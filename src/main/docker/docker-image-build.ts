@@ -12,6 +12,18 @@ WORKDIR /workspace
 const DEFAULT_DOCKERFILE_PATH = 'auto-generated:orca-default'
 export const ORCA_DOCKER_MANAGED_LABEL = 'dev.orca.managed'
 export const ORCA_DOCKER_REPO_LABEL = 'dev.orca.repo'
+export const ORCA_DOCKER_CACHE_KEY_LABEL = 'dev.orca.cache-key'
+export const ORCA_DOCKER_DOCKERFILE_PATH_LABEL = 'dev.orca.dockerfile-path'
+export const ORCA_DOCKER_IMAGE_LABEL = ORCA_DOCKER_MANAGED_LABEL
+export const ORCA_DOCKER_IMAGE_TAG_REPOSITORY = 'orca-worktree'
+
+export type DockerImageCacheIndexEntry = DockerImageHandle & {
+  repoIdentity: string
+  tag: string
+  lastUsedAt: number
+}
+
+const imageCacheIndex = new Map<string, DockerImageCacheIndexEntry>()
 
 export type ResolveDockerfileResult = {
   dockerfilePath: string
@@ -61,26 +73,33 @@ export async function buildDockerImage(
     dockerfileContent: dockerfile.content,
     repoIdentity: options.repoIdentity ?? options.repoPath
   })
-  const tag = `orca-worktree:${cacheKey.slice(0, 24)}`
+  const repoIdentity = options.repoIdentity ?? options.repoPath
+  const tag = getOrcaDockerImageTag(cacheKey)
+  const timestamp = (options.now ?? Date.now)()
 
   const result = await options.engine.buildImage({
     contextPath: options.repoPath,
     dockerfilePath: dockerfile.dockerfilePath,
     dockerfileContent: dockerfile.isGenerated ? dockerfile.content : undefined,
     tag,
+    timeoutMs: options.timeoutMs,
     labels: {
       [ORCA_DOCKER_MANAGED_LABEL]: 'true',
-      [ORCA_DOCKER_REPO_LABEL]: options.repoIdentity ?? options.repoPath
-    },
-    timeoutMs: options.timeoutMs
+      [ORCA_DOCKER_REPO_LABEL]: repoIdentity,
+      [ORCA_DOCKER_CACHE_KEY_LABEL]: cacheKey,
+      [ORCA_DOCKER_DOCKERFILE_PATH_LABEL]: dockerfile.dockerfilePath
+    }
   })
 
-  return {
+  const handle = {
     id: result.imageId,
     cacheKey,
     dockerfilePath: dockerfile.dockerfilePath,
-    builtAt: (options.now ?? Date.now)()
+    builtAt: timestamp,
+    lastUsedAt: timestamp
   }
+  imageCacheIndex.set(cacheKey, { ...handle, repoIdentity, tag, lastUsedAt: timestamp })
+  return handle
 }
 
 export function computeDockerImageCacheKey(input: {
@@ -94,4 +113,20 @@ export function computeDockerImageCacheKey(input: {
     .update('\0')
     .update(input.dockerfileContent)
     .digest('hex')
+}
+
+export function getOrcaDockerImageTag(cacheKey: string): string {
+  return `${ORCA_DOCKER_IMAGE_TAG_REPOSITORY}:${cacheKey.slice(0, 24)}`
+}
+
+export function isOrcaDockerImageTag(repoTags: string[], cacheKey: string): boolean {
+  return repoTags.includes(getOrcaDockerImageTag(cacheKey))
+}
+
+export function getDockerImageCacheIndex(): DockerImageCacheIndexEntry[] {
+  return [...imageCacheIndex.values()]
+}
+
+export function removeDockerImageCacheIndexEntry(cacheKey: string): void {
+  imageCacheIndex.delete(cacheKey)
 }

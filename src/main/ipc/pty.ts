@@ -21,6 +21,13 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { SSH_SESSION_EXPIRED_ERROR, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import { DockerPtyProvider } from '../providers/docker-pty-provider'
+import {
+  dockerContainerRegistry,
+  type DockerContainerRegistry
+} from '../providers/docker-container-registry'
+import { WorktreeIsolationLookup } from '../providers/worktree-isolation-lookup'
+import { parseWorktreePathFromId, toDockerWorktreePath } from '../providers/docker-worktree-paths'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -63,6 +70,10 @@ import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 
 let localProvider: IPtyProvider = new LocalPtyProvider()
 const sshProviders = new Map<string, IPtyProvider>()
+const dockerPtyProviders = new Map<string, IPtyProvider>()
+const dockerPtyWorktrees = new Map<string, string>()
+const DOCKER_OWNER_PREFIX = 'docker:'
+let activeDockerContainerRegistry: DockerContainerRegistry = dockerContainerRegistry
 // Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
 // write/resize/kill calls only carry the PTY ID. This map lets us route
 // post-spawn operations to the correct provider without the renderer needing
@@ -110,6 +121,18 @@ export function getPtyIdForPaneKey(paneKey: string): string | undefined {
 // internals.
 type PaneKeyTeardownListener = (paneKey: string) => void
 const paneKeyTeardownListeners = new Set<PaneKeyTeardownListener>()
+
+type DockerPtyDispatchOptions = {
+  registry?: DockerContainerRegistry
+}
+
+type PtyProviderRoute = {
+  provider: IPtyProvider
+  ownerConnectionId: string | null
+  isolation: 'host' | 'docker'
+  hostWorktreePath?: string
+  containerWorkdir?: string
+}
 
 export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListener): () => void {
   paneKeyTeardownListeners.add(listener)
@@ -176,6 +199,14 @@ function getProvider(connectionId: string | null | undefined): IPtyProvider {
   if (!connectionId) {
     return localProvider
   }
+  if (connectionId.startsWith(DOCKER_OWNER_PREFIX)) {
+    const worktreeId = connectionId.slice(DOCKER_OWNER_PREFIX.length)
+    const provider = dockerPtyProviders.get(worktreeId)
+    if (!provider) {
+      throw new Error(`No Docker PTY provider for worktree "${worktreeId}"`)
+    }
+    return provider
+  }
   const provider = sshProviders.get(connectionId)
   if (!provider) {
     throw new Error(`No PTY provider for connection "${connectionId}"`)
@@ -197,6 +228,41 @@ function getAppPtyId(connectionId: string | null | undefined, ptyId: string): st
 
 function getRelayPtyId(connectionId: string | null | undefined, ptyId: string): string {
   return connectionId ? toRelaySshPtyId(connectionId, ptyId) : ptyId
+}
+
+function getDockerOwnerKey(worktreeId: string): string {
+  return `${DOCKER_OWNER_PREFIX}${worktreeId}`
+}
+
+function isDockerOwnerKey(connectionId: string | null | undefined): boolean {
+  return connectionId?.startsWith(DOCKER_OWNER_PREFIX) === true
+}
+
+function hasRemainingDockerPtys(worktreeId: string): boolean {
+  for (const ownerWorktreeId of dockerPtyWorktrees.values()) {
+    if (ownerWorktreeId === worktreeId) {
+      return true
+    }
+  }
+  return false
+}
+
+function cleanupDockerPtyOwnership(id: string): void {
+  const worktreeId = dockerPtyWorktrees.get(id)
+  if (!worktreeId) {
+    return
+  }
+  dockerPtyWorktrees.delete(id)
+  if (!hasRemainingDockerPtys(worktreeId)) {
+    dockerPtyProviders.delete(worktreeId)
+    const unsubscribe = dockerEventUnsubs.get(worktreeId)
+    unsubscribe?.data()
+    unsubscribe?.exit()
+    dockerEventUnsubs.delete(worktreeId)
+    void activeDockerContainerRegistry.terminateContainer(worktreeId).catch((err) => {
+      console.error('[pty] failed to terminate Docker container', err)
+    })
+  }
 }
 
 function tryGetProviderForPty(ptyId: string): IPtyProvider | undefined {
@@ -233,10 +299,11 @@ function finishPtyShutdown(
   store: Store | undefined
 ): void {
   clearProviderPtyState(id)
-  if (connectionId) {
+  if (connectionId && !isDockerOwnerKey(connectionId)) {
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)
+  cleanupDockerPtyOwnership(id)
   markClaudePtyExited(id)
 }
 
@@ -752,6 +819,7 @@ export function clearProviderPtyState(id: string): void {
 
 export function deletePtyOwnership(id: string): void {
   ptyOwnership.delete(id)
+  cleanupDockerPtyOwnership(id)
 }
 
 export function setPtyOwnership(id: string, connectionId: string | null): void {
@@ -764,6 +832,7 @@ export function setPtyOwnership(id: string, connectionId: string | null): void {
 // duplicate listeners that forward every event twice.
 let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
+let dockerEventUnsubs = new Map<string, { data: () => void; exit: () => void }>()
 let didFinishLoadHandler: (() => void) | null = null
 
 // Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
@@ -798,7 +867,8 @@ export function registerPtyHandlers(
   getSelectedCodexHomePath?: () => string | null,
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
-  store?: Store
+  store?: Store,
+  dockerDispatch?: DockerPtyDispatchOptions
 ): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
@@ -816,6 +886,48 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
+
+  activeDockerContainerRegistry = dockerDispatch?.registry ?? dockerContainerRegistry
+  const isolationLookup = store ? new WorktreeIsolationLookup(store) : null
+
+  const resolveProviderRoute = async (args: {
+    worktreeId?: string
+    cwd?: string
+    connectionId?: string | null
+  }): Promise<PtyProviderRoute> => {
+    if (
+      !args.connectionId &&
+      args.worktreeId &&
+      isolationLookup?.getIsolation(args.worktreeId) === 'docker'
+    ) {
+      const hostWorktreePath = parseWorktreePathFromId(args.worktreeId) ?? args.cwd
+      if (!hostWorktreePath) {
+        throw new Error(`Cannot resolve worktree path for Docker worktree "${args.worktreeId}"`)
+      }
+      const target = await activeDockerContainerRegistry.getOrCreateTarget(
+        args.worktreeId,
+        hostWorktreePath
+      )
+      let provider = dockerPtyProviders.get(args.worktreeId)
+      if (!provider) {
+        provider = new DockerPtyProvider(target, activeDockerContainerRegistry.getEngineClient())
+        dockerPtyProviders.set(args.worktreeId, provider)
+      }
+      return {
+        provider,
+        ownerConnectionId: getDockerOwnerKey(args.worktreeId),
+        isolation: 'docker',
+        hostWorktreePath,
+        containerWorkdir: target.workdir
+      }
+    }
+
+    return {
+      provider: getProvider(args.connectionId),
+      ownerConnectionId: args.connectionId ?? null,
+      isolation: 'host'
+    }
+  }
 
   // Configure the local provider with app-specific hooks.
   // Why: only LocalPtyProvider has the configure() method — daemon-backed
@@ -971,6 +1083,81 @@ export function registerPtyHandlers(
     }
     clearTimeout(flushTimer)
     flushTimer = null
+  }
+
+  const enqueueProviderData = (payload: { id: string; data: string }, startSeq?: number): void => {
+    if (mainWindow.isDestroyed()) {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      pendingData.clear()
+      return
+    }
+    const existing = pendingData.get(payload.id)
+    const pending = appendPendingPtyData(existing, payload.data, startSeq)
+    const nextData = pending.data
+    const lastInputAt = lastInputAtByPty.get(payload.id)
+    const isInteractiveOutput =
+      nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
+      lastInputAt !== undefined &&
+      performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
+    if (isInteractiveOutput) {
+      pendingData.delete(payload.id)
+      clearFlushTimerIfIdle()
+      // Why: agent TUIs redraw small prompt regions after every keystroke.
+      // Waiting for the throughput batch timer adds visible input latency.
+      mainWindow.webContents.send(
+        'pty:data',
+        makePtyDataPayload(payload.id, nextData, pending.startSeq)
+      )
+      return
+    }
+    pendingData.set(payload.id, pending)
+    if (!flushTimer) {
+      schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
+    }
+  }
+
+  const flushRemainingPtyData = (ptyId: string): void => {
+    const remaining = pendingData.get(ptyId)
+    if (!remaining || mainWindow.isDestroyed()) {
+      return
+    }
+    mainWindow.webContents.send(
+      'pty:data',
+      makePtyDataPayload(ptyId, remaining.data, remaining.startSeq)
+    )
+    pendingData.delete(ptyId)
+  }
+
+  for (const unsubscribe of dockerEventUnsubs.values()) {
+    unsubscribe.data()
+    unsubscribe.exit()
+  }
+  dockerEventUnsubs = new Map()
+
+  const subscribeDockerProvider = (worktreeId: string, provider: IPtyProvider): void => {
+    if (dockerEventUnsubs.has(worktreeId)) {
+      return
+    }
+    const dataUnsub = provider.onData((payload) => {
+      const outputSeq = runtime?.onPtyData(payload.id, payload.data, Date.now())
+      enqueueProviderData(payload, getChunkStartSeq(outputSeq, payload.data))
+    })
+    const exitUnsub = provider.onExit((payload) => {
+      clearProviderPtyState(payload.id)
+      ptyOwnership.delete(payload.id)
+      cleanupDockerPtyOwnership(payload.id)
+      markClaudePtyExited(payload.id)
+      runtime?.onPtyExit(payload.id, payload.code)
+      flushRemainingPtyData(payload.id)
+      lastInputAtByPty.delete(payload.id)
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty:exit', payload)
+      }
+    })
+    dockerEventUnsubs.set(worktreeId, { data: dataUnsub, exit: exitUnsub })
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -1172,8 +1359,14 @@ export function registerPtyHandlers(
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
   runtime?.setPtyController({
     spawn: async (args) => {
-      const provider = getProvider(args.connectionId)
-      const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
+      const route = await resolveProviderRoute(args)
+      const provider = route.provider
+      const isDockerSpawn = route.isolation === 'docker'
+      if (isDockerSpawn && args.worktreeId) {
+        subscribeDockerProvider(args.worktreeId, provider)
+      }
+      const isClaudeLaunch =
+        !args.connectionId && !isDockerSpawn && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -1187,7 +1380,8 @@ export function registerPtyHandlers(
         )
       }
 
-      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      const isDaemonHostSpawn =
+        route.isolation === 'host' && !args.connectionId && !(provider instanceof LocalPtyProvider)
       const sessionId = isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined
       let env: Record<string, string> | undefined = claudeAuth
         ? { ...args.env, ...claudeAuth.envPatch }
@@ -1196,7 +1390,7 @@ export function registerPtyHandlers(
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
       const daemonShellOverride =
-        process.platform === 'win32' && !args.connectionId
+        process.platform === 'win32' && !args.connectionId && !isDockerSpawn
           ? getSettings?.()?.terminalWindowsShell
           : undefined
       const skipCodexHomeEnv =
@@ -1219,7 +1413,10 @@ export function registerPtyHandlers(
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
-        cwd: args.cwd,
+        cwd:
+          isDockerSpawn && route.hostWorktreePath && route.containerWorkdir
+            ? toDockerWorktreePath(args.cwd, route.hostWorktreePath, route.containerWorkdir)
+            : args.cwd,
         env,
         ...(isDaemonHostSpawn ? { isNewSession: true } : {})
       }
@@ -1227,7 +1424,7 @@ export function registerPtyHandlers(
         claudeAuth?.stripAuthEnv
           ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
           : undefined,
-        args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(env)
+        args.connectionId || isDockerSpawn ? [] : getInheritedAgentHookEnvKeysToDelete(env)
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -1245,7 +1442,7 @@ export function registerPtyHandlers(
         spawnOptions.sessionId = sessionId
         ptySizes.set(sessionId, { cols: args.cols, rows: args.rows })
       }
-      if (process.platform === 'win32' && !args.connectionId) {
+      if (process.platform === 'win32' && !args.connectionId && !isDockerSpawn) {
         spawnOptions.shellOverride = getSettings?.()?.terminalWindowsShell
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
@@ -1269,7 +1466,10 @@ export function registerPtyHandlers(
           trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
         }
       }
-      ptyOwnership.set(result.id, args.connectionId ?? null)
+      ptyOwnership.set(result.id, route.ownerConnectionId)
+      if (isDockerSpawn && args.worktreeId) {
+        dockerPtyWorktrees.set(result.id, args.worktreeId)
+      }
       ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
       if (args.preAllocatedHandle) {
         runtime?.registerPreAllocatedHandleForPty(result.id, args.preAllocatedHandle)
@@ -1284,7 +1484,7 @@ export function registerPtyHandlers(
       // so record their spawn-time paneKey here too. Synthetic hook titles and
       // paneKey-scoped cache cleanup both depend on this reverse lookup.
       const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
-      if (!args.connectionId) {
+      if (!args.connectionId && !isDockerSpawn) {
         registerPty({
           ptyId: result.id,
           worktreeId: args.worktreeId ?? null,
@@ -1469,8 +1669,14 @@ export function registerPtyHandlers(
         }
       }
     ) => {
-      const provider = getProvider(args.connectionId)
-      const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
+      const route = await resolveProviderRoute(args)
+      const provider = route.provider
+      const isDockerSpawn = route.isolation === 'docker'
+      if (isDockerSpawn && args.worktreeId) {
+        subscribeDockerProvider(args.worktreeId, provider)
+      }
+      const isClaudeLaunch =
+        !args.connectionId && !isDockerSpawn && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -1497,7 +1703,8 @@ export function registerPtyHandlers(
       // local filesystem (OpenCode plugin dir, Pi overlay, Codex home, dev
       // CLI bin, attribution shim dir) that would resolve to nothing — or
       // something misleading — on the remote machine.
-      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      const isDaemonHostSpawn =
+        route.isolation === 'host' && !args.connectionId && !(provider instanceof LocalPtyProvider)
       // Why: Pi's PTY overlay is keyed on the id we pass down, and the daemon
       // path needs a stable id BEFORE provider.spawn so the overlay can be
       // materialized in buildPtyHostEnv. DaemonPtyAdapter.doSpawn mints an id
@@ -1594,12 +1801,12 @@ export function registerPtyHandlers(
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
       const preAllocatedHandle =
-        runtime && !(provider instanceof LocalPtyProvider)
+        runtime && !isDockerSpawn && !(provider instanceof LocalPtyProvider)
           ? runtime.createPreAllocatedTerminalHandle()
           : null
       const effectiveShellOverride =
         args.shellOverride ??
-        (process.platform === 'win32' && !args.connectionId
+        (process.platform === 'win32' && !args.connectionId && !isDockerSpawn
           ? getSettings?.()?.terminalWindowsShell
           : undefined)
       const skipCodexHomeEnv =
@@ -1657,14 +1864,17 @@ export function registerPtyHandlers(
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
           envToDelete,
-          args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(spawnEnv)
+          args.connectionId || isDockerSpawn ? [] : getInheritedAgentHookEnvKeysToDelete(spawnEnv)
         ),
         skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
       )
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
-        cwd: args.cwd,
+        cwd:
+          isDockerSpawn && route.hostWorktreePath && route.containerWorkdir
+            ? toDockerWorktreePath(args.cwd, route.hostWorktreePath, route.containerWorkdir)
+            : args.cwd,
         env: spawnEnv,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
@@ -1699,7 +1909,7 @@ export function registerPtyHandlers(
           rows: args.rows
         })
       }
-      if (process.platform === 'win32' && !args.connectionId) {
+      if (process.platform === 'win32' && !args.connectionId && !isDockerSpawn) {
         // Why: the renderer only models PowerShell as one shell family. Thread
         // the persisted implementation choice through spawnOptions so both the
         // in-process and daemon-backed PTY paths can resolve the same effective
@@ -1771,7 +1981,10 @@ export function registerPtyHandlers(
           trustedTerminalHandleEnv.delete(preAllocatedHandle)
         }
       }
-      ptyOwnership.set(result.id, args.connectionId ?? null)
+      ptyOwnership.set(result.id, route.ownerConnectionId)
+      if (isDockerSpawn && args.worktreeId) {
+        dockerPtyWorktrees.set(result.id, args.worktreeId)
+      }
       const relayResultId = getRelayPtyId(args.connectionId, result.id)
       if (store && args.connectionId) {
         // Why: remote PTYs live in the SSH relay grace window after Orca
@@ -1909,7 +2122,7 @@ export function registerPtyHandlers(
       // collector so it can walk each PTY's process subtree and attribute
       // memory back to its worktree. SSH PTYs execute remotely and their
       // process tree is not visible to our local `ps`, so we skip them.
-      if (!args.connectionId) {
+      if (!args.connectionId && !isDockerSpawn) {
         // Why: providers publish the OS pid on the spawn result (both
         // LocalPtyProvider and DaemonPtyAdapter). Recording it once here keeps
         // the memory module from reaching back into ipc/pty on a hot path, and
@@ -2124,6 +2337,10 @@ export function registerPtyHandlers(
         }),
         ...Array.from(sshProviders.entries(), async ([connectionId, provider]) => ({
           connectionId,
+          sessions: await provider.listProcesses().catch(() => [])
+        })),
+        ...Array.from(dockerPtyProviders.entries(), async ([worktreeId, provider]) => ({
+          connectionId: getDockerOwnerKey(worktreeId),
           sessions: await provider.listProcesses().catch(() => [])
         }))
       ])

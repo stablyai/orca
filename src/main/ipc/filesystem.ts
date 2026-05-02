@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
-import { extname, resolve } from 'path'
+import path, { extname, resolve } from 'path'
 import type { ChildProcess } from 'child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
@@ -96,6 +96,12 @@ import {
 } from '../text-generation/commit-message-agent-environment'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { splitWorktreeId } from '../../shared/worktree-id'
+import { DockerFilesystemProvider } from '../providers/docker-filesystem-provider'
+import { DockerGitProvider } from '../providers/docker-git-provider'
+import { dockerContainerRegistry } from '../providers/docker-container-registry'
+import { WorktreeIsolationLookup } from '../providers/worktree-isolation-lookup'
+import { parseWorktreePathFromId, toDockerWorktreePath } from '../providers/docker-worktree-paths'
+import type { DockerTarget } from '../docker/types'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -304,11 +310,87 @@ export function registerFilesystemHandlers(
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
 ): void {
   const activeTextSearches = new Map<string, ChildProcess>()
+  const isolationLookup = new WorktreeIsolationLookup(store)
+
+  const getDockerTarget = async (
+    worktreeId: string
+  ): Promise<{
+    target: DockerTarget
+    hostWorktreePath: string
+  }> => {
+    const hostWorktreePath = parseWorktreePathFromId(worktreeId)
+    if (!hostWorktreePath) {
+      throw new Error(`Cannot resolve worktree path for Docker worktree "${worktreeId}"`)
+    }
+    const target = await dockerContainerRegistry.getOrCreateTarget(worktreeId, hostWorktreePath)
+    return { target, hostWorktreePath }
+  }
+
+  const getDockerFilesystemProvider = async (
+    worktreeId: string | undefined
+  ): Promise<{
+    provider: DockerFilesystemProvider
+    target: DockerTarget
+    hostWorktreePath: string
+  } | null> => {
+    if (!worktreeId || isolationLookup.getIsolation(worktreeId) !== 'docker') {
+      return null
+    }
+    const { target, hostWorktreePath } = await getDockerTarget(worktreeId)
+    return {
+      provider: new DockerFilesystemProvider(target, dockerContainerRegistry.getEngineClient()),
+      target,
+      hostWorktreePath
+    }
+  }
+
+  const getDockerGitProvider = async (
+    worktreeId: string | undefined
+  ): Promise<{
+    provider: DockerGitProvider
+    target: DockerTarget
+    hostWorktreePath: string
+  } | null> => {
+    if (!worktreeId || isolationLookup.getIsolation(worktreeId) !== 'docker') {
+      return null
+    }
+    const { target, hostWorktreePath } = await getDockerTarget(worktreeId)
+    return {
+      provider: new DockerGitProvider(target, dockerContainerRegistry.getEngineClient()),
+      target,
+      hostWorktreePath
+    }
+  }
+
+  const toContainerPath = (
+    value: string,
+    route: { hostWorktreePath: string; target: DockerTarget }
+  ): string => {
+    return toDockerWorktreePath(value, route.hostWorktreePath, route.target.workdir) ?? value
+  }
+
+  const toHostSearchResult = (
+    result: SearchResult,
+    route: { hostWorktreePath: string }
+  ): SearchResult => ({
+    ...result,
+    files: result.files.map((file) => ({
+      ...file,
+      filePath: path.join(route.hostWorktreePath, file.relativePath)
+    }))
+  })
 
   // ─── Filesystem ─────────────────────────────────────────
   ipcMain.handle(
     'fs:readDir',
-    async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
+    async (
+      _event,
+      args: { dirPath: string; connectionId?: string; worktreeId?: string }
+    ): Promise<DirEntry[]> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.readDir(toContainerPath(args.dirPath, dockerRoute))
+      }
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.readDir(args.dirPath)
@@ -337,8 +419,12 @@ export function registerFilesystemHandlers(
     'fs:readFile',
     async (
       _event,
-      args: { filePath: string; connectionId?: string }
+      args: { filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.readFile(toContainerPath(args.filePath, dockerRoute))
+      }
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.readFile(args.filePath)
@@ -386,8 +472,14 @@ export function registerFilesystemHandlers(
     'fs:listMarkdownDocuments',
     async (
       _event,
-      args: { rootPath: string; connectionId?: string }
+      args: { rootPath: string; connectionId?: string; worktreeId?: string }
     ): Promise<MarkdownDocument[]> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        const rootPath = toContainerPath(args.rootPath, dockerRoute)
+        const relativePaths = await dockerRoute.provider.listFiles(rootPath)
+        return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
+      }
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         const relativePaths = await provider.listFiles(args.rootPath)
@@ -403,8 +495,15 @@ export function registerFilesystemHandlers(
     'fs:writeFile',
     async (
       _event,
-      args: { filePath: string; content: string; connectionId?: string }
+      args: { filePath: string; content: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.writeFile(
+          toContainerPath(args.filePath, dockerRoute),
+          args.content
+        )
+      }
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.writeFile(args.filePath, args.content)
@@ -430,8 +529,15 @@ export function registerFilesystemHandlers(
     'fs:deletePath',
     async (
       _event,
-      args: { targetPath: string; connectionId?: string; recursive?: boolean }
+      args: { targetPath: string; connectionId?: string; recursive?: boolean; worktreeId?: string }
     ): Promise<void> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.deletePath(
+          toContainerPath(args.targetPath, dockerRoute),
+          args.recursive
+        )
+      }
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.deletePath(args.targetPath, args.recursive)
@@ -468,8 +574,13 @@ export function registerFilesystemHandlers(
     'fs:stat',
     async (
       _event,
-      args: { filePath: string; connectionId?: string }
+      args: { filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        const s = await dockerRoute.provider.stat(toContainerPath(args.filePath, dockerRoute))
+        return { size: s.size, isDirectory: s.type === 'directory', mtime: s.mtime }
+      }
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         const s = await provider.stat(args.filePath)
@@ -488,7 +599,18 @@ export function registerFilesystemHandlers(
   // ─── Search ────────────────────────────────────────────
   ipcMain.handle(
     'fs:search',
-    async (event, args: SearchOptions & { connectionId?: string }): Promise<SearchResult> => {
+    async (
+      event,
+      args: SearchOptions & { connectionId?: string; worktreeId?: string }
+    ): Promise<SearchResult> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        const result = await dockerRoute.provider.search({
+          ...args,
+          rootPath: toContainerPath(args.rootPath, dockerRoute)
+        })
+        return toHostSearchResult(result, dockerRoute)
+      }
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.search(args)
@@ -597,8 +719,19 @@ export function registerFilesystemHandlers(
     'fs:listFiles',
     async (
       _event,
-      args: { rootPath: string; connectionId?: string; excludePaths?: string[] }
+      args: {
+        rootPath: string
+        connectionId?: string
+        excludePaths?: string[]
+        worktreeId?: string
+      }
     ): Promise<string[]> => {
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.listFiles(toContainerPath(args.rootPath, dockerRoute), {
+          excludePaths: args.excludePaths?.map((entry) => toContainerPath(entry, dockerRoute))
+        })
+      }
       if (args.connectionId) {
         const provider = getSshFilesystemProvider(args.connectionId)
         // Why: when the SSH connection is not yet established (cold start) or
@@ -622,9 +755,18 @@ export function registerFilesystemHandlers(
     'git:status',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string; includeIgnored?: boolean }
+      args: {
+        worktreePath: string
+        connectionId?: string
+        includeIgnored?: boolean
+        worktreeId?: string
+      }
     ): Promise<GitStatusResult> => {
       const options = { includeIgnored: args.includeIgnored ?? false }
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.getStatus(dockerRoute.target.workdir, options)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -683,8 +825,12 @@ export function registerFilesystemHandlers(
     'git:conflictOperation',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string }
+      args: { worktreePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<GitConflictOperation> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.detectConflictOperation(dockerRoute.target.workdir)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -737,8 +883,19 @@ export function registerFilesystemHandlers(
         staged: boolean
         compareAgainstHead?: boolean
         connectionId?: string
+        worktreeId?: string
       }
     ): Promise<GitDiffResult> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
+        return dockerRoute.provider.getDiff(
+          dockerRoute.target.workdir,
+          filePath,
+          args.staged,
+          args.compareAgainstHead
+        )
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1029,8 +1186,12 @@ export function registerFilesystemHandlers(
     'git:branchCompare',
     async (
       _event,
-      args: { worktreePath: string; baseRef: string; connectionId?: string }
+      args: { worktreePath: string; baseRef: string; connectionId?: string; worktreeId?: string }
     ): Promise<GitBranchCompareResult> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        return dockerRoute.provider.getBranchCompare(dockerRoute.target.workdir, args.baseRef)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1202,8 +1363,34 @@ export function registerFilesystemHandlers(
         filePath: string
         oldPath?: string
         connectionId?: string
+        worktreeId?: string
       }
     ): Promise<GitDiffResult> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
+        const oldPath = args.oldPath
+          ? validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.oldPath)
+          : undefined
+        const results = await dockerRoute.provider.getBranchDiff(
+          dockerRoute.target.workdir,
+          args.compare.mergeBase,
+          {
+            includePatch: true,
+            filePath,
+            oldPath
+          }
+        )
+        return (
+          results[0] ?? {
+            kind: 'text',
+            originalContent: '',
+            modifiedContent: '',
+            originalIsBinary: false,
+            modifiedIsBinary: false
+          }
+        )
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1283,8 +1470,13 @@ export function registerFilesystemHandlers(
     'git:stage',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; connectionId?: string }
+      args: { worktreePath: string; filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
+        return dockerRoute.provider.stageFile(dockerRoute.target.workdir, filePath)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1302,8 +1494,13 @@ export function registerFilesystemHandlers(
     'git:unstage',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; connectionId?: string }
+      args: { worktreePath: string; filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
+        return dockerRoute.provider.unstageFile(dockerRoute.target.workdir, filePath)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1321,8 +1518,13 @@ export function registerFilesystemHandlers(
     'git:discard',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; connectionId?: string }
+      args: { worktreePath: string; filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
+        return dockerRoute.provider.discardChanges(dockerRoute.target.workdir, filePath)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1359,8 +1561,20 @@ export function registerFilesystemHandlers(
     'git:bulkStage',
     async (
       _event,
-      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePaths: string[]
+        connectionId?: string
+        worktreeId?: string
+      }
     ): Promise<void> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const filePaths = args.filePaths.map((p) =>
+          validateGitRelativeFilePath(dockerRoute.hostWorktreePath, p)
+        )
+        return dockerRoute.provider.bulkStageFiles(dockerRoute.target.workdir, filePaths)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1378,8 +1592,20 @@ export function registerFilesystemHandlers(
     'git:bulkUnstage',
     async (
       _event,
-      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePaths: string[]
+        connectionId?: string
+        worktreeId?: string
+      }
     ): Promise<void> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const filePaths = args.filePaths.map((p) =>
+          validateGitRelativeFilePath(dockerRoute.hostWorktreePath, p)
+        )
+        return dockerRoute.provider.bulkUnstageFiles(dockerRoute.target.workdir, filePaths)
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1397,8 +1623,26 @@ export function registerFilesystemHandlers(
     'git:remoteFileUrl',
     async (
       _event,
-      args: { worktreePath: string; relativePath: string; line: number; connectionId?: string }
+      args: {
+        worktreePath: string
+        relativePath: string
+        line: number
+        connectionId?: string
+        worktreeId?: string
+      }
     ): Promise<string | null> => {
+      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      if (dockerRoute) {
+        const relativePath = validateGitRelativeFilePath(
+          dockerRoute.hostWorktreePath,
+          args.relativePath
+        )
+        return dockerRoute.provider.getRemoteFileUrl(
+          dockerRoute.target.workdir,
+          relativePath,
+          args.line
+        )
+      }
       // Why: remote repos can't read relay-side .git/config locally. Delegate
       // URL construction to the SSH provider, which can fetch remote metadata.
       if (args.connectionId) {

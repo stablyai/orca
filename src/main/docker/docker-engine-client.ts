@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
+import * as pty from 'node-pty'
 
 const execFileAsync = promisify(execFile)
 
@@ -39,6 +40,7 @@ export type DockerExecOptions = {
   env?: Record<string, string>
   input?: string
   timeoutMs?: number
+  allowExitCodes?: number[]
 }
 
 export type DockerExecSessionOptions = {
@@ -70,6 +72,20 @@ export type DockerExecSession = {
   onExit(callback: (code: number) => void): () => void
 }
 
+export type DockerImageListEntry = {
+  id: string
+  repository: string
+  tag: string
+  size: string
+}
+
+export type DockerImageInspectInfo = {
+  id: string
+  repoTags: string[]
+  labels: Record<string, string>
+  sizeBytes: number
+}
+
 export type DockerEngineClientLike = {
   buildImage(options: DockerBuildImageOptions): Promise<{ imageId: string }>
   pullImage(image: string): Promise<void>
@@ -83,6 +99,9 @@ export type DockerEngineClientLike = {
   }>
   exec(options: DockerExecOptions): Promise<DockerExecResult>
   spawnExec(options: DockerExecSessionOptions): Promise<DockerExecSession>
+  listImages(options?: { label?: string }): Promise<DockerImageListEntry[]>
+  inspectImage(id: string): Promise<DockerImageInspectInfo>
+  removeImage(id: string): Promise<void>
   stopContainer(id: string): Promise<void>
   removeContainer(id: string): Promise<void>
 }
@@ -169,7 +188,11 @@ export class DockerEngineClient implements DockerEngineClientLike {
 
   async exec(options: DockerExecOptions): Promise<DockerExecResult> {
     const args = buildExecArgs(options)
-    return execDocker(args, { input: options.input, timeoutMs: options.timeoutMs })
+    return execDocker(args, {
+      input: options.input,
+      timeoutMs: options.timeoutMs,
+      allowExitCodes: options.allowExitCodes
+    })
   }
 
   async spawnExec(options: DockerExecSessionOptions): Promise<DockerExecSession> {
@@ -185,53 +208,74 @@ export class DockerEngineClient implements DockerEngineClientLike {
       }
     })
     args.splice(1, 0, ...(options.tty ? ['-i', '-t'] : ['-i']))
-    const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'] })
     const dataListeners = new Set<(data: string) => void>()
     const replayListeners = new Set<(data: string) => void>()
     const exitListeners = new Set<(code: number) => void>()
     let buffer = ''
     let currentCwd = options.cwd
     let exitCode: number | null = null
+    let writeInput: (data: string) => void
+    let resizePty: (cols: number, rows: number) => void
+    let killChild: (signal: NodeJS.Signals) => void
 
-    child.stdout.setEncoding('utf-8')
-    child.stderr.setEncoding('utf-8')
-    child.stdout.on('data', (chunk: string) => {
+    const emitData = (chunk: string): void => {
       buffer += chunk
       for (const cb of dataListeners) {
         cb(chunk)
       }
-    })
-    child.stderr.on('data', (chunk: string) => {
-      buffer += chunk
-      for (const cb of dataListeners) {
-        cb(chunk)
-      }
-    })
-    child.on('close', (code) => {
+    }
+    const emitExit = (code: number | null | undefined): void => {
       exitCode = code ?? 0
       for (const cb of exitListeners) {
         cb(exitCode)
       }
-    })
+    }
+
+    if (options.tty) {
+      // Why: interactive docker exec needs a real pseudoterminal so shells,
+      // vim, and ncurses apps see TTY semantics in packaged Electron builds.
+      const child = pty.spawn('docker', args, {
+        cols: options.cols,
+        rows: options.rows,
+        env: Object.fromEntries(
+          Object.entries(process.env).filter((entry): entry is [string, string] => !!entry[1])
+        )
+      })
+      child.onData(emitData)
+      child.onExit((event) => emitExit(event.exitCode))
+      writeInput = (data) => child.write(data)
+      resizePty = (cols, rows) => child.resize(cols, rows)
+      killChild = (signal) => child.kill(signal)
+    } else {
+      const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'] })
+      child.stdout.setEncoding('utf-8')
+      child.stderr.setEncoding('utf-8')
+      child.stdout.on('data', emitData)
+      child.stderr.on('data', emitData)
+      child.on('close', emitExit)
+      writeInput = (data) => child.stdin.write(data)
+      resizePty = () => {
+        if (exitCode === null) {
+          child.kill('SIGWINCH')
+        }
+      }
+      killChild = (signal) => child.kill(signal)
+    }
 
     return {
       id,
       write(data): void {
-        child.stdin.write(data)
+        writeInput(data)
       },
       resize(cols, rows): void {
-        if (exitCode === null) {
-          child.kill('SIGWINCH')
-        }
-        void cols
-        void rows
+        resizePty(cols, rows)
       },
       async shutdown(immediate): Promise<void> {
-        child.kill(immediate ? 'SIGKILL' : 'SIGTERM')
+        killChild(immediate ? 'SIGKILL' : 'SIGTERM')
       },
       async sendSignal(signal): Promise<void> {
         if (exitCode === null) {
-          child.kill(signal as NodeJS.Signals)
+          killChild(signal as NodeJS.Signals)
         }
       },
       async getCwd(): Promise<string> {
@@ -289,6 +333,53 @@ export class DockerEngineClient implements DockerEngineClientLike {
   async removeContainer(id: string): Promise<void> {
     await execDocker(['rm', id])
   }
+
+  async listImages(options: { label?: string } = {}): Promise<DockerImageListEntry[]> {
+    const args = ['image', 'ls', '--format', 'json']
+    if (options.label) {
+      args.splice(2, 0, '--filter', `label=${options.label}`)
+    }
+    const result = await execDocker(args)
+    return result.stdout
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const parsed = JSON.parse(line) as {
+          ID?: string
+          Repository?: string
+          Tag?: string
+          Size?: string
+        }
+        return {
+          id: parsed.ID ?? '',
+          repository: parsed.Repository ?? '',
+          tag: parsed.Tag ?? '',
+          size: parsed.Size ?? ''
+        }
+      })
+      .filter((entry) => entry.id.length > 0)
+  }
+
+  async inspectImage(id: string): Promise<DockerImageInspectInfo> {
+    const result = await execDocker(['image', 'inspect', id, '--format', 'json'])
+    const parsed = JSON.parse(result.stdout) as {
+      Id?: string
+      RepoTags?: string[]
+      Config?: { Labels?: Record<string, string> | null }
+      Size?: number
+    }[]
+    const image = parsed[0] ?? {}
+    return {
+      id: image.Id ?? id,
+      repoTags: image.RepoTags ?? [],
+      labels: image.Config?.Labels ?? {},
+      sizeBytes: image.Size ?? 0
+    }
+  }
+
+  async removeImage(id: string): Promise<void> {
+    await execDocker(['image', 'rm', id])
+  }
 }
 
 function buildExecArgs(options: DockerExecOptions): string[] {
@@ -309,7 +400,7 @@ function labelArgs(labels: Record<string, string> | undefined): string[] {
 
 async function execDocker(
   args: string[],
-  options: { input?: string; timeoutMs?: number } = {}
+  options: { input?: string; timeoutMs?: number; allowExitCodes?: number[] } = {}
 ): Promise<DockerExecResult> {
   if (options.input === undefined) {
     const { stdout, stderr } = await execFileAsync('docker', args, {
@@ -359,7 +450,7 @@ async function execDocker(
       if (timeout) {
         clearTimeout(timeout)
       }
-      if (code && code !== 0) {
+      if (code && code !== 0 && !(options.allowExitCodes ?? []).includes(code)) {
         reject(new Error(stderr || `docker ${args[0]} exited with ${code}`))
         return
       }

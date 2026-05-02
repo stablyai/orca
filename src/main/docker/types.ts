@@ -3,6 +3,7 @@ export type DockerImageHandle = {
   cacheKey: string
   dockerfilePath: string
   builtAt: number
+  lastUsedAt?: number
 }
 
 export type DockerContainerHandle = {

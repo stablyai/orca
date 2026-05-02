@@ -2,12 +2,25 @@ import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { detectDockerEngine } from '../docker/docker-engine-detect'
-import { buildDockerImage } from '../docker/docker-image-build'
-import { DockerEngineClient } from '../docker/docker-engine-client'
+import {
+  buildDockerImage,
+  getDockerImageCacheIndex,
+  isOrcaDockerImageTag,
+  ORCA_DOCKER_CACHE_KEY_LABEL,
+  ORCA_DOCKER_DOCKERFILE_PATH_LABEL,
+  ORCA_DOCKER_IMAGE_LABEL,
+  removeDockerImageCacheIndexEntry
+} from '../docker/docker-image-build'
+import { DockerEngineClient, type DockerEngineClientLike } from '../docker/docker-engine-client'
 import type { DockerEngineInfo } from '../docker/types'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { areWorktreePathsEqual } from './worktree-logic'
-import type { DockerBuildProgress, DockerEngineStatus, WorktreeIsolation } from '../../shared/types'
+import type {
+  DockerBuildProgress,
+  DockerCachedImage,
+  DockerEngineStatus,
+  WorktreeIsolation
+} from '../../shared/types'
 import { splitWorktreeId } from '../../shared/worktree-id'
 
 const ENGINE_STATUS_CACHE_MS = 30_000
@@ -20,7 +33,7 @@ type DockerIpcStore = Pick<Store, 'getRepo' | 'setWorktreeMeta'>
 type DockerIpcDependencies = {
   detectEngine?: () => DockerEngineInfo
   buildImage?: typeof buildDockerImage
-  createEngineClient?: () => DockerEngineClient
+  createEngineClient?: () => DockerEngineClientLike
   listWorktrees?: typeof listRepoWorktrees
   now?: () => number
 }
@@ -39,6 +52,8 @@ export function registerDockerIpcHandlers(
   ipcMain.removeHandler('docker:engine-status')
   ipcMain.removeHandler('docker:build-image')
   ipcMain.removeHandler('docker:set-worktree-isolation')
+  ipcMain.removeHandler('docker:list-cached-images')
+  ipcMain.removeHandler('docker:prune-image')
 
   const now = dependencies.now ?? Date.now
   const detectEngine = dependencies.detectEngine ?? detectDockerEngine
@@ -132,6 +147,29 @@ export function registerDockerIpcHandlers(
       return store.setWorktreeMeta(args.worktreeId, { isolation: args.isolation })
     }
   )
+
+  ipcMain.handle('docker:list-cached-images', async (): Promise<DockerCachedImage[]> => {
+    return listCachedImages(createEngineClient())
+  })
+
+  ipcMain.handle('docker:prune-image', async (_event, args: string | { imageId: string }) => {
+    const imageId = typeof args === 'string' ? args : args.imageId
+    if (!imageId) {
+      throw new Error('imageId is required')
+    }
+    const engine = createEngineClient()
+    const inspected = await engine.inspectImage(imageId)
+    const cacheKey = inspected.labels[ORCA_DOCKER_CACHE_KEY_LABEL]
+    if (
+      inspected.labels[ORCA_DOCKER_IMAGE_LABEL] !== 'true' ||
+      !cacheKey ||
+      !isOrcaDockerImageTag(inspected.repoTags, cacheKey)
+    ) {
+      throw new Error('Refusing to prune a non-Orca Docker image')
+    }
+    await engine.removeImage(imageId)
+    removeDockerImageCacheIndexEntry(cacheKey)
+  })
 }
 
 function sendBuildProgress(mainWindow: BrowserWindow, progress: DockerBuildProgress): void {
@@ -139,4 +177,36 @@ function sendBuildProgress(mainWindow: BrowserWindow, progress: DockerBuildProgr
     return
   }
   mainWindow.webContents.send('docker:build-progress', progress)
+}
+
+async function listCachedImages(engine: DockerEngineClientLike): Promise<DockerCachedImage[]> {
+  const indexByCacheKey = new Map(
+    getDockerImageCacheIndex().map((entry) => [entry.cacheKey, entry])
+  )
+  const images = await engine.listImages({ label: ORCA_DOCKER_IMAGE_LABEL })
+  const results = await Promise.all(
+    images.map(async (image) => {
+      const inspected = await engine.inspectImage(image.id)
+      const cacheKey = inspected.labels[ORCA_DOCKER_CACHE_KEY_LABEL]
+      if (
+        inspected.labels[ORCA_DOCKER_IMAGE_LABEL] !== 'true' ||
+        !cacheKey ||
+        !isOrcaDockerImageTag(inspected.repoTags, cacheKey)
+      ) {
+        return null
+      }
+      const indexed = indexByCacheKey.get(cacheKey)
+      return {
+        id: inspected.id || image.id,
+        cacheKey,
+        dockerfilePath:
+          inspected.labels[ORCA_DOCKER_DOCKERFILE_PATH_LABEL] ?? indexed?.dockerfilePath ?? '',
+        sizeBytes: inspected.sizeBytes,
+        lastUsedAt: indexed?.lastUsedAt ?? indexed?.builtAt ?? 0
+      }
+    })
+  )
+  return results
+    .filter((entry): entry is DockerCachedImage => entry !== null)
+    .sort((left, right) => right.lastUsedAt - left.lastUsedAt)
 }

@@ -78,32 +78,63 @@ describe('DockerFilesystemProvider', () => {
     expect(engine.commands).toHaveLength(0)
   })
 
-  it('returns stat, search, and file list results from JSON stdout', async () => {
+  it('returns stat, search, and file list results from docker exec', async () => {
     engine.enqueueExecResult({ stdout: JSON.stringify({ size: 1, type: 'file', mtime: 2 }) })
     engine.enqueueExecResult({
-      stdout: JSON.stringify({ files: [], totalMatches: 0, truncated: false })
+      stdout:
+        '{"type":"match","data":{"path":{"text":"/workspace/src/app.ts"},"line_number":3,"lines":{"text":"TODO item\\n"},"submatches":[{"start":0,"end":4}]}}\n'
     })
     engine.enqueueExecResult({ stdout: JSON.stringify(['src/index.ts']) })
 
     await expect(provider.stat('/workspace/a.txt')).resolves.toMatchObject({ type: 'file' })
     await expect(provider.search({ rootPath: '/workspace', query: 'TODO' })).resolves.toMatchObject(
       {
-        totalMatches: 0
+        totalMatches: 1,
+        files: [
+          expect.objectContaining({
+            relativePath: 'src/app.ts'
+          })
+        ]
       }
     )
     await expect(provider.listFiles('/workspace')).resolves.toEqual(['src/index.ts'])
     expect(engine.commands[1]).toMatchObject({
       options: {
-        args: [
-          'node',
-          '-e',
-          expect.any(String),
-          expect.stringContaining('"maxResults":2000'),
-          String(5 * 1024 * 1024),
-          '10000'
-        ]
+        args: expect.arrayContaining(['rg', '--json', '--hidden'])
       }
     })
+  })
+
+  it('passes regex, whole-word, include, and exclude options to rg', async () => {
+    engine.enqueueExecResult({ stdout: '' })
+
+    await provider.search({
+      rootPath: '/workspace',
+      query: 'TODO|FIXME',
+      useRegex: true,
+      wholeWord: true,
+      includePattern: '*.ts',
+      excludePattern: '*.test.ts'
+    })
+
+    expect(engine.commands[0]).toMatchObject({
+      command: 'container.exec',
+      options: {
+        args: expect.arrayContaining([
+          'rg',
+          '--word-regexp',
+          '--glob',
+          '*.ts',
+          '--glob',
+          '!*.test.ts'
+        ])
+      }
+    })
+    const command = engine.commands[0]
+    expect(command.command).toBe('container.exec')
+    if (command.command === 'container.exec') {
+      expect(command.options.args).not.toContain('--fixed-strings')
+    }
   })
 
   it('registers and unregisters watches without a real daemon watcher', async () => {

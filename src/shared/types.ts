@@ -78,6 +78,14 @@ export type ExternalWorktreeVisibility = 'hide' | 'show'
 export type WorktreeIsolation = 'host' | 'docker'
 export type RepoIsolationDefault = WorktreeIsolation
 
+export type DockerCachedImage = {
+  id: string
+  cacheKey: string
+  dockerfilePath: string
+  sizeBytes: number
+  lastUsedAt: number
+}
+
 export type DockerEngineFlavor =
   | 'docker-desktop-mac'
   | 'colima'

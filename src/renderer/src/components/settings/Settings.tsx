@@ -36,6 +36,7 @@ import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
 import { TasksPane } from './TasksPane'
 import { QuickCommandsPane } from './QuickCommandsPane'
+import { DockerImagesPane } from './DockerImagesPane'
 import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 import { ComputerUsePane } from './ComputerUsePane'
 import { MobileSettingsPane } from './MobileSettingsPane'
@@ -861,6 +862,17 @@ function Settings(): React.JSX.Element {
                     />
                   ) : null}
                 </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="docker-images"
+                    title="Docker Images"
+                    description="Cached Docker images for isolated worktrees."
+                    searchEntries={getSectionSearchEntries('docker-images')}
+                  >
+                    {isSectionMounted('docker-images') ? <DockerImagesPane /> : null}
+                  </SettingsSection>
+                ) : null}
 
                 {showDesktopOnlySettings ? (
                   <SettingsSection

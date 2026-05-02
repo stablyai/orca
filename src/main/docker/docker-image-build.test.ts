@@ -64,9 +64,12 @@ describe('docker-image-build', () => {
       options: {
         contextPath: repoPath,
         dockerfileContent: expect.stringContaining('FROM ubuntu'),
+        tag: expect.stringMatching(/^orca-worktree:/),
         labels: {
           'dev.orca.managed': 'true',
-          'dev.orca.repo': 'stablyai/orca'
+          'dev.orca.repo': 'stablyai/orca',
+          'dev.orca.cache-key': expect.any(String),
+          'dev.orca.dockerfile-path': 'auto-generated:orca-default'
         }
       }
     })

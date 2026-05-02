@@ -12,6 +12,7 @@ import {
   FlaskConical,
   GitBranch,
   Globe,
+  HardDrive,
   Keyboard,
   ListChecks,
   Lock,
@@ -46,6 +47,7 @@ import { APPEARANCE_PANE_SEARCH_ENTRIES } from '@/components/settings/appearance
 import { INPUT_PANE_SEARCH_ENTRIES } from '@/components/settings/input-search'
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
 import { QUICK_COMMANDS_PANE_SEARCH_ENTRIES } from '@/components/settings/quick-commands-search'
+import { DOCKER_IMAGES_PANE_SEARCH_ENTRIES } from '@/components/settings/docker-images-search'
 import { BROWSER_PANE_SEARCH_ENTRIES } from '@/components/settings/browser-pane-search'
 import { NOTIFICATIONS_PANE_SEARCH_ENTRIES } from '@/components/settings/notifications-search'
 import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from '@/components/settings/orchestration-search'
@@ -183,6 +185,18 @@ export function buildSettingsNavigationMetadata({
       searchEntries: QUICK_COMMANDS_PANE_SEARCH_ENTRIES,
       group: 'workflows'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'docker-images',
+            title: 'Docker Images',
+            description: 'Cached Docker images for isolated worktrees.',
+            icon: HardDrive,
+            searchEntries: DOCKER_IMAGES_PANE_SEARCH_ENTRIES,
+            group: 'workflows'
+          }
+        ]
+      : []),
     ...(showDesktopOnlySettings
       ? [
           {

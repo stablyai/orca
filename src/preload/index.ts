@@ -16,6 +16,7 @@ import type {
   CreateWorktreeArgs,
   CustomPet,
   DockerBuildProgress,
+  DockerCachedImage,
   DockerEngineStatus,
   FsChangedPayload,
   GetRateLimitResult,
@@ -677,6 +678,12 @@ const api = {
       worktreeId: string
       isolation: 'host' | 'docker'
     }): Promise<unknown> => ipcRenderer.invoke('docker:set-worktree-isolation', args),
+
+    listCachedImages: (): Promise<DockerCachedImage[]> =>
+      ipcRenderer.invoke('docker:list-cached-images'),
+
+    pruneImage: (imageId: string): Promise<void> =>
+      ipcRenderer.invoke('docker:prune-image', imageId),
 
     onBuildProgress: (callback: (data: DockerBuildProgress) => void): (() => void) =>
       subscribeDockerBuildProgress(ipcRenderer, callback)

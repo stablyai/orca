@@ -7,10 +7,15 @@ import { resolveDockerContainerPath } from '../docker/docker-container-path'
 import type { DockerTarget } from '../docker/types'
 import type { IFilesystemProvider, FileReadResult, FileStat } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
-import { DEFAULT_SEARCH_MAX_RESULTS } from '../../shared/text-search'
+import {
+  buildRgArgs,
+  createAccumulator,
+  DEFAULT_SEARCH_MAX_RESULTS,
+  finalize,
+  ingestRgJsonLine
+} from '../../shared/text-search'
 
 const MAX_DOCKER_FILE_READ_BYTES = 10 * 1024 * 1024
-const MAX_DOCKER_SEARCH_FILE_BYTES = 5 * 1024 * 1024
 const MAX_DOCKER_SEARCH_SCANNED_FILES = 10_000
 
 export class DockerFilesystemProvider implements IFilesystemProvider {
@@ -107,11 +112,28 @@ export class DockerFilesystemProvider implements IFilesystemProvider {
   }
 
   async search(opts: SearchOptions): Promise<SearchResult> {
-    return this.execNodeJson<SearchResult>(SEARCH_SCRIPT, [
-      JSON.stringify(this.normalizeSearchOptions(opts)),
-      String(MAX_DOCKER_SEARCH_FILE_BYTES),
-      String(MAX_DOCKER_SEARCH_SCANNED_FILES)
-    ])
+    const maxResults = Math.max(
+      1,
+      Math.min(opts.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
+    )
+    const rgArgs = buildRgArgs(opts.query, opts.rootPath, opts)
+    // Why: mirroring the host rg pipeline keeps regex, word-boundary, and
+    // include/exclude glob semantics identical for Docker-isolated worktrees.
+    const result = await this.engine.exec({
+      containerId: this.target.containerId,
+      args: ['rg', ...rgArgs],
+      cwd: opts.rootPath,
+      input: '',
+      timeoutMs: 15_000,
+      allowExitCodes: [0, 1]
+    })
+    const acc = createAccumulator()
+    for (const line of result.stdout.split(/\r?\n/)) {
+      if (ingestRgJsonLine(line, opts.rootPath, acc, maxResults) === 'stop') {
+        break
+      }
+    }
+    return finalize(acc)
   }
 
   async listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]> {
@@ -139,17 +161,6 @@ export class DockerFilesystemProvider implements IFilesystemProvider {
 
   private containerPath(filePath: string): string {
     return resolveDockerContainerPath(this.target, filePath)
-  }
-
-  private normalizeSearchOptions(opts: SearchOptions): SearchOptions {
-    return {
-      ...opts,
-      rootPath: this.containerPath(opts.rootPath),
-      maxResults: Math.max(
-        1,
-        Math.min(opts.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
-      )
-    }
   }
 
   private async execNodeJson<T>(script: string, args: string[], input?: string): Promise<T> {
@@ -271,61 +282,4 @@ function walk(dir) {
 }
 walk(root);
 process.stdout.write(JSON.stringify(out.sort()));
-`
-const SEARCH_SCRIPT = `
-const fs = require('fs');
-const path = require('path');
-const opts = JSON.parse(process.argv[1]);
-const maxFileBytes = Number(process.argv[2]);
-const maxScannedFiles = Number(process.argv[3]);
-const max = opts.maxResults || 2000;
-const files = [];
-let totalMatches = 0;
-let scannedFiles = 0;
-function escapeRegExp(value) {
-  return value.replace(/[|\\\\{}()[\\]^$+*?.]/g, '\\\\$&');
-}
-function globToRegExp(pattern) {
-  return new RegExp('^' + escapeRegExp(pattern).replace(/\\\\\\*/g, '.*') + '$');
-}
-const include = opts.includePattern ? globToRegExp(opts.includePattern) : null;
-const exclude = opts.excludePattern ? globToRegExp(opts.excludePattern) : null;
-const source = opts.useRegex ? opts.query : escapeRegExp(opts.query);
-const wrapped = opts.wholeWord ? '\\\\b(?:' + source + ')\\\\b' : source;
-const matcher = new RegExp(wrapped, opts.caseSensitive ? 'g' : 'gi');
-function visit(filePath) {
-  if (totalMatches >= max) return;
-  let stat;
-  try {
-    stat = fs.lstatSync(filePath);
-  } catch {
-    return;
-  }
-  if (stat.isSymbolicLink()) return;
-  if (stat.isDirectory()) {
-    if (path.basename(filePath) === '.git') return;
-    for (const child of fs.readdirSync(filePath)) visit(path.join(filePath, child));
-    return;
-  }
-  scannedFiles++;
-  if (scannedFiles > maxScannedFiles || stat.size > maxFileBytes) return;
-  const rel = path.relative(opts.rootPath, filePath).replace(/\\\\/g, '/');
-  if ((include && !include.test(rel)) || (exclude && exclude.test(rel))) return;
-  const buffer = fs.readFileSync(filePath);
-  if (buffer.subarray(0, Math.min(buffer.length, 8192)).includes(0)) return;
-  const text = buffer.toString('utf8');
-  const matches = [];
-  const lines = text.split(/\\r?\\n/);
-  for (let i = 0; i < lines.length && totalMatches < max; i++) {
-    matcher.lastIndex = 0;
-    const match = matcher.exec(lines[i]);
-    if (match) {
-      matches.push({ line: i + 1, column: match.index + 1, matchLength: match[0].length, lineContent: lines[i].slice(0, 500) });
-      totalMatches++;
-    }
-  }
-  if (matches.length) files.push({ filePath, relativePath: rel, matches });
-}
-visit(opts.rootPath);
-process.stdout.write(JSON.stringify({ files, totalMatches, truncated: totalMatches >= max || scannedFiles > maxScannedFiles }));
 `

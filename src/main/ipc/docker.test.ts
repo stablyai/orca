@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DockerEngineInfo } from '../docker/types'
 import type { WorktreeMeta } from '../../shared/types'
+import { DockerEngineFake } from '../docker/docker-engine-fake'
 
 const { handleMock, removeHandlerMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -229,5 +230,78 @@ describe('registerDockerIpcHandlers', () => {
       isolation: 'docker'
     })
     expect(result).toEqual({ isolation: 'docker' })
+  })
+
+  it('lists Orca cached Docker images', async () => {
+    const engine = new DockerEngineFake()
+    engine.imageList = [
+      { id: 'sha256:image-1', repository: 'orca-worktree', tag: 'abc123', size: '12MB' }
+    ]
+    engine.imageInspect.set('sha256:image-1', {
+      id: 'sha256:image-1',
+      repoTags: ['orca-worktree:cache-key-12345678901234'],
+      labels: {
+        orca: 'true',
+        'orca.cache-key': 'cache-key-12345678901234567890',
+        'orca.dockerfile-path': '/repo/.devcontainer/Dockerfile'
+      },
+      sizeBytes: 1234
+    })
+    registerDockerIpcHandlers(mainWindow as never, makeStore() as never, {
+      createEngineClient: () => engine
+    })
+
+    await expect(handlers.get('docker:list-cached-images')!(null)).resolves.toEqual([
+      {
+        id: 'sha256:image-1',
+        cacheKey: 'cache-key-12345678901234567890',
+        dockerfilePath: '/repo/.devcontainer/Dockerfile',
+        sizeBytes: 1234,
+        lastUsedAt: 0
+      }
+    ])
+    expect(engine.commands[0]).toEqual({
+      command: 'image.list',
+      options: { label: 'orca' }
+    })
+  })
+
+  it('prunes only Orca-tagged images', async () => {
+    const engine = new DockerEngineFake()
+    engine.imageInspect.set('sha256:image-1', {
+      id: 'sha256:image-1',
+      repoTags: ['orca-worktree:cache-key-12345678901234'],
+      labels: {
+        orca: 'true',
+        'orca.cache-key': 'cache-key-12345678901234567890'
+      },
+      sizeBytes: 1234
+    })
+    registerDockerIpcHandlers(mainWindow as never, makeStore() as never, {
+      createEngineClient: () => engine
+    })
+
+    await handlers.get('docker:prune-image')!(null, 'sha256:image-1')
+
+    expect(engine.commands).toEqual(
+      expect.arrayContaining([{ command: 'image.rm', id: 'sha256:image-1' }])
+    )
+  })
+
+  it('rejects pruning images without Orca labels and tags', async () => {
+    const engine = new DockerEngineFake()
+    engine.imageInspect.set('sha256:image-1', {
+      id: 'sha256:image-1',
+      repoTags: ['ubuntu:latest'],
+      labels: {},
+      sizeBytes: 1234
+    })
+    registerDockerIpcHandlers(mainWindow as never, makeStore() as never, {
+      createEngineClient: () => engine
+    })
+
+    await expect(handlers.get('docker:prune-image')!(null, 'sha256:image-1')).rejects.toThrow(
+      'Refusing to prune a non-Orca Docker image'
+    )
   })
 })

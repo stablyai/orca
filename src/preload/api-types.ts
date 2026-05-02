@@ -26,6 +26,7 @@ import type {
   DetectedWorktreeListResult,
   DirEntry,
   DockerBuildProgress,
+  DockerCachedImage,
   DockerEngineStatus,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -758,6 +759,8 @@ export type PreloadApi = {
       worktreeId: string
       isolation: 'host' | 'docker'
     }) => Promise<unknown>
+    listCachedImages: () => Promise<DockerCachedImage[]>
+    pruneImage: (imageId: string) => Promise<void>
     onBuildProgress: (callback: (data: DockerBuildProgress) => void) => () => void
   }
   workspaceCleanup: {

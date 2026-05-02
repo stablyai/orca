@@ -5,7 +5,9 @@ import type {
   DockerExecOptions,
   DockerExecResult,
   DockerExecSession,
-  DockerExecSessionOptions
+  DockerExecSessionOptions,
+  DockerImageInspectInfo,
+  DockerImageListEntry
 } from './docker-engine-client'
 
 export type DockerEngineFakeCommand =
@@ -16,6 +18,9 @@ export type DockerEngineFakeCommand =
   | { command: 'container.inspect'; id: string }
   | { command: 'container.exec'; options: DockerExecOptions }
   | { command: 'container.exec.spawn'; options: DockerExecSessionOptions }
+  | { command: 'image.list'; options?: { label?: string } }
+  | { command: 'image.inspect'; id: string }
+  | { command: 'image.rm'; id: string }
   | { command: 'container.stop'; id: string }
   | { command: 'container.rm'; id: string }
 
@@ -33,6 +38,8 @@ export class DockerEngineFake implements DockerEngineClientLike {
   buildDelayMs = 0
   nextBuildError: Error | null = null
   nextExecError: Error | null = null
+  imageList: DockerImageListEntry[] = []
+  imageInspect = new Map<string, DockerImageInspectInfo>()
   private imageCounter = 0
   private containerCounter = 0
   private sessionCounter = 0
@@ -125,6 +132,26 @@ export class DockerEngineFake implements DockerEngineClientLike {
     const session = new FakeDockerExecSession(`session-${this.sessionCounter}`, options.cwd)
     this.sessions.set(session.id, session)
     return session
+  }
+
+  async listImages(options?: { label?: string }): Promise<DockerImageListEntry[]> {
+    this.commands.push({ command: 'image.list', options })
+    return this.imageList
+  }
+
+  async inspectImage(id: string): Promise<DockerImageInspectInfo> {
+    this.commands.push({ command: 'image.inspect', id })
+    const inspected = this.imageInspect.get(id)
+    if (!inspected) {
+      throw new Error(`Unknown image ${id}`)
+    }
+    return inspected
+  }
+
+  async removeImage(id: string): Promise<void> {
+    this.commands.push({ command: 'image.rm', id })
+    this.imageList = this.imageList.filter((image) => image.id !== id)
+    this.imageInspect.delete(id)
   }
 
   async stopContainer(id: string): Promise<void> {
