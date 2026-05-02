@@ -950,6 +950,7 @@ export type GlobalSettings = {
   theme: 'system' | 'dark' | 'light'
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
+  editorMinimapEnabled: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number

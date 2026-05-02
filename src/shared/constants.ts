@@ -121,6 +121,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
+    editorMinimapEnabled: false,
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,

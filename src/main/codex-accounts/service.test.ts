@@ -33,6 +33,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
+    editorMinimapEnabled: false,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
