@@ -1031,11 +1031,15 @@ export type GlobalSettings = {
    *  migration every user has `installId` set and `optedIn` is `true` (new
    *  users) or `null` (existing users awaiting the first-launch banner).
    *
-   *  Why: crash-detection state (`lastSessionId`, `lastHeartbeatTs`, clean-exit
-   *  flag) deliberately does NOT live here. That state ships in a separate
-   *  `orca-telemetry-heartbeat.json` file so a 5-minute heartbeat tick does
-   *  not amplify the debounced user-settings write, and a corrupt heartbeat
-   *  file can only break crash attribution — never user preferences. */
+   *  Why this block carries only consent + identity state, not volatile
+   *  counters: DAU and crash attribution are both out of v1 scope
+   *  (daily_active_user is derived server-side from app_opened; crashes are
+   *  handled by a separate crash-reporting lane, not product telemetry). So
+   *  there is no lastActiveDate, no lastSessionId, and no heartbeat
+   *  timestamp here — adding any of those would amplify the debounced
+   *  settings write on a fast cadence and couple user preferences to
+   *  volatile telemetry counters. Keep this surface to values that only
+   *  change on explicit consent transitions. */
   telemetry?: {
     /** New users: initialized to `true` at install.
      *  Existing users: `null` until they resolve the first-launch banner. */
@@ -1044,8 +1048,6 @@ export type GlobalSettings = {
     installId: string
     /** Cohort marker set once during migration. Drives toast-vs-banner. */
     existedBeforeTelemetryRelease: boolean
-    /** ISO YYYY-MM-DD in local time. Gates `daily_active_user`. */
-    lastActiveDate?: string
     /** New-user toast: true only after active dismissal ("Got it" or "Turn off").
      *  Re-shows on next launch if false/undefined so the consent disclosure
      *  is never silently skipped by quitting mid-session. */

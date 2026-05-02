@@ -653,7 +653,7 @@ describe('Store', () => {
           optedIn: true,
           installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           existedBeforeTelemetryRelease: false,
-          lastActiveDate: '2026-04-30'
+          firstRunNoticeShown: true
         }
       },
       ui: {},
@@ -665,7 +665,7 @@ describe('Store', () => {
       optedIn: true,
       installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       existedBeforeTelemetryRelease: false,
-      lastActiveDate: '2026-04-30'
+      firstRunNoticeShown: true
     })
   })
 })

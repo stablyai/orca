@@ -56,7 +56,6 @@ describe('install-id', () => {
           optedIn: true,
           installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           existedBeforeTelemetryRelease: false,
-          lastActiveDate: '2026-05-01',
           firstRunNoticeShown: true
         }
       })
@@ -71,7 +70,6 @@ describe('install-id', () => {
         optedIn: true,
         installId: newId,
         existedBeforeTelemetryRelease: false,
-        lastActiveDate: '2026-05-01',
         firstRunNoticeShown: true
       })
     })

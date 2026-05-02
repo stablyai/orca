@@ -1,10 +1,8 @@
 # Orca Privacy Notice
 
-Version: 1.0 — Last updated: 2026-05-01
+Version: 1.0 — Last updated: 2026-05-02
 
 Orca is a local desktop application for running CLI coding agents across git worktrees. This document describes the anonymous product-usage telemetry we collect in packaged Orca builds, what we never collect, and how to opt out.
-
-Questions: `[telemetry-contact-email]`.
 
 ## Summary
 
@@ -26,51 +24,38 @@ Every event carries these common properties:
 - `session_id` — new UUID per app launch; does not persist.
 - `orca_channel` — `stable` or `rc`. Present only on official release builds; dev builds never transmit.
 
-The events we send:
+The events we send (7 in total — 8 literal names, counting `telemetry_opted_in` / `telemetry_opted_out` as one matched pair):
 
 ### Lifecycle
 
-- `app_opened` — fires when the main window finishes loading. No custom properties.
-- `app_closed` — fires on clean quit (`was_crash: false`) and on the next launch after a crash (`was_crash: true`, reconstructed from a local heartbeat file).
-- `daily_active_user` — fires at most once per local day on launch. Properties: `date` (ISO `YYYY-MM-DD` in local time), `timezone` (IANA name such as `America/Los_Angeles`).
+- `app_opened` — fires when the main window finishes loading. No custom properties. Daily/weekly/monthly active users are derived server-side from distinct `install_id`s with an `app_opened` in the window; we do not emit a dedicated `daily_active_user` event.
 
-### Repos and worktrees
+### Repos and workspaces
 
 - `repo_added` — `method`: `folder_picker` / `clone_url` / `drag_drop`. Never the repo URL, repo name, or path.
-- `worktree_created` — `source`: entry-point enum (`command_palette` / `sidebar` / `shortcut` / `drag_drop` / `unknown`); `from_existing_branch` (bool). Never the branch name or base branch.
-- `worktree_initialized` — `success` (bool); `setup_duration_bucket` (`<1s` / `1-5s` / `5-30s` / `>30s`).
-- `worktree_deleted` — no properties.
-- `worktree_delete_safety_guard_triggered` — `outcome`: `confirmed` / `cancelled`.
+- `workspace_created` — `source`: entry-point enum (`command_palette` / `sidebar` / `shortcut` / `drag_drop` / `unknown`); `from_existing_branch` (bool). Never the branch name or base branch.
 
 ### Agents
 
-- `agent_started` — `agent_kind` (enum — `claude-code` / `codex` / …), `launch_source` (enum), `request_kind` (`new` / `resume` / `followup`). No model details, no prompt content.
-- `agent_stopped` — `session_duration_bucket` (`<1m` / `1-5m` / `5-30m` / `>30m`); `exit_reason` (`user` / `completed` / `error` / `unknown`).
-- `agent_error` — `error_class` (closed enum of known error types); `agent_kind`; optional `error_name` (constrained to a closed whitelist of exception class names — never a raw error message).
-
-### Editor
-
-- `external_editor_launched` — `editor`: `vscode` / `cursor` / `zed` / `idea` / `other`. Fires at most once per session. No path.
-
-### PRs
-
-- `pr_created` — `from_worktree` (bool); `origin`: `manual` / `agent_triggered`. Never the PR URL, title, description, branch name, target branch, or repo name.
+- `agent_started` — `agent_kind` (enum — `claude-code` / `codex` / `gemini` / `copilot` / `cursor` / `opencode` / `aider` / `amp` / `other`); `launch_source` (`command_palette` / `sidebar` / `tab_bar_quick_launch` / `task_page` / `new_workspace_composer` / `workspace_jump_palette` / `shortcut` / `unknown`); `request_kind` (`new` / `resume` / `followup`). No model details, no prompt content.
+- `agent_error` — `error_class` (closed enum of known error types); `agent_kind`; optional `error_name` drawn from a closed whitelist of error class names. Enum-only: no raw error message, no stack trace, no free-form identifiers. Per-incident error context lives only in a local diagnostic trace file on your machine; it reaches Orca only if you explicitly share a diagnostic bundle.
 
 ### Settings
 
-- `settings_changed` — `setting_key` (whitelisted enum only); `value_kind`: `bool` / `enum`. Never the raw value of a free-form setting.
+- `settings_changed` — `setting_key` (whitelisted enum, scoped to experimental-flag toggles and a small set of AI-related preferences); `value_kind`: `bool` / `enum`. Never the raw value of a free-form setting.
 
 ### Privacy controls
 
-- `telemetry_opted_in` / `telemetry_opted_out` — fires exactly once at the moment of the change. `via`: `first_launch_banner` / `first_launch_notice` / `settings`.
+- `telemetry_opted_in` / `telemetry_opted_out` — fires exactly once at the moment of the change. `via`: `first_launch_banner` / `first_launch_notice` / `settings`. Environment-variable and CI overrides do not fire these events — they disable transmission at runtime without changing your stored preference.
 
 ## What we never send
 
 - No file paths, repo names, branch names, URLs, commit messages, or current working directory.
 - No agent prompts, responses, or terminal contents.
-- No raw error messages or stack frames. `error_class` is a closed enum; the single narrow exception is `agent_error.error_name`, constrained to a closed whitelist of exception class names.
+- No raw error messages, no stack frames, and no free-form identifiers. `agent_error` is enum-only (`error_class` + `agent_kind`, plus an optional whitelisted `error_name`). Per-incident error context stays in a local diagnostic trace file and reaches Orca only if you explicitly share a diagnostic bundle.
 - No user account information (Orca has no account system).
 - No precise geoip. PostHog's project-level "Discard client IP data" is on; country is the only geographic signal derived from the request, and we do not populate `$ip` ourselves.
+- No person-profile materialization on the vendor side. Every event is captured with `$process_person_profile: false` so no profile is created against the anonymous `install_id`.
 - No free-form strings from any UI input. Every transmitted string property is either an enum, a UUID, or a bucketed/versioned constant.
 
 Runtime enforcement: a single `track(event, props)` wrapper with a TypeScript-typed event map and a runtime Zod validator. Events not in the map never compile; properties outside the declared shape are dropped at runtime with a warning.
@@ -96,13 +81,10 @@ When you flip telemetry off, events captured up to roughly 10 seconds before the
 - **Retention:** PostHog Cloud's plan-level default. At the time of this document, the free tier retains event data for 1 year, with cold-storage thereafter per PostHog's pricing page. Paid tiers extend this. We do not set a custom retention window.
 - **Access:** project membership is restricted to the telemetry owner and a single backup.
 
-## Data subject requests
+## Resetting or stopping your anonymous data
 
-Email `[telemetry-contact-email]` with your `install_id` (find it in Settings → Privacy). We answer requests within **30 days**.
+Three paths are available to you directly:
 
-- **Deletion.** We delete events associated with your `install_id` via PostHog's person-delete workflow within 30 days of request.
-- **Prospective rotation.** You can also click "Reset anonymous ID" in Settings → Privacy at any time. Subsequent events will carry a fresh `install_id`; events emitted before the rotation remain associated with the old `install_id` until you also request deletion.
-
-## Contact
-
-Questions or concerns: `[telemetry-contact-email]`.
+- **Reset anonymous ID** in Settings → Privacy rotates your `install_id` prospectively. Subsequent events carry a fresh UUID; events emitted before the rotation remain associated with the old UUID and are not linkable to the new one.
+- **Opt out** (Settings → Privacy, `DO_NOT_TRACK=1`, or `ORCA_TELEMETRY_DISABLED=1`) stops transmission entirely from the next event onward.
+- **Retention** is PostHog Cloud's plan-level default (see above); old events age out on that schedule without any action on your part.
