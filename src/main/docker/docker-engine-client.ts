@@ -44,6 +44,7 @@ export type DockerExecSessionOptions = {
   args: string[]
   cwd: string
   env?: Record<string, string>
+  tty?: boolean
   cols: number
   rows: number
 }
@@ -164,7 +165,7 @@ export class DockerEngineClient implements DockerEngineClientLike {
         LINES: String(options.rows)
       }
     })
-    args.splice(1, 0, '-i')
+    args.splice(1, 0, ...(options.tty ? ['-i', '-t'] : ['-i']))
     const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'] })
     const dataListeners = new Set<(data: string) => void>()
     const replayListeners = new Set<(data: string) => void>()
