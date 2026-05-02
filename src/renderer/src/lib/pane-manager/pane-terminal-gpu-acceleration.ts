@@ -16,7 +16,7 @@ export function applyTerminalGpuAcceleration(
   for (const pane of panes) {
     pane.terminalGpuAcceleration = nextMode
     if (nextMode === 'off') {
-      disposeWebgl(pane)
+      disposeWebgl(pane, { refreshDimensions: true })
       continue
     }
     if (

@@ -282,14 +282,31 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
   }
 }
 
-export function disposeWebgl(pane: ManagedPaneInternal): void {
-  if (pane.webglAddon) {
-    try {
-      pane.webglAddon.dispose()
-    } catch {
-      /* ignore */
-    }
-    pane.webglAddon = null
+export function disposeWebgl(
+  pane: ManagedPaneInternal,
+  options?: { refreshDimensions?: boolean }
+): void {
+  if (!pane.webglAddon) {
+    return
+  }
+  try {
+    pane.webglAddon.dispose()
+  } catch {
+    /* ignore */
+  }
+  pane.webglAddon = null
+  if (options?.refreshDimensions) {
+    // Why: VS Code refreshes terminal dimensions after WebGL teardown because
+    // DOM and WebGL renderer cell metrics differ. Without this, Linux DOM
+    // scrollbars can desync and trigger visible reflow jitter.
+    requestAnimationFrame(() => {
+      try {
+        pane.fitAddon.fit()
+        pane.terminal.refresh(0, pane.terminal.rows - 1)
+      } catch {
+        /* ignore — pane may have been disposed in the meantime */
+      }
+    })
   }
 }
 
@@ -316,26 +333,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // Recreating WebGL for this pane can loop context loss and leave xterm
       // visually blank, so keep the pane on the DOM renderer until remount.
       pane.webglDisabledAfterContextLoss = true
-      webglAddon.dispose()
-      pane.webglAddon = null
-      // Why: when the WebGL context is lost the GPU-rendered canvas goes
-      // blank instantly. After disposing the addon, xterm.js falls back to
-      // the DOM renderer but may not redraw the viewport unprompted —
-      // without a refresh + refit, the scrollback area renders as blank
-      // space above the most recent output. Deferring to the next frame
-      // gives the DOM renderer time to initialise before repainting. Scroll
-      // position is preserved by xterm's native viewportY handling across
-      // resize (see scroll-reflow.test.ts "reference: undisturbed"); if a
-      // splitPane was in flight, its scheduleSplitScrollRestore timer owns
-      // the authoritative restore.
-      requestAnimationFrame(() => {
-        try {
-          pane.fitAddon.fit()
-          pane.terminal.refresh(0, pane.terminal.rows - 1)
-        } catch {
-          /* ignore — pane may have been disposed in the meantime */
-        }
-      })
+      disposeWebgl(pane, { refreshDimensions: true })
     })
     pane.terminal.loadAddon(webglAddon)
     pane.webglAddon = webglAddon

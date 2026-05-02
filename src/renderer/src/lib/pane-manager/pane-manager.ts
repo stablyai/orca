@@ -230,7 +230,7 @@ export class PaneManager {
     }
     pane.gpuRenderingEnabled = enabled
     if (!enabled) {
-      disposeWebgl(pane)
+      disposeWebgl(pane, { refreshDimensions: true })
       return
     }
     if (pane.webglAttachmentDeferred || pane.webglDisabledAfterContextLoss) {

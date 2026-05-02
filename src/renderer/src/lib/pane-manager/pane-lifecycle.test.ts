@@ -95,6 +95,8 @@ describe('attachWebgl', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
 
     attachWebgl(pane)
 
