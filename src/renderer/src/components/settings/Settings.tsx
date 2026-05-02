@@ -174,6 +174,18 @@ function Settings(): React.JSX.Element {
     fetchSettings()
   }, [fetchSettings])
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      closeSettingsPage()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [closeSettingsPage])
+
   useEffect(
     () => () => {
       // Why: the settings search is a transient in-page filter. Leaving it behind makes the next
