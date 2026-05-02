@@ -61,6 +61,23 @@ describe('getIsolateToggleView', () => {
       label: 'Docker not detected'
     })
   })
+
+  it('renders disabled for SSH-mounted repos', () => {
+    expect(
+      getIsolateToggleView({
+        isolation: 'host',
+        engineStatus: { available: true, flavor: 'colima' },
+        progress: null,
+        isSshRepo: true
+      })
+    ).toEqual({
+      disabled: true,
+      active: false,
+      building: false,
+      tooltip: "Docker isolation isn't available for SSH-mounted repos.",
+      label: "Docker isolation isn't available for SSH-mounted repos."
+    })
+  })
 })
 
 describe('formatBuildProgress', () => {

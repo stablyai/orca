@@ -28,8 +28,19 @@ export function getIsolateToggleView(input: {
   isolation: WorktreeIsolation
   engineStatus: DockerEngineStatus | null
   progress: DockerBuildProgress | null
+  isSshRepo?: boolean
 }): IsolateToggleView {
   const active = input.isolation === 'docker'
+  // Why: Docker builds run locally, but SSH repo paths point at the remote host.
+  if (input.isSshRepo) {
+    return {
+      disabled: true,
+      active: false,
+      building: false,
+      tooltip: "Docker isolation isn't available for SSH-mounted repos.",
+      label: "Docker isolation isn't available for SSH-mounted repos."
+    }
+  }
   if (input.engineStatus && !input.engineStatus.available) {
     return {
       disabled: true,
@@ -73,6 +84,9 @@ export default function IsolateToggleButton({
   worktreeId
 }: IsolateToggleButtonProps): React.JSX.Element {
   const worktree = useAppStore((s) => findWorktree(s.worktreesByRepo, worktreeId))
+  const repo = useAppStore((s) =>
+    worktree ? (s.repos.find((entry) => entry.id === worktree.repoId) ?? null) : null
+  )
   const setIsolation = useAppStore((s) => s.setIsolation)
   const [engineStatus, setEngineStatus] = useState<DockerEngineStatus | null>(null)
   const [progress, setProgress] = useState<DockerBuildProgress | null>(null)
@@ -110,8 +124,14 @@ export default function IsolateToggleButton({
 
   const isolation = worktree?.isolation ?? 'host'
   const view = useMemo(
-    () => getIsolateToggleView({ isolation, engineStatus, progress }),
-    [isolation, engineStatus, progress]
+    () =>
+      getIsolateToggleView({
+        isolation,
+        engineStatus,
+        progress,
+        isSshRepo: !!repo?.connectionId
+      }),
+    [isolation, engineStatus, progress, repo?.connectionId]
   )
 
   const handleClick = useCallback(

@@ -24,14 +24,15 @@ const availableEngine: DockerEngineInfo = {
   socketPath: '/tmp/docker.sock'
 }
 
-function makeStore() {
+function makeStore(repoOverrides: Record<string, unknown> = {}) {
   return {
     getRepo: vi.fn().mockReturnValue({
       id: 'repo-1',
       path: '/repo',
       displayName: 'Repo',
       badgeColor: '#000',
-      addedAt: 0
+      addedAt: 0,
+      ...repoOverrides
     }),
     setWorktreeMeta: vi
       .fn()
@@ -112,6 +113,30 @@ describe('registerDockerIpcHandlers', () => {
       'docker:build-progress',
       expect.objectContaining({ worktreeId: 'repo-1::/repo/wt', phase: 'ready', percent: 100 })
     )
+  })
+
+  it('rejects Docker image builds for SSH repositories', async () => {
+    const store = makeStore({ connectionId: 'ssh-1', path: '/home/user/project' })
+    const buildImage = vi.fn()
+    const detectEngine = vi.fn().mockReturnValue(availableEngine)
+    registerDockerIpcHandlers(mainWindow as never, store as never, {
+      detectEngine,
+      buildImage,
+      createEngineClient: () => ({ buildImage: vi.fn() }) as never
+    })
+
+    const result = await handlers.get('docker:build-image')!(null, {
+      repoId: 'repo-1',
+      worktreeId: 'repo-1::/home/user/project'
+    })
+
+    expect(result).toEqual({
+      error:
+        'Docker isolation is not yet supported for SSH repositories. Use a local repo or remove the SSH connection.'
+    })
+    expect(detectEngine).not.toHaveBeenCalled()
+    expect(buildImage).not.toHaveBeenCalled()
+    expect(mainWindow.webContents.send).not.toHaveBeenCalled()
   })
 
   it('persists worktree isolation in the settings store', () => {

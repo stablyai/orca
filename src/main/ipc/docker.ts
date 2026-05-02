@@ -8,6 +8,8 @@ import type { DockerEngineInfo } from '../docker/types'
 import type { DockerBuildProgress, DockerEngineStatus, WorktreeIsolation } from '../../shared/types'
 
 const ENGINE_STATUS_CACHE_MS = 30_000
+const SSH_DOCKER_ISOLATION_ERROR =
+  'Docker isolation is not yet supported for SSH repositories. Use a local repo or remove the SSH connection.'
 
 type DockerIpcStore = Pick<Store, 'getRepo' | 'setWorktreeMeta'>
 
@@ -60,6 +62,11 @@ export function registerDockerIpcHandlers(
       const repo = store.getRepo(args.repoId)
       if (!repo) {
         throw new Error(`Repo not found: ${args.repoId}`)
+      }
+      // Why: SSH repo paths live on the remote host; local Docker builds must
+      // not interpret them as local filesystem paths.
+      if (repo.connectionId) {
+        return { error: SSH_DOCKER_ISOLATION_ERROR }
       }
 
       const engineStatus = detectEngine()
