@@ -17,6 +17,11 @@ on:
 
 permissions:
   contents: write
+  # Why: this workflow calls release.yml, whose publish-release job needs
+  # actions: write to dispatch homebrew-bump.yml. Reusable workflows are
+  # capped by the caller's permissions, so the caller must list every
+  # scope the callee needs. Mirrors the fix in release-cut.yml.
+  actions: write
 
 concurrency:
   group: release-rc
