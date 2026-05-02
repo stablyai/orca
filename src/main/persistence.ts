@@ -186,7 +186,17 @@ export class Store {
   //   - `installId` — anonymous UUID v4. Stable across launches; regenerable
   //     from the Privacy pane (PR 3).
   private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
-    if (state.settings?.telemetry?.existedBeforeTelemetryRelease !== undefined) {
+    const existing = state.settings?.telemetry
+    // Why: the one-shot is complete only when all three invariants hold.
+    // Keying on `existedBeforeTelemetryRelease` alone would let a partially-
+    // written telemetry block (crash mid-save, hand-edit, future bug) short-
+    // circuit migration and leave `installId` undefined or `optedIn` wiped.
+    if (
+      typeof existing?.existedBeforeTelemetryRelease === 'boolean' &&
+      typeof existing.installId === 'string' &&
+      existing.installId.length > 0 &&
+      (existing.optedIn === true || existing.optedIn === false || existing.optedIn === null)
+    ) {
       return state
     }
     return {
@@ -194,12 +204,25 @@ export class Store {
       settings: {
         ...state.settings,
         telemetry: {
-          ...state.settings?.telemetry,
-          existedBeforeTelemetryRelease: fileExistedOnLoad,
-          // New users: on. Existing users: undecided — the first-launch
-          // banner in PR 3 is what flips them to true or false.
-          optedIn: fileExistedOnLoad ? null : true,
-          installId: state.settings?.telemetry?.installId ?? randomUUID()
+          ...existing,
+          existedBeforeTelemetryRelease:
+            typeof existing?.existedBeforeTelemetryRelease === 'boolean'
+              ? existing.existedBeforeTelemetryRelease
+              : fileExistedOnLoad,
+          // Why: preserve an explicit opt-in/out if the user has ever resolved
+          // it. Only fall back to the cohort default (new users: on; existing
+          // users: undecided until the first-launch banner resolves) when
+          // optedIn is truly unset (undefined), never when it is `false`.
+          optedIn:
+            existing?.optedIn === true || existing?.optedIn === false || existing?.optedIn === null
+              ? existing.optedIn
+              : fileExistedOnLoad
+                ? null
+                : true,
+          installId:
+            typeof existing?.installId === 'string' && existing.installId.length > 0
+              ? existing.installId
+              : randomUUID()
         }
       }
     }
@@ -383,13 +406,24 @@ export class Store {
   }
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
+    // Why: `telemetry` is deep-merged for the same reason `notifications` is —
+    // partial updates from the Privacy pane / consent flow (e.g., flipping
+    // only `optedIn`) must not clobber sibling fields like `installId`,
+    // `existedBeforeTelemetryRelease`, or banner-dismissal markers. The
+    // field is optional, so we only synthesize a `telemetry` key on the
+    // result when at least one side has one.
+    const mergedTelemetry =
+      updates.telemetry !== undefined
+        ? { ...this.state.settings.telemetry, ...updates.telemetry }
+        : this.state.settings.telemetry
     this.state.settings = {
       ...this.state.settings,
       ...updates,
       notifications: {
         ...this.state.settings.notifications,
         ...updates.notifications
-      }
+      },
+      ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()
     return this.state.settings

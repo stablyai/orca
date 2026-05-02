@@ -18,7 +18,7 @@ export type ConsentState =
   | { effective: 'enabled' }
   | {
       effective: 'disabled'
-      reason: 'do_not_track' | 'orca_disabled' | 'ci' | 'user_opt_out' | 'banner_unresolved'
+      reason: 'do_not_track' | 'orca_disabled' | 'ci' | 'user_opt_out'
     }
   | { effective: 'pending_banner' }
 

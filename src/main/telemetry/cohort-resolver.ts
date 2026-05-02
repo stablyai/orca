@@ -44,10 +44,19 @@ export function initCohortResolver(store: Store): void {
   // catches it if the debounce has not fired. Force-quit between this write
   // and the debounce loses at most one launch of re-ask, which is the
   // acceptable tradeoff vs. a sync-write that blocks startup.
-  if (
-    t.firstBannerDismissedAt &&
-    Date.now() - new Date(t.firstBannerDismissedAt).getTime() >= SEVEN_DAYS_MS
-  ) {
-    store.updateSettings({ telemetry: { ...t, firstBannerSecondAskShown: true } })
+  if (t.firstBannerDismissedAt) {
+    const dismissedAt = new Date(t.firstBannerDismissedAt).getTime()
+    if (!Number.isFinite(dismissedAt)) {
+      // Why: a malformed timestamp (corruption, hand-edit, partial write)
+      // would otherwise park the state machine here forever — `NaN >= N` is
+      // always false, so Case B never advances and Case A never fires.
+      // Clearing it surfaces the banner on next launch rather than silently
+      // suppressing telemetry indefinitely.
+      store.updateSettings({ telemetry: { ...t, firstBannerDismissedAt: undefined } })
+      return
+    }
+    if (Date.now() - dismissedAt >= SEVEN_DAYS_MS) {
+      store.updateSettings({ telemetry: { ...t, firstBannerSecondAskShown: true } })
+    }
   }
 }
