@@ -219,7 +219,23 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         >
       }
     ) => {
-      const updated = store.updateRepo(args.repoId, args.updates)
+      // Why: validate the persisted preference string at the IPC boundary
+      // — the TypeScript signature is erased at runtime, and a preload
+      // version skew or renderer bug could otherwise persist a garbage
+      // string that silently collapses to 'auto' in `resolveIssueSource`
+      // (see gh-utils.ts#resolveIssueSource). Strip rather than throw so
+      // other valid fields in the same call still persist.
+      const updates = { ...args.updates }
+      if (
+        'issueSourcePreference' in updates &&
+        updates.issueSourcePreference !== undefined &&
+        updates.issueSourcePreference !== 'upstream' &&
+        updates.issueSourcePreference !== 'origin' &&
+        updates.issueSourcePreference !== 'auto'
+      ) {
+        delete updates.issueSourcePreference
+      }
+      const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
         notifyReposChanged(mainWindow)
       }

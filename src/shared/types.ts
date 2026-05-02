@@ -659,7 +659,7 @@ export type ListWorkItemsResult<T> = {
      *  can always decide whether to render (upstream exists & differs from
      *  origin) and show both slugs in its tooltips, even when the user has
      *  picked 'origin' and `sources.issues` has collapsed onto origin. */
-    upstreamCandidate?: GitHubOwnerRepo | null
+    upstreamCandidate: GitHubOwnerRepo | null
   }
   errors?: {
     issues?: ClassifiedError
@@ -667,8 +667,11 @@ export type ListWorkItemsResult<T> = {
   /** True when the user's per-repo preference was `'upstream'` but no upstream
    *  remote is configured, so the resolver fell back to origin. Renderer uses
    *  this to surface a one-time-per-session toast. Omitted when absent so
-   *  existing consumers and test fixtures don't care about it. */
-  issueSourceFellBack?: boolean
+   *  existing consumers and test fixtures don't care about it.
+   *  Typed as `?: true` (not `?: boolean`) to encode the invariant "present
+   *  iff fell-back" — an explicit `false` write would be a bug, so make it a
+   *  compile error. */
+  issueSourceFellBack?: true
 }
 
 export type LinearWorkflowState = {

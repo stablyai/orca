@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import IssueSourceSelector from '@/components/github/IssueSourceSelector'
+import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { normalizeGitHubLinkQuery } from '@/lib/github-links'
@@ -100,7 +102,9 @@ export default function CreateFromTab({
     setRememberedSubTab,
     fetchWorkItems,
     getCachedWorkItems,
-    getWorkItemsSourcesAndError
+    getWorkItemsSourcesAndError,
+    setIssueSourcePreference,
+    workItemsInvalidationNonce
   } = useAppStore(
     useShallow((s) => ({
       activeRepoId: s.activeRepoId,
@@ -112,7 +116,14 @@ export default function CreateFromTab({
       setRememberedSubTab: s.setCreateFromSubTab,
       fetchWorkItems: s.fetchWorkItems,
       getCachedWorkItems: s.getCachedWorkItems,
-      getWorkItemsSourcesAndError: s.getWorkItemsSourcesAndError
+      getWorkItemsSourcesAndError: s.getWorkItemsSourcesAndError,
+      setIssueSourcePreference: s.setIssueSourcePreference,
+      // Why: re-run the issues fetch effect after `setIssueSourcePreference`
+      // evicts this repo's cache entries — otherwise flipping the selector
+      // clears the cache but the effect's deps wouldn't force a refetch and
+      // the Issues sub-tab would briefly show stale (then empty-once-cached-
+      // expires) data until the user typed or switched tabs.
+      workItemsInvalidationNonce: s.workItemsInvalidationNonce
     }))
   )
 
@@ -367,7 +378,11 @@ export default function CreateFromTab({
     normalizedGhQuery.directNumber,
     fetchWorkItems,
     getCachedWorkItems,
-    getWorkItemsSourcesAndError
+    getWorkItemsSourcesAndError,
+    // Why: flipping the issue-source selector evicts this repo's cache and
+    // bumps the nonce so this effect re-runs against the new preference.
+    // Matches the identical pattern in TaskPage's Tasks-list fetch effect.
+    workItemsInvalidationNonce
   ])
 
   // ---------------------------------------------------------------------
@@ -752,6 +767,29 @@ export default function CreateFromTab({
 
   const showGhRepoPicker = subTab !== 'linear'
 
+  // Why: render the issue-source selector inline with the Issues sub-tab's
+  // search input so a user who lands on an upstream/origin mismatch can
+  // correct it in place instead of closing the modal, flipping from the
+  // Tasks page, and re-opening. Sources come from whatever `workItemsCache`
+  // entry exists for this repo (empty-query or a past search) — the per-repo
+  // `listWorkItems` envelope always stamps both `prs` and `upstreamCandidate`
+  // so we can re-use the same derived shape the Tasks header consumes.
+  // Subscribing through `getWorkItemsAnySourcesForRepo` (a selector that
+  // returns a stable reference for unchanged entries) keeps this cheap —
+  // unrelated cache writes don't re-render the tab.
+  const selectorSources = useAppStore((s) =>
+    selectedRepo?.path && !isRemoteRepo
+      ? s.getWorkItemsAnySourcesForRepo(selectedRepo.path, COMBINED_WORK_ITEM_LIMIT)
+      : null
+  )
+  const selectorOrigin = selectorSources?.prs ?? null
+  const selectorUpstream = selectorSources?.upstreamCandidate ?? null
+  const selectorRenderable =
+    subTab === 'issues' &&
+    !!selectorOrigin &&
+    !!selectorUpstream &&
+    !sameGitHubOwnerRepo(selectorOrigin, selectorUpstream)
+
   // Why: each row gets a stable, unique `value` so cmdk's keyboard
   // navigation can track selection across sub-tab changes. Values also
   // feed the controlled `commandValue` state below.
@@ -1058,8 +1096,49 @@ export default function CreateFromTab({
                       }
                     }}
                     placeholder={placeholderBySubTab[subTab]}
-                    className="h-9 pl-8 text-sm"
+                    className={cn(
+                      'h-9 pl-8 text-sm',
+                      // Why: reserve trailing space for the absolute-positioned
+                      // IssueSourceSelector so typed text never slides under
+                      // the pills. Only widen the padding when the selector
+                      // is actually rendered.
+                      selectorRenderable && !launching ? 'pr-[140px]' : ''
+                    )}
                   />
+                  {selectorRenderable && selectedRepo && !launching ? (
+                    // Why: right-aligned inside the input so the selector
+                    // stays visually attached to the surface whose contents
+                    // it controls. `pointer-events-auto` is needed because
+                    // the sibling Search/Loader icons set
+                    // `pointer-events-none` on the absolute-positioned layer
+                    // — we override that for the clickable pills.
+                    // `suppressTooltip`: the selector is only visible on the
+                    // Issues sub-tab, so "Showing issues from X" restates
+                    // what's already implied (same reasoning as the Create
+                    // Issue composer mirror in TaskPage).
+                    <div
+                      className="pointer-events-auto absolute right-2 top-1/2 -translate-y-[calc(50%+2px)]"
+                      onMouseDown={(e) => {
+                        // Why: clicking a pill would otherwise blur the input
+                        // and close the results popover before the click
+                        // lands on the button. Blocking the default focus
+                        // shift keeps the popover open across a flip so the
+                        // user sees the list repopulate against the new
+                        // source without re-clicking the input.
+                        e.preventDefault()
+                      }}
+                    >
+                      <IssueSourceSelector
+                        preference={selectedRepo.issueSourcePreference}
+                        origin={selectorOrigin}
+                        upstream={selectorUpstream}
+                        onChange={(next) => {
+                          void setIssueSourcePreference(selectedRepo.id, selectedRepo.path, next)
+                        }}
+                        suppressTooltip
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </PopoverAnchor>
               <PopoverContent

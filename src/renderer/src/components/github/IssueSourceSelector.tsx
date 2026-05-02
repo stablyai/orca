@@ -170,7 +170,7 @@ export default function IssueSourceSelector({
     <Tooltip>
       <TooltipTrigger asChild>{group}</TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
-        Issues from{' '}
+        Showing issues from{' '}
         <span className="font-mono">{effective === 'upstream' ? upstreamSlug : originSlug}</span>
       </TooltipContent>
     </Tooltip>

@@ -185,14 +185,22 @@ export async function createIssue(
 /**
  * Update an existing GitHub issue. Fans out to separate gh commands for
  * state changes vs field edits since `gh issue edit` does not support state.
+ *
+ * Why this path doesn't take a preference (mirrors `getIssue`): mutations
+ * target an issue number already bound to a worktree / linked elsewhere in
+ * the UI. Routing an update through the live per-repo preference would let
+ * a user open upstream#N, toggle the selector to origin, save, and silently
+ * write to origin#N — a different issue (or 404). That is the exact
+ * silent-source-switch class of wrongness #1186 / the parent design doc
+ * guard against. List and create paths honor preference; mutations stay on
+ * the heuristic `getIssueOwnerRepo`.
  */
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
-  updates: GitHubIssueUpdate,
-  preference?: IssueSourcePreference
+  updates: GitHubIssueUpdate
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -262,13 +270,24 @@ export async function updateIssue(
   return { ok: true }
 }
 
+/**
+ * Add a comment to an existing GitHub issue.
+ *
+ * Why this path doesn't take a preference (mirrors `getIssue` / `updateIssue`):
+ * a comment is posted against an issue number already bound to a worktree or
+ * surfaced from a prior read. Routing through the live per-repo preference
+ * would let a user read upstream#N, toggle the selector to origin, and have
+ * their reply silently post on origin#N — a different issue entirely. That
+ * is the same silent-source-switch class of wrongness #1186 / the parent
+ * design doc guard against. List and create paths honor preference;
+ * mutations stay on the heuristic `getIssueOwnerRepo`.
+ */
 export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
-  body: string,
-  preference?: IssueSourcePreference
+  body: string
 ): Promise<GitHubCommentResult> {
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }

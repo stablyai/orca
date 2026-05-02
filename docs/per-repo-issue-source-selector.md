@@ -108,13 +108,13 @@ To thread the preference through, add a `preference?: IssueSourcePreference` par
 
 ### 4. Persistence
 
-Extend the `updateRepo` entry at `src/main/persistence.ts:268` to include `issueSourcePreference` in the Pick:
+Extend the `updateRepo` entry in `src/main/persistence.ts` to include `issueSourcePreference` in the Pick:
 
 ```ts
 updateRepo(id: string, patch: Partial<Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind' | 'issueSourcePreference'>>): void
 ```
 
-Writing `undefined` should clear the preference (reset to auto). If the current `updateRepo` does a shallow merge that treats `undefined` as "no change," add an explicit path to delete the key — or use `null` as the sentinel and treat both `null` and absent as auto. Pick whichever matches the existing code's conventions; don't invent a new one.
+Writing `undefined` clears the preference (reset to auto). As shipped, `updateRepo` has an explicit delete branch for this field — `if ('issueSourcePreference' in updates && updates.issueSourcePreference === undefined)` removes the key from the record rather than relying on shallow-merge semantics. This keeps `undefined` and absent indistinguishable at read time (both mean auto) without introducing a `null` sentinel.
 
 ### 5. IPC
 
@@ -124,7 +124,7 @@ As shipped: preference reads come off the `Repo` record already delivered by
 in its `Pick`. This keeps a single write path, emits the `repos:changed`
 broadcast for free, and avoids two channels racing on the same field.
 
-Update `src/preload/api-types.ts` and `src/preload/index.ts` accordingly.
+Update `src/preload/api-types.ts` to reflect the extended update surface. (`src/preload/index.ts` passes `repos:update` args through unchanged, so no edits are needed there.)
 
 ### 6. UI: segmented control
 
@@ -160,6 +160,7 @@ Use the existing toast mechanism (`sonner` is already in use — see `TaskPage.t
 - `src/main/persistence.ts` — extend `updateRepo` Pick with `issueSourcePreference` and add the "reset to auto drops the key" delete branch.
 - `src/main/github/gh-utils.ts` — new `resolveIssueSource` helper.
 - `src/main/github/client.ts`, `src/main/github/issues.ts` — migrate call sites.
+- `src/main/ipc/github.ts` — IPC handlers read `repo.issueSourcePreference` off the registered `Repo` and thread it into the list/create paths (`listIssues`, `createIssue`, `listWorkItems`, `countWorkItems`, `listLabels`, `listAssignableUsers`).
 - `src/main/ipc/repos.ts` — extend `repos:update` to accept `issueSourcePreference`.
 
 **Preload:**
@@ -173,7 +174,7 @@ Use the existing toast mechanism (`sonner` is already in use — see `TaskPage.t
 
 ### 9. Tests
 
-- **Extend `src/main/github/client-issue-source.test.ts`:** cover all three preference states × both remote-topology states (upstream exists / absent):
+- **Add `src/main/github/client-issue-source.test.ts`:** cover all three preference states × both remote-topology states (upstream exists / absent):
   - `preference='auto'` + upstream exists → upstream.
   - `preference='auto'` + no upstream → origin.
   - `preference='upstream'` + upstream exists → upstream.

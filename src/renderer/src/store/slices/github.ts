@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the GitHub slice co-locates all cache + fetch logic for
 PR, issue, checks, and comments data so the dedup and invalidation patterns stay consistent. */
 import type { StateCreator } from 'zustand'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
   ClassifiedError,
@@ -20,8 +21,10 @@ export type WorkItemsCacheSources = {
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
   /** Raw upstream remote (if any) — present so the selector can render
-   *  independently of the currently-effective preference. */
-  upstreamCandidate?: GitHubOwnerRepo | null
+   *  independently of the currently-effective preference. Required-nullable
+   *  (matches siblings `issues`/`prs`) so consumers only branch on `null`
+   *  vs value, not a three-state (undefined | null | value). */
+  upstreamCandidate: GitHubOwnerRepo | null
 }
 
 // Why: the indicator and retry banner both need the resolved owner/repo for
@@ -51,8 +54,10 @@ export type CacheEntry<T> = {
    * `'upstream'` remote is no longer configured for this repo. Consumers
    * surface a one-time toast per session/repo; TaskPage tracks the
    * already-toasted set so repeated refreshes don't re-toast.
+   * Typed as `?: true` (not `?: boolean`) to encode the invariant "present
+   * iff fell-back" — an explicit `false` write would be a bug.
    */
-  issueSourceFellBack?: boolean
+  issueSourceFellBack?: true
 }
 
 type FetchOptions = {
@@ -65,6 +70,10 @@ const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
 // source of truth, so 60s staleness is fine — stale data renders instantly
 // while a background refresh keeps it current.
 const WORK_ITEMS_CACHE_TTL = 60_000
+// Why: match repos.ts so error toasts surfaced from this slice share the same
+// long-lived duration — the user needs time to read + act on persist failures
+// rather than having the toast vanish behind default short-lived timings.
+const ERROR_TOAST_DURATION = 60_000
 
 const inflightPRRequests = new Map<
   string,
@@ -888,6 +897,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       })
     } catch (err) {
       console.error('Failed to persist issue-source preference:', err)
+      // Why: surface the persist failure so the user understands why the
+      // pill visually reverts (optimistic patch above → resync via
+      // fetchRepos below). Without this toast, the UI silently snaps back
+      // and the user has no clue the write failed.
+      toast.error('Failed to save issue-source preference', {
+        duration: ERROR_TOAST_DURATION
+      })
       // Why: the optimistic patch above may now disagree with disk. Resync
       // rather than leave a lie on screen. We only refetch repos — the cache
       // eviction below is still safe to run; worst case we trigger a

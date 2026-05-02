@@ -305,7 +305,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.updates || typeof args.updates !== 'object') {
         return { ok: false, error: 'Updates object is required' }
       }
-      return updateIssue(repo.path, args.number, args.updates, repo.issueSourcePreference)
+      return updateIssue(repo.path, args.number, args.updates)
     }
   )
 
@@ -319,7 +319,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
-      return addIssueComment(repo.path, args.number, args.body.trim(), repo.issueSourcePreference)
+      return addIssueComment(repo.path, args.number, args.body.trim())
     }
   )
 

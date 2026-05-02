@@ -188,11 +188,14 @@ export async function resolveIssueSource(
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
-    // Why: explicit upstream is gone — fall back to origin but flag it so the
-    // UI can toast once. Do NOT auto-reset the preference: the user may be
-    // mid-way through a workflow and expect their choice to re-engage if
-    // `upstream` is re-added.
-    return { source: await getOwnerRepoForRemote(repoPath, 'origin'), fellBack: true }
+    // Why: explicit upstream is gone — fall back to origin but only flag the
+    // fallback when it actually produced an origin source. If origin is also
+    // missing (or non-GitHub), there's nothing to "fall back to" and the
+    // UI toast "using origin" would be misleading. Do NOT auto-reset the
+    // preference: the user may be mid-way through a workflow and expect
+    // their choice to re-engage if `upstream` is re-added.
+    const origin = await getOwnerRepoForRemote(repoPath, 'origin')
+    return { source: origin, fellBack: origin !== null }
   }
   if (preference === 'origin') {
     return { source: await getOwnerRepoForRemote(repoPath, 'origin'), fellBack: false }

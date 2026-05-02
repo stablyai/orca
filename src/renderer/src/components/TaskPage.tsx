@@ -1333,13 +1333,7 @@ export default function TaskPage(): React.JSX.Element {
     // updates. `workItemsInvalidationNonce` is explicitly included so a
     // preference flip (which only evicts cache) re-dispatches this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    selectedRepos,
-    appliedTaskSearch,
-    taskRefreshNonce,
-    taskSource,
-    workItemsInvalidationNonce
-  ])
+  }, [selectedRepos, appliedTaskSearch, taskRefreshNonce, taskSource, workItemsInvalidationNonce])
 
   const handleApplyTaskSearch = useCallback((): void => {
     const trimmed = taskSearchInput.trim()
@@ -2038,8 +2032,14 @@ export default function TaskPage(): React.JSX.Element {
                             if (!selectorRenderable || !repo) {
                               return null
                             }
+                            // Why: must be a <div> (not <span>) because the child
+                            // <IssueSourceSelector> renders a <div role="group">, and
+                            // a block-level <div> nested inside an inline <span> is
+                            // invalid HTML — React emits a hydration warning and
+                            // browsers may auto-close the span. `issueSourceChipClass`
+                            // uses `inline-flex`, so the visual rendering is identical.
                             return (
-                              <span key={s.repoId} className={issueSourceChipClass}>
+                              <div key={s.repoId} className={issueSourceChipClass}>
                                 {showDotLabel ? (
                                   <RepoDotLabel
                                     name={repo.displayName}
@@ -2056,7 +2056,7 @@ export default function TaskPage(): React.JSX.Element {
                                     void setIssueSourcePreference(repo.id, repo.path, next)
                                   }}
                                 />
-                              </span>
+                              </div>
                             )
                           })}
                         </div>
