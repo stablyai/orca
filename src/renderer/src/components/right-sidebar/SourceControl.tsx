@@ -121,6 +121,8 @@ function SourceControlInner(): React.JSX.Element {
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
   const trackConflictPath = useAppStore((s) => s.trackConflictPath)
   const openDiff = useAppStore((s) => s.openDiff)
+  const openFile = useAppStore((s) => s.openFile)
+  const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
@@ -341,15 +343,38 @@ function SourceControlInner(): React.JSX.Element {
         openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path))
         return
       }
-      openDiff(
-        activeWorktreeId,
-        joinPath(worktreePath, entry.path),
-        entry.path,
-        detectLanguage(entry.path),
-        entry.area === 'staged'
-      )
+      const language = detectLanguage(entry.path)
+      const filePath = joinPath(worktreePath, entry.path)
+      // Why: unstaged markdown diffs open as a normal edit tab in Changes
+      // view mode rather than a dedicated diff tab. This unifies sidebar
+      // clicks with the header's Edit|Changes toggle: there is exactly one
+      // tab per markdown file, and the sidebar click flips that tab's view
+      // mode. Staged diffs still open as a separate diff tab because the
+      // staged content is not what the editor would be editing. Non-markdown
+      // files keep the existing diff-tab flow until the diff-tab type is
+      // eventually collapsed (see reviews/changes-view-mode-plan.md §"Follow-up").
+      if (language === 'markdown' && entry.area === 'unstaged') {
+        openFile({
+          filePath,
+          relativePath: entry.path,
+          worktreeId: activeWorktreeId,
+          language,
+          mode: 'edit'
+        })
+        setEditorViewMode(filePath, 'changes')
+        return
+      }
+      openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged')
     },
-    [activeWorktreeId, worktreePath, trackConflictPath, openConflictFile, openDiff]
+    [
+      activeWorktreeId,
+      worktreePath,
+      trackConflictPath,
+      openConflictFile,
+      openDiff,
+      openFile,
+      setEditorViewMode
+    ]
   )
 
   const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =

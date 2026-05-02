@@ -1,4 +1,5 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { EditorToggleValue } from './MarkdownViewToggle'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
@@ -11,6 +12,27 @@ const MARKDOWN_DIFF_VIEW_MODES = [
 ] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
+
+// Why: every editable file (markdown, mermaid, or plain code) can flip into
+// Changes view mode. The toggle surfaces this alongside any language-specific
+// modes so there is one UI control per pane, not two. Non-edit tabs (diff,
+// conflict) do NOT get Changes because they are already a diff/review surface.
+// Plain code files have no markdown-style sub-modes, so their toggle is just
+// Edit | Changes.
+const CODE_EDIT_TOGGLE_MODES = ['edit', 'changes'] as const satisfies readonly EditorToggleValue[]
+
+export function getEditorToggleModes(
+  target: MarkdownPreviewTarget
+): readonly EditorToggleValue[] {
+  if (target.mode !== 'edit') {
+    return getMarkdownViewModes(target)
+  }
+  const languageModes = getMarkdownViewModes(target)
+  if (languageModes.length > 0) {
+    return [...languageModes, 'changes']
+  }
+  return CODE_EDIT_TOGGLE_MODES
+}
 
 export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly MarkdownViewMode[] {
   if (target.language === 'markdown') {

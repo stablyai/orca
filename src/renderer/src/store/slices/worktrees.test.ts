@@ -48,6 +48,7 @@ function createTestStore() {
         openFiles: [],
         editorDrafts: {},
         markdownViewMode: {},
+        editorViewMode: {},
         expandedDirs: {},
         gitStatusByWorktree: {},
         gitConflictOperationByWorktree: {},
@@ -229,6 +230,35 @@ describe('removeWorktree state cleanup', () => {
     await store.getState().removeWorktree('repo1::/path/wt1')
 
     expect(store.getState().markdownViewMode).toEqual({ 'file-2': 'source' })
+  })
+
+  it('cleans up editorViewMode for files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        {
+          id: 'file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/app.ts',
+          relativePath: 'app.ts',
+          language: 'typescript',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      editorViewMode: {
+        'file-1': 'changes' as const,
+        'file-2': 'changes' as const
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
   })
 
   it('cleans up expandedDirs for the removed worktree', async () => {

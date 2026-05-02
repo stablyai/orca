@@ -252,10 +252,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
         const nextMarkdownViewMode =
           removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
+        const nextEditorViewMode =
+          removedFileIds.size > 0 ? { ...s.editorViewMode } : s.editorViewMode
         if (removedFileIds.size > 0) {
           for (const fileId of removedFileIds) {
             delete nextEditorDrafts[fileId]
             delete nextMarkdownViewMode[fileId]
+            delete nextEditorViewMode[fileId]
           }
         }
         const nextExpandedDirs = { ...s.expandedDirs }
@@ -299,6 +302,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
+          editorViewMode: nextEditorViewMode,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,
           gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,

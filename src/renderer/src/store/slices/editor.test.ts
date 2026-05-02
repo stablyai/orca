@@ -144,6 +144,50 @@ describe('createEditorSlice markdown view state', () => {
   })
 })
 
+describe('createEditorSlice editor view mode', () => {
+  it('stores changes mode as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    expect(store.getState().editorViewMode).toEqual({ '/repo/app.ts': 'changes' })
+  })
+
+  it('deletes the entry when mode resets to edit', () => {
+    const store = createEditorStore()
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'edit')
+
+    expect(store.getState().editorViewMode).toEqual({})
+  })
+
+  it('is a no-op when resetting a file that was never in changes mode', () => {
+    const store = createEditorStore()
+    const before = store.getState().editorViewMode
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'edit')
+
+    expect(store.getState().editorViewMode).toBe(before)
+  })
+
+  it('drops editor view mode when the file is closed', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/app.ts',
+      relativePath: 'app.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    store.getState().closeFile('/repo/app.ts')
+
+    expect(store.getState().editorViewMode).toEqual({})
+  })
+})
+
 describe('createEditorSlice openMarkdownPreview', () => {
   it('opens markdown preview as a separate read-only tab', () => {
     const store = createEditorStore()

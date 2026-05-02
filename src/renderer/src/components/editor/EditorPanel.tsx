@@ -42,10 +42,12 @@ import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
+  getEditorToggleModes,
   getMarkdownPreviewShortcutLabel,
   getMarkdownViewModes,
   isMarkdownPreviewShortcut
 } from './markdown-preview-controls'
+import type { EditorToggleValue } from './MarkdownViewToggle'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -140,6 +142,8 @@ function EditorPanelInner({
   const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+  const editorViewMode = useAppStore((s) => s.editorViewMode)
+  const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const closeFile = useAppStore((s) => s.closeFile)
@@ -155,6 +159,12 @@ function EditorPanelInner({
   const activeFileMode = activeFile?.mode ?? null
   const activeFileDiffSource = activeFile?.diffSource
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
+  // Why: Changes view mode only applies on top of a regular edit-mode tab. It
+  // swaps the MonacoEditor for a DiffViewer (HEAD vs working tree incl. unsaved
+  // draft) without creating a new tab. Transient tabs (diff, conflict-review,
+  // markdown-preview) keep their own rendering pipeline.
+  const isChangesMode =
+    !!activeFile && activeFile.mode === 'edit' && editorViewMode[activeFile.id] === 'changes'
 
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
@@ -286,10 +296,15 @@ function EditorPanelInner({
       if (activeFile.conflict?.kind === 'conflict-placeholder') {
         return
       }
-      if (fileContents[activeFile.id]) {
-        return
+      if (!fileContents[activeFile.id]) {
+        void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
       }
-      void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
+      // Why: Changes view mode needs the HEAD-side blob as well as the
+      // working-tree content. Kick off the diff load alongside the normal
+      // file read so both are ready by the time DiffViewer mounts.
+      if (isChangesMode && !diffContents[activeFile.id]) {
+        void loadDiffContent(activeFile)
+      }
     } else if (
       activeFile.mode === 'diff' &&
       activeFile.diffSource !== undefined &&
@@ -301,7 +316,7 @@ function EditorPanelInner({
       }
       void loadDiffContent(activeFile)
     }
-  }, [activeFile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeFile?.id, isChangesMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!copiedPathToast) {
@@ -362,7 +377,13 @@ function EditorPanelInner({
           ? file.branchCompare
           : null
       const connectionId = getConnectionId(file.worktreeId) ?? undefined
-      const key = inFlightDiffKey(file, connectionId)
+      // Why: Changes view mode runs on top of an edit-mode tab and asks git
+      // for an unstaged diff against HEAD for that file. Use the 'unstaged'
+      // diff-source key so multiple Changes tabs across split panes share one
+      // IPC round-trip with any open unstaged diff-tab for the same path.
+      const diffSourceForKey: typeof file.diffSource =
+        file.mode === 'edit' ? 'unstaged' : file.diffSource
+      const key = inFlightDiffKey({ ...file, diffSource: diffSourceForKey }, connectionId)
       // Why: same rationale as inFlightFileReads above — a single external
       // change fans out to every mounted EditorPanel, and two split panes
       // showing the same diff tab should share one git.diff IPC instead of
@@ -412,6 +433,21 @@ function EditorPanelInner({
       }))
     }
   }, [])
+
+  // Why: refetch the HEAD-side blob for Changes mode when the worktree's git
+  // status array identity changes. A commit, pull, or rebase updates the
+  // status poll result, which is the cheapest signal we have that HEAD moved
+  // — without this, users see a stale diff after committing from Changes mode.
+  // Subscribing to the status array keeps parity with the Changes sidebar.
+  const changesStatusEntries = activeFile?.worktreeId
+    ? gitStatusByWorktree[activeFile.worktreeId]
+    : undefined
+  useEffect(() => {
+    if (!isChangesMode || !activeFile) {
+      return
+    }
+    void loadDiffContent(activeFile)
+  }, [changesStatusEntries, isChangesMode, activeFile, loadDiffContent])
 
   const handleContentChange = useCallback(
     (content: string) => {
@@ -541,6 +577,13 @@ function EditorPanelInner({
       for (const file of matchingFiles) {
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
           void loadFileContent(file.filePath, file.id, file.worktreeId)
+          // Why: if this edit tab is currently in Changes view mode, the
+          // rendered DiffViewer also depends on the HEAD-side blob. An
+          // external write (e.g. a git checkout) can change both the working
+          // tree *and* shift the reference blob, so refetch the diff too.
+          if (useAppStore.getState().editorViewMode[file.id] === 'changes') {
+            void loadDiffContent(file)
+          }
         } else if (
           file.mode === 'diff' &&
           file.diffSource !== 'combined-uncommitted' &&
@@ -795,6 +838,9 @@ function EditorPanelInner({
     activeFile.diffSource !== undefined &&
     activeFile.diffSource !== 'combined-uncommitted' &&
     activeFile.diffSource !== 'combined-branch'
+  // Why: Changes view mode renders a DiffViewer, so expose the same inline /
+  // side-by-side toggle the diff-tab path already offers.
+  const isDiffSurface = isSingleDiff || isChangesMode
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-uncommitted' ||
@@ -868,6 +914,34 @@ function EditorPanelInner({
     markdownViewModes.includes(storedMarkdownViewMode)
       ? storedMarkdownViewMode
       : defaultMarkdownViewMode
+  // Why: the header toggle surfaces both the language-specific view mode
+  // (Source / Rich / Preview) and the orthogonal Changes view mode in one
+  // segmented control. Plain code files (no language-specific modes) still get
+  // an Edit | Changes toggle because Changes applies to every editable tab.
+  const editorToggleModes = getEditorToggleModes({
+    language: resolvedLanguage,
+    mode: activeFile.mode,
+    diffSource: activeFile.diffSource
+  })
+  const hasEditorToggle = editorToggleModes.length > 0
+  const effectiveToggleValue: EditorToggleValue = isChangesMode
+    ? 'changes'
+    : hasViewModeToggle
+      ? mdViewMode
+      : 'edit'
+  const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    if (next === 'changes') {
+      setEditorViewMode(activeFile.id, 'changes')
+      return
+    }
+    // Why: selecting any non-Changes segment implicitly exits Changes mode.
+    // For markdown/mermaid files, also persist the chosen language sub-mode
+    // so that next time Changes is toggled off, the file returns to that view.
+    setEditorViewMode(activeFile.id, 'edit')
+    if (next !== 'edit') {
+      setMarkdownViewMode(activeFile.id, next)
+    }
+  }
   const canShowMarkdownPreview = canOpenMarkdownPreview({
     language: resolvedLanguage,
     mode: activeFile.mode,
@@ -1020,7 +1094,7 @@ function EditorPanelInner({
               </Tooltip>
             </TooltipProvider>
           )}
-          {isSingleDiff && (
+          {isDiffSurface && (
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1037,11 +1111,11 @@ function EditorPanelInner({
               </Tooltip>
             </TooltipProvider>
           )}
-          {hasViewModeToggle && (
+          {hasEditorToggle && (
             <MarkdownViewToggle
-              mode={mdViewMode}
-              modes={markdownViewModes}
-              onChange={(mode) => setMarkdownViewMode(activeFile.id, mode)}
+              value={effectiveToggleValue}
+              modes={editorToggleModes}
+              onChange={handleEditorToggleChange}
             />
           )}
           {hasViewModeToggle && isMarkdown && (
@@ -1089,6 +1163,7 @@ function EditorPanelInner({
           isMarkdown={isMarkdown}
           isMermaid={isMermaid}
           mdViewMode={mdViewMode}
+          isChangesMode={isChangesMode}
           sideBySide={sideBySide}
           pendingEditorReveal={pendingEditorReveal}
           handleContentChange={handleContentChange}

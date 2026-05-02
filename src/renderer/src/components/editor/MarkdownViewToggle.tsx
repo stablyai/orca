@@ -1,7 +1,16 @@
 import React from 'react'
-import { Code, Eye, Pencil } from 'lucide-react'
+import { Code, Eye, FileText, GitCompareArrows, Pencil } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { MarkdownViewMode } from '@/store/slices/editor'
+
+// Why: 'changes' is not a MarkdownViewMode in the store — it lives on the
+// orthogonal editorViewMode slice. This toggle unifies both dimensions into a
+// single segmented control because they are mutually exclusive at render time:
+// a file can show Source, Rich, Preview, Edit, OR Changes, but never two at
+// once. 'edit' is the code-file counterpart to markdown's 'source' — it means
+// "the normal editor for this file" without implying the markdown source/raw
+// distinction. See reviews/changes-view-mode-plan.md.
+export type EditorToggleValue = MarkdownViewMode | 'edit' | 'changes'
 
 const VIEW_MODE_METADATA = {
   source: {
@@ -15,17 +24,25 @@ const VIEW_MODE_METADATA = {
   preview: {
     label: 'Preview',
     icon: Eye
+  },
+  edit: {
+    label: 'Edit',
+    icon: FileText
+  },
+  changes: {
+    label: 'Changes',
+    icon: GitCompareArrows
   }
 } as const
 
 type MarkdownViewToggleProps = {
-  mode: MarkdownViewMode
-  modes: readonly MarkdownViewMode[]
-  onChange: (mode: MarkdownViewMode) => void
+  value: EditorToggleValue
+  modes: readonly EditorToggleValue[]
+  onChange: (value: EditorToggleValue) => void
 }
 
 export default function MarkdownViewToggle({
-  mode,
+  value,
   modes,
   onChange
 }: MarkdownViewToggleProps): React.JSX.Element {
@@ -35,10 +52,10 @@ export default function MarkdownViewToggle({
       size="sm"
       className="h-6 [&_[data-slot=toggle-group-item]]:h-7 [&_[data-slot=toggle-group-item]]:min-w-5 [&_[data-slot=toggle-group-item]]:px-2.5"
       variant="outline"
-      value={mode}
+      value={value}
       onValueChange={(v) => {
         if (v) {
-          onChange(v as MarkdownViewMode)
+          onChange(v as EditorToggleValue)
         }
       }}
     >
