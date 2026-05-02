@@ -197,6 +197,7 @@ export function mergeWorktree(
     sortOrder: meta?.sortOrder ?? 0,
     ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
     lastActivityAt: meta?.lastActivityAt ?? 0,
+    isolation: meta?.isolation ?? 'host',
     ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     ...(git.isSparse === true

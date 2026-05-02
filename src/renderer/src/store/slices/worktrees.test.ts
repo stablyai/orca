@@ -60,6 +60,9 @@ const mockApi = {
     updateMeta: vi.fn().mockResolvedValue(undefined),
     updateLineage: vi.fn().mockResolvedValue(null)
   },
+  docker: {
+    setWorktreeIsolation: vi.fn().mockResolvedValue(undefined)
+  },
   pty: {
     kill: vi.fn().mockResolvedValue(undefined)
   },
@@ -1218,6 +1221,31 @@ describe('createWorktree base status merge', () => {
     expect(store.getState().baseStatusByWorktreeId[wt.id]).toMatchObject({
       status: 'drift',
       behind: 2
+    })
+  })
+})
+
+describe('setIsolation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('updates the worktree isolation and persists it', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      isolation: 'host'
+    })
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    await store.getState().setIsolation('repo1::/path/wt1', 'docker')
+
+    expect(store.getState().worktreesByRepo.repo1[0].isolation).toBe('docker')
+    expect(mockApi.docker.setWorktreeIsolation).toHaveBeenCalledWith({
+      worktreeId: 'repo1::/path/wt1',
+      isolation: 'docker'
     })
   })
 })
