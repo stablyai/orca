@@ -41,6 +41,7 @@ export class DockerPtyProvider implements IPtyProvider {
       args: [opts.command ?? '/bin/sh'],
       cwd: opts.cwd ?? this.target.workdir,
       env: opts.env,
+      tty: true,
       cols: opts.cols,
       rows: opts.rows
     })
