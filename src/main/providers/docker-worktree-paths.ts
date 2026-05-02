@@ -22,7 +22,12 @@ export function toDockerWorktreePath(
   if (!relativePath || relativePath === '.') {
     return containerWorkdir
   }
-  if (relativePath.startsWith('..') || pathApi.isAbsolute(relativePath)) {
+  if (
+    relativePath === '..' ||
+    relativePath.startsWith('../') ||
+    relativePath.startsWith('..\\') ||
+    pathApi.isAbsolute(relativePath)
+  ) {
     return hostPath
   }
   return path.posix.join(containerWorkdir, ...relativePath.split(/[\\/]+/))

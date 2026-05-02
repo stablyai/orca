@@ -44,6 +44,22 @@ describe('DockerPtyProvider', () => {
     })
   })
 
+  it('runs startup commands through the container shell', async () => {
+    await provider.spawn({ cols: 80, rows: 24, command: 'claude "prompt with spaces"' })
+
+    expect(engine.commands[0]).toMatchObject({
+      command: 'container.exec.spawn',
+      options: {
+        containerId: 'container-1',
+        args: ['/bin/sh', '-c', 'claude "prompt with spaces"'],
+        cwd: '/workspace',
+        tty: true,
+        cols: 80,
+        rows: 24
+      }
+    })
+  })
+
   it('forwards writes, resizes, data, and exit events', async () => {
     const data = vi.fn()
     const exit = vi.fn()

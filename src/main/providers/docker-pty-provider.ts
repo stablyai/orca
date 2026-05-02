@@ -36,9 +36,12 @@ export class DockerPtyProvider implements IPtyProvider {
       }
     }
 
+    // Why: docker exec treats argv[0] as the binary name; route composed
+    // startup commands through a shell so quotes, spaces, and pipes work.
+    const args = opts.command ? ['/bin/sh', '-c', opts.command] : ['/bin/sh']
     const session = await this.engine.spawnExec({
       containerId: this.target.containerId,
-      args: [opts.command ?? '/bin/sh'],
+      args,
       cwd: opts.cwd ?? this.target.workdir,
       env: opts.env,
       tty: true,
