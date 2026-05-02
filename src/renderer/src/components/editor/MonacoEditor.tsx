@@ -1,15 +1,8 @@
 import React, { useRef, useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { Copy, ExternalLink } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import type { MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
 import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -22,6 +15,16 @@ import {
   endProgrammaticContentSync,
   shouldIgnoreMonacoContentChange
 } from './monaco-programmatic-sync'
+import {
+  clearMarkdownDocCompletionDocuments,
+  ensureMarkdownDocCompletionProvider,
+  setMarkdownDocCompletionDocuments
+} from './monaco-markdown-doc-completions'
+import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
+import {
+  createMarkdownDocLinkDecorationController,
+  type MarkdownDocLinkDecorationController
+} from './monaco-markdown-doc-link-decorations'
 
 type MonacoEditorProps = {
   filePath: string
@@ -34,6 +37,7 @@ type MonacoEditorProps = {
   revealLine?: number
   revealColumn?: number
   revealMatchLength?: number
+  markdownDocuments?: MarkdownDocument[]
 }
 
 export default function MonacoEditor({
@@ -46,9 +50,14 @@ export default function MonacoEditor({
   onSave,
   revealLine,
   revealColumn,
-  revealMatchLength
+  revealMatchLength,
+  markdownDocuments
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const modelKeyRef = useRef<string | null>(null)
+  const languageRef = useRef(language)
+  languageRef.current = language
+  const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
   const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealRafRef = useRef<number | null>(null)
@@ -82,6 +91,22 @@ export default function MonacoEditor({
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  const updateMarkdownCompletionDocuments = useCallback((): void => {
+    const modelKey = editorRef.current?.getModel()?.uri.toString() ?? null
+    if (modelKeyRef.current && modelKeyRef.current !== modelKey) {
+      clearMarkdownDocCompletionDocuments(modelKeyRef.current)
+    }
+    modelKeyRef.current = modelKey
+    if (!modelKey) {
+      return
+    }
+    if (language === 'markdown' && markdownDocuments) {
+      setMarkdownDocCompletionDocuments(modelKey, markdownDocuments)
+    } else {
+      clearMarkdownDocCompletionDocuments(modelKey)
+    }
+  }, [language, markdownDocuments])
 
   const clearTransientRevealHighlight = useCallback(() => {
     if (revealHighlightTimerRef.current !== null) {
@@ -161,6 +186,12 @@ export default function MonacoEditor({
   const handleMount: OnMount = useCallback(
     (editorInstance, monaco) => {
       editorRef.current = editorInstance
+      markdownDocLinkDecorationsRef.current = createMarkdownDocLinkDecorationController(
+        editorInstance,
+        () => languageRef.current
+      )
+      ensureMarkdownDocCompletionProvider(monaco)
+      updateMarkdownCompletionDocuments()
 
       // Why: see comment on contentRef — reconcile the retained model against
       // the current prop before any user interaction so external changes that
@@ -261,7 +292,14 @@ export default function MonacoEditor({
         }
       }
     },
-    [queueReveal, setupCopy, filePath, setEditorCursorLine, viewStateKey]
+    [
+      queueReveal,
+      setupCopy,
+      filePath,
+      setEditorCursorLine,
+      updateMarkdownCompletionDocuments,
+      viewStateKey
+    ]
   )
 
   const handleChange = useCallback(
@@ -348,6 +386,24 @@ export default function MonacoEditor({
   }, [editorFontSize, settings])
 
   useEffect(() => {
+    markdownDocLinkDecorationsRef.current?.refresh()
+  }, [content, language])
+
+  useEffect(() => {
+    updateMarkdownCompletionDocuments()
+  }, [updateMarkdownCompletionDocuments])
+
+  useEffect(() => {
+    return () => {
+      if (modelKeyRef.current) {
+        clearMarkdownDocCompletionDocuments(modelKeyRef.current)
+      }
+      markdownDocLinkDecorationsRef.current?.dispose()
+      markdownDocLinkDecorationsRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent).detail as
         | { filePath?: string; line?: number; column?: number | null }
@@ -422,57 +478,14 @@ export default function MonacoEditor({
       />
 
       {toastNode}
-      {/* Radix context menu for line number gutter right-click */}
-      <DropdownMenu open={gutterMenuOpen} onOpenChange={setGutterMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: gutterMenuPoint.x, top: gutterMenuPoint.y }}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent sideOffset={0} align="start">
-          <DropdownMenuItem
-            onSelect={() => {
-              window.api.ui.writeClipboardText(`${filePath}#L${gutterMenuLine}`)
-            }}
-          >
-            <Copy className="w-3.5 h-3.5 mr-1.5" />
-            Copy Path to Line
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              window.api.ui.writeClipboardText(`${relativePath}#L${gutterMenuLine}`)
-            }}
-          >
-            <Copy className="w-3.5 h-3.5 mr-1.5" />
-            Copy Rel. Path to Line
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={async () => {
-              // Derive worktree root from the absolute and relative paths
-              const worktreePath = filePath.slice(0, -(relativePath.length + 1))
-              const activeFile = useAppStore
-                .getState()
-                .openFiles.find((f) => f.filePath === filePath)
-              const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined
-              const url = await window.api.git.remoteFileUrl({
-                worktreePath,
-                relativePath,
-                line: gutterMenuLine,
-                connectionId
-              })
-              if (url) {
-                window.api.ui.writeClipboardText(url)
-              }
-            }}
-          >
-            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-            Copy Remote URL
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <MonacoGutterContextMenu
+        open={gutterMenuOpen}
+        onOpenChange={setGutterMenuOpen}
+        point={gutterMenuPoint}
+        line={gutterMenuLine}
+        filePath={filePath}
+        relativePath={relativePath}
+      />
     </div>
   )
 }

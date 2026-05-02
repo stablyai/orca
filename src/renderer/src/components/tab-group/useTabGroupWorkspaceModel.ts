@@ -18,6 +18,7 @@ import { getConnectionId } from '../../lib/connection-context'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyPersistentWebview } from '../browser-pane/BrowserPane'
 import { requestEditorFileClose } from '../editor/editor-autosave'
+import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -493,11 +494,13 @@ export function useTabGroupWorkspaceModel({
         const terminal = createTab(worktreeId, groupId)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
+        focusTerminalTabSurface(terminal.id)
       },
       newTerminalWithShell: (shellOverride: string) => {
         const terminal = createTab(worktreeId, groupId, shellOverride)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
+        focusTerminalTabSurface(terminal.id)
       },
       pinFile,
       setTabColor,

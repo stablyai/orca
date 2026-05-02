@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: colocating the PR/issue cache, work-item
+envelope, and IssueSourceIndicator suppression tests in one file keeps the
+GitHub slice's cross-cutting invariants verifiable in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { createGitHubSlice } from './github'
@@ -8,7 +11,8 @@ const mockApi = {
   gh: {
     prForBranch: vi.fn().mockResolvedValue(null),
     issue: vi.fn().mockResolvedValue(null),
-    prChecks: vi.fn().mockResolvedValue([])
+    prChecks: vi.fn().mockResolvedValue([]),
+    listWorkItems: vi.fn()
   },
   cache: {
     getGitHub: vi.fn().mockResolvedValue(null),
@@ -255,5 +259,139 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(initialFetch).resolves.toBeNull()
 
     expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
+  })
+})
+
+describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('stores resolved sources on the cache entry for the indicator to read', async () => {
+    // Why: parent design doc §1 suppression rule — the Tasks header indicator
+    // consults `sources.issues` vs `sources.prs` on the cache entry. This is
+    // the round-trip through fetchWorkItems that populates those fields.
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [],
+      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } }
+    })
+
+    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
+
+    const result = store.getState().getWorkItemsSourcesAndError('/repo', 24, '')
+    expect(result.sources).toEqual({
+      issues: { owner: 'up', repo: 'r' },
+      prs: { owner: 'fork', repo: 'r' }
+    })
+    expect(result.error).toBeNull()
+  })
+
+  it('stamps the issues-side ClassifiedError with its source slug for banner copy', async () => {
+    // Why: parent design doc §2 partial-failure rule — when the issue fetch
+    // returns a 403 but the PR fetch succeeds, the cache entry carries the
+    // successful items AND the error for the failing side so the banner +
+    // list render together. The error's `source` is pinned to the issues
+    // slug so the banner copy stays correct even if the cache entry later
+    // receives new data from another read.
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [],
+      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } },
+      errors: { issues: { type: 'permission_denied', message: 'no access' } }
+    })
+
+    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
+
+    const result = store.getState().getWorkItemsSourcesAndError('/repo', 24, '')
+    expect(result.error).toMatchObject({
+      type: 'permission_denied',
+      message: 'no access',
+      source: { owner: 'up', repo: 'r' }
+    })
+  })
+
+  it('force-retry invalidates a still-failing in-flight request instead of deduping onto it', async () => {
+    // Why: parent design doc §2 acceptance criterion 4 — the [Retry] button
+    // must re-invoke the fetch with force=true and clear the banner on
+    // success. That only works when force=true does not silently dedupe onto
+    // a still-failing non-forcing request.
+    const store = createTestStore()
+    let resolveFailing: (v: unknown) => void = () => {}
+    const failingRequest = new Promise((resolve) => {
+      resolveFailing = resolve
+    })
+    mockApi.gh.listWorkItems.mockReturnValueOnce(failingRequest).mockResolvedValueOnce({
+      items: [],
+      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } }
+    })
+
+    const initialFetch = store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
+    const forcedFetch = store.getState().fetchWorkItems('repo-id', '/repo', 24, '', { force: true })
+
+    // Let the initial request settle with an error so the force path runs.
+    resolveFailing({
+      items: [],
+      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } },
+      errors: { issues: { type: 'permission_denied', message: 'no access' } }
+    })
+    await initialFetch.catch(() => {})
+    await forcedFetch
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+    const after = store.getState().getWorkItemsSourcesAndError('/repo', 24, '')
+    expect(after.error).toBeNull()
+  })
+})
+
+describe('IssueSourceIndicator suppression', () => {
+  it('hides when sources deep-equal, shows when they differ, hides when either is null', async () => {
+    const { default: IssueSourceIndicator, sameGitHubOwnerRepo } =
+      await import('../../components/github/IssueSourceIndicator')
+    const React = await import('react')
+    const { renderToStaticMarkup } = await import('react-dom/server')
+
+    // Same slug → null (no information to convey)
+    expect(sameGitHubOwnerRepo({ owner: 'o', repo: 'r' }, { owner: 'o', repo: 'r' })).toBe(true)
+    // Case-insensitive equality — the parent design doc calls out that `StablyAI/Orca`
+    // and `stablyai/orca` resolve to the same repo and must suppress.
+    expect(
+      sameGitHubOwnerRepo({ owner: 'StablyAI', repo: 'Orca' }, { owner: 'stablyai', repo: 'orca' })
+    ).toBe(true)
+    expect(sameGitHubOwnerRepo({ owner: 'a', repo: 'r' }, { owner: 'b', repo: 'r' })).toBe(false)
+
+    // null on either side → element renders as null (empty render)
+    const sameEl = React.createElement(IssueSourceIndicator, {
+      issues: { owner: 'o', repo: 'r' },
+      prs: { owner: 'o', repo: 'r' }
+    })
+    expect(renderToStaticMarkup(sameEl)).toBe('')
+
+    const nullIssueEl = React.createElement(IssueSourceIndicator, {
+      issues: null,
+      prs: { owner: 'o', repo: 'r' }
+    })
+    expect(renderToStaticMarkup(nullIssueEl)).toBe('')
+
+    const diffEl = React.createElement(IssueSourceIndicator, {
+      issues: { owner: 'up', repo: 'r' },
+      prs: { owner: 'fork', repo: 'r' }
+    })
+    const defaultMarkup = renderToStaticMarkup(diffEl)
+    expect(defaultMarkup).toContain('up/r')
+    // Default variant is 'list' → plural prefix on list surfaces.
+    expect(defaultMarkup).toContain('Issues from')
+
+    // 'item' variant → singular prefix on detail surfaces where the chip
+    // annotates a single issue (e.g. GitHubItemDialog).
+    const itemEl = React.createElement(IssueSourceIndicator, {
+      issues: { owner: 'up', repo: 'r' },
+      prs: { owner: 'fork', repo: 'r' },
+      variant: 'item'
+    })
+    const itemMarkup = renderToStaticMarkup(itemEl)
+    expect(itemMarkup).toContain('up/r')
+    expect(itemMarkup).toContain('Issue from')
+    expect(itemMarkup).not.toContain('Issues from')
   })
 })

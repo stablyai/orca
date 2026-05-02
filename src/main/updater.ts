@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import path from 'node:path'
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { NsisUpdater } from 'electron-updater'
@@ -497,6 +498,11 @@ export function setupAutoUpdater(
     return
   }
   if (is.dev) {
+    // Why: dev-app-update.yml lives at config/dev-app-update.yml (not repo root)
+    // so the root directory stays short. electron-updater only reads it when
+    // the dev-mode early-return below is temporarily disabled to exercise the
+    // update flow locally — point it at the new path up-front so that works.
+    autoUpdater.updateConfigPath = path.join(app.getAppPath(), 'config', 'dev-app-update.yml')
     return
   }
 

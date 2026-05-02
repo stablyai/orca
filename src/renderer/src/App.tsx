@@ -2,7 +2,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
-import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight, Search } from 'lucide-react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
   SYNC_FIT_PANES_EVENT,
@@ -27,6 +27,7 @@ import { ZoomOverlay } from './components/ZoomOverlay'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
+import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -51,6 +52,9 @@ const Settings = lazy(() => import('./components/settings/Settings'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
+// Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
+// the user opts into the experimental flag.
+const SidekickOverlay = lazy(() => import('./components/sidekick/SidekickOverlay'))
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -138,6 +142,15 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  // Why: render-level gate for the experimental agent dashboard retention
+  // sync. Reading the flag here (rather than only inside useDashboardData /
+  // useRetainedAgentsSync) lets us skip mounting RetainedAgentsSyncGate
+  // entirely for non-toggled users, which drops all feature-tied
+  // subscriptions (agentStatusByPaneKey, agentStatusEpoch, etc.) instead of
+  // keeping them alive behind an early-return inside the hook bodies.
+  const agentDashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
+  const sidekickEnabled = useAppStore((s) => s.settings?.experimentalSidekick === true)
+  const sidekickVisible = useAppStore((s) => s.sidekickVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
@@ -146,10 +159,10 @@ function App(): React.JSX.Element {
 
   // Subscribe to IPC push events
   useIpcEvents()
-  // Why: retention must run at App level (not inside AgentDashboard) because
-  // the sidebar hovercard also reads retained entries. If retention only ran
-  // when the dashboard is mounted, "done" agents would vanish from the hover
-  // any time the user collapses the dashboard panel.
+  // Why: retention must run at App level so the inline per-card agents list
+  // always sees retained entries. If retention ran inside the sidebar-card
+  // subtree, "done" agents would vanish any time the user collapsed a card's
+  // inline agents section.
   //
   // The retention hooks are hosted inside <RetainedAgentsSyncGate /> (a leaf
   // component that renders null) rather than being called inline here.
@@ -158,10 +171,17 @@ function App(): React.JSX.Element {
   // event frequency), re-rendering the entire app tree on every agent status
   // update. Hosting the subscriptions in a leaf isolates that churn.
   //
-  // The experimentalAgentDashboard gate still lives inside the hooks
-  // themselves (useDashboardData early-returns [] from its memo;
-  // useRetainedAgentsSync early-returns from its effect), so the gate
-  // component is cheap when the setting is off.
+  // The render-level gate on <RetainedAgentsSyncGate /> (see
+  // agentDashboardEnabled above) keeps the experimental feature fully dark
+  // for non-toggled users: without the gate mounted, none of its feature-tied
+  // zustand selectors (agentStatusByPaneKey / agentStatusEpoch / etc.) are
+  // ever subscribed, so PTY agent-status events cause zero work for them.
+  //
+  // The inner hook guards (useDashboardData early-returns [] from its memo;
+  // useRetainedAgentsSync early-returns from its effect) remain as
+  // defense-in-depth: they keep both hooks safe to call from any future
+  // callsite, and they handle the in-session off→on toggle transition
+  // cleanly without relying on a remount race when the setting flips.
   // Why: git conflict-operation state also drives the worktree cards. Polling
   // cannot live under RightSidebar because App unmounts that subtree when the
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
@@ -175,6 +195,7 @@ function App(): React.JSX.Element {
   // of tying reloads to the Explorer UI lifecycle.
   useEditorExternalWatch()
   useGlobalFileDrop()
+  useAutoAckViewedAgent()
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
   // runs synchronously after React commits the DOM but before paint, so
@@ -202,10 +223,8 @@ function App(): React.JSX.Element {
         const persistedUI = await window.api.ui.get()
         const session = await window.api.session.get()
         // Why: settings must be loaded before hydrateWorkspaceSession so that
-        // it can read experimentalTerminalDaemon to decide whether to stage
-        // pendingReconnectPtyIdByTabId. Without this, opted-in daemon users
-        // would silently lose session reattach on every launch because
-        // s.settings would still be null at hydration time.
+        // hydration has access to user preferences. Without this, settings
+        // would still be null at hydration time.
         await actions.fetchSettings()
         if (!cancelled) {
           actions.hydratePersistedUI(persistedUI)
@@ -311,7 +330,7 @@ function App(): React.JSX.Element {
             sidebarWidth: 280,
             rightSidebarWidth: 350,
             groupBy: 'none',
-            sortBy: 'name',
+            sortBy: 'recent',
             showActiveOnly: false,
             filterRepoIds: [],
             collapsedGroups: [],
@@ -495,65 +514,6 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
-  // Why: v1.3.0 shipped the persistent-terminal daemon ON by default. v1.3.1+
-  // defaults it OFF and gates it behind an Experimental toggle. On the first
-  // launch after that upgrade, main detects a still-running daemon, shuts it
-  // down (killing any surviving `sleep 9999`-style sessions), and stashes a
-  // one-shot notice. We consume that notice here and inform the user so their
-  // vanished sessions don't look like a bug. The renderer-side
-  // `experimentalTerminalDaemonNoticeShown` flag guarantees the toast fires at
-  // most once per install, even if main stashes a notice again on a later
-  // launch.
-  const transitionNoticeHandledRef = useRef(false)
-  useEffect(() => {
-    if (!settings || transitionNoticeHandledRef.current) {
-      return
-    }
-    if (settings.experimentalTerminalDaemonNoticeShown) {
-      transitionNoticeHandledRef.current = true
-      return
-    }
-    transitionNoticeHandledRef.current = true
-    void (async () => {
-      let notice: { killedCount: number } | null = null
-      try {
-        notice = await window.api.app.consumeDaemonTransitionNotice()
-      } catch {
-        // Informational only — if the IPC fails, don't fire the toast and
-        // don't flip the "shown" flag so we can retry on next launch.
-        return
-      }
-      if (!notice) {
-        return
-      }
-      const killedCount = notice.killedCount
-      const killedClause =
-        killedCount > 0
-          ? ` Cleaned up ${killedCount} background session${killedCount === 1 ? '' : 's'} from the previous version.`
-          : ''
-      toast.info('Persistent terminal sessions are now opt-in.', {
-        description: `${killedClause} You can re-enable them in Settings → Experimental.`.trim(),
-        duration: 15000,
-        action: {
-          label: 'Open settings',
-          onClick: () => {
-            useAppStore.getState().openSettingsTarget({
-              pane: 'experimental',
-              repoId: null
-            })
-            useAppStore.getState().openSettingsPage()
-          }
-        }
-      })
-      try {
-        await actions.updateSettings({ experimentalTerminalDaemonNoticeShown: true })
-      } catch {
-        // If persistence fails, the toast may re-fire on a later launch —
-        // acceptable tradeoff vs. silently dropping the notification.
-      }
-    })()
-  }, [actions, settings])
-
   const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const hasTabBar = tabs.length >= 2
   const effectiveActiveTabId = activeTabId ?? tabs[0]?.id ?? null
@@ -706,37 +666,6 @@ function App(): React.JSX.Element {
         dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
-        actions.setRightSidebarOpen(true)
-        return
-      }
-
-      // Cmd/Ctrl+Shift+D — open right sidebar (agent dashboard is now
-      // docked at the sidebar bottom, so only toggle visibility).
-      // Why: skip when a terminal is focused — that combo is the terminal
-      // split-pane shortcut (see terminal-shortcut-policy.ts). Both listeners
-      // share the window capture phase and registration order can vary with
-      // React effect re-runs, so a DOM check is the reliable coordination
-      // mechanism (same pattern as Cmd+Shift+G above). xterm-helper-textarea
-      // is the focus target the terminal handler itself uses to detect
-      // terminal focus (see keyboard-handlers.ts isEditableTarget).
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'd') {
-        // Why: read the experimental toggle at keypress time via getState() so
-        // flipping the setting takes effect immediately without re-binding the
-        // window-level listener (which would require adding `settings` to the
-        // effect deps and tearing down/rebinding on every unrelated settings
-        // change, like theme or font adjustments). Gated behind the key/modifier
-        // check so getState() isn't invoked on every unrelated keystroke.
-        const dashboardExperimentEnabled =
-          useAppStore.getState().settings?.experimentalAgentDashboard === true
-        if (!dashboardExperimentEnabled) {
-          return
-        }
-        const active = document.activeElement as HTMLElement | null
-        if (active?.classList.contains('xterm-helper-textarea')) {
-          return
-        }
-        dispatchClearModifierHints()
-        e.preventDefault()
         actions.setRightSidebarOpen(true)
         return
       }
@@ -940,6 +869,27 @@ function App(): React.JSX.Element {
             </PopoverContent>
           </Popover>
         ) : null}
+        {/* Why: always rendered (not gated on showSidebar) because the
+            worktree palette is global — it mirrors the ⌘J/Ctrl+Shift+J
+            shortcut which is live from every view including Settings and
+            Landing. The `sidebar-toggle` class is the shared titlebar
+            icon-button style used by back/forward/sidebar-toggle/right-
+            sidebar neighbors; the name is historical and applies to any
+            titlebar icon button, not only sidebar toggles. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="sidebar-toggle"
+              onClick={() => actions.openModal('worktree-palette')}
+              aria-label="Search worktrees and browser tabs"
+            >
+              <Search size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {`Search (${isMac ? '⌘J' : 'Ctrl+Shift+J'})`}
+          </TooltipContent>
+        </Tooltip>
       </div>
       {/* Why: Back/Forward traverse mixed worktree + Tasks history, so the
           cluster is shown wherever the history shortcut is live (terminal or
@@ -1016,10 +966,16 @@ function App(): React.JSX.Element {
       }
     >
       <TooltipProvider delayDuration={400}>
-        {/* Why: leaf-mounted retention sync. Hosts useDashboardData() +
-            useRetainedAgentsSync() so their high-churn store subscriptions
-            re-render a null component rather than the entire App tree. */}
-        <RetainedAgentsSyncGate />
+        {/* Why: leaf-mounted retention sync, gated at the render level by
+            agentDashboardEnabled. Hosting useDashboardData() +
+            useRetainedAgentsSync() inside a null-rendering leaf keeps their
+            high-churn store subscriptions from re-rendering the App tree;
+            the outer conditional drops those subscriptions entirely for
+            users who have not toggled the experimental agent dashboard on,
+            so PTY agent-status events do no feature-tied work for them.
+            The hooks' internal early-returns remain as defense-in-depth
+            (see the comment above useIpcEvents()). */}
+        {agentDashboardEnabled ? <RetainedAgentsSyncGate /> : null}
         {/* Why: in workspace view (split groups always enabled), the full-width
             titlebar is removed so tab groups + terminal extend to the top of
             the window. Left titlebar controls move to a header above the sidebar.
@@ -1154,6 +1110,15 @@ function App(): React.JSX.Element {
         {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
         {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
       </Suspense>
+      {/* Why: mount SidekickOverlay only when the experimental flag is on AND
+          the user hasn't hit "Hide sidekick" in the status-bar menu. Both
+          conditions must be true — see design doc (sidekick-overlay.md) on why
+          the two toggles are kept independent. */}
+      {sidekickEnabled && sidekickVisible ? (
+        <Suspense fallback={null}>
+          <SidekickOverlay />
+        </Suspense>
+      ) : null}
       <UpdateCard />
       <StarNagCard />
       <ZoomOverlay />

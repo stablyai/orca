@@ -96,6 +96,27 @@ const REPO_PATH = path.resolve('/workspace/repo')
 const WORKSPACE_DIR = path.resolve('/workspace')
 const WORKTREE_FEATURE_PATH = path.resolve('/workspace/repo-feature')
 
+type MockDirEntry = {
+  name: string
+  directory?: boolean
+  file?: boolean
+  symlink?: boolean
+}
+
+function dirEntry({ name, directory, file, symlink }: MockDirEntry): {
+  name: string
+  isDirectory: () => boolean
+  isFile: () => boolean
+  isSymbolicLink: () => boolean
+} {
+  return {
+    name,
+    isDirectory: () => directory ?? false,
+    isFile: () => file ?? false,
+    isSymbolicLink: () => symlink ?? false
+  }
+}
+
 describe('registerFilesystemHandlers', () => {
   const store = {
     getRepos: () => [
@@ -309,6 +330,135 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
 
     expect(bulkUnstageFilesMock).not.toHaveBeenCalled()
+  })
+
+  it('lists markdown documents recursively for a registered worktree', async () => {
+    readdirMock.mockImplementation(async (dirPath: string) => {
+      if (dirPath === WORKTREE_FEATURE_PATH) {
+        return [
+          dirEntry({ name: 'README.md', file: true }),
+          dirEntry({ name: 'docs', directory: true }),
+          dirEntry({ name: 'script.ts', file: true })
+        ]
+      }
+      if (dirPath === path.join(WORKTREE_FEATURE_PATH, 'docs')) {
+        return [
+          dirEntry({ name: 'Guide.MDX', file: true }),
+          dirEntry({ name: 'notes.markdown', file: true })
+        ]
+      }
+      return []
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:listMarkdownDocuments')!(null, {
+        rootPath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual([
+      {
+        filePath: path.join(WORKTREE_FEATURE_PATH, 'docs', 'Guide.MDX'),
+        relativePath: 'docs/Guide.MDX',
+        basename: 'Guide.MDX',
+        name: 'Guide'
+      },
+      {
+        filePath: path.join(WORKTREE_FEATURE_PATH, 'docs', 'notes.markdown'),
+        relativePath: 'docs/notes.markdown',
+        basename: 'notes.markdown',
+        name: 'notes'
+      },
+      {
+        filePath: path.join(WORKTREE_FEATURE_PATH, 'README.md'),
+        relativePath: 'README.md',
+        basename: 'README.md',
+        name: 'README'
+      }
+    ])
+  })
+
+  it('skips ignored and symlinked directories when listing markdown documents', async () => {
+    readdirMock.mockImplementation(async (dirPath: string) => {
+      if (dirPath === WORKTREE_FEATURE_PATH) {
+        return [
+          dirEntry({ name: '.git', directory: true }),
+          dirEntry({ name: '.hidden', directory: true }),
+          dirEntry({ name: '.github', directory: true }),
+          dirEntry({ name: 'node_modules', directory: true }),
+          dirEntry({ name: 'linked-docs', directory: true, symlink: true }),
+          dirEntry({ name: 'visible.md', file: true })
+        ]
+      }
+      if (dirPath === path.join(WORKTREE_FEATURE_PATH, '.github')) {
+        return [dirEntry({ name: 'CONTRIBUTING.md', file: true })]
+      }
+      throw new Error(`Unexpected readdir: ${dirPath}`)
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:listMarkdownDocuments')!(null, {
+        rootPath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual([
+      {
+        filePath: path.join(WORKTREE_FEATURE_PATH, '.github', 'CONTRIBUTING.md'),
+        relativePath: '.github/CONTRIBUTING.md',
+        basename: 'CONTRIBUTING.md',
+        name: 'CONTRIBUTING'
+      },
+      {
+        filePath: path.join(WORKTREE_FEATURE_PATH, 'visible.md'),
+        relativePath: 'visible.md',
+        basename: 'visible.md',
+        name: 'visible'
+      }
+    ])
+  })
+
+  it('rejects markdown document listing for authorized but unregistered roots', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:listMarkdownDocuments')!(null, {
+        rootPath: path.resolve('/workspace/unregistered')
+      })
+    ).rejects.toThrow('Access denied: unknown repository or worktree path')
+
+    expect(readdirMock).not.toHaveBeenCalled()
+  })
+
+  it('lists remote markdown documents through the SSH filesystem provider', async () => {
+    const provider = {
+      listFiles: vi
+        .fn()
+        .mockResolvedValue(['README.md', 'docs/guide.mdx', '../outside.md', 'src/app.ts'])
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:listMarkdownDocuments')!(null, {
+        rootPath: '/home/user/project',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual([
+      {
+        filePath: '/home/user/project/docs/guide.mdx',
+        relativePath: 'docs/guide.mdx',
+        basename: 'guide.mdx',
+        name: 'guide'
+      },
+      {
+        filePath: '/home/user/project/README.md',
+        relativePath: 'README.md',
+        basename: 'README.md',
+        name: 'README'
+      }
+    ])
   })
 
   it('routes branch compare queries through the git compare helper', async () => {

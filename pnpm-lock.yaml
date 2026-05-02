@@ -7,10 +7,10 @@ settings:
 patchedDependencies:
   '@xterm/addon-ligatures@0.11.0-beta.198':
     hash: df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634
-    path: patches/@xterm__addon-ligatures@0.11.0-beta.198.patch
+    path: config/patches/@xterm__addon-ligatures@0.11.0-beta.198.patch
   node-pty@1.1.0:
     hash: 02e16954edbb8e511963557e3b2c80f8a6fb230cd0c6a75ade936022f3347322
-    path: patches/node-pty@1.1.0.patch
+    path: config/patches/node-pty@1.1.0.patch
 
 importers:
 

@@ -12,6 +12,7 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitStatusResult,
+  MarkdownDocument,
   SearchOptions,
   SearchResult
 } from '../../shared/types'
@@ -47,6 +48,7 @@ import {
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
+import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -158,6 +160,26 @@ export function registerFilesystemHandlers(store: Store): void {
       }
 
       return { content: buffer.toString('utf-8'), isBinary: false }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:listMarkdownDocuments',
+    async (
+      _event,
+      args: { rootPath: string; connectionId?: string }
+    ): Promise<MarkdownDocument[]> => {
+      if (args.connectionId) {
+        const provider = getSshFilesystemProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+        }
+        const relativePaths = await provider.listFiles(args.rootPath)
+        return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
+      }
+
+      const rootPath = await resolveRegisteredWorktreePath(args.rootPath, store)
+      return listMarkdownDocuments(rootPath)
     }
   )
 

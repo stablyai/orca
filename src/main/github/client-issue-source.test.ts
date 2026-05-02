@@ -223,6 +223,59 @@ describe('GitHub issue source split', () => {
     expect(item?.type).toBe('pr')
   })
 
+  it('surfaces a 403 from upstream issues through the listWorkItems envelope', async () => {
+    // Why: parent design doc §3 / acceptance criterion 2 — the IPC envelope
+    // must carry a classified error for the failing side so the renderer can
+    // swap the empty-state for a retryable banner. `sources` must stay
+    // populated so the banner copy can name the repo that failed.
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 403: Resource not accessible by integration'))
+      .mockResolvedValueOnce({ stdout: '[]' })
+
+    const result = await listWorkItems('/repo-root', 10)
+
+    expect(result.items).toEqual([])
+    expect(result.sources).toEqual({
+      issues: { owner: 'stablyai', repo: 'orca' },
+      prs: { owner: 'fork', repo: 'orca' }
+    })
+    expect(result.errors?.issues?.type).toBe('permission_denied')
+  })
+
+  it('returns partial results when upstream issues fail but origin PRs succeed', async () => {
+    // Why: parent design doc §2 partial-failure rule — a failing source must
+    // not zero out the succeeding source. The UI renders origin PRs with a
+    // banner above the list, not an empty state. Ensures the IPC shape
+    // carries both the successful items and the error for the failing side.
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 403: Resource not accessible by integration'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Fork PR',
+            state: 'open',
+            html_url: 'https://github.com/fork/orca/pull/42',
+            labels: [],
+            updated_at: '2026-03-31T00:00:00Z',
+            user: { login: 'octocat' },
+            draft: false,
+            head: { ref: 'feature' },
+            base: { ref: 'main' }
+          }
+        ])
+      })
+
+    const result = await listWorkItems('/repo-root', 10)
+
+    expect(result.items.map((i) => i.id)).toEqual(['pr:42'])
+    expect(result.errors?.issues?.type).toBe('permission_denied')
+  })
+
   it('raw number lookup does not fall through on transient upstream errors', async () => {
     // Why: with issue source split, a non-404 upstream failure must not silently
     // route to origin's PR #N — that would return an unrelated item.

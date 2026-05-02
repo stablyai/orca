@@ -27,15 +27,14 @@ export function resolveDefaultShell(): string {
  * Tries /proc on Linux and lsof on macOS before falling back to `fallbackCwd`.
  */
 export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promise<string> {
-  // Try to read /proc/{pid}/cwd on Linux
-  const procCwd = `/proc/${pid}/cwd`
-  if (existsSync(procCwd)) {
-    try {
-      const { readlinkSync } = await import('fs')
-      return readlinkSync(procCwd)
-    } catch {
-      // Fall through
-    }
+  // Try to read /proc/{pid}/cwd on Linux. Skip an existsSync gate — the
+  // check+read pair races a concurrent exit anyway, and the catch already
+  // falls through to lsof.
+  try {
+    const { readlinkSync } = await import('fs')
+    return readlinkSync(`/proc/${pid}/cwd`)
+  } catch {
+    // Fall through
   }
 
   // Fallback: use lsof on macOS
@@ -43,17 +42,26 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
   // lsof returns ALL open files (sockets, log files, TTYs) and the first `n`-line
   // could be any of them — not the actual working directory.
   try {
-    const { stdout: output } = await execFile('lsof', ['-p', String(pid), '-d', 'cwd', '-Fn'], {
-      encoding: 'utf-8',
-      timeout: 3000
-    })
+    // Why: `-a` ANDs the -p and -d filters. Without it, macOS lsof ORs them
+    // and emits cwd records for every process on the system, so the n-line
+    // scan below picks up the first unrelated process (often pid ~391 with
+    // cwd `/`) and returns `/` regardless of the target pid's real cwd.
+    const { stdout: output } = await execFile(
+      'lsof',
+      ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+      {
+        encoding: 'utf-8',
+        timeout: 3000
+      }
+    )
     const lines = output.split('\n')
     for (const line of lines) {
       if (line.startsWith('n') && line.includes('/')) {
-        const candidate = line.slice(1)
-        if (existsSync(candidate)) {
-          return candidate
-        }
+        // Why: lsof -d cwd is authoritative — don't second-guess it with
+        // existsSync. A concurrent rmdir would race the check and cause us
+        // to drop the correct answer; node-pty handles a missing cwd on
+        // spawn anyway.
+        return line.slice(1)
       }
     }
   } catch {

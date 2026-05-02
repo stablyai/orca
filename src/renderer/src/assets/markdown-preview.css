@@ -142,12 +142,27 @@
   text-decoration-color: currentColor;
 }
 
+.markdown-body .markdown-doc-link {
+  text-decoration-style: solid;
+}
+
+.markdown-body .markdown-doc-link-broken {
+  color: var(--muted-foreground);
+  cursor: default !important;
+  text-decoration-style: dotted;
+}
+
 .markdown-light .markdown-body a {
   color: #0969da;
 }
 
 .markdown-dark .markdown-body a {
   color: #58a6ff;
+}
+
+.markdown-light .markdown-body .markdown-doc-link-broken,
+.markdown-dark .markdown-body .markdown-doc-link-broken {
+  color: var(--muted-foreground);
 }
 
 .markdown-body code {

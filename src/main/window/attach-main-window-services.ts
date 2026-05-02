@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-import { app, clipboard, ipcMain, nativeImage, session, systemPreferences } from 'electron'
-import type { BrowserWindow, MediaAccessPermissionRequest } from 'electron'
+import { app, clipboard, ipcMain, nativeImage, session } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult } from '../../shared/types'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
@@ -11,6 +11,7 @@ import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerPtyHandlers } from '../ipc/pty'
 import { registerSshHandlers } from '../ipc/ssh'
 import { browserManager } from '../browser/browser-manager'
+import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
@@ -106,10 +107,42 @@ export function attachMainWindowServices(
   )
 
   const browserSession = session.fromPartition(ORCA_BROWSER_PARTITION)
-  browserSession.setPermissionRequestHandler((webContents, permission, callback) => {
+  browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
     // Why: the in-app browser is for dev previews and lightweight browsing, not
     // trusted desktop-app privileges. Denying by default keeps arbitrary sites
     // from silently escalating into camera/mic/notification prompts inside Orca.
+    // Why `media` is allowed through: camera/mic are still gated by macOS TCC
+    // at the app-process level, so granting here only *permits* Chromium to
+    // use whatever the OS has already authorized for Orca. Denying at this
+    // layer would make pages inside the in-app browser throw NotAllowedError
+    // even after the user granted Camera/Microphone via Settings → Permissions
+    // or System Settings — the bug #1273 partially addressed.
+    if (permission === 'media') {
+      void requestSystemMediaAccess(
+        details as Electron.MediaAccessPermissionRequest | undefined
+      ).then(
+        (granted) => {
+          if (!granted) {
+            browserManager.notifyPermissionDenied({
+              guestWebContentsId: webContents.id,
+              permission,
+              rawUrl: webContents.getURL()
+            })
+          }
+          callback(granted)
+        },
+        (error: unknown) => {
+          console.error('[permissions] Browser media access failed:', error)
+          browserManager.notifyPermissionDenied({
+            guestWebContentsId: webContents.id,
+            permission,
+            rawUrl: webContents.getURL()
+          })
+          callback(false)
+        }
+      )
+      return
+    }
     const allowed = permission === 'fullscreen'
     if (!allowed) {
       browserManager.notifyPermissionDenied({
@@ -120,8 +153,14 @@ export function attachMainWindowServices(
     }
     callback(allowed)
   })
-  browserSession.setPermissionCheckHandler((_webContents, permission) => {
-    return permission === 'fullscreen'
+  browserSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+    if (permission === 'fullscreen') {
+      return true
+    }
+    if (permission === 'media') {
+      return hasSystemMediaAccess(details?.mediaType)
+    }
+    return false
   })
   browserSession.setDisplayMediaRequestHandler((_request, callback) => {
     // Why: arbitrary sites inside Orca should never be able to capture the
@@ -145,54 +184,6 @@ export function attachMainWindowServices(
     // or hot-reload cycles.
     browserManager.unregisterAll()
   })
-}
-
-function requestedMediaTypes(
-  details: MediaAccessPermissionRequest | undefined
-): Set<'audio' | 'video'> {
-  return new Set(details?.mediaTypes ?? [])
-}
-
-function hasSystemMediaAccess(mediaType: string | undefined): boolean {
-  if (process.platform !== 'darwin') {
-    return true
-  }
-  if (mediaType === 'audio') {
-    return systemPreferences.getMediaAccessStatus('microphone') === 'granted'
-  }
-  if (mediaType === 'video') {
-    return systemPreferences.getMediaAccessStatus('camera') === 'granted'
-  }
-  return false
-}
-
-async function requestSystemMediaAccess(
-  details: MediaAccessPermissionRequest | undefined
-): Promise<boolean> {
-  if (process.platform !== 'darwin') {
-    return true
-  }
-
-  const mediaTypes = requestedMediaTypes(details)
-  if (mediaTypes.size === 0) {
-    return false
-  }
-
-  if (mediaTypes.has('audio')) {
-    // Why: macOS only shows the TCC prompt from the app process, so Chromium's
-    // media grant is paired with the OS-level request at the actual media ask.
-    const granted = await systemPreferences.askForMediaAccess('microphone')
-    if (!granted) {
-      return false
-    }
-  }
-  if (mediaTypes.has('video')) {
-    const granted = await systemPreferences.askForMediaAccess('camera')
-    if (!granted) {
-      return false
-    }
-  }
-  return true
 }
 
 function registerRuntimeWindowLifecycle(

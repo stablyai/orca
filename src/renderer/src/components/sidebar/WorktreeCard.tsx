@@ -4,12 +4,12 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Server, ServerOff } from 'lucide-react'
+import { GitMerge, LoaderCircle, CircleCheck, CircleX, Server, ServerOff } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
-import AgentStatusHover from './AgentStatusHover'
+import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
@@ -26,8 +26,7 @@ import {
   checksLabel,
   CONFLICT_OPERATION_LABELS,
   EMPTY_TABS,
-  EMPTY_BROWSER_TABS,
-  FilledBellIcon
+  EMPTY_BROWSER_TABS
 } from './WorktreeCardHelpers'
 import { IssueSection, PrSection, CommentSection } from './WorktreeCardMeta'
 
@@ -40,6 +39,11 @@ type WorktreeCardProps = {
   hintNumber?: number
 }
 
+function formatSparseDirectoryPreview(directories: string[]): string {
+  const preview = directories.slice(0, 4).join(', ')
+  return directories.length <= 4 ? preview : `${preview}, +${directories.length - 4} more`
+}
+
 const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
@@ -48,7 +52,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   hintNumber
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
@@ -157,7 +160,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // that the spinner flickered; the blocked/waiting/done states don't have
   // that problem — they're terminal (done) or attention-needed (blocked/
   // waiting) and persist until the user acts. Retained "done" snapshots are
-  // consulted too so the sky dot keeps glowing after the agent process exits,
+  // consulted too so the done dot keeps glowing after the agent process exits,
   // matching the dashboard's retention behavior.
   //
   // Priority (highest first): permission (blocked/waiting) > heuristic
@@ -312,26 +315,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
     })
   }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
 
-  const handleToggleUnreadQuick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-      updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
-    },
-    [worktree.id, worktree.isUnread, updateWorktreeMeta]
-  )
+  // Why: the 'unread' card property is the user's opt-out. When off, we render
+  // as if the workspace is read so bold emphasis never appears — matching the
+  // old "hide the bell" behavior exactly. The persisted `worktree.isUnread`
+  // flag is unchanged; only the rendering changes.
+  const showUnreadEmphasis = cardProps.includes('unread') && worktree.isUnread
 
-  const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
-
-  // Why: the whole card is the hover target for the agent-status panel, not
-  // just the dot. Hovering any part of the workspace row reveals the panel
-  // to the right (HoverCardContent inside AgentStatusHover uses
-  // side="right"). A dot-sized target was too easy to miss; the card-level
-  // trigger preserves the dot as an at-a-glance cue while giving users a
-  // much larger surface to surface the "agent activity" detail. Gated by
-  // dashboardExperimentEnabled AND cardProps.includes('status') to match
-  // the previous scope — when the status dot is hidden, the hover panel
-  // stays hidden too.
   const cardBody = (
     <div
       className={cn(
@@ -371,47 +360,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
         </div>
       )}
 
-      {/* Status indicator on the left */}
-      {(cardProps.includes('status') || cardProps.includes('unread')) && (
-        <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
-          {/* Why: the agent-status hovercard is now attached to the whole
-                  card (see AgentStatusHover wrapper below), not just the dot,
-                  so the dot renders as a plain visual indicator. A dot-sized
-                  hover target was too easy to miss; hovering any part of the
-                  card is a far more forgiving way to reveal the "agent
-                  activity" panel that appears to the right of the card. */}
-          {cardProps.includes('status') && (
-            <>
-              <StatusIndicator status={status} aria-hidden="true" />
-              <span className="sr-only">{getWorktreeStatusLabel(status)}</span>
-            </>
-          )}
-
-          {cardProps.includes('unread') && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleToggleUnreadQuick}
-                  className={cn(
-                    'group/unread flex size-4 cursor-pointer items-center justify-center rounded transition-all',
-                    'hover:bg-accent/80 active:scale-95',
-                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                  )}
-                  aria-label={worktree.isUnread ? 'Mark as read' : 'Mark as unread'}
-                >
-                  {worktree.isUnread ? (
-                    <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
-                  ) : (
-                    <Bell className="size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover/unread:opacity-100 transition-opacity" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                <span>{unreadTooltip}</span>
-              </TooltipContent>
-            </Tooltip>
-          )}
+      {/* Status indicator on the left.
+           Why: bold-for-unread carries the attention signal in the title row
+           now, so the rail only needs to render when the status dot is
+           enabled — the 'unread' property is intentionally excluded here. */}
+      {cardProps.includes('status') && (
+        <div className="flex items-center justify-start pt-[2px] shrink-0">
+          <StatusIndicator status={status} aria-hidden="true" />
+          <span className="sr-only">{getWorktreeStatusLabel(status)}</span>
         </div>
       )}
 
@@ -437,7 +393,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </Tooltip>
             )}
 
-            <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
+            {/* Why: weight alone carries the unread signal; color stays
+                 at text-foreground in both states so the title keeps
+                 hierarchy against the muted branch row below (muting the
+                 title as well flattened the card — same reasoning as the
+                 repo chip comment below). */}
+            <div
+              className={cn(
+                'text-[12px] truncate leading-tight text-foreground',
+                showUnreadEmphasis ? 'font-semibold' : 'font-normal'
+              )}
+            >
+              {/* Why: the card root is a non-interactive <div>, so aria-label
+                   on it is announced inconsistently across screen readers.
+                   A visible-text prefix inside the accessible name is reliable. */}
+              {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
               {worktree.displayName}
             </div>
 
@@ -457,6 +427,29 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
                   Primary worktree (original clone directory)
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {worktree.isSparse && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
+                  >
+                    sparse
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8} className="max-w-72">
+                  <div className="space-y-1">
+                    <div>Partial checkout. Files outside these paths are not on disk.</div>
+                    {worktree.sparseDirectories && worktree.sparseDirectories.length > 0 ? (
+                      <div className="font-mono text-[11px] opacity-80">
+                        {formatSparseDirectoryPreview(worktree.sparseDirectories)}
+                      </div>
+                    ) : null}
+                  </div>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -492,7 +485,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
           {repo && !hideRepoBadge && (
             <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
               <div className="size-1.5 rounded-full" style={{ backgroundColor: repo.badgeColor }} />
-              <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+              {/* Why: repo label tracks the title's weight. Keeps
+                   text-foreground on the read state (not muted) because this
+                   label sits on a tinted bg-accent chip — muting it would leave
+                   it nearly invisible; the weight change alone restores
+                   hierarchy against the title. */}
+              <span
+                className={cn(
+                  'text-[10px] truncate max-w-[6rem] leading-none lowercase text-foreground',
+                  showUnreadEmphasis ? 'font-semibold' : 'font-normal'
+                )}
+              >
                 {repo.displayName}
               </span>
             </div>
@@ -544,19 +547,23 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
         )}
+
+        {/* Why: inline agent list. Gated on the experimental setting so
+             managed hook data is only surfaced where the cockpit is enabled,
+             and on the 'inline-agents' card property so users can hide it.
+             Layout coupling: this block grows the card height dynamically —
+             WorktreeList uses measureElement on each row, so the virtualizer
+             re-measures naturally when agents appear/disappear. */}
+        {dashboardExperimentEnabled && cardProps.includes('inline-agents') && (
+          <WorktreeCardAgents worktreeId={worktree.id} />
+        )}
       </div>
     </div>
   )
 
   return (
     <>
-      <WorktreeContextMenu worktree={worktree}>
-        {dashboardExperimentEnabled && cardProps.includes('status') ? (
-          <AgentStatusHover worktreeId={worktree.id}>{cardBody}</AgentStatusHover>
-        ) : (
-          cardBody
-        )}
-      </WorktreeContextMenu>
+      <WorktreeContextMenu worktree={worktree}>{cardBody}</WorktreeContextMenu>
 
       {repo?.connectionId && (
         <SshDisconnectedDialog

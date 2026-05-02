@@ -112,8 +112,11 @@ describe('registerPtyHandlers', () => {
     }
   }
 
+  const savedPiAgentDir = process.env.PI_CODING_AGENT_DIR
+
   beforeEach(() => {
     delete process.env.OPENCODE_CONFIG_DIR
+    delete process.env.PI_CODING_AGENT_DIR
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()
@@ -170,6 +173,9 @@ describe('registerPtyHandlers', () => {
   afterEach(() => {
     unregisterSshPtyProvider('ssh-1')
     setLocalPtyProvider(new LocalPtyProvider())
+    if (savedPiAgentDir !== undefined) {
+      process.env.PI_CODING_AGENT_DIR = savedPiAgentDir
+    }
   })
 
   function createMockProc() {

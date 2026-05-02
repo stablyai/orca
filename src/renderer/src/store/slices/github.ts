@@ -3,6 +3,8 @@ PR, issue, checks, and comments data so the dedup and invalidation patterns stay
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  ClassifiedError,
+  GitHubOwnerRepo,
   PRInfo,
   IssueInfo,
   PRCheckDetail,
@@ -13,9 +15,33 @@ import type {
 import { sortWorkItemsByUpdatedAt, PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import { syncPRChecksStatus } from './github-checks'
 
+export type WorkItemsCacheSources = {
+  issues: GitHubOwnerRepo | null
+  prs: GitHubOwnerRepo | null
+}
+
+// Why: the indicator and retry banner both need the resolved owner/repo for
+// the failing side. Stamping the slug onto the error keeps the banner copy
+// correct even when the error outlives the cache entry's `sources` field
+// (e.g. on partial-success merges where `data` is retained from a later read).
+export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
+
 export type CacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  /**
+   * Resolved issue/PR owner/repo slugs for this entry. Set only on entries
+   * populated by `fetchWorkItems` — PR and issue single-item caches don't
+   * carry sources since the indicator surfaces derive from list reads.
+   */
+  sources?: WorkItemsCacheSources
+  /**
+   * Per-side classified error. Present when one (or both) of the underlying
+   * gh list calls failed. Partial-success reads keep `data` from the
+   * successful side and record the failing side here so the banner + list
+   * render together.
+   */
+  error?: WorkItemsCacheError
 }
 
 type FetchOptions = {
@@ -72,7 +98,7 @@ function releaseWorkItemSlot(): void {
   workItemFetchInFlight -= 1
 }
 
-function workItemsCacheKey(repoPath: string, limit: number, query: string): string {
+export function workItemsCacheKey(repoPath: string, limit: number, query: string): string {
   return `${repoPath}::${limit}::${query}`
 }
 
@@ -168,6 +194,35 @@ export type GitHubSlice = {
    * the SWR revalidate hydrates the latest.
    */
   getCachedWorkItems: (repoPath: string, limit: number, query: string) => GitHubWorkItem[] | null
+  /**
+   * Why: the Tasks view header reads sources from the cache to render the
+   * "Issues from owner/repo" indicator, and the Tasks empty/partial banner
+   * reads `error` here to show the retry affordance. Returning a thin view of
+   * the cache entry (never the items) keeps this a cheap selector the
+   * component can subscribe to without dragging the whole work-item array
+   * through the equality check.
+   */
+  getWorkItemsSourcesAndError: (
+    repoPath: string,
+    limit: number,
+    query: string
+  ) => { sources: WorkItemsCacheSources | null; error: WorkItemsCacheError | null }
+  /**
+   * Why: the dialog renders the "Issue from owner/repo" chip for a single work
+   * item but may be opened before the Tasks view has populated the primary
+   * `(repoPath, PER_REPO_FETCH_LIMIT, '')` cache entry — e.g. when the user
+   * searches for an issue by query. Falls back to scanning `workItemsCache`
+   * for any entry keyed by `${repoPath}::` that carries resolved sources,
+   * returning that entry's `sources` directly. Sources are repo-level
+   * (query-independent), so any sibling entry is safe to reuse.
+   *
+   * Returning a single stable reference means the dialog can subscribe to just
+   * this selector instead of the whole `workItemsCache`, so unrelated cache
+   * writes don't force a re-render. Cache entries are fully replaced (not
+   * mutated) on every write, so reference equality is preserved between
+   * unchanged entries.
+   */
+  getWorkItemsAnySourcesForRepo: (repoPath: string, limit: number) => WorkItemsCacheSources | null
   fetchWorkItems: (
     repoId: string,
     repoPath: string,
@@ -226,6 +281,31 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return get().workItemsCache[key]?.data ?? null
   },
 
+  getWorkItemsSourcesAndError: (repoPath, limit, query) => {
+    const key = workItemsCacheKey(repoPath, limit, query)
+    const entry = get().workItemsCache[key]
+    return {
+      sources: entry?.sources ?? null,
+      error: entry?.error ?? null
+    }
+  },
+
+  getWorkItemsAnySourcesForRepo: (repoPath, limit) => {
+    const cache = get().workItemsCache
+    const primaryKey = workItemsCacheKey(repoPath, limit, '')
+    const primary = cache[primaryKey]?.sources
+    if (primary) {
+      return primary
+    }
+    const prefix = `${repoPath}::`
+    for (const [key, entry] of Object.entries(cache)) {
+      if (key.startsWith(prefix) && entry.sources) {
+        return entry.sources
+      }
+    }
+    return null
+  },
+
   fetchWorkItems: async (repoId, repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
     const key = workItemsCacheKey(repoPath, limit, query)
     const cached = get().workItemsCache[key]
@@ -251,19 +331,43 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       await acquireWorkItemSlot()
       try {
-        const raw = (await window.api.gh.listWorkItems({
+        const envelope = await window.api.gh.listWorkItems({
           repoPath,
           limit,
           query: query || undefined
-        })) as Omit<GitHubWorkItem, 'repoId'>[]
+        })
         // Why: stamp repoId at the renderer fetch boundary so every downstream
         // consumer (cross-repo merge, row rendering, drawer) can rely on the
         // field being present. Main doesn't know Orca's Repo.id.
-        const items: GitHubWorkItem[] = raw.map((item) => ({ ...item, repoId }))
+        const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
+        // Why: only surface the issues-side error in the cache entry. The
+        // parent design doc §2 scopes feature 1 to the new class of silent
+        // wrongness introduced by the issue-source split in #1076; PR-side
+        // failures existed before and are out of scope for this banner.
+        const issuesError = envelope.errors?.issues
+        // Why: if the main process resolved `errors.issues` but not `sources.issues`,
+        // the renderer has no slug to render in the banner copy, so the error is
+        // dropped from the cache entry. Log it so this rare case is at least visible
+        // in devtools rather than disappearing silently.
+        if (issuesError && !envelope.sources.issues) {
+          console.warn(
+            '[workItems] dropping issues-side error with no resolved source:',
+            issuesError
+          )
+        }
+        const errorForCache: WorkItemsCacheError | undefined =
+          issuesError && envelope.sources.issues
+            ? { ...issuesError, source: envelope.sources.issues }
+            : undefined
         set((s) => ({
           workItemsCache: {
             ...s.workItemsCache,
-            [key]: { data: items, fetchedAt: Date.now() }
+            [key]: {
+              data: items,
+              fetchedAt: Date.now(),
+              sources: envelope.sources,
+              ...(errorForCache ? { error: errorForCache } : {})
+            }
           }
         }))
         return items
@@ -321,13 +425,26 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repos.map(async (r) => {
         await acquireWorkItemSlot()
         try {
-          const raw = (await window.api.gh.listWorkItems({
+          const envelope = await window.api.gh.listWorkItems({
             repoPath: r.path,
             limit: perRepoLimit,
             query: query || undefined,
             before
-          })) as Omit<GitHubWorkItem, 'repoId'>[]
-          return raw.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+          })
+          // Why: page-N partial failures don't participate in the cache's per-repo
+          // error banner (which is keyed on the initial-fetch cache entry). Log the
+          // classified issues-side error so pagination failures are at least
+          // observable in logs rather than silently truncating the merged list. A
+          // richer surface would require threading per-page errors back to the
+          // caller and wiring a transient pagination banner — deferred per parent
+          // design doc §6 scope.
+          if (envelope.errors?.issues) {
+            console.warn(
+              `[workItems] next page ${r.repoId} issues-side partial failure:`,
+              envelope.errors.issues
+            )
+          }
+          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
         } catch (err) {
           console.warn(`[workItems] next page ${r.repoId} failed:`, err)
           failedCount += 1

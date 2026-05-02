@@ -1,5 +1,4 @@
 import React from 'react'
-import { Terminal as TerminalIcon } from 'lucide-react'
 
 export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
 
@@ -9,7 +8,10 @@ export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
 // hand-crafted icons (derived from the official brand marks and redrawn as
 // small currentColor-aware paths so they inherit the tab's text color) make
 // each shell identifiable at a glance without shipping a heavier brand-asset
-// package like simple-icons.
+// package like simple-icons. The generic (macOS/Linux) terminal fallback uses
+// the same colored-tile treatment so the tab strip reads as a consistent set
+// of badges rather than a monochrome lucide glyph next to colorful brand
+// marks.
 
 function PowerShellIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
@@ -75,6 +77,40 @@ function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   )
 }
 
+function GenericTerminalIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: matches the tile treatment of PowerShell/CMD/WSL so the tab strip
+  // reads as a consistent set of badges instead of a flat monochrome chevron.
+  // Uses black/white (same palette as the CmdIcon) so generic mac/linux
+  // sessions stay visually neutral — the colorful brand tiles are reserved
+  // for shells that actually have a brand identity.
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="1.5" y="3" width="21" height="18" rx="2.5" fill="#000000" />
+      <path
+        d="M6 7.5 L11.5 12 L6 16.5"
+        stroke="#ffffff"
+        strokeWidth="3.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path
+        d="M12.5 16.5 L18 16.5"
+        stroke="#ffffff"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  )
+}
+
 export function ShellIcon({
   shell,
   size = 14
@@ -92,7 +128,5 @@ export function ShellIcon({
   if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {
     return <WslIcon size={size} />
   }
-  // Fallback: generic terminal glyph for mac/linux shells and anything
-  // unrecognized. Inherits currentColor so it matches the surrounding tab.
-  return <TerminalIcon width={size} height={size} aria-hidden />
+  return <GenericTerminalIcon size={size} />
 }

@@ -1,6 +1,4 @@
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
-import type { AppState } from '@/store/types'
-import { matchesSearch } from './worktree-list-groups'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
@@ -20,14 +18,11 @@ export function computeVisibleWorktreeIds(
   sortedIds: string[],
   opts: {
     filterRepoIds: string[]
-    searchQuery: string
     showActiveOnly: boolean
     tabsByWorktree: Record<string, TerminalTab[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
     activeWorktreeId?: string | null
     repoMap: Map<string, Repo>
-    prCache: AppState['prCache'] | null
-    issueCache: AppState['issueCache'] | null
   }
 ): string[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
@@ -39,13 +34,6 @@ export function computeVisibleWorktreeIds(
   if (opts.filterRepoIds.length > 0) {
     const selectedRepoIds = new Set(opts.filterRepoIds)
     all = all.filter((w) => selectedRepoIds.has(w.repoId))
-  }
-
-  // Filter by search — matches against displayName, branch, repo, comment,
-  // PR number/title, and issue number/title (see matchesSearch).
-  if (opts.searchQuery) {
-    const q = opts.searchQuery.toLowerCase()
-    all = all.filter((w) => matchesSearch(w, q, opts.repoMap, opts.prCache, opts.issueCache))
   }
 
   // Filter active only
@@ -119,9 +107,9 @@ export function getVisibleWorktreeIds(): string[] {
 
   let sortedIds: string[]
 
-  // Why: matches WorktreeList's gate — when the experimental Agent Dashboard
-  // is off, the agent-status map is not populated, so fall back to the
-  // non-status sort heuristics instead of scoring against an empty map.
+  // Why: matches WorktreeList's gate — when the experimental agent-activity
+  // feature is off, the agent-status map is not populated, so fall back to
+  // the non-status sort heuristics instead of scoring against an empty map.
   const agentStatusForSort =
     state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
   if (state.sortBy === 'smart') {
@@ -149,13 +137,10 @@ export function getVisibleWorktreeIds(): string[] {
 
   return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
-    searchQuery: state.searchQuery,
     showActiveOnly: state.showActiveOnly,
     tabsByWorktree: state.tabsByWorktree,
     browserTabsByWorktree: state.browserTabsByWorktree,
     activeWorktreeId: state.activeWorktreeId,
-    repoMap,
-    prCache: state.prCache,
-    issueCache: state.issueCache
+    repoMap
   })
 }

@@ -15,6 +15,9 @@ const mockApi = {
   },
   pty: {
     kill: vi.fn().mockResolvedValue(undefined)
+  },
+  hooks: {
+    check: vi.fn().mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
   }
 }
 
@@ -30,6 +33,9 @@ function createTestStore() {
         // Why: this test isolates the worktree slice, so it only provides the
         // state surface that `createWorktreeSlice` reads and writes.
         ...createWorktreeSlice(...a),
+        trustedOrcaHooks: {},
+        repos: [],
+        openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         tabsByWorktree: {},
         tabBarOrderByWorktree: {},

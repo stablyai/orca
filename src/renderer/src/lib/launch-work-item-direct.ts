@@ -11,6 +11,7 @@ import {
   getWorkspaceSeedName
 } from '@/lib/new-workspace'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
+import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import type { OrcaHooks, RepoHookSettings, SetupDecision, TuiAgent } from '../../../shared/types'
 
 export type LaunchableWorkItem = {
@@ -98,6 +99,39 @@ async function resolveSetupDecision(
   }
 }
 
+async function pasteWorkItemDraftWhenAgentReady(args: {
+  primaryTabId: string
+  startupPlan: NonNullable<ReturnType<typeof buildAgentStartupPlan>>
+  content: string
+}): Promise<void> {
+  const { primaryTabId, startupPlan, content } = args
+  const readyResult = await waitForAgentReady(primaryTabId, startupPlan.expectedProcess, {
+    timeoutMs: 5000
+  })
+  if (!readyResult.ready) {
+    toast.message(
+      'Agent took too long to start. The workspace is ready — paste the issue URL when the agent is idle.'
+    )
+    return
+  }
+
+  const finalState = useAppStore.getState()
+  const ptyId = finalState.ptyIdsByTabId[primaryTabId]?.[0]
+  if (!ptyId) {
+    return
+  }
+
+  // Why: TUIs must enable bracketed paste mode (\x1b[?2004h) before they can
+  // interpret our paste markers. `title-idle` means the TUI has fully rendered
+  // its input box and enabled paste mode; weaker signals (`foreground-match`,
+  // `child-process`) only confirm the binary is running — the TUI's input
+  // setup may still be in-flight, especially on slow shell environments.
+  const graceMs = readyResult.reason === 'title-idle' ? 150 : 600
+  await new Promise((resolve) => window.setTimeout(resolve, graceMs))
+
+  window.api.pty.write(ptyId, `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`)
+}
+
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
  * and paste the work item URL into the agent's prompt as a draft (no submit).
@@ -121,14 +155,19 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
 
   const settings = store.settings
-  const detectedIds = new Set(await store.ensureDetectedAgents())
-  const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+  // Why: agent detection shells out and can be cold/slow. Start it now, but
+  // don't let it serialize setup-policy resolution or git worktree creation.
+  const detectedAgentsPromise = store.ensureDetectedAgents()
 
   const setupResolution = await resolveSetupDecision(repoId, repo)
   if (setupResolution.kind === 'needs-modal') {
     openModalFallback()
     return
   }
+
+  const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+  const finalSetupDecision: SetupDecision =
+    trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
   const workspaceName = getWorkspaceSeedName({
     explicitName: getLinkedWorkItemSuggestedName(item),
@@ -137,30 +176,28 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     linkedPR: item.type === 'pr' ? (item.number ?? null) : null
   })
 
-  // Why: launch the agent with no prompt so the first frame it draws is the
-  // empty input box. The URL paste below populates that input buffer, which
-  // gives the user a reviewable draft instead of a submitted request.
-  const startupPlan =
-    effectiveAgent === null
-      ? null
-      : buildAgentStartupPlan({
-          agent: effectiveAgent,
-          prompt: '',
-          cmdOverrides: settings?.agentCmdOverrides ?? {},
-          platform: CLIENT_PLATFORM,
-          allowEmptyPromptLaunch: true
-        })
-
   let worktreeId: string
   let primaryTabId: string | null
+  let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
   try {
-    const result = await store.createWorktree(
-      repoId,
-      workspaceName,
-      baseBranch,
-      setupResolution.decision
-    )
+    const result = await store.createWorktree(repoId, workspaceName, baseBranch, finalSetupDecision)
     worktreeId = result.worktree.id
+
+    const detectedIds = new Set(await detectedAgentsPromise)
+    const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    // Why: launch the agent with no prompt so the first frame it draws is the
+    // empty input box. The URL paste below populates that input buffer, which
+    // gives the user a reviewable draft instead of a submitted request.
+    startupPlan =
+      effectiveAgent === null
+        ? null
+        : buildAgentStartupPlan({
+            agent: effectiveAgent,
+            prompt: '',
+            cmdOverrides: settings?.agentCmdOverrides ?? {},
+            platform: CLIENT_PLATFORM,
+            allowEmptyPromptLaunch: true
+          })
 
     const activation = activateAndRevealWorktree(worktreeId, {
       setup: result.setup,
@@ -193,11 +230,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     meta.linkedLinearIssue = item.linearIdentifier
   }
   if (Object.keys(meta).length > 0) {
-    try {
-      await store.updateWorktreeMeta(worktreeId, meta)
-    } catch {
+    void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
       // Meta update is non-critical for the draft flow — continue.
-    }
+    })
   }
 
   store.setSidebarOpen(true)
@@ -213,32 +248,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return
   }
 
-  const readyResult = await waitForAgentReady(primaryTabId, startupPlan.expectedProcess, {
-    timeoutMs: 5000
-  })
-  if (!readyResult.ready) {
-    toast.message(
-      'Agent took too long to start. The workspace is ready — paste the issue URL when the agent is idle.'
-    )
-    return
-  }
-
-  const finalState = useAppStore.getState()
-  const ptyId = finalState.ptyIdsByTabId[primaryTabId]?.[0]
-  if (!ptyId) {
-    return
-  }
-
-  // Why: TUIs must enable bracketed paste mode (\x1b[?2004h) before they can
-  // interpret our paste markers. `title-idle` means the TUI has fully rendered
-  // its input box and enabled paste mode; weaker signals (`foreground-match`,
-  // `child-process`) only confirm the binary is running — the TUI's input
-  // setup may still be in-flight, especially on slow shell environments.
-  const graceMs = readyResult.reason === 'title-idle' ? 150 : 600
-  await new Promise((resolve) => window.setTimeout(resolve, graceMs))
-
   const content = item.pasteContent ?? item.url
-  window.api.pty.write(ptyId, `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`)
+  // Why: the workspace is already created and visible; waiting up to 5s for
+  // agent readiness here kept the Create-from modal in "Creating workspace…".
+  // Continue the draft paste in the background so selection latency ends when
+  // the worktree is ready, not when the TUI input buffer is ready.
+  void pasteWorkItemDraftWhenAgentReady({ primaryTabId, startupPlan, content })
 }
 
 export type LaunchFromBranchArgs = {
@@ -264,14 +279,19 @@ export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void
   }
 
   const settings = store.settings
-  const detectedIds = new Set(await store.ensureDetectedAgents())
-  const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+  // Why: keep agent detection off the critical path while we resolve setup
+  // policy. Worktree creation only needs the startup command at activation.
+  const detectedAgentsPromise = store.ensureDetectedAgents()
 
   const setupResolution = await resolveSetupDecision(repoId, repo)
   if (setupResolution.kind === 'needs-modal') {
     openModalFallback()
     return
   }
+
+  const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+  const finalSetupDecision: SetupDecision =
+    trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
   // Why: branch-based launches don't carry a title hint, so fall back to the
   // repo's creature-name generator — same distinct, readable default the
@@ -289,24 +309,20 @@ export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void
     fallbackName
   })
 
-  const startupPlan =
-    effectiveAgent === null
-      ? null
-      : buildAgentStartupPlan({
-          agent: effectiveAgent,
-          prompt: '',
-          cmdOverrides: settings?.agentCmdOverrides ?? {},
-          platform: CLIENT_PLATFORM,
-          allowEmptyPromptLaunch: true
-        })
-
   try {
-    const result = await store.createWorktree(
-      repoId,
-      workspaceName,
-      baseBranch,
-      setupResolution.decision
-    )
+    const result = await store.createWorktree(repoId, workspaceName, baseBranch, finalSetupDecision)
+    const detectedIds = new Set(await detectedAgentsPromise)
+    const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    const startupPlan =
+      effectiveAgent === null
+        ? null
+        : buildAgentStartupPlan({
+            agent: effectiveAgent,
+            prompt: '',
+            cmdOverrides: settings?.agentCmdOverrides ?? {},
+            platform: CLIENT_PLATFORM,
+            allowEmptyPromptLaunch: true
+          })
     const activation = activateAndRevealWorktree(result.worktree.id, {
       setup: result.setup,
       ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})

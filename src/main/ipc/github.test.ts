@@ -85,17 +85,46 @@ describe('registerGitHubHandlers', () => {
     expect(getIssueMock).not.toHaveBeenCalled()
   })
 
-  it('forwards listIssues for registered repositories', async () => {
-    listIssuesMock.mockResolvedValue([])
+  it('forwards listIssues for registered repositories and unwraps items', async () => {
+    listIssuesMock.mockResolvedValue({ items: [] })
 
     registerGitHubHandlers(store as never, stats as never)
 
-    await handlers['gh:listIssues'](null, {
+    const result = await handlers['gh:listIssues'](null, {
       repoPath: '/workspace/repo',
       limit: 5
     })
 
     expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5)
+    expect(result).toEqual([])
+  })
+
+  it('drops the error field from listIssues envelope at the IPC boundary', async () => {
+    // Why: src/main/ipc/github.ts intentionally unwraps the { items, error? }
+    // envelope to just `items` to preserve the pre-feature-1
+    // `Promise<IssueInfo[]>` contract for `gh:listIssues`. Feature 1's UI
+    // consumes the richer envelope through `gh:listWorkItems` instead. This
+    // test locks in that intentional drop so a future change that starts
+    // propagating the error through this channel (or that throws when an
+    // error is present) is caught.
+    listIssuesMock.mockResolvedValue({
+      items: [],
+      error: {
+        type: 'permission_denied',
+        message:
+          "You don't have permission to read issues for this repository. Check your GitHub token scopes."
+      }
+    })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:listIssues'](null, {
+      repoPath: '/workspace/repo',
+      limit: 5
+    })
+
+    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5)
+    expect(result).toEqual([])
   })
 
   it('forwards the authenticated viewer lookup', async () => {

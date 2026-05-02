@@ -13,7 +13,8 @@ import {
   Server,
   SlidersHorizontal,
   Blocks,
-  SquareTerminal
+  SquareTerminal,
+  UserCog
 } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
@@ -36,6 +37,7 @@ import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './Notifica
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
 import {
@@ -49,6 +51,7 @@ import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-sear
 type SettingsNavTarget =
   | 'general'
   | 'integrations'
+  | 'accounts'
   | 'browser'
   | 'git'
   | 'appearance'
@@ -309,6 +312,13 @@ function Settings(): React.JSX.Element {
         searchEntries: AGENTS_PANE_SEARCH_ENTRIES
       },
       {
+        id: 'accounts',
+        title: 'Agent Accounts',
+        description: 'Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts.',
+        icon: UserCog,
+        searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'git',
         title: 'Git',
         description: 'Branch naming and local ref behavior.',
@@ -380,8 +390,7 @@ function Settings(): React.JSX.Element {
         title: 'SSH',
         description: 'Remote SSH connections.',
         icon: Server,
-        searchEntries: SSH_PANE_SEARCH_ENTRIES,
-        badge: 'Beta'
+        searchEntries: SSH_PANE_SEARCH_ENTRIES
       },
       {
         id: 'experimental',
@@ -593,6 +602,15 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
+                  id="accounts"
+                  title="Agent Accounts"
+                  description="Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts."
+                  searchEntries={ACCOUNTS_PANE_SEARCH_ENTRIES}
+                >
+                  <AccountsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
                   id="git"
                   title="Git"
                   description="Branch naming and local ref behavior."
@@ -697,7 +715,6 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="ssh"
                   title="SSH"
-                  badge="Beta"
                   description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
                   searchEntries={SSH_PANE_SEARCH_ENTRIES}
                 >

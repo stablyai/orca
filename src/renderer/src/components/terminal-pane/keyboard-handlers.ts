@@ -3,6 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -66,6 +67,9 @@ type KeyboardHandlersDeps = {
   isActive: boolean
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  paneCwdRef: React.RefObject<PaneCwdMap>
+  /** Worktree-root cwd used when OSC 7 and pty.getCwd both fail. */
+  fallbackCwd: string
   expandedPaneIdRef: React.RefObject<number | null>
   setExpandedPane: (paneId: number | null) => void
   restoreExpandedLayout: () => void
@@ -83,6 +87,8 @@ export function useTerminalKeyboardShortcuts({
   isActive,
   managerRef,
   paneTransportsRef,
+  paneCwdRef,
+  fallbackCwd,
   expandedPaneIdRef,
   setExpandedPane,
   restoreExpandedLayout,
@@ -293,7 +299,27 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        manager.splitPane(pane.id, action.direction)
+        // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
+        // if we have a confirmed live OSC 7 for the source pane, split
+        // synchronously to preserve chaining on rapid Cmd+D. Otherwise fall
+        // back to an async resolve that queries pty.getCwd.
+        const cached = paneCwdRef.current.get(pane.id)
+        if (cached?.confirmed && cached.cwd) {
+          manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
+          return
+        }
+        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+        const paneIdAtDispatch = pane.id
+        const directionAtDispatch = action.direction
+        void (async () => {
+          const cwd = await resolveSplitCwd({
+            paneCwdMap: paneCwdRef.current,
+            sourcePaneId: paneIdAtDispatch,
+            sourcePtyId: ptyId,
+            fallbackCwd
+          })
+          managerRef.current?.splitPane(paneIdAtDispatch, directionAtDispatch, { cwd })
+        })()
       }
     }
 
@@ -309,6 +335,8 @@ export function useTerminalKeyboardShortcuts({
     isActive,
     managerRef,
     paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd,
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,

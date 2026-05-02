@@ -251,11 +251,24 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       set((s) => {
         const next = { ...s.agentStatusByPaneKey }
         delete next[paneKey]
+        // Why: acknowledgedAgentsByPaneKey is written per user-ack but owned
+        // lifecycle-wise by the pane — drop the ack entry in lockstep with the
+        // live-map entry so closed panes don't leave stale ack timestamps that
+        // could silently suppress "unvisited" signals on future paneKey
+        // collisions.
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        if (paneKey in nextAck) {
+          nextAck = { ...nextAck }
+          delete nextAck[paneKey]
+        }
         // Why: bump sortEpoch in lockstep with agentStatusEpoch — removing an
         // agent can legitimately change worktree sort order, same rationale
         // as setAgentStatus.
         return {
           agentStatusByPaneKey: next,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
           agentStatusEpoch: s.agentStatusEpoch + 1,
           sortEpoch: s.sortEpoch + 1
         }
@@ -275,12 +288,24 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const key of toRemove) {
           delete next[key]
         }
+        // See removeAgentStatus for rationale on ack cleanup.
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        const ackKeys = Object.keys(nextAck).filter((k) => k.startsWith(prefix))
+        if (ackKeys.length > 0) {
+          nextAck = { ...nextAck }
+          for (const k of ackKeys) {
+            delete nextAck[k]
+          }
+        }
         // Why: bump sortEpoch in lockstep with agentStatusEpoch — removing
         // agents can legitimately change worktree sort order, same rationale
         // as setAgentStatus. The pre-check guards against spurious bumps when
         // no keys matched the prefix.
         return {
           agentStatusByPaneKey: next,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
           agentStatusEpoch: s.agentStatusEpoch + 1,
           sortEpoch: s.sortEpoch + 1
         }
@@ -298,13 +323,25 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        // See removeAgentStatus for rationale on ack cleanup. Apply this
+        // regardless of live/retained presence — the ack entry is owned by
+        // the pane lifecycle independently of live/retained state.
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        if (paneKey in nextAck) {
+          nextAck = { ...nextAck }
+          delete nextAck[paneKey]
+        }
         // Why: bail when there is genuinely nothing to do. The old guard
         // `!hasLive && !hasRetained && alreadySuppressed` leaked a phantom
         // suppressor write in the `!hasLive && !hasRetained && !alreadySuppressed`
         // case. With the hasLive-gated suppressor below, a no-op drop on a
         // paneKey with no live and no retained entry truly has nothing to
-        // change, so short-circuit here.
+        // change, so short-circuit here — but still flush a pending ack
+        // cleanup if one is present.
         if (!hasLive && !hasRetained) {
+          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+            return { acknowledgedAgentsByPaneKey: nextAck }
+          }
           return s
         }
 
@@ -353,6 +390,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         return {
           agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetained,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
           ...(needsSuppressorWrite
             ? {
                 retentionSuppressedPaneKeys: {
@@ -365,7 +405,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // Why: mirrors removeAgentStatus — dropping a live working/blocked
           // agent changes its contribution to the worktree sort score, so the
           // sidebar smart-sort must recompute. Without this bump, a user-
-          // initiated dismissal via the dashboard/hovercard would leave the
+          // initiated dismissal from the inline agents list would leave the
           // sidebar ordering stale until some unrelated event repaired it.
           sortEpoch: hasLive ? s.sortEpoch + 1 : s.sortEpoch
         }
@@ -388,7 +428,21 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter((k) =>
           k.startsWith(prefix)
         )
+        // See removeAgentStatus for rationale on ack cleanup. Apply this
+        // regardless of live/retained presence — ack entries are owned by
+        // the pane lifecycle independently of live/retained state.
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        const ackKeys = Object.keys(nextAck).filter((k) => k.startsWith(prefix))
+        if (ackKeys.length > 0) {
+          nextAck = { ...nextAck }
+          for (const k of ackKeys) {
+            delete nextAck[k]
+          }
+        }
         if (liveKeys.length === 0 && retainedKeys.length === 0) {
+          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+            return { acknowledgedAgentsByPaneKey: nextAck }
+          }
           return s
         }
         hadLive = liveKeys.length > 0
@@ -425,6 +479,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetained,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
           // Why: mirrors removeAgentStatusByTabPrefix — only bump the live-map
           // epoch / sortEpoch when the live map actually changed. Retained-only
           // sweeps do not participate in smart-sort or freshness calculations.
@@ -448,7 +505,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       set((s) => {
         // Why: skip the allocation + set(...) entirely when every input entry
         // is already present by reference. Consumers of retainedAgentsByPaneKey
-        // select on its identity (dashboard + hovercard), so a spurious map
+        // select on its identity (the inline agents list), so a spurious map
         // reallocation forces re-renders even when nothing changed. Mirrors
         // the identity-preservation pattern used by pruneRetainedAgents and
         // clearRetentionSuppressedPaneKeys.

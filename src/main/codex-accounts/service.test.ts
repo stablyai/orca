@@ -58,8 +58,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
     showTitlebarAgentActivity: true,
-    showAgentDashboard: true,
-    showTaskProviderIcons: true,
+    showTasksButton: true,
     diffDefaultView: 'inline',
     notifications: {
       enabled: true,
@@ -80,12 +79,14 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
+    opencodeSessionCookie: '',
+    opencodeWorkspaceId: '',
+    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
-    experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
     experimentalAgentDashboard: false,
+    experimentalSidekick: false,
     terminalWindowsShell: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides
@@ -111,13 +112,15 @@ function createStore(settings: GlobalSettings) {
 
 function createRateLimits() {
   return {
-    refreshForCodexAccountChange: vi.fn().mockResolvedValue(undefined)
+    refreshForCodexAccountChange: vi.fn().mockResolvedValue(undefined),
+    evictInactiveCodexCache: vi.fn()
   }
 }
 
 function createRuntimeHome() {
   return {
-    syncForCurrentSelection: vi.fn()
+    syncForCurrentSelection: vi.fn(),
+    clearLastWrittenAuthJson: vi.fn()
   }
 }
 
@@ -554,7 +557,8 @@ describe('CodexAccountService config sync', () => {
     const rateLimits = {
       refreshForCodexAccountChange: vi.fn(async () => {
         callOrder.push('refresh')
-      })
+      }),
+      evictInactiveCodexCache: vi.fn()
     }
     const runtimeHome = createRuntimeHome()
 

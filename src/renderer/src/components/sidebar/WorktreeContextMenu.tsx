@@ -10,8 +10,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   FolderOpen,
   Copy,
-  Bell,
-  BellOff,
   Link,
   MessageSquare,
   Moon,
@@ -63,10 +61,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)
   }, [worktree.path])
-
-  const handleToggleRead = useCallback(() => {
-    updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
-  }, [worktree.id, worktree.isUnread, updateWorktreeMeta])
 
   const handleTogglePin = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isPinned: !worktree.isPinned })
@@ -168,10 +162,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
             <Pencil className="size-3.5" />
             Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-            {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-            {worktree.isUnread ? 'Mark Read' : 'Mark Unread'}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={handleLinkIssue} disabled={isDeleting}>
             <Link className="size-3.5" />

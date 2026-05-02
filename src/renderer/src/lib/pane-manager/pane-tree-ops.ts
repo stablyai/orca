@@ -1,5 +1,6 @@
 import type { DropZone, ManagedPaneInternal, PaneStyleOptions } from './pane-manager-types'
 import { createDivider } from './pane-divider'
+import { disposeWebgl, attachWebgl } from './pane-lifecycle'
 
 export { findLineByContent, captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -40,20 +41,6 @@ export function safeFit(pane: ManagedPaneInternal): void {
       // Why: divider drags fire refits every frame, but most frames do not
       // cross a cell boundary. Skipping those avoids FitAddon.clear()+refresh()
       // churn, which was causing visible terminal blinking while resizing.
-      //
-      // Why: diagnostic for intermittent dead-terminal-after-split. If a
-      // just-reparented pane's proposed dimensions match its current
-      // dimensions (the default 80×24 at certain screen widths), this
-      // early-return skips fitAddon.fit() and no terminal.resize() fires
-      // — leaving the WebGL canvas at stale dimensions.
-      if (pane.pendingSplitScrollState) {
-        console.warn(
-          '[terminal] safeFit early-return during pending split for pane',
-          pane.id,
-          `— dims ${dims.cols}×${dims.rows} match current, webgl:`,
-          !!pane.webglAddon
-        )
-      }
       return
     }
     pane.fitAddon.fit()
@@ -174,6 +161,13 @@ export function insertPaneNextTo(
   applyPaneFlexStyle(source.container)
   applyPaneFlexStyle(targetContainer)
 
+  // Why: same pattern as splitPane — dispose WebGL before the DOM reparent
+  // to free GPU context slots, then reattach after layout settles.
+  const sourceHadWebgl = !!source.webglAddon
+  const targetHadWebgl = !!target.webglAddon
+  disposeWebgl(source)
+  disposeWebgl(target)
+
   // Replace target with the split in the DOM
   parent.replaceChild(split, targetContainer)
 
@@ -188,23 +182,15 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  // Refit both and refresh rendering surfaces — both panes were reparented
-  // into the new split wrapper, which can leave the WebGL canvas in a stale
-  // state (same mechanism as wrapInSplit; see refreshAfterReparent in
-  // pane-split-scroll.ts).
   requestAnimationFrame(() => {
+    if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
+      attachWebgl(source)
+    }
+    if (targetHadWebgl && target.gpuRenderingEnabled && !target.webglDisabledAfterContextLoss) {
+      attachWebgl(target)
+    }
     callbacks.safeFit(source)
     callbacks.safeFit(target)
-    try {
-      source.terminal.refresh(0, source.terminal.rows - 1)
-    } catch {
-      /* ignore */
-    }
-    try {
-      target.terminal.refresh(0, target.terminal.rows - 1)
-    } catch {
-      /* ignore */
-    }
   })
 }
 

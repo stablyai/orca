@@ -268,7 +268,7 @@ export async function detectConflictOperation(worktreePath: string): Promise<Git
   return 'unknown'
 }
 
-async function resolveGitDir(worktreePath: string): Promise<string> {
+export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
 
   try {

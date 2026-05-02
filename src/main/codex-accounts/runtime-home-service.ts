@@ -24,6 +24,13 @@ export class CodexRuntimeHomeService {
   // (e.g. user running `codex login` or another auth tool). The snapshot
   // restore only fires on the managed→system-default transition.
   private lastSyncedAccountId: string | null = null
+  // Why: tracks the auth.json content Orca last wrote to ~/.codex/auth.json.
+  // Between syncs, if the file differs, Codex CLI refreshed the token — so
+  // Orca writes back the refreshed token to managed storage before overwriting.
+  // On managed→system-default transition, if the file differs, an external
+  // login (e.g. `codex auth login`) overwrote it — so Orca adopts the file as
+  // the new system default instead of restoring a stale snapshot.
+  private lastWrittenAuthJson: string | null = null
 
   constructor(private readonly store: Store) {
     this.safeMigrateLegacyManagedState()
@@ -80,8 +87,49 @@ export class CodexRuntimeHomeService {
       return
     }
 
+    // Why: Codex CLI refreshes expired OAuth tokens and writes them back to
+    // ~/.codex/auth.json. If we detect the runtime file differs from what Orca
+    // last wrote, the CLI must have refreshed — so we preserve those tokens
+    // back to managed storage before overwriting runtime with managed state.
+    if (this.lastSyncedAccountId === activeAccount.id) {
+      this.readBackRefreshedTokens(activeAuthPath)
+    }
+
     this.lastSyncedAccountId = activeAccount.id
     this.writeRuntimeAuth(readFileSync(activeAuthPath, 'utf-8'))
+  }
+
+  // Why: called by CodexAccountService before syncForCurrentSelection() after
+  // re-auth or add-account. Those flows write fresh tokens to managed storage,
+  // so the read-back must be skipped to avoid overwriting them with stale
+  // runtime tokens.
+  clearLastWrittenAuthJson(): void {
+    this.lastWrittenAuthJson = null
+  }
+
+  private readBackRefreshedTokens(managedAuthPath: string): void {
+    try {
+      const runtimeAuthPath = this.getRuntimeAuthPath()
+      if (!existsSync(runtimeAuthPath)) {
+        return
+      }
+
+      if (this.lastWrittenAuthJson === null) {
+        return
+      }
+
+      const runtimeContents = readFileSync(runtimeAuthPath, 'utf-8')
+      if (runtimeContents === this.lastWrittenAuthJson) {
+        return
+      }
+
+      writeFileAtomically(managedAuthPath, runtimeContents, { mode: 0o600 })
+    } catch (error) {
+      // Why: read-back is best-effort. A transient fs error must not block the
+      // forward sync path — the worst case is one more stale-token cycle, which
+      // is strictly better than failing the entire sync.
+      console.warn('[codex-runtime-home] Failed to read back refreshed tokens:', error)
+    }
   }
 
   private safeSyncForCurrentSelection(): void {
@@ -297,6 +345,13 @@ export class CodexRuntimeHomeService {
   }
 
   private restoreSystemDefaultSnapshot(): void {
+    // Why: detect whether an external tool (e.g. `codex auth login`) overwrote
+    // auth.json while a managed account was active. If so, that external login
+    // becomes the new system default — skip the stale snapshot restore.
+    if (this.detectExternalLoginAndUpdateSnapshot()) {
+      return
+    }
+
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     if (!existsSync(snapshotPath)) {
       return
@@ -305,10 +360,40 @@ export class CodexRuntimeHomeService {
     this.writeRuntimeAuth(readFileSync(snapshotPath, 'utf-8'))
   }
 
+  // Why: mirrors ClaudeRuntimeAuthService.detectExternalLoginAndUpdateSnapshot().
+  // If the runtime auth.json differs from what Orca last wrote, something
+  // external changed it. That external state should become the new system
+  // default rather than being overwritten by a potentially stale snapshot.
+  private detectExternalLoginAndUpdateSnapshot(): boolean {
+    if (this.lastWrittenAuthJson === null) {
+      return false
+    }
+
+    const runtimeAuthPath = this.getRuntimeAuthPath()
+    if (!existsSync(runtimeAuthPath)) {
+      return false
+    }
+
+    try {
+      const currentAuth = readFileSync(runtimeAuthPath, 'utf-8')
+      if (currentAuth === this.lastWrittenAuthJson) {
+        return false
+      }
+    } catch {
+      return false
+    }
+
+    const snapshotPath = this.getSystemDefaultSnapshotPath()
+    rmSync(snapshotPath, { force: true })
+    this.lastWrittenAuthJson = null
+    return true
+  }
+
   private writeRuntimeAuth(contents: string): void {
     // Why: auth.json contains sensitive credentials. Restrict to owner-only
     // so other users on a shared Linux/macOS machine cannot read it.
     writeFileAtomically(this.getRuntimeAuthPath(), contents, { mode: 0o600 })
+    this.lastWrittenAuthJson = contents
   }
 
   clearSystemDefaultSnapshot(): void {

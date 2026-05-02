@@ -1,4 +1,5 @@
 import type {
+  ClassifiedError,
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubIssueUpdate,
@@ -6,7 +7,13 @@ import type {
   PRComment
 } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, classifyGhError } from './gh-utils'
+// prettier-ignore
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, classifyGhError, classifyListIssuesError } from './gh-utils'
+
+// Why: distinguishes a successful-empty listing from a failed fetch. The
+// previous `catch { return [] }` conflated a 403 on a private upstream with an
+// empty backlog. Callers decide how to surface `error`.
+export type IssueListResult = { items: IssueInfo[]; error?: ClassifiedError }
 
 /**
  * Get a single issue by number.
@@ -46,8 +53,15 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
 /**
  * List issues for a repo.
  * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
+ *
+ * Why: returns a structured result so a 403 (e.g. fork contributor without
+ * read access to a private upstream) surfaces as an error the UI can render
+ * instead of collapsing to "No issues". The empty-list-on-error behavior this
+ * replaces was explicitly flagged as a merge-blocker in the parent design doc
+ * (§3) — silently hiding failures re-creates the same silent-source-switch
+ * class of wrongness #1186 warned against, one level deeper.
  */
-export async function listIssues(repoPath: string, limit = 20): Promise<IssueInfo[]> {
+export async function listIssues(repoPath: string, limit = 20): Promise<IssueListResult> {
   const ownerRepo = await getIssueOwnerRepo(repoPath)
   await acquire()
   try {
@@ -61,8 +75,16 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
         ],
         { cwd: repoPath }
       )
-      const data = JSON.parse(stdout) as unknown[]
-      return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+      const data = JSON.parse(stdout) as Record<string, unknown>[]
+      // Why: the GitHub REST `/repos/{owner}/{repo}/issues` endpoint returns
+      // pull requests alongside issues (PRs carry a `pull_request` key).
+      // Strip them here so `listIssues` only returns true issues, matching the
+      // filter applied in `listRecentWorkItems` (src/main/github/client.ts).
+      return {
+        items: data
+          .filter((d) => !('pull_request' in d))
+          .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+      }
     }
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
@@ -70,9 +92,10 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
       { cwd: repoPath }
     )
     const data = JSON.parse(stdout) as unknown[]
-    return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
-  } catch {
-    return []
+    return { items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0])) }
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err)
+    return { items: [], error: classifyListIssuesError(stderr) }
   } finally {
     release()
   }

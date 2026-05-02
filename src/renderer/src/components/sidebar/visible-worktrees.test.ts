@@ -43,14 +43,11 @@ describe('computeVisibleWorktreeIds', () => {
 
     const result = computeVisibleWorktreeIds({ repo1: [wt] }, [wt.id], {
       filterRepoIds: [],
-      searchQuery: '',
       showActiveOnly: true,
       tabsByWorktree: {},
       browserTabsByWorktree: { [wt.id]: [{ id: 'browser-1' }] },
       activeWorktreeId: null,
-      repoMap,
-      prCache: null,
-      issueCache: null
+      repoMap
     })
 
     expect(result).toEqual([wt.id])
@@ -61,14 +58,11 @@ describe('computeVisibleWorktreeIds', () => {
 
     const result = computeVisibleWorktreeIds({ repo1: [wt] }, [wt.id], {
       filterRepoIds: [],
-      searchQuery: '',
       showActiveOnly: true,
       tabsByWorktree: {},
       browserTabsByWorktree: {},
       activeWorktreeId: wt.id,
-      repoMap,
-      prCache: null,
-      issueCache: null
+      repoMap
     })
 
     expect(result).toEqual([wt.id])

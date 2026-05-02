@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+      tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
     steps:
       - name: Checkout ref
         uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: package.json
 
       - name: Configure git author
         run: |
@@ -187,10 +187,53 @@ jobs:
               ;;
           esac
 
-          # Refuse tag collisions (possible if someone already tagged manually).
+          # Orphan-tag recovery.
+          #
+          # Why: if a previous cut pushed the tag but was cancelled (or the
+          # dependent release.yml job otherwise failed to start) before the
+          # GitHub Release was published, the tag now exists on the remote
+          # but "latest stable" still points at the prior version. Every
+          # subsequent patch cut then recomputes the same version and dies
+          # on "Tag already exists." This exact sequence wedged the cut
+          # pipeline on 2026-05-01 when v1.3.26 was pushed by a cancelled
+          # run (25237882049) — every patch cut after that rehit the same
+          # tag for hours until the orphan release was dispatched by hand.
+          #
+          # Recovery policy: if the tag exists AND no GitHub release has
+          # been published for it (draft-or-absent both count as "not
+          # shipped"), treat this as a resumable state: emit the existing
+          # tag as the job output so the downstream release.yml job runs
+          # against it and finishes what the earlier attempt started. The
+          # bump/commit/push steps are skipped in that case — there is
+          # nothing to bump; the tag is already on the remote.
+          #
+          # Refuse collisions only when the tag *and* a published release
+          # already exist — that's a real conflict (someone tagged manually
+          # over a shipped version) and needs human attention.
           if git rev-parse "v$new" >/dev/null 2>&1; then
-            echo "::error::Tag v$new already exists." >&2
-            exit 1
+            # Use the REST API, not `gh release view`: the latter returns
+            # "release not found" for drafts *and* for absent releases,
+            # which would cause us to "recover" over a draft that a human
+            # is preparing. The API distinguishes them.
+            release_state="$(gh api \
+                "repos/$GITHUB_REPOSITORY/releases/tags/v$new" \
+                --jq '.draft' 2>/dev/null || echo "missing")"
+            case "$release_state" in
+              missing|true)
+                echo "::warning::Tag v$new already exists but no published release is attached — recovering by re-dispatching release.yml against the existing tag."
+                echo "recovered_tag=v$new" >>"$GITHUB_OUTPUT"
+                echo "recovered=true" >>"$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              false)
+                echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
+                exit 1
+                ;;
+              *)
+                echo "::error::Unexpected release state for v$new: $release_state" >&2
+                exit 1
+                ;;
+            esac
           fi
 
           echo "version=$new" >>"$GITHUB_OUTPUT"
@@ -198,6 +241,7 @@ jobs:
 
       - name: Bump package.json and tag
         id: tag
+        if: steps.version.outputs.recovered != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -213,6 +257,7 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
 
       - name: Push tag
+        if: steps.version.outputs.recovered != 'true'
         env:
           PUSH_MAIN: ${{ steps.resolve.outputs.push_main }}
           TAG: ${{ steps.tag.outputs.tag }}

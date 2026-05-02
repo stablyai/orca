@@ -713,17 +713,6 @@ export function connectPanePty(
       (t) => t.id === deps.tabId
     )?.ptyId
 
-    const daemonEnabled = storeSnapshot.settings?.experimentalTerminalDaemon === true
-    // Why: restored leaf PTYs usually come from a previous app session, so
-    // they normally go back through the daemon's createOrAttach RPC to
-    // recover snapshot or cold-restore data at the pane's real dimensions.
-    // But split remounts in the current app session also carry a leaf binding
-    // in the saved layout. When the daemon is off, treating that live local
-    // PTY like a daemon session ID incorrectly spawns a fresh shell because
-    // LocalPtyProvider ignores sessionId. The reliable distinction is whether
-    // the tab still owns that PTY right now: same-session remounts keep the
-    // tab-level ptyId populated, while daemon-off cold starts clear it during
-    // session hydration.
     const restoredSessionId = restoredPtyId ?? null
     const detachedLivePtyId =
       existingPtyId && !hasExistingPaneTransport
@@ -736,9 +725,7 @@ export function connectPanePty(
     const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
-        : daemonEnabled
-          ? detachedLivePtyId
-          : null
+        : detachedLivePtyId
     // Why: daemon session IDs encode `${worktreeId}@@${uuid}`. After a daemon
     // crash + cold restore, corrupted or stale session-to-tab mappings can
     // cause a tab in workspace A to hold a ptyId from workspace B. Restoring

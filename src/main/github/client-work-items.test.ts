@@ -80,7 +80,11 @@ describe('listWorkItems', () => {
           }
         ])
       })
-    const items = await listWorkItems('/repo-root', 10, 'assignee:@me')
+    const { items, sources } = await listWorkItems('/repo-root', 10, 'assignee:@me')
+    expect(sources).toEqual({
+      issues: { owner: 'acme', repo: 'widgets' },
+      prs: { owner: 'acme', repo: 'widgets' }
+    })
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
@@ -160,7 +164,7 @@ describe('listWorkItems', () => {
         }
       ])
     })
-    const items = await listWorkItems('/repo-root', 10, 'is:pr is:draft')
+    const { items } = await listWorkItems('/repo-root', 10, 'is:pr is:draft')
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
@@ -246,7 +250,7 @@ describe('listWorkItems', () => {
           }
         ])
       })
-    const items = await listWorkItems('/repo-root', 10, 'is:open')
+    const { items } = await listWorkItems('/repo-root', 10, 'is:open')
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'issue',

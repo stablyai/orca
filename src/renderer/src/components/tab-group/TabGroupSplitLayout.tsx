@@ -126,6 +126,7 @@ function SplitNode({
         isFocused={isWorktreeActive && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
         touchesRightEdge={touchesRightEdge}
+        touchesLeftEdge={touchesLeftEdge}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
         isTabDragActive={isTabDragActive}
@@ -217,19 +218,23 @@ export default function TabGroupSplitLayout({
       // so disabling it is the simplest fix.
       autoScroll={false}
     >
-      {/* Why: the 6px drag strip sits ABOVE the split layout — lifted out of
+      {/* Why: the 10px drag strip sits ABOVE the split layout — lifted out of
           each pane — so vertical split resize handles don't extend into the
           window-drag region at the top. Only the split layout's own panes
           own the resize handles, while this strip keeps the whole top of the
           center column draggable regardless of how the splits are arranged.
-          Why `border-l` on the wrapper: paint a single full-height divider
-          between the left sidebar and the terminal area, regardless of
-          split state. When splits exist, the leftmost pane also renders its
-          own `border-l` at the same x — both use `border-border` so the
-          overlapping 1px lines read as one clean seam. */}
+          Why 10px specifically: pairs with the 32px tab row below so the
+          total top-band is 42px, matching the sibling `titlebar-left` above
+          the sidebar. Without this, the tab row's bottom border falls short
+          of the sidebar header's and the seam between columns reads as off.
+          Why `border-l` on the wrapper: paint the single full-height divider
+          between the left sidebar and the terminal area, regardless of split
+          state. The leftmost pane suppresses its own `border-l` via
+          `touchesLeftEdge`, so the seam is always exactly 1px — previously
+          both painted and stacked into a 2px bar below the drag strip. */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border">
         <div
-          className="h-[6px] shrink-0 bg-card"
+          className="h-[10px] shrink-0 bg-card"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
         <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">

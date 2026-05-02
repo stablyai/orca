@@ -4,15 +4,19 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
-import type { AppRuntimeFlags, DaemonTransitionNotice } from './api-types'
+import type { AppRuntimeFlags } from './api-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
+  CreateWorktreeArgs,
+  CustomSidekick,
   FsChangedPayload,
   GitHubAssignableUser,
   GitHubCommentResult,
+  GitHubWorkItem,
   GhosttyImportPreview,
+  ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
   SearchResult
@@ -176,8 +180,6 @@ document.addEventListener(
 const api = {
   app: {
     getRuntimeFlags: (): Promise<AppRuntimeFlags> => ipcRenderer.invoke('app:getRuntimeFlags'),
-    consumeDaemonTransitionNotice: (): Promise<DaemonTransitionNotice | null> =>
-      ipcRenderer.invoke('app:consumeDaemonTransitionNotice'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
     // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
     // the renderer's keyboard-layout probe can distinguish Polish Pro / US
@@ -246,18 +248,36 @@ const api = {
     }
   },
 
+  sparsePresets: {
+    list: (args: { repoId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('sparsePresets:list', args),
+
+    save: (args: {
+      repoId: string
+      id?: string
+      name: string
+      directories: string[]
+    }): Promise<unknown> => ipcRenderer.invoke('sparsePresets:save', args),
+
+    remove: (args: { repoId: string; presetId: string }): Promise<void> =>
+      ipcRenderer.invoke('sparsePresets:remove', args),
+
+    onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
+        callback(data)
+      ipcRenderer.on('sparsePresets:changed', listener)
+      return () => ipcRenderer.removeListener('sparsePresets:changed', listener)
+    }
+  },
+
   worktrees: {
     list: (args: { repoId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('worktrees:list', args),
 
     listAll: (): Promise<unknown[]> => ipcRenderer.invoke('worktrees:listAll'),
 
-    create: (args: {
-      repoId: string
-      name: string
-      baseBranch?: string
-      setupDecision?: 'inherit' | 'run' | 'skip'
-    }): Promise<unknown> => ipcRenderer.invoke('worktrees:create', args),
+    create: (args: CreateWorktreeArgs): Promise<unknown> =>
+      ipcRenderer.invoke('worktrees:create', args),
 
     resolvePrBase: (args: {
       repoId: string
@@ -267,7 +287,7 @@ const api = {
     }): Promise<{ baseBranch: string } | { error: string }> =>
       ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
-    remove: (args: { worktreeId: string; force?: boolean }): Promise<void> =>
+    remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }): Promise<void> =>
       ipcRenderer.invoke('worktrees:remove', args),
 
     updateMeta: (args: {
@@ -338,6 +358,10 @@ const api = {
     /** Return the PTY foreground process basename when available (e.g. "codex"). */
     getForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:getForegroundProcess', { id }),
+
+    /** Resolve the live cwd of a PTY via `/proc` (Linux) or `lsof` (macOS).
+     *  Returns `''` when the id is unknown or the platform cannot resolve one. */
+    getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
 
     onData: (callback: (data: { id: string; data: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
@@ -431,7 +455,8 @@ const api = {
       limit?: number
       query?: string
       before?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('gh:listWorkItems', args),
+    }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
+      ipcRenderer.invoke('gh:listWorkItems', args),
 
     prChecks: (args: {
       repoPath: string
@@ -587,7 +612,16 @@ const api = {
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 
     previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
-      ipcRenderer.invoke('settings:previewGhosttyImport')
+      ipcRenderer.invoke('settings:previewGhosttyImport'),
+
+    onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        updates: Record<string, unknown>
+      ): void => callback(updates)
+      ipcRenderer.on('settings:changed', listener)
+      return () => ipcRenderer.removeListener('settings:changed', listener)
+    }
   },
 
   codexAccounts: {
@@ -681,6 +715,14 @@ const api = {
 
     copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
       ipcRenderer.invoke('shell:copyFile', args)
+  },
+
+  sidekick: {
+    import: (): Promise<CustomSidekick | null> => ipcRenderer.invoke('sidekick:import'),
+    read: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('sidekick:read', id, fileName),
+    delete: (id: string, fileName: string): Promise<void> =>
+      ipcRenderer.invoke('sidekick:delete', id, fileName)
   },
 
   browser: {
@@ -1086,6 +1128,11 @@ const api = {
       connectionId?: string
     }): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> =>
       ipcRenderer.invoke('fs:readFile', args),
+    listMarkdownDocuments: (args: {
+      rootPath: string
+      connectionId?: string
+    }): Promise<{ filePath: string; relativePath: string; basename: string; name: string }[]> =>
+      ipcRenderer.invoke('fs:listMarkdownDocuments', args),
     writeFile: (args: {
       filePath: string
       content: string
@@ -1128,6 +1175,7 @@ const api = {
     importExternalPaths: (args: {
       sourcePaths: string[]
       destDir: string
+      connectionId?: string
     }): Promise<{
       results: (
         | {
@@ -1149,6 +1197,18 @@ const api = {
           }
       )[]
     }> => ipcRenderer.invoke('fs:importExternalPaths', args),
+    resolveDroppedPathsForAgent: (args: {
+      paths: string[]
+      worktreePath: string
+      connectionId?: string
+    }): Promise<{
+      resolvedPaths: string[]
+      skipped: {
+        sourcePath: string
+        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+      }[]
+      failed: { sourcePath: string; reason: string }[]
+    }> => ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
     watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:watchWorktree', args),
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
@@ -1577,6 +1637,10 @@ const api = {
     refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
     setPollingInterval: (ms: number): Promise<void> =>
       ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
+    fetchInactiveClaudeAccounts: (): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
+    fetchInactiveCodexAccounts: (): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
