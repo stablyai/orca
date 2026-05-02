@@ -1,9 +1,9 @@
 name: Cut Release
 
-# Why: single entry point for manually cutting a release from any ref.
-# Replaces the old local `pnpm release:*` scripts so releases are always
-# reproducible from CI and can never be accidentally tagged against an
-# uncommitted or non-main working tree.
+# Why: single entry point for manually and scheduled cutting releases.
+# Replaces the old local `pnpm release:*` scripts and the standalone scheduled
+# RC workflow so releases are always reproducible from CI and can never be
+# accidentally tagged against an uncommitted or non-main working tree.
 #
 # Flow:
 #   1. Resolve `ref` to a SHA.
@@ -36,16 +36,20 @@ on:
         required: false
         type: string
         default: main
+      dry_run:
+        description: Validate a scheduled-RC run without creating a tag
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Why: GitHub scheduled workflows are not guaranteed to start exactly on
+    # time and can be delayed or dropped around high-load periods. We retry
+    # across the full target hour and dedupe per PT slot. Cron is UTC, so run
+    # during both PST and PDT equivalents and let the PT-hour gate decide.
+    - cron: '*/5 10,11,22,23 * * *'
 
 permissions:
   contents: write
-  # Why: this workflow calls release.yml, whose publish-release job needs
-  # actions: write to dispatch homebrew-bump.yml. Reusable workflows are
-  # capped by the caller's permissions, so the caller must list every
-  # scope the callee needs. Omitting this produced a startup_failure on
-  # run 25244518794 immediately after actions:write was added to
-  # release.yml in f6cc2aee.
-  actions: write
 
 concurrency:
   group: release-cut
@@ -57,11 +61,12 @@ jobs:
     timeout-minutes: 15
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+      should_release: ${{ steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     steps:
       - name: Checkout ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -91,11 +96,90 @@ jobs:
             echo "push_main=false" >>"$GITHUB_OUTPUT"
           fi
 
+      - name: Compute RC slot
+        id: slot
+        run: |
+          slot=$(TZ=America/Los_Angeles date '+%Y-%m-%d-%H')
+          echo "value=$slot" >>"$GITHUB_OUTPUT"
+
+      - name: Validate PT release window
+        id: window
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" != "schedule" ]]; then
+            echo "allowed=true" >>"$GITHUB_OUTPUT"
+            echo "reason=manual" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          pt_hour=$(TZ=America/Los_Angeles date '+%H')
+          pt_minute=$(TZ=America/Los_Angeles date '+%M')
+
+          # Why: GitHub may deliver a scheduled event long after the intended
+          # time, so delayed 4:16 AM runs must not cut the 3:00 AM release.
+          if [[ "$pt_hour" == "03" || "$pt_hour" == "15" ]]; then
+            echo "allowed=true" >>"$GITHUB_OUTPUT"
+            echo "reason=target_hour:${pt_hour}:${pt_minute}" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "allowed=false" >>"$GITHUB_OUTPUT"
+          echo "reason=outside_target_hour:${pt_hour}:${pt_minute}" >>"$GITHUB_OUTPUT"
+
+      - name: Skip if this PT release window already ran
+        id: existing
+        if: github.event_name == 'schedule' && steps.window.outputs.allowed == 'true'
+        run: |
+          # Why: scheduled runs retry inside each target hour, so make the
+          # schedule idempotent by embedding a slot marker in the release commit.
+          if git log origin/main --grep="\\[rc-slot:${{ steps.slot.outputs.value }}\\]" -n 1 --format=%H | grep -q .; then
+            echo "already_ran=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Why: this preserves dedupe across the older scheduled workflow's
+          # first runs, before all RC cuts shared release-cut's slot marker.
+          latest_rc_tag="$(git for-each-ref --sort=-creatordate --format='%(refname:short) %(creatordate:iso-strict)' 'refs/tags/v*-rc.*' | head -n 1)"
+          if [[ -n "$latest_rc_tag" ]]; then
+            latest_rc_tag_name="${latest_rc_tag%% *}"
+            latest_rc_tag_date="${latest_rc_tag#* }"
+            latest_rc_slot="$(TZ=America/Los_Angeles date -d "$latest_rc_tag_date" '+%Y-%m-%d-%H')"
+
+            if [[ "$latest_rc_slot" == "${{ steps.slot.outputs.value }}" ]]; then
+              echo "already_ran=true" >>"$GITHUB_OUTPUT"
+              echo "reason=latest_rc_tag:$latest_rc_tag_name" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "already_ran=false" >>"$GITHUB_OUTPUT"
+
+      - name: Dry run summary
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: |
+          echo "Dry run only."
+          echo "Current PT slot: ${{ steps.slot.outputs.value }}"
+          echo "Window allowed: ${{ steps.window.outputs.allowed }}"
+          echo "Window reason: ${{ steps.window.outputs.reason }}"
+          echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
+          echo "Reason: ${{ steps.existing.outputs.reason }}"
+
+      - name: Skip summary
+        if: steps.window.outputs.allowed != 'true' || steps.existing.outputs.already_ran == 'true'
+        run: |
+          echo "Skipping release cut."
+          echo "Current PT slot: ${{ steps.slot.outputs.value }}"
+          echo "Window reason: ${{ steps.window.outputs.reason }}"
+          echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
+          echo "Reason: ${{ steps.existing.outputs.reason }}"
+
       - name: Compute next version
         id: version
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          KIND: ${{ inputs.kind }}
+          KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
         run: |
           set -euo pipefail
 
@@ -248,8 +332,10 @@ jobs:
 
       - name: Bump package.json and tag
         id: tag
-        if: steps.version.outputs.recovered != 'true'
+        if: steps.version.outputs.version != '' && steps.version.outputs.recovered != 'true'
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          SLOT: ${{ steps.slot.outputs.value }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
@@ -258,13 +344,17 @@ jobs:
           # assumptions and any lifecycle scripts that would run on bump).
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           git add package.json
-          git commit -m "release: v$VERSION"
+          commit_message="release: v$VERSION"
+          if [[ "$EVENT_NAME" == "schedule" ]]; then
+            commit_message="$commit_message [rc-slot:$SLOT]"
+          fi
+          git commit -m "$commit_message"
           git tag -a "v$VERSION" -m "v$VERSION"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
 
       - name: Push tag
-        if: steps.version.outputs.recovered != 'true'
+        if: steps.tag.outputs.tag != ''
         env:
           PUSH_MAIN: ${{ steps.resolve.outputs.push_main }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -281,6 +371,7 @@ jobs:
 
   release:
     needs: cut
+    if: needs.cut.outputs.should_release == 'true'
     uses: ./.github/workflows/release.yml
     with:
       tag: ${{ needs.cut.outputs.tag }}

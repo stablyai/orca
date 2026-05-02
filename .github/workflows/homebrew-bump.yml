@@ -4,6 +4,7 @@ name: Homebrew Cask Bump
 # Triggers:
 #   - release.published with !prerelease → release workflow just finalized a
 #     stable tag (see publish-release step in release.yml)
+#   - workflow_call → release.yml finished publishing a stable tag
 #   - workflow_dispatch → manual backfill for a specific tag
 #
 # The job computes the sha256 of orca-macos-arm64.dmg + orca-macos-x64.dmg
@@ -12,6 +13,12 @@ name: Homebrew Cask Bump
 # does NOT run for -rc.* tags: the stable cask should only track GA.
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to sync (e.g. v1.3.25)
+        required: true
+        type: string
   release:
     types: [published]
   workflow_dispatch:
@@ -27,7 +34,7 @@ jobs:
     # Why: skip prereleases and RC tags. The stable cask tracks GA only; a
     # beta channel would be a separate cask in a separate job.
     if: >
-      github.event_name == 'workflow_dispatch' ||
+      inputs.tag != '' ||
       (github.event.release.prerelease == false &&
        !contains(github.event.release.tag_name, '-rc.'))
     permissions:
@@ -39,12 +46,11 @@ jobs:
       - name: Resolve tag and version
         id: tag
         env:
-          EVENT_NAME: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-          INPUT_TAG: ${{ github.event.inputs.tag }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ -n "$INPUT_TAG" ]]; then
             tag="$INPUT_TAG"
           else
             tag="$RELEASE_TAG"

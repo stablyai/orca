@@ -222,11 +222,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      # Why: actions:write is required for `gh workflow run homebrew-bump.yml`
-      # (below). Without it GITHUB_TOKEN gets HTTP 403 "Resource not accessible
-      # by integration" on POST /actions/workflows/:id/dispatches. The default
-      # scoped-down token grants only what the `permissions:` block lists.
-      actions: write
     steps:
       - name: Publish release
         # Why: derive `--prerelease` from the tag shape (not from whatever
@@ -251,20 +246,12 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
-      # Why: dispatch the Homebrew cask bump directly instead of relying on a
-      # `release.published` trigger inside homebrew-bump.yml. GitHub blocks
-      # events raised by GITHUB_TOKEN (like the `gh release edit` above) from
-      # starting other workflows — it's a documented anti-loop safeguard. A
-      # workflow_dispatch from inside an already-running workflow is the
-      # documented escape hatch. Scoped to GA tags only; rc/prerelease tags
-      # should not touch the stable cask.
-      - name: Trigger Homebrew cask bump (stable releases only)
-        if: ${{ !contains(needs.resolve-release.outputs.tag, '-rc.') }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.resolve-release.outputs.tag }}
-        run: |
-          gh workflow run homebrew-bump.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f tag="$TAG"
+  homebrew-bump:
+    needs:
+      - resolve-release
+      - publish-release
+    if: ${{ !contains(needs.resolve-release.outputs.tag, '-rc.') }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      tag: ${{ needs.resolve-release.outputs.tag }}
+    secrets: inherit
