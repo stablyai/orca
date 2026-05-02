@@ -64,7 +64,7 @@ export function ChangesModeView({
           No changes against HEAD.
         </div>
       )}
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <DiffViewer
           key={viewStateScopeId}
           modelKey={diffViewStateKey}
