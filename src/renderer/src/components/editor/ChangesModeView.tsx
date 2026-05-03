@@ -61,7 +61,7 @@ export function ChangesModeView({
       {activeFile.conflict && <ConflictBanner file={activeFile} entry={activeConflictEntry} />}
       {isIdentical && (
         <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          No changes against HEAD.
+          No uncommitted changes.
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col">

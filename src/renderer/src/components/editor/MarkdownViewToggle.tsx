@@ -20,7 +20,7 @@ import type { MarkdownViewMode } from '@/store/slices/editor'
 // distinction. See reviews/changes-view-mode-plan.md.
 export type EditorToggleValue = MarkdownViewMode | 'edit' | 'changes'
 
-type ViewModeMetadata = { label: string; icon: LucideIcon }
+type ViewModeMetadata = { label: string; icon: LucideIcon; title?: string }
 
 const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = {
   source: {
@@ -41,7 +41,12 @@ const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = 
   },
   changes: {
     label: 'Changes',
-    icon: GitCompareArrows
+    icon: GitCompareArrows,
+    // Why: "Changes" collides with the Source Control sidebar's "Branch
+    // Changes" section, which diffs against the base ref. This toggle shows
+    // uncommitted changes (working tree vs HEAD) so the user can see what
+    // they would lose on Don't Save. Spell that out in the hover title.
+    title: 'Changes — uncommitted changes (working tree vs HEAD)'
   }
 }
 
@@ -96,7 +101,7 @@ export default function MarkdownViewToggle({
             key={viewMode}
             value={viewMode}
             aria-label={metadata.label}
-            title={metadata.label}
+            title={metadata.title ?? metadata.label}
           >
             <Icon className="h-3 w-3" />
           </ToggleGroupItem>
