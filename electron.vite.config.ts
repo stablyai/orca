@@ -46,8 +46,7 @@ export default defineConfig({
       }
     },
     // Why: compile-time substitution for the telemetry gate. See the block
-    // above and `docs/telemetry-implementation.md` §"Dev/CI handling →
-    // Build-time injection" for the full rationale.
+    // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL

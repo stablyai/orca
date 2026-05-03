@@ -221,9 +221,9 @@ export type EventProps<N extends EventName> = EventMap[N]
 // which keys to allow on every outgoing event.
 //
 // No `env: 'prod' | 'dev'` property. Every transmitted event is by
-// construction from an official CI build (see §Dev/CI handling), so a wire
-// discriminator would be redundant. Contributor / `pnpm dev` builds do not
-// transmit at all; they console-mirror.
+// construction from an official CI build, so a wire discriminator would be
+// redundant. Contributor / `pnpm dev` builds do not transmit at all; they
+// console-mirror.
 //
 // Every string field carries the 64-char cap directly — this is what the
 // validator's "string-length cap" rule is made of; there is no separate
