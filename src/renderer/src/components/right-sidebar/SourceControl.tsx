@@ -1243,7 +1243,7 @@ export function CommitArea({
         placeholder="Message"
         aria-label="Commit message"
         aria-describedby={commitError ? 'commit-area-error' : undefined}
-        className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+        className="mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
       />
       {/* Why: match the "Squash and merge" button in PRActions
           (size="xs", px-3 text-[11px]) so the sidebar has a consistent
@@ -1253,7 +1253,7 @@ export function CommitArea({
         size="xs"
         disabled={isCommitDisabled}
         onClick={() => onCommitSuccess()}
-        className="mt-1 w-full px-3 text-[11px]"
+        className="w-full px-3 text-[11px]"
         title={disabledReason}
       >
         {isCommitting && <RefreshCw className="size-3.5 animate-spin" />}
