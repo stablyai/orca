@@ -26,11 +26,17 @@ export class SshGitProvider implements IGitProvider {
     return (await this.mux.request('git.status', { worktreePath })) as GitStatusResult
   }
 
-  async getDiff(worktreePath: string, filePath: string, staged: boolean): Promise<GitDiffResult> {
+  async getDiff(
+    worktreePath: string,
+    filePath: string,
+    staged: boolean,
+    compareAgainstHead?: boolean
+  ): Promise<GitDiffResult> {
     return (await this.mux.request('git.diff', {
       worktreePath,
       filePath,
-      staged
+      staged,
+      compareAgainstHead
     })) as GitDiffResult
   }
 

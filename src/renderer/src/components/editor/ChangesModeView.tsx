@@ -5,6 +5,15 @@ import { ConflictBanner } from './ConflictComponents'
 
 const DiffViewer = lazy(() => import('./DiffViewer'))
 
+function getContentSignature(content: string): string {
+  let hash = 2166136261
+  for (let i = 0; i < content.length; i += 1) {
+    hash ^= content.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16)
+}
+
 // Why: Changes view mode renders an edit-mode tab as a HEAD-vs-working-tree
 // diff without creating a separate diff-tab object. The draft is the live
 // source on the modified side; onContentChange is the same callback as normal
@@ -56,6 +65,13 @@ export function ChangesModeView({
   // a broken view. Surface an inline banner so the user knows Changes mode is
   // active but there is simply nothing to diff right now.
   const isIdentical = dc.originalContent === modifiedContent
+  // Why: after a terminal commit/pull/rebase, Changes mode refreshes the
+  // HEAD-side blob in React state, but Monaco can keep painting the previous
+  // diff if we reuse the same kept model identities. Rotate only the
+  // original-side model identity so Monaco rebuilds the stale HEAD snapshot
+  // without throwing away the modified-side undo history.
+  const headContentSignature = getContentSignature(dc.originalContent)
+  const originalModelKey = `${diffViewStateKey}:original:${headContentSignature}`
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {activeFile.conflict && <ConflictBanner file={activeFile} entry={activeConflictEntry} />}
@@ -68,6 +84,7 @@ export function ChangesModeView({
         <DiffViewer
           key={viewStateScopeId}
           modelKey={diffViewStateKey}
+          originalModelKey={originalModelKey}
           originalContent={dc.originalContent}
           modifiedContent={modifiedContent}
           language={resolvedLanguage}

@@ -479,18 +479,29 @@ export function registerFilesystemHandlers(store: Store): void {
     'git:diff',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; staged: boolean; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePath: string
+        staged: boolean
+        compareAgainstHead?: boolean
+        connectionId?: string
+      }
     ): Promise<GitDiffResult> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.getDiff(args.worktreePath, args.filePath, args.staged)
+        return provider.getDiff(
+          args.worktreePath,
+          args.filePath,
+          args.staged,
+          args.compareAgainstHead
+        )
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      return getDiff(worktreePath, filePath, args.staged)
+      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead)
     }
   )
 

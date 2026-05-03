@@ -113,7 +113,11 @@ function inFlightReadKey(connectionId: string | undefined, filePath: string): st
   return `${connectionId ?? ''}::${filePath}`
 }
 
-function inFlightDiffKey(file: OpenFile, connectionId: string | undefined): string {
+function inFlightDiffKey(
+  file: OpenFile,
+  connectionId: string | undefined,
+  compareAgainstHead = false
+): string {
   // Why: diff content depends on the file path AND which diff source is
   // being rendered (unstaged/staged/branch). Branch diffs further depend
   // on the base+head oids so switching compare points doesn't alias, and
@@ -123,7 +127,7 @@ function inFlightDiffKey(file: OpenFile, connectionId: string | undefined): stri
     file.diffSource === 'branch' && file.branchCompare
       ? `${file.branchCompare.baseOid ?? ''}..${file.branchCompare.headOid ?? ''}::${file.branchOldPath ?? ''}`
       : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${file.filePath}::${branch}`
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}`
 }
 
 function EditorPanelInner({
@@ -398,7 +402,12 @@ function EditorPanelInner({
       // branch selection so the two can never drift apart.
       const effectiveDiffSource: typeof file.diffSource =
         file.mode === 'edit' ? 'unstaged' : file.diffSource
-      const key = inFlightDiffKey({ ...file, diffSource: effectiveDiffSource }, connectionId)
+      const compareAgainstHead = file.mode === 'edit'
+      const key = inFlightDiffKey(
+        { ...file, diffSource: effectiveDiffSource },
+        connectionId,
+        compareAgainstHead
+      )
       // Why: same rationale as inFlightFileReads above — a single external
       // change fans out to every mounted EditorPanel, and two split panes
       // showing the same diff tab should share one git.diff IPC instead of
@@ -423,6 +432,7 @@ function EditorPanelInner({
                 worktreePath,
                 filePath: file.relativePath,
                 staged: effectiveDiffSource === 'staged',
+                compareAgainstHead,
                 connectionId
               })
         ) as Promise<DiffContent>
@@ -560,19 +570,20 @@ function EditorPanelInner({
   // file and avoid churning MarkdownViewToggle's onChange identity.
   const handleEditorToggleChange = useCallback(
     (next: EditorToggleValue): void => {
-      if (!activeFile) {
+      const fileId = activeFile?.id
+      if (!fileId) {
         return
       }
       if (next === 'changes') {
-        setEditorViewMode(activeFile.id, 'changes')
+        setEditorViewMode(fileId, 'changes')
         return
       }
       // Why: selecting any non-Changes segment implicitly exits Changes mode.
       // For markdown/mermaid files, also persist the chosen language sub-mode
       // so that next time Changes is toggled off, the file returns to that view.
-      setEditorViewMode(activeFile.id, 'edit')
+      setEditorViewMode(fileId, 'edit')
       if (next !== 'edit') {
-        setMarkdownViewMode(activeFile.id, next)
+        setMarkdownViewMode(fileId, next)
       }
     },
     [activeFile?.id, setEditorViewMode, setMarkdownViewMode]

@@ -1247,6 +1247,7 @@ const api = {
       worktreePath: string
       filePath: string
       staged: boolean
+      compareAgainstHead?: boolean
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:diff', args),
     branchCompare: (args: {

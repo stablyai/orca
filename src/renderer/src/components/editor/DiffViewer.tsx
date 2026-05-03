@@ -14,6 +14,8 @@ import type { DiffComment } from '../../../../shared/types'
 
 type DiffViewerProps = {
   modelKey: string
+  originalModelKey?: string
+  modifiedModelKey?: string
   originalContent: string
   modifiedContent: string
   language: string
@@ -38,6 +40,8 @@ type DiffViewerProps = {
 
 export default function DiffViewer({
   modelKey,
+  originalModelKey,
+  modifiedModelKey,
   originalContent,
   modifiedContent,
   language,
@@ -167,6 +171,8 @@ export default function DiffViewer({
 
   const propsRef = useRef({ relativePath, language, onSave })
   propsRef.current = { relativePath, language, onSave }
+  const resolvedOriginalModelKey = originalModelKey ?? modelKey
+  const resolvedModifiedModelKey = modifiedModelKey ?? modelKey
 
   const handleMount: DiffOnMount = useCallback(
     (diffEditor, monaco) => {
@@ -268,8 +274,11 @@ export default function DiffViewer({
           // (staged, unstaged, branch compare versions). The kept Monaco models
           // must therefore key off the tab identity, not the raw file path, or
           // one diff tab can incorrectly reuse another tab's model contents.
-          originalModelPath={`diff:original:${modelKey}`}
-          modifiedModelPath={`diff:modified:${modelKey}`}
+          // Why: Changes mode sometimes needs to rotate only the original-side
+          // model after HEAD moves, while preserving the modified-side model's
+          // undo stack for continued editing.
+          originalModelPath={`diff:original:${resolvedOriginalModelKey}`}
+          modifiedModelPath={`diff:modified:${resolvedModifiedModelKey}`}
           keepCurrentOriginalModel
           keepCurrentModifiedModel
           options={{
