@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
-import MarkdownViewToggle, { CSV_VIEW_MODE_METADATA } from './MarkdownViewToggle'
+import EditorViewToggle, { CSV_VIEW_MODE_METADATA } from './EditorViewToggle'
 import { EditorContent } from './EditorContent'
 import { scrollTopCache, cursorPositionCache, diffViewStateCache } from '@/lib/scroll-cache'
 import type { GitDiffResult } from '../../../../shared/types'
@@ -47,7 +47,7 @@ import {
   getMarkdownViewModes,
   isMarkdownPreviewShortcut
 } from './markdown-preview-controls'
-import type { EditorToggleValue } from './MarkdownViewToggle'
+import type { EditorToggleValue } from './EditorViewToggle'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -567,7 +567,7 @@ function EditorPanelInner({
   // Why: hooks must run unconditionally, so this useCallback lives above the
   // `if (!activeFile) return null` guard; the callback itself no-ops when
   // no file is active. Memoised to match the other editor handlers in this
-  // file and avoid churning MarkdownViewToggle's onChange identity.
+  // file and avoid churning EditorViewToggle's onChange identity.
   const handleEditorToggleChange = useCallback(
     (next: EditorToggleValue): void => {
       const fileId = activeFile?.id
@@ -1184,7 +1184,7 @@ function EditorPanelInner({
             </TooltipProvider>
           )}
           {hasEditorToggle && (
-            <MarkdownViewToggle
+            <EditorViewToggle
               value={effectiveToggleValue}
               modes={availableEditorToggleModes}
               onChange={handleEditorToggleChange}

@@ -44,9 +44,9 @@ const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = 
     icon: GitCompareArrows,
     // Why: "Changes" collides with the Source Control sidebar's "Branch
     // Changes" section, which diffs against the base ref. This toggle shows
-    // uncommitted changes (working tree vs HEAD) so the user can see what
-    // they would lose on Don't Save. Spell that out in the hover title.
-    title: 'Changes — uncommitted changes (working tree vs HEAD)'
+    // uncommitted changes (working tree vs HEAD), so disambiguate in the
+    // hover title without repeating the button label.
+    title: 'Uncommitted changes'
   }
 }
 
@@ -60,19 +60,19 @@ export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMe
   }
 }
 
-type MarkdownViewToggleProps = {
+type EditorViewToggleProps = {
   value: EditorToggleValue
   modes: readonly EditorToggleValue[]
   onChange: (value: EditorToggleValue) => void
   metadataOverride?: Partial<Record<MarkdownViewMode, ViewModeMetadata>>
 }
 
-export default function MarkdownViewToggle({
+export default function EditorViewToggle({
   value,
   modes,
   onChange,
   metadataOverride
-}: MarkdownViewToggleProps): React.JSX.Element {
+}: EditorViewToggleProps): React.JSX.Element {
   return (
     <ToggleGroup
       type="single"

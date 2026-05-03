@@ -1,5 +1,5 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
-import type { EditorToggleValue } from './MarkdownViewToggle'
+import type { EditorToggleValue } from './EditorViewToggle'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
