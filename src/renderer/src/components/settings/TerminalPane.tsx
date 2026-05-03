@@ -39,13 +39,15 @@ import {
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
   TERMINAL_RENDERING_SEARCH_ENTRIES,
-  TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
   TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
-  TERMINAL_WINDOW_SEARCH_ENTRIES,
+  TERMINAL_WINDOW_SEARCH_ENTRIES
+} from './terminal-search'
+import {
+  TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
   TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY,
   TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
-} from './terminal-search'
+} from './terminal-windows-search'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { detectedCategoryToDefault } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'

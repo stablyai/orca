@@ -10,6 +10,7 @@ const {
   readFileMock,
   writeFileMock,
   statMock,
+  openMock,
   realpathMock,
   lstatMock,
   getStatusMock,
@@ -30,6 +31,7 @@ const {
   readFileMock: vi.fn(),
   writeFileMock: vi.fn(),
   statMock: vi.fn(),
+  openMock: vi.fn(),
   realpathMock: vi.fn(),
   lstatMock: vi.fn(),
   getStatusMock: vi.fn(),
@@ -59,6 +61,7 @@ vi.mock('fs/promises', () => ({
   readFile: readFileMock,
   writeFile: writeFileMock,
   stat: statMock,
+  open: openMock,
   realpath: realpathMock,
   lstat: lstatMock
 }))
@@ -142,6 +145,7 @@ describe('registerFilesystemHandlers', () => {
       readFileMock,
       writeFileMock,
       statMock,
+      openMock,
       realpathMock,
       lstatMock,
       getStatusMock,
@@ -179,6 +183,13 @@ describe('registerFilesystemHandlers', () => {
     ])
     trashItemMock.mockResolvedValue(undefined)
     statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
+    openMock.mockResolvedValue({
+      read: vi.fn(async (buffer: Buffer) => {
+        buffer.fill(0x61)
+        return { bytesRead: buffer.length, buffer }
+      }),
+      close: vi.fn()
+    })
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
   })
 
@@ -236,6 +247,55 @@ describe('registerFilesystemHandlers', () => {
       isImage: true,
       mimeType: mime
     })
+  })
+
+  it('opens text files larger than the old 5MB guard', async () => {
+    const content = 'a'.repeat(6 * 1024 * 1024)
+    statMock.mockResolvedValue({ size: content.length, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(Buffer.from(content))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/large.json') })
+    ).resolves.toEqual({
+      content,
+      isBinary: false
+    })
+  })
+
+  it('rejects text files beyond the editor read budget', async () => {
+    statMock.mockResolvedValue({ size: 51 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.json') })
+    ).rejects.toThrow('exceeds 50MB limit')
+
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('probes large unknown binaries without reading the full file', async () => {
+    statMock.mockResolvedValue({ size: 6 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+    openMock.mockResolvedValue({
+      read: vi.fn(async (buffer: Buffer) => {
+        buffer[0] = 0x00
+        return { bytesRead: 1, buffer }
+      }),
+      close: vi.fn()
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/archive.bin') })
+    ).resolves.toEqual({
+      content: '',
+      isBinary: true
+    })
+
+    expect(readFileMock).not.toHaveBeenCalled()
   })
 
   it('moves files to trash', async () => {
