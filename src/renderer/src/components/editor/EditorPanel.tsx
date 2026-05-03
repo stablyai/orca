@@ -985,7 +985,15 @@ function EditorPanelInner({
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
-  const hasEditorToggle = editorToggleModes.length > 0
+  const isBinaryEditSurface =
+    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
+  // Why: edit-mode binary/image tabs already have their own dedicated renderers
+  // and cannot enter the Changes diff surface. Hide that segment rather than
+  // offering a toggle state the renderer will immediately ignore.
+  const availableEditorToggleModes = isBinaryEditSurface
+    ? editorToggleModes.filter((mode) => mode !== 'changes')
+    : editorToggleModes
+  const hasEditorToggle = availableEditorToggleModes.length > 0
   const effectiveToggleValue: EditorToggleValue = isChangesMode
     ? 'changes'
     : hasViewModeToggle
@@ -1163,7 +1171,7 @@ function EditorPanelInner({
           {hasEditorToggle && (
             <MarkdownViewToggle
               value={effectiveToggleValue}
-              modes={editorToggleModes}
+              modes={availableEditorToggleModes}
               onChange={handleEditorToggleChange}
               metadataOverride={isCsv ? CSV_VIEW_MODE_METADATA : undefined}
             />
