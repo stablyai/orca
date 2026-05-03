@@ -1,8 +1,7 @@
 // Burst-cap behavior. These tests pin the three independent buckets (per-
 // event token bucket, per-session global ceiling, consent-mutation bucket),
 // the refill math, and the "exactly one warn per cap crossing per session"
-// rule. See `docs/telemetry-implementation.md` §"Burst cap" and §"Consent-
-// mutation rate limit" for the rule derivations.
+// rule.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {

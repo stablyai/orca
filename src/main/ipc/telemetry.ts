@@ -18,10 +18,6 @@
 //   - Consent-mutation rate limit. A real user flips the Privacy pane
 //     toggle a handful of times at most; beyond 5 per session it is either
 //     a UI bug or a compromised renderer. Drop silently past the cap.
-//
-// See `docs/telemetry-implementation.md` §"IPC surface" for the full
-// rationale and §"Architecture at a glance" → "Security framing" for the
-// threat model these handlers belong to.
 
 import { ipcMain } from 'electron'
 import { consumeConsentMutationToken } from '../telemetry/burst-cap'

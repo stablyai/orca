@@ -624,10 +624,10 @@ app.on('will-quit', (e) => {
     // if disconnectDaemon rejects, we still quit instead of hanging the app.
     //
     // Telemetry shutdown folds in after the daemon/RPC teardown and BEFORE
-    // app.quit(): the PostHog client has up to 2s of bounded flush
-    // (docs/telemetry-implementation.md §Shutdown ordering). Errors inside
-    // `shutdownTelemetry()` are caught by the client itself — we catch again
-    // here defensively so a flush failure cannot cancel the quit chain.
+    // app.quit(): the PostHog client has up to 2s of bounded flush. Errors
+    // inside `shutdownTelemetry()` are caught by the client itself — we
+    // catch again here defensively so a flush failure cannot cancel the
+    // quit chain.
     Promise.allSettled([disconnectDaemon(), rpcStopAndClear])
       .then(() => shutdownTelemetry())
       .catch(() => {

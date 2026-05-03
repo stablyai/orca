@@ -6,10 +6,8 @@
 // The validator is the single enforcement point for both main-originated
 // and IPC-arrived events. TypeScript types do not survive IPC serialization,
 // so the renderer cannot be trusted to send well-typed payloads — the
-// renderer is explicitly in the threat model (see
-// `docs/telemetry-implementation.md` §"Architecture at a glance" → "Security
-// framing for the validator"). Every shape-level promise in `EventMap` is
-// also a runtime check here.
+// renderer is explicitly in the threat model. Every shape-level promise in
+// `EventMap` is also a runtime check here.
 //
 // Contract (all drops go through the same fail-closed path — no event is
 // ever emitted when any of these fire):

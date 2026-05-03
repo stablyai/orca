@@ -23,8 +23,7 @@ export type ConsentState =
   | { effective: 'pending_banner' }
 
 // Precedence for the `disabled` branches is documented alongside
-// `resolveConsent` below and in docs/telemetry-plan.md §"Env vars and consent
-// precedence". Keep this list in sync with that table.
+// `resolveConsent` below.
 const CI_ENV_VARS = [
   'CI',
   'GITHUB_ACTIONS',

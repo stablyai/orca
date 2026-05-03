@@ -20,10 +20,11 @@
 //   5. posthog.capture      — the only place this module calls into the
 //                             vendor SDK.
 //
-// See `docs/telemetry-implementation.md` §"The `track()` wrapper" for the
-// full rationale, and §"PostHog auto-properties" for why we attach
-// `$process_person_profile: false` on every capture (posthog-node has no
-// init-time equivalent of posthog-js's `person_profiles: 'identified_only'`).
+// `$process_person_profile: false` is attached on every capture because
+// posthog-node has no init-time equivalent of posthog-js's
+// `person_profiles: 'identified_only'` — without the per-capture flag, the
+// server SDK would materialize a PostHog person per install_id, which we
+// explicitly do not want for anonymous-only events.
 
 import { randomUUID } from 'node:crypto'
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
@@ -273,8 +274,7 @@ export function setOptIn(
     // Fire opt-out event BEFORE disabling the SDK. This is the one event
     // that transmits against the user's new preference — the user chose to
     // tell us they are opting out, and that single signal is what tells us
-    // the opt-out flow is working. Plan rationale in
-    // `docs/telemetry-plan.md` §telemetry_opted_in / telemetry_opted_out.
+    // the opt-out flow is working.
     //
     // Capture directly (not via `track()`) because `updateSettings` above
     // just flipped `optedIn` to `false`; `track()` would re-read settings,

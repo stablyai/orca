@@ -3,9 +3,7 @@
 // event names, extra properties (via `.strict()`), missing required keys,
 // wrong enum values, and overlength free-form strings. Every rejected case
 // returns `{ ok: false, reason }` — the client.ts wrapper then drops the
-// event instead of calling posthog.capture. See
-// `docs/telemetry-implementation.md` §"Runtime validator" for the full
-// contract this suite pins.
+// event instead of calling posthog.capture.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetValidatorWarnCacheForTests, validate } from './validator'
@@ -46,10 +44,9 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
-  // The core invariant of the T3 Code posture: agent_error is enum-only. If
-  // a call site ever tries to attach raw error strings to the event, the
-  // validator drops it and nothing transmits. See §"Decision record: T3
-  // Code's posture on errors".
+  // Core invariant: agent_error is enum-only. If a call site ever tries to
+  // attach raw error strings to the event, the validator drops it and nothing
+  // transmits.
   it('rejects error_message on agent_error', () => {
     const result = validate('agent_error', {
       error_class: 'auth_expired',

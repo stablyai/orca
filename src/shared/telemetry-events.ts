@@ -11,9 +11,6 @@
 // keys." Free-form string fields carry an explicit `.max(N)` cap at the
 // schema — the cap and the schema are the same thing; the validator does not
 // re-check string length.
-//
-// See `docs/telemetry-implementation.md` §"The typed event map" for the full
-// rationale and invariants this file is expected to preserve.
 
 import { z } from 'zod'
 
@@ -167,9 +164,9 @@ const agentStartedSchema = z
 //
 // `error_message` and `error_stack` are deliberately absent from this schema.
 // `.strict()` rejects either key if a call site ever tries to attach one,
-// which fails the validator and drops the event — the same posture T3 Code
-// ships in production. See `docs/telemetry-implementation.md` §"Decision
-// record: T3 Code's posture on errors" for the reversal conditions.
+// which fails the validator and drops the event. Raw error strings carry
+// arbitrary user/workspace/path content; keeping them off the wire is the
+// only way to guarantee we never transmit them by accident.
 const agentErrorSchema = z
   .object({
     error_class: errorClassSchema,

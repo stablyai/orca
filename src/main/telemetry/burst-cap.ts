@@ -1,7 +1,5 @@
 // Burst caps for the telemetry transport. Three independent buckets — all
 // must be satisfied for an event to transmit or a consent mutation to apply.
-// See `docs/telemetry-implementation.md` §"Burst cap" and §"Consent-mutation
-// rate limit" for the derivation of these numbers.
 //
 //   (1) Per-event-name token bucket — defends against runaway-`useEffect`
 //       bugs and repeated error serializations. `agent_error` is rate-limited

@@ -1,9 +1,7 @@
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
 // by `.strict()`), error_name is whitelisted, unknown enum values fail, and
-// any well-formed payload round-trips without coercion. See
-// `docs/telemetry-implementation.md` §"The typed event map" and §"Decision
-// record: T3 Code's posture on errors" for the doctrine.
+// any well-formed payload round-trips without coercion.
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -46,9 +44,9 @@ describe('agent_error schema', () => {
     expect(parsed.success).toBe(false)
   })
 
-  // Core invariant from the decision record: `.strict()` rejects raw strings
-  // the T3 Code posture forbids. If this test ever flips, the analytics
-  // lane is leaking UGC — revert the offending schema change.
+  // Core invariant: `.strict()` rejects raw error strings. If this test ever
+  // flips, the analytics lane is leaking UGC — revert the offending schema
+  // change.
   it('rejects error_message via .strict()', () => {
     const parsed = eventSchemas.agent_error.safeParse({
       error_class: 'auth_expired',

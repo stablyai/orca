@@ -1,6 +1,5 @@
 // End-to-end behavior of the track() wrapper against a mock PostHog. These
-// tests pin the ordering contracts from `docs/telemetry-implementation.md`
-// §"The track() wrapper":
+// tests pin the ordering contracts:
 //
 //   - shutdown gate fires before anything else
 //   - burst cap runs BEFORE consent resolve (opted-out flood does not hit

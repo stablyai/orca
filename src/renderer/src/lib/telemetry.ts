@@ -6,8 +6,7 @@
 // deliberately typed as a loose `(name: string, props: Record<string,
 // unknown>) => Promise<void>` so it can cross the IPC boundary without
 // pretending the renderer's types are load-bearing — the main-side
-// validator is the single enforcement point (see
-// `docs/telemetry-implementation.md` §"IPC surface").
+// validator is the single enforcement point.
 //
 // The renderer does NOT bundle `posthog-node` or any PostHog SDK. There is
 // one PostHog client in the process tree and it lives in main. That

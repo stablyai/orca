@@ -1,8 +1,7 @@
 // IPC boundary behavior. Strict type narrows must drop obviously-malformed
 // calls before they reach the validator (the renderer is in the threat
-// model — see `docs/telemetry-implementation.md` §"Architecture at a
-// glance" → Security framing). Also pins the consent-mutation rate limit:
-// ≤5 `telemetry:setOptIn` calls per session.
+// model). Also pins the consent-mutation rate limit: ≤5
+// `telemetry:setOptIn` calls per session.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
