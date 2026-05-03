@@ -226,6 +226,36 @@
   scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent) transparent;
 }
 
+/* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
+.worktree-sidebar-scrollbar {
+  scrollbar-color: transparent transparent;
+}
+
+.worktree-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-width: 3px 3px 3px 0;
+}
+
+.scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar,
+.worktree-sidebar-scrollbar:hover {
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent) transparent;
+}
+
+.scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb,
+.worktree-sidebar-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
+}
+
+.scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb:hover,
+.worktree-sidebar-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
+}
+
+.scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb:active,
+.worktree-sidebar-scrollbar:hover::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
+}
+
 [data-slot='popover-content'] {
   max-height: var(--radix-popover-content-available-height);
 }
@@ -895,6 +925,13 @@
   background: color-mix(in srgb, var(--warning, #f59e0b) 34%, transparent);
   border-radius: 3px;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning, #f59e0b) 52%, transparent);
+}
+
+.monaco-editor .monaco-markdown-doc-link {
+  color: #58a6ff !important;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
 }
 
 /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)

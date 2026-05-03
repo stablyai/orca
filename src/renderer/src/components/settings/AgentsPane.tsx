@@ -246,50 +246,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
     defaultAgent === null || (defaultAgent !== 'blank' && !detectedIds?.has(defaultAgent))
   const isBlankDefault = defaultAgent === 'blank'
 
-  // Why: match right-sidebar's `s.settings?.showAgentDashboard !== false` read.
-  // Persisted settings from older versions may be missing this field — treating
-  // `undefined` as "on" here keeps the toggle's displayed state in sync with
-  // the sidebar's actual rendering, so the UI never contradicts itself.
-  const showDashboard = settings.showAgentDashboard !== false
-
   return (
     <div className="space-y-8">
-      {/* Dashboard visibility */}
-      {settings.experimentalAgentDashboard === true && (
-        <section>
-          <div className="flex items-center justify-between gap-4 px-1 py-2">
-            <div className="space-y-0.5">
-              <span id="show-agent-dashboard-label" className="text-sm font-medium">
-                Show Agent Dashboard
-              </span>
-              <p id="show-agent-dashboard-desc" className="text-xs text-muted-foreground">
-                Show the live agent activity panel docked at the bottom of the right sidebar —
-                surfaces working, blocked, and done agents across all open worktrees.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showDashboard}
-              aria-labelledby="show-agent-dashboard-label"
-              aria-describedby="show-agent-dashboard-desc"
-              onClick={() => updateSettings({ showAgentDashboard: !showDashboard })}
-              className={cn(
-                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors',
-                showDashboard ? 'bg-foreground' : 'bg-muted-foreground/30'
-              )}
-            >
-              <span
-                className={cn(
-                  'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-                  showDashboard ? 'translate-x-4' : 'translate-x-0.5'
-                )}
-              />
-            </button>
-          </div>
-        </section>
-      )}
-
       {/* Default agent picker */}
       <section className="space-y-4">
         <div className="space-y-1">

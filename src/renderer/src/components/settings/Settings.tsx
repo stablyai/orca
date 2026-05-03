@@ -8,11 +8,13 @@ import {
   GitBranch,
   Globe,
   Keyboard,
+  ShieldCheck,
   Palette,
   Server,
   SlidersHorizontal,
   Blocks,
-  SquareTerminal
+  SquareTerminal,
+  UserCog
 } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
@@ -35,8 +37,13 @@ import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './Notifica
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
+import {
+  DeveloperPermissionsPane,
+  DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
+} from './DeveloperPermissionsPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
@@ -44,11 +51,13 @@ import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-sear
 type SettingsNavTarget =
   | 'general'
   | 'integrations'
+  | 'accounts'
   | 'browser'
   | 'git'
   | 'appearance'
   | 'terminal'
   | 'notifications'
+  | 'developer-permissions'
   | 'shortcuts'
   | 'stats'
   | 'ssh'
@@ -111,6 +120,17 @@ function flashSectionHighlight(sectionId: string): void {
   }, SECTION_FLASH_DURATION_MS)
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  if (target.isContentEditable) {
+    return true
+  }
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -144,9 +164,17 @@ function Settings(): React.JSX.Element {
   // TerminalPane, driven by this shared state.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const [wslAvailable, setWslAvailable] = useState(false)
+  const [pwshAvailable, setPwshAvailable] = useState(false)
   useEffect(() => {
+    if (!isWindows) {
+      setWslAvailable(false)
+      setPwshAvailable(false)
+      return
+    }
+
     void window.api.wsl.isAvailable().then(setWslAvailable)
-  }, [])
+    void window.api.pwsh.isAvailable().then(setPwshAvailable)
+  }, [isWindows])
   const [terminalFontSuggestions, setTerminalFontSuggestions] = useState<string[]>(
     getFallbackTerminalFonts()
   )
@@ -164,6 +192,26 @@ function Settings(): React.JSX.Element {
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      // Why: Escape in an editable control usually means "cancel this edit",
+      // not "close Settings". Closing the entire page would discard the user's
+      // in-progress typing. Defer to the field's own handler when focus is on
+      // an input/textarea/select or contenteditable region; a subsequent
+      // Escape (with focus back on the body) will then close the page.
+      if (isEditableTarget(event.target)) {
+        return
+      }
+      closeSettingsPage()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [closeSettingsPage])
 
   useEffect(
     () => () => {
@@ -303,6 +351,13 @@ function Settings(): React.JSX.Element {
         searchEntries: AGENTS_PANE_SEARCH_ENTRIES
       },
       {
+        id: 'accounts',
+        title: 'Agent Accounts',
+        description: 'Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts.',
+        icon: UserCog,
+        searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'git',
         title: 'Git',
         description: 'Branch naming and local ref behavior.',
@@ -337,6 +392,17 @@ function Settings(): React.JSX.Element {
         icon: Bell,
         searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
       },
+      ...(isMac
+        ? [
+            {
+              id: 'developer-permissions' as const,
+              title: 'Permissions',
+              description: 'macOS privacy access for terminal-launched developer tools.',
+              icon: ShieldCheck,
+              searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
+            }
+          ]
+        : []),
       {
         id: 'shortcuts',
         title: 'Shortcuts',
@@ -363,8 +429,7 @@ function Settings(): React.JSX.Element {
         title: 'SSH',
         description: 'Remote SSH connections.',
         icon: Server,
-        searchEntries: SSH_PANE_SEARCH_ENTRIES,
-        badge: 'Beta'
+        searchEntries: SSH_PANE_SEARCH_ENTRIES
       },
       {
         id: 'experimental',
@@ -381,7 +446,7 @@ function Settings(): React.JSX.Element {
         searchEntries: getRepositoryPaneSearchEntries(repo)
       }))
     ],
-    [repos, terminalPaneSearchEntries]
+    [isMac, repos, terminalPaneSearchEntries]
   )
 
   const visibleNavSections = useMemo(
@@ -576,6 +641,15 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
+                  id="accounts"
+                  title="Agent Accounts"
+                  description="Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts."
+                  searchEntries={ACCOUNTS_PANE_SEARCH_ENTRIES}
+                >
+                  <AccountsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
                   id="git"
                   title="Git"
                   description="Branch naming and local ref behavior."
@@ -627,6 +701,7 @@ function Settings(): React.JSX.Element {
                     setScrollbackMode={setScrollbackMode}
                     ghostty={ghostty}
                     wslAvailable={wslAvailable}
+                    pwshAvailable={pwshAvailable}
                   />
                 </SettingsSection>
 
@@ -647,6 +722,17 @@ function Settings(): React.JSX.Element {
                 >
                   <NotificationsPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
+
+                {isMac ? (
+                  <SettingsSection
+                    id="developer-permissions"
+                    title="Permissions"
+                    description="macOS privacy access for terminal-launched developer tools."
+                    searchEntries={DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES}
+                  >
+                    <DeveloperPermissionsPane />
+                  </SettingsSection>
+                ) : null}
 
                 <SettingsSection
                   id="shortcuts"
@@ -669,7 +755,6 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="ssh"
                   title="SSH"
-                  badge="Beta"
                   description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
                   searchEntries={SSH_PANE_SEARCH_ENTRIES}
                 >

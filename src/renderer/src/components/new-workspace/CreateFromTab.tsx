@@ -17,10 +17,11 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import IssueSourceSelector from '@/components/github/IssueSourceSelector'
+import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { normalizeGitHubLinkQuery } from '@/lib/github-links'
-import type { RepoSlug } from '@/lib/github-links'
 import { launchWorkItemDirect, launchFromBranch } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
@@ -72,6 +73,17 @@ const SUB_TABS: {
 
 const PR_LIST_LIMIT = 36
 const ISSUE_LIST_LIMIT = 36
+const BRANCH_CACHE_TTL_MS = 60_000
+// Why: branches change rarely during a composer session. A module-scoped
+// cache keyed on repoId + query (60s TTL) means switching sub-tabs or
+// re-opening the modal returns the prior result instantly instead of
+// re-shelling out to `git for-each-ref` (which can be slow on large repos).
+const branchCache = new Map<string, { data: string[]; fetchedAt: number }>()
+// Why: the unqualified empty-query path returns PRs + issues merged and
+// sliced to `limit`. Use the sum so each tab can render up to its own cap
+// after filtering by type client-side — and because both effects pass the
+// same limit, they share one cached IPC call and one gh invocation.
+const COMBINED_WORK_ITEM_LIMIT = PR_LIST_LIMIT + ISSUE_LIST_LIMIT
 const LINEAR_LIST_LIMIT = 36
 const SEARCH_DEBOUNCE_MS = 200
 
@@ -87,7 +99,12 @@ export default function CreateFromTab({
     listLinearIssues,
     searchLinearIssues,
     rememberedSubTab,
-    setRememberedSubTab
+    setRememberedSubTab,
+    fetchWorkItems,
+    getCachedWorkItems,
+    getWorkItemsSourcesAndError,
+    setIssueSourcePreference,
+    workItemsInvalidationNonce
   } = useAppStore(
     useShallow((s) => ({
       activeRepoId: s.activeRepoId,
@@ -96,7 +113,17 @@ export default function CreateFromTab({
       listLinearIssues: s.listLinearIssues,
       searchLinearIssues: s.searchLinearIssues,
       rememberedSubTab: s.createFromSubTab,
-      setRememberedSubTab: s.setCreateFromSubTab
+      setRememberedSubTab: s.setCreateFromSubTab,
+      fetchWorkItems: s.fetchWorkItems,
+      getCachedWorkItems: s.getCachedWorkItems,
+      getWorkItemsSourcesAndError: s.getWorkItemsSourcesAndError,
+      setIssueSourcePreference: s.setIssueSourcePreference,
+      // Why: re-run the issues fetch effect after `setIssueSourcePreference`
+      // evicts this repo's cache entries — otherwise flipping the selector
+      // clears the cache but the effect's deps wouldn't force a refetch and
+      // the Issues sub-tab would briefly show stale (then empty-once-cached-
+      // expires) data until the user typed or switched tabs.
+      workItemsInvalidationNonce: s.workItemsInvalidationNonce
     }))
   )
 
@@ -201,37 +228,9 @@ export default function CreateFromTab({
   )
   const isRemoteRepo = Boolean(selectedRepo?.connectionId)
 
-  // Why: resolve the repo slug once so normalizeGitHubLinkQuery can detect
-  // pasted URLs that target a different repo than the selected one — same
-  // treatment StartFromPicker applies, so the "paste a URL" flow feels
-  // identical between the two surfaces.
-  const [repoSlug, setRepoSlug] = useState<RepoSlug | null>(null)
-  useEffect(() => {
-    if (!selectedRepo?.path) {
-      setRepoSlug(null)
-      return
-    }
-    let stale = false
-    void window.api.gh
-      .repoSlug({ repoPath: selectedRepo.path })
-      .then((slug) => {
-        if (!stale) {
-          setRepoSlug(slug)
-        }
-      })
-      .catch(() => {
-        if (!stale) {
-          setRepoSlug(null)
-        }
-      })
-    return () => {
-      stale = true
-    }
-  }, [selectedRepo?.path])
-
   const normalizedGhQuery = useMemo(
-    () => normalizeGitHubLinkQuery(debouncedQuery, repoSlug),
-    [debouncedQuery, repoSlug]
+    () => normalizeGitHubLinkQuery(debouncedQuery),
+    [debouncedQuery]
   )
 
   // ---------------------------------------------------------------------
@@ -250,25 +249,38 @@ export default function CreateFromTab({
       return // handled by direct-lookup effect below
     }
     const trimmed = debouncedQuery.trim()
-    const q =
-      trimmed && !normalizedGhQuery.repoMismatch
-        ? `is:pr is:open ${normalizedGhQuery.query}`
-        : 'is:pr is:open'
+    // Why: when the user hasn't typed anything, use the unqualified listing —
+    // the backend routes that to `listRecentWorkItems` which hits
+    // `gh api --cache 120s` (fast, cached). Adding `is:pr is:open` forces the
+    // slow `gh pr list --search` path every time and skips the 60s renderer
+    // cache in the store. Same shortcut is used for the issues effect below.
+    const q = trimmed ? `is:pr is:open ${normalizedGhQuery.query}` : ''
+    // Why: empty-query path returns PRs+issues merged, so use the combined
+    // cap so the PR and Issue effects collapse onto the same cache key and
+    // dedupe into a single gh invocation via the store's inflight tracker.
+    const effectiveLimit = trimmed ? PR_LIST_LIMIT : COMBINED_WORK_ITEM_LIMIT
+
+    // Why: route through the store so the 60s workItemsCache + inflight dedup
+    // kick in. Re-opening the modal or toggling PR↔Issue sub-tabs returns
+    // cached data instantly instead of re-running gh search.
+    const cached = getCachedWorkItems(selectedRepo.path, effectiveLimit, q)
+    if (cached) {
+      setPrItems(cached.filter((i) => i.type === 'pr').slice(0, PR_LIST_LIMIT))
+      setPrLoading(false)
+      setPrError(null)
+    }
 
     let stale = false
-    setPrLoading(true)
+    if (!cached) {
+      setPrLoading(true)
+    }
     setPrError(null)
-    void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: PR_LIST_LIMIT, query: q })
+    void fetchWorkItems(selectedRepo.id, selectedRepo.path, effectiveLimit, q)
       .then((items) => {
         if (stale) {
           return
         }
-        setPrItems(
-          items
-            .filter((i) => i.type === 'pr')
-            .map((i) => ({ ...i, repoId: selectedRepo.id })) as unknown as GitHubWorkItem[]
-        )
+        setPrItems(items.filter((i) => i.type === 'pr').slice(0, PR_LIST_LIMIT))
         setPrLoading(false)
       })
       .catch((err) => {
@@ -288,8 +300,9 @@ export default function CreateFromTab({
     isRemoteRepo,
     debouncedQuery,
     normalizedGhQuery.query,
-    normalizedGhQuery.repoMismatch,
-    normalizedGhQuery.directNumber
+    normalizedGhQuery.directNumber,
+    fetchWorkItems,
+    getCachedWorkItems
   ])
 
   // ---------------------------------------------------------------------
@@ -307,25 +320,42 @@ export default function CreateFromTab({
       return
     }
     const trimmed = debouncedQuery.trim()
-    const q =
-      trimmed && !normalizedGhQuery.repoMismatch
-        ? `is:issue is:open ${normalizedGhQuery.query}`
-        : 'is:issue is:open'
+    // Why: empty query → backend's fast cached path (see PR effect above).
+    // When no query is typed this is the SAME IPC call as the PR effect, so
+    // the store's inflight dedup collapses them into a single gh invocation.
+    const q = trimmed ? `is:issue is:open ${normalizedGhQuery.query}` : ''
+    const effectiveLimit = trimmed ? ISSUE_LIST_LIMIT : COMBINED_WORK_ITEM_LIMIT
+
+    const cached = getCachedWorkItems(selectedRepo.path, effectiveLimit, q)
+    if (cached) {
+      setIssueItems(cached.filter((i) => i.type === 'issue').slice(0, ISSUE_LIST_LIMIT))
+      setIssueLoading(false)
+      setIssueError(null)
+    }
 
     let stale = false
-    setIssueLoading(true)
+    if (!cached) {
+      setIssueLoading(true)
+    }
     setIssueError(null)
-    void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: ISSUE_LIST_LIMIT, query: q })
+    void fetchWorkItems(selectedRepo.id, selectedRepo.path, effectiveLimit, q)
       .then((items) => {
         if (stale) {
           return
         }
-        setIssueItems(
-          items
-            .filter((i) => i.type === 'issue')
-            .map((i) => ({ ...i, repoId: selectedRepo.id })) as unknown as GitHubWorkItem[]
-        )
+        setIssueItems(items.filter((i) => i.type === 'issue').slice(0, ISSUE_LIST_LIMIT))
+        // Why: partial failures (e.g. a 403 on a private upstream's issues)
+        // must surface here, otherwise the subtab shows an empty list and
+        // re-creates the silent-wrongness the parent feature aims to eliminate.
+        // fetchWorkItems stores envelope-level errors on the cache entry; read
+        // them via the selector so the banner surfaces rather than the subtab
+        // silently showing no items. This branch is mutually exclusive with the
+        // .catch below: a cached error implies the IPC call resolved, so
+        // there's no double-surface risk between the two setIssueError paths.
+        const { error } = getWorkItemsSourcesAndError(selectedRepo.path, effectiveLimit, q)
+        if (error) {
+          setIssueError(error.message)
+        }
         setIssueLoading(false)
       })
       .catch((err) => {
@@ -345,8 +375,14 @@ export default function CreateFromTab({
     isRemoteRepo,
     debouncedQuery,
     normalizedGhQuery.query,
-    normalizedGhQuery.repoMismatch,
-    normalizedGhQuery.directNumber
+    normalizedGhQuery.directNumber,
+    fetchWorkItems,
+    getCachedWorkItems,
+    getWorkItemsSourcesAndError,
+    // Why: flipping the issue-source selector evicts this repo's cache and
+    // bumps the nonce so this effect re-runs against the new preference.
+    // Matches the identical pattern in TaskPage's Tasks-list fetch effect.
+    workItemsInvalidationNonce
   ])
 
   // ---------------------------------------------------------------------
@@ -408,11 +444,26 @@ export default function CreateFromTab({
       return
     }
     const trimmed = debouncedQuery.trim()
+    const cacheKey = `${selectedRepo.id}::${trimmed}`
+    const cached = branchCache.get(cacheKey)
+    const fresh = cached && Date.now() - cached.fetchedAt < BRANCH_CACHE_TTL_MS
+    if (cached) {
+      // Why: show stale cache immediately (SWR-style); the fetch below keeps
+      // the list current. Only skip the loader flash if the entry is fresh.
+      setBranches(cached.data)
+      if (fresh) {
+        setBranchesLoading(false)
+        return
+      }
+    }
     let stale = false
-    setBranchesLoading(true)
+    if (!cached) {
+      setBranchesLoading(true)
+    }
     void window.api.repos
       .searchBaseRefs({ repoId: selectedRepo.id, query: trimmed, limit: 30 })
       .then((results) => {
+        branchCache.set(cacheKey, { data: results, fetchedAt: Date.now() })
         if (!stale) {
           setBranches(results)
         }
@@ -716,6 +767,29 @@ export default function CreateFromTab({
 
   const showGhRepoPicker = subTab !== 'linear'
 
+  // Why: render the issue-source selector inline with the Issues sub-tab's
+  // search input so a user who lands on an upstream/origin mismatch can
+  // correct it in place instead of closing the modal, flipping from the
+  // Tasks page, and re-opening. Sources come from whatever `workItemsCache`
+  // entry exists for this repo (empty-query or a past search) — the per-repo
+  // `listWorkItems` envelope always stamps both `prs` and `upstreamCandidate`
+  // so we can re-use the same derived shape the Tasks header consumes.
+  // Subscribing through `getWorkItemsAnySourcesForRepo` (a selector that
+  // returns a stable reference for unchanged entries) keeps this cheap —
+  // unrelated cache writes don't re-render the tab.
+  const selectorSources = useAppStore((s) =>
+    selectedRepo?.path && !isRemoteRepo
+      ? s.getWorkItemsAnySourcesForRepo(selectedRepo.path, COMBINED_WORK_ITEM_LIMIT)
+      : null
+  )
+  const selectorOrigin = selectorSources?.prs ?? null
+  const selectorUpstream = selectorSources?.upstreamCandidate ?? null
+  const selectorRenderable =
+    subTab === 'issues' &&
+    !!selectorOrigin &&
+    !!selectorUpstream &&
+    !sameGitHubOwnerRepo(selectorOrigin, selectorUpstream)
+
   // Why: each row gets a stable, unique `value` so cmdk's keyboard
   // navigation can track selection across sub-tab changes. Values also
   // feed the controlled `commandValue` state below.
@@ -734,12 +808,6 @@ export default function CreateFromTab({
     if (subTab === 'prs') {
       if (isRemoteRepo) {
         return { kind: 'empty', message: "PR start points aren't supported for remote repos yet." }
-      }
-      if (normalizedGhQuery.repoMismatch && normalizedGhQuery.directNumber === null) {
-        return {
-          kind: 'empty',
-          message: `URL targets ${normalizedGhQuery.repoMismatch}, not the selected repo.`
-        }
       }
       if (prError) {
         return {
@@ -773,12 +841,6 @@ export default function CreateFromTab({
         return {
           kind: 'empty',
           message: "Issue start points aren't supported for remote repos yet."
-        }
-      }
-      if (normalizedGhQuery.repoMismatch && normalizedGhQuery.directNumber === null) {
-        return {
-          kind: 'empty',
-          message: `URL targets ${normalizedGhQuery.repoMismatch}, not the selected repo.`
         }
       }
       if (issueError) {
@@ -869,7 +931,6 @@ export default function CreateFromTab({
     linearLoading,
     linearStatus.connected,
     normalizedGhQuery.directNumber,
-    normalizedGhQuery.repoMismatch,
     prError,
     prLoading,
     query,
@@ -1035,8 +1096,49 @@ export default function CreateFromTab({
                       }
                     }}
                     placeholder={placeholderBySubTab[subTab]}
-                    className="h-9 pl-8 text-sm"
+                    className={cn(
+                      'h-9 pl-8 text-sm',
+                      // Why: reserve trailing space for the absolute-positioned
+                      // IssueSourceSelector so typed text never slides under
+                      // the pills. Only widen the padding when the selector
+                      // is actually rendered.
+                      selectorRenderable && !launching ? 'pr-[140px]' : ''
+                    )}
                   />
+                  {selectorRenderable && selectedRepo && !launching ? (
+                    // Why: right-aligned inside the input so the selector
+                    // stays visually attached to the surface whose contents
+                    // it controls. `pointer-events-auto` is needed because
+                    // the sibling Search/Loader icons set
+                    // `pointer-events-none` on the absolute-positioned layer
+                    // — we override that for the clickable pills.
+                    // `suppressTooltip`: the selector is only visible on the
+                    // Issues sub-tab, so "Showing issues from X" restates
+                    // what's already implied (same reasoning as the Create
+                    // Issue composer mirror in TaskPage).
+                    <div
+                      className="pointer-events-auto absolute right-2 top-1/2 -translate-y-[calc(50%+2px)]"
+                      onMouseDown={(e) => {
+                        // Why: clicking a pill would otherwise blur the input
+                        // and close the results popover before the click
+                        // lands on the button. Blocking the default focus
+                        // shift keeps the popover open across a flip so the
+                        // user sees the list repopulate against the new
+                        // source without re-clicking the input.
+                        e.preventDefault()
+                      }}
+                    >
+                      <IssueSourceSelector
+                        preference={selectedRepo.issueSourcePreference}
+                        origin={selectorOrigin}
+                        upstream={selectorUpstream}
+                        onChange={(next) => {
+                          void setIssueSourcePreference(selectedRepo.id, selectedRepo.path, next)
+                        }}
+                        suppressTooltip
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </PopoverAnchor>
               <PopoverContent

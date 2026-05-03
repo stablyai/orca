@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { BrowserWindow, ipcMain, nativeTheme, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../../resources/icon.png?asset'
@@ -38,6 +38,8 @@ function forceRepaint(window: BrowserWindow): void {
 const TITLEBAR_CSS_CENTER = 20
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
+const MIN_WIDTH = 600
+const MIN_HEIGHT = 400
 
 function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
   if (process.platform !== 'darwin' || win.isDestroyed()) {
@@ -63,7 +65,54 @@ export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const savedBounds = store?.getUI().windowBounds
+  const rawSavedBounds = store?.getUI().windowBounds
+  // Why: defense in depth — if a previous quit/update path persisted
+  // shrink-to-min bounds (see freezeBoundsOnQuit), discard them on restore
+  // rather than resurrecting a tiny window. Anything at or below the min
+  // dimensions is treated as corrupt and falls back to defaultBounds. The
+  // position must also land on a currently-attached display with a
+  // *meaningful* visible area — not just any >0 overlap, since a 1-pixel
+  // sliver (or a sub-pixel shaving after DPI scaling) would still leave
+  // the titlebar unreachable. Require at least MIN_WIDTH/2 of horizontal
+  // and MIN_HEIGHT/2 of vertical overlap with some display's workArea
+  // (workArea excludes menu bar / dock, so a rect entirely hidden under
+  // the dock is also correctly discarded). A rect saved while an external
+  // monitor was connected would otherwise be restored off-screen and
+  // macOS would silently shrink/reposition the window.
+  const rectHasVisibleAreaOnAnyDisplay = (b: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }): boolean => {
+    try {
+      return screen.getAllDisplays().some((d) => {
+        const wa = d.workArea
+        const overlapX = Math.max(0, Math.min(b.x + b.width, wa.x + wa.width) - Math.max(b.x, wa.x))
+        const overlapY = Math.max(
+          0,
+          Math.min(b.y + b.height, wa.y + wa.height) - Math.max(b.y, wa.y)
+        )
+        return overlapX >= MIN_WIDTH / 2 && overlapY >= MIN_HEIGHT / 2
+      })
+    } catch (err) {
+      console.warn('[window] screen.getAllDisplays() threw; treating bounds as off-screen', err)
+      return false
+    }
+  }
+  const savedBounds =
+    rawSavedBounds &&
+    rawSavedBounds.width > MIN_WIDTH &&
+    rawSavedBounds.height > MIN_HEIGHT &&
+    rectHasVisibleAreaOnAnyDisplay(rawSavedBounds)
+      ? rawSavedBounds
+      : undefined
+  if (rawSavedBounds && !savedBounds) {
+    console.warn(
+      '[window] Discarding persisted windowBounds and falling back to defaultBounds:',
+      rawSavedBounds
+    )
+  }
   const savedMaximized = store?.getUI().windowMaximized ?? false
   // Why: on first launch (no saved bounds), fill the primary display work area
   // so the window feels spacious without calling maximize(). Saved bounds still
@@ -95,8 +144,8 @@ export function createMainWindow(
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
-    minWidth: 600,
-    minHeight: 400,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     show: false,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
@@ -180,30 +229,88 @@ export function createMainWindow(
   // position/size instead of maximizing on every launch. Debounce to avoid
   // hammering the persistence layer during continuous resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: once close has been initiated (user Cmd+Q, auto-updater relaunch,
+  // app.quit during quitAndInstall), Electron can still emit resize/move/
+  // unmaximize events while the OS tears the window down — persisting those
+  // intermediate, often near-minimum bounds would clobber the user's real
+  // last-used size and cause the next launch (especially post-update
+  // relaunch) to come up at minWidth × minHeight. Freeze persistence as soon
+  // as 'close' is observed.
+  let windowClosing = false
   const saveBounds = (): void => {
     if (boundsTimer) {
       clearTimeout(boundsTimer)
     }
     boundsTimer = setTimeout(() => {
       boundsTimer = null
-      if (mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
+      if (windowClosing || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
         return
       }
+      // Why: windowMaximized and windowBounds must be sampled and persisted
+      // atomically — writing windowMaximized first and then deciding whether
+      // to write bounds can leave the store with `windowMaximized: false`
+      // paired with stale/absent windowBounds if the near-min guard trips,
+      // which violates the pairing invariant subsequent launches rely on.
       const isMaximized = mainWindow.isMaximized()
-      store?.updateUI({ windowMaximized: isMaximized })
-      if (!isMaximized) {
-        store?.updateUI({ windowBounds: mainWindow.getBounds() })
+      if (isMaximized) {
+        store?.updateUI({ windowMaximized: true })
+        return
       }
+      const bounds = mainWindow.getBounds()
+      // Why: never persist shrink-to-min bounds. The user cannot want these
+      // saved — the window hit the enforced minimum, so either the teardown
+      // race from PR #1269 slipped past the freeze (e.g. dev-mode Ctrl+C
+      // where will-prevent-unload re-opens the freeze), or a transient
+      // OS resize fired. Dropping the bounds write here makes the next
+      // launch fall back to defaultBounds instead of resurrecting a tiny
+      // window. We still record windowMaximized: false so subsequent
+      // launches don't incorrectly restore maximized state.
+      if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
+        console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
+        store?.updateUI({ windowMaximized: false })
+        return
+      }
+      store?.updateUI({ windowMaximized: false, windowBounds: bounds })
     }, 500)
   }
   mainWindow.on('resize', saveBounds)
   mainWindow.on('move', saveBounds)
 
+  // Why: the auto-updater install path calls
+  // `win.removeAllListeners('close')` before quitting, so the per-window
+  // 'close' handler below never runs for update-triggered relaunches.
+  // Listen to app-level 'before-quit' as a second latch so resize/move
+  // events emitted during window teardown don't persist shrink-to-min
+  // bounds that would be restored on next launch.
+  const freezeBoundsOnQuit = (): void => {
+    windowClosing = true
+    if (boundsTimer) {
+      clearTimeout(boundsTimer)
+      boundsTimer = null
+    }
+  }
+  app.on('before-quit', freezeBoundsOnQuit)
+
   mainWindow.on('maximize', () => {
+    if (windowClosing) {
+      return
+    }
     store?.updateUI({ windowMaximized: true })
   })
   mainWindow.on('unmaximize', () => {
-    store?.updateUI({ windowMaximized: false, windowBounds: mainWindow.getBounds() })
+    if (windowClosing) {
+      return
+    }
+    const bounds = mainWindow.getBounds()
+    // Why: mirror the saveBounds guard — unmaximize during teardown can land
+    // at MIN_WIDTH × MIN_HEIGHT and we must not persist those as the user's
+    // remembered size.
+    if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
+      console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
+      store?.updateUI({ windowMaximized: false })
+      return
+    }
+    store?.updateUI({ windowMaximized: false, windowBounds: bounds })
   })
 
   mainWindow.on('enter-full-screen', () => {
@@ -448,6 +555,16 @@ export function createMainWindow(
   mainWindow.on('close', (e) => {
     if (windowCloseConfirmed) {
       windowCloseConfirmed = false
+      // Why: past this point Electron/OS may emit resize/move/unmaximize as
+      // the window is destroyed. Freeze bounds persistence so those
+      // teardown events can't clobber the user's saved window size — which
+      // would otherwise make the post-update relaunch come up at minWidth ×
+      // minHeight (issue surfaced in v1.3.26-rc2).
+      windowClosing = true
+      if (boundsTimer) {
+        clearTimeout(boundsTimer)
+        boundsTimer = null
+      }
       return
     }
     e.preventDefault()
@@ -456,6 +573,10 @@ export function createMainWindow(
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
+    // Why: a prevented beforeunload cancels the in-flight quit. Release the
+    // bounds-persistence freeze so a user who keeps using the window after
+    // aborting Cmd+Q still gets their size saved.
+    windowClosing = false
     opts?.onQuitAborted?.()
   })
 
@@ -480,6 +601,7 @@ export function createMainWindow(
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {

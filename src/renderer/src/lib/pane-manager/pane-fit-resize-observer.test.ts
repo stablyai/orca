@@ -42,6 +42,7 @@ function createPane(): ManagedPaneInternal {
     container: {} as never,
     xtermContainer: {} as never,
     linkTooltip: {} as never,
+    terminalGpuAcceleration: 'auto',
     gpuRenderingEnabled: true,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
@@ -58,6 +59,7 @@ function createPane(): ManagedPaneInternal {
     webglAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
+    debugLabel: null,
     pendingSplitScrollState: {
       wasAtBottom: true,
       firstVisibleLineContent: '',

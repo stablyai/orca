@@ -29,6 +29,7 @@ export default function TabGroupPanel({
   isFocused,
   hasSplitGroups,
   touchesRightEdge,
+  touchesLeftEdge,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
@@ -41,6 +42,7 @@ export default function TabGroupPanel({
   isFocused: boolean
   hasSplitGroups: boolean
   touchesRightEdge: boolean
+  touchesLeftEdge: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
@@ -197,14 +199,14 @@ export default function TabGroupPanel({
       // because a lone group has nothing to contrast against.
       className={`group/tab-group flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
-          ? // Why: drop only the RIGHT border on the rightmost group. The right
-            // sidebar paints its own `borderLeft` that already extends full
-            // height, so painting our own border-r in that spot stacks a
-            // second 1px line next to it — reading as a 2px-thick bar below
-            // the 8px drag strip (where the sidebar border continues alone
-            // above). The left edge has no such double-up, so the left
-            // border is always kept.
-            ` border-l ${touchesRightEdge ? '' : 'border-r'} border-border border-b ${isFocused ? 'border-b-accent' : 'opacity-95'}`
+          ? // Why: drop the outer borders on the edge-touching groups. The
+            // TabGroupSplitLayout wrapper already paints a full-height
+            // `border-l` at the sidebar seam, and the right sidebar paints
+            // its own `borderLeft` at the right seam — painting our own
+            // border-l/border-r in those spots stacks a second 1px line
+            // next to it, reading as a ~2px bar below the drag strip
+            // (where the sibling border continues alone above).
+            ` ${touchesLeftEdge ? '' : 'border-l'} ${touchesRightEdge ? '' : 'border-r'} border-border border-b ${isFocused ? 'border-b-accent' : 'opacity-95'}`
           : ''
       }`}
       onPointerDown={commands.focusGroup}
@@ -223,7 +225,7 @@ export default function TabGroupPanel({
           this, the empty space after tabs in the center column is dead — the
           user can only drag from the tiny left-sidebar header strip. */}
       <div
-        className="h-[34px] shrink-0 border-b border-border bg-card"
+        className="h-[32px] shrink-0 border-b border-border bg-card"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="flex h-full items-stretch pr-1.5">

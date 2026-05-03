@@ -112,9 +112,6 @@ export function activateAndRevealWorktree(
   // Why: revealWorktreeInSidebar relies on the worktree card being rendered
   // in the sidebar. If sidebar filters exclude the target, the card is never
   // rendered and the reveal silently no-ops.
-  if (state.searchQuery) {
-    state.setSearchQuery('')
-  }
   if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
     state.setFilterRepoIds([])
   }

@@ -150,7 +150,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         (row) => row.type === 'item' && row.worktree.id === pendingRevealWorktreeId
       )
       if (targetIndex !== -1) {
-        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
+        // Why: `align: 'auto'` is a no-op when the card is already visible and
+        // otherwise scrolls the minimum amount to bring it into view. Using
+        // 'center' here made every worktree click re-center the sidebar, which
+        // is visually jumpy even when nothing needed to move. `behavior: 'smooth'`
+        // animates that minimum scroll so off-screen reveals slide into view
+        // instead of snapping — matching the native scroll-into-view feel.
+        virtualizer.scrollToIndex(targetIndex, { align: 'auto', behavior: 'smooth' })
       }
       clearPendingRevealWorktreeId()
     })
@@ -293,7 +299,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-orientation="vertical"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
-      className="flex-1 overflow-auto pl-1 pr-2 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="worktree-sidebar-scrollbar flex-1 overflow-auto pl-1 pr-px scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+      // Why: reserve scrollbar space so non-overlay scrollbars do not nudge worktree cards.
+      style={{ scrollbarGutter: 'stable' }}
     >
       <div
         role="presentation"
@@ -318,9 +326,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   tabIndex={0}
                   className={cn(
                     'group flex h-7 w-full items-center gap-1.5 px-1.5 text-left transition-all cursor-pointer',
-                    // First header sits right under the sidebar search bar, which
-                    // already supplies its own spacing — only offset secondary
-                    // group headers.
+                    // First header sits directly under SidebarHeader, which already
+                    // supplies its own spacing — only offset secondary group headers.
                     vItem.index !== firstHeaderIndex && 'mt-2',
                     row.repo ? 'overflow-hidden' : row.tone
                   )}
@@ -430,7 +437,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   const worktreeMap = useWorktreeMap()
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const searchQuery = useAppStore((s) => s.searchQuery)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
@@ -450,15 +456,11 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
-  // PR cache is needed for PR-status grouping, smart sorting, search,
-  // and when the PR card property is visible.
+  // PR cache is needed for PR-status grouping, smart sorting, and when the
+  // PR card property is visible.
   const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' || sortBy === 'smart' || searchQuery || cardProps.includes('pr')
-      ? s.prCache
-      : null
+    groupBy === 'pr-status' || sortBy === 'smart' || cardProps.includes('pr') ? s.prCache : null
   )
-  // Subscribe to issue cache only during active search to avoid unnecessary re-renders.
-  const issueCache = useAppStore((s) => (searchQuery ? s.issueCache : null))
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
 
@@ -566,7 +568,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
     // other modes ignore it.
     // Why: smart-sort only weighs live agent status when the experimental
-    // Agent Dashboard is opted in — that's the surface that populates
+    // agent-activity feature is opted in — that's what populates
     // agentStatusByPaneKey via hooks. With the setting off, pass undefined
     // so the comparator falls back to the persisted-sortOrder + title
     // heuristics instead of scoring against an empty map.
@@ -626,27 +628,21 @@ const WorktreeList = React.memo(function WorktreeList() {
   const visibleWorktrees = useMemo(() => {
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
-      searchQuery,
       showActiveOnly,
       tabsByWorktree,
       browserTabsByWorktree,
       activeWorktreeId,
-      repoMap,
-      prCache,
-      issueCache
+      repoMap
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     filterRepoIds,
-    searchQuery,
     showActiveOnly,
     activeWorktreeId,
     repoMap,
     tabsByWorktree,
     browserTabsByWorktree,
     sortedIds,
-    prCache,
-    issueCache,
     worktreeMap,
     worktreesByRepo
   ])
@@ -725,16 +721,14 @@ const WorktreeList = React.memo(function WorktreeList() {
     [openModal]
   )
 
-  const hasFilters = !!(searchQuery || showActiveOnly || filterRepoIds.length)
-  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+  const hasFilters = !!(showActiveOnly || filterRepoIds.length)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
 
   const clearFilters = useCallback(() => {
-    setSearchQuery('')
     setShowActiveOnly(false)
     setFilterRepoIds([])
-  }, [setSearchQuery, setShowActiveOnly, setFilterRepoIds])
+  }, [setShowActiveOnly, setFilterRepoIds])
 
   if (worktrees.length === 0) {
     return (

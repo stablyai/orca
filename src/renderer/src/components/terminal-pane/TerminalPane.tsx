@@ -13,6 +13,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
+import { getConnectionId } from '@/lib/connection-context'
 import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
 import { createExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
@@ -63,6 +64,11 @@ export default function TerminalPane({
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
+  // Why: per-pane live cwd tracked via OSC 7 for split-pane cwd inheritance.
+  // See docs/ssh-split-pane-inherit-cwd.md. The OSC 7 handler is installed
+  // in use-terminal-pane-lifecycle; keyboard and context-menu split actions
+  // read this map at dispatch time to pass cwd into splitPane.
+  const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
@@ -373,6 +379,7 @@ export default function TerminalPane({
     expandedStyleSnapshotRef,
     paneFontSizesRef,
     paneTransportsRef,
+    paneCwdRef,
     paneMode2031Ref,
     paneLastThemeModeRef,
     panePtyBindingsRef,
@@ -513,6 +520,8 @@ export default function TerminalPane({
     isActive,
     managerRef,
     paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,
@@ -528,6 +537,13 @@ export default function TerminalPane({
 
   useTerminalPaneGlobalEffects({
     tabId,
+    // Why: use the pane's own `worktreeId` prop (not global activeWorktreeId)
+    // so the terminal-drop resolver routes to the worktree that actually owns
+    // this PTY. Reading from global state would race during worktree switches
+    // — the drop listener is already gated by `isActive`, and the pane's own
+    // id is the authoritative identity of the terminal being written to.
+    worktreeId,
+    cwd,
     isActive,
     isVisible,
     managerRef,
@@ -865,6 +881,9 @@ export default function TerminalPane({
 
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,
+    paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
     onSetTitle: handleStartRename,
@@ -923,7 +942,21 @@ export default function TerminalPane({
           if (!transport) {
             return
           }
-          transport.sendInput(shellEscapePath(filePath))
+          // Why: the explorer passes the worktree-absolute path via a DOM
+          // MIME, so for SSH worktrees this is a remote POSIX path destined
+          // for the remote shell. Quote for the target shell (remote = posix)
+          // rather than the client OS; otherwise a Windows client dropping
+          // onto an SSH-Linux worktree would emit Windows-style quoting.
+          // Why: `typeof === 'string'` (not `!== null`) so an unhydrated
+          // store (`undefined`) is treated as local and falls through to
+          // client-OS quoting, rather than being misclassified as remote.
+          const isRemote = typeof getConnectionId(worktreeId) === 'string'
+          const targetShell: 'posix' | 'windows' = isRemote
+            ? 'posix'
+            : isWindowsUserAgent()
+              ? 'windows'
+              : 'posix'
+          transport.sendInput(shellEscapePath(filePath, targetShell))
           // Move focus to the terminal so the user can keep typing where the
           // dropped path just landed. Without this, focus stays on the file
           // tree row that originated the drag and subsequent keystrokes do

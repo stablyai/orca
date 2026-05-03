@@ -32,24 +32,30 @@ import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
+  MANAGE_SESSIONS_SEARCH_ENTRIES,
   TERMINAL_ADVANCED_SEARCH_ENTRIES,
   TERMINAL_CURSOR_SEARCH_ENTRIES,
   TERMINAL_DARK_THEME_SEARCH_ENTRIES,
   TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
-  TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
+  TERMINAL_RENDERING_SEARCH_ENTRIES,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
   TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
-  TERMINAL_WINDOW_SEARCH_ENTRIES,
-  TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
+  TERMINAL_WINDOW_SEARCH_ENTRIES
 } from './terminal-search'
+import {
+  TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
+  TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY,
+  TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
+} from './terminal-windows-search'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { detectedCategoryToDefault } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
 import { TerminalWindowSection } from './TerminalWindowSection'
 import { GhosttyImportModal } from './GhosttyImportModal'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
+import { ManageSessionsSection } from './ManageSessionsSection'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -64,6 +70,8 @@ type TerminalPaneProps = {
   ghostty: UseGhosttyImportReturn
   /** Whether WSL is installed on this Windows machine. */
   wslAvailable?: boolean
+  /** Whether PowerShell 7+ (pwsh.exe) is installed on this Windows machine. */
+  pwshAvailable?: boolean
 }
 
 export function TerminalPane({
@@ -74,7 +82,8 @@ export function TerminalPane({
   scrollbackMode,
   setScrollbackMode,
   ghostty,
-  wslAvailable
+  wslAvailable,
+  pwshAvailable
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
@@ -105,6 +114,9 @@ export function TerminalPane({
   )
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackMb}` : 'custom'
+  const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
+  const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
+  const showWindowsPowerShellImplementation = isWindows && windowsShell === 'powershell.exe'
 
   const visibleSections = [
     isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
@@ -134,7 +146,7 @@ export function TerminalPane({
                 key={value}
                 onClick={() => updateSettings({ terminalWindowsShell: value })}
                 className={`rounded-sm px-3 py-1 text-sm transition-colors ${
-                  (settings.terminalWindowsShell ?? 'powershell.exe') === value
+                  windowsShell === value
                     ? 'bg-accent font-medium text-accent-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -318,6 +330,58 @@ export function TerminalPane({
               ? 'enabled'
               : 'disabled'}
             .
+          </p>
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_RENDERING_SEARCH_ENTRIES) ? (
+      <section key="rendering" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Rendering</h3>
+          <p className="text-xs text-muted-foreground">
+            Terminal renderer behavior for live panes and new panes.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="GPU Acceleration"
+          description="Controls whether the terminal uses xterm.js WebGL rendering. Auto mirrors VS Code: try GPU and fall back to DOM if WebGL fails."
+          keywords={[
+            'terminal',
+            'gpu',
+            'acceleration',
+            'webgl',
+            'renderer',
+            'rendering',
+            'graphics',
+            'linux',
+            'vscode'
+          ]}
+          className="space-y-2"
+        >
+          <Label>GPU Acceleration</Label>
+          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+            {(['auto', 'on', 'off'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => updateSettings({ terminalGpuAcceleration: option })}
+                className={`rounded-sm px-3 py-1 text-sm capitalize transition-colors ${
+                  (settings.terminalGpuAcceleration ?? 'auto') === option
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option === 'auto' ? 'Auto' : option === 'on' ? 'On' : 'Off'}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {settings.terminalGpuAcceleration === 'off'
+              ? 'WebGL is disabled; xterm uses the DOM renderer for maximum compatibility.'
+              : settings.terminalGpuAcceleration === 'on'
+                ? 'WebGL is always attempted for terminal panes.'
+                : 'Auto tries WebGL for performance and falls back to the DOM renderer if WebGL fails, matching VS Code.'}
           </p>
         </SearchableSetting>
       </section>
@@ -727,7 +791,15 @@ export function TerminalPane({
         </SearchableSetting>
       </section>
     ) : null,
+    matchesSettingsSearch(searchQuery, MANAGE_SESSIONS_SEARCH_ENTRIES) ? (
+      <ManageSessionsSection key="manage-sessions" />
+    ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_ADVANCED_SEARCH_ENTRIES) ||
+    (showWindowsPowerShellImplementation &&
+      matchesSettingsSearch(
+        searchQuery,
+        TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY
+      )) ||
     (isMac && matchesSettingsSearch(searchQuery, TERMINAL_MAC_OPTION_SEARCH_ENTRIES)) ? (
       <section key="advanced" className="space-y-4">
         <div className="space-y-1">
@@ -819,6 +891,75 @@ export function TerminalPane({
             Characters treated as word boundaries for double-click selection.
           </p>
         </SearchableSetting>
+        {showWindowsPowerShellImplementation &&
+        matchesSettingsSearch(
+          searchQuery,
+          TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY
+        ) ? (
+          <SearchableSetting
+            title="PowerShell Version"
+            description="Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes."
+            keywords={[
+              'terminal',
+              'windows',
+              'powershell',
+              'pwsh',
+              'powershell 7',
+              'windows powershell',
+              'version',
+              'advanced'
+            ]}
+            className="space-y-2"
+          >
+            <Label>PowerShell Version</Label>
+            <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+              {[
+                { label: 'Auto', value: 'auto' },
+                { label: 'Windows PowerShell', value: 'powershell.exe' },
+                { label: 'PowerShell 7+', value: 'pwsh.exe', disabled: !pwshAvailable }
+              ].map(({ label, value, disabled }) => (
+                <button
+                  key={value}
+                  onClick={() => {
+                    if (disabled) {
+                      return
+                    }
+                    updateSettings({
+                      terminalWindowsPowerShellImplementation: value as
+                        | 'auto'
+                        | 'powershell.exe'
+                        | 'pwsh.exe'
+                    })
+                  }}
+                  aria-disabled={disabled ? 'true' : undefined}
+                  className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                    powerShellImplementation === value
+                      ? 'bg-accent font-medium text-accent-foreground'
+                      : disabled
+                        ? 'cursor-not-allowed text-muted-foreground/50'
+                        : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {!pwshAvailable ? (
+              <p className="text-xs text-muted-foreground">
+                Auto uses Windows PowerShell now and switches to PowerShell 7+ when installed.{' '}
+                <a
+                  href="https://github.com/PowerShell/PowerShell/releases/latest"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Download PowerShell 7+
+                </a>
+                .
+              </p>
+            ) : null}
+          </SearchableSetting>
+        ) : null}
         {isMac ? (
           <SearchableSetting
             title="Option as Alt"

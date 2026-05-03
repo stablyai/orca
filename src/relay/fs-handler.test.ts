@@ -132,6 +132,33 @@ describe('FsHandler', () => {
     expect(result.isBinary).toBe(false)
   })
 
+  it('readFile returns text files larger than the old 5MB guard', async () => {
+    const filePath = path.join(tmpDir, 'large.json')
+    const content = 'a'.repeat(6 * 1024 * 1024)
+    writeFileSync(filePath, content)
+
+    const result = (await dispatcher.callRequest('fs.readFile', { filePath })) as {
+      content: string
+      isBinary: boolean
+    }
+    expect(result.content).toBe(content)
+    expect(result.isBinary).toBe(false)
+  })
+
+  it('readFile returns binary marker for large unknown binary files', async () => {
+    const filePath = path.join(tmpDir, 'archive.bin')
+    const content = Buffer.alloc(6 * 1024 * 1024, 0x61)
+    content[0] = 0x00
+    writeFileSync(filePath, content)
+
+    const result = (await dispatcher.callRequest('fs.readFile', { filePath })) as {
+      content: string
+      isBinary: boolean
+    }
+    expect(result.content).toBe('')
+    expect(result.isBinary).toBe(true)
+  })
+
   it('readFile returns base64 for image files', async () => {
     const filePath = path.join(tmpDir, 'test.png')
     writeFileSync(filePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
@@ -150,8 +177,7 @@ describe('FsHandler', () => {
 
   it('readFile throws for files exceeding size limit', async () => {
     const filePath = path.join(tmpDir, 'huge.txt')
-    // Write 6MB file
-    writeFileSync(filePath, Buffer.alloc(6 * 1024 * 1024))
+    writeFileSync(filePath, Buffer.alloc(11 * 1024 * 1024, 'a'))
 
     await expect(dispatcher.callRequest('fs.readFile', { filePath })).rejects.toThrow(
       'File too large'

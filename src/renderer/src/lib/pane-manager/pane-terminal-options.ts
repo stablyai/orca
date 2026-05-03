@@ -16,6 +16,16 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
-    drawBoldTextInBrightColors: true
+    drawBoldTextInBrightColors: true,
+    // Why: advertise kitty keyboard protocol support so CLIs that probe
+    // (CSI ? u) know Orca accepts enhanced key reporting. Without this,
+    // Orca already writes \x1b[13;2u for Shift+Enter (see
+    // terminal-shortcut-policy.ts), but programs that respect the protocol
+    // handshake fall back to legacy encodings and ignore the CSI-u byte,
+    // making chords like Shift+Enter invisible to the app — especially
+    // noticeable inside tmux. Matches VS Code's xtermTerminal.ts.
+    vtExtensions: {
+      kittyKeyboard: true
+    }
   }
 }

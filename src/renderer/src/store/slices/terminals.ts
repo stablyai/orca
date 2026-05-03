@@ -528,7 +528,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
     // Why: sweep live AND retained agent-status entries for this tab — closing
     // the tab is the user telling us "I'm done with this session", so any
-    // completion snapshots it left behind (in the sidebar/hovercard) must go
+    // completion snapshots it left behind (in the inline agents list) must go
     // too. Use dropAgentStatusByTabPrefix (not removeAgentStatusByTabPrefix)
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
@@ -1027,24 +1027,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
 
-      // Why: browser tabs are factored into getWorktreeStatus — leaving them
-      // behind after shutdown keeps the sidebar dot green even though all
-      // terminals are dead.  Clearing them here ensures the status indicator
-      // transitions to inactive.
-      const nextBrowserTabsByWorktree = { ...s.browserTabsByWorktree }
-      const hadBrowserTabs = (nextBrowserTabsByWorktree[worktreeId] ?? []).length > 0
-      delete nextBrowserTabsByWorktree[worktreeId]
-      const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
-      delete nextActiveBrowserTabIdByWorktree[worktreeId]
-
-      // Why: when shutting down the active worktree, the global
-      // activeBrowserTabId and activeTabType may still point at a browser
-      // surface that no longer exists.  Reset them so the workspace does not
-      // render a blank browser pane.  Background worktrees do not own the
-      // global surface, so we leave them untouched.
-      const isActiveWorktree = s.activeWorktreeId === worktreeId
-      const shouldResetGlobalBrowser = isActiveWorktree && hadBrowserTabs
-
       // Why: intentional shutdown kills the relay PTY. Remove the tab's
       // lastKnown entry so session-save does not persist a dead session ID
       // into remoteSessionIdsByTabId, which would cause the next restart
@@ -1070,14 +1052,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // of full-state selectors. Mirrors the sibling pattern in tabs.ts.
         ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
-          : {}),
-        browserTabsByWorktree: nextBrowserTabsByWorktree,
-        activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
-        ...(shouldResetGlobalBrowser
-          ? { activeBrowserTabId: null, activeTabType: 'terminal' as const }
           : {})
       }
     })
+
+    // Why: sleep keeps the tab records (so wake restores them) but kills the
+    // PTYs, and there is no implicit "PTY death drops agent-status rows" path
+    // — closeTab and pane-close drop their own rows explicitly. Without the
+    // same explicit sweep here, a worktree slept in the 'done' state leaves
+    // live/retained entries behind and WorktreeCard's dot stays blue.
+    for (const tab of tabs) {
+      get().dropAgentStatusByTabPrefix(tab.id)
+    }
 
     if (ptyIds.length === 0) {
       return
@@ -1410,35 +1396,26 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: preserve the previous session's ptyId for each tab so that
       // reconnectPersistedTerminals can pass it as sessionId to the daemon's
       // createOrAttach RPC, triggering reattach instead of a fresh spawn.
-      // When the experimental daemon is disabled, the LocalPtyProvider will
-      // ignore any sessionId we pass anyway — populating this map just
-      // persists stale daemon-era session IDs into the next session save,
-      // which confuses debugging and bloats the session file. Skip it.
-      const daemonEnabled = s.settings?.experimentalTerminalDaemon === true
       const pendingReconnectPtyIdByTabId: Record<string, string> = {}
-      if (daemonEnabled) {
-        for (const worktreeId of pendingReconnectWorktreeIds) {
-          const worktree = Object.values(s.worktreesByRepo)
-            .flat()
-            .find((entry) => entry.id === worktreeId)
-          const repo = worktree ? s.repos.find((entry) => entry.id === worktree.repoId) : null
-          if (repo?.connectionId) {
-            continue
-          }
-          const rawTabs = session.tabsByWorktree[worktreeId] ?? []
-          for (const tab of rawTabs) {
-            if (tab.ptyId && validTabIds.has(tab.id)) {
-              pendingReconnectPtyIdByTabId[tab.id] = tab.ptyId
-            }
+      for (const worktreeId of pendingReconnectWorktreeIds) {
+        const worktree = Object.values(s.worktreesByRepo)
+          .flat()
+          .find((entry) => entry.id === worktreeId)
+        const repo = worktree ? s.repos.find((entry) => entry.id === worktree.repoId) : null
+        if (repo?.connectionId) {
+          continue
+        }
+        const rawTabs = session.tabsByWorktree[worktreeId] ?? []
+        for (const tab of rawTabs) {
+          if (tab.ptyId && validTabIds.has(tab.id)) {
+            pendingReconnectPtyIdByTabId[tab.id] = tab.ptyId
           }
         }
       }
 
-      // Why: this runs outside the daemonEnabled guard because remote PTY
-      // reattach uses the relay's pty.attach RPC, not the local terminal
-      // daemon. SSH-backed tabs need their session IDs regardless of the
-      // experimentalTerminalDaemon setting. The existing loop above correctly
-      // skips SSH repos (connectionId check), so there is no overlap.
+      // Why: remote PTY reattach uses the relay's pty.attach RPC, not the
+      // local terminal daemon. The loop above correctly skips SSH repos
+      // (connectionId check), so there is no overlap.
       console.warn(
         `[terminals-hydration] remoteSessionIdsByTabId:`,
         JSON.stringify(remoteSessionIds)

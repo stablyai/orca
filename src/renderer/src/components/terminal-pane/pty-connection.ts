@@ -16,8 +16,10 @@ import {
   POST_REPLAY_FOCUS_REPORTING_RESET
 } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
+import { detectDeveloperPermissionHint } from './developer-permission-hints'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
+const developerPermissionHintKeys = new Set<string>()
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -82,6 +84,38 @@ function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolea
     return true
   }
   return sessionId.slice(0, separatorIdx) === worktreeId
+}
+
+function maybeShowDeveloperPermissionHint(worktreeId: string, data: string): void {
+  if (!navigator.userAgent.includes('Mac')) {
+    return
+  }
+
+  const hint = detectDeveloperPermissionHint(data)
+  if (!hint) {
+    return
+  }
+  const key = `${worktreeId}:${hint.permissionId}`
+  if (developerPermissionHintKeys.has(key)) {
+    return
+  }
+  developerPermissionHintKeys.add(key)
+
+  toast.message(hint.title, {
+    description: hint.description,
+    duration: 12000,
+    action: {
+      label: 'Open Permissions',
+      onClick: () => {
+        useAppStore.getState().openSettingsTarget({
+          pane: 'developer-permissions',
+          repoId: null,
+          sectionId: 'developer-permissions'
+        })
+        useAppStore.getState().openSettingsPage()
+      }
+    }
+  })
 }
 
 export function connectPanePty(
@@ -449,6 +483,8 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string): void => {
+      maybeShowDeveloperPermissionHint(deps.worktreeId, data)
+
       if (deps.isVisibleRef.current) {
         pane.terminal.write(data)
       } else {
@@ -677,17 +713,6 @@ export function connectPanePty(
       (t) => t.id === deps.tabId
     )?.ptyId
 
-    const daemonEnabled = storeSnapshot.settings?.experimentalTerminalDaemon === true
-    // Why: restored leaf PTYs usually come from a previous app session, so
-    // they normally go back through the daemon's createOrAttach RPC to
-    // recover snapshot or cold-restore data at the pane's real dimensions.
-    // But split remounts in the current app session also carry a leaf binding
-    // in the saved layout. When the daemon is off, treating that live local
-    // PTY like a daemon session ID incorrectly spawns a fresh shell because
-    // LocalPtyProvider ignores sessionId. The reliable distinction is whether
-    // the tab still owns that PTY right now: same-session remounts keep the
-    // tab-level ptyId populated, while daemon-off cold starts clear it during
-    // session hydration.
     const restoredSessionId = restoredPtyId ?? null
     const detachedLivePtyId =
       existingPtyId && !hasExistingPaneTransport
@@ -700,9 +725,7 @@ export function connectPanePty(
     const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
-        : daemonEnabled
-          ? detachedLivePtyId
-          : null
+        : detachedLivePtyId
     // Why: daemon session IDs encode `${worktreeId}@@${uuid}`. After a daemon
     // crash + cold restore, corrupted or stale session-to-tab mappings can
     // cause a tab in workspace A to hold a ptyId from workspace B. Restoring

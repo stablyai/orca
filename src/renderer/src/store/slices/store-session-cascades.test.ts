@@ -90,6 +90,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createRepoSlice } from './repos'
+import { createSparsePresetsSlice } from './sparse-presets'
 import { createWorktreeSlice } from './worktrees'
 import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
@@ -113,6 +114,7 @@ import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 function createTestStore() {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
+    ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),
     ...createTerminalSlice(...a),
     ...createTabsSlice(...a),
@@ -908,14 +910,7 @@ describe('reconnectPersistedTerminals', () => {
   // otherwise hydration clears pendingReconnectPtyIdByTabId and tab.ptyId
   // never gets rehydrated.
   function createDaemonEnabledStore(): ReturnType<typeof createTestStore> {
-    const store = createTestStore()
-    store.setState((prev) => ({
-      settings: {
-        ...(prev.settings ?? ({} as AppState['settings'])),
-        experimentalTerminalDaemon: true
-      } as AppState['settings']
-    }))
-    return store
+    return createTestStore()
   }
 
   beforeEach(() => {

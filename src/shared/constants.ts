@@ -67,12 +67,19 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'ci',
   'issue',
   'pr',
-  'comment'
+  'comment',
+  // Why: agent activity is the primary reason users opt into the feature, so
+  // show it inline on each card by default. Unchecking this from the
+  // Workspaces view options hides the inline list entirely — there is no
+  // alternative agent-activity surface in the sidebar.
+  'inline-agents'
 ]
 
 export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'claude',
   'codex',
+  'gemini',
+  'opencode-go',
   'ssh',
   'sessions',
   'memory'
@@ -114,10 +121,14 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
+    editorMinimapEnabled: false,
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
+    // Why: VS Code defaults terminal GPU acceleration to "auto": prefer
+    // xterm WebGL for performance, but allow renderer failure to choose DOM.
+    terminalGpuAcceleration: 'auto',
     // Why 'auto': when the user has picked a known ligature font we want the
     // feature enabled by default, but we never force it if they pick a font
     // that lacks ligatures or if they've explicitly opted out. The resolver
@@ -139,6 +150,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
     terminalWindowsShell: 'powershell.exe',
+    // Why: Windows users expect "PowerShell" to mean modern PowerShell when it
+    // is installed, with a safe fallback to the inbox Windows PowerShell.
+    terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,
     // Default false: opt-in only (matches Ghostty's default). Existing users
     // on upgrade inherit this default via persistence.ts's
@@ -153,8 +167,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openLinksInApp: true,
     rightSidebarOpenByDefault: true,
     showTitlebarAgentActivity: true,
-    showAgentDashboard: true,
-    showTaskProviderIcons: true,
+    showTasksButton: true,
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
     promptCacheTimerEnabled: false,
@@ -170,6 +183,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
+    opencodeSessionCookie: '',
+    opencodeWorkspaceId: '',
+    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
@@ -179,12 +195,13 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // the box (issue #903) while US users keep Option-as-Alt readline chords.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
-    experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
     // Why: opt-in preview — default off so managed-hook installation
     // (Claude/Codex/Gemini) stays dormant for existing users and upgraders
     // (persistence.ts merges defaults first, so upgraders inherit this).
-    experimentalAgentDashboard: false
+    experimentalAgentDashboard: false,
+    // Why: off by default — opt-in cosmetic joke feature. Leaving the default
+    // false keeps the overlay unmounted for users who never enable it.
+    experimentalSidekick: false
   }
 }
 
@@ -203,6 +220,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   return {
     schemaVersion: SCHEMA_VERSION,
     repos: [],
+    sparsePresetsByRepo: {},
     worktreeMeta: {},
     settings: getDefaultSettings(homedir),
     ui: getDefaultUIState(),
@@ -219,7 +237,7 @@ export function getDefaultUIState(): PersistedUIState {
     sidebarWidth: 280,
     rightSidebarWidth: 350,
     groupBy: 'none',
-    sortBy: 'name',
+    sortBy: 'recent',
     showActiveOnly: false,
     filterRepoIds: [],
     collapsedGroups: [],
@@ -229,7 +247,8 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     dismissedUpdateVersion: null,
-    lastUpdateCheckAt: null
+    lastUpdateCheckAt: null,
+    trustedOrcaHooks: {}
   }
 }
 

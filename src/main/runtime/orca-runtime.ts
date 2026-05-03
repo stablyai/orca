@@ -949,6 +949,7 @@ export class OrcaRuntimeService {
     baseBranch?: string
     linkedIssue?: number | null
     comment?: string
+    runHooks?: boolean
   }): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -1034,8 +1035,12 @@ export class OrcaRuntimeService {
     const worktree = mergeWorktree(repo.id, created, meta)
 
     let setup: CreateWorktreeResult['setup']
-    const hooks = getEffectiveHooks(repo)
-    if (hooks?.scripts.setup) {
+    let warning: string | undefined
+    // Why: CLI-created worktrees do not have a renderer preview to mismatch
+    // against. Trust is granted by the direct CLI invocation (`--run-hooks`),
+    // so loading the setup hook from the created worktree is intentional here.
+    const hooks = getEffectiveHooks(repo, worktreePath)
+    if (hooks?.scripts.setup && args.runHooks === true) {
       if (this.authoritativeWindowId !== null) {
         try {
           // Why: CLI-created worktrees must use the same runner-script path as the
@@ -1050,12 +1055,16 @@ export class OrcaRuntimeService {
           console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
         }
       } else {
-        void runHook('setup', worktreePath, repo).then((result) => {
+        void runHook('setup', worktreePath, repo, worktreePath).then((result) => {
           if (!result.success) {
             console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
           }
         })
       }
+    } else if (hooks?.scripts.setup) {
+      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
+      warning = `orca.yaml setup hook skipped for ${worktreePath}; pass --run-hooks to run it.`
+      console.warn(`[hooks] ${warning}`)
     }
 
     this.notifier?.worktreesChanged(repo.id)
@@ -1073,7 +1082,8 @@ export class OrcaRuntimeService {
     invalidateAuthorizedRootsCache()
     return {
       worktree,
-      ...(setup ? { setup } : {})
+      ...(setup ? { setup } : {}),
+      ...(warning ? { warning } : {})
     }
   }
 
@@ -1101,7 +1111,11 @@ export class OrcaRuntimeService {
     return mergeWorktree(worktree.repoId, worktree.git, meta)
   }
 
-  async removeManagedWorktree(worktreeSelector: string, force = false): Promise<void> {
+  async removeManagedWorktree(
+    worktreeSelector: string,
+    force = false,
+    runHooks = false
+  ): Promise<{ warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -1115,11 +1129,16 @@ export class OrcaRuntimeService {
     }
 
     const hooks = getEffectiveHooks(repo)
-    if (hooks?.scripts.archive) {
+    let warning: string | undefined
+    if (hooks?.scripts.archive && runHooks) {
       const result = await runHook('archive', worktree.path, repo)
       if (!result.success) {
         console.error(`[hooks] archive hook failed for ${worktree.path}:`, result.output)
       }
+    } else if (hooks?.scripts.archive) {
+      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
+      warning = `orca.yaml archive hook skipped for ${worktree.path}; pass --run-hooks to run it.`
+      console.warn(`[hooks] ${warning}`)
     }
 
     try {
@@ -1136,7 +1155,9 @@ export class OrcaRuntimeService {
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
         this.notifier?.worktreesChanged(repo.id)
-        return
+        return {
+          ...(warning ? { warning } : {})
+        }
       }
       throw new Error(formatWorktreeRemovalError(error, worktree.path, force))
     }
@@ -1145,6 +1166,9 @@ export class OrcaRuntimeService {
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
     this.notifier?.worktreesChanged(repo.id)
+    return {
+      ...(warning ? { warning } : {})
+    }
   }
 
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {

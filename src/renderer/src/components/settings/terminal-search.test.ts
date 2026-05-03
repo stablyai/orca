@@ -7,9 +7,19 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(true)
   })
 
+  it('includes the PowerShell version setting on Windows', () => {
+    const entries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
+  })
+
   it('omits the Windows right-click setting elsewhere', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
     expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(false)
+  })
+
+  it('omits the PowerShell version setting elsewhere', () => {
+    const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(false)
   })
 
   it('includes the Option as Alt setting on macOS', () => {
@@ -20,6 +30,15 @@ describe('getTerminalPaneSearchEntries', () => {
   it('omits the Option as Alt setting on non-macOS', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
     expect(entries.some((entry) => entry.title === 'Option as Alt')).toBe(false)
+  })
+
+  it('includes the Manage Sessions entry on all platforms', () => {
+    const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    expect(entriesWindows.some((entry) => entry.title === 'Manage Sessions')).toBe(true)
+    expect(entriesMac.some((entry) => entry.title === 'Manage Sessions')).toBe(true)
+    expect(entriesLinux.some((entry) => entry.title === 'Manage Sessions')).toBe(true)
   })
 
   it('includes the Ghostty import setting on all platforms', () => {

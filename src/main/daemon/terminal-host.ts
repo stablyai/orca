@@ -1,5 +1,6 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
+import { resolveProcessCwd } from '../providers/process-cwd'
 import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
 import { SessionNotFoundError } from './types'
 
@@ -17,6 +18,7 @@ export type CreateOrAttachOptions = {
    *  daemon path honors per-tab shell selection the same way LocalPtyProvider
    *  does. */
   shellOverride?: string
+  terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
@@ -38,6 +40,7 @@ export type TerminalHostOptions = {
     env?: Record<string, string>
     command?: string
     shellOverride?: string
+    terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   }) => SubprocessHandle
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
@@ -94,7 +97,8 @@ export class TerminalHost {
       cwd: opts.cwd,
       env: opts.env,
       command: opts.command,
-      shellOverride: opts.shellOverride
+      shellOverride: opts.shellOverride,
+      terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
     })
 
     const session = new Session({
@@ -155,8 +159,19 @@ export class TerminalHost {
     session?.detachClient(token)
   }
 
-  getCwd(sessionId: string): string | null {
-    return this.getAliveSession(sessionId).getCwd()
+  async getCwd(sessionId: string): Promise<string | null> {
+    const session = this.getAliveSession(sessionId)
+    const tracked = session.getCwd()
+    if (tracked) {
+      return tracked
+    }
+    // Why: the emulator's cwd is null until the shell emits OSC 7. Orca's
+    // bash/zsh rcfiles ship with OSC 133 markers but not OSC 7, so the
+    // tracked value stays null through the entire session for most users.
+    // Fall back to the live process cwd via /proc/<pid>/cwd (Linux) or
+    // lsof (macOS). Matches the LocalPtyProvider.getCwd fallback.
+    const resolved = await resolveProcessCwd(session.pid)
+    return resolved || null
   }
 
   clearScrollback(sessionId: string): void {
@@ -221,7 +236,19 @@ export class TerminalHost {
 
     for (const [, session] of this.sessions) {
       session.detachAllClients()
-      session.kill()
+      // Why: live-vs-exited is load-bearing. For LIVE sessions we use
+      // forceKillAndDisposeSubprocess (SIGKILL + destroy) to reap stubborn
+      // children AND release the ptmx fd on the same tick, bypassing the 5s
+      // KILL_TIMEOUT_MS fallback that would otherwise outlive the daemon
+      // process. For sessions that have already exited but are still in the
+      // map, SIGKILL would target a reaped pid — on POSIX that pid can be
+      // recycled to an unrelated process, so we MUST only release the fd via
+      // disposeSubprocess() (destroy without kill). See docs/fix-pty-fd-leak.md.
+      if (session.isAlive) {
+        session.forceKillAndDisposeSubprocess()
+      } else {
+        session.disposeSubprocess()
+      }
     }
     this.sessions.clear()
     this.killedTombstones.clear()

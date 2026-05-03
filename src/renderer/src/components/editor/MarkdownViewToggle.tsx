@@ -1,9 +1,11 @@
 import React from 'react'
-import { Code, Eye, Pencil } from 'lucide-react'
+import { Code, Eye, Pencil, Table as TableIcon, type LucideIcon } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 
-const VIEW_MODE_METADATA = {
+type ViewModeMetadata = { label: string; icon: LucideIcon }
+
+const DEFAULT_VIEW_MODE_METADATA: Record<MarkdownViewMode, ViewModeMetadata> = {
   source: {
     label: 'Source',
     icon: Code
@@ -16,18 +18,30 @@ const VIEW_MODE_METADATA = {
     label: 'Preview',
     icon: Eye
   }
-} as const
+}
+
+// Why: CSV/TSV files reuse the 'rich' view mode slot but the rendered surface
+// is a read-only table, not an editor. The Pencil icon implies editability,
+// which we don't offer, so callers can override the per-mode presentation.
+export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
+  rich: {
+    label: 'Table',
+    icon: TableIcon
+  }
+}
 
 type MarkdownViewToggleProps = {
   mode: MarkdownViewMode
   modes: readonly MarkdownViewMode[]
   onChange: (mode: MarkdownViewMode) => void
+  metadataOverride?: Partial<Record<MarkdownViewMode, ViewModeMetadata>>
 }
 
 export default function MarkdownViewToggle({
   mode,
   modes,
-  onChange
+  onChange,
+  metadataOverride
 }: MarkdownViewToggleProps): React.JSX.Element {
   return (
     <ToggleGroup
@@ -43,7 +57,7 @@ export default function MarkdownViewToggle({
       }}
     >
       {modes.map((viewMode) => {
-        const metadata = VIEW_MODE_METADATA[viewMode]
+        const metadata = metadataOverride?.[viewMode] ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
         const Icon = metadata.icon
         return (
           <ToggleGroupItem

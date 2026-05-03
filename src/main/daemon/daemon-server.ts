@@ -201,6 +201,7 @@ export class DaemonServer {
           env: p.env,
           command: p.command,
           shellOverride: p.shellOverride,
+          terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
           streamClient: {
             onData: (data) => {
@@ -273,7 +274,7 @@ export class DaemonServer {
         return {}
 
       case 'getCwd':
-        return { cwd: this.host.getCwd(request.payload.sessionId) }
+        return { cwd: await this.host.getCwd(request.payload.sessionId) }
 
       case 'clearScrollback':
         this.host.clearScrollback(request.payload.sessionId)

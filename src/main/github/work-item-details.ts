@@ -9,7 +9,7 @@ import type {
   GitHubWorkItemDetails,
   PRComment
 } from '../../shared/types'
-import { ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getOwnerRepo, getIssueOwnerRepo } from './gh-utils'
 import { getWorkItem, getPRChecks, getPRComments } from './client'
 
 // Why: a PR "changed file" listing returned by the REST endpoint is paginated
@@ -171,7 +171,7 @@ async function getIssueBodyAndComments(
   repoPath: string,
   issueNumber: number
 ): Promise<{ body: string; comments: PRComment[]; assignees: string[] }> {
-  const ownerRepo = await getOwnerRepo(repoPath)
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
   try {
     if (ownerRepo) {
       const [issueResult, commentsResult] = await Promise.all([
@@ -276,7 +276,11 @@ async function getWorkItemParticipants(
   repoPath: string,
   item: Pick<GitHubWorkItem, 'number' | 'type'>
 ): Promise<GitHubAssignableUser[]> {
-  const ownerRepo = await getOwnerRepo(repoPath)
+  // Why: issues in a fork live on the upstream remote, so participants must be
+  // resolved via getIssueOwnerRepo to stay consistent with getIssueBodyAndComments.
+  // PRs remain tied to origin via getOwnerRepo.
+  const ownerRepo =
+    item.type === 'issue' ? await getIssueOwnerRepo(repoPath) : await getOwnerRepo(repoPath)
   if (!ownerRepo) {
     return []
   }
@@ -386,12 +390,13 @@ async function getMentionParticipants(
 
 export async function getWorkItemDetails(
   repoPath: string,
-  number: number
+  number: number,
+  type?: 'issue' | 'pr'
 ): Promise<GitHubWorkItemDetails | null> {
   // Why: getWorkItem already handles acquire/release. We call it first (outside
   // our semaphore) so the known-cheap lookup doesn't compete with the richer
   // detail fetches that follow.
-  const item: Omit<GitHubWorkItem, 'repoId'> | null = await getWorkItem(repoPath, number)
+  const item: Omit<GitHubWorkItem, 'repoId'> | null = await getWorkItem(repoPath, number, type)
   if (!item) {
     return null
   }

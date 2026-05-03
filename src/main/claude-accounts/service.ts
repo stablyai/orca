@@ -110,12 +110,14 @@ export class ClaudeAccountService {
         lastAuthenticatedAt: now
       }
 
+      const outgoingAccountId = previousSettings.activeClaudeManagedAccountId
       this.store.updateSettings({
         claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
         activeClaudeManagedAccountId: account.id
       })
+      this.runtimeAuth.clearLastWrittenCredentialsJson()
       await this.syncRuntimeAuthWithLivePtyGate()
-      await this.rateLimits.refreshForClaudeAccountChange()
+      await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId)
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(previousSettings)
@@ -152,6 +154,7 @@ export class ClaudeAccountService {
       )
     })
     try {
+      this.runtimeAuth.clearLastWrittenCredentialsJson()
       await this.syncRuntimeAuthWithLivePtyGate()
       await this.rateLimits.refreshForClaudeAccountChange()
       return this.getSnapshot()
@@ -178,7 +181,12 @@ export class ClaudeAccountService {
     try {
       await this.syncRuntimeAuthWithLivePtyGate()
       await this.safeRemoveManagedAuth(accountId, account.managedAuthPath)
-      await this.rateLimits.refreshForClaudeAccountChange()
+      this.rateLimits.evictInactiveClaudeCache(accountId)
+      await this.rateLimits.refreshForClaudeAccountChange(
+        settings.activeClaudeManagedAccountId === accountId
+          ? settings.activeClaudeManagedAccountId
+          : undefined
+      )
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(settings)
@@ -192,10 +200,11 @@ export class ClaudeAccountService {
       this.requireAccount(accountId)
     }
     const previousSettings = this.store.getSettings()
+    const outgoingAccountId = previousSettings.activeClaudeManagedAccountId
     this.store.updateSettings({ activeClaudeManagedAccountId: accountId })
     try {
       await this.syncRuntimeAuthWithLivePtyGate()
-      await this.rateLimits.refreshForClaudeAccountChange()
+      await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId)
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(previousSettings)

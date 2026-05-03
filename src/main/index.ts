@@ -12,18 +12,15 @@ import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { killAllPty } from './ipc/pty'
-import {
-  initDaemonPtyProvider,
-  disconnectDaemon,
-  cleanupOrphanedDaemon
-} from './daemon/daemon-init'
-import { recordPendingDaemonTransitionNotice, setAppRuntimeFlags } from './ipc/app'
+import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
+import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
-import { registerAppMenu } from './menu/register-app-menu'
+import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
+import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   configureDevUserDataPath,
@@ -34,6 +31,7 @@ import {
   patchPackagedProcessPath
 } from './startup/configure-process'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
+import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
@@ -92,18 +90,67 @@ if (app.isPackaged && process.platform !== 'win32') {
   })
 }
 configureDevUserDataPath(is.dev)
-installDevParentDisconnectQuit(is.dev)
-installDevParentWatchdog(is.dev)
-// Why: must run after configureDevUserDataPath (which redirects userData to
-// orca-dev in dev mode) but before app.setName('Orca') inside whenReady
-// (which would change the resolved path on case-sensitive filesystems).
-initDataPath()
-// Why: same timing constraint as initDataPath — capture the userData path
-// before app.setName changes it. See persistence.ts:20-28.
-initStatsPath()
-initClaudeUsagePath()
-initCodexUsagePath()
-enableMainProcessGpuFeatures()
+
+function focusExistingWindow(): void {
+  // Why: the second-instance event fires on the *primary* Electron process
+  // after another launch tries (and fails) to acquire the lock. Bring the
+  // existing window forward so the user sees the same focus behaviour as
+  // re-clicking the dock/taskbar icon, rather than a silent no-op.
+  //
+  // Why show() as well as restore() + focus(): isMinimized() only covers the
+  // dock-minimised case. A hidden window (close-to-tray on macOS via Cmd+W,
+  // or a window on a different macOS Space) is NOT minimised, so focus()
+  // alone is a silent no-op. show() handles those plus Windows taskbar
+  // focus-steal, which focus() alone does not reliably trigger.
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore()
+    }
+    if (!mainWindow.isVisible()) {
+      mainWindow.show()
+    }
+    mainWindow.focus()
+  }
+  // Pre-window case: the primary is still booting and will call
+  // openMainWindow() from whenReady(). No action needed here.
+}
+
+// Why: the lock must be acquired AFTER configureDevUserDataPath — Electron
+// derives the lock identity from the `userData` path, so this placement lets
+// dev (`orca-dev`) and packaged (`orca`) runs lock in separate namespaces
+// instead of serialising against each other.
+const hasSingleInstanceLock = acquireSingleInstanceLock(app, focusExistingWindow)
+if (!hasSingleInstanceLock) {
+  if (is.dev) {
+    // Why: packaged runs have no attached console, but dev runs do. Emit a
+    // single line so a `pnpm dev` operator does not mistake a silent exit
+    // for a broken launcher.
+    console.log(
+      '[single-instance] Another Orca instance is already running against this userData path — focusing existing window.'
+    )
+  }
+  app.quit()
+}
+
+// Why: when the lock is held by another process, we've already called
+// app.quit() above. Skip every remaining file-writing side effect so this
+// transient process never touches userData, and let handler registration
+// below happen — those handlers only fire after whenReady, which app.quit()
+// prevents from ever dispatching.
+if (hasSingleInstanceLock) {
+  installDevParentDisconnectQuit(is.dev)
+  installDevParentWatchdog(is.dev)
+  // Why: must run after configureDevUserDataPath (which redirects userData to
+  // orca-dev in dev mode) but before app.setName('Orca') inside whenReady
+  // (which would change the resolved path on case-sensitive filesystems).
+  initDataPath()
+  // Why: same timing constraint as initDataPath — capture the userData path
+  // before app.setName changes it. See persistence.ts:20-28.
+  initStatsPath()
+  initClaudeUsagePath()
+  initCodexUsagePath()
+  enableMainProcessGpuFeatures()
+}
 
 function openMainWindow(): BrowserWindow {
   if (!store) {
@@ -344,6 +391,19 @@ app.whenReady().then(async () => {
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
   rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
+  rateLimits.setSettingsResolver(() => store!.getSettings())
+  rateLimits.setInactiveClaudeAccountsResolver(() => {
+    const settings = store!.getSettings()
+    return settings.claudeManagedAccounts
+      .filter((account) => account.id !== settings.activeClaudeManagedAccountId)
+      .map((account) => ({ id: account.id, managedAuthPath: account.managedAuthPath }))
+  })
+  rateLimits.setInactiveCodexAccountsResolver(() => {
+    const settings = store!.getSettings()
+    return settings.codexManagedAccounts
+      .filter((account) => account.id !== settings.activeCodexManagedAccountId)
+      .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
+  })
   runtime = new OrcaRuntimeService(store, stats)
   starNag = new StarNagService(store, stats)
   starNag.start()
@@ -352,15 +412,15 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Why: managed hook installation mutates user-global agent config.
   // Startup must fail open so a malformed local config never bricks Orca.
-  // Claude/Codex/Gemini installs are gated behind the experimental
-  // Agent Dashboard setting because the surface they feed (the in-progress
-  // agent dashboard) isn't shippable yet. Cursor installs unconditionally
-  // because cursor-agent emits no title-based working/idle signal at all
-  // (its terminal title stays literally "Cursor Agent" across a turn), so
-  // the hook channel is the only way to drive the sidebar spinner + unread
-  // path for it — there is no "pre-dashboard" fallback to degrade to the
-  // way Claude/Codex have. Toggling the setting takes effect on next launch
-  // because the hook scripts are installed once per boot.
+  // Claude/Codex/Gemini installs are gated behind the experimentalAgentDashboard
+  // setting because the feature they feed (the inline agent-activity list) is
+  // still in preview. Cursor installs unconditionally because cursor-agent
+  // emits no title-based working/idle signal at all (its terminal title stays
+  // literally "Cursor Agent" across a turn), so the hook channel is the only
+  // way to drive the sidebar spinner + unread path for it — there is no
+  // title-based fallback the way Claude/Codex have. Toggling the setting
+  // takes effect on next launch because the hook scripts are installed once
+  // per boot.
   const agentDashboardEnabled = store.getSettings().experimentalAgentDashboard === true
   if (agentDashboardEnabled) {
     for (const installManagedHooks of [
@@ -395,8 +455,40 @@ app.whenReady().then(async () => {
     onZoomReset: () => {
       mainWindow?.webContents.send('terminal:zoom', 'reset')
     },
-    onToggleStatusBar: () => {
-      mainWindow?.webContents.send('ui:toggleStatusBar')
+    onToggleLeftSidebar: () => {
+      mainWindow?.webContents.send('ui:toggleLeftSidebar')
+    },
+    onToggleRightSidebar: () => {
+      mainWindow?.webContents.send('ui:toggleRightSidebar')
+    },
+    onToggleAppearance: (key) => {
+      if (!store) {
+        return
+      }
+      if (key === 'statusBarVisible') {
+        // Why: status bar visibility lives under the persisted UI state
+        // (ui:set/ui:get), not settings. The renderer owns the authoritative
+        // toggle logic (it knows the current value and persists it back), so
+        // we forward the event and let it flip + store.
+        mainWindow?.webContents.send('ui:toggleStatusBar')
+        return
+      }
+      const current = store.getSettings()
+      store.updateSettings({ [key]: !current[key] })
+      // Why: settings:get returns the current snapshot; renderer tracks
+      // settings through window.api.settings.get(). Push the new value so
+      // the sidebar/titlebar re-render without waiting for a round-trip.
+      mainWindow?.webContents.send('settings:changed', { [key]: !current[key] })
+      rebuildAppMenu()
+    },
+    getAppearanceState: () => {
+      const settings = store?.getSettings()
+      const ui = store?.getUI()
+      return {
+        showTasksButton: settings?.showTasksButton !== false,
+        showTitlebarAgentActivity: settings?.showTitlebarAgentActivity !== false,
+        statusBarVisible: ui?.statusBarVisible !== false
+      }
     }
   })
   runtimeRpc = new OrcaRuntimeRpcServer({
@@ -404,40 +496,15 @@ app.whenReady().then(async () => {
     userDataPath: app.getPath('userData')
   })
 
-  // Why: persistent terminal sessions (the out-of-process daemon) are gated
-  // behind an experimental setting that defaults to OFF. Users on v1.3.0 had
-  // the daemon on by default, so on upgrade we may need to clean up a live
-  // daemon from their previous session before continuing with the local
-  // provider. `registerPtyHandlers` (called inside openMainWindow) relies on
-  // the provider being set, so whichever branch runs must complete first.
-  const daemonEnabled = store.getSettings().experimentalTerminalDaemon === true
-  let daemonStarted = false
-  if (daemonEnabled) {
-    // Why: catch so the app still opens even if the daemon fails. The local
-    // PTY provider remains as the fallback — terminals will still work, just
-    // without cross-restart persistence.
-    try {
-      await initDaemonPtyProvider()
-      daemonStarted = true
-    } catch (error) {
-      console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
-    }
-  } else {
-    // Why: stash the cleanup result so the renderer's one-shot transition
-    // toast can tell the user how many background sessions were stopped. Only
-    // record when `cleaned: true` — i.e. an orphan daemon was actually found.
-    // Fresh installs (no socket) skip the toast entirely.
-    try {
-      const result = await cleanupOrphanedDaemon()
-      if (result.cleaned) {
-        recordPendingDaemonTransitionNotice({ killedCount: result.killedCount })
-      }
-    } catch (error) {
-      console.error('[daemon] Failed to clean up orphaned daemon:', error)
-    }
+  // Why: the persistent-terminal daemon is always started. If it fails, the
+  // LocalPtyProvider (initialized at module load in ipc/pty.ts) remains as the
+  // implicit fallback — terminals work, just without cross-restart persistence.
+  try {
+    await initDaemonPtyProvider()
+  } catch (error) {
+    console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
   }
   setAppRuntimeFlags({
-    daemonEnabledAtStartup: daemonStarted,
     agentDashboardEnabledAtStartup: agentDashboardEnabled
   })
 
@@ -519,11 +586,6 @@ app.on('will-quit', (e) => {
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
   killAllPty()
   void closeAllWatchers()
-  if (runtimeRpc) {
-    void runtimeRpc.stop().catch((error) => {
-      console.error('[runtime] Failed to stop local RPC transport:', error)
-    })
-  }
   store?.flush()
 
   // Why: disconnectDaemon writes final checkpoints via async getSnapshot RPCs.
@@ -532,7 +594,35 @@ app.on('will-quit', (e) => {
   // app.quit() re-fires will-quit, but the second pass skips straight through.
   if (!daemonDisconnectDone) {
     e.preventDefault()
-    disconnectDaemon().finally(() => {
+    // Why: capture ownership synchronously (before any await) so the guard
+    // still has the right pid/runtimeId to compare against if shutdown
+    // partially clears global state. Evaluating these inside .then() would
+    // let a later teardown path null them out mid-chain.
+    const ownedPid = process.pid
+    const ownedRuntimeId = runtime?.getRuntimeId()
+    // Why: the construction of rpcStopAndClear AND the allSettled() below must
+    // both live inside the `!daemonDisconnectDone` guard. will-quit re-fires
+    // after app.quit() below; without this guard, the second pass would
+    // re-invoke runtimeRpc.stop() (redundant rmSync on an already-removed
+    // socket) and re-run the ownership-guarded clear against a metadata file
+    // that may now belong to the auto-updater's replacement process.
+    const rpcStopAndClear = runtimeRpc
+      ? runtimeRpc
+          .stop()
+          .then(() => {
+            if (ownedRuntimeId) {
+              clearRuntimeMetadataIfOwned(app.getPath('userData'), ownedPid, ownedRuntimeId)
+            }
+          })
+          .catch((error) => {
+            console.error('[runtime] Failed to stop local RPC transport:', error)
+          })
+      : Promise.resolve()
+    // Why: Promise.allSettled — we need BOTH the daemon disconnect and the
+    // RPC stop + owned-metadata clear to complete before Electron exits.
+    // Using allSettled (not all) preserves the existing fail-open posture:
+    // if disconnectDaemon rejects, we still quit instead of hanging the app.
+    Promise.allSettled([disconnectDaemon(), rpcStopAndClear]).then(() => {
       daemonDisconnectDone = true
       app.quit()
     })

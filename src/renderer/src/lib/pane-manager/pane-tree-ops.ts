@@ -1,5 +1,6 @@
 import type { DropZone, ManagedPaneInternal, PaneStyleOptions } from './pane-manager-types'
 import { createDivider } from './pane-divider'
+import { disposeWebgl, attachWebgl } from './pane-lifecycle'
 
 export { findLineByContent, captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -160,6 +161,13 @@ export function insertPaneNextTo(
   applyPaneFlexStyle(source.container)
   applyPaneFlexStyle(targetContainer)
 
+  // Why: same pattern as splitPane — dispose WebGL before the DOM reparent
+  // to free GPU context slots, then reattach after layout settles.
+  const sourceHadWebgl = !!source.webglAddon
+  const targetHadWebgl = !!target.webglAddon
+  disposeWebgl(source)
+  disposeWebgl(target)
+
   // Replace target with the split in the DOM
   parent.replaceChild(split, targetContainer)
 
@@ -174,8 +182,13 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  // Refit both
   requestAnimationFrame(() => {
+    if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
+      attachWebgl(source)
+    }
+    if (targetHadWebgl && target.gpuRenderingEnabled && !target.webglDisabledAfterContextLoss) {
+      attachWebgl(target)
+    }
     callbacks.safeFit(source)
     callbacks.safeFit(target)
   })

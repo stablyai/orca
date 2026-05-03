@@ -36,6 +36,7 @@ function createPane({
     container: {} as never,
     xtermContainer: {} as never,
     linkTooltip: {} as never,
+    terminalGpuAcceleration: 'auto',
     gpuRenderingEnabled: true,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
@@ -52,7 +53,8 @@ function createPane({
     webglAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
-    pendingSplitScrollState: null
+    pendingSplitScrollState: null,
+    debugLabel: null
   }
 }
 

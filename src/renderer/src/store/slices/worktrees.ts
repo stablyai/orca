@@ -8,7 +8,18 @@ import {
   getRepoIdFromWorktreeId,
   type WorktreeSlice
 } from './worktree-helpers'
+import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
+
+function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.length !== b.length) {
+    return !a?.length && !b?.length
+  }
+  return a.every((v, i) => v === b[i])
+}
 
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
   if (!current || current.length !== next.length) {
@@ -25,6 +36,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.branch === candidate.branch &&
       worktree.isBare === candidate.isBare &&
       worktree.isMainWorktree === candidate.isMainWorktree &&
+      worktree.isSparse === candidate.isSparse &&
       worktree.displayName === candidate.displayName &&
       worktree.comment === candidate.comment &&
       worktree.linkedIssue === candidate.linkedIssue &&
@@ -33,7 +45,9 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.isUnread === candidate.isUnread &&
       worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
-      worktree.lastActivityAt === candidate.lastActivityAt
+      worktree.lastActivityAt === candidate.lastActivityAt &&
+      worktree.sparseBaseRef === candidate.sparseBaseRef &&
+      arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories)
     )
   })
 }
@@ -85,7 +99,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
   },
 
-  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit') => {
+  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit', sparseCheckout) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
@@ -102,15 +116,25 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             repoId,
             name: candidateName,
             baseBranch,
-            setupDecision
+            setupDecision,
+            sparseCheckout
           })
-          set((s) => ({
-            worktreesByRepo: {
-              ...s.worktreesByRepo,
-              [repoId]: [...(s.worktreesByRepo[repoId] ?? []), result.worktree]
-            },
-            sortEpoch: s.sortEpoch + 1
-          }))
+          // Why: a file watcher (worktrees.onChanged) can fire between the
+          // backend creating the worktree and this callback running, causing
+          // fetchWorktrees to add the worktree first. Appending unconditionally
+          // then produces a duplicate entry in worktreesByRepo, which gives
+          // React duplicate keys and can corrupt terminal DOM containers.
+          set((s) => {
+            const current = s.worktreesByRepo[repoId] ?? []
+            const alreadyPresent = current.some((w) => w.id === result.worktree.id)
+            return {
+              worktreesByRepo: {
+                ...s.worktreesByRepo,
+                [repoId]: alreadyPresent ? current : [...current, result.worktree]
+              },
+              sortEpoch: s.sortEpoch + 1
+            }
+          })
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
@@ -141,12 +165,25 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }))
 
     try {
+      const repoIdForTrust = getRepoIdFromWorktreeId(worktreeId)
+      const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
+      const skipArchive = trustDecision === 'skip'
+
       // Why: setup-enabled worktrees now commonly have a live shell open as soon as
       // they are created. We must tear those PTYs down before asking Git to remove
       // the working tree or Windows and some shells can keep the directory in use
       // and make delete look broken even though the git state itself is fine.
+      //
+      // Why browsers first: `shutdownWorktreeTerminals` used to own the
+      // `browserTabsByWorktree[worktreeId]` delete as a side effect, which would
+      // race `shutdownWorktreeBrowsers`' read of the same map. After the §1.3
+      // split, terminals no longer touches browser state, but we still call
+      // browsers first so destroyPersistentWebview sees the workspaces in place
+      // and the Chromium guests are unregistered before any other teardown work
+      // can intercept them.
+      await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
-      await window.api.worktrees.remove({ worktreeId, force })
+      await window.api.worktrees.remove({ worktreeId, force, skipArchive })
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
@@ -175,6 +212,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextActiveFileIdByWorktree[worktreeId]
         const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
         delete nextActiveBrowserTabIdByWorktree[worktreeId]
+        // Why: closeBrowserTab — which shutdownWorktreeBrowsers delegates to —
+        // pushes a snapshot into recentlyClosedBrowserTabsByWorktree for the
+        // Cmd+Shift+T undo path. That is correct for UI close, but wrong when
+        // the owning worktree itself is being deleted: the snapshots reference
+        // workspaces and pages that can never be restored. Purge the worktree
+        // key symmetrically with browserTabsByWorktree. Per-workspace page
+        // snapshots are already cleared upstream by closeBrowserTab.
+        const nextRecentlyClosedBrowserTabsByWorktree = {
+          ...s.recentlyClosedBrowserTabsByWorktree
+        }
+        delete nextRecentlyClosedBrowserTabsByWorktree[worktreeId]
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
         delete nextActiveTabTypeByWorktree[worktreeId]
         const nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
@@ -259,6 +307,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: newOpenFiles,
           browserTabsByWorktree: nextBrowserTabsByWorktree,
+          recentlyClosedBrowserTabsByWorktree: nextRecentlyClosedBrowserTabsByWorktree,
           activeFileIdByWorktree: nextActiveFileIdByWorktree,
           activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
           activeTabTypeByWorktree: nextActiveTabTypeByWorktree,

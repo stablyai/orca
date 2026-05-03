@@ -127,6 +127,16 @@ const browserLoadErrorSchema = z.object({
   validatedUrl: z.string()
 })
 
+const browserViewportPresetIdSchema = z.enum([
+  'mobile-s',
+  'mobile-m',
+  'mobile-l',
+  'tablet',
+  'laptop',
+  'laptop-l',
+  'desktop'
+])
+
 // Why: cast to WorkspaceSessionState's embedded BrowserWorkspace so future
 // additive fields in the type flow through without requiring a schema edit.
 const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
@@ -157,7 +167,11 @@ const browserPageSchema = z.object({
   canGoBack: z.boolean(),
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number()
+  createdAt: z.number(),
+  // Why: optional+nullable so sessions persisted before viewport presets were
+  // added still validate; without this, zod would strip the field during
+  // restore and reset the user's chosen preset on every app restart.
+  viewportPresetId: browserViewportPresetIdSchema.nullable().optional()
 })
 
 const browserHistoryEntrySchema = z.object({

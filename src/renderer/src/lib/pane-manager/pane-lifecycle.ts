@@ -3,7 +3,7 @@ import type { ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 // Upstream packaging bug: @xterm/addon-ligatures declares `"main":
 // "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
-// resolve the bare import. Fixed locally via patches/@xterm__addon-ligatures*.
+// resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
 // Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 — drop
 // the patch once that lands.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
@@ -23,12 +23,24 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import type { GlobalSettings } from '../../../../shared/types'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
 // ---------------------------------------------------------------------------
 
 const ENABLE_WEBGL_RENDERER = true
+let suggestedRendererType: 'dom' | undefined
+
+export function resetTerminalWebglSuggestion(): void {
+  // Why: VS Code clears its suggested renderer when gpuAcceleration changes,
+  // letting "auto" retry WebGL after a user toggles the setting.
+  suggestedRendererType = undefined
+}
+
+function shouldUseWebgl(mode: GlobalSettings['terminalGpuAcceleration']): boolean {
+  return mode === 'on' || (mode === 'auto' && suggestedRendererType === undefined)
+}
 
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
@@ -108,6 +120,7 @@ export function createPaneDOM(
     container,
     xtermContainer,
     linkTooltip,
+    terminalGpuAcceleration: options.terminalGpuAcceleration ?? 'auto',
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
@@ -121,7 +134,8 @@ export function createPaneDOM(
     webglAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
-    pendingSplitScrollState: null
+    pendingSplitScrollState: null,
+    debugLabel: options.debugLabel ?? null
   }
 
   // Focus handler: clicking a pane makes it active and explicitly focuses
@@ -268,14 +282,31 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
   }
 }
 
-export function disposeWebgl(pane: ManagedPaneInternal): void {
-  if (pane.webglAddon) {
-    try {
-      pane.webglAddon.dispose()
-    } catch {
-      /* ignore */
-    }
-    pane.webglAddon = null
+export function disposeWebgl(
+  pane: ManagedPaneInternal,
+  options?: { refreshDimensions?: boolean }
+): void {
+  if (!pane.webglAddon) {
+    return
+  }
+  try {
+    pane.webglAddon.dispose()
+  } catch {
+    /* ignore */
+  }
+  pane.webglAddon = null
+  if (options?.refreshDimensions) {
+    // Why: VS Code refreshes terminal dimensions after WebGL teardown because
+    // DOM and WebGL renderer cell metrics differ. Without this, Linux DOM
+    // scrollbars can desync and trigger visible reflow jitter.
+    requestAnimationFrame(() => {
+      try {
+        pane.fitAddon.fit()
+        pane.terminal.refresh(0, pane.terminal.rows - 1)
+      } catch {
+        /* ignore — pane may have been disposed in the meantime */
+      }
+    })
   }
 }
 
@@ -283,6 +314,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
   if (
     !ENABLE_WEBGL_RENDERER ||
     !pane.gpuRenderingEnabled ||
+    !shouldUseWebgl(pane.terminalGpuAcceleration) ||
     pane.webglAttachmentDeferred ||
     pane.webglDisabledAfterContextLoss
   ) {
@@ -301,30 +333,17 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // Recreating WebGL for this pane can loop context loss and leave xterm
       // visually blank, so keep the pane on the DOM renderer until remount.
       pane.webglDisabledAfterContextLoss = true
-      webglAddon.dispose()
-      pane.webglAddon = null
-      // Why: when the WebGL context is lost the GPU-rendered canvas goes
-      // blank instantly. After disposing the addon, xterm.js falls back to
-      // the DOM renderer but may not redraw the viewport unprompted —
-      // without a refresh + refit, the scrollback area renders as blank
-      // space above the most recent output. Deferring to the next frame
-      // gives the DOM renderer time to initialise before repainting. Scroll
-      // position is preserved by xterm's native viewportY handling across
-      // resize (see scroll-reflow.test.ts "reference: undisturbed"); if a
-      // splitPane was in flight, its scheduleSplitScrollRestore timer owns
-      // the authoritative restore.
-      requestAnimationFrame(() => {
-        try {
-          pane.fitAddon.fit()
-          pane.terminal.refresh(0, pane.terminal.rows - 1)
-        } catch {
-          /* ignore — pane may have been disposed in the meantime */
-        }
-      })
+      disposeWebgl(pane, { refreshDimensions: true })
     })
     pane.terminal.loadAddon(webglAddon)
     pane.webglAddon = webglAddon
   } catch (err) {
+    if (pane.terminalGpuAcceleration === 'auto') {
+      // Why: mirrors VS Code's `terminal.integrated.gpuAcceleration=auto`
+      // behavior: once WebGL fails, keep subsequent auto panes on DOM until
+      // the setting changes and resets the suggestion.
+      suggestedRendererType = 'dom'
+    }
     // WebGL not available — default DOM renderer is fine, but log it for debugging
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
     pane.webglAddon = null

@@ -141,15 +141,6 @@ function ComposerModalBody({
           trigger?.focus({ preventScroll: true })
         }}
       >
-        <DialogHeader className="gap-1">
-          <DialogTitle className="text-base font-semibold">Create Workspace</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            {activeTab === 'quick'
-              ? 'Pick a repository and agent to spin up a new workspace.'
-              : 'Start from an existing PR, issue, branch, or Linear ticket.'}
-          </DialogDescription>
-        </DialogHeader>
-
         <Tabs
           value={activeTab}
           onValueChange={(next) => setActiveTab(next as 'quick' | 'create-from')}
@@ -164,12 +155,17 @@ function ComposerModalBody({
               read as "tabs" — the default pill variant fought the sub-tabs
               inside Create-from for visual weight. The bottom border on the
               list gives it clear separation from the content below. */}
+          {/* Why: DialogContent has p-6 (24px top) and the close button sits
+              absolutely at top-4 (16px), so its 16px icon centers around 24px
+              from the top. Pull the h-8 tab list up with -mt-4 so its center
+              (8 + 16 = 24px) lines up with the X on the same row. Reserve
+              right padding so the last trigger doesn't slide under the X. */}
           <TabsList
             variant="line"
-            className="h-8 w-full justify-start gap-6 border-b border-border/60 px-0"
+            className="-mt-4 h-8 w-full justify-start gap-6 border-b border-border/60 px-0 pr-8"
           >
             <TabsTrigger value="quick" className="flex-none gap-2 px-0 text-xs font-medium">
-              Quick
+              Form
               <ShortcutHint>{tabShortcut.quick}</ShortcutHint>
             </TabsTrigger>
             <TabsTrigger value="create-from" className="flex-none gap-2 px-0 text-xs font-medium">
@@ -177,6 +173,15 @@ function ComposerModalBody({
               <ShortcutHint>{tabShortcut['create-from']}</ShortcutHint>
             </TabsTrigger>
           </TabsList>
+
+          <DialogHeader className="gap-1 pt-4">
+            <DialogTitle className="text-base font-semibold">Create Workspace</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              {activeTab === 'quick'
+                ? 'Pick a repository and agent to spin up a new workspace.'
+                : 'Start from an existing PR, issue, branch, or Linear ticket.'}
+            </DialogDescription>
+          </DialogHeader>
 
           <AnimatedTabPanels active={activeTab}>
             {{
@@ -471,7 +476,10 @@ function AnimatedTabPanels({
       // leaving no room for a ring to paint. `overflow-clip-margin` gives
       // the ring breathing room on every side without re-introducing scroll
       // containers or letting the inactive panel leak layout.
-      className="relative overflow-clip transition-[height] duration-200 ease-out"
+      className={cn(
+        'relative overflow-clip',
+        isAnimating && 'transition-[height] duration-200 ease-out'
+      )}
       style={{
         ...(wrapperHeight !== null ? { height: wrapperHeight } : null),
         overflowClipMargin: '8px'

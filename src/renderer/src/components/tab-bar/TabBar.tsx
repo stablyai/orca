@@ -3,7 +3,7 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
@@ -24,6 +24,8 @@ import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDr
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { ShellIcon } from './shell-icons'
+import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -142,6 +144,18 @@ function TabBarInner({
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
+  const defaultWindowsPowerShellImplementation = useAppStore(
+    (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
+  )
+  const [pwshAvailable, setPwshAvailable] = useState(false)
+  useEffect(() => {
+    if (!isWindows) {
+      setPwshAvailable(false)
+      return
+    }
+
+    void window.api.pwsh.isAvailable().then(setPwshAvailable)
+  }, [])
   const resolvedGroupId = groupId ?? worktreeId
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
@@ -224,27 +238,6 @@ function TabBarInner({
     }
     return indicators
   }, [activeIndicator, orderedItems])
-
-  const focusTerminalTabSurface = useCallback((tabId: string) => {
-    // Why: creating a terminal from the "+" menu is a two-step focus race:
-    // React must first mount the new TerminalPane/xterm, then Radix closes the
-    // menu. Even after suppressing trigger focus restore, the terminal's hidden
-    // textarea may not exist until the next paint. Double-rAF waits for that
-    // commit so the new tab, not the "+" button, ends up owning keyboard focus.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const scoped = document.querySelector(
-          `[data-terminal-tab-id="${tabId}"] .xterm-helper-textarea`
-        ) as HTMLElement | null
-        if (scoped) {
-          scoped.focus()
-          return
-        }
-        const fallback = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
-        fallback?.focus()
-      })
-    })
-  }, [])
 
   // Horizontal wheel scrolling for the tab strip
   const tabStripRef = useRef<HTMLDivElement>(null)
@@ -490,10 +483,13 @@ function TabBarInner({
             // each row narrow enough that the shortcut hint fits without
             // wrapping.
             (() => {
-              const allShells = [
+              const allShells: {
+                label: string
+                shell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+              }[] = [
                 { label: 'PowerShell', shell: 'powershell.exe' },
                 { label: 'CMD Prompt', shell: 'cmd.exe' },
-                ...(wslAvailable ? [{ label: 'WSL', shell: 'wsl.exe' }] : [])
+                ...(wslAvailable ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const) : [])
               ]
               const defaultEntry =
                 allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
@@ -507,11 +503,18 @@ function TabBarInner({
                   <DropdownMenuItem
                     key={entry.shell}
                     onSelect={() => {
-                      onNewTerminalWithShell(entry.shell)
-                      const newActiveTabId = useAppStore.getState().activeTabId
-                      if (newActiveTabId) {
-                        focusTerminalTabSurface(newActiveTabId)
-                      }
+                      // Why: the top-level Windows shell menu models shell
+                      // categories, not concrete executables. When the user
+                      // picked PowerShell 7+ in advanced settings, launching the
+                      // "PowerShell" menu item must preserve that implementation
+                      // instead of forcing inbox powershell.exe.
+                      onNewTerminalWithShell(
+                        resolveWindowsShellLaunchTarget(
+                          entry.shell,
+                          defaultWindowsPowerShellImplementation,
+                          pwshAvailable
+                        )
+                      )
                     }}
                     className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
                   >
@@ -528,10 +531,6 @@ function TabBarInner({
             <DropdownMenuItem
               onSelect={() => {
                 onNewTerminalTab()
-                const newActiveTabId = useAppStore.getState().activeTabId
-                if (newActiveTabId) {
-                  focusTerminalTabSurface(newActiveTabId)
-                }
               }}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >

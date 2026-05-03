@@ -29,6 +29,9 @@ import {
   mode2031SequenceFor
 } from './terminal-appearance'
 import { parseOsc52 } from './osc52-clipboard'
+import { parseOsc7 } from './parse-osc7'
+import { shouldBypassXtermKeydown } from './xterm-bypass-policy'
+import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
@@ -78,6 +81,10 @@ type UseTerminalPaneLifecycleDeps = {
   >
   paneFontSizesRef: React.RefObject<Map<number, number>>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  /** Shared map of per-pane live cwd, populated by the OSC 7 handler
+   *  installed in onPaneCreated. Exposed to TerminalPane so keyboard and
+   *  context-menu split handlers can read it synchronously for cache hits. */
+  paneCwdRef: React.RefObject<PaneCwdMap>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>
   panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
@@ -165,6 +172,7 @@ export function useTerminalPaneLifecycle({
   expandedStyleSnapshotRef,
   paneFontSizesRef,
   paneTransportsRef,
+  paneCwdRef,
   paneMode2031Ref,
   paneLastThemeModeRef,
   panePtyBindingsRef,
@@ -205,6 +213,7 @@ export function useTerminalPaneLifecycle({
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
+  const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
 
   const applyAppearance = (manager: PaneManager): void => {
@@ -349,7 +358,10 @@ export function useTerminalPaneLifecycle({
     const urlOpenLinkHint = getTerminalUrlOpenHint()
 
     const manager = new PaneManager(container, {
-      onPaneCreated: (pane) => {
+      // Why: `spawnHints` carries the resolved cwd from Cmd+D / context-menu
+      // Split actions so the new PTY inherits the source pane's live cwd.
+      // Split-pane CWD inheritance — see docs/ssh-split-pane-inherit-cwd.md.
+      onPaneCreated: (pane, spawnHints) => {
         // Install mode 2031 parser handlers before PTY attach so the child's
         // initial CSI ?2031h (sent at startup) is captured.
         const mode2031Disposables = installMode2031Handlers({
@@ -386,6 +398,51 @@ export function useTerminalPaneLifecycle({
           return true
         })
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
+
+        // OSC 7 — shell-reported current working directory. Drives split-pane
+        // cwd inheritance (Cmd+D / Cmd+Shift+D / context-menu Split). Handler
+        // install MUST remain before connectPanePty: the cold-restore path
+        // replays recorded PTY output into the terminal synchronously from the
+        // first PTY read, so a handler registered later would miss the first
+        // OSC 7 in replayed scrollback.
+        //
+        // Why the replay flag is reliable here: replayIntoTerminal increments
+        // a per-pane counter BEFORE xterm.write and decrements it in xterm's
+        // write-completion callback (replay-guard.ts). xterm parses OSC
+        // synchronously as it consumes the buffer, so every OSC 7 emitted
+        // during replay is seen with the counter non-zero.
+        //
+        // Return true so xterm marks the sequence handled. If a future
+        // consumer registers on code 7, registration order decides who sees
+        // each sequence.
+        const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
+          const cwd = parseOsc7(data)
+          if (cwd) {
+            const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
+            paneCwdRef.current.set(pane.id, { cwd, confirmed })
+          }
+          return true
+        })
+        osc7DisposablesRef.current.set(pane.id, osc7Disposable)
+
+        // Why: let clipboard chords bypass xterm's kitty CSI-u encoder.
+        // With vtExtensions.kittyKeyboard on, a CLI that activates progressive
+        // enhancement (Codex does, Claude Code does not) makes xterm encode
+        // Cmd+C as a CSI-u sequence with cancel=true, which preventDefaults
+        // the keydown and suppresses Chromium's native copy event — so the
+        // selection never reaches the clipboard. Returning false here short-
+        // circuits xterm's _keyDown before the encoder runs, letting the
+        // browser copy pipeline and Electron menu accelerators fire normally.
+        // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
+        pane.terminal.attachCustomKeyEventHandler((e) => {
+          if (e.type !== 'keydown') {
+            return true
+          }
+          return !shouldBypassXtermKeydown(e, {
+            isMac: navigator.userAgent.includes('Mac'),
+            hasSelection: pane.terminal.hasSelection()
+          })
+        })
 
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
           createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
@@ -442,6 +499,10 @@ export function useTerminalPaneLifecycle({
         restoredPaneCreateIndex += 1
         const panePtyBinding = connectPanePty(pane, manager, {
           ...ptyDeps,
+          // Why: spread order matters — spawnHints.cwd (inherited from the
+          // source pane) must override the tab-level ptyDeps.cwd (worktree
+          // root) so Cmd+D splits boot in the live cwd.
+          ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
           restoredLeafId
         })
         // Why: connectPanePty receives a spread copy of ptyDeps, so the
@@ -486,6 +547,14 @@ export function useTerminalPaneLifecycle({
           osc52Disposable.dispose()
           osc52DisposablesRef.current.delete(paneId)
         }
+        const osc7Disposable = osc7DisposablesRef.current.get(paneId)
+        if (osc7Disposable) {
+          osc7Disposable.dispose()
+          osc7DisposablesRef.current.delete(paneId)
+        }
+        // Why: drop the tracked cwd so the map doesn't accumulate dead
+        // entries across splits/closes over long sessions.
+        paneCwdRef.current.delete(paneId)
         const mouseHideDisposable = mouseHideDisposablesRef.current.get(paneId)
         if (mouseHideDisposable) {
           mouseHideDisposable.dispose()
@@ -614,7 +683,9 @@ export function useTerminalPaneLifecycle({
       // Why: TerminalPane instances stay mounted for hidden visited worktrees
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.
-      initialRenderingSuspended: !isVisibleRef.current
+      initialRenderingSuspended: !isVisibleRef.current,
+      terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
+      debugLabel: `tab:${tabId}/wt:${worktreeId}`
     })
 
     managerRef.current = manager
@@ -856,6 +927,10 @@ export function useTerminalPaneLifecycle({
     // immediately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
+
+  useEffect(() => {
+    managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')
+  }, [settings?.terminalGpuAcceleration, managerRef])
 
   useEffect(() => {
     const manager = managerRef.current

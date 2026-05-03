@@ -26,7 +26,9 @@
 }
 
 .pane-manager-root .xterm-viewport {
-  overflow-y: auto;
+  /* Why: xterm/VS Code keep the scrollbar gutter stable. `auto` lets Linux
+     DOM scrollbars appear/disappear, which can feed resize/reflow jitter. */
+  overflow-y: scroll;
 }
 
 /* xterm.css sets position:absolute;top:0 on .xterm-helpers but omits left,

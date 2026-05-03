@@ -4,7 +4,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
-import SearchBar from './SearchBar'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorktreeMetaDialog from './WorktreeMetaDialog'
@@ -12,6 +11,7 @@ import DeleteWorktreeDialog from './DeleteWorktreeDialog'
 import NonGitFolderDialog from './NonGitFolderDialog'
 import RemoveFolderDialog from './RemoveFolderDialog'
 import AddRepoDialog from './AddRepoDialog'
+import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -49,9 +49,7 @@ function Sidebar(): React.JSX.Element {
         {/* Fixed controls */}
         <SidebarNav />
         <SidebarHeader />
-        <SearchBar />
 
-        {/* Virtualized scrollable list */}
         <WorktreeList />
 
         {/* Fixed bottom toolbar */}
@@ -70,6 +68,7 @@ function Sidebar(): React.JSX.Element {
       <NonGitFolderDialog />
       <RemoveFolderDialog />
       <AddRepoDialog />
+      <OrcaYamlTrustDialog />
     </TooltipProvider>
   )
 }

@@ -4,7 +4,9 @@ import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
   normalizeAutoSaveDelayMs,
+  ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
+  requestEditorFileClose,
   requestEditorFileSave,
   requestEditorSaveQuiesce
 } from './editor-autosave'
@@ -137,6 +139,21 @@ describe('requestEditorFileSave', () => {
     await expect(requestEditorFileSave({ fileId: 'file-1' })).rejects.toThrow(
       'Editor save controller is unavailable.'
     )
+  })
+})
+
+describe('requestEditorFileClose', () => {
+  it('dispatches a close request event with the file id', () => {
+    const listener = vi.fn()
+    window.addEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, listener as EventListener)
+    try {
+      requestEditorFileClose('file-1')
+      expect(listener).toHaveBeenCalledTimes(1)
+      const event = listener.mock.calls[0][0] as CustomEvent<{ fileId: string }>
+      expect(event.detail).toEqual({ fileId: 'file-1' })
+    } finally {
+      window.removeEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, listener as EventListener)
+    }
   })
 })
 

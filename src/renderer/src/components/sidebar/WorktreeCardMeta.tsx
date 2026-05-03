@@ -97,7 +97,7 @@ export function PrSection({ pr, onClick }: PrSectionProps): React.JSX.Element {
               href={pr.url}
               target="_blank"
               rel="noreferrer"
-              className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
+              className="text-foreground opacity-80 shrink-0 hover:text-foreground hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
               PR #{pr.number}

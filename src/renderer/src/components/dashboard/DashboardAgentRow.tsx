@@ -63,23 +63,57 @@ function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
 type Props = {
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
-  /** Navigate directly to the tab this agent lives in. */
-  onActivate: (tabId: string) => void
+  /** Navigate directly to the tab this agent lives in. paneKey is passed
+   *  through so the caller can acknowledge (mark-visited) the specific row
+   *  that was clicked, without having to re-derive it from the tab id. */
+  onActivate: (tabId: string, paneKey: string) => void
   /**
    * Why: the relative-time labels ("Xm ago") need a periodic re-render to stay
    * honest. We accept `now` from a parent container so a single 30s tick owned
    * by the container drives every visible row, rather than each row running
-   * its own setInterval. See useNow.ts for the shared hook — callers own the
-   * tick (AgentDashboard for the dashboard, AgentStatusHover for hovercards).
+   * its own setInterval. See useNow.ts for the shared hook — WorktreeCardAgents
+   * owns the tick for the inline-in-card list.
    */
   now: number
+  /**
+   * Why: bold weight for the prompt rides on the enclosing workspace card's
+   * unvisited signal, not on the per-agent state. Passed in from
+   * WorktreeCardAgents so the workspace name and its agent rows share
+   * the same "you haven't looked at this yet" rule — visiting the worktree
+   * clears the signal, and the next render mutes both in lockstep.
+   *
+   * Optional so other callers can opt out and default to muted when their
+   * surface carries the unread signal elsewhere.
+   */
+  isUnvisited?: boolean
+  /**
+   * Why: the inline-in-card variant sits in a tighter layout next to the
+   * agent identity icon, so 'md' reads as a second ~12px glyph that users
+   * can confuse with the agent icon. 'sm' keeps them visually distinct.
+   * The full dashboard has more breathing room and prefers 'md' for leading-
+   * slot presence, so default stays 'md'.
+   */
+  stateDotSize?: 'sm' | 'md'
+  /**
+   * Why: the inline-in-card variant lives next to a worktree card that the
+   * user clicks to jump directly to the agent — a separate expand chevron
+   * and a second identity glyph (Claude/Gemini/…) are redundant noise in
+   * that tighter layout. The full dashboard keeps both, so these flags
+   * default to showing them.
+   */
+  hideIdentityIcon?: boolean
+  hideExpand?: boolean
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
   onDismiss,
   onActivate,
-  now
+  now,
+  isUnvisited = false,
+  stateDotSize = 'md',
+  hideIdentityIcon = false,
+  hideExpand = false
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
@@ -120,9 +154,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      onActivate(agent.tab.id)
+      onActivate(agent.tab.id, agent.paneKey)
     },
-    [onActivate, agent.tab.id]
+    [onActivate, agent.tab.id, agent.paneKey]
   )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
@@ -132,7 +166,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // slot would collapse the text column and leave the row with no human-
   // readable label — just a state dot and icon. Fall back to the state label
   // ("Working", "Done", "Waiting", …) so every row is identifiable at a
-  // glance, matching the old AgentStatusHover.tsx behavior.
+  // glance.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
   // Why: the tool row describes what the agent is *currently* doing; once it
   // leaves working, that line goes stale and misleads (a done row showing
@@ -165,8 +199,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     // role=button violates ARIA's "no interactive content inside interactive
     // content" rule and breaks keyboard/AT navigation. Keyboard users reach
     // the agent via the child buttons and the tab switcher; the outer <div>
-    // stays a plain clickable surface for pointer activation, mirroring the
-    // pattern in DashboardBottomPanel.tsx's collapse header.
+    // stays a plain clickable surface for pointer activation.
     <div
       onClick={handleActivate}
       className={cn(
@@ -192,7 +225,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="inline-flex shrink-0 items-center justify-center">
-              <AgentStateDot state={asDotState(agent.state)} size="md" />
+              <AgentStateDot state={asDotState(agent.state)} size={stateDotSize} />
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
@@ -205,16 +238,18 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             about the same agent and do not need the icon repeated next to
             them — keeping the icon only on the prompt row lets the sub-rows
             indent under the prompt text cleanly. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {formatAgentTypeLabel(agent.agentType)}
-          </TooltipContent>
-        </Tooltip>
+        {!hideIdentityIcon && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex shrink-0">
+                <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {formatAgentTypeLabel(agent.agentType)}
+            </TooltipContent>
+          </Tooltip>
+        )}
         {/* Why: animate between a 1-line clipped height and the content's
             natural height using Chromium's `interpolate-size: allow-keywords`
             — this is the only way to transition a `height` property to/from
@@ -223,12 +258,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             overflow-hidden so the truncate→wrap class flip stays clipped
             during the interpolation.
 
-            Done and waiting rows get "unread" weight (semibold + full
-            foreground) so the user can tell at a glance which rows need
-            their attention. Working/idle stay at the quieter baseline
-            since the state dot (spinner or neutral) is already doing the
-            work. Mirrors the convention in Slack/Gmail/Linear where the
-            row text thickens to signal "you haven't dealt with this yet."
+            Weight tracks the workspace's unvisited signal (isUnvisited):
+            bold + full foreground for agents inside a workspace the user
+            hasn't looked at yet, normal + muted once they've visited. This
+            keeps the prompt row's weight in lockstep with the workspace
+            name above it — one attention axis, not two.
 
             Rendered unconditionally with a state-label fallback so rows
             without a prompt (fresh/unknown) still have a human-readable
@@ -238,9 +272,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
             'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
-            agent.state === 'done' || agent.state === 'waiting' || agent.state === 'blocked'
-              ? 'font-semibold text-foreground'
-              : 'font-medium text-foreground/90'
+            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
           )}
           // Why: tooltip should only reveal truncated prompt text — not echo state-word fallbacks
           // (e.g. "Working"/"Done") that already fit on one line and never overflow.
@@ -348,19 +380,24 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               old node unmounts. Invisible placeholder keeps vertical
               alignment stable across rows when nothing is expandable
               so the row-trailing edge stays stable. */}
-          <button
-            type="button"
-            onClick={handleToggleExpand}
-            onMouseDown={stopMouseDown}
-            onKeyDown={stopKeyDown}
-            className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
-            aria-label={expanded ? 'Collapse details' : 'Expand details'}
-            aria-expanded={expanded}
-          >
-            <ChevronDown
-              className={cn('size-3.5 transition-transform duration-150', expanded && 'rotate-180')}
-            />
-          </button>
+          {!hideExpand && (
+            <button
+              type="button"
+              onClick={handleToggleExpand}
+              onMouseDown={stopMouseDown}
+              onKeyDown={stopKeyDown}
+              className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
+              aria-label={expanded ? 'Collapse details' : 'Expand details'}
+              aria-expanded={expanded}
+            >
+              <ChevronDown
+                className={cn(
+                  'size-3.5 transition-transform duration-150',
+                  expanded && 'rotate-180'
+                )}
+              />
+            </button>
+          )}
         </span>
       </div>
       {/* Why: tool row and message row both carry different info — tool shows

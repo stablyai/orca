@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Ellipsis, Import, Plus, Settings } from 'lucide-react'
+import { Check, Ellipsis, Import, Monitor, Plus, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -24,16 +26,26 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
+import type { BrowserViewportPresetId } from '../../../../shared/types'
+import {
+  BROWSER_VIEWPORT_PRESETS,
+  browserViewportPresetToOverride,
+  getBrowserViewportPreset
+} from '../../../../shared/browser-viewport-presets'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
   workspaceId: string
+  browserPageId: string
+  viewportPresetId: BrowserViewportPresetId | null
   onDestroyWebview: () => void
 }
 
 export function BrowserToolbarMenu({
   currentProfileId,
   workspaceId,
+  browserPageId,
+  viewportPresetId,
   onDestroyWebview
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
@@ -42,7 +54,16 @@ export function BrowserToolbarMenu({
   const createBrowserSessionProfile = useAppStore((s) => s.createBrowserSessionProfile)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
+  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
+  const setBrowserPageViewportPreset = useAppStore((s) => s.setBrowserPageViewportPreset)
+
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void => {
+    setBrowserPageViewportPreset(browserPageId, nextId)
+    const preset = getBrowserViewportPreset(nextId)
+    const override = preset ? browserViewportPresetToOverride(preset) : null
+    void window.api.browser.setViewportOverride({ browserPageId, override })
+  }
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -171,7 +192,15 @@ export function BrowserToolbarMenu({
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuSub>
+          <DropdownMenuSub
+            onOpenChange={(open) => {
+              if (open) {
+                // Why: macOS treats other browsers' profile folders as app
+                // data. Only probe them when the user opens the import menu.
+                void fetchDetectedBrowsers()
+              }
+            }}
+          >
             <DropdownMenuSubTrigger disabled={browserSessionImportState?.status === 'importing'}>
               <Import className="mr-2 size-3.5" />
               Import Cookies
@@ -210,6 +239,38 @@ export function BrowserToolbarMenu({
                 <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
                   From File…
                 </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Monitor className="mr-2 size-3.5" />
+              Viewport Size
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                {/* Why: Viewport is a "pick one of N" control, so use a radio group
+                    for proper a11y semantics (role="menuitemradio", aria-checked).
+                    The "Default" option represents a null preset (no override),
+                    encoded as the sentinel string 'default' because
+                    DropdownMenuRadioGroup values must be strings. */}
+                <DropdownMenuRadioGroup
+                  value={viewportPresetId ?? 'default'}
+                  onValueChange={(v) =>
+                    applyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
+                  }
+                >
+                  <DropdownMenuRadioItem value="default">Default</DropdownMenuRadioItem>
+                  <DropdownMenuSeparator />
+                  {BROWSER_VIEWPORT_PRESETS.map((preset) => (
+                    <DropdownMenuRadioItem key={preset.id} value={preset.id}>
+                      <span className="truncate">{preset.label}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>
