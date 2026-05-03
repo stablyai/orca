@@ -103,7 +103,9 @@ export function consumeBurstToken(name: EventName): boolean {
   // `Object.prototype` key. Growth would be bounded (~12 keys) but the whole
   // point of this check is to keep the Map size pinned to the compile-time
   // `eventSchemas` surface.
-  if (!Object.hasOwn(eventSchemas, name)) return false
+  if (!Object.hasOwn(eventSchemas, name)) {
+    return false
+  }
   const now = Date.now()
   const bucket = getOrCreateBucket(name, now)
   if (bucket.tokens < 1) {
