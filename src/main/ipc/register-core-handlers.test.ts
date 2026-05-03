@@ -12,6 +12,7 @@ const {
   registerNotificationHandlersMock,
   registerDeveloperPermissionHandlersMock,
   registerSettingsHandlersMock,
+  registerTelemetryHandlersMock,
   registerShellHandlersMock,
   registerSidekickHandlersMock,
   registerSessionHandlersMock,
@@ -43,6 +44,7 @@ const {
   registerNotificationHandlersMock: vi.fn(),
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
+  registerTelemetryHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerSidekickHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
@@ -110,6 +112,10 @@ vi.mock('./developer-permissions', () => ({
 
 vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
+}))
+
+vi.mock('./telemetry', () => ({
+  registerTelemetryHandlers: registerTelemetryHandlersMock
 }))
 
 vi.mock('./shell', () => ({
@@ -190,6 +196,7 @@ describe('registerCoreHandlers', () => {
     registerNotificationHandlersMock.mockReset()
     registerDeveloperPermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
+    registerTelemetryHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerSidekickHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()

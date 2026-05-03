@@ -15,6 +15,7 @@ import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { initTelemetry, shutdownTelemetry } from './telemetry/client'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
@@ -373,6 +374,13 @@ app.whenReady().then(async () => {
   }
 
   store = new Store()
+  // Why: telemetry must initialize before any IPC handler / renderer can
+  // call `track()`. The client is a no-op in dev/contributor builds
+  // (`IS_OFFICIAL_BUILD === false`) and a no-op while `TELEMETRY_ENABLED`
+  // is false in PR 2 — so this call is safe to run early; it only records
+  // the Store reference, seeds common props, and resets per-session burst
+  // caps. Actual transport initialization is still gated by both flags.
+  initTelemetry(store)
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
@@ -614,10 +622,21 @@ app.on('will-quit', (e) => {
     // RPC stop + owned-metadata clear to complete before Electron exits.
     // Using allSettled (not all) preserves the existing fail-open posture:
     // if disconnectDaemon rejects, we still quit instead of hanging the app.
-    Promise.allSettled([disconnectDaemon(), rpcStopAndClear]).then(() => {
-      daemonDisconnectDone = true
-      app.quit()
-    })
+    //
+    // Telemetry shutdown folds in after the daemon/RPC teardown and BEFORE
+    // app.quit(): the PostHog client has up to 2s of bounded flush
+    // (docs/telemetry-implementation.md §Shutdown ordering). Errors inside
+    // `shutdownTelemetry()` are caught by the client itself — we catch again
+    // here defensively so a flush failure cannot cancel the quit chain.
+    Promise.allSettled([disconnectDaemon(), rpcStopAndClear])
+      .then(() => shutdownTelemetry())
+      .catch(() => {
+        /* swallow — telemetry must never prevent app.quit() */
+      })
+      .then(() => {
+        daemonDisconnectDone = true
+        app.quit()
+      })
   }
 })
 

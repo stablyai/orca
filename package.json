@@ -90,6 +90,7 @@
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "^5.6.205",
+    "posthog-node": "^5.33.0",
     "radix-ui": "^1.4.3",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
