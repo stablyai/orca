@@ -42,7 +42,7 @@ The events we send (7 in total — 8 literal names, counting `telemetry_opted_in
 
 ### Settings
 
-- `settings_changed` — `setting_key` (whitelisted enum, scoped to experimental-flag toggles and a small set of AI-related preferences); `value_kind`: `bool` / `enum`. Never the raw value of a free-form setting.
+- `settings_changed` — `setting_key` (whitelisted enum, scoped to a small set of feature-flag and UX-preference toggles); `value_kind`: `bool` / `enum`. Never the raw value of a free-form setting.
 
 ### Privacy controls
 
