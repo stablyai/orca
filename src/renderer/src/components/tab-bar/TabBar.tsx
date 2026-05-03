@@ -24,6 +24,7 @@ import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDr
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { ShellIcon } from './shell-icons'
+import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   DropdownMenu,
@@ -143,6 +144,18 @@ function TabBarInner({
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
+  const defaultWindowsPowerShellImplementation = useAppStore(
+    (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
+  )
+  const [pwshAvailable, setPwshAvailable] = useState(false)
+  useEffect(() => {
+    if (!isWindows) {
+      setPwshAvailable(false)
+      return
+    }
+
+    void window.api.pwsh.isAvailable().then(setPwshAvailable)
+  }, [])
   const resolvedGroupId = groupId ?? worktreeId
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
@@ -470,10 +483,13 @@ function TabBarInner({
             // each row narrow enough that the shortcut hint fits without
             // wrapping.
             (() => {
-              const allShells = [
+              const allShells: {
+                label: string
+                shell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+              }[] = [
                 { label: 'PowerShell', shell: 'powershell.exe' },
                 { label: 'CMD Prompt', shell: 'cmd.exe' },
-                ...(wslAvailable ? [{ label: 'WSL', shell: 'wsl.exe' }] : [])
+                ...(wslAvailable ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const) : [])
               ]
               const defaultEntry =
                 allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
@@ -487,7 +503,18 @@ function TabBarInner({
                   <DropdownMenuItem
                     key={entry.shell}
                     onSelect={() => {
-                      onNewTerminalWithShell(entry.shell)
+                      // Why: the top-level Windows shell menu models shell
+                      // categories, not concrete executables. When the user
+                      // picked PowerShell 7+ in advanced settings, launching the
+                      // "PowerShell" menu item must preserve that implementation
+                      // instead of forcing inbox powershell.exe.
+                      onNewTerminalWithShell(
+                        resolveWindowsShellLaunchTarget(
+                          entry.shell,
+                          defaultWindowsPowerShellImplementation,
+                          pwshAvailable
+                        )
+                      )
                     }}
                     className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
                   >

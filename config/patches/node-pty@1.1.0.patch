@@ -73,3 +73,18 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+diff --git a/src/unix/pty.cc b/src/unix/pty.cc
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..c17decbb7bc06f10d7b5d26317bd68fdc8c4e339 100644
+--- a/src/unix/pty.cc
++++ b/src/unix/pty.cc
+@@ -778,8 +778,8 @@ done:
+   posix_spawn_file_actions_destroy(&acts);
+   posix_spawnattr_destroy(&attrs);
+
+-  for (; count > 0; count--) {
+-    close(low_fds[count]);
++  for (size_t i = 0; i <= count && i < 3; i++) {
++    close(low_fds[i]);
+   }
+ }
+ #endif

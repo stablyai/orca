@@ -7,6 +7,11 @@ export type DaemonConnectionInfo = {
   tokenPath: string
 }
 
+export type DaemonPidFile = {
+  pid: number
+  startedAtMs: number | null
+}
+
 export type DaemonProcessHandle = {
   shutdown(): Promise<void>
 }
@@ -79,4 +84,8 @@ export function getDaemonTokenPath(runtimeDir: string, protocolVersion = PROTOCO
 
 export function getDaemonPidPath(runtimeDir: string, protocolVersion = PROTOCOL_VERSION): string {
   return join(runtimeDir, `daemon-v${protocolVersion}.pid`)
+}
+
+export function serializeDaemonPidFile(pidFile: DaemonPidFile): string {
+  return JSON.stringify(pidFile)
 }

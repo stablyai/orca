@@ -226,6 +226,24 @@ export type BrowserLoadError = {
   validatedUrl: string
 }
 
+// Why: BrowserPage persists the active viewport preset so CDP emulation can be
+// reapplied on reload/navigation without the user re-picking from the toolbar.
+export type BrowserViewportPresetId =
+  | 'mobile-s'
+  | 'mobile-m'
+  | 'mobile-l'
+  | 'tablet'
+  | 'laptop'
+  | 'laptop-l'
+  | 'desktop'
+
+export type BrowserViewportOverride = {
+  width: number
+  height: number
+  deviceScaleFactor: number
+  mobile: boolean
+}
+
 export type BrowserPage = {
   id: string
   workspaceId: string
@@ -238,6 +256,8 @@ export type BrowserPage = {
   canGoForward: boolean
   loadError: BrowserLoadError | null
   createdAt: number
+  /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
+  viewportPresetId?: BrowserViewportPresetId | null
 }
 
 export type BrowserWorkspace = {
@@ -950,10 +970,16 @@ export type GlobalSettings = {
   theme: 'system' | 'dark' | 'light'
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
+  editorMinimapEnabled: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
+  /** Mirrors VS Code's terminal.integrated.gpuAcceleration shape.
+   *  - 'auto': try xterm WebGL and fall back to DOM if the renderer fails.
+   *  - 'on': always try xterm WebGL.
+   *  - 'off': keep terminal rendering on xterm's DOM renderer. */
+  terminalGpuAcceleration: 'auto' | 'on' | 'off'
   /** Whether to enable programming-ligatures rendering via
    *  `@xterm/addon-ligatures`.
    *  - `'auto'` (default): enabled only when the configured font is known to
@@ -991,6 +1017,9 @@ export type GlobalSettings = {
    *  user's preferred shell. Defaults to 'powershell.exe' which is the
    *  modern choice for an IDE context. Only consulted on Windows. */
   terminalWindowsShell: string
+  /** Why: "PowerShell" is the product-facing shell family. Auto resolves to
+   *  PowerShell 7+ when present and falls back to inbox Windows PowerShell. */
+  terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
   terminalFocusFollowsMouse: boolean
   /** Why: mirrors X11 / gnome-terminal "copy on select" UX — making a terminal
    *  selection copies it to the system clipboard automatically, so users can

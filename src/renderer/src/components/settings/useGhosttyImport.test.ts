@@ -10,6 +10,7 @@ const baseSettings: GlobalSettings = {
   terminalFontSize: 12,
   terminalFontWeight: 400,
   terminalLineHeight: 1,
+  terminalGpuAcceleration: 'auto',
   terminalCursorStyle: 'bar',
   terminalCursorBlink: true,
   terminalScrollbackBytes: 10_000_000,

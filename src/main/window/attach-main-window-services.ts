@@ -9,6 +9,7 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerPtyHandlers } from '../ipc/pty'
+import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
@@ -41,6 +42,13 @@ export function attachMainWindowServices(
     () => store.getSettings(),
     prepareClaudeAuth
   )
+  // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
+  // uses a narrow `pty:management:*` IPC surface that reads the live
+  // DaemonPtyRouter via getDaemonProvider(). Registering here — after
+  // registerPtyHandlers — keeps this wiring alongside the rest of the PTY IPC
+  // and ensures the handlers are re-installed on macOS app re-activation when
+  // the main window is recreated.
+  registerDaemonManagementHandlers()
   // Why: GC runs on a 10s delay so live worktree enumeration completes first.
   // Uses git worktree list (not store.getWorktreeMeta) because untouched
   // worktrees have no metadata entries — see design doc §7.6.

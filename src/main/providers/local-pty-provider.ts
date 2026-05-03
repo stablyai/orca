@@ -3,7 +3,9 @@
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
 import { basename } from 'path'
+import { win32 as pathWin32 } from 'path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
@@ -80,6 +82,27 @@ function clearPtyState(id: string): void {
   ptyLoadGeneration.delete(id)
 }
 
+function destroyPtyProcess(proc: pty.IPty): void {
+  // Why: node-pty's UnixTerminal.destroy() closes the master socket, which
+  // releases the ptmx fd to the OS — without this call the fd leaks until GC
+  // (see docs/fix-pty-fd-leak.md). destroy() also registers a close listener
+  // that fires `this.kill('SIGHUP')` AFTER the socket closes. On POSIX, by
+  // the time that listener runs the child may have exited and its pid been
+  // recycled to an unrelated user process — SIGHUP would land on a Chrome tab,
+  // editor, etc. Neutralize proc.kill on this instance before calling
+  // destroy() to defuse the hazard. Windows exempt: WindowsTerminal.destroy
+  // IS a kill() call via _deferNoArgs, so neutralizing it would leak the
+  // ConPTY agent.
+  if (process.platform !== 'win32') {
+    ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+  }
+  try {
+    ;(proc as unknown as { destroy?: () => void }).destroy?.()
+  } catch {
+    /* swallow — already torn down */
+  }
+}
+
 function safeKillAndClean(id: string, proc: pty.IPty): void {
   disposePtyListeners(id)
   try {
@@ -87,6 +110,7 @@ function safeKillAndClean(id: string, proc: pty.IPty): void {
   } catch {
     /* Process may already be dead */
   }
+  destroyPtyProcess(proc)
   clearPtyState(id)
 }
 
@@ -100,6 +124,8 @@ export type LocalPtyProviderOptions = {
    *  IPC layer inject the persisted setting without coupling the provider to the
    *  settings store. Returns undefined when no preference is set. */
   getWindowsShell?: () => string | undefined
+  getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
+  pwshAvailable?: () => boolean
   onSpawned?: (id: string) => void
   onExit?: (id: string, code: number) => void
   onData?: (id: string, data: string, timestamp: number) => void
@@ -139,11 +165,35 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: shellOverride lets a single tab open in a different shell than the
       // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
       // changing the user's setting. It takes priority over the setting.
-      shellPath =
+      const shellFamily =
         args.shellOverride ||
         this.opts.getWindowsShell?.() ||
         process.env.COMSPEC ||
         'powershell.exe'
+      const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
+      // Why: shell selection can arrive either as a canonical setting value
+      // ('powershell.exe') or as a concrete PowerShell executable path from a
+      // one-off override. Normalize both forms back to the PowerShell family so
+      // the shared resolver can still fall back to inbox powershell.exe when
+      // pwsh.exe was requested but is unavailable.
+      const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
+      const shouldResolvePowerShellFamily =
+        powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
+      shellPath = shouldResolvePowerShellFamily
+        ? (resolveEffectiveWindowsPowerShell({
+            shellFamily:
+              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+                ? 'powershell.exe'
+                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                  ? normalizedShellFamily
+                  : undefined,
+            implementation: powerShellImplementation,
+            pwshAvailable: this.opts.pwshAvailable?.() ?? false
+          }) ?? shellFamily)
+        : shellFamily
+      // Why: one-off overrides and persisted shell-family selection keep the
+      // same priority, while the shared resolver chooses which PowerShell
+      // executable is safe to run right now if that family is selected.
       // Why: both this path and the daemon-subprocess path must derive the
       // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
       // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
@@ -310,12 +360,28 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const onExitDisposable = proc.onExit(({ exitCode }) => {
+      // Why: neutralize proc.kill the instant the child is reaped, before any
+      // other work in this callback. node-pty's UnixTerminal installs a
+      // `_socket.once('close', () => this.kill('SIGHUP'))` handler at destroy
+      // time, but the master socket can also emit 'close' on natural exit
+      // between this onExit callback starting and destroyPtyProcess() running
+      // below. If 'close' wins, SIGHUP is dispatched to proc.pid — which on
+      // POSIX has already been reaped and may have been recycled to an
+      // unrelated process. Synchronous neutralization here closes that window.
+      // Windows is exempt: WindowsTerminal.destroy is implemented via kill().
+      if (process.platform !== 'win32') {
+        ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      }
       if (shellReadyTimeout) {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null
       }
       startupCommandCleanup?.()
       clearPtyState(id)
+      // Why: release the master ptmx fd on the natural-exit path — without
+      // this, a shell that exits cleanly (the common case) never releases its
+      // fd until the next GC. See docs/fix-pty-fd-leak.md.
+      destroyPtyProcess(proc)
       this.opts.onExit?.(id, exitCode)
       for (const cb of exitListeners) {
         cb({ id, code: exitCode })
@@ -365,6 +431,7 @@ export class LocalPtyProvider implements IPtyProvider {
     } catch {
       /* Process may already be dead */
     }
+    destroyPtyProcess(proc)
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
     ptyLoadGeneration.delete(id)

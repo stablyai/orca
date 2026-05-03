@@ -127,14 +127,20 @@ describe('PtyHandler', () => {
   })
 
   it('terminates spawned PTY when request becomes stale before response', async () => {
-    const term = { ...mockPtyInstance, kill: vi.fn(), onData: vi.fn(), onExit: vi.fn() }
+    const killSpy = vi.fn()
+    const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
     mockPtySpawn.mockReturnValue(term)
 
     await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
 
-    expect(term.kill).toHaveBeenCalledWith('SIGTERM')
+    // Why: assert via the captured spy reference rather than term.kill because
+    // disposeManagedPty() neutralizes managed.pty.kill (replaces it with a
+    // no-op) on POSIX to close the UnixTerminal.destroy() → socket-close →
+    // SIGHUP-to-recycled-pid race. After the 5s timer fires, term.kill is the
+    // neutralized function, not the original spy. killSpy retains call history.
+    expect(killSpy).toHaveBeenCalledWith('SIGTERM')
     vi.advanceTimersByTime(5000)
-    expect(term.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(killSpy).toHaveBeenCalledWith('SIGKILL')
   })
 
   it('increments PTY ids on each spawn', async () => {
@@ -403,7 +409,7 @@ describe('PtyHandler', () => {
     })
   })
 
-  it('dispose kills all PTYs', async () => {
+  it('dispose kills all PTYs with SIGKILL', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -417,7 +423,11 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(2)
 
     handler.dispose()
-    expect(mockKill).toHaveBeenCalledWith('SIGTERM')
+    // Why: dispose uses SIGKILL (not SIGTERM) because the relay process is
+    // exiting. A SIGTERM-ignoring remote shell (editor with unsaved buffers,
+    // wedged process, uninterruptible sleep) would survive SIGTERM + immediate
+    // destroy() as an orphan on the remote host. SIGKILL is not ignorable.
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(handler.activePtyCount).toBe(0)
   })
 })

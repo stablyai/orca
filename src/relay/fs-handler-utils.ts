@@ -6,6 +6,7 @@
  * so they are straightforward to test independently.
  */
 import { spawn, execFile } from 'child_process'
+import { open } from 'fs/promises'
 import {
   buildRgArgs,
   createAccumulator,
@@ -17,9 +18,13 @@ import type { SearchResult as SharedSearchResult } from '../shared/types'
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-export const MAX_FILE_SIZE = 5 * 1024 * 1024
+// Why: remote reads still travel through bounded JSON-RPC frames, but matching
+// the old 5MB search cap would block common JSON/log files before Monaco's
+// large-file optimizations can handle them.
+export const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
 // 10MB for relayed binaries (base64 → ~13.3MB frame payload at 16MB relay cap)
 export const MAX_PREVIEWABLE_BINARY_SIZE = 10 * 1024 * 1024
+export const BINARY_PROBE_BYTES = 8192
 export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000
 
@@ -45,6 +50,17 @@ export function isBinaryBuffer(buffer: Buffer): boolean {
     }
   }
   return false
+}
+
+export async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
+  const handle = await open(filePath, 'r')
+  try {
+    const probe = Buffer.alloc(BINARY_PROBE_BYTES)
+    const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
+    return isBinaryBuffer(probe.subarray(0, bytesRead))
+  } finally {
+    await handle.close()
+  }
 }
 
 // ─── Search types ────────────────────────────────────────────────────

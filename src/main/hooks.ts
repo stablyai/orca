@@ -261,8 +261,8 @@ function ensureOrcaDirIgnored(repoPath: string): void {
   }
 }
 
-export function getEffectiveHooks(repo: Repo): OrcaHooks | null {
-  const yamlHooks = loadHooks(repo.path)
+export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
+  const yamlHooks = loadHooks(worktreePath ?? repo.path)
   const legacySetup = repo.hookSettings?.scripts.setup?.trim()
   const legacyArchive = repo.hookSettings?.scripts.archive?.trim()
   const setup = yamlHooks?.scripts.setup?.trim() || legacySetup
@@ -282,6 +282,15 @@ export function getEffectiveHooks(repo: Repo): OrcaHooks | null {
       ...(archive ? { archive } : {})
     }
   }
+}
+
+export function setupScriptsMatch(
+  repo: Repo,
+  worktreePath: string,
+  primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
+): boolean {
+  const worktreeSetupScript = getEffectiveHooks(repo, worktreePath)?.scripts.setup
+  return primarySetupScript === worktreeSetupScript
 }
 
 export function getEffectiveSetupRunPolicy(repo: Repo): SetupRunPolicy {
@@ -304,8 +313,11 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getSetupCommandSource(repo: Repo): { source: 'yaml'; command: string } | null {
-  const yamlSetup = loadHooks(repo.path)?.scripts.setup?.trim()
+export function getSetupCommandSource(
+  repo: Repo,
+  worktreePath?: string
+): { source: 'yaml'; command: string } | null {
+  const yamlSetup = loadHooks(worktreePath ?? repo.path)?.scripts.setup?.trim()
 
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
@@ -433,9 +445,10 @@ function createWorktreeRunnerScript(
 export function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
-  repo: Repo
+  repo: Repo,
+  hooksPath?: string
 ): Promise<{ success: boolean; output: string }> {
-  const hooks = getEffectiveHooks(repo)
+  const hooks = getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
 
   if (!script) {

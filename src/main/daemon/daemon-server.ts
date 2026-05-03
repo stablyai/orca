@@ -201,6 +201,7 @@ export class DaemonServer {
           env: p.env,
           command: p.command,
           shellOverride: p.shellOverride,
+          terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
           streamClient: {
             onData: (data) => {

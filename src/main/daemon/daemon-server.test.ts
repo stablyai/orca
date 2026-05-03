@@ -27,7 +27,8 @@ function createMockSubprocess(): SubprocessHandle {
     },
     onExit(cb) {
       onExitCb = cb
-    }
+    },
+    dispose: vi.fn()
   }
 }
 

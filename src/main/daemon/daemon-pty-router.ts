@@ -180,11 +180,42 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
+  // Why: restart swaps to a fresh router carrying the *same* legacy adapter
+  // instances. If we called dispose() on the outgoing router it would tear
+  // down those legacy adapters along with it. disposeRouterOnly() detaches
+  // only this router's subscriptions from the adapters — the adapters and
+  // their daemon connections keep running, and the new router re-subscribes.
+  // Without this, each restart leaked a router instance pinned by the legacy
+  // adapters' listener arrays (one pair per adapter per restart).
+  disposeRouterOnly(): void {
+    for (const unsubscribe of this.unsubscribers.splice(0)) {
+      unsubscribe()
+    }
+  }
+
   async disconnectOnly(): Promise<void> {
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()
     }
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
+  }
+
+  // Why: the Manage Sessions panel iterates all adapters to list sessions
+  // across every protocol version, and the restart handler needs to preserve
+  // surviving legacy adapters across the current-adapter swap. On this branch
+  // (pre-#1323) the legacy list is set once at construction and never mutated,
+  // so returning the internal array by reference is safe for the intended
+  // read-only use.
+  getCurrentAdapter(): DaemonPtyAdapter {
+    return this.current
+  }
+
+  getLegacyAdapters(): readonly DaemonPtyAdapter[] {
+    return this.legacy
+  }
+
+  getAllAdapters(): readonly DaemonPtyAdapter[] {
+    return this.allAdapters()
   }
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {

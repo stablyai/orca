@@ -154,6 +154,12 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
                 // agent identity icon right next to it. 'sm' keeps the two
                 // distinguishable at a glance.
                 stateDotSize="sm"
+                // Why: in the per-card inline list the user already knows
+                // which worktree they're in, and clicking the row jumps
+                // directly to the agent — an expand chevron and a repeated
+                // identity glyph (Claude/Gemini/…) are redundant noise here.
+                hideIdentityIcon
+                hideExpand
               />
             </div>
           ))}

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { app, ipcMain } from 'electron'
+import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
 
 const execFileAsync = promisify(execFile)
@@ -28,6 +29,7 @@ export function registerAppHandlers(): void {
   ipcMain.handle('app:getRuntimeFlags', (): AppRuntimeFlags => runtimeFlags)
 
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
+  ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
 
   // Why: ABC, Polish Pro, US Extended, ABC Extended, and every CJK Roman
   // IME all report a US-QWERTY base layer to navigator.keyboard.getLayoutMap()

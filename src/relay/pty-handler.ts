@@ -34,6 +34,41 @@ type ManagedPty = {
   buffered: string
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
+  /** True once disposeManagedPty has run. Prevents double-dispose (onExit + an
+   *  explicit shutdown can both fire for the same PTY) and converts post-dispose
+   *  entry-point calls into a clean "not found" error instead of a silent no-op
+   *  (POSIX proc.kill is neutralized inside disposeManagedPty). */
+  disposed?: boolean
+}
+
+function disposeManagedPty(managed: ManagedPty): void {
+  if (managed.disposed) {
+    return
+  }
+  managed.disposed = true
+  // Why: clear any pending 5s SIGKILL fallback timer. If graceful-shutdown
+  // armed a killTimer and the child then exited cleanly (firing onExit →
+  // disposeManagedPty), the timer would otherwise fire later and attempt
+  // pty.kill('SIGKILL') on an already-disposed instance. The ptys.has(id)
+  // guard inside the timer short-circuits today, but symmetry is clearer.
+  if (managed.killTimer) {
+    clearTimeout(managed.killTimer)
+    managed.killTimer = undefined
+  }
+  // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`.
+  // The close event fires asynchronously; by then the child may have exited and
+  // its pid been recycled. On the Linux remote hosts the relay typically runs on,
+  // pid recycling is fast — SIGHUP to a stranger is a real hazard. Neutralize
+  // managed.pty.kill before destroy() runs. Windows exempt: WindowsTerminal.destroy
+  // IS a kill() call via _deferNoArgs — neutralizing it leaks the ConPTY agent.
+  if (process.platform !== 'win32') {
+    ;(managed.pty as unknown as { kill: (sig?: string) => void }).kill = () => {}
+  }
+  try {
+    ;(managed.pty as unknown as { destroy?: () => void }).destroy?.()
+  } catch {
+    /* swallow */
+  }
 }
 const DEFAULT_GRACE_TIME_MS = 5 * 60 * 1000
 export const REPLAY_BUFFER_MAX = 100 * 1024
@@ -75,14 +110,29 @@ export class PtyHandler {
       this.dispatcher.notify('pty.data', { id: managed.id, data })
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
+      // Why: neutralize managed.pty.kill synchronously BEFORE anything else
+      // in this callback. node-pty's UnixTerminal has
+      // `_socket.once('close', () => this.kill('SIGHUP'))` wired at destroy
+      // time, and the master socket can emit 'close' concurrently with this
+      // onExit on natural exit. If 'close' wins, SIGHUP targets the reaped
+      // pid — recycled to an unrelated process on Linux (the typical relay
+      // host). Synchronous neutralization closes that window. Windows is
+      // exempt (WindowsTerminal.destroy uses kill() to close ConPTY).
+      if (process.platform !== 'win32') {
+        ;(managed.pty as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      }
       // Why: If the PTY exits normally (or via SIGTERM), we must clear the
-      // SIGKILL fallback timer to avoid sending SIGKILL to a recycled PID.
+      // SIGKILL fallback timer to avoid firing SIGKILL later.
       if (managed.killTimer) {
         clearTimeout(managed.killTimer)
         managed.killTimer = undefined
       }
       this.dispatcher.notify('pty.exit', { id: managed.id, code: exitCode })
       this.ptys.delete(managed.id)
+      // Why: release the ptmx fd on the natural-exit path. Without this the
+      // node-pty wrapper's _socket stays alive until GC and the master fd
+      // leaks (see docs/fix-pty-fd-leak.md).
+      disposeManagedPty(managed)
     })
   }
 
@@ -147,8 +197,15 @@ export class PtyHandler {
       // immediately so it does not linger as an unreachable remote shell.
       term.kill('SIGTERM')
       managed.killTimer = setTimeout(() => {
-        if (this.ptys.has(id)) {
-          term.kill('SIGKILL')
+        const still = this.ptys.get(id)
+        if (still && !still.disposed) {
+          still.pty.kill('SIGKILL')
+          // Why: stale-spawn cleanup has no client who will ever attach. If
+          // SIGKILL's onExit is missed (kernel edge case, uninterruptible
+          // sleep), the managed entry + ptmx fd would leak forever. Dispose
+          // synchronously so the entry is gone regardless of onExit timing.
+          disposeManagedPty(still)
+          this.ptys.delete(id)
         }
       }, 5000)
     }
@@ -158,7 +215,11 @@ export class PtyHandler {
   private async attach(params: Record<string, unknown>): Promise<{ replay?: string }> {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    if (!managed) {
+    // Why: treat a disposed managed entry the same as "not found" — after
+    // disposeManagedPty has run, managed.pty is torn down and any write/kill
+    // would hit a neutralized no-op on POSIX. The explicit check converts a
+    // silent failure into the existing error callers already handle.
+    if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
 
@@ -187,7 +248,7 @@ export class PtyHandler {
       return
     }
     const managed = this.ptys.get(id)
-    if (managed) {
+    if (managed && !managed.disposed) {
       managed.pty.write(data)
     }
   }
@@ -197,7 +258,7 @@ export class PtyHandler {
     const cols = Math.max(1, Math.min(500, Math.floor(Number(params.cols) || 80)))
     const rows = Math.max(1, Math.min(500, Math.floor(Number(params.rows) || 24)))
     const managed = this.ptys.get(id)
-    if (managed) {
+    if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
     }
   }
@@ -212,6 +273,20 @@ export class PtyHandler {
 
     if (immediate) {
       managed.pty.kill('SIGKILL')
+      // Why: SIGKILL has already reaped the child; release the ptmx fd on the
+      // same tick. Deferring to onExit leaves a window where the fd is live
+      // with a dead child. Idempotent via the disposed guard — if onExit fires
+      // later and also calls disposeManagedPty, the second call is a no-op.
+      disposeManagedPty(managed)
+      // Why: mirror the graceful-shutdown killTimer cleanup. If SIGKILL's
+      // onExit never fires (kernel edge case: uninterruptible sleep,
+      // D-state child on a bad NFS mount), the disposed managed entry would
+      // linger in this.ptys forever. Each stranded entry consumes a slot in
+      // the 50-PTY cap and is returned by listProcesses/serialize. Deleting
+      // here makes the map hygiene a hard guarantee, not "hopefully onExit
+      // runs". If onExit DOES fire later, its own `this.ptys.delete(id)` is
+      // a no-op.
+      this.ptys.delete(id)
     } else {
       managed.pty.kill('SIGTERM')
 
@@ -220,9 +295,22 @@ export class PtyHandler {
       // managed entry would never be cleaned up. The 5-second window gives
       // well-behaved processes time to flush and exit gracefully. The timer is
       // cleared in the onExit handler if the process terminates on its own.
+      // Do NOT call disposeManagedPty here: destroy()-right-after-SIGTERM
+      // collapses the graceful-shutdown window and risks interrupting shell
+      // EXIT traps. Fd release happens via onExit (natural exit) or via the
+      // killTimer → SIGKILL → disposeManagedPty chain below.
       managed.killTimer = setTimeout(() => {
-        if (this.ptys.has(id)) {
-          managed.pty.kill('SIGKILL')
+        const still = this.ptys.get(id)
+        if (still && !still.disposed) {
+          still.pty.kill('SIGKILL')
+          // Why: if SIGKILL's onExit never fires (kernel edge case,
+          // uninterruptible sleep, child wedged on a bad NFS mount), the
+          // fd and map entry would leak forever. Dispose synchronously so
+          // graceful-shutdown's SIGKILL fallback is a hard guarantee, not
+          // "hopefully onExit will run". The disposed guard inside
+          // disposeManagedPty makes a later onExit's dispose a no-op.
+          disposeManagedPty(still)
+          this.ptys.delete(id)
         }
       }, 5000)
     }
@@ -235,7 +323,10 @@ export class PtyHandler {
       throw new Error(`Signal not allowed: ${signal}`)
     }
     const managed = this.ptys.get(id)
-    if (!managed) {
+    // Why: POSIX disposeManagedPty neutralizes managed.pty.kill. Without the
+    // disposed check, a post-dispose sendSignal would silently succeed (no
+    // error, no action). Convert to the existing "not found" error.
+    if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
     managed.pty.kill(signal)
@@ -244,7 +335,7 @@ export class PtyHandler {
   private async getCwd(params: Record<string, unknown>): Promise<string> {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    if (!managed) {
+    if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
     return resolveProcessCwd(managed.pty.pid, managed.initialCwd)
@@ -253,7 +344,7 @@ export class PtyHandler {
   private async getInitialCwd(params: Record<string, unknown>): Promise<string> {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    if (!managed) {
+    if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
     return managed.initialCwd
@@ -262,7 +353,7 @@ export class PtyHandler {
   private async clearBuffer(params: Record<string, unknown>): Promise<void> {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    if (managed) {
+    if (managed && !managed.disposed) {
       managed.pty.clear()
     }
   }
@@ -270,7 +361,7 @@ export class PtyHandler {
   private async hasChildProcesses(params: Record<string, unknown>): Promise<boolean> {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    if (!managed) {
+    if (!managed || managed.disposed) {
       return false
     }
     return await processHasChildren(managed.pty.pid)
@@ -279,7 +370,7 @@ export class PtyHandler {
   private async getForegroundProcess(params: Record<string, unknown>): Promise<string | null> {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    if (!managed) {
+    if (!managed || managed.disposed) {
       return null
     }
     return await getForegroundProcessName(managed.pty.pid)
@@ -371,8 +462,21 @@ export class PtyHandler {
     for (const [, managed] of this.ptys) {
       if (managed.killTimer) {
         clearTimeout(managed.killTimer)
+        managed.killTimer = undefined
       }
-      managed.pty.kill('SIGTERM')
+      // Why: SIGKILL (not SIGTERM) before destroy. The relay process is
+      // exiting; any SIGTERM-ignoring remote shell (editor with unsaved
+      // buffers, a hung child with a bad handler, a process in
+      // uninterruptible sleep) would survive SIGTERM + immediate destroy()
+      // as an orphan on the remote host. SIGKILL is not ignorable and the
+      // ptmx fd release via disposeManagedPty is synchronous, so there is
+      // no graceful-shutdown window to preserve at this point.
+      try {
+        managed.pty.kill('SIGKILL')
+      } catch {
+        /* child may already be dead */
+      }
+      disposeManagedPty(managed)
     }
     this.ptys.clear()
   }

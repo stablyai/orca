@@ -748,6 +748,21 @@ describe('AgentBrowserBridge', () => {
     expect(bridge.getActiveWebContentsId()).toBeNull()
   })
 
+  it('closes the named agent-browser session when a tab closes', async () => {
+    succeedWith({ snapshot: 'tree' })
+    await bridge.snapshot()
+
+    execFileMock.mockClear()
+    succeedWith(null)
+    await bridge.onTabClosed(100)
+
+    const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('close')
+    )
+    expect(closeCall).toBeTruthy()
+    expect(closeCall![1]).toEqual(['--session', 'orca-tab-tab-1', 'close'])
+  })
+
   it('repairs per-worktree active routing when the active tab closes', async () => {
     const tabs = new Map([
       ['tab-a', 1],

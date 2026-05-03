@@ -37,6 +37,7 @@ function createTestStore() {
         repos: [],
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
+        shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
         tabsByWorktree: {},
         tabBarOrderByWorktree: {},
         pendingReconnectTabByWorktree: {},
@@ -59,6 +60,7 @@ function createTestStore() {
         activeFileIdByWorktree: {},
         activeBrowserTabIdByWorktree: {},
         browserTabsByWorktree: {},
+        recentlyClosedBrowserTabsByWorktree: {},
         activeTabTypeByWorktree: {},
         activeWorktreeId: null,
         activeTabId: null,
@@ -420,6 +422,31 @@ describe('removeWorktree state cleanup', () => {
     })
     expect(store.getState().gitBranchCompareRequestKeyByWorktree).toEqual({
       'repo1::/path/wt2': 'req-2'
+    })
+  })
+
+  it('clears recentlyClosedBrowserTabsByWorktree for the removed worktree', async () => {
+    // Why: closeBrowserTab (which shutdownWorktreeBrowsers delegates to) pushes
+    // each closed workspace into recentlyClosedBrowserTabsByWorktree for the
+    // Cmd+Shift+T undo path. When the owning worktree is deleted those
+    // snapshots reference entities that can never be restored — removeWorktree
+    // must clear the worktree key symmetrically with browserTabsByWorktree
+    // (design §1.1).
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      recentlyClosedBrowserTabsByWorktree: {
+        'repo1::/path/wt1': [{ workspace: { id: 'workspace-1' }, pages: [] }],
+        'repo1::/path/wt2': [{ workspace: { id: 'workspace-2' }, pages: [] }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().recentlyClosedBrowserTabsByWorktree).toEqual({
+      'repo1::/path/wt2': [{ workspace: { id: 'workspace-2' }, pages: [] }]
     })
   })
 

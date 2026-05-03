@@ -77,8 +77,7 @@ export function BrowserUseSetup({
     }
     void refreshCli()
     void fetchBrowserSessionProfiles()
-    void fetchDetectedBrowsers()
-  }, [browserUseEnabled, fetchBrowserSessionProfiles, fetchDetectedBrowsers])
+  }, [browserUseEnabled, fetchBrowserSessionProfiles])
 
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   // Why: this step explicitly imports into the default profile, so completion
@@ -325,7 +324,15 @@ export function BrowserUseSetup({
                 </button>
               ) : null}
             </div>
-            <DropdownMenu>
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (open) {
+                  // Why: macOS treats other browsers' profile folders as app
+                  // data. Only probe them when the user opens the import menu.
+                  void fetchDetectedBrowsers()
+                }
+              }}
+            >
               <DropdownMenuTrigger asChild>
                 <Button
                   variant={cookiesImported ? 'outline' : 'default'}

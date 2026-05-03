@@ -1027,24 +1027,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
 
-      // Why: browser tabs are factored into getWorktreeStatus — leaving them
-      // behind after shutdown keeps the sidebar dot green even though all
-      // terminals are dead.  Clearing them here ensures the status indicator
-      // transitions to inactive.
-      const nextBrowserTabsByWorktree = { ...s.browserTabsByWorktree }
-      const hadBrowserTabs = (nextBrowserTabsByWorktree[worktreeId] ?? []).length > 0
-      delete nextBrowserTabsByWorktree[worktreeId]
-      const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
-      delete nextActiveBrowserTabIdByWorktree[worktreeId]
-
-      // Why: when shutting down the active worktree, the global
-      // activeBrowserTabId and activeTabType may still point at a browser
-      // surface that no longer exists.  Reset them so the workspace does not
-      // render a blank browser pane.  Background worktrees do not own the
-      // global surface, so we leave them untouched.
-      const isActiveWorktree = s.activeWorktreeId === worktreeId
-      const shouldResetGlobalBrowser = isActiveWorktree && hadBrowserTabs
-
       // Why: intentional shutdown kills the relay PTY. Remove the tab's
       // lastKnown entry so session-save does not persist a dead session ID
       // into remoteSessionIdsByTabId, which would cause the next restart
@@ -1070,11 +1052,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // of full-state selectors. Mirrors the sibling pattern in tabs.ts.
         ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
-          : {}),
-        browserTabsByWorktree: nextBrowserTabsByWorktree,
-        activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
-        ...(shouldResetGlobalBrowser
-          ? { activeBrowserTabId: null, activeTabType: 'terminal' as const }
           : {})
       }
     })

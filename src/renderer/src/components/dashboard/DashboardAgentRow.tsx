@@ -94,6 +94,15 @@ type Props = {
    * slot presence, so default stays 'md'.
    */
   stateDotSize?: 'sm' | 'md'
+  /**
+   * Why: the inline-in-card variant lives next to a worktree card that the
+   * user clicks to jump directly to the agent — a separate expand chevron
+   * and a second identity glyph (Claude/Gemini/…) are redundant noise in
+   * that tighter layout. The full dashboard keeps both, so these flags
+   * default to showing them.
+   */
+  hideIdentityIcon?: boolean
+  hideExpand?: boolean
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -102,7 +111,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   onActivate,
   now,
   isUnvisited = false,
-  stateDotSize = 'md'
+  stateDotSize = 'md',
+  hideIdentityIcon = false,
+  hideExpand = false
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
@@ -227,16 +238,18 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             about the same agent and do not need the icon repeated next to
             them — keeping the icon only on the prompt row lets the sub-rows
             indent under the prompt text cleanly. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {formatAgentTypeLabel(agent.agentType)}
-          </TooltipContent>
-        </Tooltip>
+        {!hideIdentityIcon && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex shrink-0">
+                <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {formatAgentTypeLabel(agent.agentType)}
+            </TooltipContent>
+          </Tooltip>
+        )}
         {/* Why: animate between a 1-line clipped height and the content's
             natural height using Chromium's `interpolate-size: allow-keywords`
             — this is the only way to transition a `height` property to/from
@@ -367,19 +380,24 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               old node unmounts. Invisible placeholder keeps vertical
               alignment stable across rows when nothing is expandable
               so the row-trailing edge stays stable. */}
-          <button
-            type="button"
-            onClick={handleToggleExpand}
-            onMouseDown={stopMouseDown}
-            onKeyDown={stopKeyDown}
-            className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
-            aria-label={expanded ? 'Collapse details' : 'Expand details'}
-            aria-expanded={expanded}
-          >
-            <ChevronDown
-              className={cn('size-3.5 transition-transform duration-150', expanded && 'rotate-180')}
-            />
-          </button>
+          {!hideExpand && (
+            <button
+              type="button"
+              onClick={handleToggleExpand}
+              onMouseDown={stopMouseDown}
+              onKeyDown={stopKeyDown}
+              className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
+              aria-label={expanded ? 'Collapse details' : 'Expand details'}
+              aria-expanded={expanded}
+            >
+              <ChevronDown
+                className={cn(
+                  'size-3.5 transition-transform duration-150',
+                  expanded && 'rotate-180'
+                )}
+              />
+            </button>
+          )}
         </span>
       </div>
       {/* Why: tool row and message row both carry different info — tool shows

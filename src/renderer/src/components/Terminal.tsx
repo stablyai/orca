@@ -32,8 +32,13 @@ import {
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
-import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
+import BrowserPane from './browser-pane/BrowserPane'
+import { destroyPersistentWebview } from './browser-pane/webview-registry'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import {
+  collectBrowserWebviewIds,
+  destroyWorkspaceWebviews
+} from '../store/slices/browser-webview-cleanup'
 import { handleSwitchTab, handleSwitchTerminalTab } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
@@ -691,7 +696,7 @@ function Terminal(): React.JSX.Element | null {
       }
       const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
-        destroyPersistentWebview(tabId)
+        destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
         closeBrowserTab(tabId)
         if (state.activeWorktreeId === owningWorktreeId) {
           const worktreeFile = state.openFiles.find((file) => file.worktreeId === owningWorktreeId)
@@ -717,7 +722,7 @@ function Terminal(): React.JSX.Element | null {
           setActiveBrowserTab(nextTab.id)
         }
       }
-      destroyPersistentWebview(tabId)
+      destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
       closeBrowserTab(tabId)
     },
     [
@@ -766,7 +771,7 @@ function Terminal(): React.JSX.Element | null {
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
-          destroyPersistentWebview(id)
+          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
         }
       }
@@ -805,7 +810,7 @@ function Terminal(): React.JSX.Element | null {
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
-          destroyPersistentWebview(id)
+          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
         }
       }
@@ -1091,29 +1096,38 @@ function Terminal(): React.JSX.Element | null {
     })
   }, [queueEditorCloseRequests])
 
-  // Why: removeWorktree cleans up browser tab state in the store but cannot
-  // call destroyPersistentWebview (renderer-only DOM code). This subscriber
-  // detects when browser tabs disappear from a worktree (e.g. worktree deleted)
-  // and destroys orphaned webview elements to prevent memory leaks.
-  const prevBrowserTabIdsRef = useRef<Set<string>>(new Set())
+  // Why: browser page state can disappear through store-only paths (CLI tab
+  // close, worktree deletion). The store cannot call destroyPersistentWebview
+  // because that function owns renderer DOM nodes, so this subscriber tears down
+  // webviews whose backing page records were removed.
+  const prevBrowserWebviewIdsRef = useRef<Set<string>>(
+    collectBrowserWebviewIds(
+      useAppStore.getState().browserTabsByWorktree,
+      useAppStore.getState().browserPagesByWorkspace
+    )
+  )
   useEffect(() => {
     let prevBrowserTabs = useAppStore.getState().browserTabsByWorktree
+    let prevBrowserPages = useAppStore.getState().browserPagesByWorkspace
     return useAppStore.subscribe((state) => {
-      if (state.browserTabsByWorktree === prevBrowserTabs) {
+      if (
+        state.browserTabsByWorktree === prevBrowserTabs &&
+        state.browserPagesByWorkspace === prevBrowserPages
+      ) {
         return
       }
       prevBrowserTabs = state.browserTabsByWorktree
-      const currentIds = new Set(
-        Object.values(state.browserTabsByWorktree)
-          .flat()
-          .map((tab) => tab.id)
+      prevBrowserPages = state.browserPagesByWorkspace
+      const currentIds = collectBrowserWebviewIds(
+        state.browserTabsByWorktree,
+        state.browserPagesByWorkspace
       )
-      for (const prevId of prevBrowserTabIdsRef.current) {
+      for (const prevId of prevBrowserWebviewIdsRef.current) {
         if (!currentIds.has(prevId)) {
           destroyPersistentWebview(prevId)
         }
       }
-      prevBrowserTabIdsRef.current = currentIds
+      prevBrowserWebviewIdsRef.current = currentIds
     })
   }, [])
 

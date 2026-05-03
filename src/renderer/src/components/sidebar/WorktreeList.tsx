@@ -299,7 +299,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-orientation="vertical"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
-      className="flex-1 overflow-auto pl-1 pr-2 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="worktree-sidebar-scrollbar flex-1 overflow-auto pl-1 pr-px scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+      // Why: reserve scrollbar space so non-overlay scrollbars do not nudge worktree cards.
+      style={{ scrollbarGutter: 'stable' }}
     >
       <div
         role="presentation"

@@ -173,6 +173,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // they are created. We must tear those PTYs down before asking Git to remove
       // the working tree or Windows and some shells can keep the directory in use
       // and make delete look broken even though the git state itself is fine.
+      //
+      // Why browsers first: `shutdownWorktreeTerminals` used to own the
+      // `browserTabsByWorktree[worktreeId]` delete as a side effect, which would
+      // race `shutdownWorktreeBrowsers`' read of the same map. After the §1.3
+      // split, terminals no longer touches browser state, but we still call
+      // browsers first so destroyPersistentWebview sees the workspaces in place
+      // and the Chromium guests are unregistered before any other teardown work
+      // can intercept them.
+      await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
       await window.api.worktrees.remove({ worktreeId, force, skipArchive })
       const tabs = get().tabsByWorktree[worktreeId] ?? []
@@ -203,6 +212,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextActiveFileIdByWorktree[worktreeId]
         const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
         delete nextActiveBrowserTabIdByWorktree[worktreeId]
+        // Why: closeBrowserTab — which shutdownWorktreeBrowsers delegates to —
+        // pushes a snapshot into recentlyClosedBrowserTabsByWorktree for the
+        // Cmd+Shift+T undo path. That is correct for UI close, but wrong when
+        // the owning worktree itself is being deleted: the snapshots reference
+        // workspaces and pages that can never be restored. Purge the worktree
+        // key symmetrically with browserTabsByWorktree. Per-workspace page
+        // snapshots are already cleared upstream by closeBrowserTab.
+        const nextRecentlyClosedBrowserTabsByWorktree = {
+          ...s.recentlyClosedBrowserTabsByWorktree
+        }
+        delete nextRecentlyClosedBrowserTabsByWorktree[worktreeId]
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
         delete nextActiveTabTypeByWorktree[worktreeId]
         const nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
@@ -290,6 +310,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: newOpenFiles,
           browserTabsByWorktree: nextBrowserTabsByWorktree,
+          recentlyClosedBrowserTabsByWorktree: nextRecentlyClosedBrowserTabsByWorktree,
           activeFileIdByWorktree: nextActiveFileIdByWorktree,
           activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
           activeTabTypeByWorktree: nextActiveTabTypeByWorktree,

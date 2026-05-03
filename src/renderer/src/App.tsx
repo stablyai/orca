@@ -96,7 +96,6 @@ function App(): React.JSX.Element {
       hydrateEditorSession: s.hydrateEditorSession,
       hydrateBrowserSession: s.hydrateBrowserSession,
       fetchBrowserSessionProfiles: s.fetchBrowserSessionProfiles,
-      fetchDetectedBrowsers: s.fetchDetectedBrowsers,
       reconnectPersistedTerminals: s.reconnectPersistedTerminals,
       setDeferredSshReconnectTargets: s.setDeferredSshReconnectTargets,
       setSshConnectionState: s.setSshConnectionState,
@@ -233,7 +232,6 @@ function App(): React.JSX.Element {
           actions.hydrateEditorSession(session)
           actions.hydrateBrowserSession(session)
           await actions.fetchBrowserSessionProfiles()
-          await actions.fetchDetectedBrowsers()
 
           // Why: SSH connections must be re-established BEFORE terminal
           // reconnect so that reconnectPersistedTerminals can route SSH-backed

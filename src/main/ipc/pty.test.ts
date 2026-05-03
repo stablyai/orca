@@ -20,7 +20,8 @@ const {
   openCodeClearPtyMock,
   buildAgentHookEnvMock,
   piBuildPtyEnvMock,
-  piClearPtyMock
+  piClearPtyMock,
+  isPwshAvailableMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -35,6 +36,7 @@ const {
   getPathMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
+  isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
@@ -89,6 +91,10 @@ vi.mock('../pi/titlebar-extension-service', () => ({
     clearPty: piClearPtyMock
   }
 }))
+
+vi.mock('../pwsh', () => ({
+  isPwshAvailable: isPwshAvailableMock
+}))
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import {
   registerPtyHandlers,
@@ -135,6 +141,7 @@ describe('registerPtyHandlers', () => {
     buildAgentHookEnvMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
+    isPwshAvailableMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
@@ -159,6 +166,7 @@ describe('registerPtyHandlers', () => {
         ? '/tmp/orca-pi-agent-overlay'
         : '/tmp/orca-pi-agent-overlay'
     }))
+    isPwshAvailableMock.mockReturnValue(false)
     spawnMock.mockReturnValue({
       onData: vi.fn(() => makeDisposable()),
       onExit: vi.fn(() => makeDisposable()),
@@ -994,6 +1002,178 @@ describe('registerPtyHandlers', () => {
         expect.any(Object)
       )
     })
+
+    it('spawns powershell.exe when PowerShell family keeps the inbox implementation', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'powershell.exe',
+            terminalWindowsPowerShellImplementation: 'powershell.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'powershell.exe',
+        [
+          '-NoExit',
+          '-Command',
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
+        expect.any(Object)
+      )
+    })
+
+    it('spawns pwsh.exe when PowerShell 7 is selected and available', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      isPwshAvailableMock.mockReturnValue(true)
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'powershell.exe',
+            terminalWindowsPowerShellImplementation: 'pwsh.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'pwsh.exe',
+        [
+          '-NoExit',
+          '-Command',
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
+        expect.any(Object)
+      )
+    })
+
+    it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      isPwshAvailableMock.mockReturnValue(false)
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'powershell.exe',
+            terminalWindowsPowerShellImplementation: 'pwsh.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'powershell.exe',
+        [
+          '-NoExit',
+          '-Command',
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
+        expect.any(Object)
+      )
+    })
+
+    it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      isPwshAvailableMock.mockReturnValue(false)
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'powershell.exe',
+            terminalWindowsPowerShellImplementation: 'pwsh.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, shellOverride: 'pwsh.exe' })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'powershell.exe',
+        [
+          '-NoExit',
+          '-Command',
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
+        expect.any(Object)
+      )
+    })
+
+    it('ignores the PowerShell implementation setting for cmd.exe', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\powershell.exe'
+      isPwshAvailableMock.mockReturnValue(true)
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'cmd.exe',
+            terminalWindowsPowerShellImplementation: 'pwsh.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'cmd.exe',
+        ['/K', 'chcp 65001 > nul'],
+        expect.any(Object)
+      )
+    })
+
+    it('ignores the PowerShell implementation setting for wsl.exe', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\powershell.exe'
+      isPwshAvailableMock.mockReturnValue(true)
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'wsl.exe',
+            terminalWindowsPowerShellImplementation: 'pwsh.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith('wsl.exe', expect.any(Array), expect.any(Object))
+    })
+
+    it('keeps shellOverride priority for one-off tabs', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      isPwshAvailableMock.mockReturnValue(false)
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'powershell.exe',
+            terminalWindowsPowerShellImplementation: 'pwsh.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe'
+      })
+
+      expect(spawnMock).toHaveBeenCalledWith('wsl.exe', expect.any(Array), expect.any(Object))
+    })
   })
 
   it('rejects missing WSL worktree cwd instead of validating only the fallback Windows cwd', async () => {
@@ -1309,12 +1489,17 @@ describe('registerPtyHandlers', () => {
   it('disposes PTY listeners before manual kill IPC', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    // Why: hold a stable reference to the kill spy. On POSIX, destroyPtyProcess
+    // in local-pty-provider reassigns proc.kill to a no-op to defuse the
+    // SIGHUP-to-recycled-pid hazard (see docs/fix-pty-fd-leak.md). Reading
+    // proc.kill.mock after that runs would yield a non-mock and crash.
+    const killSpy = vi.fn()
     const proc = {
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn(),
+      kill: killSpy,
       process: 'zsh',
       pid: 12345
     }
@@ -1329,22 +1514,23 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:kill')!(null, { id: spawnResult.id })
 
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      proc.kill.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[0]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      proc.kill.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[0]
     )
   })
 
   it('disposes PTY listeners before runtime controller kill', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    const killSpy = vi.fn()
     const proc = {
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn(),
+      kill: killSpy,
       process: 'zsh',
       pid: 12345
     }
@@ -1368,22 +1554,23 @@ describe('registerPtyHandlers', () => {
 
     expect(runtimeController.kill(spawnResult.id)).toBe(true)
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      proc.kill.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[0]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      proc.kill.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[0]
     )
   })
 
   it('disposes PTY listeners before did-finish-load orphan cleanup', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    const killSpy = vi.fn()
     const proc = {
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn(),
+      kill: killSpy,
       process: 'zsh',
       pid: 12345
     }
@@ -1409,10 +1596,10 @@ describe('registerPtyHandlers', () => {
     didFinishLoad?.()
 
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      proc.kill.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[0]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      proc.kill.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[0]
     )
   })
 

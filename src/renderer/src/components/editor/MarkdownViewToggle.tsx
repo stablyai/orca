@@ -1,5 +1,13 @@
 import React from 'react'
-import { Code, Eye, FileText, GitCompareArrows, Pencil } from 'lucide-react'
+import {
+  Code,
+  Eye,
+  FileText,
+  GitCompareArrows,
+  Pencil,
+  Table as TableIcon,
+  type LucideIcon
+} from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 
@@ -12,7 +20,9 @@ import type { MarkdownViewMode } from '@/store/slices/editor'
 // distinction. See reviews/changes-view-mode-plan.md.
 export type EditorToggleValue = MarkdownViewMode | 'edit' | 'changes'
 
-const VIEW_MODE_METADATA = {
+type ViewModeMetadata = { label: string; icon: LucideIcon }
+
+const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = {
   source: {
     label: 'Source',
     icon: Code
@@ -33,18 +43,30 @@ const VIEW_MODE_METADATA = {
     label: 'Changes',
     icon: GitCompareArrows
   }
-} as const
+}
+
+// Why: CSV/TSV files reuse the 'rich' view mode slot but the rendered surface
+// is a read-only table, not an editor. The Pencil icon implies editability,
+// which we don't offer, so callers can override the per-mode presentation.
+export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
+  rich: {
+    label: 'Table',
+    icon: TableIcon
+  }
+}
 
 type MarkdownViewToggleProps = {
   value: EditorToggleValue
   modes: readonly EditorToggleValue[]
   onChange: (value: EditorToggleValue) => void
+  metadataOverride?: Partial<Record<MarkdownViewMode, ViewModeMetadata>>
 }
 
 export default function MarkdownViewToggle({
   value,
   modes,
-  onChange
+  onChange,
+  metadataOverride
 }: MarkdownViewToggleProps): React.JSX.Element {
   return (
     <ToggleGroup
@@ -60,7 +82,14 @@ export default function MarkdownViewToggle({
       }}
     >
       {modes.map((viewMode) => {
-        const metadata = VIEW_MODE_METADATA[viewMode]
+        // Why: metadataOverride is keyed by MarkdownViewMode (source/rich/preview)
+        // because only those slots have language-specific presentation variants
+        // (e.g. CSV's "Table" label on the 'rich' slot). 'edit'/'changes' are
+        // orthogonal toggle values and always use the default metadata.
+        const override = (metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>>)[
+          viewMode
+        ]
+        const metadata = override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
         const Icon = metadata.icon
         return (
           <ToggleGroupItem

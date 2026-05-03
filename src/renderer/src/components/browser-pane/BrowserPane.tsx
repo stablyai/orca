@@ -38,11 +38,22 @@ import {
   normalizeExternalBrowserUrl
 } from '../../../../shared/browser-url'
 import {
-  clearLiveBrowserUrl,
+  browserViewportPresetToOverride,
+  getBrowserViewportPreset
+} from '../../../../shared/browser-viewport-presets'
+import {
   consumeEvictedBrowserTab,
   markEvictedBrowserTab,
   rememberLiveBrowserUrl
 } from './browser-runtime'
+import {
+  destroyPersistentWebview,
+  getHiddenContainer,
+  MAX_PARKED_WEBVIEWS,
+  parkedAtByTabId,
+  registeredWebContentsIds,
+  webviewRegistry
+} from './webview-registry'
 import type {
   BrowserDownloadRequestedEvent,
   BrowserDownloadProgressEvent,
@@ -84,84 +95,7 @@ type BrowserDownloadState = BrowserDownloadRequestedEvent & {
   status: 'requested' | 'downloading'
 }
 
-const webviewRegistry = new Map<string, Electron.WebviewTag>()
-const registeredWebContentsIds = new Map<string, number>()
-const parkedAtByTabId = new Map<string, number>()
-let hiddenContainer: HTMLDivElement | null = null
-const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
-const MAX_PARKED_WEBVIEWS = 6
 const EMPTY_BROWSER_PAGES: BrowserPageState[] = []
-function getHiddenContainer(): HTMLDivElement {
-  if (!hiddenContainer) {
-    hiddenContainer = document.createElement('div')
-    hiddenContainer.style.position = 'fixed'
-    hiddenContainer.style.left = '-9999px'
-    hiddenContainer.style.top = '-9999px'
-    hiddenContainer.style.width = '100vw'
-    hiddenContainer.style.height = '100vh'
-    hiddenContainer.style.overflow = 'hidden'
-    hiddenContainer.style.pointerEvents = 'none'
-    document.body.appendChild(hiddenContainer)
-  }
-  return hiddenContainer
-}
-
-function setWebviewsDragPassthrough(passthrough: boolean): void {
-  for (const webview of webviewRegistry.values()) {
-    webview.style.pointerEvents = passthrough ? 'none' : ''
-  }
-}
-
-if (typeof window !== 'undefined') {
-  type DragListenerRegistry = {
-    dragstart: () => void
-    dragend: () => void
-    drop: () => void
-  }
-  const listenerHost = window as Window & { [DRAG_LISTENER_KEY]?: DragListenerRegistry }
-  const existingListeners = listenerHost[DRAG_LISTENER_KEY]
-  if (existingListeners) {
-    window.removeEventListener('dragstart', existingListeners.dragstart, true)
-    window.removeEventListener('dragend', existingListeners.dragend, true)
-    window.removeEventListener('drop', existingListeners.drop, true)
-  }
-
-  const dragstart = (): void => setWebviewsDragPassthrough(true)
-  const dragend = (): void => setWebviewsDragPassthrough(false)
-  const drop = (): void => setWebviewsDragPassthrough(false)
-
-  window.addEventListener('dragstart', dragstart, true)
-  window.addEventListener('dragend', dragend, true)
-  window.addEventListener('drop', drop, true)
-  // Why: BrowserPane installs process-wide drag listeners so parked webviews
-  // stop swallowing drop targets. We store/remove the previous handlers on
-  // window to keep Vite HMR from stacking duplicates across module reloads.
-  listenerHost[DRAG_LISTENER_KEY] = { dragstart, dragend, drop }
-}
-
-export function destroyPersistentWebview(browserTabId: string): void {
-  const webview = webviewRegistry.get(browserTabId)
-  if (!webview) {
-    registeredWebContentsIds.delete(browserTabId)
-    parkedAtByTabId.delete(browserTabId)
-    clearLiveBrowserUrl(browserTabId)
-    return
-  }
-  void window.api.browser.unregisterGuest({ browserPageId: browserTabId })
-  // Why: if this webview currently owns focus, removing it lets macOS hand
-  // activation back to the previously-active app (Slack, etc.) because the
-  // focused webContents is gone with no replacement. Move focus back into the
-  // main renderer first so Electron keeps focus inside the Orca window.
-  if (webview === document.activeElement || webview.contains(document.activeElement)) {
-    ;(document.activeElement as HTMLElement | null)?.blur?.()
-    window.focus()
-  }
-  webview.remove()
-  webviewRegistry.delete(browserTabId)
-  registeredWebContentsIds.delete(browserTabId)
-  parkedAtByTabId.delete(browserTabId)
-  clearLiveBrowserUrl(browserTabId)
-}
 
 function buildLoadError(event: {
   errorCode?: number
@@ -368,6 +302,12 @@ function BrowserPagePane({
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
   const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError)
+  // Why: CDP viewport emulation does not survive all renderer process swaps
+  // (cross-origin navigations, crashes). We reapply on every dom-ready from
+  // this ref so the persisted preset survives reloads without re-running the
+  // webview lifecycle effect whenever the preset changes.
+  const viewportPresetIdRef = useRef(browserTab.viewportPresetId ?? null)
+  viewportPresetIdRef.current = browserTab.viewportPresetId ?? null
   const trackNextLoadingEventRef = useRef(false)
   // Why: tracks the most recent URL the webview has navigated to or been
   // observed at, from any source (navigation events, address bar, initial
@@ -1016,6 +956,21 @@ function BrowserPagePane({
       if (keepAddressBarFocusRef.current) {
         focusAddressBarNow()
       }
+      // Why: CDP Emulation.setDeviceMetricsOverride and related overrides are
+      // scoped to the guest's debugger session and do not survive all
+      // cross-origin navigations (renderer swaps). Reapplying on dom-ready is
+      // idempotent, so users who picked a viewport preset keep it after
+      // reloads, SPA navigations, and persisted-session restoration.
+      const presetId = viewportPresetIdRef.current
+      const preset = getBrowserViewportPreset(presetId)
+      // Why: always reapply on dom-ready (including null) because
+      // Emulation.setDeviceMetricsOverride can persist across same-origin navigations
+      // within the same renderer. Sending null ensures CDP matches the store state
+      // instead of showing a stale emulated viewport after the user picks "Default".
+      void window.api.browser.setViewportOverride({
+        browserPageId: browserTab.id,
+        override: preset ? browserViewportPresetToOverride(preset) : null
+      })
     }
 
     const handleDidStartLoading = (): void => {
@@ -1846,6 +1801,8 @@ function BrowserPagePane({
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}
           workspaceId={workspaceId}
+          browserPageId={browserTab.id}
+          viewportPresetId={browserTab.viewportPresetId ?? null}
           onDestroyWebview={() => destroyPersistentWebview(browserTab.id)}
         />
       </div>

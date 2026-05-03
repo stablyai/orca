@@ -46,6 +46,7 @@ export function BrowserProfileRow({
   isDefault
 }: BrowserProfileRowProps): React.JSX.Element {
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
+  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
 
   const handleImportFromBrowser = async (
     browserFamily: string,
@@ -115,7 +116,15 @@ export function BrowserProfileRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) {
+              // Why: macOS treats other browsers' profile folders as app
+              // data. Only probe them when the user opens the import menu.
+              void fetchDetectedBrowsers()
+            }
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"

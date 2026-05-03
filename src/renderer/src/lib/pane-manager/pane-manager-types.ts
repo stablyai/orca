@@ -7,6 +7,7 @@ import type { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { WebLinksAddon } from '@xterm/addon-web-links'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
+import type { GlobalSettings } from '../../../../shared/types'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -28,6 +29,7 @@ export type PaneManagerOptions = {
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
   initialRenderingSuspended?: boolean
+  terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal
   // helpers log warnings that are hard to correlate without knowing which
   // tab/worktree the PaneManager belongs to.
@@ -74,6 +76,7 @@ export type ScrollState = {
 export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
   linkTooltip: HTMLElement
+  terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean

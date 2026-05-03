@@ -321,6 +321,10 @@ export default function NewWorkspaceComposerCard({
                   variant="ghost"
                   size="icon-xs"
                   onClick={onOpenAgentSettings}
+                  // Why: keep Tab flow Name → Agent combobox. This settings
+                  // shortcut is a detour; making it tabbable forces a keystroke
+                  // on every workspace creation.
+                  tabIndex={-1}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                   aria-label="Open agent settings"
                 >

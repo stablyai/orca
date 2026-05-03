@@ -121,10 +121,14 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
+    editorMinimapEnabled: false,
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
+    // Why: VS Code defaults terminal GPU acceleration to "auto": prefer
+    // xterm WebGL for performance, but allow renderer failure to choose DOM.
+    terminalGpuAcceleration: 'auto',
     // Why 'auto': when the user has picked a known ligature font we want the
     // feature enabled by default, but we never force it if they pick a font
     // that lacks ligatures or if they've explicitly opted out. The resolver
@@ -146,6 +150,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
     terminalWindowsShell: 'powershell.exe',
+    // Why: Windows users expect "PowerShell" to mean modern PowerShell when it
+    // is installed, with a safe fallback to the inbox Windows PowerShell.
+    terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,
     // Default false: opt-in only (matches Ghostty's default). Existing users
     // on upgrade inherit this default via persistence.ts's

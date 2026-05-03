@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -204,9 +205,14 @@ describe('LocalPtyProvider', () => {
 
   describe('shutdown', () => {
     it('kills the PTY process', async () => {
+      // Why: capture the spy reference before shutdown triggers onExit →
+      // POSIX kill neutralization. After neutralization, mockProc.kill is
+      // replaced with a non-spy no-op to close the UnixTerminal.destroy() →
+      // socket-close → SIGHUP-to-recycled-pid race (see docs/fix-pty-fd-leak.md).
+      const killSpy = mockProc.kill
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, true)
-      expect(mockProc.kill).toHaveBeenCalled()
+      expect(killSpy).toHaveBeenCalled()
     })
 
     it('invokes onExit callback via the node-pty exit handler', async () => {
@@ -319,12 +325,40 @@ describe('LocalPtyProvider', () => {
 
   describe('killAll', () => {
     it('kills all PTY processes', async () => {
+      // Why: each spawn needs its own proc so the onExit-triggered POSIX kill
+      // neutralization on one proc does not replace the kill function on the
+      // other (mockProc is shared by default in beforeEach). Each proc also
+      // needs its own exitCb holder — the default mockProc.onExit assigns to
+      // the shared `exitCb` variable, so the second spawn would overwrite the
+      // first's exit callback, and mock1Kill firing would trigger cleanup for
+      // id2 (removing it from the map before killAll iterates to it).
+      let exit1: ((e: { exitCode: number }) => void) | undefined
+      let exit2: ((e: { exitCode: number }) => void) | undefined
+      const mock1Kill = vi.fn(() => exit1?.({ exitCode: -1 }))
+      const mock2Kill = vi.fn(() => exit2?.({ exitCode: -1 }))
+      spawnMock
+        .mockReturnValueOnce({
+          ...mockProc,
+          kill: mock1Kill,
+          onExit: vi.fn((cb) => {
+            exit1 = cb
+          })
+        })
+        .mockReturnValueOnce({
+          ...mockProc,
+          kill: mock2Kill,
+          onExit: vi.fn((cb) => {
+            exit2 = cb
+          })
+        })
+
       await provider.spawn({ cols: 80, rows: 24 })
       await provider.spawn({ cols: 80, rows: 24 })
 
       provider.killAll()
 
-      expect(mockProc.kill).toHaveBeenCalled()
+      expect(mock1Kill).toHaveBeenCalled()
+      expect(mock2Kill).toHaveBeenCalled()
       const list = await provider.listProcesses()
       expect(list).toHaveLength(0)
     })

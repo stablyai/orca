@@ -394,6 +394,22 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return spawnResult.id
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        // Why: after "Kill All" from Settings → Manage Sessions, mounted panes
+        // can still trigger pty:spawn with the killed session ID (tab remount,
+        // navigating back to the workspace). The main-side adapter correctly
+        // rejects with TerminalKilledError ("...was explicitly killed") via
+        // its tombstone. Surfacing that rejection as a red "Terminal error,
+        // please file an issue" toast misrepresents an intentional user
+        // action as a bug. The pane will already render "Process exited" via
+        // the normal lifecycle — that is the correct signal. Match against
+        // both the raw Error.message and Electron's IPC-wrapped form
+        // ("Error invoking remote method 'pty:spawn': TerminalKilledError:
+        // ..."). The phrase "was explicitly killed" only appears in that one
+        // error type (see src/main/daemon/daemon-pty-adapter.ts), so a
+        // substring match is safe.
+        if (msg.includes('was explicitly killed')) {
+          return undefined
+        }
         // Why: on cold start, SSH provider isn't registered yet so pty:spawn
         // throws a raw IPC error. Replace with a friendly message since this
         // is an expected state, not an application crash.

@@ -9,7 +9,7 @@ patchedDependencies:
     hash: df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634
     path: config/patches/@xterm__addon-ligatures@0.11.0-beta.198.patch
   node-pty@1.1.0:
-    hash: 02e16954edbb8e511963557e3b2c80f8a6fb230cd0c6a75ade936022f3347322
+    hash: d39825bae630ddf0fc73e83e6001057c70957161772ba078988767d8569cee63
     path: config/patches/node-pty@1.1.0.patch
 
 importers:
@@ -159,7 +159,7 @@ importers:
         version: 0.55.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=02e16954edbb8e511963557e3b2c80f8a6fb230cd0c6a75ade936022f3347322)
+        version: 1.1.0(patch_hash=d39825bae630ddf0fc73e83e6001057c70957161772ba078988767d8569cee63)
       pdfjs-dist:
         specifier: ^5.6.205
         version: 5.6.205
@@ -11426,7 +11426,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  node-pty@1.1.0(patch_hash=02e16954edbb8e511963557e3b2c80f8a6fb230cd0c6a75ade936022f3347322):
+  node-pty@1.1.0(patch_hash=d39825bae630ddf0fc73e83e6001057c70957161772ba078988767d8569cee63):
     dependencies:
       node-addon-api: 7.1.1
 

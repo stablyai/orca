@@ -39,10 +39,12 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
+    editorMinimapEnabled: false,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
     terminalLineHeight: 1,
+    terminalGpuAcceleration: 'auto',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
     terminalCursorBlink: false,
@@ -94,6 +96,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalAgentDashboard: false,
     experimentalSidekick: false,
     terminalWindowsShell: 'powershell.exe',
+    terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides
   }

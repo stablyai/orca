@@ -368,6 +368,38 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             ))}
           </div>
         </SearchableSetting>
+
+        <SearchableSetting
+          title="Minimap"
+          description="Show the minimap overview when editing a file."
+          keywords={['minimap', 'overview', 'code', 'scroll']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Minimap</Label>
+            <p className="text-xs text-muted-foreground">
+              Show the minimap overview when editing a file.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.editorMinimapEnabled}
+            onClick={() =>
+              updateSettings({
+                editorMinimapEnabled: !settings.editorMinimapEnabled
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.editorMinimapEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.editorMinimapEnabled ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_CLI_SEARCH_ENTRIES) ? (

@@ -450,7 +450,11 @@ export default function MonacoEditor({
         onChange={handleChange}
         onMount={handleMount}
         options={{
-          minimap: { enabled: false },
+          // Why: only the file editor honors editorMinimapEnabled. Monaco 0.55's
+          // DiffEditor hard-overrides minimap.enabled = false on its inner editors
+          // (see diffEditorEditors._adjustOptionsForSubEditor), so threading the
+          // setting into DiffViewer/DiffSectionItem would have no effect.
+          minimap: { enabled: settings?.editorMinimapEnabled ?? false },
           scrollBeyondLastLine: false,
           wordWrap: 'on',
           fontSize: editorFontSize,

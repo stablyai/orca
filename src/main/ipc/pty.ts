@@ -11,6 +11,7 @@ import type { GlobalSettings } from '../../shared/types'
 import { openCodeHookService } from '../opencode/hook-service'
 import { agentHookServer } from '../agent-hooks/server'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
+import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
@@ -318,6 +319,30 @@ let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
 
+// Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
+// against the freshly-created adapter after replaceDaemonProvider swaps the
+// module-level `localProvider` pointer. Without this, old subscribers stay
+// bound to the disposed adapter and new PTY data silently drops. Saved at
+// module scope so the restart flow (src/main/daemon/daemon-init.ts) can
+// trigger a rebind without re-running the full registerPtyHandlers setup.
+let rebindProviderListeners: (() => void) | null = null
+
+export function rebindLocalProviderListeners(): void {
+  rebindProviderListeners?.()
+}
+
+// Why: the "Restart daemon" flow needs to detach listeners from the current
+// adapter *after* synthetic pty:exit events fan out (so the renderer receives
+// them) but *before* replaceDaemonProvider swaps in the new adapter (so the
+// new provider isn't missing bindings). This export narrows that window to
+// the caller.
+export function unbindLocalProviderListeners(): void {
+  localDataUnsub?.()
+  localExitUnsub?.()
+  localDataUnsub = null
+  localExitUnsub = null
+}
+
 // ─── IPC Registration ───────────────────────────────────────────────
 
 export function registerPtyHandlers(
@@ -347,6 +372,11 @@ export function registerPtyHandlers(
     localProvider.configure({
       isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
       getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
+      getWindowsPowerShellImplementation: () =>
+        getSettings
+          ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
+          : undefined,
+      pwshAvailable: () => isPwshAvailable(),
       buildSpawnEnv: (id, baseEnv) => {
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
@@ -373,10 +403,6 @@ export function registerPtyHandlers(
     })
   }
 
-  // Wire up provider events → renderer IPC
-  localDataUnsub?.()
-  localExitUnsub?.()
-
   // Why: batching PTY data into short flush windows (8ms ≈ half a frame)
   // reduces IPC round-trips from hundreds/sec to ~120/sec under high
   // throughput, with no perceptible latency increase for interactive use.
@@ -396,52 +422,64 @@ export function registerPtyHandlers(
     pendingData.clear()
   }
 
-  // Why: LocalPtyProvider routes data to the runtime via configure().onData,
-  // but daemon-backed providers don't have configure(). Without this, daemon
-  // PTY data never reaches the runtime's tail buffer, so terminal.read returns
-  // empty and agent-detection from raw data never fires.
-  const isLocalProvider = localProvider instanceof LocalPtyProvider
+  // Why: extracted so the "Restart daemon" flow can rebind against the fresh
+  // adapter after replaceDaemonProvider runs. Both the startup registration
+  // and the post-restart rebind go through the same code path — no risk of
+  // drift between the two entry points.
+  const bindProviderListeners = (): void => {
+    localDataUnsub?.()
+    localExitUnsub?.()
 
-  localDataUnsub = localProvider.onData((payload) => {
-    if (mainWindow.isDestroyed()) {
-      // Why: clear the pending flush timer so it doesn't fire after the window
-      // is gone. Without this, macOS app re-activation leaks orphaned timers
-      // from the previous window's registration.
-      if (flushTimer) {
-        clearTimeout(flushTimer)
-        flushTimer = null
+    // Why: LocalPtyProvider routes data to the runtime via configure().onData,
+    // but daemon-backed providers don't have configure(). Without this, daemon
+    // PTY data never reaches the runtime's tail buffer, so terminal.read returns
+    // empty and agent-detection from raw data never fires.
+    const isLocalProvider = localProvider instanceof LocalPtyProvider
+
+    localDataUnsub = localProvider.onData((payload) => {
+      if (mainWindow.isDestroyed()) {
+        // Why: clear the pending flush timer so it doesn't fire after the window
+        // is gone. Without this, macOS app re-activation leaks orphaned timers
+        // from the previous window's registration.
+        if (flushTimer) {
+          clearTimeout(flushTimer)
+          flushTimer = null
+        }
+        pendingData.clear()
+        return
       }
-      pendingData.clear()
-      return
-    }
-    if (!isLocalProvider) {
-      runtime?.onPtyData(payload.id, payload.data, Date.now())
-    }
-    const existing = pendingData.get(payload.id)
-    pendingData.set(payload.id, existing ? existing + payload.data : payload.data)
-    if (!flushTimer) {
-      flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS)
-    }
-  })
-  localExitUnsub = localProvider.onExit((payload) => {
-    if (!isLocalProvider) {
-      clearProviderPtyState(payload.id)
-      ptyOwnership.delete(payload.id)
-      markClaudePtyExited(payload.id)
-      runtime?.onPtyExit(payload.id, payload.code)
-    }
-    if (!mainWindow.isDestroyed()) {
-      // Why: flush any batched data for this PTY before sending the exit event,
-      // otherwise the last ≤8ms of output is silently lost because the renderer
-      // tears down the terminal on pty:exit before the batch timer fires.
-      const remaining = pendingData.get(payload.id)
-      if (remaining) {
-        mainWindow.webContents.send('pty:data', { id: payload.id, data: remaining })
-        pendingData.delete(payload.id)
+      if (!isLocalProvider) {
+        runtime?.onPtyData(payload.id, payload.data, Date.now())
       }
-      mainWindow.webContents.send('pty:exit', payload)
-    }
-  })
+      const existing = pendingData.get(payload.id)
+      pendingData.set(payload.id, existing ? existing + payload.data : payload.data)
+      if (!flushTimer) {
+        flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS)
+      }
+    })
+    localExitUnsub = localProvider.onExit((payload) => {
+      if (!isLocalProvider) {
+        clearProviderPtyState(payload.id)
+        ptyOwnership.delete(payload.id)
+        markClaudePtyExited(payload.id)
+        runtime?.onPtyExit(payload.id, payload.code)
+      }
+      if (!mainWindow.isDestroyed()) {
+        // Why: flush any batched data for this PTY before sending the exit event,
+        // otherwise the last ≤8ms of output is silently lost because the renderer
+        // tears down the terminal on pty:exit before the batch timer fires.
+        const remaining = pendingData.get(payload.id)
+        if (remaining) {
+          mainWindow.webContents.send('pty:data', { id: payload.id, data: remaining })
+          pendingData.delete(payload.id)
+        }
+        mainWindow.webContents.send('pty:exit', payload)
+      }
+    })
+  }
+
+  bindProviderListeners()
+  rebindProviderListeners = bindProviderListeners
 
   // Kill orphaned PTY processes from previous page loads when the renderer reloads.
   // Why: only applies to LocalPtyProvider where PTYs live in the Electron main
@@ -649,6 +687,15 @@ export function registerPtyHandlers(
           : undefined)
       if (effectiveShellOverride !== undefined) {
         spawnOptions.shellOverride = effectiveShellOverride
+      }
+      if (process.platform === 'win32' && !args.connectionId) {
+        // Why: the renderer only models PowerShell as one shell family. Thread
+        // the persisted implementation choice through spawnOptions so both the
+        // in-process and daemon-backed PTY paths can resolve the same effective
+        // executable without inventing a fourth top-level shell.
+        spawnOptions.terminalWindowsPowerShellImplementation = getSettings
+          ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
+          : undefined
       }
       let result: PtySpawnResult
       try {

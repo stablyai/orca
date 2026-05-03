@@ -38,14 +38,10 @@ import {
 } from './pane-tree-ops'
 import { scheduleSplitScrollRestore } from './pane-split-scroll'
 import { toPublicPane } from './pane-public-view'
+import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
+import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 
 export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
-
-function reattachWebglIfNeeded(pane: ManagedPaneInternal): void {
-  if (pane.gpuRenderingEnabled && !pane.webglAddon && !pane.webglDisabledAfterContextLoss) {
-    attachWebgl(pane)
-  }
-}
 
 export class PaneManager {
   private root: HTMLElement
@@ -234,7 +230,7 @@ export class PaneManager {
     }
     pane.gpuRenderingEnabled = enabled
     if (!enabled) {
-      disposeWebgl(pane)
+      disposeWebgl(pane, { refreshDimensions: true })
       return
     }
     if (pane.webglAttachmentDeferred || pane.webglDisabledAfterContextLoss) {
@@ -244,6 +240,10 @@ export class PaneManager {
       attachWebgl(pane)
       safeFit(pane)
     }
+  }
+
+  setTerminalGpuAcceleration(mode: PaneManagerOptions['terminalGpuAcceleration']): void {
+    applyTerminalGpuAcceleration(this.panes.values(), this.options, mode)
   }
 
   suspendRendering(): void {

@@ -120,6 +120,17 @@ function flashSectionHighlight(sectionId: string): void {
   }, SECTION_FLASH_DURATION_MS)
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  if (target.isContentEditable) {
+    return true
+  }
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -153,9 +164,17 @@ function Settings(): React.JSX.Element {
   // TerminalPane, driven by this shared state.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const [wslAvailable, setWslAvailable] = useState(false)
+  const [pwshAvailable, setPwshAvailable] = useState(false)
   useEffect(() => {
+    if (!isWindows) {
+      setWslAvailable(false)
+      setPwshAvailable(false)
+      return
+    }
+
     void window.api.wsl.isAvailable().then(setWslAvailable)
-  }, [])
+    void window.api.pwsh.isAvailable().then(setPwshAvailable)
+  }, [isWindows])
   const [terminalFontSuggestions, setTerminalFontSuggestions] = useState<string[]>(
     getFallbackTerminalFonts()
   )
@@ -173,6 +192,26 @@ function Settings(): React.JSX.Element {
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      // Why: Escape in an editable control usually means "cancel this edit",
+      // not "close Settings". Closing the entire page would discard the user's
+      // in-progress typing. Defer to the field's own handler when focus is on
+      // an input/textarea/select or contenteditable region; a subsequent
+      // Escape (with focus back on the body) will then close the page.
+      if (isEditableTarget(event.target)) {
+        return
+      }
+      closeSettingsPage()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [closeSettingsPage])
 
   useEffect(
     () => () => {
@@ -662,6 +701,7 @@ function Settings(): React.JSX.Element {
                     setScrollbackMode={setScrollbackMode}
                     ghostty={ghostty}
                     wslAvailable={wslAvailable}
+                    pwshAvailable={pwshAvailable}
                   />
                 </SettingsSection>
 

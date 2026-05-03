@@ -1,6 +1,11 @@
+/* eslint-disable max-lines */
 // Why: extracted from worktrees.ts to keep the main IPC module under the
 // max-lines threshold. Worktree creation helpers (local and remote) live
-// here so the IPC dispatch file stays focused on handler wiring.
+// here so the IPC dispatch file stays focused on handler wiring. The
+// recently added sparse-checkout flow plus the worktree-bound setup-script
+// trust gate pushed this file marginally over the per-file limit; matches
+// the eslint-disable pattern other files in src/renderer use when a
+// cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
 import { join } from 'path'
@@ -17,7 +22,12 @@ import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
+import {
+  createSetupRunnerScript,
+  getEffectiveHooks,
+  setupScriptsMatch,
+  shouldRunSetupForCreate
+} from '../hooks'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -307,11 +317,15 @@ export async function createLocalWorktree(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
   }
-  const setupScript = getEffectiveHooks(repo)?.scripts.setup
+  const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
   // Why: `ask` is a pre-create choice gate, not a post-create side effect.
   // Resolve it before mutating git state so missing UI input cannot strand
-  // a real worktree on disk while the renderer reports "create failed".
-  const shouldLaunchSetup = setupScript ? shouldRunSetupForCreate(repo, args.setupDecision) : false
+  // a real worktree on disk while the renderer reports "create failed". The
+  // actual run/skip decision is recomputed after the worktree exists, gated
+  // on the worktree's own setup script matching the primary's preview.
+  if (primarySetupScript) {
+    shouldRunSetupForCreate(repo, args.setupDecision)
+  }
   const sparseDirectories = args.sparseCheckout
     ? normalizeSparseDirectories(args.sparseCheckout.directories)
     : []
@@ -401,6 +415,24 @@ export async function createLocalWorktree(
   invalidateAuthorizedRootsCache()
 
   let setup: CreateWorktreeResult['setup']
+  const setupScript = getEffectiveHooks(repo, worktreePath)?.scripts.setup
+  const setupMatchesPreview = setupScriptsMatch(repo, worktreePath, primarySetupScript)
+  let shouldLaunchSetup = false
+  if (setupScript && !setupMatchesPreview) {
+    console.warn(
+      `[hooks] setup hook skipped for ${worktreePath}: worktree setup script differs from the primary checkout setup script shown to the user`
+    )
+  } else if (setupScript) {
+    try {
+      shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
+    } catch (error) {
+      // Why: if the target branch introduces setup hooks that the primary
+      // checkout did not expose, the renderer may not have collected an ask
+      // decision. The worktree already exists, so skip setup instead of
+      // turning successful git creation into an IPC failure.
+      console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
+    }
+  }
   if (setupScript && shouldLaunchSetup) {
     try {
       // Why: setup now runs in a visible terminal owned by the renderer so users

@@ -26,6 +26,7 @@ const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 const MermaidViewer = lazy(() => import('./MermaidViewer'))
+const CsvViewer = lazy(() => import('./CsvViewer'))
 
 const richMarkdownSizeEncoder = new TextEncoder()
 // Why: encodeInto() with a pre-allocated buffer avoids creating a new
@@ -49,6 +50,7 @@ export function EditorContent({
   resolvedLanguage,
   isMarkdown,
   isMermaid,
+  isCsv,
   mdViewMode,
   isChangesMode,
   sideBySide,
@@ -66,6 +68,7 @@ export function EditorContent({
   resolvedLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isCsv: boolean
   mdViewMode: MarkdownViewMode
   isChangesMode: boolean
   sideBySide: boolean
@@ -370,6 +373,12 @@ export function EditorContent({
             renderMarkdownContent(fc)
           ) : isMermaid && mdViewMode === 'rich' ? (
             <MermaidViewer
+              key={activeFile.id}
+              content={editBuffers[activeFile.id] ?? fc.content}
+              filePath={activeFile.filePath}
+            />
+          ) : isCsv && mdViewMode === 'rich' ? (
+            <CsvViewer
               key={activeFile.id}
               content={editBuffers[activeFile.id] ?? fc.content}
               filePath={activeFile.filePath}
