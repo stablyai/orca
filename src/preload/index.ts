@@ -739,6 +739,16 @@ const api = {
     openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:openDevTools', args),
 
+    setViewportOverride: (args: {
+      browserPageId: string
+      override: {
+        width: number
+        height: number
+        deviceScaleFactor: number
+        mobile: boolean
+      } | null
+    }): Promise<boolean> => ipcRenderer.invoke('browser:setViewportOverride', args),
+
     onGuestLoadFailed: (
       callback: (args: {
         browserPageId: string

@@ -34,6 +34,21 @@ import {
   setupGuestShortcutForwarding
 } from './browser-guest-ui'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { cleanElectronUserAgent } from './browser-session-ua'
+import type { BrowserViewportOverride } from '../../shared/types'
+
+// Why: mobile presets need a touch-capable UA or responsive sites serve the
+// desktop variant based on UA sniffing. This is the Chrome DevTools default
+// iPhone UA template; we splice in the guest session's real Chrome major so
+// sec-ch-ua headers (see setupClientHintsOverride) stay consistent.
+function buildMobileUserAgent(chromeMajor: string): string {
+  return `Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/${chromeMajor}.0.0.0 Mobile/15E148 Safari/604.1`
+}
+
+function extractChromeMajor(ua: string): string {
+  const match = ua.match(/Chrome\/(\d+)/)
+  return match ? match[1] : '134'
+}
 
 export type BrowserGuestRegistration = {
   browserPageId?: string
@@ -873,6 +888,76 @@ export class BrowserManager {
     }
     guest.openDevTools({ mode: 'detach' })
     return true
+  }
+
+  // Why: Electron <webview> guests do not expose Chrome DevTools' device
+  // toolbar (Cmd+Shift+M) to the embedding app, so viewport emulation must be
+  // driven through CDP directly. We reuse the debugger attachment that
+  // injectAntiDetection already established and never detach it here — doing
+  // so would clear Page.addScriptToEvaluateOnNewDocument and other per-guest
+  // overrides. Passing override=null clears emulation.
+  async setViewportOverride(
+    browserTabId: string,
+    override: BrowserViewportOverride | null
+  ): Promise<boolean> {
+    const webContentsId = this.webContentsIdByTabId.get(browserTabId)
+    if (!webContentsId) {
+      return false
+    }
+    const guest = webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      this.webContentsIdByTabId.delete(browserTabId)
+      this.tabIdByWebContentsId.delete(webContentsId)
+      return false
+    }
+
+    try {
+      if (!guest.debugger.isAttached()) {
+        guest.debugger.attach('1.3')
+      }
+    } catch {
+      return false
+    }
+
+    const dbg = guest.debugger
+    try {
+      if (override) {
+        await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
+          width: override.width,
+          height: override.height,
+          deviceScaleFactor: override.deviceScaleFactor,
+          mobile: override.mobile
+        })
+        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
+          enabled: override.mobile,
+          maxTouchPoints: override.mobile ? 5 : 0
+        })
+        if (override.mobile) {
+          const chromeMajor = extractChromeMajor(cleanElectronUserAgent(guest.getUserAgent()))
+          await dbg.sendCommand('Emulation.setUserAgentOverride', {
+            userAgent: buildMobileUserAgent(chromeMajor)
+          })
+        } else {
+          // Why: desktop presets still need the clean (non-Electron) UA so
+          // Cloudflare/Turnstile don't flag the session. Passing the cleaned
+          // real UA keeps sec-ch-ua consistent with the override.
+          await dbg.sendCommand('Emulation.setUserAgentOverride', {
+            userAgent: cleanElectronUserAgent(guest.getUserAgent())
+          })
+        }
+      } else {
+        await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
+        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
+          enabled: false,
+          maxTouchPoints: 0
+        })
+        // Why: passing an empty string restores the session default UA.
+        await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
+      }
+      return true
+    } catch {
+      return false
+    }
   }
 
   // ---------------------------------------------------------------------------

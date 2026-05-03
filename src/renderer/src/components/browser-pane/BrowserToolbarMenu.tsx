@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Ellipsis, Import, Plus, Settings } from 'lucide-react'
+import { Check, Ellipsis, Import, Monitor, Plus, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,16 +24,26 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
+import type { BrowserViewportPresetId } from '../../../../shared/types'
+import {
+  BROWSER_VIEWPORT_PRESETS,
+  browserViewportPresetToOverride,
+  getBrowserViewportPreset
+} from '../../../../shared/browser-viewport-presets'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
   workspaceId: string
+  browserPageId: string
+  viewportPresetId: BrowserViewportPresetId | null
   onDestroyWebview: () => void
 }
 
 export function BrowserToolbarMenu({
   currentProfileId,
   workspaceId,
+  browserPageId,
+  viewportPresetId,
   onDestroyWebview
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
@@ -43,6 +53,14 @@ export function BrowserToolbarMenu({
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
+  const setBrowserPageViewportPreset = useAppStore((s) => s.setBrowserPageViewportPreset)
+
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void => {
+    setBrowserPageViewportPreset(browserPageId, nextId)
+    const preset = getBrowserViewportPreset(nextId)
+    const override = preset ? browserViewportPresetToOverride(preset) : null
+    void window.api.browser.setViewportOverride({ browserPageId, override })
+  }
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -210,6 +228,44 @@ export function BrowserToolbarMenu({
                 <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
                   From File…
                 </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Monitor className="mr-2 size-3.5" />
+              Viewport Size
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onSelect={() => applyViewportPreset(null)}>
+                  <Check
+                    className={`mr-2 size-3.5 shrink-0 ${
+                      viewportPresetId === null ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                  Responsive
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {BROWSER_VIEWPORT_PRESETS.map((preset) => {
+                  const isActive = preset.id === viewportPresetId
+                  return (
+                    <DropdownMenuItem
+                      key={preset.id}
+                      onSelect={() => applyViewportPreset(preset.id)}
+                    >
+                      <Check
+                        className={`mr-2 size-3.5 shrink-0 ${
+                          isActive ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <span className="truncate">{preset.label}</span>
+                    </DropdownMenuItem>
+                  )
+                })}
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>

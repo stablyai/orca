@@ -127,6 +127,15 @@ export type BrowserApi = {
   }) => Promise<void>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
+  setViewportOverride: (args: {
+    browserPageId: string
+    override: {
+      width: number
+      height: number
+      deviceScaleFactor: number
+      mobile: boolean
+    } | null
+  }) => Promise<boolean>
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void

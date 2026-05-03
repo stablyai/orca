@@ -84,6 +84,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:openDevTools')
+  ipcMain.removeHandler('browser:setViewportOverride')
   ipcMain.removeHandler('browser:acceptDownload')
   ipcMain.removeHandler('browser:cancelDownload')
   ipcMain.removeHandler('browser:setGrabMode')
@@ -171,6 +172,27 @@ export function registerBrowserHandlers(): void {
     }
     return browserManager.openDevTools(args.browserPageId)
   })
+
+  ipcMain.handle(
+    'browser:setViewportOverride',
+    (
+      event,
+      args: {
+        browserPageId: string
+        override: {
+          width: number
+          height: number
+          deviceScaleFactor: number
+          mobile: boolean
+        } | null
+      }
+    ) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return browserManager.setViewportOverride(args.browserPageId, args.override)
+    }
+  )
 
   ipcMain.handle('browser:acceptDownload', async (event, args: { downloadId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
