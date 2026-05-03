@@ -1004,7 +1004,11 @@ function EditorPanelInner({
   const availableEditorToggleModes = isBinaryEditSurface
     ? editorToggleModes.filter((mode) => mode !== 'changes')
     : editorToggleModes
-  const hasEditorToggle = availableEditorToggleModes.length > 0
+  // Why: a toggle with a single option is just a decorative pill with nothing
+  // to switch to. Binary plain-code tabs end up here after 'changes' is
+  // stripped — on main they had no header toggle at all, so requiring >1 mode
+  // preserves that behavior instead of leaving a lone "Edit" segment.
+  const hasEditorToggle = availableEditorToggleModes.length > 1
   const effectiveToggleValue: EditorToggleValue = isChangesMode
     ? 'changes'
     : hasViewModeToggle
