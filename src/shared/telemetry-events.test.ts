@@ -203,7 +203,7 @@ describe('exported enum schemas', () => {
   it('agentKindSchema accepts the known product IDs', () => {
     expect(agentKindSchema.safeParse('claude-code').success).toBe(true)
     expect(agentKindSchema.safeParse('codex').success).toBe(true)
-    expect(agentKindSchema.safeParse('amp').success).toBe(true)
+    expect(agentKindSchema.safeParse('other').success).toBe(true)
   })
 
   it('errorClassSchema rejects novel classes', () => {

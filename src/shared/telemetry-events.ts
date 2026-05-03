@@ -20,13 +20,12 @@ import { z } from 'zod'
 // ── Shared property enums ───────────────────────────────────────────────
 
 // Mirrors the detectable agents in `src/shared/agent-detection.ts`
-// (`AGENT_NAMES`), with two deliberate shifts:
-//   1. `claude` in AGENT_NAMES ↔ `claude-code` here (product, not CLI string)
-//      so dashboards read cleanly.
-//   2. `amp` is present here even though it is intentionally absent from
-//      AGENT_NAMES title detection — the telemetry enum stays ready for the
-//      near-term roadmap without broadening title detection.
-// Adding a new agent may require updating both places, but not always.
+// (`AGENT_NAMES`), with one deliberate shift: `claude` in AGENT_NAMES ↔
+// `claude-code` here (product, not CLI string) so dashboards read cleanly.
+//
+// Enum values are limited to agents that have a real emit path today. Adding
+// a new agent is additive-safe — extend this enum when the call site that
+// would emit it lands, not in anticipation.
 export const agentKindSchema = z.enum([
   'claude-code',
   'codex',
@@ -35,7 +34,6 @@ export const agentKindSchema = z.enum([
   'cursor',
   'opencode',
   'aider',
-  'amp',
   'other'
 ])
 export type AgentKind = z.infer<typeof agentKindSchema>
