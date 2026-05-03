@@ -763,6 +763,7 @@ export type PreloadApi = {
       worktreePath: string
       filePath: string
       staged: boolean
+      compareAgainstHead?: boolean
       connectionId?: string
     }) => Promise<GitDiffResult>
     branchCompare: (args: {
