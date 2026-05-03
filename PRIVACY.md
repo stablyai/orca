@@ -37,7 +37,7 @@ The events we send (7 in total — 8 literal names, counting `telemetry_opted_in
 
 ### Agents
 
-- `agent_started` — `agent_kind` (enum — `claude-code` / `codex` / `gemini` / `copilot` / `cursor` / `opencode` / `aider` / `amp` / `other`); `launch_source` (`command_palette` / `sidebar` / `tab_bar_quick_launch` / `task_page` / `new_workspace_composer` / `workspace_jump_palette` / `shortcut` / `unknown`); `request_kind` (`new` / `resume` / `followup`). No model details, no prompt content.
+- `agent_started` — `initial_agent_kind` (enum — `claude-code` / `codex` / `gemini` / `copilot` / `cursor` / `opencode` / `aider` / `amp` / `other`); `launch_source` (`command_palette` / `sidebar` / `tab_bar_quick_launch` / `task_page` / `new_workspace_composer` / `workspace_jump_palette` / `shortcut` / `unknown`); `request_kind` (`new` / `resume` / `followup`). This event means "what Orca launched after confirmed session creation," not a later shell-title inference. No model details, no prompt content.
 - `agent_error` — `error_class` (closed enum of known error types); `agent_kind`; optional `error_name` drawn from a closed whitelist of error class names. Enum-only: no raw error message, no stack trace, no free-form identifiers. Per-incident error context lives only in a local diagnostic trace file on your machine; it reaches Orca only if you explicitly share a diagnostic bundle.
 
 ### Settings

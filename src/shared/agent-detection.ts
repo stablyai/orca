@@ -16,25 +16,12 @@ const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
 const GEMINI_IDLE = '\u25C7' // ◇
 const GEMINI_PERMISSION = '\u270B' // ✋
 
-// Why: `'amp'` is not a detectable agent in the title-parsing paths today, but
-// the telemetry wire enum (`agentKindSchema`, landing in PR 2) is the single
-// source of truth for agent-kind values that ever reach the analytics vendor,
-// and adding a new kind in both places at once costs one commit while letting
-// us stabilize the enum *before* the first integration PR. Adding an agent to
-// this list without adding it to `agentKindSchema` is a compatibility break;
-// adding it to `agentKindSchema` without updating this list means a detected-
-// agent title would ever carry a different spelling from the reported
-// `agent_kind`. Keep the two in lock-step.
-export const AGENT_NAMES = [
-  'claude',
-  'codex',
-  'copilot',
-  'cursor',
-  'gemini',
-  'opencode',
-  'aider',
-  'amp'
-]
+// Why: this list is for OSC-title detection only. It is intentionally narrower
+// than the full set of launchable agents because short names like "amp" are
+// unsafe under the substring-based detector and would classify ordinary shell
+// titles like "timestamp ready" as agent activity. Product telemetry uses the
+// explicit launch/session facts Orca owns, not this inference path.
+export const AGENT_NAMES = ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode', 'aider']
 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
