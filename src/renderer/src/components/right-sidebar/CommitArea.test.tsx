@@ -71,6 +71,7 @@ const baseProps = {
   commitMessage: 'feat: add commit area',
   commitError: null as string | null,
   isCommitting: false,
+  branchName: 'main',
   onCommitMessageChange: vi.fn(),
   onCommitSuccess: vi.fn()
 }
