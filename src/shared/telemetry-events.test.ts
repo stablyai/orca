@@ -103,7 +103,7 @@ describe('workspace_created schema', () => {
     const parsed = eventSchemas.workspace_created.safeParse({
       source: 'command_palette',
       from_existing_branch: true,
-      branch: 'refs/heads/main' // raw branch name is an anti-pattern from superset
+      branch: 'refs/heads/main' // raw branch name is UGC — rejected by .strict()
     })
     expect(parsed.success).toBe(false)
   })
