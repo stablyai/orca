@@ -599,6 +599,49 @@ describe('registerFilesystemHandlers', () => {
     expect(commitChangesMock).not.toHaveBeenCalled()
   })
 
+  it('rejects git:commit with empty message and does not call commitChanges', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        message: ''
+      })
+    ).rejects.toThrow('Commit message is required')
+
+    expect(commitChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects git:commit with whitespace-only message and does not call commitChanges', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        message: '   '
+      })
+    ).rejects.toThrow('Commit message is required')
+
+    expect(commitChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects git:commit with whitespace-only message before SSH dispatch', async () => {
+    const sshCommitMock = vi.fn().mockResolvedValue({ success: true })
+    getSshGitProviderMock.mockReturnValue({ commit: sshCommitMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: '/remote/repo',
+        message: '\n',
+        connectionId: 'conn-1'
+      })
+    ).rejects.toThrow('Commit message is required')
+
+    expect(sshCommitMock).not.toHaveBeenCalled()
+  })
+
   it('allows git operations on worktrees outside repo/workspace roots', async () => {
     // Linked worktrees can live anywhere on disk (e.g. ~/.codex/worktrees/).
     // As long as the path matches a worktree reported by `git worktree list`

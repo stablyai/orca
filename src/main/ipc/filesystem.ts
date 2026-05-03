@@ -502,7 +502,7 @@ export function registerFilesystemHandlers(store: Store): void {
       args: { worktreePath: string; message: string; connectionId?: string }
     ): Promise<{ success: boolean; error?: string }> => {
       // Why: validate at the IPC boundary so the renderer gets a clear error instead of an opaque execFile failure.
-      if (typeof args.message !== 'string' || args.message.length === 0) {
+      if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
       }
       if (args.connectionId) {

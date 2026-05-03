@@ -15,7 +15,8 @@ import {
   createMockDispatcher,
   gitInit,
   gitCommit,
-  type MockDispatcher
+  type MockDispatcher,
+  type RelayDispatcher
 } from './git-handler-test-setup'
 
 describe('GitHandler — commit & staging', () => {
@@ -28,7 +29,7 @@ describe('GitHandler — commit & staging', () => {
     const ctx = new RelayContext()
     ctx.registerRoot(tmpDir)
     // eslint-disable-next-line no-new
-    new GitHandler(dispatcher as never, ctx)
+    new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
   })
 
   afterEach(async () => {
@@ -54,6 +55,26 @@ describe('GitHandler — commit & staging', () => {
         encoding: 'utf-8'
       }).trim()
       expect(latestMessage).toBe('feat: relay commit')
+    })
+
+    // Why: covers the error-extraction path in commitChangesRelay
+    // (git-handler-worktree-ops.ts). Running `git commit` with nothing staged
+    // exits non-zero and writes a "nothing to commit" message; we assert the
+    // relay surfaces a non-empty error string so the UI can display it.
+    it('returns a non-empty error when the commit fails', async () => {
+      gitInit(tmpDir)
+
+      const result = (await dispatcher.callRequest('git.commit', {
+        worktreePath: tmpDir,
+        message: 'no changes'
+      })) as { success: boolean; error?: string }
+
+      expect(result.success).toBe(false)
+      expect(typeof result.error).toBe('string')
+      expect((result.error ?? '').length).toBeGreaterThan(0)
+      // Why: exact phrasing can vary across git versions, so match the
+      // stable substring "nothing" rather than the full "nothing to commit".
+      expect((result.error ?? '').toLowerCase()).toContain('nothing')
     })
   })
 

@@ -69,7 +69,6 @@ const baseProps = {
   commitMessage: 'feat: add commit area',
   commitError: null as string | null,
   isCommitting: false,
-  branchName: 'main',
   onCommitMessageChange: vi.fn(),
   onCommitSuccess: vi.fn()
 }
@@ -106,38 +105,12 @@ describe('CommitArea', () => {
     expect(button.props.disabled).toBe(false)
   })
 
-  it('triggers commit on Ctrl+Enter shortcut for non-macOS', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Windows' })
-
+  it('triggers commit when the button is clicked', () => {
     const onCommitSuccess = vi.fn()
     const element = CommitArea({ ...baseProps, onCommitSuccess })
-    const textarea = findTextarea(element)
-
-    const preventDefault = vi.fn()
-    ;(textarea.props.onKeyDown as (event: unknown) => void)({
-      metaKey: false,
-      ctrlKey: true,
-      key: 'Enter',
-      preventDefault
-    })
-
-    expect(preventDefault).toHaveBeenCalledTimes(1)
+    const button = findCommitButton(element)
+    ;(button.props.onClick as () => void)()
     expect(onCommitSuccess).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not trigger shortcut submit when commit is disabled', () => {
-    const onCommitSuccess = vi.fn()
-    const element = CommitArea({ ...baseProps, commitMessage: '   ', onCommitSuccess })
-    const textarea = findTextarea(element)
-
-    ;(textarea.props.onKeyDown as (event: unknown) => void)({
-      metaKey: true,
-      ctrlKey: false,
-      key: 'Enter',
-      preventDefault: vi.fn()
-    })
-
-    expect(onCommitSuccess).not.toHaveBeenCalled()
   })
 
   it('clears message and keeps error hidden after successful commit lifecycle', async () => {
@@ -164,13 +137,8 @@ describe('CommitArea', () => {
         }
       })
 
-    const textarea = findTextarea(render())
-    ;(textarea.props.onKeyDown as (event: unknown) => void)({
-      metaKey: true,
-      ctrlKey: false,
-      key: 'Enter',
-      preventDefault: vi.fn()
-    })
+    const button = findCommitButton(render())
+    ;(button.props.onClick as () => void)()
     await flushPromises()
 
     const updated = render()
@@ -204,13 +172,8 @@ describe('CommitArea', () => {
         }
       })
 
-    const textarea = findTextarea(render())
-    ;(textarea.props.onKeyDown as (event: unknown) => void)({
-      metaKey: true,
-      ctrlKey: false,
-      key: 'Enter',
-      preventDefault: vi.fn()
-    })
+    const button = findCommitButton(render())
+    ;(button.props.onClick as () => void)()
     await flushPromises()
 
     const updated = render()
@@ -219,20 +182,10 @@ describe('CommitArea', () => {
     expect(runCommit).toHaveBeenCalledTimes(1)
   })
 
-  it('locks interactions while commit is in flight', () => {
-    const onCommitSuccess = vi.fn()
-    const element = CommitArea({ ...baseProps, isCommitting: true, onCommitSuccess })
+  it('locks the button while commit is in flight', () => {
+    const element = CommitArea({ ...baseProps, isCommitting: true })
     const button = findCommitButton(element)
     expect(button.props.disabled).toBe(true)
-
-    const textarea = findTextarea(element)
-    ;(textarea.props.onKeyDown as (event: unknown) => void)({
-      metaKey: true,
-      ctrlKey: false,
-      key: 'Enter',
-      preventDefault: vi.fn()
-    })
-    expect(onCommitSuccess).not.toHaveBeenCalled()
   })
 
   it('shows an inline error message when commit fails', () => {

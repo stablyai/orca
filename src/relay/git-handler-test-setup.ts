@@ -9,7 +9,23 @@ import { vi } from 'vitest'
 import { execFileSync } from 'child_process'
 import type { RelayDispatcher } from './dispatcher'
 
-export function createMockDispatcher() {
+// Why: declare an explicit type so the inferred return type of
+// createMockDispatcher doesn't transitively reference `@vitest/spy`'s
+// internal `Procedure` type (from `vi.fn(...)`). Without this annotation,
+// TS2883 fires under `pnpm run tc:node` because the generated .d.ts would
+// need to name a type that isn't portably resolvable from this module.
+export type MockDispatcher = {
+  onRequest: (
+    method: string,
+    handler: (params: Record<string, unknown>) => Promise<unknown>
+  ) => void
+  onNotification: (method: string, handler: (params: Record<string, unknown>) => void) => void
+  notify: (method: string, params?: Record<string, unknown>) => void
+  _requestHandlers: Map<string, (params: Record<string, unknown>) => Promise<unknown>>
+  callRequest(method: string, params?: Record<string, unknown>): Promise<unknown>
+}
+
+export function createMockDispatcher(): MockDispatcher {
   const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
 
@@ -33,8 +49,6 @@ export function createMockDispatcher() {
     }
   }
 }
-
-export type MockDispatcher = ReturnType<typeof createMockDispatcher>
 
 export function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })

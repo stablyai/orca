@@ -25,7 +25,7 @@ import {
   X
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -128,6 +128,7 @@ function SourceControlInner(): React.JSX.Element {
   const commitInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
@@ -358,6 +359,35 @@ function SourceControlInner(): React.JSX.Element {
       })),
     [unresolvedConflicts]
   )
+
+  // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
+  // removed from the store (long sessions with many create/destroy cycles).
+  // Prune them so a deleted-then-reused worktree ID doesn't inherit stale
+  // state — especially commitInFlightRef, which would permanently disable
+  // Commit for that ID if left stuck at `true`.
+  useEffect(() => {
+    const pruneRecord = <T,>(prev: Record<string, T>): Record<string, T> => {
+      let changed = false
+      const next: Record<string, T> = {}
+      for (const key of Object.keys(prev)) {
+        if (worktreeMap.has(key)) {
+          next[key] = prev[key]
+        } else {
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    }
+    setCommitDrafts((prev) => pruneRecord(prev))
+    setCommitErrors((prev) => pruneRecord(prev))
+    setCommitInFlightByWorktree((prev) => pruneRecord(prev))
+    // Refs don't need setState — mutate in place to drop stale keys.
+    for (const key of Object.keys(commitInFlightRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete commitInFlightRef.current[key]
+      }
+    }
+  }, [worktreeMap])
 
   // Why: the sidebar no longer uses key={activeWorktreeId} to force a full
   // remount on worktree switch (that caused an IPC storm on Windows).
@@ -797,8 +827,12 @@ function SourceControlInner(): React.JSX.Element {
         {/* Why: Diff-comments live on the worktree and apply across every diff
             view the user opens. The header row expands inline to show per-file
             comment previews plus a Copy-all action so the user can hand the
-            set off to whichever tool they want without leaving the sidebar. */}
-        {activeWorktreeId && worktreePath && (
+            set off to whichever tool they want without leaving the sidebar.
+            Hidden when count is 0: notes are created from the diff view, so
+            an empty Notes shelf in the sidebar is pure chrome — it adds a
+            border, a row of space, and an expand control that only reveals
+            a redirect hint. */}
+        {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <div className="border-b border-border">
             <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">
               <button
@@ -943,7 +977,6 @@ function SourceControlInner(): React.JSX.Element {
               commitMessage={commitMessage}
               commitError={commitError}
               isCommitting={isCommitting}
-              branchName={branchName}
               onCommitMessageChange={(value) => {
                 if (!activeWorktreeId) {
                   return
@@ -1139,7 +1172,6 @@ type CommitAreaProps = {
   commitMessage: string
   commitError: string | null
   isCommitting: boolean
-  branchName: string
   onCommitMessageChange: (message: string) => void
   onCommitSuccess: () => void
 }
@@ -1150,7 +1182,6 @@ export function CommitArea({
   commitMessage,
   commitError,
   isCommitting,
-  branchName,
   onCommitMessageChange,
   onCommitSuccess
 }: CommitAreaProps): React.JSX.Element {
@@ -1158,10 +1189,25 @@ export function CommitArea({
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
   // the existing style) — the browser scrolls internally past 12 rows.
   const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
-  const isMac = navigator.userAgent.includes('Mac')
-  const shortcut = isMac ? '⌘ Enter' : 'Ctrl+Enter'
+  const hasMessage = commitMessage.trim().length > 0
   const isCommitDisabled =
-    isCommitting || !commitMessage.trim() || stagedCount === 0 || hasUnresolvedConflicts
+    isCommitting || !hasMessage || stagedCount === 0 || hasUnresolvedConflicts
+
+  // Why: when the button is disabled, the title surfaces the reason so the
+  // user doesn't have to guess why Commit is greyed out. Part-2 may extend
+  // this into a split button (primary action + dropdown for Push / Sync /
+  // Commit & Push); the label stays as a plain "Commit" here so the shape
+  // lines up cleanly with the forthcoming "Remote Updates" section beneath it.
+  let disabledReason: string | undefined
+  if (isCommitting) {
+    disabledReason = 'Commit in progress…'
+  } else if (hasUnresolvedConflicts) {
+    disabledReason = 'Resolve conflicts before committing'
+  } else if (stagedCount === 0) {
+    disabledReason = 'Stage at least one file to commit'
+  } else if (!hasMessage) {
+    disabledReason = 'Enter a commit message to commit'
+  }
 
   return (
     <div className="px-3 pb-2">
@@ -1169,34 +1215,25 @@ export function CommitArea({
         rows={rows}
         value={commitMessage}
         onChange={(e) => onCommitMessageChange(e.target.value)}
-        placeholder={`Message (${shortcut} to commit on "${branchName}")`}
+        placeholder="Message"
         aria-label="Commit message"
         aria-describedby={commitError ? 'commit-area-error' : undefined}
         className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-        onKeyDown={(e) => {
-          // Why: shortcuts must map to Cmd on macOS and Ctrl elsewhere so users
-          // get native platform behavior instead of a mixed modifier policy.
-          const commitModifierPressed = isMac ? e.metaKey : e.ctrlKey
-          if (commitModifierPressed && e.key === 'Enter') {
-            e.preventDefault()
-            if (!isCommitDisabled) {
-              onCommitSuccess()
-            }
-          }
-        }}
       />
-      <div className="mt-2 flex items-center justify-end gap-2">
-        <Button
-          type="button"
-          size="sm"
-          disabled={isCommitDisabled}
-          onClick={() => onCommitSuccess()}
-          className="h-7 text-xs"
-        >
-          {isCommitting && <RefreshCw className="size-3.5 animate-spin" />}
-          Commit
-        </Button>
-      </div>
+      {/* Why: match the "Squash and merge" button in PRActions
+          (size="xs", px-3 text-[11px]) so the sidebar has a consistent
+          action-button shape across Source Control and Checks. */}
+      <Button
+        type="button"
+        size="xs"
+        disabled={isCommitDisabled}
+        onClick={() => onCommitSuccess()}
+        className="mt-1 w-full px-3 text-[11px]"
+        title={disabledReason}
+      >
+        {isCommitting && <RefreshCw className="size-3.5 animate-spin" />}
+        Commit
+      </Button>
       {commitError && (
         // Why: role="alert" + aria-live="polite" lets screen readers announce
         // commit failures; the id ties the message to the textarea via
