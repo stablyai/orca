@@ -16,6 +16,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -241,31 +243,25 @@ export function BrowserToolbarMenu({
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
               <DropdownMenuSubContent>
-                <DropdownMenuItem onSelect={() => applyViewportPreset(null)}>
-                  <Check
-                    className={`mr-2 size-3.5 shrink-0 ${
-                      viewportPresetId === null ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
-                  Default
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {BROWSER_VIEWPORT_PRESETS.map((preset) => {
-                  const isActive = preset.id === viewportPresetId
-                  return (
-                    <DropdownMenuItem
-                      key={preset.id}
-                      onSelect={() => applyViewportPreset(preset.id)}
-                    >
-                      <Check
-                        className={`mr-2 size-3.5 shrink-0 ${
-                          isActive ? 'opacity-100' : 'opacity-0'
-                        }`}
-                      />
+                {/* Why: Viewport is a "pick one of N" control, so use a radio group
+                    for proper a11y semantics (role="menuitemradio", aria-checked).
+                    The "Default" option represents a null preset (no override),
+                    encoded as the sentinel string 'default' because
+                    DropdownMenuRadioGroup values must be strings. */}
+                <DropdownMenuRadioGroup
+                  value={viewportPresetId ?? 'default'}
+                  onValueChange={(v) =>
+                    applyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
+                  }
+                >
+                  <DropdownMenuRadioItem value="default">Default</DropdownMenuRadioItem>
+                  <DropdownMenuSeparator />
+                  {BROWSER_VIEWPORT_PRESETS.map((preset) => (
+                    <DropdownMenuRadioItem key={preset.id} value={preset.id}>
                       <span className="truncate">{preset.label}</span>
-                    </DropdownMenuItem>
-                  )
-                })}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>

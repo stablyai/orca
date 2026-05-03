@@ -9,6 +9,7 @@ import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
+  BrowserViewportOverride,
   CreateWorktreeArgs,
   CustomSidekick,
   FsChangedPayload,
@@ -741,12 +742,7 @@ const api = {
 
     setViewportOverride: (args: {
       browserPageId: string
-      override: {
-        width: number
-        height: number
-        deviceScaleFactor: number
-        mobile: boolean
-      } | null
+      override: BrowserViewportOverride | null
     }): Promise<boolean> => ipcRenderer.invoke('browser:setViewportOverride', args),
 
     onGuestLoadFailed: (

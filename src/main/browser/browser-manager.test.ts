@@ -1250,5 +1250,34 @@ describe('browserManager', () => {
       // (anti-detection). Guard regression.
       expect((guest.debugger as { detach?: unknown }).detach ?? undefined).toBeUndefined()
     })
+
+    it('returns false when debugger.attach throws (e.g. DevTools already open)', async () => {
+      const { guest, debuggerSendCommand, debuggerAttach } = makeGuest(4545)
+      ;(guest.debugger as { isAttached: ReturnType<typeof vi.fn> }).isAttached = vi.fn(() => false)
+      // Why: Electron throws from debugger.attach if another client (e.g. the
+      // user's open DevTools window) is already attached. setViewportOverride
+      // must surface this as a clean `false` rather than an unhandled rejection.
+      debuggerAttach.mockImplementation(() => {
+        throw new Error('Another debugger is already attached')
+      })
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-attach-throws',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+
+      const ok = await browserManager.setViewportOverride('tab-attach-throws', {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+
+      expect(ok).toBe(false)
+      expect(debuggerAttach).toHaveBeenCalledWith('1.3')
+      expect(debuggerSendCommand).not.toHaveBeenCalled()
+    })
   })
 })

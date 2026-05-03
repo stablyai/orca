@@ -12,7 +12,7 @@ export type BrowserViewportPreset = {
 // Why: deviceScaleFactor=2 on mobile/tablet mirrors Chrome's device toolbar so
 // retina-aware sites pick the correct asset tier; mobile=true enables touch
 // emulation + small-viewport CSS. Dimensions match Chrome DevTools presets.
-export const BROWSER_VIEWPORT_PRESETS: readonly BrowserViewportPreset[] = [
+export const BROWSER_VIEWPORT_PRESETS = [
   {
     id: 'mobile-s',
     label: 'Mobile S — 320 × 568',
@@ -69,7 +69,7 @@ export const BROWSER_VIEWPORT_PRESETS: readonly BrowserViewportPreset[] = [
     deviceScaleFactor: 1,
     mobile: false
   }
-]
+] as const satisfies readonly BrowserViewportPreset[]
 
 export function getBrowserViewportPreset(
   id: BrowserViewportPresetId | null | undefined

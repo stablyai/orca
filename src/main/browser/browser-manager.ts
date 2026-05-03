@@ -98,6 +98,11 @@ export class BrowserManager {
   // has to bridge that mismatch to activate the right tab before capture.
   private readonly workspaceIdByPageId = new Map<string, string>()
   private readonly rendererWebContentsIdByTabId = new Map<string, number>()
+  // Why: chain setViewportOverride calls per tab so rapid toggles don't
+  // interleave CDP commands. Without serialization, two concurrent calls can
+  // race (e.g. clearDeviceMetricsOverride landing after a later mobile
+  // setDeviceMetricsOverride), leaving emulation in an unexpected state.
+  private readonly viewportOpsByTabId = new Map<string, Promise<unknown>>()
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   private readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   private readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
@@ -651,6 +656,9 @@ export class BrowserManager {
     this.rendererWebContentsIdByTabId.delete(browserTabId)
     this.workspaceIdByPageId.delete(browserTabId)
     this.worktreeIdByTabId.delete(browserTabId)
+    // Why: drop any pending viewport-op chain for this tab so the Map doesn't
+    // retain a resolved promise keyed to a destroyed guest.
+    this.viewportOpsByTabId.delete(browserTabId)
   }
 
   unregisterAll(): void {
@@ -900,6 +908,31 @@ export class BrowserManager {
     browserTabId: string,
     override: BrowserViewportOverride | null
   ): Promise<boolean> {
+    // Why: chain per-tab so rapid toggles (e.g. user clicking presets quickly)
+    // don't interleave CDP commands. Each call waits for the previous one to
+    // settle, guaranteeing the last-requested override wins rather than whichever
+    // sendCommand sequence happens to finish last.
+    const prev = this.viewportOpsByTabId.get(browserTabId) ?? Promise.resolve()
+    const next = prev
+      .catch(() => {})
+      .then(() => this.doSetViewportOverrideImpl(browserTabId, override))
+    this.viewportOpsByTabId.set(browserTabId, next)
+    try {
+      return await next
+    } finally {
+      // Why: only clear if this call's promise is still the tail. A concurrent
+      // later call may have already replaced the entry; deleting would drop the
+      // chain and break serialization for the next invocation.
+      if (this.viewportOpsByTabId.get(browserTabId) === next) {
+        this.viewportOpsByTabId.delete(browserTabId)
+      }
+    }
+  }
+
+  private async doSetViewportOverrideImpl(
+    browserTabId: string,
+    override: BrowserViewportOverride | null
+  ): Promise<boolean> {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (!webContentsId) {
       return false
@@ -915,7 +948,16 @@ export class BrowserManager {
       if (!guest.debugger.isAttached()) {
         guest.debugger.attach('1.3')
       }
-    } catch {
+    } catch (err) {
+      // Why: DevTools being open on the guest causes attach to throw with
+      // "Another debugger is already attached". Silently returning false made
+      // this failure mode undiagnosable — surface it via the logger with enough
+      // context (tab + webContents ids) to correlate with user reports.
+      console.warn('[browser-manager] setViewportOverride: failed to attach debugger', {
+        browserTabId,
+        webContentsId,
+        error: err instanceof Error ? err.message : String(err)
+      })
       return false
     }
 
@@ -934,8 +976,30 @@ export class BrowserManager {
         })
         if (override.mobile) {
           const chromeMajor = extractChromeMajor(cleanElectronUserAgent(guest.getUserAgent()))
+          // Why: pass userAgentMetadata alongside the mobile UA string so
+          // sec-ch-ua-mobile / sec-ch-ua-platform client hints match. Without
+          // it, session-level desktop client-hints leak through and create a
+          // UA/CH mismatch that bot-detection (Cloudflare, Turnstile) flags.
           await dbg.sendCommand('Emulation.setUserAgentOverride', {
-            userAgent: buildMobileUserAgent(chromeMajor)
+            userAgent: buildMobileUserAgent(chromeMajor),
+            userAgentMetadata: {
+              brands: [
+                { brand: 'Google Chrome', version: chromeMajor },
+                { brand: 'Chromium', version: chromeMajor },
+                { brand: 'Not/A)Brand', version: '24' }
+              ],
+              fullVersionList: [
+                { brand: 'Google Chrome', version: `${chromeMajor}.0.0.0` },
+                { brand: 'Chromium', version: `${chromeMajor}.0.0.0` },
+                { brand: 'Not/A)Brand', version: '24.0.0.0' }
+              ],
+              fullVersion: `${chromeMajor}.0.0.0`,
+              platform: 'iOS',
+              platformVersion: '17.0',
+              architecture: '',
+              model: 'iPhone',
+              mobile: true
+            }
           })
         } else {
           // Why: desktop presets still need the clean (non-Electron) UA so

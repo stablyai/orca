@@ -256,7 +256,7 @@ export type BrowserPage = {
   canGoForward: boolean
   loadError: BrowserLoadError | null
   createdAt: number
-  /** Active CDP viewport emulation preset. null = responsive (fill pane). */
+  /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
 }
 

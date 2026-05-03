@@ -963,12 +963,14 @@ function BrowserPagePane({
       // reloads, SPA navigations, and persisted-session restoration.
       const presetId = viewportPresetIdRef.current
       const preset = getBrowserViewportPreset(presetId)
-      if (preset) {
-        void window.api.browser.setViewportOverride({
-          browserPageId: browserTab.id,
-          override: browserViewportPresetToOverride(preset)
-        })
-      }
+      // Why: always reapply on dom-ready (including null) because
+      // Emulation.setDeviceMetricsOverride can persist across same-origin navigations
+      // within the same renderer. Sending null ensures CDP matches the store state
+      // instead of showing a stale emulated viewport after the user picks "Default".
+      void window.api.browser.setViewportOverride({
+        browserPageId: browserTab.id,
+        override: preset ? browserViewportPresetToOverride(preset) : null
+      })
     }
 
     const handleDidStartLoading = (): void => {

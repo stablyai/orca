@@ -25,7 +25,8 @@ import type {
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
-  BrowserSessionProfileScope
+  BrowserSessionProfileScope,
+  BrowserViewportOverride
 } from '../../shared/types'
 
 let trustedBrowserRendererWebContentsId: number | null = null
@@ -179,16 +180,36 @@ export function registerBrowserHandlers(): void {
       event,
       args: {
         browserPageId: string
-        override: {
-          width: number
-          height: number
-          deviceScaleFactor: number
-          mobile: boolean
-        } | null
+        override: BrowserViewportOverride | null
       }
     ) => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
+      }
+      // Why: CDP misbehaves on non-finite/negative metrics (NaN/Infinity can
+      // wedge Emulation.setDeviceMetricsOverride and leave the page in a
+      // broken state). Validate at the main-process trust boundary so a buggy
+      // or compromised renderer cannot corrupt CDP state.
+      if (args.override !== null) {
+        const { width, height, deviceScaleFactor, mobile } = args.override
+        const isFinitePositive = (n: unknown): n is number =>
+          typeof n === 'number' && Number.isFinite(n) && n > 0
+        if (!isFinitePositive(width) || width < 1 || width > 10000) {
+          return false
+        }
+        if (!isFinitePositive(height) || height < 1 || height > 10000) {
+          return false
+        }
+        if (
+          !isFinitePositive(deviceScaleFactor) ||
+          deviceScaleFactor < 0.1 ||
+          deviceScaleFactor > 5
+        ) {
+          return false
+        }
+        if (typeof mobile !== 'boolean') {
+          return false
+        }
       }
       return browserManager.setViewportOverride(args.browserPageId, args.override)
     }

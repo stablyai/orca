@@ -992,6 +992,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }
     }),
 
+  // viewportPresetId is a per-page setting on BrowserPage and is intentionally not
+  // mirrored onto BrowserWorkspace: the outer tab strip doesn't surface the preset,
+  // so there's no UI consumer at the workspace layer. Keeping it page-local avoids
+  // cross-layer plumbing; do NOT add mirrorWorkspaceFromActivePage here.
   setBrowserPageViewportPreset: (pageId, viewportPresetId) =>
     set((s) => {
       const page = findPage(s.browserPagesByWorkspace, pageId)
