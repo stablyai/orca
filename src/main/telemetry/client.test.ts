@@ -67,6 +67,44 @@ function makeFakeStore(settings: GlobalSettings): Store {
   } as unknown as Store
 }
 
+// Env vars read by `resolveConsent` (see `consent.ts`). Any of these set at
+// test time — most commonly `CI=true` on GitHub Actions — would make every
+// `track()` call drop at the consent gate and every capture assertion fail.
+// We clear them per-test and restore in afterEach so tests behave identically
+// on a dev laptop (where none are set) and in CI (where `CI` always is).
+const CONSENT_ENV_VARS = [
+  'DO_NOT_TRACK',
+  'ORCA_TELEMETRY_DISABLED',
+  'CI',
+  'GITHUB_ACTIONS',
+  'GITLAB_CI',
+  'CIRCLECI',
+  'TRAVIS',
+  'BUILDKITE',
+  'JENKINS_URL',
+  'TEAMCITY_VERSION'
+] as const
+
+function stashAndClearConsentEnv(): Record<string, string | undefined> {
+  const stash: Record<string, string | undefined> = {}
+  for (const name of CONSENT_ENV_VARS) {
+    stash[name] = process.env[name]
+    delete process.env[name]
+  }
+  return stash
+}
+
+function restoreConsentEnv(stash: Record<string, string | undefined>): void {
+  for (const name of CONSENT_ENV_VARS) {
+    const prior = stash[name]
+    if (prior === undefined) {
+      delete process.env[name]
+    } else {
+      process.env[name] = prior
+    }
+  }
+}
+
 const BASE_COMMON: CommonProps = {
   app_version: '1.3.33',
   platform: 'darwin',
@@ -80,8 +118,10 @@ const BASE_COMMON: CommonProps = {
 describe('track()', () => {
   let mock: MockPostHog
   let store: Store
+  let envStash: Record<string, string | undefined>
 
   beforeEach(() => {
+    envStash = stashAndClearConsentEnv()
     vi.spyOn(console, 'debug').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     resetBurstCapsForSession()
@@ -105,6 +145,7 @@ describe('track()', () => {
     _setCommonPropsForTests(null)
     _setStoreForTests(null)
     vi.restoreAllMocks()
+    restoreConsentEnv(envStash)
   })
 
   it('captures a valid event with merged common + event props and $process_person_profile false', () => {
@@ -209,8 +250,10 @@ describe('setOptIn()', () => {
   let mock: MockPostHog
   let store: Store
   let settings: GlobalSettings
+  let envStash: Record<string, string | undefined>
 
   beforeEach(() => {
+    envStash = stashAndClearConsentEnv()
     vi.spyOn(console, 'debug').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     resetBurstCapsForSession()
@@ -233,6 +276,7 @@ describe('setOptIn()', () => {
     _setCommonPropsForTests(null)
     _setStoreForTests(null)
     vi.restoreAllMocks()
+    restoreConsentEnv(envStash)
   })
 
   // Ordering invariant: the opt-out event is the one signal that transmits
