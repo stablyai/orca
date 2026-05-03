@@ -114,7 +114,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: `${homedir}/orca/workspaces`,
     nestWorkspaces: true,
-    hideDefaultBranchWorkspace: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
@@ -240,6 +239,7 @@ export function getDefaultUIState(): PersistedUIState {
     groupBy: 'none',
     sortBy: 'recent',
     showActiveOnly: false,
+    hideDefaultBranchWorkspace: false,
     filterRepoIds: [],
     collapsedGroups: [],
     uiZoomLevel: 0,

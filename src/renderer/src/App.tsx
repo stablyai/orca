@@ -135,6 +135,7 @@ function App(): React.JSX.Element {
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
@@ -330,6 +331,7 @@ function App(): React.JSX.Element {
             groupBy: 'none',
             sortBy: 'recent',
             showActiveOnly: false,
+            hideDefaultBranchWorkspace: false,
             filterRepoIds: [],
             collapsedGroups: [],
             uiZoomLevel: 0,
@@ -460,6 +462,7 @@ function App(): React.JSX.Element {
         groupBy,
         sortBy,
         showActiveOnly,
+        hideDefaultBranchWorkspace,
         filterRepoIds
       })
     }, 150)
@@ -472,6 +475,7 @@ function App(): React.JSX.Element {
     groupBy,
     sortBy,
     showActiveOnly,
+    hideDefaultBranchWorkspace,
     filterRepoIds
   ])
 

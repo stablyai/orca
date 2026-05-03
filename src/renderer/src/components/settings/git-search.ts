@@ -12,11 +12,6 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
   },
   {
-    title: 'Hide Default Branch Workspace',
-    description: 'Hide the repo default branch from the Workspaces sidebar.',
-    keywords: ['main', 'master', 'default branch', 'workspace', 'sidebar', 'hide']
-  },
-  {
     title: 'Orca Attribution',
     description: 'Add Orca attribution to commits, PRs, and issues.',
     keywords: ['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']

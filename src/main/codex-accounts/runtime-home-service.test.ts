@@ -98,8 +98,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
-    ...overrides,
-    hideDefaultBranchWorkspace: overrides.hideDefaultBranchWorkspace ?? false
+    ...overrides
   }
 }
 

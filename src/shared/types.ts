@@ -963,8 +963,6 @@ export type TerminalColorOverrides = {
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
-  /** Hide the repo's original checked-out branch from workspace navigation. */
-  hideDefaultBranchWorkspace: boolean
   refreshLocalBaseRefOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
@@ -1205,6 +1203,12 @@ export type PersistedUIState = {
   groupBy: 'none' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean
+  /** Hide the repo's original checked-out branch from workspace navigation
+   *  (sidebar and Cmd+J jump palette). Folder-mode repos are unaffected —
+   *  the predicate in visible-worktrees.ts excludes worktrees with an empty
+   *  branch. Lives alongside showActiveOnly because both are user-facing
+   *  sidebar filters reached through the same dropdown. */
+  hideDefaultBranchWorkspace: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]
   uiZoomLevel: number

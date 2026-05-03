@@ -16,6 +16,7 @@ import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/gith
 import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
+import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
@@ -157,6 +158,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -176,7 +178,24 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hasQuery = deferredQuery.trim().length > 0
 
   const sortedWorktrees = useMemo(() => {
-    const visibleWorktrees = allWorktrees.filter((worktree) => !worktree.isArchived)
+    const visibleWorktrees = allWorktrees.filter((worktree) => {
+      if (worktree.isArchived) {
+        return false
+      }
+      // Why: keep the jump palette aligned with the sidebar. If the user
+      // opted to hide the default-branch workspace, surfacing it here via
+      // Cmd+J would reintroduce the entry they asked to remove.
+      // Drift warning: this check must stay in lockstep with the sidebar's
+      // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
+      // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
+      // but adding a new filter axis (e.g. a second toggle) here would need
+      // the matching change in the sidebar pipeline — otherwise Cmd+J and
+      // the sidebar will show different lists.
+      if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
+        return false
+      }
+      return true
+    })
     // Why: on empty query, show pure recency (matches sidebar's 'recent' sort
     // rationale in smart-sort.ts) so Cmd+J is a predictable "jump back to what
     // I was just on" surface. Typing swaps in smart-sort to rank matches.
@@ -188,11 +207,15 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           (a, b) =>
             b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
         )
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache, hasQuery])
+  }, [allWorktrees, tabsByWorktree, repoMap, prCache, hasQuery, hideDefaultBranchWorkspace])
 
   const browserSortedWorktrees = useMemo(() => {
     // Why: browser-tab search is explicitly cross-worktree, so it must keep
-    // indexing live browser pages even when their owning worktree is archived.
+    // indexing live browser pages even when their owning worktree is archived
+    // or hidden by the default-branch-workspace setting. A user who opened a
+    // tab on the default-branch worktree before toggling hide-on should still
+    // be able to Cmd+J back to it — the setting hides the *workspace row*,
+    // not the browser tabs that live inside it.
     return sortWorktreesSmart(allWorktrees, tabsByWorktree, repoMap, prCache)
   }, [allWorktrees, tabsByWorktree, repoMap, prCache])
 

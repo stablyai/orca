@@ -183,6 +183,8 @@ export type UISlice = {
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
+  hideDefaultBranchWorkspace: boolean
+  setHideDefaultBranchWorkspace: (v: boolean) => void
   filterRepoIds: string[]
   setFilterRepoIds: (ids: string[]) => void
   collapsedGroups: Set<string>
@@ -447,6 +449,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
 
+  hideDefaultBranchWorkspace: false,
+  setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
+
   filterRepoIds: [],
   setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
@@ -581,6 +586,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // transient render detail. Restoring it on launch keeps the filtered
         // worktree list stable across restarts instead of silently widening it.
         showActiveOnly: ui.showActiveOnly,
+        hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),
         uiZoomLevel: ui.uiZoomLevel ?? 0,

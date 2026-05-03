@@ -111,45 +111,6 @@ export function GitPane({
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
-      title: 'Hide Default Branch Workspace',
-      description: 'Hide the repo default branch from the Workspaces sidebar.',
-      keywords: ['main', 'master', 'default branch', 'workspace', 'sidebar', 'hide']
-    }) ? (
-      <SearchableSetting
-        key="hide-default-branch-workspace"
-        title="Hide Default Branch Workspace"
-        description="Hide the repo default branch from the Workspaces sidebar."
-        keywords={['main', 'master', 'default branch', 'workspace', 'sidebar', 'hide']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>Hide Default Branch Workspace</Label>
-          <p className="text-xs text-muted-foreground">
-            When enabled, Orca hides the repo&apos;s original checked-out branch, such as{' '}
-            <code>main</code> from the workspaces sidebar.
-          </p>
-        </div>
-        <button
-          role="switch"
-          aria-checked={settings.hideDefaultBranchWorkspace}
-          onClick={() =>
-            updateSettings({
-              hideDefaultBranchWorkspace: !settings.hideDefaultBranchWorkspace
-            })
-          }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.hideDefaultBranchWorkspace ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.hideDefaultBranchWorkspace ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
-      </SearchableSetting>
-    ) : null,
-    matchesSettingsSearch(searchQuery, {
       title: 'Orca Attribution',
       description: 'Add Orca attribution to commits, PRs, and issues.',
       keywords: ['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']
