@@ -7,7 +7,6 @@ import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import devIcon from '../../resources/icon-dev.png?asset'
 import { Store, initDataPath } from './persistence'
-import { initCohortResolver } from './telemetry/cohort-resolver'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
@@ -374,13 +373,6 @@ app.whenReady().then(async () => {
   }
 
   store = new Store()
-  // Runs the existing-user first-launch banner state machine post-load.
-  // Kept out of `Store.load()` so Case B's `firstBannerSecondAskShown`
-  // write goes through `store.updateSettings()` and gets picked up by the
-  // debounced save — force-quitting between migration and the next
-  // settings change would otherwise lose the flag and re-nag forever.
-  // PR 2 adds `initTelemetry(store)` after this line.
-  initCohortResolver(store)
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)

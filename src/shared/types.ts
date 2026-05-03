@@ -1172,15 +1172,6 @@ export type GlobalSettings = {
      *  Re-shows on next launch if false/undefined so the consent disclosure
      *  is never silently skipped by quitting mid-session. */
     firstRunNoticeShown?: boolean
-    /** Existing-user banner ✕ dismissal timestamp (ISO). While set, the
-     *  cohort resolver suppresses the banner for 7 days, then re-renders it
-     *  one final time with the ✕ removed. */
-    firstBannerDismissedAt?: string
-    /** True once the post-7-day follow-up banner has been rendered. If the
-     *  user dismisses that banner without clicking Sure/No-thanks, the next
-     *  cohort resolve treats it as `optedIn = false` (Case A in
-     *  cohort-resolver.ts). */
-    firstBannerSecondAskShown?: boolean
   }
 }
 

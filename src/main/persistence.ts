@@ -552,10 +552,10 @@ export class Store {
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping
-    // only `optedIn`) must not clobber sibling fields like `installId`,
-    // `existedBeforeTelemetryRelease`, or banner-dismissal markers. The
-    // field is optional, so we only synthesize a `telemetry` key on the
-    // result when at least one side has one.
+    // only `optedIn`) must not clobber sibling fields like `installId` or
+    // `existedBeforeTelemetryRelease`. The field is optional, so we only
+    // synthesize a `telemetry` key on the result when at least one side has
+    // one.
     const mergedTelemetry =
       updates.telemetry !== undefined
         ? { ...this.state.settings.telemetry, ...updates.telemetry }
