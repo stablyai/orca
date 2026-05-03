@@ -86,9 +86,9 @@ export default function MarkdownViewToggle({
         // because only those slots have language-specific presentation variants
         // (e.g. CSV's "Table" label on the 'rich' slot). 'edit'/'changes' are
         // orthogonal toggle values and always use the default metadata.
-        const override = (metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>>)[
-          viewMode
-        ]
+        const override = (
+          metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>> | undefined
+        )?.[viewMode]
         const metadata = override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
         const Icon = metadata.icon
         return (
