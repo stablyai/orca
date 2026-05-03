@@ -195,6 +195,14 @@ const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 // The validator does `eventSchemas[name].safeParse(props)`. `EventMap` is
 // `z.infer`-derived from this record, so there is exactly one source of
 // truth for both compile-time types and runtime validation.
+//
+// Schema-evolution / versioning doctrine:
+// Breaking changes (renaming a field, changing an enum's meaning, removing a
+// required key) require a new event name (e.g. `agent_started_v2`), not an
+// in-place edit. Additive-optional fields (`z.field().optional()`) are safe
+// to add in place. This keeps PostHog funnels clean — an in-place breaking
+// change silently blends pre- and post-change rows under one event name,
+// which cannot be unmixed after the fact.
 export const eventSchemas = {
   app_opened: emptySchema,
 
@@ -231,8 +239,15 @@ export const commonPropsSchema = z
     platform: z.string().max(64),
     arch: z.string().max(64),
     os_release: z.string().max(64),
-    install_id: z.string().max(64),
-    session_id: z.string().max(64),
+    // `install_id` is used as PostHog's `distinctId` and `session_id` is the
+    // per-process correlation key — an empty string on either would collapse
+    // unrelated events into a single synthetic "user" / "session" and
+    // silently corrupt analytics. `.min(1)` rejects that actual observed
+    // failure mode without pinning the shape to UUIDs (both ids come from
+    // `randomUUID()` today, but forward-compatibility with a future id
+    // scheme is cheap to preserve).
+    install_id: z.string().min(1).max(64),
+    session_id: z.string().min(1).max(64),
     orca_channel: z.enum(['stable', 'rc'])
   })
   .strict()

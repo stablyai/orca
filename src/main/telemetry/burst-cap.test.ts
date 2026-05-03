@@ -73,6 +73,37 @@ describe('burst-cap', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
+  // ── Unknown event names ──────────────────────────────────────────────
+
+  it('rejects unknown event names without creating a bucket (prevents unbounded Map growth)', () => {
+    // The IPC handler casts any renderer string to `EventName`, so a
+    // compromised renderer could flood unique bogus names. `consumeBurstToken`
+    // must short-circuit before `getOrCreateBucket` to keep `perEventBuckets`
+    // bounded by the compile-time `eventSchemas` size.
+    const sizeBefore = _getBurstCapStateForTests().perEventBuckets.size
+    // Cast through unknown — this is the renderer-controlled-string scenario.
+    expect(consumeBurstToken('totally_bogus_event_name' as unknown as 'app_opened')).toBe(false)
+    expect(consumeBurstToken('another_fake_name' as unknown as 'app_opened')).toBe(false)
+    expect(consumeBurstToken('yet_another' as unknown as 'app_opened')).toBe(false)
+    const sizeAfter = _getBurstCapStateForTests().perEventBuckets.size
+    expect(sizeAfter).toBe(sizeBefore)
+  })
+
+  it('rejects Object.prototype key names without creating a bucket', () => {
+    // Regression: the guard originally used `name in eventSchemas`, which
+    // walks the prototype chain — so `'toString'`, `'__proto__'`,
+    // `'constructor'`, etc. would all pass the check and seed buckets.
+    // `Object.hasOwn` is an own-property check and rejects them.
+    const sizeBefore = _getBurstCapStateForTests().perEventBuckets.size
+    expect(consumeBurstToken('toString' as unknown as 'app_opened')).toBe(false)
+    expect(consumeBurstToken('__proto__' as unknown as 'app_opened')).toBe(false)
+    expect(consumeBurstToken('constructor' as unknown as 'app_opened')).toBe(false)
+    expect(consumeBurstToken('hasOwnProperty' as unknown as 'app_opened')).toBe(false)
+    expect(consumeBurstToken('valueOf' as unknown as 'app_opened')).toBe(false)
+    const sizeAfter = _getBurstCapStateForTests().perEventBuckets.size
+    expect(sizeAfter).toBe(sizeBefore)
+  })
+
   // ── Per-session ceiling ──────────────────────────────────────────────
 
   it('enforces the 1000-event per-session ceiling even if per-event caps refill', () => {

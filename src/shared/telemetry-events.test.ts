@@ -167,6 +167,36 @@ describe('commonPropsSchema', () => {
     })
     expect(parsed.success).toBe(false)
   })
+
+  // Empty `install_id` would collapse every event under one synthetic
+  // PostHog `distinctId`; empty `session_id` would blend unrelated process
+  // lifetimes. `.min(1)` guards both — this test pins that contract so a
+  // future edit can't relax it back to `.max(64)`-only.
+  it('rejects empty install_id', () => {
+    const parsed = commonPropsSchema.safeParse({
+      app_version: '1.3.33',
+      platform: 'darwin',
+      arch: 'arm64',
+      os_release: '25.3.0',
+      install_id: '',
+      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      orca_channel: 'stable'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects empty session_id', () => {
+    const parsed = commonPropsSchema.safeParse({
+      app_version: '1.3.33',
+      platform: 'darwin',
+      arch: 'arm64',
+      os_release: '25.3.0',
+      install_id: '00000000-0000-4000-8000-000000000000',
+      session_id: '',
+      orca_channel: 'stable'
+    })
+    expect(parsed.success).toBe(false)
+  })
 })
 
 describe('exported enum schemas', () => {

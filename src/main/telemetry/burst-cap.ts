@@ -30,7 +30,7 @@
 // then drops quietly until the next session reset. Rate-limiting the logs
 // themselves is what keeps a pathological caller from DoSing stderr.
 
-import type { EventName } from '../../shared/telemetry-events'
+import { eventSchemas, type EventName } from '../../shared/telemetry-events'
 
 const PER_EVENT_DEFAULT_CAPACITY = 30
 const PER_EVENT_AGENT_ERROR_CAPACITY = 20
@@ -90,6 +90,20 @@ function getOrCreateBucket(name: string, now: number): TokenBucket {
  * cycles through event names to evade the per-event caps.
  */
 export function consumeBurstToken(name: EventName): boolean {
+  // Reject unknown event names here so renderer-controlled strings cannot
+  // grow `perEventBuckets` past the fixed `eventSchemas` size. The IPC
+  // `telemetry:track` handler casts any string to `EventName`, so a
+  // compromised renderer could otherwise flood unique bogus names and
+  // unboundedly grow the Map before the validator rejects them. Downstream
+  // validator still rejects with the proper "unknown event" reason.
+  //
+  // Use `Object.hasOwn` rather than `in` — the latter walks the prototype
+  // chain, so a compromised renderer could pass `'toString'`, `'__proto__'`,
+  // `'constructor'`, etc. to bypass the guard and seed buckets for every
+  // `Object.prototype` key. Growth would be bounded (~12 keys) but the whole
+  // point of this check is to keep the Map size pinned to the compile-time
+  // `eventSchemas` surface.
+  if (!Object.hasOwn(eventSchemas, name)) return false
   const now = Date.now()
   const bucket = getOrCreateBucket(name, now)
   if (bucket.tokens < 1) {

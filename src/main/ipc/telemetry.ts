@@ -46,10 +46,11 @@ export function registerTelemetryHandlers(): void {
       if (props !== null && props !== undefined && typeof props !== 'object') {
         return
       }
-      // The cast to `never` here is the documented pattern for IPC
-      // pass-through: the validator inside `track()` enforces the schema
-      // contract at runtime, and we do not want the main-side type system
-      // to pretend the renderer's word is trustworthy.
+      // The casts to `EventName` / `EventProps<EventName>` here are
+      // pass-through only — this file does NOT pretend the renderer's
+      // name/props are type-safe. The validator inside `track()` is the
+      // single enforcement point at runtime; these casts only feed the
+      // typed channel that the validator will re-check.
       track(
         name as EventName,
         (props ?? {}) as EventProps<EventName>

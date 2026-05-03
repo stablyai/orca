@@ -263,6 +263,15 @@ describe('setOptIn()', () => {
 })
 
 describe('shutdownTelemetry()', () => {
+  // Reset module-level state that persists across tests: shutdownTelemetry
+  // leaves shuttingDown=true, which would silently drop events in any
+  // later-added test. Also null out the client so a stale mock from one
+  // test cannot leak into the next.
+  afterEach(() => {
+    _setShuttingDownForTests(false)
+    _setPostHogClientForTests(null)
+  })
+
   it('sets the shutdown gate and calls posthog.shutdown(2000)', async () => {
     const mock = makeMockPostHog()
     _setPostHogClientForTests(mock as unknown as PostHog)

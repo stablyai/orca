@@ -16,11 +16,21 @@
 import type { EventName, EventProps } from '../../../shared/telemetry-events'
 
 export function track<N extends EventName>(name: N, props: EventProps<N>): void {
-  // Fire-and-forget: the renderer does not await the main-side capture.
-  // `void` suppresses the float-promise lint without changing semantics.
-  void window.api.telemetryTrack(name, props as Record<string, unknown>)
+  // Why: telemetry must never throw into the renderer. A missing bridge
+  // (tests, early init, sandboxed iframe) would turn `window.api.telemetryTrack`
+  // into a synchronous TypeError that defeats the documented fire-and-forget
+  // contract. Swallow both the sync throw and any promise rejection.
+  try {
+    void window.api?.telemetryTrack?.(name, props as Record<string, unknown>)?.catch(() => {})
+  } catch {
+    // Swallow — telemetry must never break the renderer.
+  }
 }
 
 export function setOptIn(optedIn: boolean): void {
-  void window.api.telemetrySetOptIn(optedIn)
+  try {
+    void window.api?.telemetrySetOptIn?.(optedIn)?.catch(() => {})
+  } catch {
+    // Swallow — telemetry must never break the renderer.
+  }
 }

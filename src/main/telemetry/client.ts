@@ -33,7 +33,7 @@ import type { CommonProps, EventName, EventProps } from '../../shared/telemetry-
 import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { resolveConsent } from './consent'
-import { validate } from './validator'
+import { commonPropsSchema, validate } from './validator'
 
 // Compile-time feature flag. PR 2 ships with this `false` — the SDK is wired
 // but no event transmits. PR 3 flips it to `true` once the PostHog project
@@ -135,6 +135,25 @@ export function initTelemetry(store: Store): void {
     // narrows the identity constant to the `'stable' | 'rc'` arm.
     BUILD_IDENTITY as 'stable' | 'rc'
   )
+
+  // Fail-closed on bad common props — the validator is the single enforcement
+  // point for wire shape, including common props. A bad `install_id` (e.g.
+  // empty string from a migration bug) would collapse all events into one
+  // distinct_id, so we must refuse to initialize transport rather than ship
+  // malformed identity on every capture.
+  //
+  // Validated once here at init — NOT on every `track()` call — because
+  // `commonProps` is a module-level singleton built exactly once from inputs
+  // that do not change across the session (app version, OS, install_id,
+  // session_id, channel). Re-validating per event would be wasted work on
+  // a value that cannot drift. If a future refactor makes `commonProps`
+  // mutable mid-session, move this check accordingly.
+  const parsedCommon = commonPropsSchema.safeParse(commonProps)
+  if (!parsedCommon.success) {
+    console.warn('[telemetry] common props failed schema validation; skipping transport init')
+    commonProps = null
+    return
+  }
 
   posthog = new PostHog(WRITE_KEY as string, {
     host: 'https://us.i.posthog.com',
