@@ -1,10 +1,13 @@
-/* eslint-disable max-lines -- Why: this component is the central dispatcher
-that maps (language, viewMode, binary, conflict) onto the correct editor
-surface. Splitting the branches across files would force the view-mode state
-machine to live behind indirection that obscures the exhaustive conditionals. */
+/* eslint-disable max-lines -- Why: EditorContent is the dispatch surface for
+every editor mode (edit, diff, conflict, markdown-preview, combined-diff, and
+now Changes view mode). Keeping the mode-selection branches colocated is easier
+to reason about than scattering the switch across per-mode wrappers. Individual
+renderers (MonacoEditor, DiffViewer, ChangesModeView, MarkdownPreview, etc.)
+already live in their own modules. */
 import React, { lazy } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
+import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
@@ -49,6 +52,7 @@ export function EditorContent({
   isMermaid,
   isCsv,
   mdViewMode,
+  isChangesMode,
   sideBySide,
   pendingEditorReveal,
   handleContentChange,
@@ -66,6 +70,7 @@ export function EditorContent({
   isMermaid: boolean
   isCsv: boolean
   mdViewMode: MarkdownViewMode
+  isChangesMode: boolean
   sideBySide: boolean
   pendingEditorReveal: {
     filePath?: string
@@ -342,6 +347,22 @@ export function EditorContent({
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
           Binary file — cannot display
         </div>
+      )
+    }
+    if (isChangesMode) {
+      return (
+        <ChangesModeView
+          activeFile={activeFile}
+          dc={diffContents[activeFile.id]}
+          modifiedContent={editBuffers[activeFile.id] ?? fc.content}
+          activeConflictEntry={activeConflictEntry}
+          resolvedLanguage={resolvedLanguage}
+          sideBySide={sideBySide}
+          viewStateScopeId={viewStateScopeId}
+          diffViewStateKey={diffViewStateKey}
+          onContentChange={handleContentChange}
+          onSave={isMarkdown ? md.mdSave : handleSave}
+        />
       )
     }
     return (

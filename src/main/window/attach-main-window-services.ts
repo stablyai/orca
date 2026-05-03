@@ -34,7 +34,7 @@ export function attachMainWindowServices(
   prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>
 ): void {
   registerRepoHandlers(mainWindow, store)
-  registerWorktreeHandlers(mainWindow, store)
+  registerWorktreeHandlers(mainWindow, store, runtime)
   registerPtyHandlers(
     mainWindow,
     runtime,

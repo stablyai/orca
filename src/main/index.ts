@@ -44,7 +44,7 @@ import { claudeHookService } from './claude/hook-service'
 import { codexHookService } from './codex/hook-service'
 import { geminiHookService } from './gemini/hook-service'
 import { cursorHookService } from './cursor/hook-service'
-import { getPtyIdForPaneKey, registerPaneKeyTeardownListener } from './ipc/pty'
+import { getPtyIdForPaneKey, registerPaneKeyTeardownListener, getLocalPtyProvider } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 
@@ -396,7 +396,14 @@ app.whenReady().then(async () => {
       .filter((account) => account.id !== settings.activeCodexManagedAccountId)
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
-  runtime = new OrcaRuntimeService(store, stats)
+  runtime = new OrcaRuntimeService(store, stats, {
+    // Why: resolve the PTY provider lazily. initDaemonPtyProvider() runs later
+    // inside attachMainWindowServices and calls setLocalPtyProvider(routedAdapter)
+    // to swap the in-process provider for the daemon-routed one. Capturing the
+    // provider reference eagerly here would freeze the pre-daemon LocalPtyProvider
+    // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
+    getLocalProvider: () => getLocalPtyProvider()
+  })
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()

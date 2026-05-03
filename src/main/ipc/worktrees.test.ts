@@ -104,6 +104,19 @@ vi.mock('../terminal-history', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
+const { killAllProcessesForWorktreeMock, getLocalPtyProviderMock } = vi.hoisted(() => ({
+  killAllProcessesForWorktreeMock: vi.fn(),
+  getLocalPtyProviderMock: vi.fn()
+}))
+
+vi.mock('../runtime/worktree-teardown', () => ({
+  killAllProcessesForWorktree: killAllProcessesForWorktreeMock
+}))
+
+vi.mock('./pty', () => ({
+  getLocalPtyProvider: getLocalPtyProviderMock
+}))
+
 import { registerWorktreeHandlers } from './worktrees'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
@@ -155,10 +168,18 @@ describe('registerWorktreeHandlers', () => {
       store.getSettings,
       store.getWorktreeMeta,
       store.setWorktreeMeta,
-      store.removeWorktreeMeta
+      store.removeWorktreeMeta,
+      killAllProcessesForWorktreeMock,
+      getLocalPtyProviderMock
     ]) {
       m.mockReset()
     }
+    killAllProcessesForWorktreeMock.mockResolvedValue({
+      runtimeStopped: 0,
+      providerStopped: 0,
+      registryStopped: 0
+    })
+    getLocalPtyProviderMock.mockReturnValue({} as never)
 
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
@@ -230,7 +251,7 @@ describe('registerWorktreeHandlers', () => {
     ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([])
 
-    registerWorktreeHandlers(mainWindow as never, store as never)
+    registerWorktreeHandlers(mainWindow as never, store as never, {} as never)
   })
 
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
@@ -748,6 +769,60 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/feature-wt',
       false
     )
+  })
+
+  it('IPC-initiated delete kills PTYs BEFORE git-level removal (design §4.3)', async () => {
+    listWorktreesMock.mockResolvedValue([])
+    getEffectiveHooksMock.mockReturnValue(null)
+    const callOrder: string[] = []
+    killAllProcessesForWorktreeMock.mockImplementation(async () => {
+      callOrder.push('kill')
+      return { runtimeStopped: 1, providerStopped: 0, registryStopped: 0 }
+    })
+    removeWorktreeMock.mockImplementation(async () => {
+      callOrder.push('git')
+    })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      expect.objectContaining({
+        localProvider: expect.anything()
+      })
+    )
+    expect(removeWorktreeMock).toHaveBeenCalled()
+    expect(callOrder).toEqual(['kill', 'git'])
+  })
+
+  it('skips the PTY teardown for SSH-backed repos (design §6 out-of-scope)', async () => {
+    // Why: SSH-backed PTYs live on the remote host and are handled by the
+    // remote provider's own teardown. The local-host helper must not run for
+    // SSH repos, because it would sweep registry entries for other worktrees.
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+
+    // The test can't easily mock the SSH provider without more plumbing — the
+    // call will throw about 'no git provider for connection'. What matters
+    // here is that the kill helper was NOT called for the SSH branch.
+    await (
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-ssh::/remote/feature-wt'
+      }) as Promise<unknown>
+    ).catch(() => {})
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('rejects ask-policy creates before mutating git state when setup decision is missing', async () => {

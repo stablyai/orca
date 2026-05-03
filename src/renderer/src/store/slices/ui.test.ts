@@ -97,6 +97,18 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().showActiveOnly).toBe(true)
   })
+
+  it('restores the hide-default-branch filter from persisted UI state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        hideDefaultBranchWorkspace: true
+      })
+    )
+
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
+  })
 })
 
 describe('createUISlice settings navigation', () => {

@@ -1145,6 +1145,34 @@ export type GlobalSettings = {
    *  off never mount the overlay. Toggling takes effect immediately in the
    *  current session (no relaunch) because it is purely renderer-side. */
   experimentalSidekick: boolean
+  /** Anonymous product-telemetry state. Optional because the one-shot
+   *  migration in `Store.load()` is what populates it on first boot of the
+   *  telemetry release; before migration runs, the field is absent. After
+   *  migration every user has `installId` set and `optedIn` is `true` (new
+   *  users) or `null` (existing users awaiting the first-launch banner).
+   *
+   *  Why this block carries only consent + identity state, not volatile
+   *  counters: DAU and crash attribution are both out of v1 scope
+   *  (daily_active_user is derived server-side from app_opened; crashes are
+   *  handled by a separate crash-reporting lane, not product telemetry). So
+   *  there is no lastActiveDate, no lastSessionId, and no heartbeat
+   *  timestamp here — adding any of those would amplify the debounced
+   *  settings write on a fast cadence and couple user preferences to
+   *  volatile telemetry counters. Keep this surface to values that only
+   *  change on explicit consent transitions. */
+  telemetry?: {
+    /** New users: initialized to `true` at install.
+     *  Existing users: `null` until they resolve the first-launch banner. */
+    optedIn: boolean | null
+    /** Anonymous UUID v4. Generated on first run. Regenerable from Privacy pane. */
+    installId: string
+    /** Cohort marker set once during migration. Drives toast-vs-banner. */
+    existedBeforeTelemetryRelease: boolean
+    /** New-user toast: true only after active dismissal ("Got it" or "Turn off").
+     *  Re-shows on next launch if false/undefined so the consent disclosure
+     *  is never silently skipped by quitting mid-session. */
+    firstRunNoticeShown?: boolean
+  }
 }
 
 export type GhosttyImportPreview = {
@@ -1203,6 +1231,12 @@ export type PersistedUIState = {
   groupBy: 'none' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean
+  /** Hide the repo's original checked-out branch from workspace navigation
+   *  (sidebar and Cmd+J jump palette). Folder-mode repos are unaffected —
+   *  the predicate in visible-worktrees.ts excludes worktrees with an empty
+   *  branch. Lives alongside showActiveOnly because both are user-facing
+   *  sidebar filters reached through the same dropdown. */
+  hideDefaultBranchWorkspace: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]
   uiZoomLevel: number

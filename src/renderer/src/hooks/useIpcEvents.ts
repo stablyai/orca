@@ -34,8 +34,31 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.worktrees.onChanged((data: { repoId: string }) => {
-        useAppStore.getState().fetchWorktrees(data.repoId)
+      window.api.worktrees.onChanged(async (data: { repoId: string }) => {
+        // Why: diff before vs. after fetchWorktrees to detect server-side
+        // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
+        // and purge worktree-scoped state for removed ids. Without this,
+        // `ptyIdsByTabId` would retain entries for tabs whose worktree is
+        // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
+        // misclassifying the zombie as bound (design §2c, §4.4).
+        const state = useAppStore.getState()
+        const before = new Set((state.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        await state.fetchWorktrees(data.repoId)
+        const afterState = useAppStore.getState()
+        const after = new Set((afterState.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        const removed: string[] = []
+        for (const id of before) {
+          if (!after.has(id)) {
+            removed.push(id)
+          }
+        }
+        if (removed.length > 0) {
+          console.warn(
+            `[worktree-purge] diff-based purge removing state for ${removed.length} worktree(s):`,
+            removed
+          )
+          afterState.purgeWorktreeTerminalState(removed)
+        }
       })
     )
 

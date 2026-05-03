@@ -49,6 +49,7 @@ function createTestStore() {
         openFiles: [],
         editorDrafts: {},
         markdownViewMode: {},
+        editorViewMode: {},
         expandedDirs: {},
         gitStatusByWorktree: {},
         gitConflictOperationByWorktree: {},
@@ -231,6 +232,35 @@ describe('removeWorktree state cleanup', () => {
     await store.getState().removeWorktree('repo1::/path/wt1')
 
     expect(store.getState().markdownViewMode).toEqual({ 'file-2': 'source' })
+  })
+
+  it('cleans up editorViewMode for files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        {
+          id: 'file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/app.ts',
+          relativePath: 'app.ts',
+          language: 'typescript',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      editorViewMode: {
+        'file-1': 'changes' as const,
+        'file-2': 'changes' as const
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
   })
 
   it('cleans up expandedDirs for the removed worktree', async () => {
@@ -502,5 +532,219 @@ describe('worktree unread (show-until-interact)', () => {
 
     expect(store.getState().worktreesByRepo).toBe(initial)
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+})
+
+// Why: design §4.4 — the hydration-time purge must be gated behind a
+// per-repo success check (F1 regression) so a transient git error on one
+// repo cannot silently wipe every persisted tabsByWorktree entry for that
+// repo. An empty-but-successful fetch from a newly-cloned sibling repo is
+// also unsafe to treat as authoritative on its own. Pins both halves of
+// that contract plus the happy-path purge.
+describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const repoA = {
+    id: 'repoA',
+    path: '/repos/a',
+    displayName: 'a',
+    badgeColor: '#000',
+    addedAt: 0
+  }
+  const repoB = {
+    id: 'repoB',
+    path: '/repos/b',
+    displayName: 'b',
+    badgeColor: '#111',
+    addedAt: 0
+  }
+
+  it('defers the purge when a sibling repo fetch fails (F1 regression)', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+
+    // Stub: repoA succeeds; repoB throws. Stale tabsByWorktree entry for
+    // repoA::/a/stale must NOT be purged while any repo fetch is degraded.
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      if (repoId === 'repoA') {
+        return [wtA]
+      }
+      throw new Error('git error')
+    })
+
+    store.setState({
+      repos: [repoA, repoB],
+      worktreesByRepo: { repoB: [wtB] },
+      tabsByWorktree: {
+        'repoA::/a/stale': [{ id: 'tab-A-stale', worktreeId: 'repoA::/a/stale' }],
+        'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repoA::/a/stale': [{ id: 'tab-A-stale', worktreeId: 'repoA::/a/stale' }],
+      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
+
+    // After repoB recovers, the deferred purge fires for genuinely stale ids.
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      if (repoId === 'repoA') {
+        return [wtA]
+      }
+      return [wtB]
+    })
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
+  })
+
+  it('defers the purge when every repo succeeds but none returns worktrees (empty-sibling safety)', async () => {
+    const store = createTestStore()
+
+    // Both repos succeed but legitimately return empty (newly-cloned). The
+    // union of valid ids would be empty — declaring that authoritative
+    // would wipe every persisted tabsByWorktree entry. Must defer instead.
+    mockApi.worktrees.list.mockResolvedValue([])
+
+    store.setState({
+      repos: [repoA, repoB],
+      tabsByWorktree: {
+        'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }]
+    })
+  })
+
+  it('fires the purge once when every repo returns successfully with ≥1 worktree', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+      repoId === 'repoA' ? [wtA] : [wtB]
+    )
+
+    store.setState({
+      repos: [repoA, repoB],
+      tabsByWorktree: {
+        'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
+        'repoA::/a/zombie': [{ id: 'tab-zombie', worktreeId: 'repoA::/a/zombie' }],
+        'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
+      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
+
+    // Second call must not re-run the purge even if new stale ids appear.
+    store.setState({
+      tabsByWorktree: {
+        ...store.getState().tabsByWorktree,
+        'repoA::/a/new-zombie': [{ id: 'tab-new-zombie', worktreeId: 'repoA::/a/new-zombie' }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().tabsByWorktree['repoA::/a/new-zombie']).toBeDefined()
+  })
+})
+
+// Why: design §4.4 — purgeWorktreeTerminalState wipes every worktree-scoped
+// map symmetrically so a single removed-worktree event cannot leave
+// per-worktree entries stranded. The full cascade is already covered by
+// removeWorktree tests above; this block exercises the action directly to
+// confirm cross-map coverage (worktree key, tab id, file id, and top-level
+// actives).
+describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('wipes tab-id-keyed maps (terminalLayoutsByTabId, ptyIdsByTabId) and clears actives', () => {
+    const store = createTestStore()
+
+    store.setState({
+      tabsByWorktree: {
+        'repoA::/a/wt1': [
+          { id: 'tab-1', worktreeId: 'repoA::/a/wt1' },
+          { id: 'tab-2', worktreeId: 'repoA::/a/wt1' }
+        ],
+        'repoA::/a/wt2': [{ id: 'tab-3', worktreeId: 'repoA::/a/wt2' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': { panes: [] },
+        'tab-2': { panes: [] },
+        'tab-3': { panes: [] }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'], 'tab-3': ['pty-3'] },
+      runtimePaneTitlesByTabId: { 'tab-1': 'claude', 'tab-3': 'bash' },
+      openFiles: [
+        {
+          id: 'file-1',
+          worktreeId: 'repoA::/a/wt1',
+          filePath: '/a/wt1/a.ts',
+          relativePath: 'a.ts',
+          language: 'typescript',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      editorDrafts: { 'file-1': 'draft', 'file-99': 'other' },
+      activeWorktreeId: 'repoA::/a/wt1',
+      activeFileId: 'file-1',
+      activeTabId: 'tab-1',
+      activeTabType: 'editor' as const
+    } as unknown as Partial<AppState>)
+
+    store.getState().purgeWorktreeTerminalState(['repoA::/a/wt1'])
+
+    const s = store.getState()
+    expect(s.tabsByWorktree).toEqual({
+      'repoA::/a/wt2': [{ id: 'tab-3', worktreeId: 'repoA::/a/wt2' }]
+    })
+    expect(s.terminalLayoutsByTabId).toEqual({ 'tab-3': { panes: [] } })
+    expect(s.ptyIdsByTabId).toEqual({ 'tab-3': ['pty-3'] })
+    expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
+    expect(s.openFiles).toEqual([])
+    expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeFileId).toBeNull()
+    expect(s.activeTabId).toBeNull()
+    expect(s.activeTabType).toBe('terminal')
+  })
+
+  it('is a no-op when the id list is empty', () => {
+    const store = createTestStore()
+    const before = {
+      'repoA::/a/wt1': [{ id: 'tab-1', worktreeId: 'repoA::/a/wt1' }]
+    }
+    store.setState({ tabsByWorktree: before } as unknown as Partial<AppState>)
+
+    store.getState().purgeWorktreeTerminalState([])
+
+    expect(store.getState().tabsByWorktree).toBe(before)
   })
 })

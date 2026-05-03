@@ -28,7 +28,12 @@ import {
   buildRows,
   getGroupKeyForWorktree
 } from './worktree-list-groups'
-import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
+import {
+  computeClearFilterActions,
+  computeVisibleWorktreeIds,
+  setVisibleWorktreeIds,
+  sidebarHasActiveFilters
+} from './visible-worktrees'
 import { useModifierHint } from '@/hooks/useModifierHint'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
@@ -440,6 +445,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
@@ -632,6 +638,7 @@ const WorktreeList = React.memo(function WorktreeList() {
       tabsByWorktree,
       browserTabsByWorktree,
       activeWorktreeId,
+      hideDefaultBranchWorkspace,
       repoMap
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
@@ -639,6 +646,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     filterRepoIds,
     showActiveOnly,
     activeWorktreeId,
+    hideDefaultBranchWorkspace,
     repoMap,
     tabsByWorktree,
     browserTabsByWorktree,
@@ -721,14 +729,32 @@ const WorktreeList = React.memo(function WorktreeList() {
     [openModal]
   )
 
-  const hasFilters = !!(showActiveOnly || filterRepoIds.length)
+  // Why: hideDefaultBranchWorkspace is counted as a filter here so the
+  // empty-sidebar escape hatch (Clear Filters button below) is reachable when
+  // it's the only reason the list is empty — otherwise a user whose only
+  // worktree is a default-branch row and who just toggled hide on would see
+  // "No worktrees found" with no way back short of reopening the filter menu.
+  const filterState = useMemo(
+    () => ({ showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace }),
+    [showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace]
+  )
+  const hasFilters = sidebarHasActiveFilters(filterState)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
 
   const clearFilters = useCallback(() => {
-    setShowActiveOnly(false)
-    setFilterRepoIds([])
-  }, [setShowActiveOnly, setFilterRepoIds])
+    const actions = computeClearFilterActions(filterState)
+    if (actions.resetShowActiveOnly) {
+      setShowActiveOnly(false)
+    }
+    if (actions.resetFilterRepoIds) {
+      setFilterRepoIds([])
+    }
+    if (actions.resetHideDefaultBranchWorkspace) {
+      setHideDefaultBranchWorkspace(false)
+    }
+  }, [setShowActiveOnly, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
 
   if (worktrees.length === 0) {
     return (

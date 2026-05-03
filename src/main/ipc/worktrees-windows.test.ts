@@ -184,7 +184,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     listWorktreesMock.mockResolvedValue([])
 
-    registerWorktreeHandlers(mainWindow as never, store as never)
+    registerWorktreeHandlers(mainWindow as never, store as never, {} as never)
   })
 
   it('accepts a newly created Windows worktree when git lists the same path with different separators', async () => {

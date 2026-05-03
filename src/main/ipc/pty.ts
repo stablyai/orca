@@ -228,13 +228,16 @@ export function getSshPtyProvider(connectionId: string): IPtyProvider | undefine
   return sshProviders.get(connectionId)
 }
 
-/** Get the local PTY provider (for direct access in tests/runtime). */
-export function getLocalPtyProvider(): LocalPtyProvider {
-  // Why: callers that need LocalPtyProvider-specific methods (killOrphanedPtys,
-  // advanceGeneration, getPtyProcess) can only work with the local provider.
-  // Daemon mode replaces it with an adapter, so callers must use this only when
-  // they know the concrete local provider is installed.
-  return localProvider as LocalPtyProvider
+/** Get the installed PTY provider (for direct access in tests/runtime).
+ *
+ * Returns the installed PTY provider — after `setLocalPtyProvider()` runs
+ * during daemon init this may be the routed adapter (specifically either
+ * `DaemonPtyAdapter` or its `DaemonPtyRouter` wrapper). Callers needing
+ * `LocalPtyProvider`-specific methods (`killOrphanedPtys`,
+ * `advanceGeneration`, `getPtyProcess`) must type-narrow or import the
+ * concrete class directly. */
+export function getLocalPtyProvider(): IPtyProvider {
+  return localProvider
 }
 
 /** Replace the local PTY provider with a daemon-backed one.

@@ -720,4 +720,90 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('a')).toBeUndefined()
     expect(store.getWorktreeMeta('b')).toBeDefined()
   })
+
+  // ── Telemetry cohort migration ─────────────────────────────────────
+  //
+  // The migration keys on `existsSync(dataFile)` rather than field-based
+  // inference because the `telemetry` field is new in this release: keying
+  // on its presence would misclassify every pre-telemetry install as fresh,
+  // silently flipping existing users to default-on and violating the social
+  // contract they installed Orca under.
+
+  it('classifies a truly fresh install as new-user cohort (file absent → optedIn=true)', async () => {
+    // No data file written — truly fresh install of the telemetry release.
+    const store = await createStore()
+    const t = store.getSettings().telemetry
+    expect(t).toBeDefined()
+    expect(t!.existedBeforeTelemetryRelease).toBe(false)
+    expect(t!.optedIn).toBe(true)
+    expect(t!.installId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    )
+  })
+
+  it('classifies a pre-existing install as existing-user cohort (file present → optedIn=null)', async () => {
+    // A pre-telemetry data file exists on disk with no telemetry block.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {},
+      settings: { theme: 'dark' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    const t = store.getSettings().telemetry
+    expect(t).toBeDefined()
+    expect(t!.existedBeforeTelemetryRelease).toBe(true)
+    expect(t!.optedIn).toBeNull()
+    expect(t!.installId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    )
+    // Sibling migrations still run alongside the telemetry migration.
+    expect(store.getSettings().theme).toBe('dark')
+  })
+
+  it('still classifies as existing-user cohort when the data file is corrupt', async () => {
+    // Load-bearing: `fileExistedOnLoad` stays true even when the parse
+    // throws, so the corrupt-file catch path must also apply the migration.
+    // Otherwise a user whose `orca-data.json` got corrupted would be
+    // silently opted in as if they were a fresh install.
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
+    const store = await createStore()
+    const t = store.getSettings().telemetry
+    expect(t).toBeDefined()
+    expect(t!.existedBeforeTelemetryRelease).toBe(true)
+    expect(t!.optedIn).toBeNull()
+    expect(t!.installId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    )
+  })
+
+  it('preserves an already-migrated telemetry block on subsequent launches', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        telemetry: {
+          optedIn: true,
+          installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          existedBeforeTelemetryRelease: false,
+          firstRunNoticeShown: true
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().telemetry).toEqual({
+      optedIn: true,
+      installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      existedBeforeTelemetryRelease: false,
+      firstRunNoticeShown: true
+    })
+  })
 })

@@ -35,6 +35,15 @@ export type WorktreeSlice = {
    * agent output) count normally. Session-only; never persisted.
    */
   everActivatedWorktreeIds: Set<string>
+  /**
+   * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
+   * `true` only after the first launch where every repo's `worktrees.list` IPC
+   * call succeeded AND at least one repo returned a non-empty result — at that
+   * moment the renderer has enough signal to treat the union of fetched ids as
+   * authoritative and purge stale `tabsByWorktree` keys left behind by pre-fix
+   * sessions (design §4.4). Session-only; never persisted.
+   */
+  hasHydratedWorktreePurge: boolean
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>
   createWorktree: (
@@ -58,6 +67,12 @@ export type WorktreeSlice = {
   bumpWorktreeActivity: (worktreeId: string) => void
   setActiveWorktree: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]
+  /**
+   * Wipes every terminal- and worktree-scoped map entry for each given id.
+   * Called by the `worktrees:changed` listener on server-side deletions and
+   * one-shot at hydration time. See design §4.4.
+   */
+  purgeWorktreeTerminalState: (worktreeIds: string[]) => void
 }
 
 export function findWorktreeById(

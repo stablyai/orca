@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Activity, ListFilter, FolderPlus, X } from 'lucide-react'
+import { Activity, GitBranch, ListFilter, FolderPlus, X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +17,8 @@ import RepoDotLabel from '@/components/repo/RepoDotLabel'
 const SidebarFilter = React.memo(function SidebarFilter() {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const repos = useAppStore((s) => s.repos)
@@ -37,14 +39,19 @@ const SidebarFilter = React.memo(function SidebarFilter() {
     () => setShowActiveOnly(!showActiveOnly),
     [showActiveOnly, setShowActiveOnly]
   )
+  const handleToggleHideDefaultBranch = useCallback(
+    () => setHideDefaultBranchWorkspace(!hideDefaultBranchWorkspace),
+    [hideDefaultBranchWorkspace, setHideDefaultBranchWorkspace]
+  )
   const canFilterRepos = repos.length > 1
   // Why: derive from the current repos list so stale IDs in filterRepoIds
   // (e.g. lingering after a repo is removed) don't inflate the active-filter
   // count or falsely signal an applied filter.
   const selectedRepos = canFilterRepos ? repos.filter((r) => filterRepoIds.includes(r.id)) : []
   const hasRepoFilter = selectedRepos.length > 0
-  const hasAnyFilter = showActiveOnly || hasRepoFilter
-  const activeFilterCount = (showActiveOnly ? 1 : 0) + selectedRepos.length
+  const hasAnyFilter = showActiveOnly || hideDefaultBranchWorkspace || hasRepoFilter
+  const activeFilterCount =
+    (showActiveOnly ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedRepos.length
 
   return (
     <DropdownMenu>
@@ -79,7 +86,6 @@ const SidebarFilter = React.memo(function SidebarFilter() {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-[12rem]">
-        <DropdownMenuLabel>Status</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           checked={showActiveOnly}
           onCheckedChange={handleToggleActive}
@@ -87,6 +93,14 @@ const SidebarFilter = React.memo(function SidebarFilter() {
         >
           <Activity className="size-3.5 text-muted-foreground" />
           Active only
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={hideDefaultBranchWorkspace}
+          onCheckedChange={handleToggleHideDefaultBranch}
+          onSelect={(event) => event.preventDefault()}
+        >
+          <GitBranch className="size-3.5 text-muted-foreground" />
+          Hide default branch
         </DropdownMenuCheckboxItem>
         {canFilterRepos && (
           <>
@@ -110,6 +124,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
             <DropdownMenuItem
               onSelect={() => {
                 setShowActiveOnly(false)
+                setHideDefaultBranchWorkspace(false)
                 setFilterRepoIds([])
               }}
             >

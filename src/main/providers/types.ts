@@ -133,7 +133,12 @@ export type IFilesystemProvider = {
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
-  getDiff(worktreePath: string, filePath: string, staged: boolean): Promise<GitDiffResult>
+  getDiff(
+    worktreePath: string,
+    filePath: string,
+    staged: boolean,
+    compareAgainstHead?: boolean
+  ): Promise<GitDiffResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>

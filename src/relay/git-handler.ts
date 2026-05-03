@@ -84,8 +84,13 @@ export class GitHandler {
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
-    const staged = params.staged as boolean
-    return computeDiff(this.gitBuffer.bind(this), worktreePath, filePath, staged)
+    return computeDiff(
+      this.gitBuffer.bind(this),
+      worktreePath,
+      filePath,
+      params.staged as boolean,
+      params.compareAgainstHead as boolean | undefined
+    )
   }
 
   private async stage(params: Record<string, unknown>) {

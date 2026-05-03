@@ -105,6 +105,8 @@ import {
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { killAllProcessesForWorktree } from './worktree-teardown'
+import type { IPtyProvider } from '../providers/types'
 
 type RuntimeStore = {
   getRepos: Store['getRepos']
@@ -240,12 +242,28 @@ export class OrcaRuntimeService {
   private agentDetector: AgentDetector | null = null
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
+  private readonly getLocalProviderFn: (() => IPtyProvider) | null
 
-  constructor(store: RuntimeStore | null = null, stats?: StatsCollector) {
+  constructor(
+    store: RuntimeStore | null = null,
+    stats?: StatsCollector,
+    deps?: { getLocalProvider?: () => IPtyProvider }
+  ) {
     this.store = store
     if (stats) {
       this.agentDetector = new AgentDetector(stats)
     }
+    // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
+    // attachMainWindowServices, AFTER this service is constructed. Capturing
+    // `getLocalPtyProvider()` at construction time would freeze a reference to
+    // the pre-daemon `LocalPtyProvider` and miss the routed adapter. Resolve
+    // lazily via thunk so teardown always sees the currently-installed
+    // provider (design §4.3 wire-up).
+    this.getLocalProviderFn = deps?.getLocalProvider ?? null
+  }
+
+  getLocalProvider(): IPtyProvider | null {
+    return this.getLocalProviderFn ? this.getLocalProviderFn() : null
   }
 
   // Why: lazy initialization — the DB path depends on Electron's userData
@@ -1126,6 +1144,37 @@ export class OrcaRuntimeService {
     }
     if (isFolderRepo(repo)) {
       throw new Error('Folder mode does not support deleting worktrees.')
+    }
+
+    // Why: kill every PTY belonging to this worktree BEFORE the git-level
+    // removal. Some shells keep the worktree directory busy, and `git worktree
+    // remove` throws a confusing error if PTYs still hold it open. This also
+    // closes the headless-CLI leak (design §2a/§2b): without this call, the
+    // CLI path runs git removal and never touches PTYs, leaving zombies
+    // behind. Best-effort: any failure here must not prevent git removal —
+    // the worst case without the call is the status quo.
+    const localProvider = this.getLocalProvider()
+    if (localProvider) {
+      await killAllProcessesForWorktree(worktree.id, {
+        runtime: this,
+        localProvider
+      })
+        .then((r) => {
+          const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+          if (total > 0) {
+            // Why (design §4.4 observability): breadcrumb lets ops
+            // distinguish a renderer-state-induced leak (diff-path purge
+            // non-empty) from a backend-induced one (nothing to kill but
+            // memory still pinned). Emit only when the sweep actually did
+            // work so steady-state logs stay quiet.
+            console.info(
+              `[worktree-teardown] ${worktree.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+            )
+          }
+        })
+        .catch((err) => {
+          console.warn(`[worktree-teardown] failed for ${worktree.id}:`, err)
+        })
     }
 
     const hooks = getEffectiveHooks(repo)

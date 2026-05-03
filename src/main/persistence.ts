@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, unlinkS
 import { writeFile, rename, mkdir, rm } from 'fs/promises'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
+import { randomUUID } from 'node:crypto'
 import type {
   PersistedState,
   Repo,
@@ -106,9 +107,19 @@ export class Store {
   }
 
   private load(): PersistedState {
+    // Capture once, at the top: this is the unambiguous "has the user run
+    // Orca before?" signal used by the telemetry cohort migration below.
+    // Field-based inference (e.g., `settings.telemetry` presence) does not
+    // work on the telemetry release itself — `telemetry` is new here, so it
+    // would be absent on every pre-telemetry install and misclassify existing
+    // users as fresh, flipping them to default-on in violation of the
+    // social contract we installed them under.
+    const dataFile = getDataFile()
+    const fileExistedOnLoad = existsSync(dataFile)
+
+    let result: PersistedState | null = null
     try {
-      const dataFile = getDataFile()
-      if (existsSync(dataFile)) {
+      if (fileExistedOnLoad) {
         const raw = readFileSync(dataFile, 'utf-8')
         const parsed = JSON.parse(raw) as PersistedState
 
@@ -140,7 +151,7 @@ export class Store {
           : rawOptionAsAlt === undefined || rawOptionAsAlt === 'true'
             ? 'auto'
             : rawOptionAsAlt
-        return {
+        result = {
           ...defaults,
           ...parsed,
           settings: {
@@ -226,7 +237,70 @@ export class Store {
     } catch (err) {
       console.error('[persistence] Failed to load state, using defaults:', err)
     }
-    return getDefaultPersistedState(homedir())
+
+    // Corrupt-file catch path and "no file on disk" path converge here. The
+    // telemetry migration below runs on whichever branch produced `result`,
+    // because a user whose `orca-data.json` got corrupted is not a fresh
+    // install of the telemetry release — they still count as existing and
+    // must see the opt-in banner, not the default-on toast.
+    if (result === null) {
+      result = getDefaultPersistedState(homedir())
+    }
+
+    return this.migrateTelemetry(result, fileExistedOnLoad)
+  }
+
+  // One-shot telemetry cohort migration. Runs on every `load()` but is a
+  // no-op once `existedBeforeTelemetryRelease` is set, so subsequent launches
+  // pay only the property lookup. Populates:
+  //   - `existedBeforeTelemetryRelease` — cohort discriminator (drives the
+  //     first-launch toast vs. banner in PR 3).
+  //   - `optedIn` — new users start opted in; existing users are `null` until
+  //     the banner resolves (the consent resolver returns `pending_banner`
+  //     until then, so nothing transmits).
+  //   - `installId` — anonymous UUID v4. Stable across launches; regenerable
+  //     from the Privacy pane (PR 3).
+  private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    const existing = state.settings?.telemetry
+    // Why: the one-shot is complete only when all three invariants hold.
+    // Keying on `existedBeforeTelemetryRelease` alone would let a partially-
+    // written telemetry block (crash mid-save, hand-edit, future bug) short-
+    // circuit migration and leave `installId` undefined or `optedIn` wiped.
+    if (
+      typeof existing?.existedBeforeTelemetryRelease === 'boolean' &&
+      typeof existing.installId === 'string' &&
+      existing.installId.length > 0 &&
+      (existing.optedIn === true || existing.optedIn === false || existing.optedIn === null)
+    ) {
+      return state
+    }
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        telemetry: {
+          ...existing,
+          existedBeforeTelemetryRelease:
+            typeof existing?.existedBeforeTelemetryRelease === 'boolean'
+              ? existing.existedBeforeTelemetryRelease
+              : fileExistedOnLoad,
+          // Why: preserve an explicit opt-in/out if the user has ever resolved
+          // it. Only fall back to the cohort default (new users: on; existing
+          // users: undecided until the first-launch banner resolves) when
+          // optedIn is truly unset (undefined), never when it is `false`.
+          optedIn:
+            existing?.optedIn === true || existing?.optedIn === false || existing?.optedIn === null
+              ? existing.optedIn
+              : fileExistedOnLoad
+                ? null
+                : true,
+          installId:
+            typeof existing?.installId === 'string' && existing.installId.length > 0
+              ? existing.installId
+              : randomUUID()
+        }
+      }
+    }
   }
 
   private scheduleSave(): void {
@@ -476,13 +550,24 @@ export class Store {
   }
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
+    // Why: `telemetry` is deep-merged for the same reason `notifications` is —
+    // partial updates from the Privacy pane / consent flow (e.g., flipping
+    // only `optedIn`) must not clobber sibling fields like `installId` or
+    // `existedBeforeTelemetryRelease`. The field is optional, so we only
+    // synthesize a `telemetry` key on the result when at least one side has
+    // one.
+    const mergedTelemetry =
+      updates.telemetry !== undefined
+        ? { ...this.state.settings.telemetry, ...updates.telemetry }
+        : this.state.settings.telemetry
     this.state.settings = {
       ...this.state.settings,
       ...updates,
       notifications: {
         ...this.state.settings.notifications,
         ...updates.notifications
-      }
+      },
+      ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()
     return this.state.settings
