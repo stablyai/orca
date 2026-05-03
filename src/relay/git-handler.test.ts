@@ -47,6 +47,8 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
     expect(methods).toContain('git.removeWorktree')
+    expect(methods).toContain('git.exec')
+    expect(methods).toContain('git.isGitRepo')
   })
 
   describe('status', () => {

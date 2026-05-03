@@ -264,24 +264,3 @@ export async function branchDiffEntries(
 }
 
 export { validateGitExecArgs } from './git-exec-validator'
-
-// ─── Commit ──────────────────────────────────────────────────────────
-
-export async function commitChangesRelay(
-  git: GitExec,
-  worktreePath: string,
-  message: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    await git(['commit', '-m', message], worktreePath)
-    return { success: true }
-  } catch (error) {
-    const stderr =
-      typeof error === 'object' && error && 'stderr' in error && typeof error.stderr === 'string'
-        ? error.stderr
-        : error instanceof Error
-          ? error.message
-          : 'Commit failed'
-    return { success: false, error: stderr }
-  }
-}

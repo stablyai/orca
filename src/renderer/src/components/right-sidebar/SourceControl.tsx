@@ -62,7 +62,6 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
-  GitStatusResult,
   PRInfo
 } from '../../../../shared/types'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
@@ -123,6 +122,10 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
 
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement>(null)
+  // Why: React setState is async, so two rapid Cmd+Enter presses can both pass the
+  // isCommitting guard before commitInFlightByWorktree re-renders. A ref flipped
+  // synchronously at the start of handleCommit gives us a true single-flight lock.
+  const commitInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -202,7 +205,14 @@ function SourceControlInner(): React.JSX.Element {
   // so switching worktrees restores each draft instead of wiping it.
   const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
   const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
-  const [isCommitting, setIsCommitting] = useState(false)
+  // Why: keep commit-in-flight state per-worktree. A single boolean would be
+  // cleared when the user switched worktrees, letting them double-click Commit
+  // on worktree A after briefly navigating to B and back while A's original
+  // commit is still running.
+  const [commitInFlightByWorktree, setCommitInFlightByWorktree] = useState<Record<string, boolean>>(
+    {}
+  )
+  const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
@@ -366,7 +376,11 @@ function SourceControlInner(): React.JSX.Element {
     // repos and back to re-trigger the resolver.
     setFilterQuery('')
     setIsExecutingBulk(false)
-    setIsCommitting(false)
+    // Why: no reset for commit-in-flight state — it now lives in a per-worktree
+    // map, so it cannot leak across worktrees. Resetting here would actually
+    // clear in-flight state for the *incoming* worktree if the user is coming
+    // back to a worktree mid-commit, re-enabling the button while the commit
+    // still runs.
   }, [activeWorktreeId])
 
   const handleCommit = useCallback(async (): Promise<void> => {
@@ -378,8 +392,13 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
 
+    if (commitInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    commitInFlightRef.current[activeWorktreeId] = true
+
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-    setIsCommitting(true)
+    setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
     setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
     try {
       const commitResult = await window.api.git.commit({
@@ -397,18 +416,27 @@ function SourceControlInner(): React.JSX.Element {
 
       setCommitDrafts((prev) => writeCommitDraftForWorktree(prev, activeWorktreeId, ''))
       setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
-      const status = (await window.api.git.status({
-        worktreePath,
-        connectionId
-      })) as GitStatusResult
-      setGitStatus(activeWorktreeId, status)
+      // Why: the commit already succeeded. If the follow-up status refresh fails
+      // (e.g., transient IPC error), log it but do NOT overwrite the cleared
+      // commitError with a misleading "Commit failed" — the existing status poll
+      // in useGitStatusPolling will refresh the UI shortly anyway.
+      try {
+        const status = await window.api.git.status({
+          worktreePath,
+          connectionId
+        })
+        setGitStatus(activeWorktreeId, status)
+      } catch (refreshError) {
+        console.error('[SourceControl] post-commit status refresh failed', refreshError)
+      }
     } catch (error) {
       setCommitErrors((prev) => ({
         ...prev,
         [activeWorktreeId]: error instanceof Error ? error.message : 'Commit failed'
       }))
     } finally {
-      setIsCommitting(false)
+      setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      commitInFlightRef.current[activeWorktreeId] = false
     }
   }, [
     activeWorktreeId,
@@ -912,8 +940,6 @@ function SourceControlInner(): React.JSX.Element {
             <CommitArea
               stagedCount={grouped.staged.length}
               hasUnresolvedConflicts={unresolvedConflicts.length > 0}
-              worktreePath={worktreePath}
-              connectionId={getConnectionId(activeWorktreeId) ?? undefined}
               commitMessage={commitMessage}
               commitError={commitError}
               isCommitting={isCommitting}
@@ -1110,8 +1136,6 @@ export default SourceControl
 type CommitAreaProps = {
   stagedCount: number
   hasUnresolvedConflicts: boolean
-  worktreePath: string
-  connectionId?: string
   commitMessage: string
   commitError: string | null
   isCommitting: boolean
@@ -1123,8 +1147,6 @@ type CommitAreaProps = {
 export function CommitArea({
   stagedCount,
   hasUnresolvedConflicts,
-  worktreePath: _worktreePath,
-  connectionId: _connectionId,
   commitMessage,
   commitError,
   isCommitting,
@@ -1132,7 +1154,10 @@ export function CommitArea({
   onCommitMessageChange,
   onCommitSuccess
 }: CommitAreaProps): React.JSX.Element {
-  const rows = Math.max(2, commitMessage.split('\n').length)
+  // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
+  // the Commit button off-screen. The textarea keeps `resize-none` (matching
+  // the existing style) — the browser scrolls internally past 12 rows.
+  const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
   const isMac = navigator.userAgent.includes('Mac')
   const shortcut = isMac ? '⌘ Enter' : 'Ctrl+Enter'
   const isCommitDisabled =
@@ -1145,6 +1170,8 @@ export function CommitArea({
         value={commitMessage}
         onChange={(e) => onCommitMessageChange(e.target.value)}
         placeholder={`Message (${shortcut} to commit on "${branchName}")`}
+        aria-label="Commit message"
+        aria-describedby={commitError ? 'commit-area-error' : undefined}
         className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         onKeyDown={(e) => {
           // Why: shortcuts must map to Cmd on macOS and Ctrl elsewhere so users
@@ -1170,7 +1197,19 @@ export function CommitArea({
           Commit
         </Button>
       </div>
-      {commitError && <p className="mt-1 text-[11px] text-destructive">{commitError}</p>}
+      {commitError && (
+        // Why: role="alert" + aria-live="polite" lets screen readers announce
+        // commit failures; the id ties the message to the textarea via
+        // aria-describedby so assistive tech associates the two.
+        <p
+          id="commit-area-error"
+          role="alert"
+          aria-live="polite"
+          className="mt-1 text-[11px] text-destructive"
+        >
+          {commitError}
+        </p>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
 
@@ -66,8 +66,6 @@ function flushPromises(): Promise<void> {
 const baseProps = {
   stagedCount: 1,
   hasUnresolvedConflicts: false,
-  worktreePath: '/repo',
-  connectionId: undefined as string | undefined,
   commitMessage: 'feat: add commit area',
   commitError: null as string | null,
   isCommitting: false,
@@ -78,10 +76,10 @@ const baseProps = {
 
 describe('CommitArea', () => {
   beforeEach(() => {
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { userAgent: 'Macintosh' },
-      configurable: true
-    })
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('disables commit button when no staged files', () => {
@@ -109,10 +107,7 @@ describe('CommitArea', () => {
   })
 
   it('triggers commit on Ctrl+Enter shortcut for non-macOS', () => {
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { userAgent: 'Windows' },
-      configurable: true
-    })
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
 
     const onCommitSuccess = vi.fn()
     const element = CommitArea({ ...baseProps, onCommitSuccess })
