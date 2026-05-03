@@ -247,7 +247,7 @@ export function BrowserToolbarMenu({
                       viewportPresetId === null ? 'opacity-100' : 'opacity-0'
                     }`}
                   />
-                  Responsive
+                  Default
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {BROWSER_VIEWPORT_PRESETS.map((preset) => {
