@@ -7,15 +7,14 @@ import type { GitUpstreamStatus } from '../../../../shared/types'
 // makes it straightforward to unit-test each row of the priority table without
 // spinning up a renderer.
 
-export type PrimaryActionKind =
-  | 'commit'
-  | 'commit_push'
-  | 'commit_sync'
-  | 'commit_publish'
-  | 'push'
-  | 'pull'
-  | 'sync'
-  | 'publish'
+// Why: the primary button collapses to one-label-per-action. Compound
+// kinds ('commit_push', 'commit_sync', 'commit_publish') live in
+// DropdownActionKind only — never on the primary — so they are not part
+// of this union. Narrowing the type here is load-bearing: it lets
+// `handlePrimaryClick` switch exhaustively over only the kinds the
+// primary can actually emit, and it kills the compound-commit branch in
+// the isRemoteOperationActive tooltip below at compile time.
+export type PrimaryActionKind = 'commit' | 'push' | 'pull' | 'sync' | 'publish'
 
 export type PrimaryAction = {
   kind: PrimaryActionKind
@@ -52,7 +51,9 @@ function describeSyncCounts(ahead: number, behind: number): string {
  *   1. In-flight commit locks the primary to a disabled "Commit".
  *   2. In-flight remote operation keeps the current label but disables it.
  *   3. Unresolved conflicts block the commit path entirely.
- *   4. Has staged files + message → a "Commit & X" compound.
+ *   4. Has staged files + message → plain "Commit" (compound flows live in
+ *      the dropdown; after the commit lands, step 6 rotates the primary to
+ *      the appropriate single remote action).
  *   5. Has staged files + no message → disabled "Commit" with a reason.
  *   6. Clean tree → adaptive remote action (or disabled "Commit" no-op).
  *
@@ -87,16 +88,16 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   //    with isRemoteOperationActive cleared, then force-disable it.
   if (isRemoteOperationActive) {
     const candidate = resolvePrimaryAction({ ...inputs, isRemoteOperationActive: false })
-    // Why: when the candidate label is a Commit variant, a generic "remote
-    // operation in progress" tooltip mismatches the visible label. Surface a
-    // tooltip that tells the user the commit will wait, keeping the label and
+    // Why: when the candidate label is "Commit", the generic "remote
+    // operation in progress…" tooltip mismatches the visible label. Point
+    // the user at the fact that the commit will wait, keeping the label and
     // the explanation consistent.
-    const isCommitKind = candidate.kind.startsWith('commit')
     return {
       ...candidate,
-      title: isCommitKind
-        ? 'Remote operation in progress — try again once it finishes'
-        : 'Remote operation in progress…',
+      title:
+        candidate.kind === 'commit'
+          ? 'Remote operation in progress — try again once it finishes'
+          : 'Remote operation in progress…',
       disabled: true
     }
   }

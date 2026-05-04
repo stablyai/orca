@@ -571,9 +571,12 @@ function SourceControlInner(): React.JSX.Element {
   // Why: compound actions must commit first and only run the follow-up remote
   // op when the commit succeeds. handleCommit's return value carries that
   // signal — a failure leaves commitError populated and short-circuits here
-  // so we never push a commit the user didn't actually land.
+  // so we never push a commit the user didn't actually land. The primary
+  // button never takes this path (it always emits a single-action kind);
+  // compound flows are reached only from the dropdown, which offers
+  // 'commit_push' and 'commit_sync' (there is no 'Commit & Publish' row).
   const runCompoundCommitAction = useCallback(
-    async (remoteKind: 'push' | 'sync' | 'publish'): Promise<void> => {
+    async (remoteKind: 'push' | 'sync'): Promise<void> => {
       const ok = await handleCommit()
       if (!ok) {
         return
@@ -658,31 +661,26 @@ function SourceControlInner(): React.JSX.Element {
     [handleCommit, runCompoundCommitAction, runRemoteAction]
   )
 
-  // Why: the primary split-button kind includes 'commit_publish', which never
-  // appears as a dropdown row (the dropdown uses Publish Branch + Commit &
-  // Push as distinct entries). An exhaustive switch here ensures a new
-  // PrimaryActionKind can't be added without TypeScript catching a missing
-  // branch — an `as DropdownActionKind` cast would silently paper over it.
+  // Why: PrimaryActionKind is narrowed to the single-action kinds the
+  // primary can emit ('commit' | 'push' | 'pull' | 'sync' | 'publish') —
+  // compound commit_* kinds are dropdown-only. An exhaustive switch keeps
+  // the mapping honest: if a new PrimaryActionKind is added, TypeScript
+  // lights up the missing case instead of silently falling through.
   const handlePrimaryClick = useCallback((): void => {
     switch (primaryAction.kind) {
       case 'commit':
-      case 'commit_push':
-      case 'commit_sync':
       case 'push':
       case 'pull':
       case 'sync':
       case 'publish':
         handleActionInvoke(primaryAction.kind)
         return
-      case 'commit_publish':
-        void runCompoundCommitAction('publish')
-        return
       default: {
         const _exhaustive: never = primaryAction.kind
         void _exhaustive
       }
     }
-  }, [handleActionInvoke, primaryAction.kind, runCompoundCommitAction])
+  }, [handleActionInvoke, primaryAction.kind])
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
