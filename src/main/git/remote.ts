@@ -1,15 +1,56 @@
 import { gitExecFileAsync } from './runner'
 
-function normalizeGitErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.message.includes('non-fast-forward') || error.message.includes('fetch first')) {
-      // Why: this specific guidance tells users the safe recovery path instead
-      // of surfacing raw git stderr that varies across git versions/locales.
-      return 'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
-    }
-    return error.message
+// Why: git's stderr often embeds the full remote URL, which can include an
+// embedded credential (e.g. `https://x-access-token:TOKEN@github.com/...`) when
+// the caller injects one. Stripping these prefixes here is defensive — git's
+// wording varies across versions and locales, so we sanitize regardless of the
+// matched pattern before the message reaches logs, toasts, or telemetry.
+const CREDENTIAL_URL_PATTERN = /https?:\/\/[^\s/@]+:[^\s/@]+@/g
+
+function stripCredentialsFromMessage(message: string): string {
+  return message.replace(CREDENTIAL_URL_PATTERN, '')
+}
+
+function extractTailLine(message: string): string {
+  // Why: execFile rejections prefix the message with "Command failed: git ..."
+  // followed by the full stderr. The meaningful diagnostic is typically the
+  // last non-empty line; surfacing the full blob risks leaking local paths or
+  // environment details to the UI.
+  const lines = message
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  return lines.at(-1) ?? message
+}
+
+export function normalizeGitErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Git remote operation failed.'
   }
-  return 'Git remote operation failed.'
+
+  const raw = error.message
+
+  if (raw.includes('non-fast-forward') || raw.includes('fetch first')) {
+    // Why: this specific guidance tells users the safe recovery path instead
+    // of surfacing raw git stderr that varies across git versions/locales.
+    return 'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
+  }
+
+  if (raw.includes('could not read Username') || raw.includes('Authentication failed')) {
+    return 'Authentication failed. Check your remote credentials.'
+  }
+
+  if (raw.includes('Could not resolve host') || raw.includes('Network is unreachable')) {
+    return 'Network error. Check your connection.'
+  }
+
+  if (raw.includes('no tracking information') || raw.includes('no upstream')) {
+    return 'Branch has no upstream. Publish the branch first.'
+  }
+
+  // Fallthrough: extract only the tail stderr line and scrub any embedded
+  // credential before returning. See CREDENTIAL_URL_PATTERN comment above.
+  return stripCredentialsFromMessage(extractTailLine(raw))
 }
 
 export async function gitPush(worktreePath: string, publish = false): Promise<void> {
@@ -25,9 +66,17 @@ export async function gitPull(worktreePath: string): Promise<void> {
   // Why: plain `git pull` uses the user's configured pull strategy (merge by
   // default) so diverged branches reconcile instead of erroring out. Conflicts
   // surface through the existing conflict-resolution flow.
-  await gitExecFileAsync(['pull'], { cwd: worktreePath })
+  try {
+    await gitExecFileAsync(['pull'], { cwd: worktreePath })
+  } catch (error) {
+    throw new Error(normalizeGitErrorMessage(error))
+  }
 }
 
 export async function gitFetch(worktreePath: string): Promise<void> {
-  await gitExecFileAsync(['fetch', '--prune'], { cwd: worktreePath })
+  try {
+    await gitExecFileAsync(['fetch', '--prune'], { cwd: worktreePath })
+  } catch (error) {
+    throw new Error(normalizeGitErrorMessage(error))
+  }
 }

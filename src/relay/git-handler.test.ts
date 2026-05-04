@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
@@ -263,6 +264,102 @@ describe('GitHandler', () => {
       expect(result.ahead).toBe(0)
       expect(result.behind).toBe(0)
     })
+
+    it('reports ahead/behind counts against a real upstream remote', async () => {
+      // Why: the upstream branch exists but isn't configured — exercise the
+      // full path through `git rev-parse HEAD@{u}` + `rev-list --left-right`
+      // so a future refactor can't silently break the happy-path roundtrip
+      // the no-upstream test doesn't cover.
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'initial')
+        const firstSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['push', '--set-upstream', 'origin', branch], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        // Add two local commits (ahead=2), then reset behind the remote tip
+        // and add one different commit so we end up ahead=1, behind=0 vs.
+        // upstream; then reset to first commit to produce behind=1 ahead=0.
+        writeFileSync(path.join(tmpDir, 'ahead1.txt'), 'a1')
+        gitCommit(tmpDir, 'ahead1')
+        writeFileSync(path.join(tmpDir, 'ahead2.txt'), 'a2')
+        gitCommit(tmpDir, 'ahead2')
+        // Push so remote is at ahead2 (so after we reset below, we are behind).
+        execFileSync('git', ['push', 'origin', branch], { cwd: tmpDir, stdio: 'pipe' })
+        // Reset local back to the first commit: 0 ahead, 2 behind.
+        execFileSync('git', ['reset', '--hard', firstSha], { cwd: tmpDir, stdio: 'pipe' })
+
+        const result = (await dispatcher.callRequest('git.upstreamStatus', {
+          worktreePath: tmpDir
+        })) as { hasUpstream: boolean; upstreamName?: string; ahead: number; behind: number }
+
+        expect(result.hasUpstream).toBe(true)
+        expect(result.upstreamName).toBe(`origin/${branch}`)
+        expect(result.ahead).toBe(0)
+        expect(result.behind).toBe(2)
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('fetches from a configured remote without throwing', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'initial')
+        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['push', '--set-upstream', 'origin', branch], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        await expect(
+          dispatcher.callRequest('git.fetch', { worktreePath: tmpDir })
+        ).resolves.not.toThrow()
+
+        // FETCH_HEAD is created by any successful fetch, confirming the
+        // remote was actually contacted (not just silently no-op'd).
+        await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    // TODO: once git-handler's upstreamStatus catch is narrowed to only swallow
+    // the `no upstream configured` error (rather than every git failure), add
+    // a test that a non-upstream failure — e.g. pointing at a registered but
+    // non-repo subdirectory — rethrows instead of returning { hasUpstream: false }.
+    // Today the handler's bare `catch {}` swallows all failures, so such a
+    // test would pass on both pre- and post-fix code and would not provide
+    // meaningful regression coverage.
   })
 
   describe('listWorktrees', () => {

@@ -124,12 +124,18 @@ export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstre
       ahead: Number.isFinite(ahead) ? ahead : 0,
       behind: Number.isFinite(behind) ? behind : 0
     }
-  } catch {
-    return {
-      hasUpstream: false,
-      ahead: 0,
-      behind: 0
+  } catch (error) {
+    // Why: we only swallow the 'no upstream configured' error — that's an
+    // expected state, not a failure. Other errors (auth, corruption, network)
+    // should surface to the user so they can act on them.
+    if (error instanceof Error && /no upstream|HEAD@\{u\}|does not point/i.test(error.message)) {
+      return {
+        hasUpstream: false,
+        ahead: 0,
+        behind: 0
+      }
     }
+    throw error
   }
 }
 

@@ -16,6 +16,7 @@ import type {
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
+  GitUpstreamStatus,
   GhosttyImportPreview,
   ListWorkItemsResult,
   MemorySnapshot,
@@ -1265,8 +1266,10 @@ const api = {
       baseRef: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
-    upstreamStatus: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('git:upstreamStatus', args),
+    upstreamStatus: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
     fetch: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('git:fetch', args),
     push: (args: {

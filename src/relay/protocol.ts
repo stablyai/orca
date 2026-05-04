@@ -15,29 +15,6 @@ export const MessageType = {
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
 
-export const GIT_RPC_METHODS = [
-  'git.status',
-  'git.commit',
-  'git.diff',
-  'git.stage',
-  'git.unstage',
-  'git.bulkStage',
-  'git.bulkUnstage',
-  'git.discard',
-  'git.conflictOperation',
-  'git.branchCompare',
-  'git.upstreamStatus',
-  'git.fetch',
-  'git.push',
-  'git.pull',
-  'git.branchDiff',
-  'git.listWorktrees',
-  'git.addWorktree',
-  'git.removeWorktree',
-  'git.exec',
-  'git.isGitRepo'
-] as const
-
 export type JsonRpcRequest = {
   jsonrpc: '2.0'
   id: number

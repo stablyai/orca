@@ -14,6 +14,7 @@ import {
 } from './git-handler-ops'
 import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { normalizeGitErrorMessage, isNoUpstreamError } from './git-handler-error-utils'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -223,15 +224,28 @@ export class GitHandler {
         ahead: Number.isFinite(ahead) ? ahead : 0,
         behind: Number.isFinite(behind) ? behind : 0
       }
-    } catch {
-      return { hasUpstream: false, ahead: 0, behind: 0 }
+    } catch (error) {
+      // Why: we only swallow the 'no upstream configured' error — that's an
+      // expected state, not a failure. Other errors (auth, corruption, network)
+      // should surface to the user so they can act on them.
+      if (isNoUpstreamError(error)) {
+        return { hasUpstream: false, ahead: 0, behind: 0 }
+      }
+      throw error
     }
   }
 
   private async fetch(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
-    await this.git(['fetch', '--prune'], worktreePath)
+    try {
+      await this.git(['fetch', '--prune'], worktreePath)
+    } catch (error) {
+      // Why: mirror the local gitFetch normalization so SSH users see the same
+      // actionable messages instead of raw git stderr (which varies across
+      // versions/locales and may embed credentials).
+      throw new Error(normalizeGitErrorMessage(error))
+    }
   }
 
   private async push(params: Record<string, unknown>) {
@@ -239,7 +253,13 @@ export class GitHandler {
     this.context.validatePath(worktreePath)
     const publish = params.publish === true
     const args = publish ? ['push', '--set-upstream', 'origin', 'HEAD'] : ['push']
-    await this.git(args, worktreePath)
+    try {
+      await this.git(args, worktreePath)
+    } catch (error) {
+      // Why: mirror the local gitPush normalization so SSH users see the same
+      // "non-fast-forward / pull first" guidance instead of raw git stderr.
+      throw new Error(normalizeGitErrorMessage(error))
+    }
   }
 
   private async pull(params: Record<string, unknown>) {
@@ -247,7 +267,13 @@ export class GitHandler {
     this.context.validatePath(worktreePath)
     // Why: plain `git pull` uses the user's configured pull strategy (merge by
     // default) so diverged branches reconcile instead of erroring out.
-    await this.git(['pull'], worktreePath)
+    try {
+      await this.git(['pull'], worktreePath)
+    } catch (error) {
+      // Why: mirror the local gitPull normalization so SSH users see the same
+      // actionable messages instead of raw git stderr.
+      throw new Error(normalizeGitErrorMessage(error))
+    }
   }
 
   private async branchDiff(params: Record<string, unknown>) {

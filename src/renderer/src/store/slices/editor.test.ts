@@ -837,6 +837,72 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
+
+  it('preserves prior upstream status when fetch fails', async () => {
+    // Why: a transient upstream fetch failure (network blip, auth prompt
+    // timeout) must not erase the last-known ahead/behind counts — doing so
+    // would briefly flip the UI to an unknown/no-upstream state that
+    // misrepresents the branch's relationship to its remote.
+    const store = createEditorStore()
+    store.getState().setUpstreamStatus('wt-1', {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+    gitUpstreamStatusMock.mockRejectedValueOnce(new Error('transient failure'))
+
+    await store.getState().fetchUpstreamStatus('wt-1', '/repo')
+
+    expect(store.getState().remoteStatusesByWorktree['wt-1']).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+  })
+
+  it('keeps isRemoteOperationActive true while any remote op is in flight', async () => {
+    // Why: a bare boolean races across worktrees — if push A finishes while
+    // pull B is still running, flipping the flag off would prematurely
+    // re-enable B's button. The refcount-derived boolean must stay true
+    // until every in-flight remote op has finished.
+    const store = createEditorStore()
+
+    let resolveA: () => void = () => {}
+    let resolveB: () => void = () => {}
+    gitPushMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveA = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveB = resolve
+          })
+      )
+
+    const pushA = store.getState().pushBranch('wt-1', '/a')
+    // Kick microtasks so pushA has begun and flipped the flag on.
+    await Promise.resolve()
+    expect(store.getState().isRemoteOperationActive).toBe(true)
+
+    const pushB = store.getState().pushBranch('wt-2', '/b')
+    await Promise.resolve()
+    expect(store.getState().isRemoteOperationActive).toBe(true)
+
+    resolveA()
+    await pushA.catch(() => {})
+    // B is still running, so the busy flag must remain true.
+    expect(store.getState().isRemoteOperationActive).toBe(true)
+
+    resolveB()
+    await pushB.catch(() => {})
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
 })
 
 describe('createEditorSlice activateMarkdownLink', () => {

@@ -268,8 +268,16 @@ export type EditorSlice = {
   setConflictOperation: (worktreeId: string, operation: GitConflictOperation) => void
   remoteStatusesByWorktree: Record<string, GitUpstreamStatus>
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
+  // Why: refcount-backed busy flag. A bare boolean races across worktrees —
+  // push on A finishing while pull on B is still in flight would flip the
+  // flag off and prematurely re-enable B's button. beginRemoteOperation /
+  // endRemoteOperation must be paired (begin at the start of the async
+  // operation, end in finally) so the derived boolean only flips to false
+  // once every in-flight remote op has finished.
   isRemoteOperationActive: boolean
-  setRemoteOperationActive: (active: boolean) => void
+  remoteOperationDepth: number
+  beginRemoteOperation: () => void
+  endRemoteOperation: () => void
   fetchUpstreamStatus: (
     worktreeId: string,
     worktreePath: string,
@@ -362,6 +370,28 @@ function openWorkspaceEditorItem(
 }
 
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
+const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
+
+// Why: git stderr can embed a remote URL that includes credentials when the
+// caller (or a helper) injected them, e.g. `https://user:token@github.com/...`.
+// Echoing that into a toast would leak the token to anyone shoulder-surfing or
+// reading a screenshot. Strip the `<user>:<token>@` portion from any http(s)
+// URL in the detail before it reaches the UI; the bare `https://` host+path is
+// still enough for the user to recognize which remote failed.
+function stripGitCredentials(message: string): string {
+  return message.replace(/https?:\/\/[^@\s]+:[^@\s]+@/g, 'https://')
+}
+
+// Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
+// server-side pre-receive hook message) should not blow up the toast. Cap the
+// detail length so the toast stays readable; the underlying error is still
+// rethrown for console/logs if a caller needs the full payload.
+function truncateDetail(detail: string): string {
+  if (detail.length <= REMOTE_OPERATION_DETAIL_MAX_LENGTH) {
+    return detail
+  }
+  return `${detail.slice(0, REMOTE_OPERATION_DETAIL_MAX_LENGTH).trimEnd()}...`
+}
 
 function extractPublishFailureDetail(message: string): string | null {
   const normalized = message.replace(/\r\n/g, '\n')
@@ -371,11 +401,11 @@ function extractPublishFailureDetail(message: string): string | null {
     .filter(Boolean)
   const fatalLine = lines.find((line) => line.startsWith('fatal:'))
   if (fatalLine) {
-    return fatalLine.slice('fatal:'.length).trim()
+    return truncateDetail(stripGitCredentials(fatalLine.slice('fatal:'.length).trim()))
   }
   const remoteLine = lines.find((line) => line.startsWith('remote:'))
   if (remoteLine) {
-    return remoteLine.slice('remote:'.length).trim()
+    return truncateDetail(stripGitCredentials(remoteLine.slice('remote:'.length).trim()))
   }
   return null
 }
@@ -1807,20 +1837,36 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     })),
   isRemoteOperationActive: false,
-  setRemoteOperationActive: (active) => set({ isRemoteOperationActive: active }),
+  remoteOperationDepth: 0,
+  beginRemoteOperation: () =>
+    set((s) => ({
+      remoteOperationDepth: s.remoteOperationDepth + 1,
+      isRemoteOperationActive: true
+    })),
+  endRemoteOperation: () =>
+    set((s) => {
+      const next = Math.max(0, s.remoteOperationDepth - 1)
+      return { remoteOperationDepth: next, isRemoteOperationActive: next > 0 }
+    }),
   fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId) => {
     try {
-      const status = (await window.api.git.upstreamStatus({
+      const status = await window.api.git.upstreamStatus({
         worktreePath,
         connectionId
-      })) as GitUpstreamStatus
+      })
       get().setUpstreamStatus(worktreeId, status)
-    } catch {
-      get().setUpstreamStatus(worktreeId, { hasUpstream: false, ahead: 0, behind: 0 })
+    } catch (error) {
+      // Why: on error we leave the prior status in place rather than writing a
+      // synthetic {hasUpstream:false} — that would flash 'Publish Branch' on a
+      // tracked branch after any transient IPC hiccup and a user click would
+      // re-publish, clobbering the upstream relationship. If the branch is
+      // genuinely newly unpublished, the polling effect will eventually correct
+      // the status on success.
+      console.error('fetchUpstreamStatus failed', error)
     }
   },
   pushBranch: async (worktreeId, worktreePath, publish = false, connectionId) => {
-    get().setRemoteOperationActive(true)
+    get().beginRemoteOperation()
     try {
       await window.api.git.push({ worktreePath, publish, connectionId })
       const status = (await window.api.git.status({
@@ -1835,11 +1881,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
     } finally {
-      get().setRemoteOperationActive(false)
+      get().endRemoteOperation()
     }
   },
   pullBranch: async (worktreeId, worktreePath, connectionId) => {
-    get().setRemoteOperationActive(true)
+    get().beginRemoteOperation()
     try {
       await window.api.git.pull({ worktreePath, connectionId })
       const status = (await window.api.git.status({
@@ -1852,11 +1898,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       toast.error(resolveRemoteOperationErrorMessage(error))
       throw error
     } finally {
-      get().setRemoteOperationActive(false)
+      get().endRemoteOperation()
     }
   },
   syncBranch: async (worktreeId, worktreePath, connectionId) => {
-    get().setRemoteOperationActive(true)
+    get().beginRemoteOperation()
     try {
       await window.api.git.fetch({ worktreePath, connectionId })
       await window.api.git.pull({ worktreePath, connectionId })
@@ -1864,10 +1910,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // remote. After a merge pull the ahead count can be >0 (local commits +
       // the new merge commit) or 0 (pure fast-forward), and we avoid a
       // no-op push round-trip in the fast-forward case.
-      const upstreamStatus = (await window.api.git.upstreamStatus({
+      const upstreamStatus = await window.api.git.upstreamStatus({
         worktreePath,
         connectionId
-      })) as GitUpstreamStatus
+      })
       if (upstreamStatus.ahead > 0) {
         await window.api.git.push({ worktreePath, connectionId })
       }
@@ -1881,14 +1927,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       toast.error(resolveRemoteOperationErrorMessage(error))
       throw error
     } finally {
-      get().setRemoteOperationActive(false)
+      get().endRemoteOperation()
     }
   },
   fetchBranch: async (worktreeId, worktreePath, connectionId) => {
     // Why: mirror pushBranch/pullBranch/syncBranch so the dropdown Fetch action
     // participates in isRemoteOperationActive (disabling the split button while
     // the fetch is in flight) and uses the same toast error path.
-    get().setRemoteOperationActive(true)
+    get().beginRemoteOperation()
     try {
       await window.api.git.fetch({ worktreePath, connectionId })
       // Why: fetch doesn't change the working tree, but the refreshed remote
@@ -1900,7 +1946,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       toast.error(resolveRemoteOperationErrorMessage(error))
       throw error
     } finally {
-      get().setRemoteOperationActive(false)
+      get().endRemoteOperation()
     }
   },
   gitBranchChangesByWorktree: {},

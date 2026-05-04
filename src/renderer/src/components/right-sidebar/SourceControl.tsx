@@ -646,6 +646,14 @@ function SourceControlInner(): React.JSX.Element {
         case 'fetch':
         case 'publish':
           void runRemoteAction(kind)
+          return
+        default: {
+          // Why: exhaustiveness check — if a new DropdownActionKind is added
+          // to the union, TypeScript will flag this assignment so we can't
+          // silently drop a case.
+          const _exhaustive: never = kind
+          void _exhaustive
+        }
       }
     },
     [handleCommit, runCompoundCommitAction, runRemoteAction]
@@ -653,15 +661,27 @@ function SourceControlInner(): React.JSX.Element {
 
   // Why: the primary split-button kind includes 'commit_publish', which never
   // appears as a dropdown row (the dropdown uses Publish Branch + Commit &
-  // Push as distinct entries). This helper collapses it onto the runCompound
-  // path so the primary button can reuse handleActionInvoke semantics.
+  // Push as distinct entries). An exhaustive switch here ensures a new
+  // PrimaryActionKind can't be added without TypeScript catching a missing
+  // branch — an `as DropdownActionKind` cast would silently paper over it.
   const handlePrimaryClick = useCallback((): void => {
     switch (primaryAction.kind) {
+      case 'commit':
+      case 'commit_push':
+      case 'commit_sync':
+      case 'push':
+      case 'pull':
+      case 'sync':
+      case 'publish':
+        handleActionInvoke(primaryAction.kind)
+        return
       case 'commit_publish':
         void runCompoundCommitAction('publish')
         return
-      default:
-        handleActionInvoke(primaryAction.kind as DropdownActionKind)
+      default: {
+        const _exhaustive: never = primaryAction.kind
+        void _exhaustive
+      }
     }
   }, [handleActionInvoke, primaryAction.kind, runCompoundCommitAction])
 
@@ -868,12 +888,16 @@ function SourceControlInner(): React.JSX.Element {
   }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
 
   useEffect(() => {
-    if (!activeWorktreeId || !worktreePath || isFolder) {
+    // Why: gate on isBranchVisible so we don't spawn git processes while the
+    // sidebar is closed. Store-slice remote operations refresh upstream-status
+    // on success anyway, so the user's first sidebar open will show accurate
+    // state.
+    if (!activeWorktreeId || !worktreePath || isFolder || !isBranchVisible) {
       return
     }
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     void fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
-  }, [activeWorktreeId, fetchUpstreamStatus, isFolder, worktreePath])
+  }, [activeWorktreeId, fetchUpstreamStatus, isBranchVisible, isFolder, worktreePath])
 
   const toggleSection = useCallback((section: string) => {
     setCollapsedSections((prev) => {
@@ -1441,7 +1465,6 @@ export function CommitArea({
           onClick={() => onPrimaryAction()}
           className="flex-1 px-3 text-[11px]"
           title={primaryAction.title}
-          aria-label={primaryAction.label}
         >
           {showSpinner && <RefreshCw className="size-3.5 animate-spin" />}
           {primaryAction.label}

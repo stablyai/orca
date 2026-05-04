@@ -85,9 +85,16 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   //    with isRemoteOperationActive cleared, then force-disable it.
   if (isRemoteOperationActive) {
     const candidate = resolvePrimaryAction({ ...inputs, isRemoteOperationActive: false })
+    // Why: when the candidate label is a Commit variant, a generic "remote
+    // operation in progress" tooltip mismatches the visible label. Surface a
+    // tooltip that tells the user the commit will wait, keeping the label and
+    // the explanation consistent.
+    const isCommitKind = candidate.kind.startsWith('commit')
     return {
       ...candidate,
-      title: 'Remote operation in progress…',
+      title: isCommitKind
+        ? 'Remote operation in progress — try again once it finishes'
+        : 'Remote operation in progress…',
       disabled: true
     }
   }
@@ -271,8 +278,12 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     disabled: !canCommit
   }
 
+  // Why: when the branch has no upstream, the primary button surfaces
+  // "Commit & Publish" as a one-click path. Point the dropdown at that
+  // compound action instead of contradicting it with a "publish first"
+  // instruction that ignores the offered shortcut.
   const commitPushTitle = !hasUpstream
-    ? 'Publish the branch first to push commits'
+    ? 'Use Commit & Publish to publish and push in one step'
     : (commitDisabledReason ?? 'Commit staged changes and push')
   const commitPushItem: DropdownItem = {
     kind: 'commit_push',
@@ -283,7 +294,10 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
 
   const commitSyncTitle = (() => {
     if (!hasUpstream) {
-      return 'Publish the branch first to sync commits'
+      // Why: same reasoning as commitPushTitle — stay consistent with the
+      // primary's Commit & Publish offer rather than telling the user to
+      // publish first.
+      return 'Use Commit & Publish, then sync'
     }
     if (behind === 0) {
       return 'Nothing to pull — use Commit & Push instead'
