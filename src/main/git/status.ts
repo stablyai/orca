@@ -667,8 +667,9 @@ export async function commitChanges(
     await gitExecFileAsync(['commit', '-m', message], { cwd: worktreePath })
     return { success: true }
   } catch (error) {
-    // Why: `git commit` writes failure messages like "nothing to commit, working tree clean" to stdout,
-    // not stderr, so fall back to stdout before the generic Error.message to surface useful context.
+    // Why: surface whichever channel carries the useful message. Pre-commit/GPG
+    // hook failures write to stderr; "nothing to commit, working tree clean"
+    // writes to stdout. Try stderr first, fall back to stdout, then error.message.
     const readStringField = (field: string): string | null => {
       if (typeof error === 'object' && error && field in error) {
         const v = (error as Record<string, unknown>)[field]

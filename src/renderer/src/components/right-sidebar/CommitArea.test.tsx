@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
 
@@ -74,13 +74,6 @@ const baseProps = {
 }
 
 describe('CommitArea', () => {
-  beforeEach(() => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
   it('disables commit button when no staged files', () => {
     const element = CommitArea({ ...baseProps, stagedCount: 0 })
     const button = findCommitButton(element)

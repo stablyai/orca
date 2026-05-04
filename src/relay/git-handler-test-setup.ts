@@ -17,27 +17,39 @@ import type { RelayDispatcher } from './dispatcher'
 export type MockDispatcher = {
   onRequest: (
     method: string,
-    handler: (params: Record<string, unknown>) => Promise<unknown>
+    handler: (
+      params: Record<string, unknown>,
+      context: { isStale: () => boolean }
+    ) => Promise<unknown>
   ) => void
   onNotification: (method: string, handler: (params: Record<string, unknown>) => void) => void
   notify: (method: string, params?: Record<string, unknown>) => void
-  _requestHandlers: Map<string, (params: Record<string, unknown>) => Promise<unknown>>
+  _requestHandlers: Map<
+    string,
+    (params: Record<string, unknown>, context: { isStale: () => boolean }) => Promise<unknown>
+  >
   callRequest(method: string, params?: Record<string, unknown>): Promise<unknown>
 }
 
 export function createMockDispatcher(): MockDispatcher {
-  const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
-  const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
+  const requestHandlers = new Map<
+    string,
+    (params: Record<string, unknown>, context: { isStale: () => boolean }) => Promise<unknown>
+  >()
 
   return {
     onRequest: vi.fn(
-      (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+      (
+        method: string,
+        handler: (
+          params: Record<string, unknown>,
+          context: { isStale: () => boolean }
+        ) => Promise<unknown>
+      ) => {
         requestHandlers.set(method, handler)
       }
     ),
-    onNotification: vi.fn((method: string, handler: (params: Record<string, unknown>) => void) => {
-      notificationHandlers.set(method, handler)
-    }),
+    onNotification: vi.fn(),
     notify: vi.fn(),
     _requestHandlers: requestHandlers,
     async callRequest(method: string, params: Record<string, unknown> = {}) {
@@ -45,7 +57,7 @@ export function createMockDispatcher(): MockDispatcher {
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      return handler(params)
+      return handler(params, { isStale: () => false })
     }
   }
 }

@@ -122,9 +122,10 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
 
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement>(null)
-  // Why: React setState is async, so two rapid Cmd+Enter presses can both pass the
-  // isCommitting guard before commitInFlightByWorktree re-renders. A ref flipped
-  // synchronously at the start of handleCommit gives us a true single-flight lock.
+  // Why: React setState is async, so a rapid double-click on the Commit
+  // button can both pass the isCommitting state guard before the disabled
+  // state re-renders. A ref flipped synchronously at the start of
+  // handleCommit gives us a true single-flight lock.
   const commitInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -446,7 +447,20 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
 
-      setCommitDrafts((prev) => writeCommitDraftForWorktree(prev, activeWorktreeId, ''))
+      // Why: the textarea stays enabled during the in-flight commit (only the
+      // button is disabled), so the user can keep typing after clicking Commit.
+      // Unconditionally clearing the draft here would silently discard those
+      // in-progress edits — the commit used the OLD `message` captured in this
+      // closure, so the dropped text would never have been committed either.
+      // Only clear when the current draft still matches what we committed.
+      setCommitDrafts((prev) => {
+        const current = prev[activeWorktreeId]
+        if (current !== undefined && current.trim() !== message) {
+          // User typed more after submit — preserve their in-progress edits.
+          return prev
+        }
+        return writeCommitDraftForWorktree(prev, activeWorktreeId, '')
+      })
       setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       // Why: the commit already succeeded. If the follow-up status refresh fails
       // (e.g., transient IPC error), log it but do NOT overwrite the cleared

@@ -76,12 +76,21 @@ export async function commitChangesRelay(
   worktreePath: string,
   message: string
 ): Promise<{ success: boolean; error?: string }> {
+  // Why: defense-in-depth. The IPC handler at src/main/ipc/filesystem.ts validates
+  // the message, but a relay caller (future automation, or an SSH client connecting
+  // to the relay directly) could bypass that path. Reject empty/whitespace messages
+  // here so we surface a clear error instead of git's opaque failure.
+  if (typeof message !== 'string' || message.trim().length === 0) {
+    return { success: false, error: 'Commit message is required' }
+  }
+
   try {
     await git(['commit', '-m', message], worktreePath)
     return { success: true }
   } catch (error) {
-    // Why: `git commit` writes failure messages like "nothing to commit, working tree clean" to stdout,
-    // not stderr, so fall back to stdout before the generic Error.message to surface useful context.
+    // Why: surface whichever channel carries the useful message. Pre-commit/GPG
+    // hook failures write to stderr; "nothing to commit, working tree clean"
+    // writes to stdout. Try stderr first, fall back to stdout, then error.message.
     // Mirrors commitChanges in src/main/git/status.ts — keep the two paths in sync.
     const readStringField = (field: string): string | null => {
       if (typeof error === 'object' && error && field in error) {

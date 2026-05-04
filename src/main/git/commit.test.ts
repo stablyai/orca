@@ -39,4 +39,43 @@ describe('commitChanges', () => {
       error: 'pre-commit hook failed: lint errors\n'
     })
   })
+
+  it('returns stdout when git writes to stdout (e.g. nothing to commit)', async () => {
+    gitExecFileAsyncMock.mockRejectedValue({
+      stdout: 'nothing to commit, working tree clean\n',
+      stderr: ''
+    })
+
+    const result = await commitChanges('/repo', 'feat: empty commit')
+
+    expect(result).toEqual({
+      success: false,
+      error: 'nothing to commit, working tree clean\n'
+    })
+  })
+
+  it('prefers stderr over stdout when both are present', async () => {
+    gitExecFileAsyncMock.mockRejectedValue({
+      stdout: 'some stdout output\n',
+      stderr: 'hook rejected\n'
+    })
+
+    const result = await commitChanges('/repo', 'feat: both channels')
+
+    expect(result).toEqual({
+      success: false,
+      error: 'hook rejected\n'
+    })
+  })
+
+  it('falls back to Error.message when stdout/stderr are empty', async () => {
+    gitExecFileAsyncMock.mockRejectedValue(new Error('spawn git ENOENT'))
+
+    const result = await commitChanges('/repo', 'feat: missing git')
+
+    expect(result).toEqual({
+      success: false,
+      error: 'spawn git ENOENT'
+    })
+  })
 })
