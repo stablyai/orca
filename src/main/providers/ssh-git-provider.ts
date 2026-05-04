@@ -26,6 +26,16 @@ export class SshGitProvider implements IGitProvider {
     return (await this.mux.request('git.status', { worktreePath })) as GitStatusResult
   }
 
+  async commit(
+    worktreePath: string,
+    message: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return (await this.mux.request('git.commit', {
+      worktreePath,
+      message
+    })) as { success: boolean; error?: string }
+  }
+
   async getDiff(
     worktreePath: string,
     filePath: string,

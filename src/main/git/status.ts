@@ -659,6 +659,34 @@ export async function unstageFile(worktreePath: string, filePath: string): Promi
   await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
 }
 
+export async function commitChanges(
+  worktreePath: string,
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await gitExecFileAsync(['commit', '-m', message], { cwd: worktreePath })
+    return { success: true }
+  } catch (error) {
+    // Why: surface whichever channel carries the useful message. Pre-commit/GPG
+    // hook failures write to stderr; "nothing to commit, working tree clean"
+    // writes to stdout. Try stderr first, fall back to stdout, then error.message.
+    const readStringField = (field: string): string | null => {
+      if (typeof error === 'object' && error && field in error) {
+        const v = (error as Record<string, unknown>)[field]
+        if (typeof v === 'string' && v.length > 0) {
+          return v
+        }
+      }
+      return null
+    }
+    const errorMessage =
+      readStringField('stderr') ??
+      readStringField('stdout') ??
+      (error instanceof Error ? error.message : 'Commit failed')
+    return { success: false, error: errorMessage }
+  }
+}
+
 /**
  * Discard working tree changes for a file.
  */

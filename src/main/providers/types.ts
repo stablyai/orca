@@ -132,6 +132,7 @@ export type IFilesystemProvider = {
 
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
+  commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
   getDiff(
     worktreePath: string,
     filePath: string,

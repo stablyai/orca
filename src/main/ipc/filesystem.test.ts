@@ -13,6 +13,7 @@ const {
   openMock,
   realpathMock,
   lstatMock,
+  commitChangesMock,
   getStatusMock,
   getDiffMock,
   getBranchCompareMock,
@@ -23,7 +24,8 @@ const {
   bulkUnstageFilesMock,
   discardChangesMock,
   listWorktreesMock,
-  getSshFilesystemProviderMock
+  getSshFilesystemProviderMock,
+  getSshGitProviderMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   trashItemMock: vi.fn(),
@@ -34,6 +36,7 @@ const {
   openMock: vi.fn(),
   realpathMock: vi.fn(),
   lstatMock: vi.fn(),
+  commitChangesMock: vi.fn(),
   getStatusMock: vi.fn(),
   getDiffMock: vi.fn(),
   getBranchCompareMock: vi.fn(),
@@ -44,7 +47,8 @@ const {
   bulkUnstageFilesMock: vi.fn(),
   discardChangesMock: vi.fn(),
   listWorktreesMock: vi.fn(),
-  getSshFilesystemProviderMock: vi.fn()
+  getSshFilesystemProviderMock: vi.fn(),
+  getSshGitProviderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -67,6 +71,7 @@ vi.mock('fs/promises', () => ({
 }))
 
 vi.mock('../git/status', () => ({
+  commitChanges: commitChangesMock,
   getStatus: getStatusMock,
   getDiff: getDiffMock,
   getBranchCompare: getBranchCompareMock,
@@ -87,7 +92,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: vi.fn().mockReturnValue(null)
+  getSshGitProvider: getSshGitProviderMock
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
@@ -148,6 +153,7 @@ describe('registerFilesystemHandlers', () => {
       openMock,
       realpathMock,
       lstatMock,
+      commitChangesMock,
       getStatusMock,
       getDiffMock,
       getBranchCompareMock,
@@ -158,7 +164,8 @@ describe('registerFilesystemHandlers', () => {
       bulkUnstageFilesMock,
       discardChangesMock,
       listWorktreesMock,
-      getSshFilesystemProviderMock
+      getSshFilesystemProviderMock,
+      getSshGitProviderMock
     ]) {
       mock.mockReset()
     }
@@ -182,6 +189,7 @@ describe('registerFilesystemHandlers', () => {
       }
     ])
     trashItemMock.mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue(null)
     statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
     openMock.mockResolvedValue({
       read: vi.fn(async (buffer: Buffer) => {
@@ -543,6 +551,95 @@ describe('registerFilesystemHandlers', () => {
     })
 
     expect(getBranchCompareMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'origin/main')
+  })
+
+  it('routes local git:commit through commitChanges and returns success', async () => {
+    commitChangesMock.mockResolvedValue({ success: true })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        message: 'feat: ship commit'
+      })
+    ).resolves.toEqual({ success: true })
+
+    expect(commitChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'feat: ship commit')
+  })
+
+  it('returns local commit hook failure payload from git:commit', async () => {
+    commitChangesMock.mockResolvedValue({ success: false, error: 'hook failed' })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        message: 'feat: ship commit'
+      })
+    ).resolves.toEqual({ success: false, error: 'hook failed' })
+  })
+
+  it('routes ssh git:commit through the SSH provider instead of local commitChanges', async () => {
+    const sshCommitMock = vi.fn().mockResolvedValue({ success: true })
+    getSshGitProviderMock.mockReturnValue({ commit: sshCommitMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: '/remote/repo',
+        message: 'feat: remote commit',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual({ success: true })
+
+    expect(sshCommitMock).toHaveBeenCalledWith('/remote/repo', 'feat: remote commit')
+    expect(commitChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects git:commit with empty message and does not call commitChanges', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        message: ''
+      })
+    ).rejects.toThrow('Commit message is required')
+
+    expect(commitChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects git:commit with whitespace-only message and does not call commitChanges', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        message: '   '
+      })
+    ).rejects.toThrow('Commit message is required')
+
+    expect(commitChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects git:commit with whitespace-only message before SSH dispatch', async () => {
+    const sshCommitMock = vi.fn().mockResolvedValue({ success: true })
+    getSshGitProviderMock.mockReturnValue({ commit: sshCommitMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: '/remote/repo',
+        message: '\n',
+        connectionId: 'conn-1'
+      })
+    ).rejects.toThrow('Commit message is required')
+
+    expect(sshCommitMock).not.toHaveBeenCalled()
   })
 
   it('allows git operations on worktrees outside repo/workspace roots', async () => {

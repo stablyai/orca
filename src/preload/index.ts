@@ -1272,6 +1272,11 @@ const api = {
       oldPath?: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
+    commit: (args: {
+      worktreePath: string
+      message: string
+      connectionId?: string
+    }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
     stage: (args: {
       worktreePath: string
       filePath: string

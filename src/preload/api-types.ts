@@ -19,7 +19,7 @@ import type {
   GitBranchCompareResult,
   GitConflictOperation,
   GitDiffResult,
-  GitStatusEntry,
+  GitStatusResult,
   GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
@@ -759,10 +759,7 @@ export type PreloadApi = {
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   git: {
-    status: (args: {
-      worktreePath: string
-      connectionId?: string
-    }) => Promise<{ entries: GitStatusEntry[] }>
+    status: (args: { worktreePath: string; connectionId?: string }) => Promise<GitStatusResult>
     conflictOperation: (args: {
       worktreePath: string
       connectionId?: string
@@ -791,6 +788,11 @@ export type PreloadApi = {
       oldPath?: string
       connectionId?: string
     }) => Promise<GitDiffResult>
+    commit: (args: {
+      worktreePath: string
+      message: string
+      connectionId?: string
+    }) => Promise<{ success: boolean; error?: string }>
     stage: (args: {
       worktreePath: string
       filePath: string
