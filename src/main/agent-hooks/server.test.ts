@@ -660,6 +660,22 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.state).toBe('waiting')
   })
 
+  it('AskUserQuestion maps to waiting', () => {
+    // Why: OpenCode emits `question.asked` when the agent uses an ask-the-user
+    // tool (distinct from `permission.asked`, which blocks on tool approval).
+    // Both leave the agent idle-but-waiting on a human, so both must render
+    // the same red "needs attention" indicator. Without this mapping the pane
+    // silently stays in `working` and the user has no visual cue that the
+    // agent is waiting on them.
+    const result = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({ hook_event_name: 'AskUserQuestion' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.agentType).toBe('opencode')
+  })
+
   it('unknown event name returns null', () => {
     const result = _internals.normalizeHookPayload(
       'opencode',
