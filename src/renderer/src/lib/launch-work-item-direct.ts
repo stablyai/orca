@@ -258,7 +258,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
 
 export type LaunchFromBranchArgs = {
   repoId: string
-  baseBranch: string
+  /** Existing branch to branch the new workspace from. When omitted the repo's
+   *  default base ref is used — pass undefined when creating a workspace with a
+   *  user-supplied name that should start from the default base. */
+  baseBranch?: string
+  /** When provided, use this as the workspace name instead of the repo's
+   *  creature-name generator. Allows the caller to set an explicit branch name
+   *  (e.g. "feature/my-thing") without going through the Quick-tab form. */
+  explicitName?: string
   /** Called when the flow cannot proceed without user input (setup policy is
    *  `ask`, or the selected repo cannot resolve). */
   openModalFallback: () => void
@@ -270,7 +277,7 @@ export type LaunchFromBranchArgs = {
  * just land the user in a fresh workspace rooted at the requested branch.
  */
 export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void> {
-  const { repoId, baseBranch, openModalFallback } = args
+  const { repoId, baseBranch, explicitName, openModalFallback } = args
   const store = useAppStore.getState()
   const repo = store.repos.find((r) => r.id === repoId)
   if (!repo) {
@@ -295,14 +302,16 @@ export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void
 
   // Why: branch-based launches don't carry a title hint, so fall back to the
   // repo's creature-name generator — same distinct, readable default the
-  // quick-composer uses when the name field is blank.
+  // quick-composer uses when the name field is blank. When an explicitName is
+  // provided (e.g. "feature/my-thing" typed by the user), skip the generator
+  // and use it directly so the workspace branch matches what the user typed.
   const fallbackName = getSuggestedCreatureName(
     repoId,
     store.worktreesByRepo,
     settings?.nestWorkspaces ?? true
   )
   const workspaceName = getWorkspaceSeedName({
-    explicitName: '',
+    explicitName: explicitName ?? '',
     prompt: '',
     linkedIssueNumber: null,
     linkedPR: null,

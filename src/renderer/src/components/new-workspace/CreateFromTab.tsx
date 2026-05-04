@@ -10,10 +10,20 @@ import {
   GitBranch,
   GitPullRequest,
   LoaderCircle,
+  Plus,
   Search
 } from 'lucide-react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -536,6 +546,8 @@ export default function CreateFromTab({
   // row's label into the input for the duration of the launch so the user
   // still sees what they picked.
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
+  const [newBranchDialogOpen, setNewBranchDialogOpen] = useState(false)
+  const [newBranchName, setNewBranchName] = useState('')
   const beginLaunch = useCallback((label: string) => {
     setSelectedLabel(label)
     setResultsOpen(false)
@@ -667,6 +679,34 @@ export default function CreateFromTab({
           repoId: selectedRepo.id,
           baseBranch: refName,
           openModalFallback: () => onFallbackToQuick({ initialRepoId: selectedRepo.id })
+        })
+        if (token === inflightRef.current) {
+          onLaunched()
+        }
+      } finally {
+        if (token === inflightRef.current) {
+          setLaunching(false)
+          setSelectedLabel(null)
+        }
+      }
+    },
+    [beginLaunch, onFallbackToQuick, onLaunched, selectedRepo]
+  )
+
+  const handleNewBranchCreate = useCallback(
+    async (branchName: string) => {
+      if (!selectedRepo) {
+        return
+      }
+      const token = ++inflightRef.current
+      setLaunching(true)
+      beginLaunch(branchName)
+      try {
+        await launchFromBranch({
+          repoId: selectedRepo.id,
+          explicitName: branchName,
+          openModalFallback: () =>
+            onFallbackToQuick({ initialRepoId: selectedRepo.id, prefilledName: branchName })
         })
         if (token === inflightRef.current) {
           onLaunched()
@@ -1033,114 +1073,138 @@ export default function CreateFromTab({
               // keys move the highlighted row and Enter selects it.
               className="overflow-visible bg-transparent"
             >
-              <PopoverAnchor asChild>
-                <div className="relative">
-                  {launching ? (
-                    <LoaderCircle className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-                  ) : (
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  )}
-                  <Input
-                    ref={searchInputRef}
-                    // Why: once a row is chosen we pin its label into the input
-                    // so the user still sees what they selected while the
-                    // launch runs. `readOnly` + aria-busy lets keystrokes still
-                    // blur/focus without the text being editable mid-launch.
-                    value={selectedLabel ?? query}
-                    readOnly={launching}
-                    aria-busy={launching}
-                    onChange={(e) => {
-                      if (launching) {
-                        return
-                      }
-                      setQuery(e.target.value)
-                      setResultsOpen(true)
-                    }}
-                    onFocus={() => {
-                      if (!launching) {
+              <div className="flex items-center gap-2">
+                <PopoverAnchor asChild>
+                  <div className="relative flex-1">
+                    {launching ? (
+                      <LoaderCircle className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                    )}
+                    <Input
+                      ref={searchInputRef}
+                      // Why: once a row is chosen we pin its label into the input
+                      // so the user still sees what they selected while the
+                      // launch runs. `readOnly` + aria-busy lets keystrokes still
+                      // blur/focus without the text being editable mid-launch.
+                      value={selectedLabel ?? query}
+                      readOnly={launching}
+                      aria-busy={launching}
+                      onChange={(e) => {
+                        if (launching) {
+                          return
+                        }
+                        setQuery(e.target.value)
                         setResultsOpen(true)
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (launching) {
-                        return
-                      }
-                      if (e.key === 'Escape' && resultsOpen) {
-                        // Why: first Escape dismisses the suggestions; only
-                        // if the popover is already closed should Escape
-                        // bubble up to close the dialog.
-                        e.stopPropagation()
-                        setResultsOpen(false)
-                        return
-                      }
-                      if (
-                        e.key === 'ArrowDown' ||
-                        e.key === 'ArrowUp' ||
-                        e.key === 'Home' ||
-                        e.key === 'End'
-                      ) {
-                        if (!resultsOpen) {
+                      }}
+                      onFocus={() => {
+                        if (!launching) {
                           setResultsOpen(true)
                         }
-                        // Why: cmdk handles arrow/Home/End on its root via
-                        // its own listener. The event reaching here already
-                        // got processed; just make sure the popover is open
-                        // so the user sees the movement.
-                      }
-                      if (e.key === 'Enter' && resultsOpen && resultState.kind === 'rows') {
-                        const row = resultState.rows.find((r) => r.value === commandValue)
-                        if (row) {
-                          e.preventDefault()
-                          handleRowSelect(row)
-                        }
-                      }
-                    }}
-                    placeholder={placeholderBySubTab[subTab]}
-                    className={cn(
-                      'h-9 pl-8 text-sm',
-                      // Why: reserve trailing space for the absolute-positioned
-                      // IssueSourceSelector so typed text never slides under
-                      // the pills. Only widen the padding when the selector
-                      // is actually rendered.
-                      selectorRenderable && !launching ? 'pr-[140px]' : ''
-                    )}
-                  />
-                  {selectorRenderable && selectedRepo && !launching ? (
-                    // Why: right-aligned inside the input so the selector
-                    // stays visually attached to the surface whose contents
-                    // it controls. `pointer-events-auto` is needed because
-                    // the sibling Search/Loader icons set
-                    // `pointer-events-none` on the absolute-positioned layer
-                    // — we override that for the clickable pills.
-                    // `suppressTooltip`: the selector is only visible on the
-                    // Issues sub-tab, so "Showing issues from X" restates
-                    // what's already implied (same reasoning as the Create
-                    // Issue composer mirror in TaskPage).
-                    <div
-                      className="pointer-events-auto absolute right-2 top-1/2 -translate-y-[calc(50%+2px)]"
-                      onMouseDown={(e) => {
-                        // Why: clicking a pill would otherwise blur the input
-                        // and close the results popover before the click
-                        // lands on the button. Blocking the default focus
-                        // shift keeps the popover open across a flip so the
-                        // user sees the list repopulate against the new
-                        // source without re-clicking the input.
-                        e.preventDefault()
                       }}
-                    >
-                      <IssueSourceSelector
-                        preference={selectedRepo.issueSourcePreference}
-                        origin={selectorOrigin}
-                        upstream={selectorUpstream}
-                        onChange={(next) => {
-                          void setIssueSourcePreference(selectedRepo.id, selectedRepo.path, next)
+                      onKeyDown={(e) => {
+                        if (launching) {
+                          return
+                        }
+                        if (e.key === 'Escape' && resultsOpen) {
+                          // Why: first Escape dismisses the suggestions; only
+                          // if the popover is already closed should Escape
+                          // bubble up to close the dialog.
+                          e.stopPropagation()
+                          setResultsOpen(false)
+                          return
+                        }
+                        if (
+                          e.key === 'ArrowDown' ||
+                          e.key === 'ArrowUp' ||
+                          e.key === 'Home' ||
+                          e.key === 'End'
+                        ) {
+                          if (!resultsOpen) {
+                            setResultsOpen(true)
+                          }
+                          // Why: cmdk handles arrow/Home/End on its root via
+                          // its own listener. The event reaching here already
+                          // got processed; just make sure the popover is open
+                          // so the user sees the movement.
+                        }
+                        if (e.key === 'Enter' && resultsOpen && resultState.kind === 'rows') {
+                          const row = resultState.rows.find((r) => r.value === commandValue)
+                          if (row) {
+                            e.preventDefault()
+                            handleRowSelect(row)
+                          }
+                        }
+                      }}
+                      placeholder={placeholderBySubTab[subTab]}
+                      className={cn(
+                        'h-9 pl-8 text-sm',
+                        // Why: reserve trailing space for the absolute-positioned
+                        // IssueSourceSelector so typed text never slides under
+                        // the pills. Only widen the padding when the selector
+                        // is actually rendered.
+                        selectorRenderable && !launching ? 'pr-[140px]' : ''
+                      )}
+                    />
+                    {selectorRenderable && selectedRepo && !launching ? (
+                      // Why: right-aligned inside the input so the selector
+                      // stays visually attached to the surface whose contents
+                      // it controls. `pointer-events-auto` is needed because
+                      // the sibling Search/Loader icons set
+                      // `pointer-events-none` on the absolute-positioned layer
+                      // — we override that for the clickable pills.
+                      // `suppressTooltip`: the selector is only visible on the
+                      // Issues sub-tab, so "Showing issues from X" restates
+                      // what's already implied (same reasoning as the Create
+                      // Issue composer mirror in TaskPage).
+                      <div
+                        className="pointer-events-auto absolute right-2 top-1/2 -translate-y-[calc(50%+2px)]"
+                        onMouseDown={(e) => {
+                          // Why: clicking a pill would otherwise blur the input
+                          // and close the results popover before the click
+                          // lands on the button. Blocking the default focus
+                          // shift keeps the popover open across a flip so the
+                          // user sees the list repopulate against the new
+                          // source without re-clicking the input.
+                          e.preventDefault()
                         }}
-                        suppressTooltip
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </PopoverAnchor>
+                      >
+                        <IssueSourceSelector
+                          preference={selectedRepo.issueSourcePreference}
+                          origin={selectorOrigin}
+                          upstream={selectorUpstream}
+                          onChange={(next) => {
+                            void setIssueSourcePreference(selectedRepo.id, selectedRepo.path, next)
+                          }}
+                          suppressTooltip
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </PopoverAnchor>
+                {subTab === 'branches' ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={launching}
+                          aria-label="New branch"
+                          className="shrink-0 bg-white text-black hover:bg-gray-50 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
+                          onClick={() => {
+                            setNewBranchName(query.trim())
+                            setNewBranchDialogOpen(true)
+                          }}
+                        >
+                          <Plus />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">New branch</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : null}
+              </div>
               <PopoverContent
                 align="start"
                 sideOffset={4}
@@ -1242,6 +1306,45 @@ export default function CreateFromTab({
           Creating workspace…
         </div>
       ) : null}
+
+      <Dialog open={newBranchDialogOpen} onOpenChange={setNewBranchDialogOpen}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>New workspace</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Branch name</label>
+            <Input
+              autoFocus
+              value={newBranchName}
+              onChange={(e) => setNewBranchName(e.target.value)}
+              placeholder="feature/my-thing"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newBranchName.trim()) {
+                  e.preventDefault()
+                  setNewBranchDialogOpen(false)
+                  void handleNewBranchCreate(newBranchName.trim())
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setNewBranchDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!newBranchName.trim()}
+              onClick={() => {
+                setNewBranchDialogOpen(false)
+                void handleNewBranchCreate(newBranchName.trim())
+              }}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
