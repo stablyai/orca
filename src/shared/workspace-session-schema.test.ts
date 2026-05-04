@@ -95,4 +95,25 @@ describe('parseWorkspaceSession', () => {
     expect(parseWorkspaceSession('garbage').ok).toBe(false)
     expect(parseWorkspaceSession(42).ok).toBe(false)
   })
+
+  it('drops bad lastVisitedAtByWorktreeId entries rather than failing the session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      lastVisitedAtByWorktreeId: {
+        good: 1_700_000_000_000,
+        nan: Number.NaN,
+        infinite: Number.POSITIVE_INFINITY,
+        negative: -5,
+        string: 'nope'
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.lastVisitedAtByWorktreeId).toEqual({ good: 1_700_000_000_000 })
+    }
+  })
 })

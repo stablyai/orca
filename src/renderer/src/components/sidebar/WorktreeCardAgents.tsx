@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -50,11 +51,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
-  const setActiveView = useAppStore((s) => s.setActiveView)
   const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
-  const markWorktreeVisited = useAppStore((s) => s.markWorktreeVisited)
 
   // Why: per-worktree collapse is session-only UI state. Single-primitive
   // subscription so the card only re-renders when THIS worktree's collapsed
@@ -89,24 +87,20 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const handleActivateAgentTab = useCallback(
     (tabId: string, paneKey: string) => {
       acknowledgeAgents([paneKey])
-      setActiveWorktree(worktreeId)
-      // Why: sidebar agent-tab click is a user-initiated switch; stamp focus
-      // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
-      markWorktreeVisited(worktreeId)
-      setActiveView('terminal')
+      // Why: route through activateAndRevealWorktree so cross-repo clicks also
+      // set activeRepoId, record a nav-history entry, clear sidebar filters,
+      // reveal the card, and stamp focus recency — per the design doc rule
+      // "Every user-initiated worktree switch must route through
+      // activateAndRevealWorktree". Bypassing it (direct setActiveWorktree +
+      // markWorktreeVisited) silently skipped cross-repo activation and
+      // back/forward history for clicks from inline agent rows.
+      activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
         setActiveTab(tabId)
       }
     },
-    [
-      worktreeId,
-      setActiveWorktree,
-      setActiveTab,
-      setActiveView,
-      acknowledgeAgents,
-      markWorktreeVisited
-    ]
+    [worktreeId, setActiveTab, acknowledgeAgents]
   )
 
   const handleToggleCollapsed = useCallback(
