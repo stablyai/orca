@@ -56,7 +56,9 @@ if (!ignoreModules.includes('cpu-features')) {
   for (const relDir of cpuFeatureDirs) {
     const dir = resolve(projectDir, relDir)
     const gypiPath = resolve(dir, 'buildcheck.gypi')
-    if (existsSync(gypiPath)) continue
+    if (existsSync(gypiPath)) {
+      continue
+    }
     try {
       const out = execFileSync(process.execPath, ['buildcheck.js'], {
         cwd: dir,
