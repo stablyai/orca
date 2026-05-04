@@ -166,10 +166,34 @@ export class OrcaRuntimeRpcServer {
     // Why: Unix socket transport uses the shared runtime auth token. This is
     // the existing security model for CLI connections — the token lives in a
     // 0o600-permissioned file on disk.
+    // Why: the `.catch` guarantees `reply()` always fires even if
+    // `handleMessage` (or `JSON.stringify` on a pathological response) throws.
+    // Without it, a throw would leave the client waiting for a terminal frame
+    // that never arrives AND leak the dispatch's AbortController in the
+    // transport's in-flight set until the 30 s socket idle timer closes the
+    // connection.
     socketTransport.onMessage((msg, reply, context) => {
-      void this.handleMessage(msg, context).then((response) => {
-        reply(JSON.stringify(response))
-      })
+      void this.handleMessage(msg, context)
+        .then((response) => {
+          reply(JSON.stringify(response))
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          // Why: best-effort id recovery so the client can correlate the
+          // error frame to its pending request. A malformed message would
+          // have been caught by handleMessage and returned an envelope
+          // instead of throwing, so in practice the id is always present.
+          let id = 'unknown'
+          try {
+            const parsed = JSON.parse(msg) as { id?: unknown }
+            if (typeof parsed.id === 'string' && parsed.id.length > 0) {
+              id = parsed.id
+            }
+          } catch {
+            // ignore — fall through with id='unknown'
+          }
+          reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
+        })
     })
 
     await socketTransport.start()

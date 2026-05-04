@@ -755,6 +755,40 @@ describe('OrcaRuntimeRpcServer', () => {
         await server.stop()
       }
     })
+
+    it('returns an internal_error envelope when the dispatcher throws', async () => {
+      // Why: handlers are designed to return error envelopes, never to throw,
+      // but a bug somewhere in the RPC stack (e.g. JSON.stringify choking on
+      // a response with circular refs) must still produce a terminal frame.
+      // Without the `.catch` on handleMessage's promise, a throw would leave
+      // the client hanging until the 30s idle timer and leak the dispatch's
+      // AbortController in the transport's in-flight set.
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+      await server.start()
+
+      // Force the dispatcher to throw a non-envelope error.
+      const originalDispatch = server['dispatcher'].dispatch.bind(server['dispatcher'])
+      server['dispatcher'].dispatch = vi.fn().mockRejectedValue(new Error('boom'))
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const response = await sendRequest(metadata!.transports[0]!.endpoint, {
+          id: 'req_throw',
+          authToken: metadata!.authToken,
+          method: 'status.get'
+        })
+        expect(response).toMatchObject({
+          id: 'req_throw',
+          ok: false,
+          error: { code: 'internal_error', message: 'boom' }
+        })
+      } finally {
+        server['dispatcher'].dispatch = originalDispatch
+        await server.stop()
+      }
+    })
   })
 
   // Why: §6 test for the idempotent + hard-fail schema migration. A broken
