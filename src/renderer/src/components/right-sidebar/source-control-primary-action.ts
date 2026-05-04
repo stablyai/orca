@@ -1,9 +1,11 @@
+// Why: split from the combined primary+dropdown module because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
+
 import type { GitUpstreamStatus } from '../../../../shared/types'
 
 // Why: this module owns the pure state-machine logic for the Source Control
-// primary action (split button) and its chevron dropdown. Keeping the logic
-// outside the React component makes it straightforward to unit-test each row
-// of the priority table without spinning up a renderer.
+// primary action (split button). Keeping the logic outside the React component
+// makes it straightforward to unit-test each row of the priority table without
+// spinning up a renderer.
 
 export type PrimaryActionKind =
   | 'commit'
@@ -134,10 +136,13 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
       }
     }
     if (upstreamStatus.behind > 0) {
+      // Why: compound commit labels and tooltips omit ahead/behind counts
+      // because the commit itself bumps ahead by at least one — surfacing
+      // the pre-commit numbers would be stale the moment the action fires.
       return {
         kind: 'commit_sync',
         label: 'Commit & Sync',
-        title: `Commit, then ${describeSyncCounts(upstreamStatus.ahead, upstreamStatus.behind).toLowerCase()}`,
+        title: 'Commit staged changes, then pull and push',
         disabled: false
       }
     }
@@ -210,176 +215,4 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     title: 'Nothing to commit. Branch is up to date.',
     disabled: true
   }
-}
-
-export type DropdownActionKind =
-  | 'commit'
-  | 'commit_push'
-  | 'commit_sync'
-  | 'push'
-  | 'pull'
-  | 'sync'
-  | 'fetch'
-  | 'publish'
-
-export type DropdownItem = {
-  kind: DropdownActionKind
-  label: string
-  title: string
-  disabled: boolean
-}
-
-export type DropdownSeparator = { kind: 'separator' }
-
-export type DropdownEntry = DropdownItem | DropdownSeparator
-
-/**
- * Resolve the chevron dropdown items. Every item is always rendered so the
- * menu shape stays stable across states; inapplicable rows are disabled
- * with a tooltip reason rather than hidden.
- */
-export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry[] {
-  const {
-    stagedCount,
-    hasMessage,
-    hasUnresolvedConflicts,
-    isCommitting,
-    isRemoteOperationActive,
-    upstreamStatus
-  } = inputs
-
-  const hasStaged = stagedCount > 0
-  const hasUpstream = upstreamStatus?.hasUpstream ?? false
-  const ahead = upstreamStatus?.ahead ?? 0
-  const behind = upstreamStatus?.behind ?? 0
-
-  // Why: any in-flight commit or remote operation should lock the whole menu.
-  // A running push shouldn't let a second pull/sync click queue up behind it
-  // on a stale status snapshot.
-  const globalBusy = isCommitting || isRemoteOperationActive
-
-  const commitDisabledReason = (() => {
-    if (hasUnresolvedConflicts) {
-      return 'Resolve conflicts before committing'
-    }
-    if (!hasStaged) {
-      return 'Stage at least one file to commit'
-    }
-    if (!hasMessage) {
-      return 'Enter a commit message to commit'
-    }
-    return null
-  })()
-  const canCommit = !globalBusy && commitDisabledReason === null
-  const commitItem: DropdownItem = {
-    kind: 'commit',
-    label: 'Commit',
-    title: commitDisabledReason ?? 'Commit staged changes',
-    disabled: !canCommit
-  }
-
-  // Why: when the branch has no upstream, the primary button surfaces
-  // "Commit & Publish" as a one-click path. Point the dropdown at that
-  // compound action instead of contradicting it with a "publish first"
-  // instruction that ignores the offered shortcut.
-  const commitPushTitle = !hasUpstream
-    ? 'Use Commit & Publish to publish and push in one step'
-    : (commitDisabledReason ?? 'Commit staged changes and push')
-  const commitPushItem: DropdownItem = {
-    kind: 'commit_push',
-    label: formatCountLabel('Commit & Push', ahead),
-    title: commitPushTitle,
-    disabled: globalBusy || !hasUpstream || commitDisabledReason !== null
-  }
-
-  const commitSyncTitle = (() => {
-    if (!hasUpstream) {
-      // Why: same reasoning as commitPushTitle — stay consistent with the
-      // primary's Commit & Publish offer rather than telling the user to
-      // publish first.
-      return 'Use Commit & Publish, then sync'
-    }
-    if (behind === 0) {
-      return 'Nothing to pull — use Commit & Push instead'
-    }
-    return commitDisabledReason ?? `Commit, then ${describeSyncCounts(ahead, behind).toLowerCase()}`
-  })()
-  const commitSyncItem: DropdownItem = {
-    kind: 'commit_sync',
-    label: formatSyncLabel('Commit & Sync', ahead, behind),
-    title: commitSyncTitle,
-    disabled: globalBusy || !hasUpstream || behind === 0 || commitDisabledReason !== null
-  }
-
-  const pushItem: DropdownItem = {
-    kind: 'push',
-    label: formatCountLabel('Push', ahead),
-    title: !hasUpstream
-      ? 'Publish the branch first to push commits'
-      : ahead === 0
-        ? 'Nothing to push'
-        : describePushCount(ahead),
-    disabled: globalBusy || !hasUpstream || ahead === 0
-  }
-
-  const pullItem: DropdownItem = {
-    kind: 'pull',
-    label: formatCountLabel('Pull', behind),
-    title: !hasUpstream
-      ? 'Publish the branch first to pull commits'
-      : behind === 0
-        ? 'Nothing to pull'
-        : describePullCount(behind),
-    disabled: globalBusy || !hasUpstream || behind === 0
-  }
-
-  const syncItem: DropdownItem = {
-    kind: 'sync',
-    label: formatSyncLabel('Sync', ahead, behind),
-    title: !hasUpstream
-      ? 'Publish the branch first to sync commits'
-      : ahead === 0 && behind === 0
-        ? 'Branch is up to date'
-        : describeSyncCounts(ahead, behind),
-    disabled: globalBusy || !hasUpstream || (ahead === 0 && behind === 0)
-  }
-
-  const fetchItem: DropdownItem = {
-    kind: 'fetch',
-    label: 'Fetch',
-    title: !hasUpstream
-      ? 'Publish the branch first to fetch from remote'
-      : 'Fetch from remote without merging',
-    disabled: globalBusy || !hasUpstream
-  }
-
-  const publishItem: DropdownItem = {
-    kind: 'publish',
-    label: 'Publish Branch',
-    title: hasUpstream ? 'Branch is already published' : 'Publish this branch to origin',
-    disabled: globalBusy || hasUpstream
-  }
-
-  return [
-    commitItem,
-    commitPushItem,
-    commitSyncItem,
-    { kind: 'separator' },
-    pushItem,
-    pullItem,
-    syncItem,
-    fetchItem,
-    publishItem
-  ]
-}
-
-function formatCountLabel(base: string, count: number): string {
-  return count > 0 ? `${base} (${count})` : base
-}
-
-function formatSyncLabel(base: string, ahead: number, behind: number): string {
-  if (ahead === 0 && behind === 0) {
-    return base
-  }
-  return `${base} (↓${behind} ↑${ahead})`
 }

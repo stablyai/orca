@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
-import {
-  resolveDropdownItems,
-  resolvePrimaryAction,
-  type DropdownActionKind,
-  type PrimaryActionInputs
-} from './source-control-primary-action'
+import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
+import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 
 type ReactElementLike = {
   type: unknown

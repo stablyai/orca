@@ -90,15 +90,15 @@ export class SshGitProvider implements IGitProvider {
     })) as GitUpstreamStatus
   }
 
-  async push(worktreePath: string, publish = false): Promise<void> {
+  async pushBranch(worktreePath: string, publish = false): Promise<void> {
     await this.mux.request('git.push', { worktreePath, publish })
   }
 
-  async pull(worktreePath: string): Promise<void> {
+  async pullBranch(worktreePath: string): Promise<void> {
     await this.mux.request('git.pull', { worktreePath })
   }
 
-  async fetch(worktreePath: string): Promise<void> {
+  async fetchRemote(worktreePath: string): Promise<void> {
     await this.mux.request('git.fetch', { worktreePath })
   }
 

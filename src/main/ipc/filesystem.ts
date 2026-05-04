@@ -36,9 +36,9 @@ import {
   bulkUnstageFiles,
   discardChanges,
   getBranchCompare,
-  getBranchDiff,
-  getUpstreamStatus
+  getBranchDiff
 } from '../git/status'
+import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { getRemoteFileUrl } from '../git/repo'
 import {
@@ -575,7 +575,7 @@ export function registerFilesystemHandlers(store: Store): void {
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.fetch(args.worktreePath)
+        return provider.fetchRemote(args.worktreePath)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await gitFetch(worktreePath)
@@ -593,7 +593,7 @@ export function registerFilesystemHandlers(store: Store): void {
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.push(args.worktreePath, args.publish)
+        return provider.pushBranch(args.worktreePath, args.publish)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await gitPush(worktreePath, args.publish)
@@ -608,7 +608,7 @@ export function registerFilesystemHandlers(store: Store): void {
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.pull(args.worktreePath)
+        return provider.pullBranch(args.worktreePath)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await gitPull(worktreePath)

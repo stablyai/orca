@@ -1868,42 +1868,72 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   },
   pushBranch: async (worktreeId, worktreePath, publish = false, connectionId) => {
     get().beginRemoteOperation()
+    let success = false
     try {
       await window.api.git.push({ worktreePath, publish, connectionId })
-      const status = (await window.api.git.status({
-        worktreePath,
-        connectionId
-      })) as GitStatusResult
-      get().setGitStatus(worktreeId, status)
-      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+      success = true
     } catch (error) {
       // Why: centralize remote git failure feedback in the store so every caller
       // gets the same actionable message without duplicating toast handling.
       toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
     } finally {
+      if (success) {
+        // Why: post-op refresh is best-effort — a status-fetch failure after a
+        // successful push must not surface a misleading 'Push failed' toast
+        // nor reject the promise, which would break runCompoundCommitAction's
+        // success gating and mislead the user about an op that actually landed.
+        try {
+          const status = (await window.api.git.status({
+            worktreePath,
+            connectionId
+          })) as GitStatusResult
+          get().setGitStatus(worktreeId, status)
+          await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+        } catch (refreshError) {
+          console.error('post-op git status refresh failed', refreshError)
+        }
+      }
       get().endRemoteOperation()
     }
   },
   pullBranch: async (worktreeId, worktreePath, connectionId) => {
     get().beginRemoteOperation()
+    let success = false
     try {
       await window.api.git.pull({ worktreePath, connectionId })
-      const status = (await window.api.git.status({
-        worktreePath,
-        connectionId
-      })) as GitStatusResult
-      get().setGitStatus(worktreeId, status)
-      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+      success = true
     } catch (error) {
       toast.error(resolveRemoteOperationErrorMessage(error))
       throw error
     } finally {
+      if (success) {
+        // Why: post-op refresh is best-effort — a status-fetch failure after a
+        // successful pull must not surface a misleading 'Pull blocked' toast
+        // nor reject the promise, which would break runCompoundCommitAction's
+        // success gating and mislead the user about an op that actually landed.
+        try {
+          const status = (await window.api.git.status({
+            worktreePath,
+            connectionId
+          })) as GitStatusResult
+          get().setGitStatus(worktreeId, status)
+          await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+        } catch (refreshError) {
+          console.error('post-op git status refresh failed', refreshError)
+        }
+      }
       get().endRemoteOperation()
     }
   },
   syncBranch: async (worktreeId, worktreePath, connectionId) => {
     get().beginRemoteOperation()
+    let success = false
+    // Why: the inner push stage toasts with { isPush: true } so its failure
+    // surfaces the same "Push failed. {detail}. Check your remote access..."
+    // message pushBranch produces. The outer catch must then skip toasting to
+    // avoid a double-toast for the same error.
+    let pushStageToastShown = false
     try {
       await window.api.git.fetch({ worktreePath, connectionId })
       await window.api.git.pull({ worktreePath, connectionId })
@@ -1916,18 +1946,41 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         connectionId
       })
       if (upstreamStatus.ahead > 0) {
-        await window.api.git.push({ worktreePath, connectionId })
+        try {
+          await window.api.git.push({ worktreePath, connectionId })
+        } catch (error) {
+          // Why: preserve push-specific error messaging through the outer catch
+          // so sync's final push failure surfaces the same "Push failed.
+          // {detail}..." toast that pushBranch produces for the same underlying
+          // error (auth, protected branch, etc.).
+          toast.error(resolveRemoteOperationErrorMessage(error, { isPush: true }))
+          pushStageToastShown = true
+          throw error
+        }
       }
-      const status = (await window.api.git.status({
-        worktreePath,
-        connectionId
-      })) as GitStatusResult
-      get().setGitStatus(worktreeId, status)
-      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+      success = true
     } catch (error) {
-      toast.error(resolveRemoteOperationErrorMessage(error))
+      if (!pushStageToastShown) {
+        toast.error(resolveRemoteOperationErrorMessage(error))
+      }
       throw error
     } finally {
+      if (success) {
+        // Why: post-op refresh is best-effort — a status-fetch failure after a
+        // successful sync must not surface a misleading 'Remote operation
+        // failed' toast nor reject the promise, which would break
+        // runCompoundCommitAction's success gating.
+        try {
+          const status = (await window.api.git.status({
+            worktreePath,
+            connectionId
+          })) as GitStatusResult
+          get().setGitStatus(worktreeId, status)
+          await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+        } catch (refreshError) {
+          console.error('post-op git status refresh failed', refreshError)
+        }
+      }
       get().endRemoteOperation()
     }
   },

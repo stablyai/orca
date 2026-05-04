@@ -14,7 +14,7 @@ import {
 } from './git-handler-ops'
 import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
-import { normalizeGitErrorMessage, isNoUpstreamError } from './git-handler-error-utils'
+import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024

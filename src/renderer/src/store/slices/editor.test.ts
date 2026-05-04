@@ -903,6 +903,177 @@ describe('createEditorSlice remote branch actions', () => {
     await pushB.catch(() => {})
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
+
+  it('does not surface a misleading toast when pushBranch post-op status refresh fails', async () => {
+    // Why: a status-fetch hiccup after a successful push must not fire a
+    // 'Push failed' toast or reject the promise — that would mislead the
+    // user about an op that landed and break runCompoundCommitAction's
+    // success gating for compound commit-then-push flows.
+    const store = createEditorStore()
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    gitStatusMock.mockRejectedValueOnce(new Error('transient IPC failure'))
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).resolves.toBeUndefined()
+
+    expect(gitPushMock).toHaveBeenCalled()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'post-op git status refresh failed',
+      expect.any(Error)
+    )
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('does not surface a misleading toast when pushBranch post-op upstream refresh fails', async () => {
+    // Why: the upstream fetch in the post-op refresh is also best-effort;
+    // a failure there must likewise not overwrite the successful push signal.
+    const store = createEditorStore()
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // The upstream fetch inside fetchUpstreamStatus swallows its own errors
+    // (see fetchUpstreamStatus), so rely on the status call for this case.
+    gitStatusMock.mockRejectedValueOnce(new Error('ipc timeout'))
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).resolves.toBeUndefined()
+
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('does not surface a misleading toast when pullBranch post-op status refresh fails', async () => {
+    // Why: same shape as push — a refresh hiccup after a successful pull
+    // must not produce a 'Pull blocked' toast or reject the promise.
+    const store = createEditorStore()
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    gitStatusMock.mockRejectedValueOnce(new Error('transient IPC failure'))
+
+    await expect(store.getState().pullBranch('wt-1', '/repo')).resolves.toBeUndefined()
+
+    expect(gitPullMock).toHaveBeenCalled()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'post-op git status refresh failed',
+      expect.any(Error)
+    )
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('runs syncBranch end-to-end (fetch+pull+push+refresh) on success', async () => {
+    const store = createEditorStore()
+
+    await store.getState().syncBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitPullMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    // ahead=1 in the default mock, so sync pushes.
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitStatusMock).toHaveBeenCalled()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('skips the inner push when syncBranch sees ahead=0', async () => {
+    // Why: guards against a no-op push round-trip after a pure fast-forward
+    // pull. See syncBranch's ahead>0 guard in editor.ts.
+    const store = createEditorStore()
+    gitUpstreamStatusMock.mockResolvedValueOnce({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 0,
+      behind: 0
+    })
+
+    await store.getState().syncBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).toHaveBeenCalled()
+    expect(gitPullMock).toHaveBeenCalled()
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the push-formatted toast when syncBranch inner push fails with auth error', async () => {
+    // Why: sync's inner push shares pushBranch's failure modes (auth,
+    // protected branch). The toast must match pushBranch's formatting
+    // ("Push failed. {detail}...") so the user sees a single consistent
+    // actionable message, not a bare raw error.
+    const store = createEditorStore()
+    const authError = new Error(
+      'git push failed: Command failed: git push origin feature\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
+    )
+    gitPushMock.mockRejectedValueOnce(authError)
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow(authError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push failed. Authentication failed for https://github.com/acme/private-repo.git. Check your remote access and try again.'
+    )
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces a single "Push rejected" toast when syncBranch inner push is non-fast-forward', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow(pushError.message)
+
+    // No double-toast from the outer catch.
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+  })
+
+  it('surfaces the pull-blocked toast when syncBranch pull stage fails', async () => {
+    // Why: failures in sync's fetch/pull/status stages flow through the
+    // outer catch's generic path; push-specific framing only applies to
+    // the inner push stage.
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.ts\nPlease commit your changes or stash them before you merge.\nAborting'
+      )
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Pull blocked — commit or stash your local changes first.'
+    )
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('does not surface a misleading toast when syncBranch post-op status refresh fails', async () => {
+    const store = createEditorStore()
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    gitStatusMock.mockRejectedValueOnce(new Error('transient IPC failure'))
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).resolves.toBeUndefined()
+
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'post-op git status refresh failed',
+      expect.any(Error)
+    )
+    consoleErrorSpy.mockRestore()
+  })
 })
 
 describe('createEditorSlice activateMarkdownLink', () => {

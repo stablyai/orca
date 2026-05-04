@@ -139,23 +139,23 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(upstreamResult)
   })
 
-  it('push sends git.push request and forwards publish mode', async () => {
-    await provider.push('/home/user/repo', true)
+  it('pushBranch sends git.push request and forwards publish mode', async () => {
+    await provider.pushBranch('/home/user/repo', true)
     expect(mux.request).toHaveBeenCalledWith('git.push', {
       worktreePath: '/home/user/repo',
       publish: true
     })
   })
 
-  it('pull sends git.pull request', async () => {
-    await provider.pull('/home/user/repo')
+  it('pullBranch sends git.pull request', async () => {
+    await provider.pullBranch('/home/user/repo')
     expect(mux.request).toHaveBeenCalledWith('git.pull', {
       worktreePath: '/home/user/repo'
     })
   })
 
-  it('fetch sends git.fetch request', async () => {
-    await provider.fetch('/home/user/repo')
+  it('fetchRemote sends git.fetch request', async () => {
+    await provider.fetchRemote('/home/user/repo')
     expect(mux.request).toHaveBeenCalledWith('git.fetch', {
       worktreePath: '/home/user/repo'
     })

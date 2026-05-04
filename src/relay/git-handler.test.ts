@@ -363,7 +363,7 @@ describe('GitHandler', () => {
 
       await expect(
         dispatcher.callRequest('git.upstreamStatus', { worktreePath: nonRepoDir })
-      ).rejects.toBeDefined()
+      ).rejects.toThrow(/not a git repository/i)
     })
   })
 

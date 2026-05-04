@@ -12,8 +12,7 @@ import type {
   GitDiffResult,
   GitFileStatus,
   GitStatusEntry,
-  GitStatusResult,
-  GitUpstreamStatus
+  GitStatusResult
 } from '../../shared/types'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './runner'
 
@@ -92,59 +91,6 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
   }
 
   return { entries, conflictOperation }
-}
-
-export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus> {
-  try {
-    const { stdout: upstreamStdout } = await gitExecFileAsync(
-      ['rev-parse', '--abbrev-ref', 'HEAD@{u}'],
-      {
-        cwd: worktreePath
-      }
-    )
-    const upstreamName = upstreamStdout.trim()
-    if (!upstreamName) {
-      return { hasUpstream: false, ahead: 0, behind: 0 }
-    }
-
-    const { stdout: countsStdout } = await gitExecFileAsync(
-      ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
-      {
-        cwd: worktreePath
-      }
-    )
-
-    const [aheadText = '0', behindText = '0'] = countsStdout.trim().split(/\s+/)
-    const ahead = Number.parseInt(aheadText, 10)
-    const behind = Number.parseInt(behindText, 10)
-
-    return {
-      hasUpstream: true,
-      upstreamName,
-      ahead: Number.isFinite(ahead) ? ahead : 0,
-      behind: Number.isFinite(behind) ? behind : 0
-    }
-  } catch (error) {
-    // Why: we only swallow the 'no upstream configured' error — that's an
-    // expected state, not a failure. Other errors (auth, corruption, "not a
-    // git repository") should surface to the user so they can act on them.
-    // We explicitly avoid matching `HEAD@{u}` alone because execFile wraps
-    // errors with "Command failed: git rev-parse --abbrev-ref HEAD@{u}…",
-    // which would make every non-repo/corrupt failure look like no-upstream.
-    if (
-      error instanceof Error &&
-      /no upstream configured|no tracking information|HEAD does not point|Needed a single revision|no such branch/i.test(
-        error.message
-      )
-    ) {
-      return {
-        hasUpstream: false,
-        ahead: 0,
-        behind: 0
-      }
-    }
-    throw error
-  }
 }
 
 function parseStatusChar(char: string): GitFileStatus {

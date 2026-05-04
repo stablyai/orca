@@ -39,13 +39,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { resolvePrimaryAction, type PrimaryAction } from './source-control-primary-action'
 import {
   resolveDropdownItems,
-  resolvePrimaryAction,
   type DropdownActionKind,
-  type DropdownEntry,
-  type PrimaryAction
-} from './source-control-primary-action'
+  type DropdownEntry
+} from './source-control-dropdown-items'
 import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {

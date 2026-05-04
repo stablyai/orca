@@ -1432,6 +1432,10 @@ export type GitStatusResult = {
   conflictOperation: GitConflictOperation
 }
 
+// Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a
+// "sync" signal — callers must check hasUpstream before treating 0/0 as in-sync.
+// Kept separate from GitStatusResult because upstream lookup can fail for
+// reasons unrelated to working-tree status (e.g., no upstream is expected).
 export type GitUpstreamStatus = {
   hasUpstream: boolean
   upstreamName?: string

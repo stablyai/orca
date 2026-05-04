@@ -1,0 +1,44 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
+}))
+
+vi.mock('./runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+import { getUpstreamStatus } from './upstream'
+
+describe('getUpstreamStatus', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('returns upstream and ahead/behind counts when tracking is configured', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'origin/main\n' })
+      .mockResolvedValueOnce({ stdout: '2\t3\n' })
+
+    const result = await getUpstreamStatus('/repo')
+
+    expect(result).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 3
+    })
+  })
+
+  it('returns hasUpstream=false when upstream is missing', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: no upstream configured'))
+
+    const result = await getUpstreamStatus('/repo')
+
+    expect(result).toEqual({
+      hasUpstream: false,
+      ahead: 0,
+      behind: 0
+    })
+  })
+})

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveDropdownItems,
-  resolvePrimaryAction,
-  type PrimaryActionInputs
-} from './source-control-primary-action'
+import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
@@ -101,6 +97,10 @@ describe('resolvePrimaryAction', () => {
     )
     expect(result.kind).toBe('commit_sync')
     expect(result.label).toBe('Commit & Sync')
+    // Why: compound commit labels/tooltips drop the pre-commit counts — the
+    // commit itself bumps ahead by at least one, so surfacing stale numbers
+    // would mislead the user.
+    expect(result.title).toBe('Commit staged changes, then pull and push')
   })
 
   it('offers Commit & Push for staged+message when upstream is ahead-only or in sync', () => {
@@ -195,110 +195,5 @@ describe('resolvePrimaryAction', () => {
       title: 'Stage at least one file to commit',
       disabled: true
     })
-  })
-})
-
-describe('resolveDropdownItems', () => {
-  it('renders every row — Commit through Publish — for a staged, tracked, ahead+behind branch', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 }
-      })
-    )
-    const kinds = items.map((item) => item.kind)
-    expect(kinds).toEqual([
-      'commit',
-      'commit_push',
-      'commit_sync',
-      'separator',
-      'push',
-      'pull',
-      'sync',
-      'fetch',
-      'publish'
-    ])
-  })
-
-  it('disables compound commit actions when no staged files', () => {
-    const items = resolveDropdownItems(
-      inputs({ upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 } })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.commit.disabled).toBe(true)
-    expect(byKind.commit_push.disabled).toBe(true)
-    expect(byKind.commit_sync.disabled).toBe(true)
-  })
-
-  it('disables Push/Commit&Push when branch has no upstream', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.push.disabled).toBe(true)
-    expect(byKind.commit_push.disabled).toBe(true)
-    expect(byKind.publish.disabled).toBe(false)
-    expect(byKind.fetch.disabled).toBe(true)
-  })
-
-  it('disables Publish Branch when branch already has an upstream', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.publish.disabled).toBe(true)
-  })
-
-  it('renders counts on action labels when > 0', () => {
-    const items = resolveDropdownItems(
-      inputs({ upstreamStatus: { hasUpstream: true, ahead: 3, behind: 2 } })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.push.label).toBe('Push (3)')
-    expect(byKind.pull.label).toBe('Pull (2)')
-    expect(byKind.sync.label).toBe('Sync (↓2 ↑3)')
-  })
-
-  it('omits counts from labels when ahead/behind are 0', () => {
-    const items = resolveDropdownItems(
-      inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 } })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.push.label).toBe('Push')
-    expect(byKind.pull.label).toBe('Pull')
-    expect(byKind.sync.label).toBe('Sync')
-  })
-
-  it('locks every item while a remote op is running', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        isRemoteOperationActive: true,
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 }
-      })
-    )
-    for (const entry of items) {
-      if (entry.kind !== 'separator') {
-        expect(entry.disabled).toBe(true)
-      }
-    }
   })
 })
