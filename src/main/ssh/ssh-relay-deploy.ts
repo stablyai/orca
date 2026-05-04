@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { app } from 'electron'
+import { createHash } from 'crypto'
 import type { SshConnection } from './ssh-connection'
 import {
   RELAY_VERSION,
@@ -41,7 +42,9 @@ const RELAY_DEPLOY_TIMEOUT_MS = 120_000
  */
 export async function deployAndLaunchRelay(
   conn: SshConnection,
-  onProgress?: (status: string) => void
+  onProgress?: (status: string) => void,
+  graceTimeSeconds?: number,
+  relayInstanceId?: string
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -51,7 +54,10 @@ export async function deployAndLaunchRelay(
   })
 
   try {
-    return await Promise.race([deployAndLaunchRelayInner(conn, onProgress), timeoutPromise])
+    return await Promise.race([
+      deployAndLaunchRelayInner(conn, onProgress, graceTimeSeconds, relayInstanceId),
+      timeoutPromise
+    ])
   } finally {
     clearTimeout(timeoutHandle!)
   }
@@ -59,7 +65,9 @@ export async function deployAndLaunchRelay(
 
 async function deployAndLaunchRelayInner(
   conn: SshConnection,
-  onProgress?: (status: string) => void
+  onProgress?: (status: string) => void,
+  graceTimeSeconds?: number,
+  relayInstanceId?: string
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
@@ -103,7 +111,7 @@ async function deployAndLaunchRelayInner(
 
   onProgress?.('Starting relay...')
   console.log('[ssh-relay] Launching relay...')
-  const transport = await launchRelay(conn, remoteRelayDir)
+  const transport = await launchRelay(conn, remoteRelayDir, graceTimeSeconds, relayInstanceId)
   console.log('[ssh-relay] Relay started successfully')
 
   return { transport, platform }
@@ -265,17 +273,139 @@ function getLocalRelayPath(platform: RelayPlatform): string | null {
   return null
 }
 
-async function launchRelay(conn: SshConnection, remoteDir: string): Promise<MultiplexerTransport> {
+async function launchRelay(
+  conn: SshConnection,
+  remoteDir: string,
+  graceTimeSeconds?: number,
+  relayInstanceId?: string
+): Promise<MultiplexerTransport> {
   // Why: Phase 1 of the plan requires Node.js on the remote. We use the
   // system `node` rather than bundling a node binary, keeping the relay
   // package small (~100KB JS vs ~60MB with embedded node).
   // Non-login SSH shells may not have node in PATH, so we source the
   // user's profile to pick up nvm/fnm/brew PATH entries.
   const nodePath = await resolveRemoteNodePath(conn)
-  // Why: both remoteDir and nodePath come from the remote host and could
-  // contain shell metacharacters. Single-quote escaping prevents injection.
+  // Why: graceTimeSeconds originates from user-editable SshTarget config.
+  // Clamping to integer prevents shell injection if the type ever loosened.
+  const graceTime = Math.max(60, Math.min(3600, Math.floor(graceTimeSeconds ?? 300)))
+  const escapedDir = shellEscape(remoteDir)
+  const escapedNode = shellEscape(nodePath)
+  // Why: remoteRelayDir is shared by every Orca target for the same remote
+  // account. Hashing the target ID into the socket name prevents one target
+  // from attaching to another target's live relay.
+  const sockName = relayInstanceId
+    ? `relay-${hashRelayInstanceId(relayInstanceId)}.sock`
+    : 'relay.sock'
+  const sockFile = `${remoteDir}/${sockName}`
+
+  // Why: after an app restart a relay may still be running in its grace
+  // period with live PTY sessions.  We check for its Unix socket and
+  // launch in --connect mode to bridge the new SSH channel to the
+  // existing relay process — preserving PTY state and scrollback.
+  try {
+    const probeOutput = await execCommand(
+      conn,
+      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`
+    )
+    console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
+    if (probeOutput.trim() === 'ALIVE') {
+      console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
+      try {
+        const channel = await conn.exec(
+          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
+        )
+        const transport = await waitForSentinel(channel)
+        console.log('[ssh-relay] Reconnected to existing relay via socket')
+        return transport
+      } catch (err) {
+        console.warn(
+          '[ssh-relay] Socket reconnect failed, launching fresh relay:',
+          err instanceof Error ? err.message : String(err)
+        )
+        // Why: stale socket from a crashed relay — remove it so the
+        // fresh launch can bind a new socket at the same path.
+        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`).catch(() => {})
+      }
+    }
+  } catch {
+    // Probe failed — fall through to fresh launch
+  }
+
+  // Why: the relay must outlive the SSH connection so PTY sessions survive
+  // app restarts.  nohup prevents SIGHUP death, </dev/null detaches stdin,
+  // and & backgrounds the process so it's not a direct child of the exec
+  // channel.  When sshd tears down the session the relay continues as an
+  // orphan adopted by init, listening on its Unix socket for a --connect
+  // bridge from the next app launch.
+  // Why: execCommand waits for the channel to close, but SSH channels stay
+  // open while backgrounded children exist (even with fd redirection).
+  // Fire-and-forget via conn.exec: we don't need the output — the socket
+  // poll below detects readiness.
+  const logFile = `${remoteDir}/relay.log`
+  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  const launchChannel = await conn.exec(launchCmd)
+  launchChannel.on('data', () => {})
+  launchChannel.stderr.on('data', () => {})
+  // Why: the shell exits quickly (nohup ... &), but the SSH channel stays
+  // open until all child fds close. Explicitly closing it after the poll
+  // loop prevents channel accumulation across relay restarts, which would
+  // eventually hit the server's MaxSessions limit.
+  launchChannel.on('close', () => {})
+
+  // Why: the backgrounded relay needs time to bind its Unix socket.  We
+  // poll rather than sleep a fixed duration because remote host speed
+  // varies widely (CI vs. Raspberry Pi).
+  // Why: checking `test -S` only verifies the inode exists, not that the
+  // relay is listening. After a stale socket removal + fresh launch, the
+  // old inode can linger briefly. We probe with a connect-and-close to
+  // confirm the socket is actually accepting connections.
+  const POLL_INTERVAL_MS = 200
+  const POLL_TIMEOUT_MS = 10_000
+  const pollStart = Date.now()
+  let socketReady = false
+  while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
+    try {
+      // Why: node is guaranteed to exist on the remote (we just deployed
+      // the relay with it). Using it to probe the socket is more portable
+      // than python3/socat/perl which may not be installed. The socket
+      // path is passed as argv[1] to avoid shell quoting issues with -e.
+      const result = await execCommand(
+        conn,
+        `${escapedNode} -e 'var s=require("net").connect(process.argv[1]);s.on("connect",function(){s.destroy();process.stdout.write("READY")});s.on("error",function(){process.stdout.write("WAITING")})' ${shellEscape(sockFile)} 2>/dev/null || (test -S ${shellEscape(sockFile)} && echo READY || echo WAITING)`
+      )
+      if (result.trim() === 'READY') {
+        socketReady = true
+        break
+      }
+    } catch {
+      /* exec failed, retry */
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+  }
+
+  // Why: close the fire-and-forget launch channel now that the relay's
+  // socket is either ready or the poll timed out. Leaving it open leaks
+  // an SSH channel per relay restart.
+  launchChannel.close()
+
+  if (!socketReady) {
+    const logOutput = await execCommand(
+      conn,
+      `tail -20 ${shellEscape(logFile)} 2>/dev/null || echo "(no log)"`
+    ).catch(() => '(could not read log)')
+    throw new Error(`Relay failed to start within ${POLL_TIMEOUT_MS / 1000}s. Log:\n${logOutput}`)
+  }
+
+  // Why: the backgrounded relay's stdout goes to a log file, not the exec
+  // channel.  We connect via --connect which bridges this new channel's
+  // stdin/stdout to the relay's Unix socket — same path used for reconnect
+  // after app restart.
   const channel = await conn.exec(
-    `cd ${shellEscape(remoteDir)} && ${shellEscape(nodePath)} relay.js --grace-time 60`
+    `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
   )
   return waitForSentinel(channel)
+}
+
+function hashRelayInstanceId(relayInstanceId: string): string {
+  return createHash('sha256').update(relayInstanceId).digest('hex').slice(0, 16)
 }

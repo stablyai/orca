@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   removeHandlerMock,
@@ -58,6 +58,7 @@ import { registerBrowserHandlers, setAgentBrowserBridgeRef } from './browser'
 
 describe('registerBrowserHandlers', () => {
   beforeEach(() => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', '')
     removeHandlerMock.mockReset()
     handleMock.mockReset()
     registerGuestMock.mockReset()
@@ -72,6 +73,10 @@ describe('registerBrowserHandlers', () => {
     browserWindowFromWebContentsMock.mockReset()
     openDevToolsMock.mockResolvedValue(true)
     setAgentBrowserBridgeRef(null)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('rejects non-window callers', async () => {

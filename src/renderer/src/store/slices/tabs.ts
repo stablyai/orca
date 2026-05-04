@@ -493,6 +493,24 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         return {}
       }
       const { tab, worktreeId } = found
+      // Why: activating a terminal tab dismisses the tab-level bell — the user
+      // has now moved their eyes to this tab.
+      //
+      // Why (activeWorktree guard below): only dismiss the tab-level bell when
+      // the tab is in the active worktree — otherwise the tab is not visible
+      // yet and the signal would be lost before the user saw it. Mirrors the
+      // guard in focusGroup.
+      const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
+      const nextUnreadTerminalTabs =
+        state.activeWorktreeId === worktreeId &&
+        terminalEntityId &&
+        state.unreadTerminalTabs[terminalEntityId]
+          ? (() => {
+              const copy = { ...state.unreadTerminalTabs }
+              delete copy[terminalEntityId]
+              return copy
+            })()
+          : state.unreadTerminalTabs
       return {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
@@ -522,7 +540,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         activeGroupIdByWorktree: {
           ...state.activeGroupIdByWorktree,
           [worktreeId]: tab.groupId
-        }
+        },
+        // Why: skip writing unreadTerminalTabs when the reference is unchanged —
+        // avoids a no-op top-level state allocation that would force re-evaluation
+        // of full-state selectors. Mirrors focusGroup / reconcileWorktreeTabModel.
+        ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
+          ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+          : {})
       }
     })
   },
@@ -556,11 +580,21 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       (group.recentTabIds ?? []).filter((id) => id !== tabId),
       remainingOrder
     )
+    const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
 
     set((current) => {
       const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter(
         (item) => item.id !== tabId
       )
+      // Why: closeUnifiedTab can be invoked without going through terminals.closeTab
+      // (e.g., close-to-right / close-others gestures via closeOtherTabs and
+      // closeTabsToRight). The unread-flag map is keyed by terminal entityId and
+      // would otherwise leak a stale dot for a tab that no longer renders.
+      let nextUnreadTerminalTabs = current.unreadTerminalTabs
+      if (terminalEntityId && current.unreadTerminalTabs[terminalEntityId]) {
+        nextUnreadTerminalTabs = { ...current.unreadTerminalTabs }
+        delete nextUnreadTerminalTabs[terminalEntityId]
+      }
       let nextGroups = (current.groupsByWorktree[worktreeId] ?? []).map((candidate) =>
         candidate.id === group.id
           ? {
@@ -599,6 +633,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         },
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        // Why: skip writing unreadTerminalTabs when the reference is unchanged —
+        // avoids a no-op top-level state allocation that would force re-evaluation
+        // of full-state selectors. Mirrors focusGroup / reconcileWorktreeTabModel.
+        ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
+          ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+          : {}),
         // Why: the split-group model can legally derive "terminal with no
         // active tab" after the final unified tab closes. That leaves the
         // worktree selected but render-empty, so the workspace shows a blank
@@ -784,13 +824,55 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...state.activeGroupIdByWorktree,
         [worktreeId]: groupId
       }
+      // Why: focusing a split group surfaces whichever terminal tab is already
+      // active in that group, so the tab-level bell is no longer needed.
+      //
+      // Why (activeWorktree guard below): only clear unreadTerminalTabs when
+      // focusing a group within the *active* worktree. If the caller is
+      // focusing a group in a background worktree, that tab is not visible
+      // yet — dismissing its bell here would silently swallow the signal
+      // before the user ever sees the tab. All current callers only fire for
+      // the active worktree, but this guard prevents future misuse.
       if (state.activeWorktreeId !== worktreeId) {
         return {
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree
         }
       }
+      const groups = state.groupsByWorktree[worktreeId] ?? []
+      const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+      const visibleTerminalEntityIds = new Set(
+        groups
+          .map((group) =>
+            group.activeTabId ? unifiedTabs.find((tab) => tab.id === group.activeTabId) : null
+          )
+          .filter((tab): tab is (typeof unifiedTabs)[number] => tab?.contentType === 'terminal')
+          .map((tab) => tab.entityId)
+      )
+      const nextUnreadTerminalTabs =
+        visibleTerminalEntityIds.size > 0
+          ? (() => {
+              let changed = false
+              const copy = { ...state.unreadTerminalTabs }
+              for (const terminalEntityId of visibleTerminalEntityIds) {
+                if (!copy[terminalEntityId]) {
+                  continue
+                }
+                delete copy[terminalEntityId]
+                changed = true
+              }
+              return changed ? copy : state.unreadTerminalTabs
+            })()
+          : state.unreadTerminalTabs
       return {
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        // Why: only write unreadTerminalTabs back into state when it actually
+        // changed. The IIFE above returns state.unreadTerminalTabs by reference
+        // on no-op; preserving that reference via conditional spread keeps
+        // downstream selectors/subscribers from firing spuriously. This matches
+        // the pattern used by activateTab and closeUnifiedTab.
+        ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
+          ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+          : {}),
         ...buildActiveSurfacePatch(
           {
             ...state,
@@ -1317,29 +1399,62 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         : state.layoutByWorktree[worktreeId]
 
     if (tabsChanged || groupsChanged || activeGroupChanged || orphanTerminalIds.size > 0) {
-      set((current) => ({
-        unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: validTabs },
-        groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: nextGroups },
-        activeGroupIdByWorktree: {
-          ...current.activeGroupIdByWorktree,
-          [worktreeId]: nextActiveGroupId
-        },
-        ...(restoredLegacyTabs.length > 0
-          ? {
-              layoutByWorktree: {
-                ...current.layoutByWorktree,
-                // Why: a restored live runtime terminal needs a concrete leaf
-                // in the split-group model before activation runs again.
-                // Without this, the worktree still looks render-empty and the
-                // activation fallback spawns a duplicate "Terminal 2".
-                [worktreeId]: nextLayout!
-              }
+      // Why: when reconcile drops a unified terminal tab (stale persisted id,
+      // dead PTY, closed editor), its entry in unreadTerminalTabs (keyed by the
+      // terminal tab's entityId) would otherwise linger forever and bleed into
+      // downstream persistence/selectors. Mirrors the cleanup in closeUnifiedTab
+      // which removes the unread flag when a terminal tab is torn down.
+      const droppedTerminalEntityIds: string[] = []
+      for (const tab of unifiedTabs) {
+        if (tab.contentType !== 'terminal') {
+          continue
+        }
+        if (!validTabIds.has(tab.id)) {
+          droppedTerminalEntityIds.push(tab.entityId)
+        }
+      }
+      set((current) => {
+        let nextUnreadTerminalTabs = current.unreadTerminalTabs
+        if (droppedTerminalEntityIds.length > 0) {
+          let changed = false
+          const copy = { ...current.unreadTerminalTabs }
+          for (const entityId of droppedTerminalEntityIds) {
+            if (copy[entityId]) {
+              delete copy[entityId]
+              changed = true
             }
-          : {}),
-        ...(orphanTerminalIds.size > 0
-          ? buildOrphanTerminalCleanupPatch(current, worktreeId, orphanTerminalIds)
-          : {})
-      }))
+          }
+          if (changed) {
+            nextUnreadTerminalTabs = copy
+          }
+        }
+        return {
+          unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: validTabs },
+          groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: nextGroups },
+          activeGroupIdByWorktree: {
+            ...current.activeGroupIdByWorktree,
+            [worktreeId]: nextActiveGroupId
+          },
+          ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
+            ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+            : {}),
+          ...(restoredLegacyTabs.length > 0
+            ? {
+                layoutByWorktree: {
+                  ...current.layoutByWorktree,
+                  // Why: a restored live runtime terminal needs a concrete leaf
+                  // in the split-group model before activation runs again.
+                  // Without this, the worktree still looks render-empty and the
+                  // activation fallback spawns a duplicate "Terminal 2".
+                  [worktreeId]: nextLayout!
+                }
+              }
+            : {}),
+          ...(orphanTerminalIds.size > 0
+            ? buildOrphanTerminalCleanupPatch(current, worktreeId, orphanTerminalIds)
+            : {})
+        }
+      })
     }
 
     const activeRenderableTabId =

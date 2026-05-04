@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session'
@@ -20,6 +21,7 @@ function createMockSubprocess(): SubprocessHandle {
     onExit(cb) {
       onExitCb = cb
     },
+    dispose: vi.fn(),
     // Test helpers
     get _onDataCb() {
       return onDataCb
@@ -147,7 +149,15 @@ describe('TerminalHost', () => {
 
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
+      // Why: the marker alone no longer flushes — the kernel can still have
+      // ECHO enabled when it arrives. The flush waits for the prompt draw
+      // plus a short delay so readline has switched the PTY into raw mode
+      // first. Otherwise the command would be visibly double-echoed.
       lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07')
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+      lastSubprocess._onDataCb?.('\r\nuser@host $ ')
+      await new Promise((r) => setTimeout(r, 40))
       expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\n')
     })
   })
@@ -171,6 +181,18 @@ describe('TerminalHost', () => {
   })
 
   describe('resize', () => {
+    it('normalizes invalid initial dimensions before spawning a session', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 0,
+        rows: -1,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(spawnFn).toHaveBeenCalledWith(expect.objectContaining({ cols: 80, rows: 24 }))
+      expect(host.listSessions()[0]).toMatchObject({ cols: 80, rows: 24 })
+    })
+
     it('forwards resize to the session', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -181,6 +203,20 @@ describe('TerminalHost', () => {
 
       host.resize('session-1', 120, 40)
       expect(lastSubprocess.resize).toHaveBeenCalledWith(120, 40)
+    })
+
+    it('ignores transient zero-size resize events', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      host.resize('session-1', 0, 0)
+
+      expect(lastSubprocess.resize).not.toHaveBeenCalled()
+      expect(host.listSessions()[0]).toMatchObject({ cols: 80, rows: 24 })
     })
   })
 
@@ -280,7 +316,7 @@ describe('TerminalHost', () => {
   })
 
   describe('dispose', () => {
-    it('kills live subprocesses before disposing sessions', async () => {
+    it('force-kills live subprocesses and releases PTY fds on dispose', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -289,7 +325,13 @@ describe('TerminalHost', () => {
       })
 
       host.dispose()
-      expect(lastSubprocess.kill).toHaveBeenCalled()
+      // Why: for LIVE sessions, dispose() calls session.forceKillAndDisposeSubprocess()
+      // which sends SIGKILL (forceKill) and releases the ptmx fd (subprocess.dispose)
+      // synchronously — no longer relies on the 5s KILL_TIMEOUT_MS fallback.
+      // Exited sessions take the disposeSubprocess() path instead (see the test
+      // below). See docs/fix-pty-fd-leak.md.
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      expect(lastSubprocess.dispose).toHaveBeenCalled()
     })
 
     it('does not list exited sessions', async () => {
@@ -302,6 +344,40 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onExitCb?.(0)
       expect(host.listSessions()).toEqual([])
+    })
+
+    it('skips forceKill on already-exited sessions to avoid recycled-pid SIGKILL', async () => {
+      // Why: after a session's subprocess has exited (onExit fired), proc.pid
+      // refers to a reaped child whose pid may have been recycled. Calling
+      // forceKillAndDisposeSubprocess() on an exited session would
+      // process.kill(recycled_pid, 'SIGKILL') — killing a stranger. Dispose
+      // must detect isAlive=false and use disposeSubprocess() (fd release only).
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      // Simulate natural exit — session is retained in map until dispose.
+      lastSubprocess._onExitCb?.(0)
+
+      // Re-create another session so the map has BOTH a live and dead entry.
+      const exitedSub = lastSubprocess
+      await host.createOrAttach({
+        sessionId: 'session-2',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      const liveSub = lastSubprocess
+
+      host.dispose()
+
+      expect(exitedSub.forceKill).not.toHaveBeenCalled()
+      expect(exitedSub.dispose).toHaveBeenCalled()
+      expect(liveSub.forceKill).toHaveBeenCalled()
+      expect(liveSub.dispose).toHaveBeenCalled()
     })
   })
 })

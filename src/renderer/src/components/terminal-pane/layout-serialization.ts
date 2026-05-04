@@ -4,12 +4,50 @@ import type {
   TerminalPaneSplitDirection
 } from '../../../../shared/types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 
 export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
   activeLeafId: null,
   expandedLeafId: null
 }
+
+// Why: xterm's SerializeAddon captures display state by emitting mode-setting
+// bytes (e.g. `\e[?1004h` for focus reporting) so a re-fed emulator lands in
+// the same mode as the snapshot source. That's correct for tmux-style
+// "attach to a still-running TUI" — but Orca restores scrollback against a
+// *fresh* shell, with no TUI to consume those modes. A stale focus-reporting
+// bit causes xterm to emit `\e[I`/`\e[O` on every pane click, which the
+// fresh zsh treats as unbound key input and rings the bell for.
+//
+// Reset the interactive modes most commonly left set by crashed/ended TUIs
+// so replayed mode bits do not leak into the fresh shell. ghostty achieves
+// the same end by not restoring state at all.
+//
+//   25                  — DECTCEM cursor visibility (SerializeAddon captures
+//                         `?25l` when the cursor was hidden at snapshot time;
+//                         without an explicit `?25h` here the cursor stays
+//                         invisible in the restored terminal)
+//   1000/1002/1003/1006 — mouse reporting variants
+//   1004                — focus event reporting (the actual bug source)
+//   2004                — bracketed paste
+export const POST_REPLAY_MODE_RESET =
+  '\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+
+// Why: daemon snapshot restore reattaches to a live session, so we avoid the
+// full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
+// rely on mouse or bracketed-paste modes. Two exceptions are safe to reset:
+//
+//   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
+//          snapshot when the cursor was hidden at capture time. Without `?25h`
+//          here the cursor stays invisible after reattach. If a TUI is still
+//          running and wants the cursor hidden, the SIGWINCH sent immediately
+//          after restore triggers a repaint that re-hides it — a brief flash
+//          that is far less harmful than a permanently invisible cursor.
+//   1004 — focus event reporting: preserving `?1004h` makes restored shells
+//          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
+//          as unbound key input).
+export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?25h\x1b[?1004l'
 
 export function paneLeafId(paneId: number): string {
   return `pane:${paneId}`
@@ -198,7 +236,8 @@ function collectLeafIds(
 export function restoreScrollbackBuffers(
   manager: PaneManager,
   savedBuffers: Record<string, string> | undefined,
-  restoredPaneByLeafId: Map<string, number>
+  restoredPaneByLeafId: Map<string, number>,
+  replayingPanesRef: ReplayingPanesRef
 ): void {
   if (!savedBuffers) {
     return
@@ -224,10 +263,19 @@ export function restoreScrollbackBuffers(
         buf = buf.slice(0, lastOn)
       }
       if (buf.length > 0) {
-        pane.terminal.write(buf)
+        // Why replayIntoTerminal: the serialized buffer can contain query
+        // sequences that leaked in via the pendingWritesRef flush before
+        // serialization (see TerminalPane capture hook). Writing those
+        // through xterm would trigger auto-replies that land in the new
+        // shell's stdin. See replay-guard.ts.
+        replayIntoTerminal(pane, replayingPanesRef, buf)
         // Ensure cursor is on a new line so the new shell prompt
         // doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
-        pane.terminal.write('\r\n')
+        replayIntoTerminal(pane, replayingPanesRef, '\r\n')
+        // Clear any mode bits the serialized buffer replayed into xterm.
+        // The shell underneath is fresh and has no TUI consuming these modes.
+        // See POST_REPLAY_MODE_RESET comment.
+        replayIntoTerminal(pane, replayingPanesRef, POST_REPLAY_MODE_RESET)
       }
     } catch {
       // If restore fails, continue with blank terminal.

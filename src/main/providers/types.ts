@@ -17,6 +17,7 @@ export type PtySpawnOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
@@ -24,10 +25,27 @@ export type PtySpawnOptions = {
   /** Daemon session ID for reattach. When provided, the daemon reconnects
    *  to an existing session instead of creating a new one. */
   sessionId?: string
+  /** Why: allows the renderer to request a specific shell for a single new
+   *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
+   *  changing the user's persistent default shell setting. Only consulted on
+   *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
+  shellOverride?: string
+  /** Why: PowerShell is the top-level shell family in product terms, but on
+   *  Windows we may need to choose between inbox Windows PowerShell 5.1 and
+   *  pwsh.exe at spawn time. Threading the persisted implementation choice
+   *  through spawn options keeps local PTY and daemon PTY semantics aligned
+   *  without promoting pwsh into a separate shell family. */
+  terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
 }
 
 export type PtySpawnResult = {
   id: string
+  /** OS-level pid of the shell process, when available at spawn time.
+   *  Why: the memory collector needs this to walk each PTY's process
+   *  subtree. Daemon-backed providers return it from the RPC result;
+   *  local providers read it from node-pty. Null when the underlying
+   *  provider could not publish a pid (e.g., race during spawn). */
+  pid?: number | null
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string
@@ -40,6 +58,13 @@ export type PtySpawnResult = {
   /** True when the reattached session uses the alternate screen buffer
    *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
   isAlternateScreen?: boolean
+  /** Buffered output returned by relay pty.attach. Unlike snapshot, this is
+   *  incremental scrollback and must not clear the terminal before replay. */
+  replay?: string
+  /** True when the caller requested reattach (sessionId was provided) but the
+   *  relay PTY was gone (grace window elapsed). The renderer uses this to show
+   *  a brief "Session expired — new shell started" message. */
+  sessionExpired?: boolean
   /** Present when cold-restoring from disk history after a daemon crash.
    *  Contains the saved scrollback and CWD. The new shell spawns in the
    *  saved CWD; the scrollback is written to xterm.js as read-only history. */
@@ -92,14 +117,14 @@ export type IFilesystemProvider = {
   readFile(filePath: string): Promise<FileReadResult>
   writeFile(filePath: string, content: string): Promise<void>
   stat(filePath: string): Promise<FileStat>
-  deletePath(targetPath: string): Promise<void>
+  deletePath(targetPath: string, recursive?: boolean): Promise<void>
   createFile(filePath: string): Promise<void>
   createDir(dirPath: string): Promise<void>
   rename(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
-  listFiles(rootPath: string): Promise<string[]>
+  listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
 }
 
@@ -107,7 +132,13 @@ export type IFilesystemProvider = {
 
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
-  getDiff(worktreePath: string, filePath: string, staged: boolean): Promise<GitDiffResult>
+  commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  getDiff(
+    worktreePath: string,
+    filePath: string,
+    staged: boolean,
+    compareAgainstHead?: boolean
+  ): Promise<GitDiffResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>

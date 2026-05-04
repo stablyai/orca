@@ -1,17 +1,20 @@
 /* eslint-disable max-lines -- Why: the status bar keeps provider rendering,
 interaction menus, and compact-layout behavior together so the hover/click
 states stay consistent across Claude and Codex. */
-import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  MemoryStick as MemoryStickIcon,
+  RefreshCw,
+  Server,
+  Terminal
+} from 'lucide-react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  ContextMenu,
-  ContextMenuCheckboxItem,
-  ContextMenuContent,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
-import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -19,12 +22,20 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
-import type { CodexRateLimitAccountsState } from '../../../../shared/types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../../../shared/types'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel } from './tooltip'
+import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { SessionsStatusSegment } from './SessionsStatusSegment'
+import { UpdateStatusSegment } from './UpdateStatusSegment'
+import { MemoryStatusSegment } from './MemoryStatusSegment'
+import { SidekickStatusSegment } from './SidekickStatusSegment'
 
 function getCodexAccountLabel(
   state: CodexRateLimitAccountsState,
@@ -34,6 +45,174 @@ function getCodexAccountLabel(
     return 'System default'
   }
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
+
+function ClaudeSwitcherMenu({
+  claude,
+  compact,
+  iconOnly
+}: {
+  claude: ProviderRateLimits
+  compact: boolean
+  iconOnly: boolean
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [accountsExpanded, setAccountsExpanded] = useState(false)
+  const [accounts, setAccounts] = useState<ClaudeRateLimitAccountsState>({
+    accounts: [],
+    activeAccountId: null
+  })
+  const [isSwitching, setIsSwitching] = useState(false)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
+  const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
+  const claudeAccountSyncKey = useAppStore((s) => {
+    const settings = s.settings
+    if (!settings) {
+      return 'no-settings'
+    }
+    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+  })
+
+  const loadAccounts = useCallback(async () => {
+    const next = await window.api.claudeAccounts.list()
+    setAccounts(next)
+  }, [])
+
+  useEffect(() => {
+    void loadAccounts().catch((error) => {
+      console.error('Failed to load Claude accounts for status bar:', error)
+    })
+  }, [loadAccounts, open, claudeAccountSyncKey])
+
+  useEffect(() => {
+    if (!open) {
+      setAccountsExpanded(false)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (accountsExpanded) {
+      void fetchInactiveClaudeAccountUsage()
+    }
+  }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
+
+  const handleSelectAccount = async (accountId: string | null): Promise<void> => {
+    if (isSwitching) {
+      return
+    }
+    setIsSwitching(true)
+    try {
+      const next = await window.api.claudeAccounts.select({ accountId })
+      setAccounts(next)
+      await fetchSettings()
+      setAccountsExpanded(false)
+    } catch (error) {
+      console.error('Failed to switch Claude account from status bar:', error)
+    } finally {
+      setIsSwitching(false)
+    }
+  }
+
+  const activeAccountLabel =
+    accounts.activeAccountId === null
+      ? 'System default'
+      : (accounts.accounts.find((account) => account.id === accounts.activeAccountId)?.email ??
+        'Managed')
+  const availableSwitchTargets = [
+    ...(accounts.activeAccountId === null
+      ? []
+      : [{ id: null as string | null, label: 'System default' }]),
+    ...accounts.accounts
+      .filter((account) => account.id !== accounts.activeAccountId)
+      .map((account) => ({ id: account.id, label: account.email }))
+  ]
+
+  return (
+    <ProviderDetailsMenu
+      provider={claude}
+      compact={compact}
+      iconOnly={iconOnly}
+      ariaLabel="Open Claude details and account switcher"
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <DropdownMenuLabel>Claude Account</DropdownMenuLabel>
+      <DropdownMenuItem
+        onSelect={(event) => {
+          event.preventDefault()
+          setAccountsExpanded((prev) => !prev)
+        }}
+      >
+        <span className="max-w-[180px] truncate text-[12px] text-foreground">
+          {activeAccountLabel}
+        </span>
+        {accountsExpanded ? (
+          <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
+        ) : (
+          <ChevronRight className="ml-auto size-3.5 text-muted-foreground/85" />
+        )}
+      </DropdownMenuItem>
+      {accountsExpanded ? (
+        <div className="px-1 pb-1">
+          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Switch to
+          </div>
+          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1">
+            {availableSwitchTargets.length === 0 ? (
+              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
+            ) : null}
+            {availableSwitchTargets.map((target) => {
+              const inactiveUsage = target.id
+                ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
+                : null
+
+              return (
+                <DropdownMenuItem
+                  key={target.id ?? 'system'}
+                  disabled={isSwitching}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    void handleSelectAccount(target.id)
+                  }}
+                >
+                  <div className="flex w-full flex-col gap-0.5">
+                    <span className="max-w-[220px] truncate">{target.label}</span>
+                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                      <InlineUsageSkeleton />
+                    ) : inactiveUsage?.claude ? (
+                      <InlineUsageBars
+                        limits={inactiveUsage.claude}
+                        isFetching={inactiveUsage.isFetching}
+                      />
+                    ) : null}
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
+          </div>
+          <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+            Restart live Claude terminals before continuing old conversations after switching.
+          </div>
+        </div>
+      ) : null}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onSelect={() => {
+          openSettingsTarget({
+            pane: 'accounts',
+            repoId: null,
+            sectionId: 'accounts-claude'
+          })
+          openSettingsPage()
+        }}
+      >
+        Manage Accounts…
+      </DropdownMenuItem>
+    </ProviderDetailsMenu>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -47,6 +226,66 @@ function MiniBar({ leftPct }: { leftPct: number }): React.JSX.Element {
         className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
         style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
       />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Inline usage bars (compact bars for inactive accounts in the switcher)
+// ---------------------------------------------------------------------------
+
+function InlineUsageBars({
+  limits,
+  isFetching
+}: {
+  limits: ProviderRateLimits
+  isFetching: boolean
+}): React.JSX.Element {
+  const sessionLeft = limits.session
+    ? Math.max(0, Math.round(100 - limits.session.usedPercent))
+    : null
+  const weeklyLeft = limits.weekly ? Math.max(0, Math.round(100 - limits.weekly.usedPercent)) : null
+
+  return (
+    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
+      {sessionLeft !== null && (
+        <div className="flex flex-1 items-center gap-1">
+          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full ${barColor(sessionLeft)}`}
+              style={{ width: `${sessionLeft}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+            {sessionLeft}% 5h
+          </span>
+        </div>
+      )}
+      {weeklyLeft !== null && (
+        <div className="flex flex-1 items-center gap-1">
+          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full ${barColor(weeklyLeft)}`}
+              style={{ width: `${weeklyLeft}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+            {weeklyLeft}% wk
+          </span>
+        </div>
+      )}
+      {limits.status === 'error' && !limits.session && !limits.weekly && (
+        <span className="text-[10px] text-muted-foreground">Sign in to see usage</span>
+      )}
+    </div>
+  )
+}
+
+function InlineUsageSkeleton(): React.JSX.Element {
+  return (
+    <div className="flex w-full animate-pulse items-center gap-2">
+      <div className="h-[4px] flex-1 rounded-full bg-muted" />
+      <div className="h-[4px] flex-1 rounded-full bg-muted" />
     </div>
   )
 }
@@ -67,6 +306,10 @@ function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React
 // ---------------------------------------------------------------------------
 // Provider segment
 // ---------------------------------------------------------------------------
+
+// Why: only Flash and the latest Pro are shown in the status bar —
+// the rest (Flash Lite, experimental) are secondary and would clutter the bar.
+const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function ProviderSegment({
   p,
@@ -120,13 +363,40 @@ function ProviderSegment({
 
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
+
+  if (p.buckets && p.buckets.length > 0) {
+    const visibleBuckets = p.buckets.filter((b) => STATUS_BAR_BUCKET_NAMES.has(b.name))
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <ProviderIcon provider={provider} />
+        {visibleBuckets.map((bucket, i) => {
+          const left = Math.max(0, Math.round(100 - bucket.usedPercent))
+          return (
+            <React.Fragment key={bucket.name}>
+              {i > 0 && <span className="text-muted-foreground">&middot;</span>}
+              <span className="tabular-nums">
+                {bucket.name} {left}%
+              </span>
+            </React.Fragment>
+          )
+        })}
+        {visibleBuckets.length === 0 && p.session && (
+          <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+        )}
+        {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
+      </span>
+    )
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
-      {p.session && <WindowLabel w={p.session} label="5h" />}
+      {p.session && (
+        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+      )}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
-      {p.weekly && <WindowLabel w={p.weekly} label="wk" />}
+      {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -151,6 +421,8 @@ function CodexSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
+  const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
@@ -211,6 +483,12 @@ function CodexSwitcherMenu({
       setAccountsExpanded(false)
     }
   }, [open])
+
+  useEffect(() => {
+    if (accountsExpanded) {
+      void fetchInactiveCodexAccountUsage()
+    }
+  }, [accountsExpanded, fetchInactiveCodexAccountUsage])
 
   const activeAccountLabel =
     accounts.activeAccountId === null
@@ -276,22 +554,38 @@ function CodexSwitcherMenu({
             {availableSwitchTargets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}
-            {availableSwitchTargets.map((target) => (
-              <DropdownMenuItem
-                key={target.id ?? 'system'}
-                onSelect={(event) => {
-                  // Why: account switching may need an immediate follow-up
-                  // restart action for live Codex tabs. Prevent the menu from
-                  // auto-closing so that prompt can stay within the same
-                  // account-switcher interaction instead of jumping elsewhere.
-                  event.preventDefault()
-                  void handleSelectAccount(target.id)
-                }}
-                disabled={isSwitching}
-              >
-                <span className="truncate">{target.label}</span>
-              </DropdownMenuItem>
-            ))}
+            {availableSwitchTargets.map((target) => {
+              const inactiveUsage = target.id
+                ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+                : null
+
+              return (
+                <DropdownMenuItem
+                  key={target.id ?? 'system'}
+                  onSelect={(event) => {
+                    // Why: account switching may need an immediate follow-up
+                    // restart action for live Codex tabs. Prevent the menu from
+                    // auto-closing so that prompt can stay within the same
+                    // account-switcher interaction instead of jumping elsewhere.
+                    event.preventDefault()
+                    void handleSelectAccount(target.id)
+                  }}
+                  disabled={isSwitching}
+                >
+                  <div className="flex w-full flex-col gap-0.5">
+                    <span className="truncate">{target.label}</span>
+                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                      <InlineUsageSkeleton />
+                    ) : inactiveUsage?.claude ? (
+                      <InlineUsageBars
+                        limits={inactiveUsage.claude}
+                        isFetching={inactiveUsage.isFetching}
+                      />
+                    ) : null}
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
           </div>
         </div>
       ) : null}
@@ -328,9 +622,9 @@ function CodexSwitcherMenu({
       <DropdownMenuItem
         onSelect={() => {
           openSettingsTarget({
-            pane: 'general',
+            pane: 'accounts',
             repoId: null,
-            sectionId: 'general-codex-accounts'
+            sectionId: 'accounts-codex'
           })
           openSettingsPage()
         }}
@@ -372,7 +666,13 @@ function ProviderDetailsMenu({
                 className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
-                {provider.provider === 'claude' ? 'C' : 'X'}
+                {provider.provider === 'claude'
+                  ? 'C'
+                  : provider.provider === 'gemini'
+                    ? 'G'
+                    : provider.provider === 'opencode-go'
+                      ? 'O'
+                      : 'X'}
               </span>
             </span>
           ) : (
@@ -399,17 +699,32 @@ function ProviderDetailsMenu({
 // StatusBar
 // ---------------------------------------------------------------------------
 
+const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+
 function StatusBarInner(): React.JSX.Element | null {
   const rateLimits = useAppStore((s) => s.rateLimits)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
+  // Why: sidekick segment intentionally does NOT participate in statusBarItems
+  // (see design doc — gating with both the experimental flag and a
+  // statusBarItems checkbox would double-toggle the surface). It is driven
+  // purely by the experimentalSidekick settings flag.
+  const sidekickEnabled = useAppStore((s) => s.settings?.experimentalSidekick === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const containerRef = useRef<HTMLDivElement>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
   const [containerWidth, setContainerWidth] = useState(900)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+
+  useEffect(() => {
+    const closeMenu = (): void => setMenuOpen(false)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+  }, [])
 
   const containerRefCallback = useCallback((node: HTMLDivElement | null) => {
     if (resizeObserverRef.current) {
@@ -445,7 +760,7 @@ function StatusBarInner(): React.JSX.Element | null {
     return null
   }
 
-  const { claude, codex } = rateLimits
+  const { claude, codex, gemini, opencodeGo } = rateLimits
 
   // Why: hiding `unavailable` providers makes the status bar appear to lose a
   // provider at random after refreshes or wake/resume. Keeping the slot visible
@@ -453,89 +768,155 @@ function StatusBarInner(): React.JSX.Element | null {
   // configured but currently unavailable.
   const showClaude = claude && statusBarItems.includes('claude')
   const showCodex = codex && statusBarItems.includes('codex')
+  // Why: hide only when the state hasn't loaded yet (null), not when unavailable.
+  // Gemini shows if credentials exist; OpenCode Go shows always so users can see
+  // the provider and know to configure the cookie in Settings.
+  const showGemini = gemini !== null && statusBarItems.includes('gemini')
+  const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showSessions = statusBarItems.includes('sessions')
-  const anyVisible = showClaude || showCodex
-  const anyFetching = claude?.status === 'fetching' || codex?.status === 'fetching'
+  const showMemory = statusBarItems.includes('memory')
+  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showMemory
+  const anyFetching =
+    claude?.status === 'fetching' ||
+    codex?.status === 'fetching' ||
+    gemini?.status === 'fetching' ||
+    opencodeGo?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          ref={containerRefCallback}
-          className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0"
-        >
-          <div className="flex items-center gap-3">
-            {showClaude && (
-              <ProviderDetailsMenu
-                provider={claude}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel="Open Claude usage details"
-              />
-            )}
-            {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
-            {anyVisible && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                    aria-label="Refresh rate limits"
-                  >
-                    <RefreshCw
-                      size={11}
-                      className={isRefreshing || anyFetching ? 'animate-spin' : ''}
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>
-                  Refresh usage data
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
+    <div
+      ref={containerRefCallback}
+      className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0 relative"
+      onContextMenuCapture={(event) => {
+        // Why: mirror the right-click pattern used across the app
+        // (WorktreeContextMenu, TerminalContextMenu, tab bar) — dispatch the
+        // global close event so peer menus dismiss, then place a hidden
+        // trigger at the cursor so the menu anchors there. This also lets a
+        // second right-click reposition the menu instead of leaving it where
+        // it first opened.
+        event.preventDefault()
+        window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+        const bounds = event.currentTarget.getBoundingClientRect()
+        setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+        setMenuOpen(true)
+      }}
+    >
+      <div className="flex items-center gap-3">
+        {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
+        {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+        {showGemini && (
+          <ProviderDetailsMenu
+            provider={gemini}
+            compact={compact}
+            iconOnly={iconOnly}
+            ariaLabel="Open Gemini usage details"
+          />
+        )}
+        {showOpencodeGo && (
+          <ProviderDetailsMenu
+            provider={opencodeGo}
+            compact={compact}
+            iconOnly={iconOnly}
+            ariaLabel="Open OpenCode Go usage details"
+          />
+        )}
+        {anyVisible && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                aria-label="Refresh rate limits"
+              >
+                <RefreshCw
+                  size={11}
+                  className={isRefreshing || anyFetching ? 'animate-spin' : ''}
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>
+              Refresh usage data
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
 
-          <div className="flex-1" />
+      <div className="flex-1" />
 
-          <div className="flex items-center gap-3">
-            {showSessions && <SessionsStatusSegment compact={compact} iconOnly={iconOnly} />}
-            {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
-          </div>
-        </div>
-      </ContextMenuTrigger>
+      <div className="flex items-center gap-3">
+        <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
+        {sidekickEnabled && <SidekickStatusSegment />}
+        {showMemory && <MemoryStatusSegment compact={compact} iconOnly={iconOnly} />}
+        {showSessions && <SessionsStatusSegment compact={compact} iconOnly={iconOnly} />}
+        {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
+      </div>
 
-      <ContextMenuContent className="min-w-0 w-fit">
-        <ContextMenuCheckboxItem
-          checked={statusBarItems.includes('claude')}
-          onCheckedChange={() => toggleStatusBarItem('claude')}
-        >
-          Claude Usage
-        </ContextMenuCheckboxItem>
-        <ContextMenuCheckboxItem
-          checked={statusBarItems.includes('codex')}
-          onCheckedChange={() => toggleStatusBarItem('codex')}
-        >
-          Codex Usage
-        </ContextMenuCheckboxItem>
-        <ContextMenuCheckboxItem
-          checked={statusBarItems.includes('ssh')}
-          onCheckedChange={() => toggleStatusBarItem('ssh')}
-        >
-          SSH Status
-        </ContextMenuCheckboxItem>
-        <ContextMenuCheckboxItem
-          checked={statusBarItems.includes('sessions')}
-          onCheckedChange={() => toggleStatusBarItem('sessions')}
-        >
-          Terminal Sessions
-        </ContextMenuCheckboxItem>
-      </ContextMenuContent>
-    </ContextMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-hidden
+            tabIndex={-1}
+            className="pointer-events-none absolute size-px opacity-0"
+            style={{ left: menuPoint.x, top: menuPoint.y }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="min-w-0 w-fit" sideOffset={0} align="start">
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('claude')}
+            onCheckedChange={() => toggleStatusBarItem('claude')}
+          >
+            <ClaudeIcon size={14} />
+            Claude Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('codex')}
+            onCheckedChange={() => toggleStatusBarItem('codex')}
+          >
+            <OpenAIIcon size={14} />
+            Codex Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('gemini')}
+            onCheckedChange={() => toggleStatusBarItem('gemini')}
+          >
+            <GeminiIcon size={14} />
+            Gemini Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('opencode-go')}
+            onCheckedChange={() => toggleStatusBarItem('opencode-go')}
+          >
+            <OpenCodeGoIcon size={14} />
+            OpenCode Go Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('ssh')}
+            onCheckedChange={() => toggleStatusBarItem('ssh')}
+          >
+            <Server className="size-3.5" />
+            SSH Status
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('sessions')}
+            onCheckedChange={() => toggleStatusBarItem('sessions')}
+          >
+            <Terminal className="size-3.5" />
+            Terminal Sessions
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('memory')}
+            onCheckedChange={() => toggleStatusBarItem('memory')}
+          >
+            <MemoryStickIcon className="size-3.5" />
+            Memory
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }
 

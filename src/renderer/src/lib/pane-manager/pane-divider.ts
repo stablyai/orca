@@ -11,15 +11,15 @@ export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   return thickness + HIT_PADDING * 2
 }
 
+type DividerCallbacks = {
+  refitPanesUnder: (el: HTMLElement) => void
+  onLayoutChanged?: () => void
+}
+
 export function createDivider(
   isVertical: boolean,
   styleOptions: PaneStyleOptions,
-  callbacks: {
-    refitPanesUnder: (el: HTMLElement) => void
-    lockDragScroll: (el: HTMLElement) => void
-    unlockDragScroll: (el: HTMLElement) => void
-    onLayoutChanged?: () => void
-  }
+  callbacks: DividerCallbacks
 ): HTMLElement {
   const divider = document.createElement('div')
   divider.className = `pane-divider ${isVertical ? 'is-vertical' : 'is-horizontal'}`
@@ -45,12 +45,7 @@ export function createDivider(
 function attachDividerDrag(
   divider: HTMLElement,
   isVertical: boolean,
-  callbacks: {
-    refitPanesUnder: (el: HTMLElement) => void
-    lockDragScroll: (el: HTMLElement) => void
-    unlockDragScroll: (el: HTMLElement) => void
-    onLayoutChanged?: () => void
-  }
+  callbacks: DividerCallbacks
 ): void {
   const MIN_PANE_SIZE = 50
 
@@ -89,15 +84,7 @@ function attachDividerDrag(
     // Store current proportions as flex-basis values
     prevFlex = prevSize
     nextFlex = nextSize
-
-    callbacks.lockDragScroll(prevEl)
-    callbacks.lockDragScroll(nextEl)
   }
-
-  // Why: fitAddon.fit() triggers a full xterm.js reflow which can take
-  // hundreds of ms with large scrollbacks. Gating behind rAF caps refit
-  // to once per paint frame instead of once per pointer event (~250Hz).
-  let refitRafId: number | null = null
 
   const onPointerMove = (e: PointerEvent): void => {
     if (!dragging || !prevEl || !nextEl) {
@@ -121,20 +108,11 @@ function attachDividerDrag(
       newPrev = totalSize - MIN_PANE_SIZE
     }
 
+    // Why: keep drag-time work to flex layout only; pane-local ResizeObservers
+    // schedule the terminal fit on the next frame so the divider stays smooth.
     // Use flex-grow proportionally
     prevEl.style.flex = `${newPrev} 1 0%`
     nextEl.style.flex = `${newNext} 1 0%`
-
-    // Refit terminals in affected panes (throttled to one per animation frame)
-    if (refitRafId === null) {
-      const p = prevEl
-      const n = nextEl
-      refitRafId = requestAnimationFrame(() => {
-        refitRafId = null
-        callbacks.refitPanesUnder(p)
-        callbacks.refitPanesUnder(n)
-      })
-    }
   }
 
   const onPointerUp = (e: PointerEvent): void => {
@@ -142,21 +120,14 @@ function attachDividerDrag(
       return
     }
     dragging = false
-    if (refitRafId !== null) {
-      cancelAnimationFrame(refitRafId)
-      refitRafId = null
-    }
     divider.releasePointerCapture(e.pointerId)
     divider.classList.remove('is-dragging')
-    // Final refit at the exact drop position, then unlock drag scroll state
-    // so the authoritative restore uses the original pre-drag scroll position
+    // Final refit at the exact drop position.
     if (prevEl) {
       callbacks.refitPanesUnder(prevEl)
-      callbacks.unlockDragScroll(prevEl)
     }
     if (nextEl) {
       callbacks.refitPanesUnder(nextEl)
-      callbacks.unlockDragScroll(nextEl)
     }
     prevEl = null
     nextEl = null
@@ -175,16 +146,11 @@ function attachDividerDrag(
       return
     }
 
-    callbacks.lockDragScroll(prev)
-    callbacks.lockDragScroll(next)
-
     prev.style.flex = '1 1 0%'
     next.style.flex = '1 1 0%'
 
     callbacks.refitPanesUnder(prev)
-    callbacks.unlockDragScroll(prev)
     callbacks.refitPanesUnder(next)
-    callbacks.unlockDragScroll(next)
     callbacks.onLayoutChanged?.()
   }
 
@@ -234,5 +200,11 @@ export function applyPaneOpacity(
 export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOptions): void {
   if (styleOptions.splitBackground) {
     root.style.background = styleOptions.splitBackground
+  }
+  if (styleOptions.paddingX !== undefined) {
+    root.style.setProperty('--pane-padding-x', `${styleOptions.paddingX}px`)
+  }
+  if (styleOptions.paddingY !== undefined) {
+    root.style.setProperty('--pane-padding-y', `${styleOptions.paddingY}px`)
   }
 }

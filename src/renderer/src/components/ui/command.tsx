@@ -107,9 +107,50 @@ function CommandInput({
   )
 }
 
-function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
+function CommandList({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.List>) {
+  const internalRef = React.useRef<HTMLDivElement>(null)
+
+  // Why: Radix Dialog applies react-remove-scroll which calls preventDefault()
+  // on wheel events for portaled elements (e.g. Popover) outside the Dialog's
+  // DOM tree. The scrollbar renders (CSS overflow works) but the browser never
+  // scrolls because the native event is cancelled. A non-passive wheel listener
+  // directly on the list takes over scrolling manually so it works regardless
+  // of whether a scroll-lock is active.
+  React.useEffect(() => {
+    const el = internalRef.current
+    if (!el) {
+      return
+    }
+    const onWheel = (e: WheelEvent): void => {
+      if (el.scrollHeight <= el.clientHeight) {
+        return
+      }
+      e.preventDefault()
+      el.scrollTop += e.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const mergedRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      internalRef.current = node
+      if (typeof ref === 'function') {
+        ref(node)
+      } else if (ref) {
+        ref.current = node
+      }
+    },
+    [ref]
+  )
+
   return (
     <CommandPrimitive.List
+      ref={mergedRef}
       data-slot="command-list"
       className={cn(
         'max-h-[min(400px,60vh)] overflow-y-auto overflow-x-hidden scrollbar-sleek scroll-pb-4 scroll-pt-4',

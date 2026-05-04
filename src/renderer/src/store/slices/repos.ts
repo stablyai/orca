@@ -16,7 +16,15 @@ export type RepoSlice = {
   updateRepo: (
     repoId: string,
     updates: Partial<
-      Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+      Pick<
+        Repo,
+        | 'displayName'
+        | 'badgeColor'
+        | 'hookSettings'
+        | 'worktreeBaseRef'
+        | 'kind'
+        | 'issueSourcePreference'
+      >
     >
   ) => Promise<void>
   setActiveRepo: (repoId: string | null) => void
@@ -69,6 +77,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return null
       }
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
+      if (alreadyAdded) {
+        get().clearOrcaHookTrustForRepo(repo.id)
+      }
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
@@ -76,18 +87,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return { repos: [...s.repos, repo] }
       })
       if (alreadyAdded) {
-        toast.info('Repo already added', { description: repo.displayName })
+        toast.info('Project already added', { description: repo.displayName })
       } else {
-        toast.success(isGitRepoKind(repo) ? 'Repo added' : 'Folder added', {
+        toast.success(isGitRepoKind(repo) ? 'Project added' : 'Folder added', {
           description: repo.displayName
         })
       }
       return repo
     } catch (err) {
-      console.error('Failed to add repo:', err)
+      console.error('Failed to add project:', err)
       const message = err instanceof Error ? err.message : String(err)
       const duration = ERROR_TOAST_DURATION
-      toast.error('Failed to add repo', {
+      toast.error('Failed to add project', {
         description: message,
         duration
       })
@@ -103,6 +114,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       const repo = result.repo
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
+      if (alreadyAdded) {
+        get().clearOrcaHookTrustForRepo(repo.id)
+      }
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
@@ -110,7 +124,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return { repos: [...s.repos, repo] }
       })
       if (alreadyAdded) {
-        toast.info('Repo already added', { description: repo.displayName })
+        toast.info('Project already added', { description: repo.displayName })
       } else {
         toast.success('Folder added', { description: repo.displayName })
       }
@@ -138,6 +152,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   removeRepo: async (repoId) => {
     try {
       await window.api.repos.remove({ repoId })
+
+      get().clearOrcaHookTrustForRepo(repoId)
 
       // Kill PTYs for all worktrees belonging to this repo
       const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)

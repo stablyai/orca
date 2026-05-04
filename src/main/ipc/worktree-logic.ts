@@ -160,16 +160,25 @@ export function mergeWorktree(
     head: git.head,
     branch: git.branch,
     isBare: git.isBare,
+    ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
     displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
+    linkedLinearIssue: meta?.linkedLinearIssue ?? null,
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
     isPinned: meta?.isPinned ?? false,
     sortOrder: meta?.sortOrder ?? 0,
     lastActivityAt: meta?.lastActivityAt ?? 0,
+    ...(git.isSparse === true
+      ? {
+          sparseDirectories: meta?.sparseDirectories,
+          sparseBaseRef: meta?.sparseBaseRef,
+          sparsePresetId: meta?.sparsePresetId
+        }
+      : {}),
     // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
     // shared/types) and forwarded verbatim so the renderer store mirrors
     // on-disk state. `undefined` here means the worktree has no comments yet.

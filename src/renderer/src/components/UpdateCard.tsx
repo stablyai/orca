@@ -6,15 +6,19 @@ import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
-import { AlertCircle, Check, Loader2, X } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Minus, X } from 'lucide-react'
 import type { ChangelogData } from '../../../shared/types'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function releaseUrlForVersion(version: string | null): string {
+  // Why: when no version is cached (typically a failed check), point at the
+  // plain releases listing rather than /releases/latest — /latest also breaks
+  // when GitHub's release API is degraded, and the listing is the most
+  // reliable manual fallback.
   return version
     ? `https://github.com/stablyai/orca/releases/tag/v${version}`
-    : 'https://github.com/stablyai/orca/releases/latest'
+    : 'https://github.com/stablyai/orca/releases'
 }
 
 function isAnimatedGif(url: string | undefined): boolean {
@@ -85,6 +89,8 @@ export function UpdateCard() {
   const storeChangelog = useAppStore((s) => s.updateChangelog)
   const dismissedVersion = useAppStore((s) => s.dismissedUpdateVersion)
   const dismissUpdate = useAppStore((s) => s.dismissUpdate)
+  const collapsed = useAppStore((s) => s.updateCardCollapsed)
+  const setCollapsed = useAppStore((s) => s.setUpdateCardCollapsed)
   const reassuranceSeen = useAppStore((s) => s.updateReassuranceSeen)
   const markReassuranceSeen = useAppStore((s) => s.markUpdateReassuranceSeen)
   const hasStartedDownload = useRef(false)
@@ -263,6 +269,13 @@ export function UpdateCard() {
     }
   }
 
+  if (
+    collapsed &&
+    (status.state === 'downloading' || status.state === 'downloaded' || status.state === 'error')
+  ) {
+    return null
+  }
+
   // ── Shared helpers ────────────────────────────────────────────────
 
   const isRichMode = changelog?.release != null
@@ -303,7 +316,9 @@ export function UpdateCard() {
   const errorCard: ErrorCardModel | null =
     status.state === 'error'
       ? {
-          title: 'Update Error',
+          // Why: title is scoped to the operation that failed so check-time
+          // failures (commonly GitHub-side) don't read as a bug in Orca.
+          title: cachedVersion ? 'Update Error' : 'Update Check Failed',
           summary: cachedVersion
             ? 'Could not complete the update.'
             : 'Could not check for updates.',
@@ -338,10 +353,33 @@ export function UpdateCard() {
     setTimeout(handleClose, 150)
   }
 
-  // Escape key handler for accessibility
+  // Why: long-running phases (downloading, downloaded, error) minimize to the
+  // status bar instead of persistently dismissing. A dismiss during an active
+  // download would orphan the in-flight download with no surfaced recovery.
+  const handleCollapseWithAnimation = () => {
+    if (prefersReducedMotion) {
+      setCollapsed(true)
+      return
+    }
+    setExiting(true)
+    setTimeout(() => {
+      setCollapsed(true)
+      setExiting(false)
+    }, 150)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault()
+    if (e.key !== 'Escape') {
+      return
+    }
+    e.preventDefault()
+    if (
+      status.state === 'downloading' ||
+      status.state === 'downloaded' ||
+      status.state === 'error'
+    ) {
+      handleCollapseWithAnimation()
+    } else {
       handleDismissWithAnimation()
     }
   }
@@ -392,7 +430,7 @@ export function UpdateCard() {
           message={errorCard.message}
           releaseUrl={errorCard.releaseUrl}
           primaryAction={errorCard.primaryAction}
-          onClose={handleDismissWithAnimation}
+          onClose={handleCollapseWithAnimation}
         />
       )
     }
@@ -412,7 +450,7 @@ export function UpdateCard() {
         <ReadyToInstallContent
           version={status.version}
           onRestart={handleInstallRetry}
-          onClose={handleDismissWithAnimation}
+          onClose={handleCollapseWithAnimation}
         />
       )
     }
@@ -430,6 +468,7 @@ export function UpdateCard() {
           mediaLoaded={mediaLoaded}
           onMediaError={() => setMediaFailed(true)}
           onMediaLoad={() => setMediaLoaded(true)}
+          onCollapse={handleCollapseWithAnimation}
         />
       )
     }
@@ -668,7 +707,8 @@ function DownloadingContent({
   mediaFailed,
   mediaLoaded,
   onMediaError,
-  onMediaLoad
+  onMediaLoad,
+  onCollapse
 }: {
   version: string
   percent: number
@@ -678,6 +718,7 @@ function DownloadingContent({
   mediaLoaded: boolean
   onMediaError: () => void
   onMediaLoad: () => void
+  onCollapse: () => void
 }) {
   const release = changelog?.release
   const showMedia =
@@ -691,7 +732,15 @@ function DownloadingContent({
         ) : (
           <h3 className="text-sm font-semibold">Downloading Update</h3>
         )}
-        <div className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
+          onClick={onCollapse}
+          aria-label="Minimize to status bar"
+        >
+          <Minus className="size-3.5" />
+        </Button>
       </div>
 
       {showMedia && release?.mediaUrl && (
@@ -765,9 +814,9 @@ function ErrorCardContent({
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label="Dismiss"
+          aria-label="Minimize to status bar"
         >
-          <X className="size-3.5" />
+          <Minus className="size-3.5" />
         </Button>
       </div>
 
@@ -814,9 +863,9 @@ function ReadyToInstallContent({
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label="Dismiss"
+          aria-label="Minimize to status bar"
         >
-          <X className="size-3.5" />
+          <Minus className="size-3.5" />
         </Button>
       </div>
 

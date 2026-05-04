@@ -13,10 +13,12 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
+import { getConnectionId } from '@/lib/connection-context'
 import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
 import { createExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import { TerminalErrorToast } from './TerminalErrorToast'
@@ -62,14 +64,36 @@ export default function TerminalPane({
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
+  // Why: per-pane live cwd tracked via OSC 7 for split-pane cwd inheritance.
+  // See docs/ssh-split-pane-inherit-cwd.md. The OSC 7 handler is installed
+  // in use-terminal-pane-lifecycle; keyboard and context-menu split actions
+  // read this map at dispatch time to pass cwd into splitPane.
+  const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
+  const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
+  const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
   const pendingWritesRef = useRef<Map<number, string>>(new Map())
+  // Why: tracks panes currently replaying recorded PTY bytes into xterm
+  // (cold-restore, daemon snapshot, scrollback restore, eager-buffer flush).
+  // While non-zero, pty-connection.ts drops xterm onData so auto-replies to
+  // embedded query sequences don't leak to the shell. See replay-guard.ts.
+  const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
   const isVisibleRef = useRef(isVisible)
   isVisibleRef.current = isVisible
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
+  // Why: tracked in React state (not derived from managerRef.getPanes().length)
+  // so the render containing the portal map (which reads the imperative pane
+  // list via managerRef.current?.getPanes()) re-runs when a pane is split or
+  // closed. managerRef is imperative and doesn't trigger React's dependency
+  // tracking. The lifecycle hook updates this via setPaneCount on
+  // onPaneCreated / onPaneClosed / onLayoutChanged. The value is never
+  // read — the portal map at line ~914 calls `managerRef.current?.getPanes()`
+  // imperatively, so `setPaneCount` is used only as a render-trigger side
+  // effect to force that map to re-run when a pane is split or closed.
+  const [, setPaneCount] = useState<number>(0)
   const [searchOpen, setSearchOpen] = useState(false)
   const searchOpenRef = useRef(false)
   searchOpenRef.current = searchOpen
@@ -111,6 +135,9 @@ export default function TerminalPane({
   const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
+  const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
+  const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
+  const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const settings = useAppStore((store) => store.settings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
@@ -147,8 +174,15 @@ export default function TerminalPane({
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  const macOptionAsAltRef = useRef<MacOptionAsAlt>(settings?.terminalMacOptionAsAlt ?? 'false')
-  macOptionAsAltRef.current = settings?.terminalMacOptionAsAlt ?? 'false'
+  // Why: the persisted setting can be 'auto' (default) or one of the four
+  // explicit modes. useEffectiveMacOptionAsAlt resolves 'auto' into
+  // 'true' | 'false' based on the probe's current layout category (US → 'true',
+  // anything else → 'false'), and re-renders when the OS layout changes.
+  // Downstream keyboard handlers read the ref, so the ref also tracks the
+  // effective value, not the raw setting.
+  const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
+  const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
+  macOptionAsAltRef.current = effectiveMacOptionAsAlt
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
 
@@ -277,16 +311,21 @@ export default function TerminalPane({
         // a single split pane doesn't go through closeTab.
         useAppStore.getState().setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
         syncPanePtyLayoutBinding(paneId, null)
+        // Why: Cmd+W on a split pane is user-initiated teardown — drop (not
+        // remove) so any retained `done` snapshot for this pane is also cleared
+        // and a same-frame live→gone transition cannot re-snapshot it via the
+        // retention sync.
+        useAppStore.getState().dropAgentStatus(`${tabId}:${paneId}`)
         manager.closePane(paneId)
       }
     },
     [onCloseTab, syncPanePtyLayoutBinding, tabId]
   )
 
-  // Cmd+W handler — shows a Ghostty-style confirmation dialog when the
-  // pane's shell has a running child process (e.g. npm run dev), so the
-  // user doesn't accidentally kill it. An idle shell prompt closes
-  // immediately. Ctrl+D (explicit EOF) bypasses this by design.
+  // Cmd+W handler — shows a confirmation dialog when the pane's shell has
+  // a running child process (e.g. npm run dev), so the user doesn't
+  // accidentally kill it. An idle shell prompt closes immediately. Ctrl+D
+  // (explicit EOF) bypasses this by design.
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
       const transport = paneTransportsRef.current.get(paneId)
@@ -295,13 +334,20 @@ export default function TerminalPane({
         executeClosePane(paneId)
         return
       }
-      void window.api.pty.hasChildProcesses(ptyId).then((hasChildren) => {
-        if (hasChildren) {
-          setCloseConfirmPaneId(paneId)
-        } else {
-          executeClosePane(paneId)
-        }
-      })
+      void window.api.pty
+        .hasChildProcesses(ptyId)
+        .then((hasChildren) => {
+          if (hasChildren) {
+            setCloseConfirmPaneId(paneId)
+          } else {
+            executeClosePane(paneId)
+          }
+        })
+        // Why: if the child-process probe rejects (IPC wedged, handler
+        // missing on legacy providers), fall back to closing the pane — Cmd+W
+        // silently doing nothing is worse than closing a pane that might have
+        // had a child process. Matches the semantics of the !ptyId branch above.
+        .catch(() => executeClosePane(paneId))
     },
     [executeClosePane]
   )
@@ -325,14 +371,20 @@ export default function TerminalPane({
     systemPrefersDark,
     settings,
     settingsRef,
+    effectiveMacOptionAsAlt,
+    effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
     managerRef,
     containerRef,
     expandedStyleSnapshotRef,
     paneFontSizesRef,
     paneTransportsRef,
+    paneCwdRef,
+    paneMode2031Ref,
+    paneLastThemeModeRef,
     panePtyBindingsRef,
     pendingWritesRef,
+    replayingPanesRef,
     isActiveRef,
     isVisibleRef,
     onPtyExitRef,
@@ -344,6 +396,9 @@ export default function TerminalPane({
     clearRuntimePaneTitle,
     updateTabPtyId,
     markWorktreeUnread,
+    markTerminalTabUnread,
+    clearWorktreeUnread,
+    clearTerminalTabUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
@@ -354,7 +409,8 @@ export default function TerminalPane({
     persistLayoutSnapshot,
     setPaneTitles,
     paneTitlesRef,
-    setRenamingPaneId
+    setRenamingPaneId,
+    setPaneCount
   })
 
   const handleRestartCodexPane = useCallback(
@@ -394,6 +450,7 @@ export default function TerminalPane({
         startup: { command: 'codex' },
         paneTransportsRef,
         pendingWritesRef,
+        replayingPanesRef,
         isActiveRef,
         isVisibleRef,
         onPtyExitRef,
@@ -405,6 +462,9 @@ export default function TerminalPane({
         clearRuntimePaneTitle,
         updateTabPtyId,
         markWorktreeUnread,
+        markTerminalTabUnread,
+        clearWorktreeUnread,
+        clearTerminalTabUnread,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding
@@ -419,6 +479,9 @@ export default function TerminalPane({
       cwd,
       dispatchNotification,
       markWorktreeUnread,
+      markTerminalTabUnread,
+      clearWorktreeUnread,
+      clearTerminalTabUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -457,6 +520,8 @@ export default function TerminalPane({
     isActive,
     managerRef,
     paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,
@@ -472,6 +537,13 @@ export default function TerminalPane({
 
   useTerminalPaneGlobalEffects({
     tabId,
+    // Why: use the pane's own `worktreeId` prop (not global activeWorktreeId)
+    // so the terminal-drop resolver routes to the worktree that actually owns
+    // this PTY. Reading from global state would race during worktree switches
+    // — the drop listener is already gated by `isActive`, and the pane's own
+    // id is the authoritative identity of the terminal being written to.
+    worktreeId,
+    cwd,
     isActive,
     isVisible,
     managerRef,
@@ -588,6 +660,37 @@ export default function TerminalPane({
     }
   }, [isActive])
 
+  // Why: a click inside the terminal container is a deliberate interaction
+  // with the pane — dismiss the bell indicator for this tab and worktree
+  // (ghostty "show until interact" semantics). onData already covers
+  // keystrokes; pointerdown covers the mouse path, including right-click
+  // and middle-click paste, which also count as engagement with the pane.
+  //
+  // This listener is intentionally NOT gated on `isActive`. In multi-group
+  // split layouts (TabGroupPanel), several TerminalPane instances are
+  // simultaneously visible but only ONE has `isActive=true` (the focused
+  // group's active pane). When the user clicks into a visible-but-inactive
+  // split pane, TabGroupPanel's wrapper `onPointerDown={commands.focusGroup}`
+  // fires first; focusGroup clears tab-level unread but does NOT call
+  // clearWorktreeUnread — so the worktree-level sidebar dot would linger
+  // until another interaction. Attaching this listener unconditionally lets
+  // the first click dismiss both dots BEFORE focusGroup re-renders the pane
+  // as active and the effect deps change.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
+    const onPointerDown = (): void => {
+      clearTerminalTabUnread(tabId)
+      clearWorktreeUnread(worktreeId)
+    }
+    container.addEventListener('pointerdown', onPointerDown, { capture: true })
+    return () => {
+      container.removeEventListener('pointerdown', onPointerDown, { capture: true })
+    }
+  }, [tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
+
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.
   // useLayoutEffect (not useEffect) ensures the attribute and refit happen
@@ -603,6 +706,10 @@ export default function TerminalPane({
     for (const pane of manager.getPanes()) {
       // Show the title bar space when the pane has a title OR is being
       // inline-edited (so the input appears even for untitled panes).
+      // Unread activity does NOT reserve title-bar space — the bell is
+      // rendered as an absolutely-positioned overlay in the pane's top-right
+      // corner so it can appear and disappear without shifting terminal
+      // content, avoiding the jarring reflow on bell toggles.
       const shouldShow = !!paneTitles[pane.id] || renamingPaneId === pane.id
       const hadTitle = pane.container.hasAttribute('data-has-title')
       if (shouldShow && !hadTitle) {
@@ -774,6 +881,9 @@ export default function TerminalPane({
 
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,
+    paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
     onSetTitle: handleStartRename,
@@ -832,7 +942,26 @@ export default function TerminalPane({
           if (!transport) {
             return
           }
-          transport.sendInput(shellEscapePath(filePath))
+          // Why: the explorer passes the worktree-absolute path via a DOM
+          // MIME, so for SSH worktrees this is a remote POSIX path destined
+          // for the remote shell. Quote for the target shell (remote = posix)
+          // rather than the client OS; otherwise a Windows client dropping
+          // onto an SSH-Linux worktree would emit Windows-style quoting.
+          // Why: `typeof === 'string'` (not `!== null`) so an unhydrated
+          // store (`undefined`) is treated as local and falls through to
+          // client-OS quoting, rather than being misclassified as remote.
+          const isRemote = typeof getConnectionId(worktreeId) === 'string'
+          const targetShell: 'posix' | 'windows' = isRemote
+            ? 'posix'
+            : isWindowsUserAgent()
+              ? 'windows'
+              : 'posix'
+          transport.sendInput(shellEscapePath(filePath, targetShell))
+          // Move focus to the terminal so the user can keep typing where the
+          // dropped path just landed. Without this, focus stays on the file
+          // tree row that originated the drag and subsequent keystrokes do
+          // not reach the pty — #978.
+          pane.terminal.focus()
         }}
       />
       {terminalError && isActive && (
@@ -878,7 +1007,7 @@ export default function TerminalPane({
           and structural changes (split, close) update those same signals via
           onPaneClosed / onPaneCreated callbacks — so React always re-renders
           this block when .getPanes() would return a different result. */}
-      {managerRef.current?.getPanes().map((pane) => {
+      {(managerRef.current?.getPanes() ?? []).map((pane) => {
         const title = paneTitles[pane.id]
         const isEditing = renamingPaneId === pane.id
         if (!title && !isEditing) {

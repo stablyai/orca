@@ -33,6 +33,11 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Default Diff View',
     description: 'Preferred presentation format for showing git diffs by default.',
     keywords: ['diff', 'view', 'inline', 'side-by-side', 'split']
+  },
+  {
+    title: 'Minimap',
+    description: 'Show the minimap overview when editing a file.',
+    keywords: ['minimap', 'overview', 'code', 'scroll']
   }
 ]
 
@@ -65,24 +70,21 @@ export const GENERAL_CACHE_TIMER_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Codex Accounts',
-    description: 'Manage which Codex account Orca uses for live rate limit fetching.',
-    keywords: ['codex', 'account', 'rate limit', 'status bar', 'quota']
-  },
-  {
-    title: 'Active Codex Account',
-    description: 'Choose which saved Codex account powers live quota reads.',
-    keywords: ['codex', 'account', 'switch', 'active', 'status bar']
-  }
-]
-
 export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Default Agent',
     description: 'Pre-select an AI coding agent in the new-workspace composer.',
-    keywords: ['agent', 'default', 'claude', 'codex', 'opencode', 'pi', 'gemini', 'aider', 'copilot']
+    keywords: [
+      'agent',
+      'default',
+      'claude',
+      'codex',
+      'opencode',
+      'pi',
+      'gemini',
+      'aider',
+      'copilot'
+    ]
   }
 ]
 
@@ -99,7 +101,6 @@ export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
-  ...GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES,
   ...GENERAL_SUPPORT_SEARCH_ENTRIES
 ]

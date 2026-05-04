@@ -22,14 +22,24 @@ describe('getMarkdownRenderMode', () => {
     ).toBe('rich-editor')
   })
 
-  it('falls back to plain markdown preview when rich editing is unsupported', () => {
+  it('keeps explicit preview mode in the rendered preview', () => {
+    expect(
+      getMarkdownRenderMode({
+        exceedsRichModeSizeLimit: true,
+        hasRichModeUnsupportedContent: true,
+        viewMode: 'preview'
+      })
+    ).toBe('preview')
+  })
+
+  it('falls back to source mode when rich editing is unsupported', () => {
     expect(
       getMarkdownRenderMode({
         exceedsRichModeSizeLimit: false,
         hasRichModeUnsupportedContent: true,
         viewMode: 'rich'
       })
-    ).toBe('preview')
+    ).toBe('source')
   })
 
   it('falls back to source mode when the markdown is too large for rich editing', () => {

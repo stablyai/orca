@@ -25,17 +25,28 @@ export function useRichMarkdownSearch({
   const [searchQuery, setSearchQuery] = useState('')
   const [rawActiveMatchIndex, setRawActiveMatchIndex] = useState(-1)
   const [searchRevision, setSearchRevision] = useState(0)
+  // Why: debouncing the query that drives match computation prevents the
+  // expensive full-doc walk from running on every keystroke — the old
+  // un-debounced path froze the main thread on large documents.
+  const [debouncedQuery, setDebouncedQuery] = useState('')
 
-  // Why: memoizing the match array avoids the old two-effect pattern where both
-  // effects independently called findRichMarkdownSearchMatches on every change.
+  useEffect(() => {
+    if (!searchQuery) {
+      setDebouncedQuery('')
+      return
+    }
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 150)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   const matches = useMemo(() => {
-    if (!editor || !isSearchOpen || !searchQuery) {
+    if (!editor || !isSearchOpen || !debouncedQuery) {
       return []
     }
-    return findRichMarkdownSearchMatches(editor.state.doc, searchQuery)
+    return findRichMarkdownSearchMatches(editor.state.doc, debouncedQuery)
     // searchRevision is bumped on ProseMirror doc edits to trigger recomputation
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, isSearchOpen, searchQuery, searchRevision])
+  }, [editor, isSearchOpen, debouncedQuery, searchRevision])
 
   const matchCount = matches.length
 
@@ -63,6 +74,7 @@ export function useRichMarkdownSearch({
   const closeSearch = useCallback(() => {
     setIsSearchOpen(false)
     setSearchQuery('')
+    setDebouncedQuery('')
     setRawActiveMatchIndex(-1)
   }, [])
 
@@ -128,15 +140,18 @@ export function useRichMarkdownSearch({
       return
     }
 
-    const query = isSearchOpen ? searchQuery : ''
+    const query = isSearchOpen ? debouncedQuery : ''
 
     // Why: combining decoration meta and selection+scrollIntoView into one
     // transaction avoids a split-dispatch where the first dispatch updates
     // editor.state and the second dispatch's scrollIntoView can be lost
     // when ProseMirror coalesces view updates.
+    // Why: passing pre-computed matches avoids the plugin re-walking the
+    // entire document — the old double-walk froze the UI on large files.
     const tr = editor.state.tr
     tr.setMeta(richMarkdownSearchPluginKey, {
       activeIndex: activeMatchIndex,
+      matches,
       query
     })
 
@@ -162,7 +177,7 @@ export function useRichMarkdownSearch({
         container.scrollTo({ top: targetScroll, behavior: 'instant' })
       }
     }
-  }, [activeMatchIndex, editor, isSearchOpen, matches, scrollContainerRef, searchQuery])
+  }, [activeMatchIndex, debouncedQuery, editor, isSearchOpen, matches, scrollContainerRef])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {

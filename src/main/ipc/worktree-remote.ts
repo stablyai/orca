@@ -1,6 +1,11 @@
+/* eslint-disable max-lines */
 // Why: extracted from worktrees.ts to keep the main IPC module under the
 // max-lines threshold. Worktree creation helpers (local and remote) live
-// here so the IPC dispatch file stays focused on handler wiring.
+// here so the IPC dispatch file stays focused on handler wiring. The
+// recently added sparse-checkout flow plus the worktree-bound setup-script
+// trust gate pushed this file marginally over the per-file limit; matches
+// the eslint-disable pattern other files in src/renderer use when a
+// cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
 import { join } from 'path'
@@ -13,12 +18,18 @@ import type {
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
-import { listWorktrees, addWorktree } from '../git/worktree'
+import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
+import {
+  createSetupRunnerScript,
+  getEffectiveHooks,
+  setupScriptsMatch,
+  shouldRunSetupForCreate
+} from '../hooks'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import {
   sanitizeWorktreeName,
@@ -30,6 +41,7 @@ import {
   areWorktreePathsEqual
 } from './worktree-logic'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
+import { normalizeSparseDirectories } from './sparse-checkout-directories'
 
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
@@ -43,6 +55,10 @@ export async function createRemoteWorktree(
   store: Store,
   mainWindow: BrowserWindow
 ): Promise<CreateWorktreeResult> {
+  if (args.sparseCheckout) {
+    throw new Error('Sparse checkout is not supported for remote SSH repos yet.')
+  }
+
   const provider = getSshGitProvider(repo.connectionId!) as SshGitProvider | undefined
   if (!provider) {
     throw new Error(`No git provider for connection "${repo.connectionId}"`)
@@ -110,11 +126,62 @@ export async function createRemoteWorktree(
     /* best-effort */
   }
 
+  // Why: the relay's git.addWorktree validates targetDir against registered
+  // roots. The worktree sibling path (repo/../name) is outside the repo root
+  // and must be registered first. Using request (not notify) makes the
+  // ordering guarantee explicit rather than relying on FIFO frame processing,
+  // and closes failure windows during relay reconnect or fresh-host scenarios
+  // where roots may not yet be registered at all. See issue #911.
+  const mux = getActiveMultiplexer(repo.connectionId!)
+  if (!mux) {
+    throw new Error('SSH connection is not available. Please reconnect and try again.')
+  }
+  // Why: git.addWorktree validates both repoPath and targetDir against
+  // registered roots. In a fresh-host or reconnect scenario, registerRelayRoots
+  // may not have finished yet, so neither path may be registered. Register both
+  // synchronously here to close that window.
+  //
+  // Why (fallback): when Orca reconnects via --connect to a relay still in its
+  // grace period, the old relay binary may not have the request handler yet.
+  // Fall back to notify so worktree creation still works against pre-upgrade
+  // relays.
+  try {
+    await Promise.all([
+      mux.request('session.registerRoot', { rootPath: repo.path }),
+      mux.request('session.registerRoot', { rootPath: remotePath })
+    ])
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Method not found')) {
+      mux.notify('session.registerRoot', { rootPath: repo.path })
+      mux.notify('session.registerRoot', { rootPath: remotePath })
+    } else {
+      throw err
+    }
+  }
+
   // Create worktree via relay
-  await provider.addWorktree(repo.path, branchName, remotePath, {
-    base: baseBranch,
-    track: baseBranch.includes('/')
-  })
+  try {
+    await provider.addWorktree(repo.path, branchName, remotePath, {
+      base: baseBranch,
+      track: baseBranch.includes('/')
+    })
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes('No workspace roots registered yet') ||
+        err.message.includes('Path outside authorized workspace'))
+    ) {
+      // Why: validatePath throws two distinct errors — "No workspace roots
+      // registered yet" (relay has no roots at all, e.g., reconnect before
+      // registerRelayRoots completes) and "Path outside authorized workspace"
+      // (roots exist but the sibling worktree path isn't among them). Both are
+      // implementation details that mean nothing to the user.
+      throw new Error(
+        'The SSH relay has not registered the worktree path yet. Please wait a moment and try again, or disconnect and reconnect the SSH session.'
+      )
+    }
+    throw err
+  }
 
   // Re-list to get the created worktree info
   const gitWorktrees = await provider.listWorktrees(repo.path)
@@ -250,11 +317,41 @@ export async function createLocalWorktree(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
   }
-  const setupScript = getEffectiveHooks(repo)?.scripts.setup
+  const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
   // Why: `ask` is a pre-create choice gate, not a post-create side effect.
   // Resolve it before mutating git state so missing UI input cannot strand
-  // a real worktree on disk while the renderer reports "create failed".
-  const shouldLaunchSetup = setupScript ? shouldRunSetupForCreate(repo, args.setupDecision) : false
+  // a real worktree on disk while the renderer reports "create failed". The
+  // actual run/skip decision is recomputed after the worktree exists, gated
+  // on the worktree's own setup script matching the primary's preview.
+  if (primarySetupScript) {
+    shouldRunSetupForCreate(repo, args.setupDecision)
+  }
+  const sparseDirectories = args.sparseCheckout
+    ? normalizeSparseDirectories(args.sparseCheckout.directories)
+    : []
+  if (args.sparseCheckout && sparseDirectories.length === 0) {
+    throw new Error('Sparse checkout requires at least one repo-relative directory.')
+  }
+  let sparsePresetId: string | undefined
+  if (args.sparseCheckout?.presetId) {
+    const preset = store
+      .getSparsePresets(repo.id)
+      .find((entry) => entry.id === args.sparseCheckout?.presetId)
+    if (preset?.repoId === repo.id) {
+      try {
+        const presetDirectories = normalizeSparseDirectories(preset.directories)
+        // Why: use Set-based comparison so directory order does not affect
+        // attribution — matches the renderer's sparseDirectoriesMatch logic.
+        const presetSet = new Set(presetDirectories)
+        const directoriesMatch =
+          presetDirectories.length === sparseDirectories.length &&
+          sparseDirectories.every((entry) => presetSet.has(entry))
+        sparsePresetId = directoriesMatch ? preset.id : undefined
+      } catch {
+        // Why: corrupt preset data should not block creation or falsely label the new worktree.
+      }
+    }
+  }
 
   // Why: `git fetch` previously blocked worktree creation for 1–5s on every
   // click, even though the fetch result isn't actually required — the
@@ -267,13 +364,22 @@ export async function createLocalWorktree(
     // Fetch is best-effort — don't block worktree creation if offline
   })
 
-  await addWorktree(
-    repo.path,
-    worktreePath,
-    branchName,
-    baseBranch,
-    settings.refreshLocalBaseRefOnWorktreeCreate
-  )
+  await (sparseDirectories.length > 0
+    ? addSparseWorktree(
+        repo.path,
+        worktreePath,
+        branchName,
+        sparseDirectories,
+        baseBranch,
+        settings.refreshLocalBaseRefOnWorktreeCreate
+      )
+    : addWorktree(
+        repo.path,
+        worktreePath,
+        branchName,
+        baseBranch,
+        settings.refreshLocalBaseRefOnWorktreeCreate
+      ))
 
   // Re-list to get the freshly created worktree info
   const gitWorktrees = await listWorktrees(repo.path)
@@ -290,6 +396,13 @@ export async function createLocalWorktree(
     lastActivityAt: Date.now(),
     ...(shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
       ? { displayName: effectiveRequestedName }
+      : {}),
+    ...(sparseDirectories.length > 0
+      ? {
+          sparseDirectories,
+          sparseBaseRef: baseBranch,
+          sparsePresetId
+        }
       : {})
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
@@ -302,6 +415,24 @@ export async function createLocalWorktree(
   invalidateAuthorizedRootsCache()
 
   let setup: CreateWorktreeResult['setup']
+  const setupScript = getEffectiveHooks(repo, worktreePath)?.scripts.setup
+  const setupMatchesPreview = setupScriptsMatch(repo, worktreePath, primarySetupScript)
+  let shouldLaunchSetup = false
+  if (setupScript && !setupMatchesPreview) {
+    console.warn(
+      `[hooks] setup hook skipped for ${worktreePath}: worktree setup script differs from the primary checkout setup script shown to the user`
+    )
+  } else if (setupScript) {
+    try {
+      shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
+    } catch (error) {
+      // Why: if the target branch introduces setup hooks that the primary
+      // checkout did not expose, the renderer may not have collected an ask
+      // decision. The worktree already exists, so skip setup instead of
+      // turning successful git creation into an IPC failure.
+      console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
+    }
+  }
   if (setupScript && shouldLaunchSetup) {
     try {
       // Why: setup now runs in a visible terminal owned by the renderer so users

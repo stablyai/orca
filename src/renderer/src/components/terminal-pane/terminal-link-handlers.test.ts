@@ -1,10 +1,14 @@
+import type { IDisposable, ILink } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
+  createFilePathLinkProvider,
   getTerminalHtmlFileOpenHint,
   handleOscLink,
   isTerminalLinkActivation,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
 const openUrlMock = vi.fn()
 const openFileUriMock = vi.fn()
@@ -32,6 +36,14 @@ vi.mock('@/lib/language-detect', () => ({
   detectLanguage: () => 'plaintext'
 }))
 
+// Why: the real helper reads worktreesByRepo/activeRepoId/etc. from the store
+// and orchestrates side effects that are out of scope for the link-handler
+// unit tests. Mock it so these tests only assert on routing (browser tab vs.
+// openFile), not on activation internals.
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
+
 function setPlatform(userAgent: string): void {
   vi.stubGlobal('navigator', { userAgent })
 }
@@ -39,11 +51,13 @@ function setPlatform(userAgent: string): void {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
     api: {
       shell: {
         openUrl: openUrlMock,
-        openFileUri: openFileUriMock
+        openFileUri: openFileUriMock,
+        pathExists: vi.fn().mockResolvedValue(true)
       },
       fs: {
         authorizeExternalPath: authorizeExternalPathMock,
@@ -98,7 +112,11 @@ describe('handleOscLink', () => {
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(preventDefault).toHaveBeenCalled()
-    expect(stopPropagation).toHaveBeenCalled()
+    // Why: we intentionally do NOT stopPropagation — xterm's SelectionService
+    // relies on the mouseup bubbling to ownerDocument to detach its drag-select
+    // mousemove listener. Stopping propagation was causing phantom selections
+    // after Cmd+clicking a link and then moving the mouse back over the terminal.
+    expect(stopPropagation).not.toHaveBeenCalled()
   })
 
   it('defaults to Orca when settings have not hydrated yet', () => {
@@ -107,7 +125,10 @@ describe('handleOscLink', () => {
 
     handleOscLink('https://example.com', { metaKey: true, ctrlKey: false, shiftKey: false }, deps)
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/')
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
@@ -193,5 +214,71 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' })
     )
+  })
+})
+
+describe('createFilePathLinkProvider range bounds', () => {
+  function makePane(lineText: string): { id: number; terminal: unknown } {
+    return {
+      id: 1,
+      terminal: {
+        buffer: {
+          active: {
+            getLine: (_y: number) => ({
+              translateToString: (_trim: boolean) => lineText
+            })
+          }
+        }
+      }
+    }
+  }
+
+  function collectLinks(lineText: string): Promise<ILink[]> {
+    const pane = makePane(lineText)
+    const managerRef = {
+      current: { getPanes: () => [pane] } as unknown as PaneManager
+    }
+    const provider = createFilePathLinkProvider(
+      1,
+      {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        startupCwd: '/repo',
+        managerRef,
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache: new Map<string, boolean>([
+          ['/repo/CLAUDE.md', true],
+          ['/repo/package.json', true]
+        ])
+      },
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      'hint'
+    )
+    return new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (links) => resolve(links ?? []))
+    })
+  }
+
+  it('underlines only the filename itself, not the column padding from `ls`', async () => {
+    // ls pads each column with trailing spaces. Regression: the provider used
+    // to report `end.x = endIndex + 1`, which in xterm's 1-based *inclusive*
+    // convention overshoots the last filename cell by one, underlining the
+    // trailing space as well ("package.json ").
+    const line = 'CLAUDE.md      package.json     README.md'
+    const links = await collectLinks(line)
+    const byText = new Map(links.map((link) => [link.text, link]))
+
+    const claude = byText.get('CLAUDE.md')
+    expect(claude, 'CLAUDE.md should be linkified').toBeDefined()
+    // 'CLAUDE.md' occupies cols 1..9 (inclusive, 1-based). end.x must be 9.
+    expect(claude!.range.start.x).toBe(1)
+    expect(claude!.range.end.x).toBe('CLAUDE.md'.length)
+
+    const pkg = byText.get('package.json')
+    expect(pkg, 'package.json should be linkified').toBeDefined()
+    // 'package.json' starts at index 15 → col 16; inclusive end at col 15+12 = 27.
+    const pkgStartIndex = line.indexOf('package.json')
+    expect(pkg!.range.start.x).toBe(pkgStartIndex + 1)
+    expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
   })
 })

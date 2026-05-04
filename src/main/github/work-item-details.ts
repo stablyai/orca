@@ -2,20 +2,62 @@
    body/comments/files/checks fetch paths alongside the file-contents resolver
    so the drawer's rate-limit and caching strategy lives in one place. */
 import type {
+  GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubWorkItem,
   GitHubWorkItemDetails,
-  PRCheckDetail,
   PRComment
 } from '../../shared/types'
-import { ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getOwnerRepo, getIssueOwnerRepo } from './gh-utils'
 import { getWorkItem, getPRChecks, getPRComments } from './client'
 
 // Why: a PR "changed file" listing returned by the REST endpoint is paginated
 // at 100 per page; we cap at a reasonable total so a massive PR cannot starve
 // the gh semaphore while we fetch file listings.
 const MAX_PR_FILES = 300
+
+const WORK_ITEM_PARTICIPANTS_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $isPr: Boolean!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) @include(if: $isPr) {
+      participants(first: 100) {
+        nodes { login avatarUrl(size: 48) ... on User { name } }
+      }
+    }
+    issue(number: $number) @skip(if: $isPr) {
+      participants(first: 100) {
+        nodes { login avatarUrl(size: 48) ... on User { name } }
+      }
+    }
+  }
+}`
+
+function mergeGitHubUsers(users: GitHubAssignableUser[]): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of users) {
+    if (!user.login) {
+      continue
+    }
+    const key = user.login.toLowerCase()
+    const existing = byLogin.get(key)
+    if (existing) {
+      // Why: avoid mutating caller-provided objects — return a new merged record
+      // so upstream references to `user`/`existing` stay unchanged.
+      byLogin.set(key, {
+        login: existing.login,
+        name: existing.name ?? user.name ?? null,
+        avatarUrl: existing.avatarUrl || user.avatarUrl || ''
+      })
+      continue
+    }
+    byLogin.set(key, {
+      login: user.login,
+      name: user.name ?? null,
+      avatarUrl: user.avatarUrl ?? ''
+    })
+  }
+  return Array.from(byLogin.values())
+}
 
 type RESTPRFile = {
   filename: string
@@ -128,8 +170,8 @@ async function getPRFiles(repoPath: string, prNumber: number): Promise<GitHubPRF
 async function getIssueBodyAndComments(
   repoPath: string,
   issueNumber: number
-): Promise<{ body: string; comments: PRComment[] }> {
-  const ownerRepo = await getOwnerRepo(repoPath)
+): Promise<{ body: string; comments: PRComment[]; assignees: string[] }> {
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
   try {
     if (ownerRepo) {
       const [issueResult, commentsResult] = await Promise.all([
@@ -152,10 +194,13 @@ async function getIssueBodyAndComments(
           { cwd: repoPath }
         )
       ])
-      const issue = JSON.parse(issueResult.stdout) as { body?: string | null }
+      const issue = JSON.parse(issueResult.stdout) as {
+        body?: string | null
+        assignees?: { login: string }[]
+      }
       type RESTComment = {
         id: number
-        user: { login: string; avatar_url: string } | null
+        user: { login: string; avatar_url: string; type?: string } | null
         body: string
         created_at: string
         html_url: string
@@ -167,14 +212,16 @@ async function getIssueBodyAndComments(
           authorAvatarUrl: c.user?.avatar_url ?? '',
           body: c.body ?? '',
           createdAt: c.created_at,
-          url: c.html_url
+          url: c.html_url,
+          isBot: c.user?.type === 'Bot'
         })
       )
-      return { body: issue.body ?? '', comments }
+      const assignees = (issue.assignees ?? []).map((a) => a.login)
+      return { body: issue.body ?? '', comments, assignees }
     }
     // Fallback: non-GitHub remote
     const { stdout } = await ghExecFileAsync(
-      ['issue', 'view', String(issueNumber), '--json', 'body,comments'],
+      ['issue', 'view', String(issueNumber), '--json', 'body,comments,assignees'],
       { cwd: repoPath }
     )
     const data = JSON.parse(stdout) as {
@@ -185,6 +232,7 @@ async function getIssueBodyAndComments(
         createdAt: string
         url: string
       }[]
+      assignees?: { login: string }[]
     }
     const comments = (data.comments ?? []).map(
       (c, i): PRComment => ({
@@ -196,9 +244,10 @@ async function getIssueBodyAndComments(
         url: c.url ?? ''
       })
     )
-    return { body: data.body ?? '', comments }
+    const fallbackAssignees = (data.assignees ?? []).map((a) => a.login)
+    return { body: data.body ?? '', comments, assignees: fallbackAssignees }
   } catch {
-    return { body: '', comments: [] }
+    return { body: '', comments: [], assignees: [] }
   }
 }
 
@@ -223,14 +272,131 @@ async function getPRBody(repoPath: string, prNumber: number): Promise<string> {
   }
 }
 
+async function getWorkItemParticipants(
+  repoPath: string,
+  item: Pick<GitHubWorkItem, 'number' | 'type'>
+): Promise<GitHubAssignableUser[]> {
+  // Why: issues in a fork live on the upstream remote, so participants must be
+  // resolved via getIssueOwnerRepo to stay consistent with getIssueBodyAndComments.
+  // PRs remain tied to origin via getOwnerRepo.
+  const ownerRepo =
+    item.type === 'issue' ? await getIssueOwnerRepo(repoPath) : await getOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return []
+  }
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${WORK_ITEM_PARTICIPANTS_QUERY}`,
+        '-f',
+        `owner=${ownerRepo.owner}`,
+        '-f',
+        `repo=${ownerRepo.repo}`,
+        '-F',
+        `number=${item.number}`,
+        '-F',
+        `isPr=${item.type === 'pr'}`
+      ],
+      { cwd: repoPath }
+    )
+    const data = JSON.parse(stdout) as {
+      data?: {
+        repository?: {
+          pullRequest?: {
+            participants?: { nodes?: GitHubAssignableUser[] }
+          } | null
+          issue?: {
+            participants?: { nodes?: GitHubAssignableUser[] }
+          } | null
+        }
+      }
+    }
+    const nodes =
+      data.data?.repository?.pullRequest?.participants?.nodes ??
+      data.data?.repository?.issue?.participants?.nodes ??
+      []
+    return nodes
+      .map((user) => ({
+        login: user.login,
+        name: user.name ?? null,
+        avatarUrl: user.avatarUrl ?? ''
+      }))
+      .filter((user) => user.login)
+  } catch {
+    return []
+  }
+}
+
+async function getGitHubUsersByLogin(
+  repoPath: string,
+  logins: string[]
+): Promise<GitHubAssignableUser[]> {
+  const uniqueLogins = Array.from(
+    new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
+  ).slice(0, 40)
+  if (uniqueLogins.length === 0) {
+    return []
+  }
+  const fields = uniqueLogins
+    .map(
+      (login, index) =>
+        `u${index}: user(login: ${JSON.stringify(login)}) { login name avatarUrl(size: 48) }`
+    )
+    .join('\n')
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['api', 'graphql', '-f', `query=query { ${fields} }`],
+      {
+        cwd: repoPath
+      }
+    )
+    const data = JSON.parse(stdout) as {
+      data?: Record<
+        string,
+        { login?: string; name?: string | null; avatarUrl?: string | null } | null
+      >
+    }
+    return Object.values(data.data ?? {})
+      .filter((user): user is { login: string; name?: string | null; avatarUrl?: string | null } =>
+        Boolean(user?.login)
+      )
+      .map((user) => ({
+        login: user.login,
+        name: user.name ?? null,
+        avatarUrl: user.avatarUrl ?? ''
+      }))
+  } catch {
+    return []
+  }
+}
+
+async function getMentionParticipants(
+  repoPath: string,
+  item: Pick<GitHubWorkItem, 'author' | 'number' | 'type'>,
+  comments: PRComment[],
+  participants: GitHubAssignableUser[]
+): Promise<GitHubAssignableUser[]> {
+  const visibleLogins = [item.author ?? '', ...comments.map((comment) => comment.author)]
+  // Why: one aliased GraphQL query returns login/name/avatarUrl for every
+  // mentioned author in a single round-trip. The previous REST fan-out
+  // (/users/<login>) returned the same fields but cost one rate-limit point
+  // per user.
+  const graphQlUsers = await getGitHubUsersByLogin(repoPath, visibleLogins)
+  return mergeGitHubUsers([...participants, ...graphQlUsers])
+}
+
 export async function getWorkItemDetails(
   repoPath: string,
-  number: number
+  number: number,
+  type?: 'issue' | 'pr'
 ): Promise<GitHubWorkItemDetails | null> {
   // Why: getWorkItem already handles acquire/release. We call it first (outside
   // our semaphore) so the known-cheap lookup doesn't compete with the richer
   // detail fetches that follow.
-  const item: GitHubWorkItem | null = await getWorkItem(repoPath, number)
+  const item: Omit<GitHubWorkItem, 'repoId'> | null = await getWorkItem(repoPath, number, type)
   if (!item) {
     return null
   }
@@ -238,21 +404,39 @@ export async function getWorkItemDetails(
   await acquire()
   try {
     if (item.type === 'issue') {
-      const { body, comments } = await getIssueBodyAndComments(repoPath, item.number)
-      return { item, body, comments }
+      // Why: fetch body/comments and GraphQL participants in parallel; the
+      // mention-participant merge is a cheap local operation afterward.
+      const [{ body, comments, assignees }, participants] = await Promise.all([
+        getIssueBodyAndComments(repoPath, item.number),
+        getWorkItemParticipants(repoPath, item)
+      ])
+      const mentionParticipants = await getMentionParticipants(
+        repoPath,
+        item,
+        comments,
+        participants
+      )
+      return { item, body, comments, assignees, participants: mentionParticipants }
     }
 
     // PR: fetch body + comments + checks + files + head/base SHAs in parallel.
-    const [body, comments, shas, files] = await Promise.all([
+    const [body, comments, shas, files, participants] = await Promise.all([
       getPRBody(repoPath, item.number),
       getPRComments(repoPath, item.number),
       getPRHeadBaseSha(repoPath, item.number),
-      getPRFiles(repoPath, item.number)
+      getPRFiles(repoPath, item.number),
+      getWorkItemParticipants(repoPath, item)
     ])
 
-    const checks: PRCheckDetail[] = shas?.headSha
-      ? await getPRChecks(repoPath, item.number, shas.headSha)
-      : await getPRChecks(repoPath, item.number)
+    // Why: run the mention-author GraphQL lookup in parallel with the final
+    // checks fetch instead of serially — both depend only on data from the
+    // Promise.all above, so there's no ordering requirement between them.
+    const [mentionParticipants, checks] = await Promise.all([
+      getMentionParticipants(repoPath, item, comments, participants),
+      shas?.headSha
+        ? getPRChecks(repoPath, item.number, shas.headSha)
+        : getPRChecks(repoPath, item.number)
+    ])
 
     return {
       item,
@@ -261,7 +445,8 @@ export async function getWorkItemDetails(
       headSha: shas?.headSha,
       baseSha: shas?.baseSha,
       checks,
-      files
+      files,
+      participants: mentionParticipants
     }
   } finally {
     release()

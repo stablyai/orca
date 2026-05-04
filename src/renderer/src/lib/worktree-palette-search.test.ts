@@ -15,6 +15,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
+    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -131,6 +132,43 @@ describe('worktree-palette-search', () => {
     expect(results[0].worktreeId).toBe('wt-feature')
     expect(results[1].worktreeId).toBe('wt-bugfix')
     expect(results[2].worktreeId).toBe('wt-main')
+  })
+
+  it('supports "repo/worktree" composite queries and highlights both segments', () => {
+    const worktrees = [
+      makeWorktree({
+        id: 'wt-main',
+        branch: 'refs/heads/main',
+        displayName: 'main'
+      }),
+      makeWorktree({
+        id: 'wt-feature',
+        branch: 'refs/heads/feature/foo',
+        displayName: 'feature foo'
+      })
+    ]
+
+    const results = searchWorktrees(worktrees, 'orca/main', repoMap, null, null)
+
+    expect(results).toHaveLength(1)
+    expect(results[0].worktreeId).toBe('wt-main')
+    expect(results[0].matchedField).toBe('branch')
+    expect(results[0].repoRange).toEqual({ start: 9, end: 13 })
+    expect(results[0].branchRange).toEqual({ start: 0, end: 4 })
+  })
+
+  it('falls back to single-token matching when a composite query has no composite hits', () => {
+    const results = searchWorktrees(
+      [makeWorktree({ branch: 'refs/heads/feature/palette-refresh' })],
+      'feature/palette',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].matchedField).toBe('branch')
+    expect(results[0].branchRange).toEqual({ start: 0, end: 'feature/palette'.length })
   })
 
   it('matches issue numbers with a leading hash and returns issue render context', () => {

@@ -5,6 +5,7 @@ import type {
   GitConflictOperation,
   TerminalTab
 } from '../../../../shared/types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 // ── Pure helper functions ────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ export const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'un
 
 export const EMPTY_TABS: TerminalTab[] = []
 export const EMPTY_BROWSER_TABS: { id: string }[] = []
+export const EMPTY_AGENT_ENTRIES: AgentStatusEntry[] = []
 
 // ── SVG icon components ──────────────────────────────────────────────
 

@@ -46,6 +46,7 @@ export function BrowserProfileRow({
   isDefault
 }: BrowserProfileRowProps): React.JSX.Element {
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
+  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
 
   const handleImportFromBrowser = async (
     browserFamily: string,
@@ -79,11 +80,21 @@ export function BrowserProfileRow({
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
     : null
 
+  // Why: uses div[role=button] instead of <button> to avoid nested <button>
+  // elements — the dropdown trigger and trash actions inside also render as
+  // <button>, which is invalid HTML and causes React hydration warnings.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
-      className={`flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      className={`flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors cursor-pointer ${
         isActive
           ? 'border-foreground/20 bg-accent/15'
           : 'border-border/70 hover:border-border hover:bg-accent/8'
@@ -105,7 +116,15 @@ export function BrowserProfileRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) {
+              // Why: macOS treats other browsers' profile folders as app
+              // data. Only probe them when the user opens the import menu.
+              void fetchDetectedBrowsers()
+            }
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -187,6 +206,6 @@ export function BrowserProfileRow({
           </Button>
         )}
       </div>
-    </button>
+    </div>
   )
 }

@@ -236,7 +236,7 @@ export default function Landing(): React.JSX.Element {
           <p className="text-sm text-muted-foreground text-center">
             {canCreateWorktree
               ? 'Select a worktree from the sidebar to begin.'
-              : 'Add a repository to get started.'}
+              : 'Add a project to get started.'}
           </p>
 
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
@@ -245,13 +245,13 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('add-repo')}
             >
               <FolderPlus className="size-3.5" />
-              Add Repo
+              Add Project
             </button>
 
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
               disabled={!canCreateWorktree}
-              title={!canCreateWorktree ? 'Add a Git repo first' : undefined}
+              title={!canCreateWorktree ? 'Add a Git project first' : undefined}
               onClick={() => openModal('new-workspace-composer')}
             >
               <GitBranchPlus className="size-3.5" />

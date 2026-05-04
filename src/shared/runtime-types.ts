@@ -49,6 +49,7 @@ export type RuntimeSyncedLeaf = {
   leafId: string
   paneRuntimeId: number
   ptyId: string | null
+  paneTitle?: string | null
 }
 
 export type RuntimeSyncWindowGraph = {
@@ -92,13 +93,43 @@ export type RuntimeTerminalRead = {
   nextCursor: string | null
 }
 
+export type RuntimeTerminalRename = {
+  handle: string
+  tabId: string
+  title: string | null
+}
+
 export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
 }
 
-export type RuntimeTerminalWaitCondition = 'exit'
+export type RuntimeTerminalCreate = {
+  handle: string
+  worktreeId: string
+  title: string | null
+}
+
+export type RuntimeTerminalSplit = {
+  handle: string
+  tabId: string
+  paneRuntimeId: number
+}
+
+export type RuntimeTerminalFocus = {
+  handle: string
+  tabId: string
+  worktreeId: string
+}
+
+export type RuntimeTerminalClose = {
+  handle: string
+  tabId: string
+  ptyKilled: boolean
+}
+
+export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
 export type RuntimeTerminalWait = {
   handle: string

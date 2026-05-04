@@ -1,7 +1,12 @@
+/* eslint-disable max-lines -- Why: this file covers every branch of the
+shortcut policy (letter chords, zoom variants, alt/shift gating, history
+navigation, new-workspace tab routing). Splitting across files would
+fragment the test of a single pure function. */
 import { describe, expect, it } from 'vitest'
 import {
   isWindowShortcutModifierChord,
   resolveWindowShortcutAction,
+  type WindowShortcutAction,
   type WindowShortcutInput
 } from './window-shortcut-policy'
 
@@ -101,6 +106,257 @@ describe('resolveWindowShortcutAction', () => {
         'linux'
       )
     ).toEqual({ type: 'zoom', direction: 'reset' })
+  })
+
+  it('resolves the worktree-history chord despite carrying Alt', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'back' })
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowRight',
+          key: 'ArrowRight',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'forward' })
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: false,
+          control: true,
+          alt: true,
+          shift: false
+        },
+        'linux'
+      )
+    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'back' })
+  })
+
+  it('rejects the history chord when Shift is also held', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: true
+        },
+        'darwin'
+      )
+    ).toBeNull()
+  })
+
+  it('leaves Alt+Arrow without a primary modifier untouched (word-nav territory)', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: false,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBeNull()
+  })
+
+  it('ignores Cmd/Ctrl+Alt combined with ArrowUp or ArrowDown', () => {
+    // Why: the history predicate explicitly narrows to ArrowLeft/ArrowRight.
+    // Cmd+Alt+Up / Cmd+Alt+Down must fall through to null so the event
+    // reaches the renderer/PTTY (e.g. shells / readline).
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowUp',
+          key: 'ArrowUp',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBeNull()
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowDown',
+          key: 'ArrowDown',
+          meta: false,
+          control: true,
+          alt: true,
+          shift: false
+        },
+        'linux'
+      )
+    ).toBeNull()
+  })
+
+  it('rejects the history chord when the opposite primary modifier is also held', () => {
+    // Why: Cmd+Ctrl+Alt+Arrow on macOS collides with Mission Control space
+    // switching; Ctrl+Meta+Alt+Arrow on Linux collides with GNOME workspace
+    // switching. The app must not intercept either.
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: true,
+          control: true,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBeNull()
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowRight',
+          key: 'ArrowRight',
+          meta: true,
+          control: true,
+          alt: true,
+          shift: false
+        },
+        'linux'
+      )
+    ).toBeNull()
+  })
+
+  it('still returns null for other Cmd/Ctrl+Alt combos (not an allowlist escape)', () => {
+    // Why: regression guard — the history early-return must not swallow
+    // unrelated primary+alt chords in a way that changes their old null
+    // result. A future addition that intentionally consumes e.g. Cmd+Alt+KeyT
+    // must add a new branch explicitly.
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'KeyB',
+          key: 'b',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBeNull()
+  })
+
+  it('routes Cmd/Ctrl+Shift+N to the Create-from tab of the new-workspace composer', () => {
+    // Why: the shift variant of the new-workspace shortcut jumps straight to
+    // the "Create from…" tab so users can start from an existing GH/Linear
+    // item without a detour through the quick-create form.
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyN', key: 'n', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toEqual({ type: 'openNewWorkspace', tab: 'create-from' })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyN', key: 'n', meta: false, control: true, alt: false, shift: true },
+        'linux'
+      )
+    ).toEqual({ type: 'openNewWorkspace', tab: 'create-from' })
+
+    // Alt must still be rejected — the allowlist is alt-free for Cmd/Ctrl+N
+    // so future chords like Cmd+Alt+Shift+N remain available.
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyN', key: 'n', meta: true, control: false, alt: true, shift: true },
+        'darwin'
+      )
+    ).toBeNull()
+  })
+
+  it('resolves letter shortcuts by layout-aware key, with code as fallback', () => {
+    // Why: non-QWERTY layouts (Dvorak, Colemak, AZERTY, …) move letters to
+    // other physical keys. Matching only on `input.code` (always QWERTY)
+    // breaks the shortcut for those users. Prefer `input.key` when it is a
+    // letter; fall back to `input.code` only when `key` is empty or a
+    // non-letter marker (dead keys, IME edge cases).
+
+    // Dvorak layout: the letters the user presses sit on different codes
+    // ('b'→KeyN, 'l'→KeyP, 'p'→KeyR, 'n'→KeyL, 'j'→KeyC). All must resolve
+    // to the layout-matched shortcut.
+    const dvorak: [WindowShortcutInput, WindowShortcutAction][] = [
+      [
+        { code: 'KeyN', key: 'b', meta: true, alt: false, shift: false },
+        { type: 'toggleLeftSidebar' }
+      ],
+      [
+        { code: 'KeyP', key: 'l', meta: true, alt: false, shift: false },
+        { type: 'toggleRightSidebar' }
+      ],
+      [{ code: 'KeyR', key: 'p', meta: true, alt: false, shift: false }, { type: 'openQuickOpen' }],
+      [
+        { code: 'KeyL', key: 'n', meta: true, alt: false, shift: false },
+        { type: 'openNewWorkspace', tab: 'quick' }
+      ],
+      [
+        { code: 'KeyC', key: 'j', meta: true, alt: false, shift: false },
+        { type: 'toggleWorktreePalette' }
+      ]
+    ]
+    for (const [input, expected] of dvorak) {
+      expect(resolveWindowShortcutAction(input, 'darwin')).toEqual(expected)
+    }
+
+    // Inverse guard: physical QWERTY-B on Dvorak types 'x' — that is the
+    // platform Cut shortcut, not the sidebar. The layout-aware match must
+    // reject it.
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyB', key: 'x', meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBeNull()
+
+    // Fallback: drivers/IME states that leave `key` empty or non-letter
+    // (dead keys, modifier names) must still reach the shortcut on QWERTY.
+    const fallbacks: [WindowShortcutInput, WindowShortcutAction][] = [
+      [
+        { code: 'KeyB', key: '', meta: true, alt: false, shift: false },
+        { type: 'toggleLeftSidebar' }
+      ],
+      [
+        { code: 'KeyN', key: 'Dead', meta: true, alt: false, shift: false },
+        { type: 'openNewWorkspace', tab: 'quick' }
+      ],
+      [{ code: 'KeyP', meta: true, alt: false, shift: false }, { type: 'openQuickOpen' }]
+    ]
+    for (const [input, expected] of fallbacks) {
+      expect(resolveWindowShortcutAction(input, 'darwin')).toEqual(expected)
+    }
   })
 
   it('exposes the shared platform modifier gate used by browser guests', () => {

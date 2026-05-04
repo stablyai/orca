@@ -13,6 +13,11 @@ vi.mock('sonner', () => ({
   toast: { error: toastErrorMock }
 }))
 
+const { openHttpLinkMock } = vi.hoisted(() => ({ openHttpLinkMock: vi.fn() }))
+vi.mock('@/lib/http-link-routing', () => ({
+  openHttpLink: openHttpLinkMock
+}))
+
 function createEditorStore(): StoreApi<AppState> {
   // Only the editor slice + activeWorktreeId are needed for these tests.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -134,6 +139,111 @@ describe('createEditorSlice markdown view state', () => {
       expect.objectContaining({
         id: '/repo/docs/guide.md',
         isPreview: true
+      })
+    ])
+  })
+})
+
+describe('createEditorSlice editor view mode', () => {
+  it('stores changes mode as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    expect(store.getState().editorViewMode).toEqual({ '/repo/app.ts': 'changes' })
+  })
+
+  it('deletes the entry when mode resets to edit', () => {
+    const store = createEditorStore()
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'edit')
+
+    expect(store.getState().editorViewMode).toEqual({})
+  })
+
+  it('is a no-op when resetting a file that was never in changes mode', () => {
+    const store = createEditorStore()
+    const before = store.getState().editorViewMode
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'edit')
+
+    expect(store.getState().editorViewMode).toBe(before)
+  })
+
+  it('drops editor view mode when the file is closed', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/app.ts',
+      relativePath: 'app.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    store.getState().closeFile('/repo/app.ts')
+
+    expect(store.getState().editorViewMode).toEqual({})
+  })
+})
+
+describe('createEditorSlice openMarkdownPreview', () => {
+  it('opens markdown preview as a separate read-only tab', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/docs/README.md',
+        mode: 'edit'
+      }),
+      expect.objectContaining({
+        id: 'markdown-preview::/repo/docs/README.md',
+        mode: 'markdown-preview',
+        markdownPreviewSourceFileId: '/repo/docs/README.md'
+      })
+    ])
+    expect(store.getState().activeFileId).toBe('markdown-preview::/repo/docs/README.md')
+  })
+
+  it('retargets an existing preview tab instead of duplicating it', () => {
+    const store = createEditorStore()
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown'
+      },
+      { anchor: 'install' }
+    )
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'markdown-preview::/repo/docs/README.md',
+        mode: 'markdown-preview',
+        markdownPreviewAnchor: 'install'
       })
     ])
   })
@@ -482,6 +592,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     openUrlMock.mockReset()
     openFileUriMock.mockReset()
     pathExistsMock.mockReset()
+    openHttpLinkMock.mockReset()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).window = (globalThis as any).window ?? {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -558,14 +669,15 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
   })
 
-  it('delegates external links to shell.openUrl', async () => {
+  it('delegates external links to openHttpLink with the ctx worktreeId', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('https://example.com', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', { worktreeId: 'wt-1' })
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
   })
 

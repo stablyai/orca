@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
 import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
@@ -7,38 +8,18 @@ import { getConnectionId } from '@/lib/connection-context'
 const POLL_INTERVAL_MS = 3000
 
 export function useGitStatusPolling(): void {
+  const activeWorktree = useActiveWorktree()
+  const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+  const repoMap = useRepoMap()
 
-  const worktreePath = useMemo(() => {
-    if (!activeWorktreeId) {
-      return null
-    }
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      const wt = worktrees.find((w) => w.id === activeWorktreeId)
-      if (wt) {
-        return wt.path
-      }
-    }
-    return null
-  }, [activeWorktreeId, worktreesByRepo])
-
-  const activeRepoId = useMemo(() => {
-    if (!activeWorktreeId) {
-      return null
-    }
-    for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
-      if (worktrees.some((wt) => wt.id === activeWorktreeId)) {
-        return repoId
-      }
-    }
-    return null
-  }, [activeWorktreeId, worktreesByRepo])
-  const activeRepo = useAppStore((s) => s.repos.find((repo) => repo.id === activeRepoId) ?? null)
+  const worktreePath = activeWorktree?.path ?? null
+  const activeRepoId = activeWorktree?.repoId ?? null
+  const activeRepo = useRepoById(activeRepoId)
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   // Why: build a list of non-active worktrees that still have a known conflict
@@ -51,20 +32,17 @@ export function useGitStatusPolling(): void {
       if (worktreeId === activeWorktreeId || op === 'unknown') {
         continue
       }
-      for (const worktrees of Object.values(worktreesByRepo)) {
-        const wt = worktrees.find((w) => w.id === worktreeId)
-        if (wt) {
-          const repo = useAppStore.getState().repos.find((entry) => entry.id === wt.repoId)
-          if (repo && !isGitRepoKind(repo)) {
-            break
-          }
-          result.push({ id: wt.id, path: wt.path })
-          break
+      const worktree = allWorktrees.find((entry) => entry.id === worktreeId)
+      if (worktree) {
+        const repo = repoMap.get(worktree.repoId)
+        if (repo && !isGitRepoKind(repo)) {
+          continue
         }
+        result.push({ id: worktree.id, path: worktree.path })
       }
     }
     return result
-  }, [conflictOperationByWorktree, activeWorktreeId, worktreesByRepo])
+  }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
   const fetchStatus = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !activeRepoSupportsGit) {

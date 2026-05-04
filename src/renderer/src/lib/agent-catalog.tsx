@@ -79,13 +79,16 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     id: 'kilo',
     label: 'Kilocode',
     cmd: 'kilo',
-    faviconDomain: 'kilo.ai',
     homepageUrl: 'https://kilo.ai/docs/cli'
   },
   {
     id: 'kiro',
     label: 'Kiro',
-    cmd: 'kiro',
+    // Why: the Kiro installer (https://cli.kiro.dev/install) ships a binary
+    // named `kiro-cli`, not `kiro`. Match TUI_AGENT_CONFIG.kiro.detectCmd so
+    // the settings pane's "default command" hint aligns with what Orca
+    // actually looks for on PATH.
+    cmd: 'kiro-cli',
     faviconDomain: 'kiro.dev',
     homepageUrl: 'https://kiro.dev/docs/cli/'
   },
@@ -99,7 +102,7 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   {
     id: 'aug',
     label: 'Auggie',
-    cmd: 'aug',
+    cmd: 'auggie',
     faviconDomain: 'augmentcode.com',
     homepageUrl: 'https://docs.augmentcode.com/cli/overview'
   },
@@ -198,6 +201,31 @@ function PiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   )
 }
 
+function KiloIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // SVG sourced from Kilo-Org/kilocode:packages/kilo-vscode/assets/icons/kilo-light.svg.
+  // Why: the Google favicon for kilo.ai is black-on-black at small sizes and
+  // is illegible. Inlining the brand mark (yellow on black) keeps it readable
+  // on both light and dark app themes without using currentColor — this logo
+  // is intentionally brand-colored, not theme-colored.
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 512 512"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+      style={{ borderRadius: 2 }}
+    >
+      <path d="M512 0H0V512H512V0Z" fill="black" />
+      <path
+        d="M322 377H377V421H307.857L278 391.143V322H322V377ZM421 307.857L391.143 278H322V322L377 322V377H421V307.857ZM234 278H190V322H234V278ZM91 391.143L120.857 421H234V377H135V278H91V391.143ZM371.172 189.999V120.856L341.315 90.9995H278V135H327.172V189.999H278V233.999H421V189.999H371.172ZM135 91H91V233.999H135V184.5H190V233.999H234V184.5L190 140.5H135V91ZM234 91H190V140.5H234V91Z"
+        fill="#FAF74F"
+      />
+    </svg>
+  )
+}
+
 function AiderIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // SVG sourced from aider.chat/assets/icons/safari-pinned-tab.svg.
   // Why: className="text-current" opts out of shadcn's Select rule that forces
@@ -255,9 +283,16 @@ export function AgentIcon({
   agent,
   size = 14
 }: {
-  agent: TuiAgent
+  agent: TuiAgent | null | undefined
   size?: number
 }): React.JSX.Element {
+  // Why: render a neutral question-mark glyph when the agent identity is not
+  // yet known. Before, the caller coerced null → 'claude', which caused Codex
+  // panes to briefly show the Claude icon until the first hook callback
+  // arrived.
+  if (!agent) {
+    return <AgentLetterIcon letter="?" size={size} />
+  }
   if (agent === 'claude') {
     return <ClaudeIcon size={size} />
   }
@@ -269,6 +304,9 @@ export function AgentIcon({
   }
   if (agent === 'aider') {
     return <AiderIcon size={size} />
+  }
+  if (agent === 'kilo') {
+    return <KiloIcon size={size} />
   }
   const catalogEntry = AGENT_CATALOG.find((a) => a.id === agent)
   if (catalogEntry?.faviconDomain) {

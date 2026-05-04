@@ -1,6 +1,20 @@
 import { resolve, relative, isAbsolute } from 'path'
+import { homedir } from 'os'
 import { realpathSync } from 'fs'
 import { realpath } from 'fs/promises'
+
+// Why: Node's fs APIs don't understand shell tilde expansion. Old repos may
+// have been stored with `~` or `~/…` paths before the client-side fix, so the
+// relay must expand them to absolute paths as a safety net.
+export function expandTilde(p: string): string {
+  if (p === '~' || p === '~/') {
+    return homedir()
+  }
+  if (p.startsWith('~/')) {
+    return resolve(homedir(), p.slice(2))
+  }
+  return p
+}
 
 // Why: mutating FS operations on the remote must be scoped to workspace roots
 // registered by the main process. Without this, a compromised or buggy client
@@ -16,7 +30,7 @@ export class RelayContext {
   private rootsRegistered = false
 
   registerRoot(rootPath: string): void {
-    const resolved = resolve(rootPath)
+    const resolved = resolve(expandTilde(rootPath))
     this.authorizedRoots.add(resolved)
     // Why: on macOS, /tmp is a symlink to /private/tmp. If a root is registered
     // as /tmp/workspace, validatePathResolved would resolve it to /private/tmp/
@@ -38,7 +52,7 @@ export class RelayContext {
       throw new Error('No workspace roots registered yet — path validation denied')
     }
 
-    const resolved = resolve(targetPath)
+    const resolved = resolve(expandTilde(targetPath))
     for (const root of this.authorizedRoots) {
       const rel = relative(root, resolved)
       if (!rel.startsWith('..') && !isAbsolute(rel)) {

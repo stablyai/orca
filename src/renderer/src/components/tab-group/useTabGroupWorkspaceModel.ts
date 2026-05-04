@@ -12,9 +12,13 @@ import type {
   TerminalTab
 } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import { useAllWorktrees } from '../../store/selectors'
 import { createUntitledMarkdownFile } from '../../lib/create-untitled-markdown'
+import { getConnectionId } from '../../lib/connection-context'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
-import { destroyPersistentWebview } from '../browser-pane/BrowserPane'
+import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
+import { requestEditorFileClose } from '../editor/editor-autosave'
+import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -43,6 +47,7 @@ export function useTabGroupWorkspaceModel({
   groupId: string
   worktreeId: string
 }) {
+  const allWorktrees = useAllWorktrees()
   const worktreeState = useAppStore(
     useShallow((state) => ({
       // Why: Zustand v5 expects selector snapshots to be referentially stable
@@ -55,19 +60,13 @@ export function useTabGroupWorkspaceModel({
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       runtimeTerminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_RUNTIME_TERMINAL_TABS,
-      expandedPaneByTabId: state.expandedPaneByTabId,
-      worktree:
-        Object.values(state.worktreesByRepo)
-          .flat()
-          .find((candidate) => candidate.id === worktreeId) ?? null
+      expandedPaneByTabId: state.expandedPaneByTabId
     }))
   )
 
   const focusGroup = useAppStore((state) => state.focusGroup)
   const activateTab = useAppStore((state) => state.activateTab)
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
-  const closeOtherTabs = useAppStore((state) => state.closeOtherTabs)
-  const closeTabsToRight = useAppStore((state) => state.closeTabsToRight)
   const closeEmptyGroup = useAppStore((state) => state.closeEmptyGroup)
   const createTab = useAppStore((state) => state.createTab)
   const closeTab = useAppStore((state) => state.closeTab)
@@ -90,6 +89,10 @@ export function useTabGroupWorkspaceModel({
   const group = useMemo(
     () => worktreeState.groups.find((item) => item.id === groupId) ?? null,
     [groupId, worktreeState.groups]
+  )
+  const worktree = useMemo(
+    () => allWorktrees.find((candidate) => candidate.id === worktreeId) ?? null,
+    [allWorktrees, worktreeId]
   )
   const groupTabs = useMemo(
     () => worktreeState.unifiedTabs.filter((item) => item.groupId === groupId),
@@ -145,14 +148,6 @@ export function useTabGroupWorkspaceModel({
     [groupTabs, worktreeState.browserTabs]
   )
 
-  const activeBrowserTab = useMemo(
-    () =>
-      activeTab?.contentType === 'browser'
-        ? (worktreeState.browserTabs.find((bt) => bt.id === activeTab.entityId) ?? null)
-        : null,
-    [activeTab, worktreeState.browserTabs]
-  )
-
   const runtimeTerminalTabById = useMemo(
     () => new Map(worktreeState.runtimeTerminalTabs.map((tab) => [tab.id, tab])),
     [worktreeState.runtimeTerminalTabs]
@@ -169,8 +164,17 @@ export function useTabGroupWorkspaceModel({
             item.contentType === 'conflict-review')
       )
       if (!otherReference) {
+        const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === entityId)
+        if (file?.isDirty) {
+          // Why: split-group close actions bypass Terminal.tsx, but the unsaved
+          // confirmation + save/discard ordering must stay centralized there so
+          // tab close, bulk close, and window quit share one queueing flow.
+          requestEditorFileClose(entityId)
+          return false
+        }
         closeFile(entityId)
       }
+      return true
     },
     [closeFile, worktreeId]
   )
@@ -200,10 +204,13 @@ export function useTabGroupWorkspaceModel({
       if (item.contentType === 'terminal') {
         closeTab(item.entityId)
       } else if (item.contentType === 'browser') {
-        destroyPersistentWebview(item.entityId)
+        destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
         closeBrowserTab(item.entityId)
       } else {
-        closeEditorIfUnreferenced(item.entityId, item.id)
+        const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
+        if (!canCloseTab) {
+          return
+        }
         closeUnifiedTab(item.id)
       }
       if (!opts?.skipEmptyCheck) {
@@ -230,14 +237,17 @@ export function useTabGroupWorkspaceModel({
         if (item.contentType === 'terminal') {
           closeTab(item.entityId)
         } else if (item.contentType === 'browser') {
-          destroyPersistentWebview(item.entityId)
+          destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
         } else {
-          closeEditorIfUnreferenced(item.entityId, item.id)
+          const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
+          if (canCloseTab) {
+            closeUnifiedTab(item.id)
+          }
         }
       }
     },
-    [closeBrowserTab, closeEditorIfUnreferenced, closeTab, groupTabs]
+    [closeBrowserTab, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs]
   )
 
   const activateTerminal = useCallback(
@@ -364,6 +374,47 @@ export function useTabGroupWorkspaceModel({
     }
   }, [closeItem, groupTabs])
 
+  const closeOthers = useCallback(
+    (itemId: string) => {
+      const item = groupTabs.find((candidate) => candidate.id === itemId)
+      if (!item) {
+        return
+      }
+      // Why: the store's closeOtherTabs helper unconditionally closes every non-pinned
+      // sibling unified tab, including dirty editor tabs — stranding those files in
+      // openFiles without a tab if the user cancels the save dialog. Collect the target
+      // ids here instead and route them through the same dirty-aware closeMany path
+      // used by individual tab closes so the Cancel -> zombie-file hazard is impossible.
+      const siblingIds = groupTabs
+        .filter((candidate) => candidate.id !== itemId && !candidate.isPinned)
+        .map((candidate) => candidate.id)
+      closeMany(siblingIds)
+    },
+    [closeMany, groupTabs]
+  )
+
+  const closeToRight = useCallback(
+    (itemId: string) => {
+      // Why: see closeOthers — the store's closeTabsToRight helper pre-closes dirty
+      // editor tabs before the save dialog resolves. Walking the group's tabOrder
+      // locally (unifiedTabsByWorktree is append-ordered, not visually ordered, so
+      // tabOrder is the canonical left-to-right sequence) and routing through
+      // closeMany keeps the dirty-aware flow intact.
+      const order = group?.tabOrder ?? []
+      const index = order.indexOf(itemId)
+      if (index === -1) {
+        return
+      }
+      const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
+      const rightIds = order.slice(index + 1).filter((id) => {
+        const candidate = tabById.get(id)
+        return candidate ? !candidate.isPinned : false
+      })
+      closeMany(rightIds)
+    },
+    [closeMany, group, groupTabs]
+  )
+
   const tabBarOrder = useMemo(
     () =>
       (group?.tabOrder ?? []).map((itemId) => {
@@ -381,13 +432,12 @@ export function useTabGroupWorkspaceModel({
   return {
     group,
     activeTab,
-    activeBrowserTab,
     browserItems,
     editorItems,
     terminalTabs,
     tabBarOrder,
     groupTabs,
-    worktreePath: worktreeState.worktree?.path,
+    worktreePath: worktree?.path,
     runtimeTerminalTabById,
     expandedPaneByTabId: worktreeState.expandedPaneByTabId,
     commands: {
@@ -400,13 +450,16 @@ export function useTabGroupWorkspaceModel({
       closeAllEditorTabsInGroup,
       closeGroup,
       closeItem,
-      closeOthers: (itemId: string) => closeMany(closeOtherTabs(itemId)),
-      closeToRight: (itemId: string) => closeMany(closeTabsToRight(itemId)),
+      closeOthers,
+      closeToRight,
       consumeSuppressedPtyExit,
       createSplitGroup,
       newBrowserTab: () => {
         const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-        createBrowserTab(worktreeId, defaultUrl, { title: 'New Browser Tab' })
+        createBrowserTab(worktreeId, defaultUrl, {
+          title: 'New Browser Tab',
+          focusAddressBar: true
+        })
       },
       duplicateBrowserTab: (browserTabId: string) => {
         const state = useAppStore.getState()
@@ -425,12 +478,13 @@ export function useTabGroupWorkspaceModel({
       // assistive-tech activation because the "+" menu can be triggered from
       // an unfocused panel without first updating global group focus.
       newFileTab: async () => {
-        const path = worktreeState.worktree?.path
+        const path = worktree?.path
         if (!path) {
           return
         }
         try {
-          const fileInfo = await createUntitledMarkdownFile(path, worktreeId)
+          const connectionId = getConnectionId(worktreeId) ?? undefined
+          const fileInfo = await createUntitledMarkdownFile(path, worktreeId, connectionId)
           openFile(fileInfo, { preview: false, targetGroupId: groupId })
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
@@ -440,6 +494,13 @@ export function useTabGroupWorkspaceModel({
         const terminal = createTab(worktreeId, groupId)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
+        focusTerminalTabSurface(terminal.id)
+      },
+      newTerminalWithShell: (shellOverride: string) => {
+        const terminal = createTab(worktreeId, groupId, shellOverride)
+        setActiveTab(terminal.id)
+        setActiveTabType('terminal')
+        focusTerminalTabSurface(terminal.id)
       },
       pinFile,
       setTabColor,

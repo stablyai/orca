@@ -1,8 +1,12 @@
 /* eslint-disable max-lines -- Why: the GitHub slice co-locates all cache + fetch logic for
 PR, issue, checks, and comments data so the dedup and invalidation patterns stay consistent. */
 import type { StateCreator } from 'zustand'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
+  ClassifiedError,
+  GitHubOwnerRepo,
+  IssueSourcePreference,
   PRInfo,
   IssueInfo,
   PRCheckDetail,
@@ -10,11 +14,50 @@ import type {
   Worktree,
   GitHubWorkItem
 } from '../../../../shared/types'
+import { sortWorkItemsByUpdatedAt, PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import { syncPRChecksStatus } from './github-checks'
+
+export type WorkItemsCacheSources = {
+  issues: GitHubOwnerRepo | null
+  prs: GitHubOwnerRepo | null
+  /** Raw upstream remote (if any) — present so the selector can render
+   *  independently of the currently-effective preference. Required-nullable
+   *  (matches siblings `issues`/`prs`) so consumers only branch on `null`
+   *  vs value, not a three-state (undefined | null | value). */
+  upstreamCandidate: GitHubOwnerRepo | null
+}
+
+// Why: the indicator and retry banner both need the resolved owner/repo for
+// the failing side. Stamping the slug onto the error keeps the banner copy
+// correct even when the error outlives the cache entry's `sources` field
+// (e.g. on partial-success merges where `data` is retained from a later read).
+export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
 
 export type CacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  /**
+   * Resolved issue/PR owner/repo slugs for this entry. Set only on entries
+   * populated by `fetchWorkItems` — PR and issue single-item caches don't
+   * carry sources since the indicator surfaces derive from list reads.
+   */
+  sources?: WorkItemsCacheSources
+  /**
+   * Per-side classified error. Present when one (or both) of the underlying
+   * gh list calls failed. Partial-success reads keep `data` from the
+   * successful side and record the failing side here so the banner + list
+   * render together.
+   */
+  error?: WorkItemsCacheError
+  /**
+   * True when the resolver fell back to origin because the user's preferred
+   * `'upstream'` remote is no longer configured for this repo. Consumers
+   * surface a one-time toast per session/repo; TaskPage tracks the
+   * already-toasted set so repeated refreshes don't re-toast.
+   * Typed as `?: true` (not `?: boolean`) to encode the invariant "present
+   * iff fell-back" — an explicit `false` write would be a bug.
+   */
+  issueSourceFellBack?: true
 }
 
 type FetchOptions = {
@@ -27,6 +70,10 @@ const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
 // source of truth, so 60s staleness is fine — stale data renders instantly
 // while a background refresh keeps it current.
 const WORK_ITEMS_CACHE_TTL = 60_000
+// Why: match repos.ts so error toasts surfaced from this slice share the same
+// long-lived duration — the user needs time to read + act on persist failures
+// rather than having the toast vanish behind default short-lived timings.
+const ERROR_TOAST_DURATION = 60_000
 
 const inflightPRRequests = new Map<
   string,
@@ -35,10 +82,43 @@ const inflightPRRequests = new Map<
 const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
 const inflightChecksRequests = new Map<string, Promise<PRCheckDetail[]>>()
 const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
-const inflightWorkItemsRequests = new Map<string, Promise<GitHubWorkItem[]>>()
+type InflightWorkItems = {
+  promise: Promise<GitHubWorkItem[]>
+  force: boolean
+}
+const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 const prRequestGenerations = new Map<string, number>()
 
-function workItemsCacheKey(repoPath: string, limit: number, query: string): string {
+// Why: cap in-flight cross-repo fan-out and hover-prefetches at the renderer
+// boundary — the main-side gate is behind the IPC queue, so it can't see a
+// stampede until the calls are already mid-flight. 8 balances responsiveness
+// against gh rate-limit pressure.
+const WORK_ITEM_FETCH_CONCURRENCY = 8
+let workItemFetchInFlight = 0
+const workItemFetchWaiters: (() => void)[] = []
+
+async function acquireWorkItemSlot(): Promise<void> {
+  if (workItemFetchInFlight < WORK_ITEM_FETCH_CONCURRENCY) {
+    workItemFetchInFlight += 1
+    return
+  }
+  await new Promise<void>((resolve) => workItemFetchWaiters.push(resolve))
+  // Why: resolver has already claimed the slot on our behalf, so we don't
+  // re-increment here. Pairing convention: acquireWorkItemSlot + releaseWorkItemSlot.
+}
+
+function releaseWorkItemSlot(): void {
+  const next = workItemFetchWaiters.shift()
+  if (next) {
+    // Hand the slot off directly — net count unchanged — so we can't race a
+    // third caller into the cap between decrement and resolve.
+    next()
+    return
+  }
+  workItemFetchInFlight -= 1
+}
+
+export function workItemsCacheKey(repoPath: string, limit: number, query: string): string {
   return `${repoPath}::${limit}::${query}`
 }
 
@@ -134,17 +214,103 @@ export type GitHubSlice = {
    * the SWR revalidate hydrates the latest.
    */
   getCachedWorkItems: (repoPath: string, limit: number, query: string) => GitHubWorkItem[] | null
+  /**
+   * Why: the Tasks view header reads sources from the cache to render the
+   * "Issues from owner/repo" indicator, and the Tasks empty/partial banner
+   * reads `error` here to show the retry affordance. Returning a thin view of
+   * the cache entry (never the items) keeps this a cheap selector the
+   * component can subscribe to without dragging the whole work-item array
+   * through the equality check.
+   */
+  getWorkItemsSourcesAndError: (
+    repoPath: string,
+    limit: number,
+    query: string
+  ) => { sources: WorkItemsCacheSources | null; error: WorkItemsCacheError | null }
+  /**
+   * Why: the dialog renders the "Issue from owner/repo" chip for a single work
+   * item but may be opened before the Tasks view has populated the primary
+   * `(repoPath, PER_REPO_FETCH_LIMIT, '')` cache entry — e.g. when the user
+   * searches for an issue by query. Falls back to scanning `workItemsCache`
+   * for any entry keyed by `${repoPath}::` that carries resolved sources,
+   * returning that entry's `sources` directly. Sources are repo-level
+   * (query-independent), so any sibling entry is safe to reuse.
+   *
+   * Returning a single stable reference means the dialog can subscribe to just
+   * this selector instead of the whole `workItemsCache`, so unrelated cache
+   * writes don't force a re-render. Cache entries are fully replaced (not
+   * mutated) on every write, so reference equality is preserved between
+   * unchanged entries.
+   */
+  getWorkItemsAnySourcesForRepo: (repoPath: string, limit: number) => WorkItemsCacheSources | null
   fetchWorkItems: (
+    repoId: string,
     repoPath: string,
     limit: number,
     query: string,
     options?: FetchOptions
   ) => Promise<GitHubWorkItem[]>
   /**
+   * Why: fan out a single work-item query across multiple repos. Partial
+   * failures don't reject — a repo that both fails to fetch *and* has no
+   * cached fallback contributes nothing and increments `failedCount`, which
+   * the caller surfaces as a "N of M repos failed to load" banner. A repo
+   * served from stale cache on rejection is NOT counted as failed — matching
+   * the single-repo behavior of quietly serving stale data.
+   */
+  fetchWorkItemsAcrossRepos: (
+    repos: { repoId: string; path: string }[],
+    perRepoLimit: number,
+    displayLimit: number,
+    query: string,
+    options?: FetchOptions
+  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
+  /**
+   * Fetch the next page of work items using a date cursor. Does not cache —
+   * pagination pages are ephemeral and managed by TaskPage state.
+   */
+  fetchWorkItemsNextPage: (
+    repos: { repoId: string; path: string }[],
+    perRepoLimit: number,
+    displayLimit: number,
+    query: string,
+    before: string
+  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
+  /**
+   * Count total work items across repos using GitHub's search API.
+   * Returns the sum of per-repo counts for the given query.
+   */
+  countWorkItemsAcrossRepos: (repos: { path: string }[], query: string) => Promise<number>
+  /**
    * Fire-and-forget prefetch used by UI entry points (hover/focus of the
    * "new workspace" buttons) to warm the cache before the page mounts.
    */
-  prefetchWorkItems: (repoPath: string, limit?: number, query?: string) => void
+  prefetchWorkItems: (repoId: string, repoPath: string, limit?: number, query?: string) => void
+  patchWorkItem: (itemId: string, patch: Partial<GitHubWorkItem>) => void
+  /**
+   * Monotonic counter bumped whenever a repo's issue-source preference is
+   * flipped. Subscribers (TaskPage's fetch effect) include this in their
+   * dependency array to force a re-fetch after preference changes — the
+   * work-items cache eviction alone isn't enough because the effect keys on
+   * `selectedRepos`/`appliedTaskSearch`/`taskRefreshNonce` and wouldn't
+   * otherwise notice the cache went empty.
+   */
+  workItemsInvalidationNonce: number
+  /**
+   * Persist a per-repo issue-source preference, update the local Repo record
+   * for reactive UI, and invalidate all cached work-items entries that key
+   * off this repo's path so the Tasks list re-fetches against the new source.
+   *
+   * Why invalidate all `${repoPath}::*` keys and not only the primary entry:
+   * preferences flip the issue source for every list query (query-less +
+   * user-entered queries alike). Surgical eviction of the primary key alone
+   * would leave stale results in alternate-query cache lines.
+   */
+  setIssueSourcePreference: (
+    repoId: string,
+    repoPath: string,
+    preference: IssueSourcePreference
+  ) => Promise<void>
 }
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -153,35 +319,101 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   checksCache: {},
   commentsCache: {},
   workItemsCache: {},
+  workItemsInvalidationNonce: 0,
 
   getCachedWorkItems: (repoPath, limit, query) => {
     const key = workItemsCacheKey(repoPath, limit, query)
     return get().workItemsCache[key]?.data ?? null
   },
 
-  fetchWorkItems: async (repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
+  getWorkItemsSourcesAndError: (repoPath, limit, query) => {
+    const key = workItemsCacheKey(repoPath, limit, query)
+    const entry = get().workItemsCache[key]
+    return {
+      sources: entry?.sources ?? null,
+      error: entry?.error ?? null
+    }
+  },
+
+  getWorkItemsAnySourcesForRepo: (repoPath, limit) => {
+    const cache = get().workItemsCache
+    const primaryKey = workItemsCacheKey(repoPath, limit, '')
+    const primary = cache[primaryKey]?.sources
+    if (primary) {
+      return primary
+    }
+    const prefix = `${repoPath}::`
+    for (const [key, entry] of Object.entries(cache)) {
+      if (key.startsWith(prefix) && entry.sources) {
+        return entry.sources
+      }
+    }
+    return null
+  },
+
+  fetchWorkItems: async (repoId, repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
     const key = workItemsCacheKey(repoPath, limit, query)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
       return cached.data ?? []
     }
 
-    const inflight = inflightWorkItemsRequests.get(key)
-    if (inflight) {
-      return inflight
+    const existing = inflightWorkItemsRequests.get(key)
+    if (existing) {
+      // Why: a user-initiated refresh (force=true) must not silently dedupe to
+      // a non-forcing fetch already in flight — the result would be no fresher
+      // than what the user just asked to invalidate. Wait for the non-forcing
+      // request to settle (success or failure — we discard the result either
+      // way), then fall through to issue a new forced request. Non-forcing
+      // callers continue to dedupe onto any in-flight request as before.
+      if (options?.force && !existing.force) {
+        await existing.promise.catch(() => {})
+      } else {
+        return existing.promise
+      }
     }
 
     const request = (async () => {
+      await acquireWorkItemSlot()
       try {
-        const items = (await window.api.gh.listWorkItems({
+        const envelope = await window.api.gh.listWorkItems({
           repoPath,
           limit,
           query: query || undefined
-        })) as GitHubWorkItem[]
+        })
+        // Why: stamp repoId at the renderer fetch boundary so every downstream
+        // consumer (cross-repo merge, row rendering, drawer) can rely on the
+        // field being present. Main doesn't know Orca's Repo.id.
+        const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
+        // Why: only surface the issues-side error in the cache entry. The
+        // parent design doc §2 scopes feature 1 to the new class of silent
+        // wrongness introduced by the issue-source split in #1076; PR-side
+        // failures existed before and are out of scope for this banner.
+        const issuesError = envelope.errors?.issues
+        // Why: if the main process resolved `errors.issues` but not `sources.issues`,
+        // the renderer has no slug to render in the banner copy, so the error is
+        // dropped from the cache entry. Log it so this rare case is at least visible
+        // in devtools rather than disappearing silently.
+        if (issuesError && !envelope.sources.issues) {
+          console.warn(
+            '[workItems] dropping issues-side error with no resolved source:',
+            issuesError
+          )
+        }
+        const errorForCache: WorkItemsCacheError | undefined =
+          issuesError && envelope.sources.issues
+            ? { ...issuesError, source: envelope.sources.issues }
+            : undefined
         set((s) => ({
           workItemsCache: {
             ...s.workItemsCache,
-            [key]: { data: items, fetchedAt: Date.now() }
+            [key]: {
+              data: items,
+              fetchedAt: Date.now(),
+              sources: envelope.sources,
+              ...(errorForCache ? { error: errorForCache } : {}),
+              ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
+            }
           }
         }))
         return items
@@ -191,15 +423,104 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         console.error('Failed to fetch GitHub work items:', err)
         throw err
       } finally {
+        releaseWorkItemSlot()
         inflightWorkItemsRequests.delete(key)
       }
     })()
 
-    inflightWorkItemsRequests.set(key, request)
+    inflightWorkItemsRequests.set(key, {
+      promise: request,
+      force: Boolean(options?.force)
+    })
     return request
   },
 
-  prefetchWorkItems: (repoPath, limit = 36, query = '') => {
+  fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
+    const state = get()
+    let failedCount = 0
+    const perRepoResults = await Promise.all(
+      repos.map(async (r) => {
+        try {
+          return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, options)
+        } catch (err) {
+          // Why: fall back to any cache entry (stale or not) before declaring
+          // this repo failed. Matches single-repo behavior of silently serving
+          // stale data on error. A repo is only counted as failed when it has
+          // nothing at all to contribute.
+          // Why: must use perRepoLimit (not displayLimit) so the cache key
+          // matches what fetchWorkItems wrote.
+          const key = workItemsCacheKey(r.path, perRepoLimit, query)
+          const cached = get().workItemsCache[key]?.data
+          if (cached) {
+            console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
+            return cached
+          }
+          console.warn(`[workItems] ${r.repoId} failed:`, err)
+          failedCount += 1
+          return [] as GitHubWorkItem[]
+        }
+      })
+    )
+    const merged = sortWorkItemsByUpdatedAt(perRepoResults.flat()).slice(0, displayLimit)
+    return { items: merged, failedCount }
+  },
+
+  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, before) => {
+    let failedCount = 0
+    const perRepoResults = await Promise.all(
+      repos.map(async (r) => {
+        await acquireWorkItemSlot()
+        try {
+          const envelope = await window.api.gh.listWorkItems({
+            repoPath: r.path,
+            limit: perRepoLimit,
+            query: query || undefined,
+            before
+          })
+          // Why: page-N partial failures don't participate in the cache's per-repo
+          // error banner (which is keyed on the initial-fetch cache entry). Log the
+          // classified issues-side error so pagination failures are at least
+          // observable in logs rather than silently truncating the merged list. A
+          // richer surface would require threading per-page errors back to the
+          // caller and wiring a transient pagination banner — deferred per parent
+          // design doc §6 scope.
+          if (envelope.errors?.issues) {
+            console.warn(
+              `[workItems] next page ${r.repoId} issues-side partial failure:`,
+              envelope.errors.issues
+            )
+          }
+          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+        } catch (err) {
+          console.warn(`[workItems] next page ${r.repoId} failed:`, err)
+          failedCount += 1
+          return [] as GitHubWorkItem[]
+        } finally {
+          releaseWorkItemSlot()
+        }
+      })
+    )
+    const merged = sortWorkItemsByUpdatedAt(perRepoResults.flat()).slice(0, displayLimit)
+    return { items: merged, failedCount }
+  },
+
+  countWorkItemsAcrossRepos: async (repos, query) => {
+    const counts = await Promise.all(
+      repos.map(async (r) => {
+        try {
+          return await window.api.gh.countWorkItems({
+            repoPath: r.path,
+            query: query || undefined
+          })
+        } catch {
+          return 0
+        }
+      })
+    )
+    return counts.reduce((sum, c) => sum + c, 0)
+  },
+
+  prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '') => {
     const key = workItemsCacheKey(repoPath, limit, query)
     const cached = get().workItemsCache[key]
     // Skip when the cache is fresh or a request is already in flight.
@@ -207,7 +528,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return
     }
     void get()
-      .fetchWorkItems(repoPath, limit, query)
+      .fetchWorkItems(repoId, repoPath, limit, query)
       .catch(() => {})
   },
 
@@ -525,6 +846,103 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (worktree.linkedIssue) {
       void get().fetchIssue(repo.path, worktree.linkedIssue)
     }
+  },
+
+  patchWorkItem: (itemId, patch) => {
+    set((s) => {
+      const nextCache = { ...s.workItemsCache }
+      let changed = false
+      for (const key of Object.keys(nextCache)) {
+        const entry = nextCache[key]
+        if (!entry?.data) {
+          continue
+        }
+        const idx = entry.data.findIndex((item) => item.id === itemId)
+        if (idx === -1) {
+          continue
+        }
+        const updatedItems = [...entry.data]
+        updatedItems[idx] = { ...updatedItems[idx], ...patch }
+        nextCache[key] = { ...entry, data: updatedItems }
+        changed = true
+      }
+      return changed ? { workItemsCache: nextCache } : {}
+    })
+  },
+
+  setIssueSourcePreference: async (repoId, repoPath, preference) => {
+    // Why: optimistically patch the local Repo first so the segmented control
+    // reflects the new selection on the same frame. On IPC failure we resync
+    // from disk via `fetchRepos()` below so the UI doesn't lie about what's
+    // persisted.
+    set((s) => ({
+      repos: s.repos.map((r) =>
+        r.id === repoId
+          ? {
+              ...r,
+              issueSourcePreference: preference === 'auto' ? undefined : preference
+            }
+          : r
+      )
+    }))
+    try {
+      // Why: persist via the generic `repos:update` channel rather than a
+      // dedicated gh-namespaced handler. Single write path → single
+      // `repos:changed` broadcast → other windows re-fetch. The store layer
+      // normalizes `'auto'` to `undefined` so the persisted record drops
+      // the key entirely (see main/persistence.ts#updateRepo).
+      await window.api.repos.update({
+        repoId,
+        updates: { issueSourcePreference: preference === 'auto' ? undefined : preference }
+      })
+    } catch (err) {
+      console.error('Failed to persist issue-source preference:', err)
+      // Why: surface the persist failure so the user understands why the
+      // pill visually reverts (optimistic patch above → resync via
+      // fetchRepos below). Without this toast, the UI silently snaps back
+      // and the user has no clue the write failed.
+      toast.error('Failed to save issue-source preference', {
+        duration: ERROR_TOAST_DURATION
+      })
+      // Why: the optimistic patch above may now disagree with disk. Resync
+      // rather than leave a lie on screen. We only refetch repos — the cache
+      // eviction below is still safe to run; worst case we trigger a
+      // harmless re-fetch of work items against the pre-flip preference.
+      void get().fetchRepos()
+    }
+    // Why: wipe in-flight dedupe entries for this repo BEFORE bumping the
+    // invalidation nonce. The bump triggers a re-run of TaskPage's fetch
+    // effect; if the inflight map still held a pre-flip entry, the new
+    // dispatch could collapse onto it and skip the source swap. Clearing
+    // first makes the "new fetch gets a fresh request" invariant impossible
+    // to trip on later refactors that change zustand or React flush timing.
+    for (const key of Array.from(inflightWorkItemsRequests.keys())) {
+      if (key.startsWith(`${repoPath}::`)) {
+        inflightWorkItemsRequests.delete(key)
+      }
+    }
+    // Why: evict every cache entry keyed on this repo's path AFTER the IPC
+    // resolves. If we evicted before awaiting, an overlapping fetch triggered
+    // by a different subscriber would hit main with the pre-flip persisted
+    // preference and repopulate the cache with stale-source data. Work-items
+    // cache keys are `${repoPath}::${limit}::${query}` so we can't selectively
+    // invalidate by query — the preference change affects all queries against
+    // this repo.
+    set((s) => {
+      const prefix = `${repoPath}::`
+      const next: Record<string, CacheEntry<GitHubWorkItem[]>> = {}
+      for (const [key, entry] of Object.entries(s.workItemsCache)) {
+        if (!key.startsWith(prefix)) {
+          next[key] = entry
+        }
+      }
+      // Why: bump the invalidation nonce so the Tasks list's fetch effect
+      // — which keys on `[selectedRepos, appliedTaskSearch, taskRefreshNonce,
+      // taskSource, workItemsInvalidationNonce]` — re-runs and re-populates
+      // the just-evicted entries. Evicting alone wouldn't trigger the effect
+      // because it doesn't depend on the cache.
+      return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
+    })
   },
 
   // Why: worktree switches previously force-refreshed GitHub data on every

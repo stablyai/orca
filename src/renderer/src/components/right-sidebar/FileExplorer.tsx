@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree } from '@/store/selectors'
 import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { FileDeleteDialog } from './FileDeleteDialog'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import { splitPathSegments } from './path-tree'
@@ -17,7 +17,6 @@ import { useFileExplorerReveal } from './useFileExplorerReveal'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
-import { useActiveWorktreePath } from './useActiveWorktreePath'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerImport } from './useFileExplorerImport'
@@ -26,7 +25,8 @@ import { useFileExplorerWatch } from './useFileExplorerWatch'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const activeWorktree = useActiveWorktree()
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const toggleDir = useAppStore((s) => s.toggleDir)
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
@@ -38,7 +38,7 @@ function FileExplorerInner(): React.JSX.Element {
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
 
-  const worktreePath = useActiveWorktreePath(activeWorktreeId, worktreesByRepo)
+  const worktreePath = activeWorktree?.path ?? null
 
   const expanded = useMemo(
     () =>
@@ -84,16 +84,7 @@ function FileExplorerInner(): React.JSX.Element {
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 
-  const {
-    pendingDelete,
-    isDeleting,
-    deleteShortcutLabel,
-    deleteActionLabel,
-    deleteDescription,
-    requestDelete,
-    closeDeleteDialog,
-    confirmDelete
-  } = useFileDeletion({
+  const { deleteShortcutLabel, requestDelete } = useFileDeletion({
     activeWorktreeId,
     openFiles,
     closeFile,
@@ -137,6 +128,21 @@ function FileExplorerInner(): React.JSX.Element {
     clearFileExplorerUndoHistory()
   }, [worktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Why: on app startup the file explorer loads before SSH providers are
+  // registered, so readDir fails for remote worktrees. When the SSH
+  // connection is later established, sshConnectedGeneration bumps and this
+  // effect retries the load. Only retries when there was a prior error to
+  // avoid redundant reloads for local worktrees.
+  const sshGenRef = useRef(sshConnectedGeneration)
+  useEffect(() => {
+    if (sshConnectedGeneration > sshGenRef.current) {
+      sshGenRef.current = sshConnectedGeneration
+      if (worktreePath && rootError) {
+        resetAndLoad()
+      }
+    }
+  }, [sshConnectedGeneration]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => clearFlashTimeout, [clearFlashTimeout])
 
   useEffect(() => {
@@ -176,14 +182,16 @@ function FileExplorerInner(): React.JSX.Element {
     refreshDir,
     refreshTree,
     inlineInput,
-    dragSourcePath
+    dragSourcePath,
+    isNativeDragOver
   })
 
   useFileExplorerImport({
     worktreePath,
     activeWorktreeId,
     refreshDir,
-    clearNativeDragState
+    clearNativeDragState,
+    setSelectedPath
   })
 
   const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
@@ -313,6 +321,16 @@ function FileExplorerInner(): React.JSX.Element {
             setBgMenuPoint({ x: e.clientX, y: e.clientY })
             setBgMenuOpen(true)
           }}
+          onDoubleClick={(e) => {
+            if (!worktreePath || inlineInput) {
+              return
+            }
+            const target = e.target as HTMLElement
+            if (target.closest('[data-slot="context-menu-trigger"]')) {
+              return
+            }
+            startNew('file', worktreePath, 0)
+          }}
         >
           {isLoading && (
             <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
@@ -372,15 +390,6 @@ function FileExplorerInner(): React.JSX.Element {
         point={bgMenuPoint}
         worktreePath={worktreePath}
         onStartNew={startNew}
-      />
-
-      <FileDeleteDialog
-        pendingDelete={pendingDelete}
-        isDeleting={isDeleting}
-        deleteDescription={deleteDescription}
-        deleteActionLabel={deleteActionLabel}
-        onClose={closeDeleteDialog}
-        onConfirm={() => void confirmDelete()}
       />
     </>
   )

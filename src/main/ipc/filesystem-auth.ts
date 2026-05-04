@@ -120,10 +120,37 @@ export function isENOENT(error: unknown): boolean {
   )
 }
 
-export async function resolveAuthorizedPath(targetPath: string, store: Store): Promise<string> {
+export type ResolveAuthorizedPathOptions = {
+  /**
+   * When true, canonicalize the parent directory but preserve the leaf so
+   * operations target the symlink itself rather than its destination. Required
+   * for delete and rename — following the symlink would trash or rename the
+   * target file (which can live outside allowed roots, or be another tracked
+   * file a symlink inside the worktree happens to point at).
+   */
+  preserveSymlink?: boolean
+}
+
+export async function resolveAuthorizedPath(
+  targetPath: string,
+  store: Store,
+  options: ResolveAuthorizedPathOptions = {}
+): Promise<string> {
   const resolvedTarget = resolve(targetPath)
   if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+
+  if (options.preserveSymlink) {
+    // Canonicalize the parent so symlinks in ancestors cannot redirect us
+    // outside allowed roots, but keep the final segment untouched so callers
+    // (delete/rename) act on the link itself.
+    const realParent = await realpath(dirname(resolvedTarget))
+    const candidateTarget = resolve(realParent, basename(resolvedTarget))
+    if (!(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store))) {
+      throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+    }
+    return candidateTarget
   }
 
   try {

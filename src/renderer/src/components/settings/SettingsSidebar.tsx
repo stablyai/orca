@@ -1,4 +1,4 @@
-import { ArrowLeft, Globe, Search, type LucideIcon, type LucideProps } from 'lucide-react'
+import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 
@@ -134,7 +134,7 @@ export function SettingsSidebar({
                       <span className="truncate">{section.title}</span>
                       {section.isRemote && (
                         <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-                          <Globe className="size-3" />
+                          <Server className="size-3" />
                           SSH
                         </span>
                       )}

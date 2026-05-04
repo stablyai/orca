@@ -16,7 +16,6 @@ Use `orca` for:
 - reading and replying to Orca-managed terminals
 - stopping or waiting on Orca-managed terminals
 - accessing repos known to Orca
-
 Do not use `orca` when plain shell tools are simpler and Orca state does not matter.
 
 Examples:
@@ -141,10 +140,25 @@ orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
 orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json
 orca terminal stop --worktree id:<worktreeId> --json
+orca terminal create --json
+orca terminal create --title "My Terminal" --json
+orca terminal create --worktree path:/projects/myapp --command "npm test" --json
+orca terminal split --terminal <handle> --direction vertical --json
+orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
+orca terminal rename --terminal <handle> --title "New Name" --json
+orca terminal switch --terminal <handle> --json
+orca terminal close --terminal <handle> --json
+orca terminal send --text "echo hello" --enter --json
+orca terminal read --json
 ```
 
+Why: `--terminal` is optional for most commands. When omitted, Orca auto-resolves to the active terminal in the current worktree (same as browser commands target the active tab). Use explicit `--terminal <handle>` when operating on a specific pane.
+
 Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca returns `terminal_handle_stale`, reacquire a fresh handle with `terminal list`.
+
+Why: `--direction horizontal` splits the pane **left and right** (new pane appears to the right). `--direction vertical` splits the pane **top and bottom** (new pane appears below). This matches VS Code's split convention. Default is horizontal.
 
 ## Agent Guidance
 
@@ -162,7 +176,10 @@ Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca
 - Orca only injects `ORCA_WORKTREE_PATH`-style variables for some setup-hook flows, so they are not a general detection contract for agents.
 - Use `terminal list` to reacquire handles after Orca reloads.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
-- Use `terminal wait --for exit` only when the task actually depends on process completion.
+- Use `terminal wait --terminal <handle> --for exit` only when the task actually depends on process completion.
+- Use `terminal wait --terminal <handle> --for tui-idle` to wait for an agent CLI (Claude Code, Gemini, Codex, etc.) to finish its current task. This detects the working→idle OSC title transition. Always pass `--timeout-ms` as a safety net — unsupported CLIs will hang until timeout.
+- Use `terminal create` to spin up new terminal tabs programmatically, optionally with a `--command` for startup (e.g. `--command "claude"` to launch Claude Code) and `--title` for labeling. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
+- Use `terminal split` to create split panes within an existing terminal tab. Pass `--command` to run a command in the new pane.
 - Prefer Orca worktree selectors over hardcoded paths when Orca identity already exists.
 - If the user asks for CLI UX feedback, test the public `orca` command first. Only inspect `src/cli` or use `node out/cli/index.js` if the public command is missing or the task is explicitly about implementation internals.
 - If a command fails, prefer retrying with the public `orca` command before concluding the CLI is broken, unless the failure already came from `orca` itself.
@@ -538,10 +555,11 @@ When `orca tab create` opens a new tab, it is automatically set as the active ta
 ## Important Constraints
 
 - Orca CLI only talks to a running Orca editor.
-- Terminal handles are ephemeral and tied to the current Orca runtime.
-- `terminal wait` in focused v1 supports only `--for exit`.
-- Orca is the source of truth for worktree/terminal orchestration; do not duplicate that state with manual assumptions.
+- Terminal handles are ephemeral and tied to the current Orca runtime. If Orca restarts, handles change.
+- `terminal wait` supports `--for exit` (wait for process exit) and `--for tui-idle` (wait for a recognized agent CLI like Claude Code, Gemini, or Codex to finish its current task, detected via OSC title transitions). `tui-idle` defaults to a 5-minute timeout if `--timeout-ms` is not specified. Real coding tasks routinely take 15-60 minutes — always pass `--timeout-ms` explicitly.
+- Orca is the source of truth for worktree/terminal state; do not duplicate that state with manual assumptions.
 - The public `orca` command is the interface users experience. Agents should validate and use that surface, not repo-local implementation entrypoints.
+- The 120-line terminal output buffer (`terminal read`) is for status monitoring, not result extraction.
 
 ## References
 

@@ -10,7 +10,3 @@ export type DirCache = {
   children: TreeNode[]
   loading: boolean
 }
-
-export type PendingDelete = {
-  node: TreeNode
-}

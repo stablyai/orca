@@ -53,7 +53,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setRemoteError,
     resetRemoteState,
     handleOpenRemoteStep,
-    handleAddRemoteRepo
+    handleAddRemoteRepo,
+    handleConnectTarget
   } = useRemoteRepo(fetchWorktrees, setStep, setAddedRepo, closeModal)
 
   const {
@@ -199,7 +200,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   )
 
   const handleCreateWorktree = useCallback(() => {
-    // Why: small delay so the Add Repo dialog close animation finishes before
+    // Why: small delay so the Add Project dialog close animation finishes before
     // the composer modal takes focus; otherwise the dialog teardown can steal
     // the first focus frame from the composer's prompt textarea.
     closeModal()
@@ -274,13 +275,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 onClick={handleBrowse}
                 disabled={isAdding}
                 variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center"
+                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
                 <FolderOpen className="size-6 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-medium">Browse folder</p>
                   <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
-                    Local repo or folder
+                    Local Git project or folder
                   </p>
                 </div>
               </Button>
@@ -288,7 +289,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               <Button
                 onClick={() => setStep('clone')}
                 variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center"
+                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
                 <Globe className="size-6 text-muted-foreground" />
                 <div>
@@ -302,11 +303,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               <Button
                 onClick={handleOpenRemoteStep}
                 variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center"
+                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
                 <Monitor className="size-6 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Remote repo</p>
+                  <p className="text-sm font-medium">Remote project</p>
                   <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
                     SSH connected target
                   </p>
@@ -345,6 +346,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               setRemoteError(null)
             }}
             onAdd={handleAddRemoteRepo}
+            onOpenSshSettings={() => {
+              closeModal()
+              openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+              openSettingsPage()
+            }}
+            onConnectTarget={handleConnectTarget}
           />
         ) : step === 'clone' ? (
           <CloneStep

@@ -64,7 +64,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     ensureWorktreeHasInitialTerminal(store, 'wt-1')
 
-    expect(store.createTab).toHaveBeenCalledWith('wt-1')
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true
+    })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
@@ -98,7 +100,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       undefined
     )
 
-    expect(store.createTab).toHaveBeenCalledWith('wt-1')
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true
+    })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude "Fix this bug"'
@@ -130,7 +134,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       }
     })
 
-    expect(store.createTab).toHaveBeenCalledWith('wt-1')
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true
+    })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
     expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {

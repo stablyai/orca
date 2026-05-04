@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -11,10 +11,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import TabBar from '../tab-bar/TabBar'
 import TerminalPane from '../terminal-pane/TerminalPane'
-import BrowserPane from '../browser-pane/BrowserPane'
+import { browserSlotAnchorName } from '../browser-pane/browser-pane-slots'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import TabGroupDropOverlay from './TabGroupDropOverlay'
-import { getTabPaneBodyDroppableId, type TabDropZone } from './useTabDragSplit'
+import {
+  getTabPaneBodyDroppableId,
+  type HoveredTabInsertion,
+  type TabDropZone
+} from './useTabDragSplit'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -24,27 +28,37 @@ export default function TabGroupPanel({
   isWorktreeActive,
   isFocused,
   hasSplitGroups,
+  touchesRightEdge,
+  touchesLeftEdge,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
-  activeDropZone = null
+  activeDropZone = null,
+  hoveredTabInsertion = null
 }: {
   groupId: string
   worktreeId: string
   isWorktreeActive: boolean
   isFocused: boolean
   hasSplitGroups: boolean
+  touchesRightEdge: boolean
+  touchesLeftEdge: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
   activeDropZone?: TabDropZone | null
+  hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
+  const [wslAvailable, setWslAvailable] = useState(false)
+  useEffect(() => {
+    void window.api.wsl.isAvailable().then(setWslAvailable)
+  }, [])
+
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
-    activeBrowserTab,
     activeTab,
     browserItems,
     commands,
@@ -63,6 +77,21 @@ export default function TabGroupPanel({
     },
     disabled: !isTabDragActive
   })
+  // Why: browser panes for this worktree are rendered once at the worktree
+  // level (BrowserPaneOverlayLayer) and positioned over the owning group's
+  // body via CSS anchor positioning. Tagging this body with a per-group
+  // `anchor-name` lets the overlay reference it via `position-anchor`;
+  // moving a tab between groups only swaps which anchor-name the overlay
+  // targets, never reparenting the `<webview>` (which would reload it).
+  const bodyAnchorName = browserSlotAnchorName(groupId)
+  // Why: memoize the style object so the literal isn't recreated on every
+  // render. A fresh object every render would make the body `<div>` appear
+  // to have a new `style` prop on every parent re-render, which defeats any
+  // downstream memoization keyed on referential equality.
+  const bodyAnchorStyle = useMemo(
+    () => ({ anchorName: bodyAnchorName }) as React.CSSProperties,
+    [bodyAnchorName]
+  )
 
   const tabBar = (
     <TabBar
@@ -97,6 +126,8 @@ export default function TabGroupPanel({
         }
       }}
       onNewTerminalTab={commands.newTerminalTab}
+      onNewTerminalWithShell={commands.newTerminalWithShell}
+      wslAvailable={wslAvailable}
       onNewBrowserTab={commands.newBrowserTab}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
@@ -142,6 +173,7 @@ export default function TabGroupPanel({
       }}
       tabBarOrder={tabBarOrder}
       onCreateSplitGroup={commands.createSplitGroup}
+      hoveredTabInsertion={hoveredTabInsertion}
     />
   )
 
@@ -155,8 +187,27 @@ export default function TabGroupPanel({
 
   return (
     <div
+      // Why: vertical borders are always `border-border` so the focus
+      // highlight doesn't introduce a near-white strip next to the split
+      // resize handle (--accent is ~#f5f5f5 in light mode, which reads as a
+      // visible gap between the dragger and the tab row). Only the bottom
+      // border changes color on focus, which is enough to cue the focused
+      // group without painting a bright line along the vertical edges.
+      // Why: unfocused split groups dim very subtly so the focused group
+      // reads as "selected" without making the unfocused content look
+      // washed out or hard to read. Only applied when `hasSplitGroups`
+      // because a lone group has nothing to contrast against.
       className={`group/tab-group flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
-        hasSplitGroups ? ` border-x border-b ${isFocused ? 'border-accent' : 'border-border'}` : ''
+        hasSplitGroups
+          ? // Why: drop the outer borders on the edge-touching groups. The
+            // TabGroupSplitLayout wrapper already paints a full-height
+            // `border-l` at the sidebar seam, and the right sidebar paints
+            // its own `borderLeft` at the right seam — painting our own
+            // border-l/border-r in those spots stacks a second 1px line
+            // next to it, reading as a ~2px bar below the drag strip
+            // (where the sibling border continues alone above).
+            ` ${touchesLeftEdge ? '' : 'border-l'} ${touchesRightEdge ? '' : 'border-r'} border-border border-b ${isFocused ? 'border-b-accent' : 'opacity-95'}`
+          : ''
       }`}
       onPointerDown={commands.focusGroup}
       // Why: keyboard and assistive-tech users can move focus into an unfocused
@@ -169,27 +220,32 @@ export default function TabGroupPanel({
           can show multiple groups at once, while the window titlebar only has
           one shared center slot. Rendering true tab chrome here preserves
           per-group titles without making groups fight over one portal target. */}
-      <div className="h-[42px] shrink-0 border-b border-border bg-card">
-        <div
-          className={`flex h-full items-stretch pr-1.5${
-            reserveClosedExplorerToggleSpace && !rightSidebarOpen ? ' pr-10' : ''
-          }`}
-          style={{
-            paddingLeft:
-              reserveCollapsedSidebarHeaderSpace && !sidebarOpen
-                ? 'var(--collapsed-sidebar-header-width)'
-                : undefined
-          }}
-        >
-          {/* Why: when the right sidebar is closed, App.tsx renders a floating
-              explorer toggle in the top-right corner of the workspace. Only the
-              top-right tab group can sit underneath that button, so reserve
-              space in just that one header instead of pushing every group in. */}
-          {/* Why: collapsing the left worktree sidebar should let the terminal
-              reclaim the full left edge, but the top-left tab row should still
-              stop where the remaining titlebar controls end. Use the measured
-              width of that controls cluster instead of the old full sidebar
-              width so tabs cap at the agent badge, not at the old divider. */}
+      {/* Why: the macOS window uses hiddenInset titleBarStyle, so the only
+          way to drag-move the window is via -webkit-app-region: drag. Without
+          this, the empty space after tabs in the center column is dead — the
+          user can only drag from the tiny left-sidebar header strip. */}
+      <div
+        className="h-[32px] shrink-0 border-b border-border bg-card"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        <div className="flex h-full items-stretch pr-1.5">
+          {/* Why: Electron's native drag hit-test only respects no-drag on DOM
+              descendants, not z-index siblings. When the left sidebar is
+              collapsed, its header floats absolutely (z-10) over this tab row
+              from a separate DOM branch. An explicit no-drag spacer here
+              punches a hole in the drag surface so the floating sidebar toggle
+              and other titlebar controls remain clickable. */}
+          {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+            <div
+              className="shrink-0"
+              style={
+                {
+                  width: 'var(--collapsed-sidebar-header-width)',
+                  WebkitAppRegion: 'no-drag'
+                } as React.CSSProperties
+              }
+            />
+          ) : null}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
           {/* Why: pane-scoped layout actions belong with the active pane instead
               of the global tab-bar `+`, which should keep opening tabs exactly
@@ -265,10 +321,26 @@ export default function TabGroupPanel({
               </DropdownMenu>
             ) : null}
           </div>
+          {/* Why: Electron's native drag hit-test ignores z-index — a no-drag
+              element only overrides drag when it's a DOM descendant, not a
+              sibling in another branch. The floating right-sidebar toggle in
+              App.tsx sits in a separate DOM tree, so we need an explicit
+              no-drag child here to punch a hole in the drag surface beneath it
+              and let clicks through to the toggle. */}
+          {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+            <div
+              className="shrink-0 w-10"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            />
+          ) : null}
         </div>
       </div>
 
-      <div ref={setBodyDropRef} className="relative flex-1 min-h-0 overflow-hidden">
+      <div
+        ref={setBodyDropRef}
+        className="relative flex-1 min-h-0 overflow-hidden"
+        style={bodyAnchorStyle}
+      >
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {model.groupTabs
           .filter((item) => item.contentType === 'terminal')
@@ -325,20 +397,12 @@ export default function TabGroupPanel({
             </div>
           )}
 
-        {browserItems.map((bt) => (
-          <div
-            key={bt.id}
-            className="absolute inset-0 flex min-h-0 min-w-0"
-            style={{
-              display: isWorktreeActive && activeBrowserTab?.id === bt.id ? undefined : 'none'
-            }}
-          >
-            <BrowserPane
-              browserTab={bt}
-              isActive={isWorktreeActive && activeBrowserTab?.id === bt.id}
-            />
-          </div>
-        ))}
+        {/* Why: browser panes are rendered at the worktree level by
+            BrowserPaneOverlayLayer and absolutely positioned over this body
+            element via the slot registered above. Rendering them per-group
+            here caused moving a browser tab between groups to unmount and
+            remount the pane, reparenting the Electron `<webview>` — which
+            destroys its guest contents and reloads the page. */}
       </div>
     </div>
   )

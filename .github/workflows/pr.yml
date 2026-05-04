@@ -22,12 +22,28 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: package.json
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
+
+      # Why: pnpm's bundled node-gyp ships gyp_main.py without execute
+      # permission, which breaks native module builds (e.g. node-pty's
+      # postinstall) with "/bin/sh: gyp_main.py: Permission denied".
+      # Pin the fallback to the lockfile's node-gyp version so CI stays
+      # reproducible while forcing pnpm to bypass its broken bundled copy.
+      # Gate on runner.os == 'Linux' to match release.yml — the
+      # npm-global path layout this step assumes is POSIX-shaped, and the
+      # failure has only been observed on Linux runners. Today this job
+      # pins runs-on: ubuntu-latest so the guard is a no-op, but it
+      # prevents a silent break if a Windows/macOS matrix is added later.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -35,8 +51,31 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
+      # Why: project-owned type declarations must live in .ts so tsc
+      # actually checks them. TypeScript's skipLibCheck: true (inherited
+      # from @electron-toolkit/tsconfig) silently widens unresolved names
+      # in .d.ts to `any`, which is how #1186 shipped a broken IPC signature
+      # past typecheck. See docs/preload-typecheck-hole.md.
+      - name: Guard against project-owned .d.ts in preload/shared
+        run: |
+          matches=$(find src/preload src/shared -name '*.d.ts' 2>/dev/null || true)
+          if [ -n "$matches" ]; then
+            echo "::error::Project-owned .d.ts files are not allowed under src/preload or src/shared."
+            echo "Move type declarations into a .ts file so skipLibCheck does not hide errors."
+            echo "See docs/preload-typecheck-hole.md."
+            echo "Found:"
+            echo "$matches"
+            exit 1
+          fi
+
       - name: Typecheck
         run: pnpm typecheck
+
+      # Why: postinstall rebuilds better-sqlite3 for Electron's ABI via
+      # @electron/rebuild, but vitest runs under system Node.js. Rebuild
+      # it for Node so orchestration tests can load the native module.
+      - name: Rebuild better-sqlite3 for Node
+        run: pnpm rebuild better-sqlite3
 
       - name: Test
         run: pnpm test
@@ -46,3 +85,9 @@ jobs:
 
   e2e:
     uses: ./.github/workflows/e2e.yml
+    # Why: check out the PR head directly instead of refs/pull/N/merge.
+    # The merge ref doesn't exist when the PR has conflicts or GitHub
+    # hasn't computed the merge commit yet, causing checkout to fail
+    # for reasons unrelated to the code under test.
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}

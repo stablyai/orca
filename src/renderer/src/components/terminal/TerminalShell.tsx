@@ -29,8 +29,10 @@ type TerminalShellProps = {
   onCloseOthers: (tabId: string) => void
   onCloseTabsToRight: (tabId: string) => void
   onNewTerminalTab: () => void
+  onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewFileTab?: () => void
+  wslAvailable?: boolean
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -65,8 +67,10 @@ export function TerminalShell({
   onCloseOthers,
   onCloseTabsToRight,
   onNewTerminalTab,
+  onNewTerminalWithShell,
   onNewBrowserTab,
   onNewFileTab,
+  wslAvailable,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -103,8 +107,10 @@ export function TerminalShell({
               onCloseOthers={onCloseOthers}
               onCloseToRight={onCloseTabsToRight}
               onNewTerminalTab={onNewTerminalTab}
+              onNewTerminalWithShell={onNewTerminalWithShell}
               onNewBrowserTab={onNewBrowserTab}
               onNewFileTab={onNewFileTab}
+              wslAvailable={wslAvailable}
               onSetCustomTitle={onSetCustomTitle}
               onSetTabColor={onSetTabColor}
               expandedPaneByTabId={expandedPaneByTabId}

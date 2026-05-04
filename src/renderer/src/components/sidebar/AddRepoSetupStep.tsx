@@ -44,7 +44,7 @@ export function SetupStep({
       </DialogHeader>
 
       {hasWorktrees && (
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             Existing worktrees
           </p>
@@ -68,7 +68,7 @@ export function SetupStep({
             onClick={onConfigureRepo}
           >
             <Settings className="size-3" />
-            Configure repo
+            Configure project
           </button>
           <Button variant="ghost" size="sm" className="text-xs" onClick={onSkip}>
             Skip

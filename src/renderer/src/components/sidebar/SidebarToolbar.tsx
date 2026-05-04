@@ -247,11 +247,11 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               className="gap-1.5 text-muted-foreground"
             >
               <FolderPlus className="size-3.5" />
-              <span className="text-[11px]">Add Repo</span>
+              <span className="text-[11px]">Add Project</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            Open folder picker to add a repo
+            Open folder picker to add a project
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import {
   X,
   FileCode,
   GitCompareArrows,
   Copy,
+  Eye,
   ShieldAlert,
   ExternalLink,
   Columns2,
@@ -21,12 +21,20 @@ import {
 import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
+import { detectLanguage } from '@/lib/language-detect'
+import { useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
+import {
+  ACTIVE_TAB_INDICATOR_CLASSES,
+  getDropIndicatorClasses,
+  type DropIndicator
+} from './drop-indicator'
+import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -49,7 +57,8 @@ export default function EditorFileTab({
   onCloseAll,
   onPin,
   onSplitGroup,
-  dragData
+  dragData,
+  dropIndicator
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
@@ -62,8 +71,12 @@ export default function EditorFileTab({
   onPin?: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
+  dropIndicator?: DropIndicator
 }): React.JSX.Element {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const worktree = useWorktreeById(file.worktreeId)
+  // Why: no transform/transition/isDragging styling — the drag design is
+  // that tabs stay visually anchored; only the blue insertion bar moves.
+  const { attributes, listeners, setNodeRef } = useSortable({
     // Why: split groups can duplicate the same open file into multiple visible
     // tabs. Using the unified tab ID keeps each rendered tab draggable as a
     // distinct item instead of collapsing every copy onto the file entity ID.
@@ -71,15 +84,21 @@ export default function EditorFileTab({
     data: dragData
   })
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : undefined,
-    opacity: isDragging ? 0.8 : 1
-  }
-
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
+  const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  const resolvedLanguage =
+    file.mode === 'diff'
+      ? detectLanguage(file.relativePath)
+      : isConflictReview
+        ? 'plaintext'
+        : file.language
+  const canShowMarkdownPreview = canOpenMarkdownPreview({
+    language: resolvedLanguage,
+    mode: file.mode,
+    diffSource: file.diffSource
+  })
+  const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isRenaming, setIsRenaming] = useState(false)
@@ -114,16 +133,7 @@ export default function EditorFileTab({
     if (newName === oldName) {
       return
     }
-    const worktreePath = (() => {
-      const state = useAppStore.getState()
-      for (const worktrees of Object.values(state.worktreesByRepo)) {
-        const wt = worktrees.find((w) => w.id === file.worktreeId)
-        if (wt) {
-          return wt.path
-        }
-      }
-      return null
-    })()
+    const worktreePath = worktree?.path ?? null
     if (!worktreePath) {
       return
     }
@@ -168,6 +178,20 @@ export default function EditorFileTab({
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
+  // Why: Electron <webview> elements run in a separate process, so clicking
+  // inside one never dispatches a pointerdown on the renderer document. Radix
+  // DropdownMenu relies on document pointerdown for outside-click detection,
+  // so it misses webview clicks. Listening for window blur catches the moment
+  // focus leaves the renderer (including into a webview).
+  useEffect(() => {
+    if (!menuOpen) {
+      return
+    }
+    const dismiss = (): void => setMenuOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [menuOpen])
+
   return (
     <>
       <div
@@ -180,13 +204,10 @@ export default function EditorFileTab({
       >
         <div
           ref={setNodeRef}
-          style={style}
           {...attributes}
           {...listeners}
-          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
-            isActive
-              ? 'bg-accent text-foreground border-b-transparent'
-              : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
+          className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
+            isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
           }`}
           onPointerDown={(e) => {
             if (e.button !== 0) {
@@ -213,27 +234,32 @@ export default function EditorFileTab({
             }
           }}
         >
+          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           {isConflictReview ? (
             <ShieldAlert
-              className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
+              className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
             />
           ) : isDiff ? (
             <GitCompareArrows
+              className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+            />
+          ) : isMarkdownPreviewTab ? (
+            <Eye
               className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           ) : (
             <FileCode
-              className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+              className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           )}
-          <span className="mr-1.5 flex min-w-0 items-baseline gap-1.5">
+          <span className="mr-1 flex min-w-0 items-baseline gap-1">
             {isRenaming ? (
               <input
                 ref={renameInputRef}
                 defaultValue={basename(file.filePath)}
                 // Tiny border to make the edit affordance obvious without
                 // changing overall tab height. Size matches the label span.
-                className="truncate max-w-[130px] bg-transparent text-sm text-foreground outline-none border border-ring rounded-sm px-1 py-0"
+                className="truncate max-w-[80px] bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1 py-0"
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
@@ -254,7 +280,7 @@ export default function EditorFileTab({
               />
             ) : (
               <span
-                className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
+                className={`truncate max-w-[80px]${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
                 style={tabStatusColor ? { color: tabStatusColor } : undefined}
                 onDoubleClick={(e) => {
                   // Why: the outer tab's onDoubleClick pins preview tabs. Scope
@@ -344,6 +370,24 @@ export default function EditorFileTab({
             Close Tabs To The Right
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {canShowMarkdownPreview && (
+            <>
+              <DropdownMenuItem
+                onSelect={() => {
+                  onActivate()
+                  openMarkdownPreview({
+                    filePath: file.filePath,
+                    relativePath: file.relativePath,
+                    worktreeId: file.worktreeId,
+                    language: resolvedLanguage
+                  })
+                }}
+              >
+                Open Markdown Preview
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem
             onSelect={() => {
               void window.api.ui.writeClipboardText(file.filePath)

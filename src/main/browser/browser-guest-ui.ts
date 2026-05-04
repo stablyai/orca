@@ -10,6 +10,16 @@ import {
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 
+function isTerminalTabSwitchChord(input: Electron.Input): boolean {
+  return (
+    Boolean(input.control) &&
+    !input.meta &&
+    !input.alt &&
+    !input.shift &&
+    (input.code === 'PageDown' || input.code === 'PageUp')
+  )
+}
+
 export function setupGuestContextMenu(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -209,6 +219,35 @@ export function setupGuestShortcutForwarding(args: {
     if (input.type !== 'keyDown') {
       return
     }
+    // Why: resolve the policy action once per keystroke. The history-navigate
+    // chord (Cmd/Ctrl+Alt+Arrow) is the only allowlisted chord that carries
+    // Alt and must be handled before the generic modifier-chord gate below,
+    // which rejects Alt. Every other chord handled further down can reuse
+    // the same `action` rather than re-running the full predicate chain.
+    const action = resolveWindowShortcutAction(input, process.platform)
+    if (action?.type === 'worktreeHistoryNavigate') {
+      // Why: preventDefault unconditionally — if we cannot resolve the
+      // renderer (torn-down tab or teardown race), dropping the keystroke
+      // into the guest's webContents would let Chromium / the guest page
+      // handle Cmd+Alt+Arrow as their own chord (e.g. guest-side text
+      // navigation). Consistency with the main-window path is preserved
+      // only by suppressing the event here too.
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:worktreeHistoryNavigate', action.direction)
+      return
+    }
+
+    // Why: terminal-only tab switching is intentionally Ctrl+PageUp/PageDown on
+    // every platform. Handle it before the primary-modifier gate so macOS Ctrl
+    // (non-primary there) still forwards out of focused browser guests.
+    if (isTerminalTabSwitchChord(input)) {
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:switchTerminalTab', input.code === 'PageDown' ? 1 : -1)
+      return
+    }
+
     // Why: browser guests need a broader modifier-chord gate than the main
     // window because they also forward guest-specific tab shortcuts
     // (Cmd/Ctrl+T/W/Shift+B/Shift+[ / ]) in addition to the shared allowlist
@@ -221,11 +260,6 @@ export function setupGuestShortcutForwarding(args: {
     if (!renderer) {
       return
     }
-
-    // Why: centralizing the shared subset still keeps guest forwarding in
-    // lockstep with the main window for the chords that must never steal
-    // readline control input above the terminal.
-    const action = resolveWindowShortcutAction(input, process.platform)
 
     if (input.code === 'KeyB' && input.shift) {
       renderer.send('ui:newBrowserTab')
@@ -268,7 +302,7 @@ export function setupGuestShortcutForwarding(args: {
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
     } else if (action?.type === 'openNewWorkspace') {
-      renderer.send('ui:openNewWorkspace')
+      renderer.send('ui:openNewWorkspace', action.tab)
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else {

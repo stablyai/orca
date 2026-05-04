@@ -33,10 +33,13 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
+    editorMinimapEnabled: false,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
     terminalLineHeight: 1,
+    terminalGpuAcceleration: 'auto',
+    terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
     terminalCursorBlink: false,
     terminalThemeDark: 'orca-dark',
@@ -51,11 +54,13 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalRightClickToPaste: false,
     terminalFocusFollowsMouse: false,
     terminalClipboardOnSelect: false,
+    terminalAllowOsc52Clipboard: false,
     setupScriptLaunchMode: 'split-vertical',
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
     showTitlebarAgentActivity: true,
+    showTasksButton: true,
     diffDefaultView: 'inline',
     notifications: {
       enabled: true,
@@ -67,14 +72,26 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
     activeCodexManagedAccountId: null,
+    claudeManagedAccounts: [],
+    activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
     defaultTaskViewPreset: 'all',
+    defaultTaskSource: 'github',
+    defaultRepoSelection: null,
+    defaultLinearTeamSelection: null,
+    opencodeSessionCookie: '',
+    opencodeWorkspaceId: '',
+    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
-    experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
+    terminalMacOptionAsAltMigrated: true,
+    experimentalAgentDashboard: false,
+    experimentalSidekick: false,
+    terminalWindowsShell: 'powershell.exe',
+    terminalWindowsPowerShellImplementation: 'powershell.exe',
+    enableGitHubAttribution: true,
     ...overrides
   }
 }
@@ -98,13 +115,15 @@ function createStore(settings: GlobalSettings) {
 
 function createRateLimits() {
   return {
-    refreshForCodexAccountChange: vi.fn().mockResolvedValue(undefined)
+    refreshForCodexAccountChange: vi.fn().mockResolvedValue(undefined),
+    evictInactiveCodexCache: vi.fn()
   }
 }
 
 function createRuntimeHome() {
   return {
-    syncForCurrentSelection: vi.fn()
+    syncForCurrentSelection: vi.fn(),
+    clearLastWrittenAuthJson: vi.fn()
   }
 }
 
@@ -541,7 +560,8 @@ describe('CodexAccountService config sync', () => {
     const rateLimits = {
       refreshForCodexAccountChange: vi.fn(async () => {
         callOrder.push('refresh')
-      })
+      }),
+      evictInactiveCodexCache: vi.fn()
     }
     const runtimeHome = createRuntimeHome()
 

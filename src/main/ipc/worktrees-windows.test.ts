@@ -17,6 +17,7 @@ const {
   runHookMock,
   hasHooksFileMock,
   loadHooksMock,
+  setupScriptsMatchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
 } = vi.hoisted(() => ({
@@ -33,6 +34,7 @@ const {
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
+  setupScriptsMatchMock: vi.fn(() => true),
   runHookMock: vi.fn(),
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
@@ -78,7 +80,8 @@ vi.mock('../hooks', () => ({
   loadHooks: loadHooksMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
-  shouldRunSetupForCreate: shouldRunSetupForCreateMock
+  shouldRunSetupForCreate: shouldRunSetupForCreateMock,
+  setupScriptsMatch: setupScriptsMatchMock
 }))
 
 vi.mock('./worktree-logic', async (importOriginal) => {
@@ -181,7 +184,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     listWorktreesMock.mockResolvedValue([])
 
-    registerWorktreeHandlers(mainWindow as never, store as never)
+    registerWorktreeHandlers(mainWindow as never, store as never, {} as never)
   })
 
   it('accepts a newly created Windows worktree when git lists the same path with different separators', async () => {

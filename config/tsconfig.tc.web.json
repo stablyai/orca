@@ -1,5 +1,14 @@
 {
   "extends": "./tsconfig.web.json",
+  "include": [
+    "../src/renderer/src/env.d.ts",
+    "../src/renderer/src/**/*",
+    "../src/renderer/src/**/*.tsx",
+    "../src/preload/api-types.ts",
+    "../src/shared/**/*",
+    "../src/main/ipc/worktree-logic.ts",
+    "../src/main/wsl.ts"
+  ],
   "compilerOptions": {
     "baseUrl": null,
     "paths": {

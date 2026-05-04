@@ -87,8 +87,15 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.search', opts)) as SearchResult
   }
 
-  async listFiles(rootPath: string): Promise<string[]> {
-    return (await this.mux.request('fs.listFiles', { rootPath })) as string[]
+  async listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]> {
+    // Why: older relays ignore unknown fields, so sending excludePaths to a
+    // pre-refactor relay is a non-regression. The relay validates the shape
+    // and treats malformed input as "no exclusions" rather than failing.
+    const params: Record<string, unknown> = { rootPath }
+    if (options?.excludePaths && options.excludePaths.length > 0) {
+      params.excludePaths = options.excludePaths
+    }
+    return (await this.mux.request('fs.listFiles', params)) as string[]
   }
 
   async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {

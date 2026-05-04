@@ -175,34 +175,39 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).not.toHaveBeenCalled()
   })
 
-  it('rejects rename when new path escapes allowed roots', async () => {
+  it('rejects rename when parent directory escapes allowed roots', async () => {
+    // Why: the parent is still canonicalized (preserveSymlink only preserves
+    // the leaf). A symlinked ancestor that points outside allowed roots must
+    // still be rejected so callers cannot redirect rename through it.
     mockRealpath({
-      [path.resolve('/workspace/repo/escape.ts')]: path.resolve('/private/escape.ts')
+      [path.resolve('/workspace/repo/escape-dir')]: path.resolve('/private/escape-dir')
     })
 
     await expect(
       handlers.get('fs:rename')!(null, {
         oldPath: path.resolve('/workspace/repo/old.ts'),
-        newPath: path.resolve('/workspace/repo/escape.ts')
+        newPath: path.resolve('/workspace/repo/escape-dir/new.ts')
       })
     ).rejects.toThrow('Access denied')
 
     expect(renameMock).not.toHaveBeenCalled()
   })
 
-  it('rejects rename when old path escapes allowed roots', async () => {
+  it('renames a symlink without following its target', async () => {
+    // Why: rename must operate on the symlink entry, not its target —
+    // following the link would rename the target file (possibly elsewhere in
+    // the worktree, or outside allowed roots entirely). Even though the
+    // symlink points at /private/secret.ts, renaming the link entry inside
+    // the allowed root is a safe directory-entry mutation.
     mockRealpath({
       [path.resolve('/workspace/repo/symlink.ts')]: path.resolve('/private/secret.ts')
     })
 
-    await expect(
-      handlers.get('fs:rename')!(null, {
-        oldPath: path.resolve('/workspace/repo/symlink.ts'),
-        newPath: path.resolve('/workspace/repo/new.ts')
-      })
-    ).rejects.toThrow('Access denied')
+    const oldPath = path.resolve('/workspace/repo/symlink.ts')
+    const newPath = path.resolve('/workspace/repo/renamed-symlink.ts')
+    await handlers.get('fs:rename')!(null, { oldPath, newPath })
 
-    expect(renameMock).not.toHaveBeenCalled()
+    expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
   // ── Edge cases ─────────────────────────────────────────────────

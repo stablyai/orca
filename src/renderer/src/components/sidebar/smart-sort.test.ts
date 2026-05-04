@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import { buildWorktreeComparator, computeSmartScore, type SmartSortOverride } from './smart-sort'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
 
@@ -29,6 +30,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isMainWorktree: overrides.isMainWorktree ?? false,
     linkedIssue: overrides.linkedIssue ?? null,
     linkedPR: overrides.linkedPR ?? null,
+    linkedLinearIssue: null,
     isArchived: overrides.isArchived ?? false,
     comment: overrides.comment ?? '',
     isUnread: overrides.isUnread ?? false,
@@ -49,6 +51,21 @@ function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
     color: overrides.color ?? null,
     sortOrder: overrides.sortOrder ?? 0,
     createdAt: overrides.createdAt ?? 0
+  }
+}
+
+function makeAgentStatusEntry(
+  overrides: Partial<AgentStatusEntry> & { paneKey: string }
+): AgentStatusEntry {
+  return {
+    state: overrides.state ?? 'working',
+    prompt: overrides.prompt ?? '',
+    updatedAt: overrides.updatedAt ?? NOW - 30_000,
+    stateStartedAt: overrides.stateStartedAt ?? overrides.updatedAt ?? NOW - 30_000,
+    agentType: overrides.agentType ?? 'codex',
+    paneKey: overrides.paneKey,
+    terminalTitle: overrides.terminalTitle,
+    stateHistory: overrides.stateHistory ?? []
   }
 }
 
@@ -156,6 +173,39 @@ describe('computeSmartScore', () => {
     expect(computeSmartScore(linked, null, repoMap, {})).toBeGreaterThan(
       computeSmartScore(plain, null, repoMap, {})
     )
+  })
+
+  it('does not let stale explicit status mask a live heuristic permission prompt', () => {
+    const worktree = makeWorktree({ id: 'wt-1' })
+    const tabsByWorktree = {
+      [worktree.id]: [makeTab({ worktreeId: worktree.id, title: 'codex permission needed' })]
+    }
+    const score = computeSmartScore(worktree, tabsByWorktree, repoMap, null, NOW, {
+      'tab-1:1': makeAgentStatusEntry({
+        paneKey: 'tab-1:1',
+        state: 'done',
+        updatedAt: NOW - 45 * 60_000
+      })
+    })
+
+    expect(score).toBeGreaterThanOrEqual(35)
+  })
+
+  it('does not stack heuristic working on top of fresh explicit done for the same tab', () => {
+    const worktree = makeWorktree({ id: 'wt-1' })
+    const tabsByWorktree = {
+      [worktree.id]: [makeTab({ worktreeId: worktree.id, title: 'codex working' })]
+    }
+
+    expect(
+      computeSmartScore(worktree, tabsByWorktree, repoMap, null, NOW, {
+        'tab-1:1': makeAgentStatusEntry({
+          paneKey: 'tab-1:1',
+          state: 'done',
+          updatedAt: NOW - 60_000
+        })
+      })
+    ).toBe(12)
   })
 })
 

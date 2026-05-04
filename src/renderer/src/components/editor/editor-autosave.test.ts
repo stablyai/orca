@@ -4,7 +4,9 @@ import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
   normalizeAutoSaveDelayMs,
+  ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
+  requestEditorFileClose,
   requestEditorFileSave,
   requestEditorSaveQuiesce
 } from './editor-autosave'
@@ -140,9 +142,30 @@ describe('requestEditorFileSave', () => {
   })
 })
 
+describe('requestEditorFileClose', () => {
+  it('dispatches a close request event with the file id', () => {
+    const listener = vi.fn()
+    window.addEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, listener as EventListener)
+    try {
+      requestEditorFileClose('file-1')
+      expect(listener).toHaveBeenCalledTimes(1)
+      const event = listener.mock.calls[0][0] as CustomEvent<{ fileId: string }>
+      expect(event.detail).toEqual({ fileId: 'file-1' })
+    } finally {
+      window.removeEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, listener as EventListener)
+    }
+  })
+})
+
 describe('getOpenFilesForExternalFileChange', () => {
   it('matches edit tabs and unstaged diff tabs for the same worktree file', () => {
     const matchingEdit = makeOpenFile()
+    const matchingPreview = makeOpenFile({
+      id: 'markdown-preview::/repo/file.ts',
+      mode: 'markdown-preview',
+      language: 'markdown',
+      markdownPreviewSourceFileId: '/repo/file.ts'
+    })
     const matchingUnstagedDiff = makeOpenFile({
       id: 'wt-1::diff::unstaged::file.ts',
       mode: 'diff',
@@ -161,13 +184,13 @@ describe('getOpenFilesForExternalFileChange', () => {
 
     expect(
       getOpenFilesForExternalFileChange(
-        [matchingEdit, matchingUnstagedDiff, stagedDiff, otherWorktree],
+        [matchingEdit, matchingPreview, matchingUnstagedDiff, stagedDiff, otherWorktree],
         {
           worktreeId: 'wt-1',
           worktreePath: '/repo',
           relativePath: 'file.ts'
         }
       ).map((file) => file.id)
-    ).toEqual(['/repo/file.ts', 'wt-1::diff::unstaged::file.ts'])
+    ).toEqual(['/repo/file.ts', 'markdown-preview::/repo/file.ts', 'wt-1::diff::unstaged::file.ts'])
   })
 })

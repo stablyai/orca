@@ -73,6 +73,7 @@ describe('OrcaRuntimeRpcServer', () => {
         comment: '',
         linkedIssue: 123,
         linkedPR: null,
+        linkedLinearIssue: null,
         isArchived: false,
         isUnread: overrides?.isUnread ?? false,
         isPinned: false,
@@ -246,7 +247,8 @@ describe('OrcaRuntimeRpcServer', () => {
         writes.push(data)
         return true
       },
-      kill: () => true
+      kill: () => true,
+      getForegroundProcess: async () => null
     })
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
 
@@ -340,7 +342,7 @@ describe('OrcaRuntimeRpcServer', () => {
       id: 'req_send',
       ok: true
     })
-    expect(writes).toEqual(['continue\r'])
+    expect(writes).toEqual(['continue', '\r'])
 
     const waitPromise = sendRequest(metadata!.transport!.endpoint, {
       id: 'req_wait',

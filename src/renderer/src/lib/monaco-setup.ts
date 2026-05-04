@@ -7,6 +7,8 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import { registerSvelteLanguage } from './monaco-languages/register-svelte'
+import { registerVueLanguage } from './monaco-languages/register-vue'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -30,18 +32,25 @@ globalThis.MonacoEnvironment = {
   }
 }
 
-// Why: Monaco's built-in TypeScript worker runs in isolation without filesystem
-// access, so it cannot resolve imports to project files that aren't open as
-// editor models. This produces false "Cannot find module" diagnostics for every
-// import statement. Ignoring specific TS diagnostic codes (e.g., 2307, 2792)
-// removes this noise while keeping type checking, auto-complete, and basic
-// validation fully functional for local symbols.
-monacoTS.typescriptDefaults.setDiagnosticsOptions({
-  diagnosticCodesToIgnore: [2307, 2792]
-})
-monacoTS.javascriptDefaults.setDiagnosticsOptions({
-  diagnosticCodesToIgnore: [2307, 2792]
-})
+// Why: Monaco here is a viewer/diff surface, not a type checker — users edit
+// real code in their own IDE. The sandboxed TS worker cannot resolve imports
+// to project files, so semantic validation produces a long tail of false
+// positives (unresolved modules 2307/2792, unused-import fades 6133/6138/
+// 6192/6196/6198/6205, missing names 2304/2305, bogus type mismatches 2322/
+// 2339/2345/2571/2724, implicit-any 7006/7016/7026/7031/7053/18046/18048).
+// Syntax validation is also noisy in the diff viewer: with `renderSideBySide`
+// off (or during partial hunks), Monaco feeds the worker concatenated
+// original+modified text that isn't a valid TS program, producing fake
+// parse errors like "',' expected (1005)". Disable all three categories —
+// we keep tokenization (colorization) which is what actually gives useful
+// reading affordance here.
+const diagnosticsOptions = {
+  noSemanticValidation: true,
+  noSuggestionDiagnostics: true,
+  noSyntaxValidation: true
+}
+monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
+monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 
 // Why: .tsx/.jsx files share the base 'typescript'/'javascript' language ids
 // in Monaco's registry (there is no separate 'typescriptreact' id), so the
@@ -57,6 +66,9 @@ monacoTS.javascriptDefaults.setCompilerOptions({
   ...monacoTS.javascriptDefaults.getCompilerOptions(),
   jsx: monacoTS.JsxEmit.Preserve
 })
+
+registerVueLanguage(monaco)
+registerSvelteLanguage(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })

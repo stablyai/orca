@@ -7,14 +7,31 @@ import * as path from 'path'
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'fs'
 import { tmpdir } from 'os'
 
+const { mockSubscribe } = vi.hoisted(() => ({
+  mockSubscribe: vi.fn()
+}))
+
+vi.mock('@parcel/watcher', () => ({
+  subscribe: mockSubscribe
+}))
+
 function createMockDispatcher() {
-  const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+  const requestHandlers = new Map<
+    string,
+    (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
+  >()
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
 
   return {
     onRequest: vi.fn(
-      (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+      (
+        method: string,
+        handler: (
+          params: Record<string, unknown>,
+          context?: { isStale: () => boolean }
+        ) => Promise<unknown>
+      ) => {
         requestHandlers.set(method, handler)
       }
     ),
@@ -27,12 +44,16 @@ function createMockDispatcher() {
     _requestHandlers: requestHandlers,
     _notificationHandlers: notificationHandlers,
     _notifications: notifications,
-    async callRequest(method: string, params: Record<string, unknown> = {}) {
+    async callRequest(
+      method: string,
+      params: Record<string, unknown> = {},
+      context?: { isStale: () => boolean }
+    ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      return handler(params)
+      return handler(params, context)
     },
     callNotification(method: string, params: Record<string, unknown> = {}) {
       const handler = notificationHandlers.get(method)
@@ -50,6 +71,8 @@ describe('FsHandler', () => {
   let tmpDir: string
 
   beforeEach(() => {
+    mockSubscribe.mockReset()
+    mockSubscribe.mockResolvedValue({ unsubscribe: vi.fn() })
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-fs-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
@@ -109,6 +132,33 @@ describe('FsHandler', () => {
     expect(result.isBinary).toBe(false)
   })
 
+  it('readFile returns text files larger than the old 5MB guard', async () => {
+    const filePath = path.join(tmpDir, 'large.json')
+    const content = 'a'.repeat(6 * 1024 * 1024)
+    writeFileSync(filePath, content)
+
+    const result = (await dispatcher.callRequest('fs.readFile', { filePath })) as {
+      content: string
+      isBinary: boolean
+    }
+    expect(result.content).toBe(content)
+    expect(result.isBinary).toBe(false)
+  })
+
+  it('readFile returns binary marker for large unknown binary files', async () => {
+    const filePath = path.join(tmpDir, 'archive.bin')
+    const content = Buffer.alloc(6 * 1024 * 1024, 0x61)
+    content[0] = 0x00
+    writeFileSync(filePath, content)
+
+    const result = (await dispatcher.callRequest('fs.readFile', { filePath })) as {
+      content: string
+      isBinary: boolean
+    }
+    expect(result.content).toBe('')
+    expect(result.isBinary).toBe(true)
+  })
+
   it('readFile returns base64 for image files', async () => {
     const filePath = path.join(tmpDir, 'test.png')
     writeFileSync(filePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
@@ -127,8 +177,7 @@ describe('FsHandler', () => {
 
   it('readFile throws for files exceeding size limit', async () => {
     const filePath = path.join(tmpDir, 'huge.txt')
-    // Write 6MB file
-    writeFileSync(filePath, Buffer.alloc(6 * 1024 * 1024))
+    writeFileSync(filePath, Buffer.alloc(11 * 1024 * 1024, 'a'))
 
     await expect(dispatcher.callRequest('fs.readFile', { filePath })).rejects.toThrow(
       'File too large'
@@ -221,5 +270,35 @@ describe('FsHandler', () => {
     // On macOS, /var is a symlink to /private/var, so resolve both to compare
     const { realpathSync } = await import('fs')
     expect(result).toBe(realpathSync(realFile))
+  })
+
+  it('does not let stale pending watch remove newer replacement watch', async () => {
+    const firstUnsubscribe = vi.fn()
+    const secondUnsubscribe = vi.fn()
+    let resolveFirst!: () => void
+    mockSubscribe
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = () => resolve({ unsubscribe: firstUnsubscribe })
+        })
+      )
+      .mockResolvedValueOnce({ unsubscribe: secondUnsubscribe })
+
+    const firstWatch = dispatcher.callRequest(
+      'fs.watch',
+      { rootPath: tmpDir },
+      { isStale: () => true }
+    )
+    while (mockSubscribe.mock.calls.length === 0) {
+      await Promise.resolve()
+    }
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => false })
+    resolveFirst()
+    await firstWatch
+
+    expect(firstUnsubscribe).toHaveBeenCalled()
+    expect(secondUnsubscribe).not.toHaveBeenCalled()
+    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
+    expect(secondUnsubscribe).toHaveBeenCalled()
   })
 })

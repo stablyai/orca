@@ -83,17 +83,4 @@ export function buildAgentStartupPlan(args: {
   }
 }
 
-export function isShellProcess(processName: string): boolean {
-  const normalized = processName.trim().toLowerCase()
-  return (
-    normalized === '' ||
-    normalized === 'bash' ||
-    normalized === 'zsh' ||
-    normalized === 'sh' ||
-    normalized === 'fish' ||
-    normalized === 'cmd.exe' ||
-    normalized === 'powershell.exe' ||
-    normalized === 'pwsh.exe' ||
-    normalized === 'nu'
-  )
-}
+export { isShellProcess } from '../../../shared/agent-detection'

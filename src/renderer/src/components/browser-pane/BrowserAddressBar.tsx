@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import {
   buildSearchUrl,
   looksLikeSearchQuery,
+  normalizeBrowserNavigationUrl,
   SEARCH_ENGINE_LABELS,
   DEFAULT_SEARCH_ENGINE,
   type SearchEngine
@@ -17,9 +18,10 @@ const MAX_SUGGESTIONS = 8
 type SuggestionEntry = {
   url: string
   title: string
+  subtitle: string
   lastVisitedAt: number
   visitCount: number
-  isSearch?: boolean
+  isSearch: boolean
 }
 
 type BrowserAddressBarProps = {
@@ -78,6 +80,7 @@ export default function BrowserAddressBar({
       return [...browserUrlHistory]
         .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
         .slice(0, MAX_SUGGESTIONS)
+        .map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false }))
     }
 
     const historySuggestions: SuggestionEntry[] =
@@ -87,22 +90,45 @@ export default function BrowserAddressBar({
             .filter((item) => item.score >= 0)
             .sort((a, b) => b.score - a.score)
             .slice(0, MAX_SUGGESTIONS - 1)
-            .map((item) => item.entry)
+            .map((item) => ({ ...item.entry, subtitle: item.entry.url, isSearch: false }))
         : []
 
-    const searchSuggestion: SuggestionEntry = {
-      url: buildSearchUrl(trimmed, searchEngine),
-      title: `${trimmed} — ${SEARCH_ENGINE_LABELS[searchEngine]} Search`,
-      lastVisitedAt: 0,
-      visitCount: 0,
-      isSearch: true
+    // Why: the top row of the dropdown must always mirror what pressing Enter
+    // will do — i.e. what `normalizeBrowserNavigationUrl` resolves to. Chrome
+    // and Firefox omniboxes work this way: for URL-like inputs the top row is
+    // the typed URL itself (navigate), and for bare queries it is the search.
+    // The earlier implementation appended a "Google Search" row as a fallback
+    // for URL-like inputs, which then got auto-selected when no history
+    // matched — so Enter on "www.example.com" hit Google instead of the site.
+    const isQuery = looksLikeSearchQuery(trimmed)
+    const topAction: SuggestionEntry = isQuery
+      ? {
+          url: buildSearchUrl(trimmed, searchEngine),
+          title: trimmed,
+          subtitle: `${SEARCH_ENGINE_LABELS[searchEngine]} Search`,
+          lastVisitedAt: 0,
+          visitCount: 0,
+          isSearch: true
+        }
+      : {
+          url: normalizeBrowserNavigationUrl(trimmed, searchEngine) ?? trimmed,
+          title: trimmed,
+          subtitle: '',
+          lastVisitedAt: 0,
+          visitCount: 0,
+          isSearch: false
+        }
+
+    // Why: if a history row already targets the same URL as the top action,
+    // skip the synthetic top row — the history row is more informative (real
+    // page title) and will be auto-selected, so Enter still navigates to the
+    // same place.
+    const duplicateIdx = historySuggestions.findIndex((h) => h.url === topAction.url)
+    if (duplicateIdx >= 0) {
+      return historySuggestions.slice(0, MAX_SUGGESTIONS)
     }
 
-    if (looksLikeSearchQuery(trimmed)) {
-      return [searchSuggestion, ...historySuggestions]
-    }
-
-    return [...historySuggestions.slice(0, MAX_SUGGESTIONS - 1), searchSuggestion]
+    return [topAction, ...historySuggestions].slice(0, MAX_SUGGESTIONS)
   }, [browserUrlHistory, value, searchEngine])
 
   const handleFocus = useCallback(() => {
@@ -281,16 +307,12 @@ export default function BrowserAddressBar({
                       <Globe className="size-3.5 shrink-0 text-muted-foreground" />
                     )}
                     <div className="flex min-w-0 flex-1 flex-col">
-                      {entry.isSearch ? (
-                        <span className="truncate text-sm">{entry.title}</span>
-                      ) : (
-                        <>
-                          <span className="truncate text-sm">{entry.title}</span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {entry.url}
-                          </span>
-                        </>
-                      )}
+                      <span className="truncate text-sm">{entry.title}</span>
+                      {entry.subtitle ? (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {entry.subtitle}
+                        </span>
+                      ) : null}
                     </div>
                   </CommandItem>
                 ))}

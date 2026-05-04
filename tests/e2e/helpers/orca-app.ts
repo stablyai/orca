@@ -188,7 +188,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
 
     // Add the test repo via the IPC bridge
     // Why: calling window.api.repos.add() goes through the same code path as
-    // the "Add Repo" UI flow, ensuring worktrees are fetched and the session
+    // the "Add Project" UI flow, ensuring worktrees are fetched and the session
     // initializes properly.
     await page.evaluate(async (repoPath) => {
       await window.api.repos.add({ path: repoPath })

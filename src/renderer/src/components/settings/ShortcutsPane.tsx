@@ -138,6 +138,16 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         action: 'Previous tab',
         searchKeywords: ['shortcut', 'tab', 'previous'],
         keys: ({ mod, shift }) => [mod, shift, '[']
+      },
+      {
+        action: 'Next terminal tab',
+        searchKeywords: ['shortcut', 'tab', 'terminal', 'next'],
+        keys: () => ['Ctrl', 'PageDown']
+      },
+      {
+        action: 'Previous terminal tab',
+        searchKeywords: ['shortcut', 'tab', 'terminal', 'previous'],
+        keys: () => ['Ctrl', 'PageUp']
       }
     ]
   },
@@ -182,6 +192,16 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         action: 'Expand / collapse pane',
         searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
         keys: ({ mod, shift, enter }) => [mod, shift, enter]
+      }
+    ]
+  },
+  {
+    title: 'Editors',
+    items: [
+      {
+        action: 'Show Markdown Preview',
+        searchKeywords: ['shortcut', 'editor', 'markdown', 'preview'],
+        keys: ({ mod, shift }) => [mod, shift, 'V']
       }
     ]
   }

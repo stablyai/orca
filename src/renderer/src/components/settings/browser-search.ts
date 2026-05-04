@@ -12,10 +12,22 @@ export const BROWSER_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['browser', 'search', 'engine', 'google', 'duckduckgo', 'bing', 'omnibox', 'query']
   },
   {
-    title: 'Terminal Link Routing',
+    title: 'Link Routing',
     description:
-      'Cmd/Ctrl+click opens terminal http(s) links in Orca. Shift+Cmd/Ctrl+click uses the system browser.',
-    keywords: ['browser', 'preview', 'links', 'localhost', 'webview', 'shift', 'cmd', 'ctrl']
+      "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. Shift+Cmd/Ctrl+click always uses your system browser.",
+    keywords: [
+      'browser',
+      'preview',
+      'links',
+      'localhost',
+      'webview',
+      'shift',
+      'cmd',
+      'ctrl',
+      'markdown',
+      'file',
+      'editor'
+    ]
   },
   {
     title: 'Session & Cookies',

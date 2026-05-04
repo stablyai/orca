@@ -19,7 +19,8 @@ function makeDragData(groupId: string, unifiedTabId = 'tab-1'): TabDragItemData 
     groupId,
     unifiedTabId,
     visibleTabId: unifiedTabId,
-    tabType: 'editor'
+    tabType: 'editor',
+    label: unifiedTabId
   }
 }
 

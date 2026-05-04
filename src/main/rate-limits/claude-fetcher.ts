@@ -5,6 +5,8 @@ import path from 'node:path'
 import { net, session } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { fetchViaPty } from './claude-pty'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { readManagedClaudeKeychainCredentials } from '../claude-accounts/keychain'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
@@ -74,6 +76,25 @@ type KeychainCredentials = {
   }
 }
 
+// Why: factored out so both the active-account Keychain reader and the
+// managed-account reader share the same JSON parsing + expiry check.
+function parseOAuthTokenFromCredentialsJson(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw) as KeychainCredentials
+    const token = parsed?.claudeAiOauth?.accessToken
+    if (!token || typeof token !== 'string') {
+      return null
+    }
+    const expiresAt = parsed.claudeAiOauth?.expiresAt
+    if (typeof expiresAt === 'number' && expiresAt < Date.now()) {
+      return null
+    }
+    return token
+  } catch {
+    return null
+  }
+}
+
 /**
  * Read OAuth token from macOS Keychain.
  * Why: Claude Code v2.x+ stores OAuth credentials in the macOS Keychain
@@ -102,24 +123,7 @@ async function readFromKeychain(): Promise<string | null> {
           resolve(null)
           return
         }
-        try {
-          const parsed = JSON.parse(stdout.trim()) as KeychainCredentials
-          const token = parsed?.claudeAiOauth?.accessToken
-          if (!token || typeof token !== 'string') {
-            resolve(null)
-            return
-          }
-
-          const expiresAt = parsed.claudeAiOauth?.expiresAt
-          if (typeof expiresAt === 'number' && expiresAt < Date.now()) {
-            resolve(null)
-            return
-          }
-
-          resolve(token)
-        } catch {
-          resolve(null)
-        }
+        resolve(parseOAuthTokenFromCredentialsJson(stdout.trim()))
       }
     )
   })
@@ -130,8 +134,8 @@ async function readFromKeychain(): Promise<string | null> {
  * Why: older Claude CLI versions store credentials in this plain JSON
  * file. We keep it as a fallback for compatibility.
  */
-async function readFromCredentialsFile(): Promise<string | null> {
-  const credPath = path.join(homedir(), '.claude', '.credentials.json')
+async function readFromCredentialsFile(configDir?: string): Promise<string | null> {
+  const credPath = path.join(configDir ?? path.join(homedir(), '.claude'), '.credentials.json')
   try {
     const raw = await readFile(credPath, 'utf-8')
     const parsed = JSON.parse(raw) as ClaudeCredentials
@@ -157,7 +161,7 @@ async function readFromCredentialsFile(): Promise<string | null> {
  * here — those are API keys which return 401 on the OAuth usage endpoint.
  * API-key users are served by the PTY fallback instead.
  */
-async function readOAuthCredentials(): Promise<string | null> {
+async function readOAuthCredentials(configDir?: string): Promise<string | null> {
   // 1. macOS Keychain (Claude Max/Pro OAuth)
   const fromKeychain = await readFromKeychain()
   if (fromKeychain) {
@@ -165,7 +169,7 @@ async function readOAuthCredentials(): Promise<string | null> {
   }
 
   // 2. Legacy credentials file
-  const fromFile = await readFromCredentialsFile()
+  const fromFile = await readFromCredentialsFile(configDir)
   if (fromFile) {
     return fromFile
   }
@@ -266,9 +270,13 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function fetchClaudeRateLimits(): Promise<ProviderRateLimits> {
+export async function fetchClaudeRateLimits(options?: {
+  authPreparation?: ClaudeRuntimeAuthPreparation
+}): Promise<ProviderRateLimits> {
   // Path A: try OAuth API if we have a genuine OAuth token
-  const oauthToken = await readOAuthCredentials()
+  const oauthToken = await readOAuthCredentials(
+    options?.authPreparation?.envPatch.CLAUDE_CONFIG_DIR
+  )
   if (oauthToken) {
     try {
       return await fetchViaOAuth(oauthToken)
@@ -282,7 +290,7 @@ export async function fetchClaudeRateLimits(): Promise<ProviderRateLimits> {
     // `/usage` command is subscription-only, so there's no point
     // attempting PTY for API key users.
     try {
-      return await fetchViaPty()
+      return await fetchViaPty({ authPreparation: options?.authPreparation })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       return {
@@ -308,4 +316,51 @@ export async function fetchClaudeRateLimits(): Promise<ProviderRateLimits> {
     error: 'No subscription plan — API key billing',
     status: 'unavailable'
   }
+}
+
+// ---------------------------------------------------------------------------
+// Managed account usage (inactive accounts — fetch-on-open)
+// ---------------------------------------------------------------------------
+
+export type InactiveClaudeAccountInfo = {
+  id: string
+  managedAuthPath: string
+}
+
+// Why: reads an inactive account's OAuth token directly from its managed
+// storage without materializing credentials into the shared runtime location.
+// Using ClaudeRuntimeAuthService would overwrite the active account's auth.
+async function readManagedOAuthToken(account: InactiveClaudeAccountInfo): Promise<string | null> {
+  try {
+    if (process.platform === 'darwin') {
+      const raw = await readManagedClaudeKeychainCredentials(account.id)
+      if (raw) {
+        return parseOAuthTokenFromCredentialsJson(raw)
+      }
+      return null
+    }
+    return await readFromCredentialsFile(account.managedAuthPath)
+  } catch {
+    return null
+  }
+}
+
+export async function fetchManagedAccountUsage(
+  account: InactiveClaudeAccountInfo
+): Promise<ProviderRateLimits> {
+  const token = await readManagedOAuthToken(account)
+  if (!token) {
+    return {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'No credentials',
+      status: 'error'
+    }
+  }
+  // Why: PTY fallback is intentionally omitted for inactive accounts. The PTY
+  // path materializes credentials via ClaudeRuntimeAuthService, which would
+  // interfere with the active account's auth state.
+  return fetchViaOAuth(token)
 }

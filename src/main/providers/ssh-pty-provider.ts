@@ -64,13 +64,49 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    // Why: when sessionId is present, the caller is requesting reattach to an
+    // existing relay PTY (persisted across app restart). pty.attach replays
+    // the buffered output the relay kept alive during the grace window.
+    if (opts.sessionId) {
+      console.warn(
+        `[ssh-pty] spawn() called with sessionId=${opts.sessionId}, attempting pty.attach`
+      )
+      try {
+        const attachResult = (await this.mux.request('pty.attach', {
+          id: opts.sessionId,
+          cols: opts.cols,
+          rows: opts.rows,
+          suppressReplayNotification: true
+        })) as { replay?: string }
+        console.warn(
+          `[ssh-pty] pty.attach succeeded for ${opts.sessionId}, replay=${!!attachResult.replay}`
+        )
+        return {
+          id: opts.sessionId,
+          isReattach: true,
+          ...(attachResult.replay ? { replay: attachResult.replay } : {})
+        }
+      } catch (err) {
+        // Why: pty.attach fails when the relay grace window has elapsed. Fall
+        // through to pty.spawn so the user gets a fresh shell; sessionExpired
+        // lets the renderer show a brief "Session expired" message.
+        console.warn(
+          `[ssh-pty] pty.attach FAILED for ${opts.sessionId}, falling back to fresh spawn:`,
+          err
+        )
+      }
+    }
+
     const result = await this.mux.request('pty.spawn', {
       cols: opts.cols,
       rows: opts.rows,
       cwd: opts.cwd,
       env: opts.env
     })
-    return result as PtySpawnResult
+    return {
+      ...(result as PtySpawnResult),
+      ...(opts.sessionId ? { sessionExpired: true } : {})
+    }
   }
 
   async attach(id: string): Promise<void> {

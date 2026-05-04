@@ -5,7 +5,8 @@
     "../src/main/**/*",
     "../src/preload/**/*",
     "../src/shared/**/*",
-    "../src/relay/**/*"
+    "../src/relay/**/*",
+    "../src/types/**/*"
   ],
   "compilerOptions": {
     "composite": true,

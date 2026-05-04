@@ -1,63 +1,9 @@
-import { createReadStream } from 'fs'
-import type { SFTPWrapper, ClientChannel } from 'ssh2'
+import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 
-// ── SFTP upload helpers ───────────────────────────────────────────────
-
-export async function uploadDirectory(
-  sftp: SFTPWrapper,
-  localDir: string,
-  remoteDir: string
-): Promise<void> {
-  const { readdirSync, statSync } = await import('fs')
-  const { join: pathJoin } = await import('path')
-
-  const entries = readdirSync(localDir)
-  for (const entry of entries) {
-    const localPath = pathJoin(localDir, entry)
-    const remotePath = `${remoteDir}/${entry}`
-    const stat = statSync(localPath)
-
-    if (stat.isDirectory()) {
-      await mkdirSftp(sftp, remotePath)
-      await uploadDirectory(sftp, localPath, remotePath)
-    } else {
-      await uploadFile(sftp, localPath, remotePath)
-    }
-  }
-}
-
-export function mkdirSftp(sftp: SFTPWrapper, path: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.mkdir(path, (err) => {
-      // Ignore "already exists" errors (SFTP status code 4 = SSH_FX_FAILURE)
-      if (err && (err as { code?: number }).code !== 4) {
-        reject(err)
-      } else {
-        resolve()
-      }
-    })
-  })
-}
-
-export function uploadFile(
-  sftp: SFTPWrapper,
-  localPath: string,
-  remotePath: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const readStream = createReadStream(localPath)
-    const writeStream = sftp.createWriteStream(remotePath)
-
-    writeStream.on('close', resolve)
-    writeStream.on('error', reject)
-    readStream.on('error', reject)
-
-    readStream.pipe(writeStream)
-  })
-}
+export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
 
 // ── Sentinel detection ────────────────────────────────────────────────
 
@@ -66,6 +12,7 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
     let sentinelReceived = false
     let stderrOutput = ''
     let bufferedStdout = Buffer.alloc(0)
+    let closedAfterSentinel = false
 
     const timeout = setTimeout(() => {
       if (!sentinelReceived) {
@@ -86,6 +33,9 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
       }
     })
 
+    const dataCallbacks: ((data: Buffer) => void)[] = []
+    const closeCallbacks: (() => void)[] = []
+
     channel.on('close', () => {
       if (!sentinelReceived) {
         clearTimeout(timeout)
@@ -94,16 +44,31 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
             `Relay process exited before ready.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
           )
         )
+        return
+      }
+      closedAfterSentinel = true
+      for (const cb of closeCallbacks) {
+        cb()
       }
     })
 
-    const dataCallbacks: ((data: Buffer) => void)[] = []
-    const closeCallbacks: (() => void)[] = []
+    // Why: data arriving in the same TCP chunk as the sentinel is buffered
+    // here. It's delivered on the first onData registration rather than
+    // immediately after resolve, because resolve schedules a microtask —
+    // the caller's `await` hasn't resumed yet, so no callbacks are
+    // registered when the synchronous code after resolve runs.
+    let pendingAfterSentinel: Buffer | null = null
 
     channel.on('data', (data: Buffer) => {
       if (sentinelReceived) {
-        for (const cb of dataCallbacks) {
-          cb(data)
+        if (dataCallbacks.length === 0) {
+          pendingAfterSentinel = pendingAfterSentinel
+            ? Buffer.concat([pendingAfterSentinel, data])
+            : data
+        } else {
+          for (const cb of dataCallbacks) {
+            cb(data)
+          }
         }
         return
       }
@@ -120,29 +85,36 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
           Buffer.byteLength(text.substring(0, sentinelIdx + RELAY_SENTINEL.length), 'utf-8')
         )
 
+        if (afterSentinel.length > 0) {
+          pendingAfterSentinel = afterSentinel
+        }
+
         const transport: MultiplexerTransport = {
           write: (buf: Buffer) => channel.stdin.write(buf),
           onData: (cb) => {
             dataCallbacks.push(cb)
+            // Why: deliver buffered post-sentinel data to the first
+            // subscriber. This is the multiplexer constructor, which
+            // registers onData synchronously — the data is guaranteed
+            // to reach the decoder before any other frames arrive.
+            if (pendingAfterSentinel) {
+              const buf = pendingAfterSentinel
+              pendingAfterSentinel = null
+              cb(buf)
+            }
           },
           onClose: (cb) => {
             closeCallbacks.push(cb)
+            if (closedAfterSentinel) {
+              cb()
+            }
+          },
+          close: () => {
+            channel.close()
           }
         }
-
-        channel.on('close', () => {
-          for (const cb of closeCallbacks) {
-            cb()
-          }
-        })
 
         resolve(transport)
-
-        if (afterSentinel.length > 0) {
-          for (const cb of dataCallbacks) {
-            cb(afterSentinel)
-          }
-        }
       }
     })
   })

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -61,6 +61,10 @@ function makeMockConnection(): SshConnection {
 }
 
 describe('deployAndLaunchRelay', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('calls exec to detect remote platform', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
@@ -68,6 +72,8 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('/home/user') // echo $HOME
     mockExecCommand.mockResolvedValueOnce('OK') // check relay exists
     mockExecCommand.mockResolvedValueOnce('0.1.0') // version check
+    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    mockExecCommand.mockResolvedValueOnce('READY') // socket poll
 
     await deployAndLaunchRelay(conn)
 
@@ -81,6 +87,8 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('OK')
     mockExecCommand.mockResolvedValueOnce('0.1.0')
+    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    mockExecCommand.mockResolvedValueOnce('READY') // socket poll
 
     const progress: string[] = []
     await deployAndLaunchRelay(conn, (status) => progress.push(status))
@@ -108,5 +116,46 @@ describe('deployAndLaunchRelay', () => {
     expect((result as Error).message).toBe('Relay deployment timed out after 120s')
 
     vi.useRealTimers()
+  })
+
+  it('uses distinct target-specific relay socket paths', async () => {
+    const connA = makeMockConnection()
+    const connB = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    mockExecCommand
+      .mockResolvedValueOnce('Linux x86_64') // uname A
+      .mockResolvedValueOnce('/home/user') // $HOME A
+      .mockResolvedValueOnce('OK') // exists A
+      .mockResolvedValueOnce('0.1.0') // version A
+      .mockResolvedValueOnce('DEAD') // probe A
+      .mockResolvedValueOnce('READY') // poll A
+      .mockResolvedValueOnce('Linux x86_64') // uname B
+      .mockResolvedValueOnce('/home/user') // $HOME B
+      .mockResolvedValueOnce('OK') // exists B
+      .mockResolvedValueOnce('0.1.0') // version B
+      .mockResolvedValueOnce('DEAD') // probe B
+      .mockResolvedValueOnce('READY') // poll B
+
+    await deployAndLaunchRelay(connA, undefined, 300, 'target-a')
+    await deployAndLaunchRelay(connB, undefined, 300, 'target-b')
+
+    const probeCommands = mockExecCommand.mock.calls
+      .map(([, command]) => command)
+      .filter(
+        (command) =>
+          command.includes('test -S') && command.includes('relay-') && command.includes('ALIVE')
+      )
+    expect(probeCommands).toHaveLength(2)
+    expect(probeCommands[0]).toContain('relay-')
+    expect(probeCommands[0]).not.toContain('relay.sock')
+    expect(probeCommands[1]).toContain('relay-')
+    expect(probeCommands[1]).not.toContain('relay.sock')
+    expect(probeCommands[0]).not.toEqual(probeCommands[1])
+
+    const launchA = vi.mocked(connA.exec).mock.calls.at(-1)?.[0] ?? ''
+    const launchB = vi.mocked(connB.exec).mock.calls.at(-1)?.[0] ?? ''
+    expect(launchA).toContain('--sock-path')
+    expect(launchB).toContain('--sock-path')
+    expect(launchA).not.toEqual(launchB)
   })
 })

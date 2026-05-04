@@ -4,6 +4,7 @@ const {
   execFileAsyncMock,
   ghExecFileAsyncMock,
   getOwnerRepoMock,
+  getIssueOwnerRepoMock,
   gitExecFileAsyncMock,
   acquireMock,
   releaseMock
@@ -11,6 +12,7 @@ const {
   execFileAsyncMock: vi.fn(),
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
+  getIssueOwnerRepoMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -20,6 +22,7 @@ vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
   getOwnerRepo: getOwnerRepoMock,
+  getIssueOwnerRepo: getIssueOwnerRepoMock,
   acquire: acquireMock,
   release: releaseMock,
   _resetOwnerRepoCache: vi.fn()
@@ -36,6 +39,7 @@ describe('getPRForBranch', () => {
     execFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
+    getIssueOwnerRepoMock.mockReset()
     gitExecFileAsyncMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()

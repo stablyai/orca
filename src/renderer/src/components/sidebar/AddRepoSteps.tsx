@@ -5,18 +5,19 @@
  * by moving the presentational JSX for each wizard step into separate components
  * while the parent retains all state and handlers.
  */
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Folder, FolderOpen } from 'lucide-react'
+import { Folder, FolderOpen, Settings } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
+import { SshTargetRow } from './SshTargetRow'
 import type { Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
-// ── Remote repo hook ────────────────────────────────────────────────
+// ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
@@ -72,6 +73,27 @@ export function useRemoteRepo(
     }
   }, [setStep])
 
+  // Why: keep the target list's connection state in sync while the dialog is
+  // open, so clicking the inline Connect button below updates the dot/label
+  // live without the user reopening the step.
+  useEffect(() => {
+    const unsubscribe = window.api.ssh.onStateChanged(({ targetId, state }) => {
+      setSshTargets((prev) => prev.map((t) => (t.id === targetId ? { ...t, state } : t)))
+      if (state.status === 'connected') {
+        setSelectedTargetId((curr) => curr ?? targetId)
+      }
+    })
+    return unsubscribe
+  }, [])
+
+  const handleConnectTarget = useCallback(async (targetId: string) => {
+    try {
+      await window.api.ssh.connect({ targetId })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Connection failed')
+    }
+  }, [])
+
   const handleAddRemoteRepo = useCallback(async () => {
     if (!selectedTargetId || !remotePath.trim()) {
       return
@@ -91,6 +113,9 @@ export function useRemoteRepo(
 
       const state = useAppStore.getState()
       const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
+      if (existingIdx !== -1) {
+        state.clearOrcaHookTrustForRepo(repo.id)
+      }
       if (existingIdx === -1) {
         useAppStore.setState({ repos: [...state.repos, repo] })
       } else {
@@ -99,14 +124,14 @@ export function useRemoteRepo(
         useAppStore.setState({ repos: updated })
       }
 
-      toast.success('Remote repository added', { description: repo.displayName })
+      toast.success('Remote project added', { description: repo.displayName })
       setAddedRepo(repo)
       await fetchWorktrees(repo.id)
       setStep('setup')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes('Not a valid git repository')) {
-        // Why: match the local add-repo flow — show confirmation dialog so
+        // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than
         // silently adding as a folder.
         closeModal()
@@ -133,7 +158,8 @@ export function useRemoteRepo(
     setRemoteError,
     resetRemoteState,
     handleOpenRemoteStep,
-    handleAddRemoteRepo
+    handleAddRemoteRepo,
+    handleConnectTarget
   }
 }
 
@@ -148,6 +174,8 @@ type RemoteStepProps = {
   onSelectTarget: (id: string) => void
   onRemotePathChange: (value: string) => void
   onAdd: () => void
+  onOpenSshSettings: () => void
+  onConnectTarget: (id: string) => Promise<void>
 }
 
 export function RemoteStep({
@@ -158,7 +186,9 @@ export function RemoteStep({
   isAddingRemote,
   onSelectTarget,
   onRemotePathChange,
-  onAdd
+  onAdd,
+  onOpenSshSettings,
+  onConnectTarget
 }: RemoteStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(false)
 
@@ -187,7 +217,7 @@ export function RemoteStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Open remote repo</DialogTitle>
+        <DialogTitle>Open remote project</DialogTitle>
         <DialogDescription>
           Choose a connected SSH target and enter the path to a Git repository.
         </DialogDescription>
@@ -197,41 +227,29 @@ export function RemoteStep({
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">SSH target</label>
           {sshTargets.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2">
-              No SSH targets configured. Add one in Settings first.
-            </p>
+            <div className="space-y-1.5 py-1">
+              <p className="text-xs text-muted-foreground">No SSH targets configured.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={onOpenSshSettings}
+              >
+                <Settings className="size-3.5" />
+                Add in Settings
+              </Button>
+            </div>
           ) : (
             <div className="space-y-1.5">
-              {sshTargets.map((target) => {
-                const isConnected = target.state?.status === 'connected'
-                const isSelected = selectedTargetId === target.id
-                return (
-                  <button
-                    key={target.id}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-md border text-xs transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'border-foreground/30 bg-accent'
-                        : 'border-border hover:bg-accent/50'
-                    } ${!isConnected ? 'opacity-50' : ''}`}
-                    onClick={() => {
-                      if (isConnected) {
-                        onSelectTarget(target.id)
-                      }
-                    }}
-                    disabled={!isConnected}
-                  >
-                    <span
-                      className={`size-2 rounded-full shrink-0 ${isConnected ? 'bg-green-500' : 'bg-muted-foreground/30'}`}
-                    />
-                    <span className="font-medium truncate">
-                      {target.label || `${target.username}@${target.host}`}
-                    </span>
-                    {!isConnected && (
-                      <span className="text-muted-foreground ml-auto">Not connected</span>
-                    )}
-                  </button>
-                )
-              })}
+              {sshTargets.map((target) => (
+                <SshTargetRow
+                  key={target.id}
+                  target={target}
+                  isSelected={selectedTargetId === target.id}
+                  onSelect={onSelectTarget}
+                  onConnect={onConnectTarget}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -242,9 +260,17 @@ export function RemoteStep({
             <Input
               value={remotePath}
               onChange={(e) => onRemotePathChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  if (selectedTargetId && remotePath.trim() && !isAddingRemote) {
+                    onAdd()
+                  }
+                }
+              }}
               placeholder="/home/user/project"
               className="h-8 text-xs flex-1"
-              disabled={isAddingRemote}
+              disabled={isAddingRemote || !selectedTargetId}
             />
             <Button
               variant="outline"
@@ -265,7 +291,7 @@ export function RemoteStep({
           disabled={!selectedTargetId || !remotePath.trim() || isAddingRemote}
           className="w-full"
         >
-          {isAddingRemote ? 'Adding...' : 'Add remote repo'}
+          {isAddingRemote ? 'Adding...' : 'Add remote project'}
         </Button>
       </div>
     </>
@@ -297,6 +323,15 @@ export function CloneStep({
   onPickDestination,
   onClone
 }: CloneStepProps): React.JSX.Element {
+  const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      if (canClone) {
+        onClone()
+      }
+    }
+  }
   return (
     <>
       <DialogHeader>
@@ -310,6 +345,7 @@ export function CloneStep({
           <Input
             value={cloneUrl}
             onChange={(e) => onUrlChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="https://github.com/user/repo.git"
             className="h-8 text-xs"
             disabled={isCloning}
@@ -323,6 +359,7 @@ export function CloneStep({
             <Input
               value={cloneDestination}
               onChange={(e) => onDestChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="/path/to/destination"
               className="h-8 text-xs flex-1"
               disabled={isCloning}

@@ -1,4 +1,10 @@
-import type { TerminalTab, Worktree } from '../../../shared/types'
+import type { TerminalTab, TuiAgent, Worktree } from '../../../shared/types'
+import type {
+  AgentStatusEntry,
+  AgentStatusState,
+  AgentType
+} from '../../../shared/agent-status-types'
+import type { WorktreeStatus } from './worktree-status'
 
 // Re-export from shared module so existing renderer imports continue to work.
 // Why: the main process now needs the same agent detection logic for stat
@@ -84,6 +90,105 @@ export function getWorkingAgentsPerWorktree({
   }
 
   return result
+}
+
+const WELL_KNOWN_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  gemini: 'Gemini',
+  opencode: 'OpenCode',
+  cursor: 'Cursor',
+  aider: 'Aider'
+}
+
+export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
+  if (!agentType || agentType === 'unknown') {
+    return 'Agent'
+  }
+  // Capitalize well-known names nicely; pass through custom names as-is
+  return WELL_KNOWN_LABELS[agentType] ?? agentType
+}
+
+// Why: AgentIcon expects a TuiAgent, but AgentType is a broader union
+// (WellKnownAgentType | (string & {})) that includes 'unknown' and arbitrary
+// strings reported by hook payloads. Return null for the unknown case so
+// AgentIcon renders a neutral "?" glyph — using 'claude' as a fallback
+// caused Codex panes to briefly show the Claude icon before the hook fired.
+// Why: we also guard against arbitrary strings (e.g. a hook reporting
+// agentType: "weirdo") by checking membership in an explicit record. A
+// blind `as TuiAgent` cast would pass values through that AgentIcon can't
+// render, producing a broken icon or falling back to an unrelated glyph.
+// Why: modeled as `Record<TuiAgent, true>` rather than a Set so the TypeScript
+// compiler fails to build when a TuiAgent member is added to shared/types.ts
+// without being added here — a Set<TuiAgent> is structurally permissive and
+// would silently accept a subset of the union.
+const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
+  claude: true,
+  codex: true,
+  opencode: true,
+  pi: true,
+  gemini: true,
+  aider: true,
+  goose: true,
+  amp: true,
+  kilo: true,
+  kiro: true,
+  crush: true,
+  aug: true,
+  cline: true,
+  codebuff: true,
+  continue: true,
+  cursor: true,
+  droid: true,
+  kimi: true,
+  'mistral-vibe': true,
+  'qwen-code': true,
+  rovo: true,
+  hermes: true,
+  copilot: true
+}
+
+export function agentTypeToIconAgent(agentType: AgentType | null | undefined): TuiAgent | null {
+  if (!agentType || agentType === 'unknown') {
+    return null
+  }
+  return Object.prototype.hasOwnProperty.call(ICONABLE_AGENT_TYPES, agentType)
+    ? (agentType as TuiAgent)
+    : null
+}
+
+// Why: explicit agent status entries (from hook-based reports) can go stale if
+// the agent process exits without sending a final update. This helper lets
+// callers decide whether to trust the entry based on a configurable TTL.
+export function isExplicitAgentStatusFresh(
+  entry: Pick<AgentStatusEntry, 'updatedAt'>,
+  now: number,
+  staleAfterMs: number
+): boolean {
+  return now - entry.updatedAt <= staleAfterMs
+}
+
+/**
+ * Map an explicit AgentStatusState to the visual Status used by
+ * StatusIndicator and WorktreeCard.
+ *
+ * | Explicit State | Visual Status | Meaning                        |
+ * |----------------|---------------|--------------------------------|
+ * | working        | working       | agent actively executing       |
+ * | blocked        | permission    | agent needs user attention     |
+ * | waiting        | permission    | agent needs user attention     |
+ * | done           | done          | task complete but pane live    |
+ */
+export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): WorktreeStatus {
+  switch (state) {
+    case 'working':
+      return 'working'
+    case 'blocked':
+    case 'waiting':
+      return 'permission'
+    case 'done':
+      return 'done'
+  }
 }
 
 export function countWorkingAgents({

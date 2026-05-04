@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
-import type { GitHubWorkItem, OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
@@ -9,14 +9,20 @@ import type { GitHubWorkItem, OrcaHooks, TaskViewPresetId } from '../../../share
  * mapping here so the prefetch warms exactly the cache key the page will look
  * up on mount.
  */
+export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
+
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'issues':
+      return 'is:issue is:open'
     case 'my-issues':
-      return 'assignee:@me is:open'
-    case 'review':
-      return 'review-requested:@me is:open'
+      return 'assignee:@me is:issue is:open'
+    case 'prs':
+      return 'is:pr is:open'
     case 'my-prs':
-      return 'author:@me is:open'
+      return 'author:@me is:pr is:open'
+    case 'review':
+      return 'review-requested:@me is:pr is:open'
     default:
       return 'is:open'
   }
@@ -136,7 +142,7 @@ function slugifyForWorkspaceName(input: string): string {
   )
 }
 
-export function getLinkedWorkItemSuggestedName(item: GitHubWorkItem): string {
+export function getLinkedWorkItemSuggestedName(item: { title: string }): string {
   const withoutLeadingNumber = item.title
     .trim()
     .replace(/^(?:issue|pr|pull request)\s*#?\d+\s*[:-]\s*/i, '')
@@ -153,8 +159,13 @@ export function getWorkspaceSeedName(args: {
   prompt: string
   linkedIssueNumber: number | null
   linkedPR: number | null
+  /** Why: when none of the other seed sources produce a name, the composer
+   *  supplies a repo-scoped unique marine-creature name so blank submissions
+   *  still get a distinct, readable workspace rather than a collision-prone
+   *  "workspace" literal that git would append numeric suffixes to. */
+  fallbackName?: string
 }): string {
-  const { explicitName, prompt, linkedIssueNumber, linkedPR } = args
+  const { explicitName, prompt, linkedIssueNumber, linkedPR, fallbackName } = args
   if (explicitName.trim()) {
     return explicitName.trim()
   }
@@ -174,6 +185,9 @@ export function getWorkspaceSeedName(args: {
     if (slug) {
       return slug
     }
+  }
+  if (fallbackName && fallbackName.trim()) {
+    return fallbackName.trim()
   }
   // Why: the prompt is optional in this flow. Fall back to a stable default
   // branch/workspace seed so users can launch an empty draft without first

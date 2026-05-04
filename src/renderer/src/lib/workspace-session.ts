@@ -27,6 +27,11 @@ type WorkspaceSessionSnapshot = Pick<
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
+  | 'sshConnectionStates'
+  | 'repos'
+  | 'worktreesByRepo'
+  | 'lastKnownRelayPtyIdByTabId'
+  | 'lastVisitedAtByWorktreeId'
 >
 
 /** Build the editor-file portion of the workspace session for persistence.
@@ -127,15 +132,68 @@ export function buildBrowserSessionData(
 export function buildWorkspaceSessionPayload(
   snapshot: WorkspaceSessionSnapshot
 ): WorkspaceSessionState {
+  // Why: lastKnownRelayPtyIdByTabId preserves session IDs across relay
+  // disconnect/reconnect cycles. tab.ptyId is cleared on disconnect, but
+  // the relay keeps the PTY alive — using the lastKnown fallback ensures
+  // the session save captures the ID even when the mux is temporarily down.
+  const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
+
   const activeWorktreeIdsOnShutdown = Object.entries(snapshot.tabsByWorktree)
-    .filter(([, tabs]) => tabs.some((tab) => tab.ptyId))
+    .filter(([, tabs]) => tabs.some((tab) => tab.ptyId || lastKnown[tab.id]))
     .map(([worktreeId]) => worktreeId)
+
+  // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
+  // object. Object.entries() on a Map returns [] — must use Array.from().
+  const connectedTargetIds = Array.from(snapshot.sshConnectionStates.entries())
+    .filter(([, state]) => state.status === 'connected')
+    .map(([targetId]) => targetId)
+
+  // Why: the renderer already has tab.ptyId for every terminal tab and knows
+  // which worktrees are SSH-backed via repo.connectionId. Deriving the map
+  // here avoids a sync IPC round-trip during beforeunload, which is fragile
+  // (can be dropped by Chromium under shutdown time pressure).
+  const remoteSessionIdsByTabId: Record<string, string> = {}
+  for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
+    const worktree = Object.values(snapshot.worktreesByRepo)
+      .flat()
+      .find((w) => w.id === worktreeId)
+    const repo = worktree ? snapshot.repos.find((r) => r.id === worktree.repoId) : null
+    if (!repo?.connectionId) {
+      continue
+    }
+    for (const tab of tabs) {
+      const sessionId = tab.ptyId || lastKnown[tab.id]
+      if (sessionId) {
+        remoteSessionIdsByTabId[tab.id] = sessionId
+      }
+    }
+  }
+
+  // Why: pendingActivationSpawn is documented on TerminalTab as a transient
+  // renderer-only handoff between setActiveWorktree and the next updateTabPtyId
+  // — it must never be persisted. The main-process session:set handler writes
+  // the payload to disk without re-parsing it against the Zod schema, so if
+  // the flag were ever set and not consumed before a save (e.g. app quits
+  // mid-handoff), it would round-trip to disk and the next session would
+  // start with a stale suppression flag that drops the first legitimate PTY
+  // spawn from the sidebar's recency sort. Strip it here to enforce the
+  // type-level invariant at the persistence boundary.
+  const sanitizedTabsByWorktree = Object.fromEntries(
+    Object.entries(snapshot.tabsByWorktree).map(([worktreeId, tabs]) => [
+      worktreeId,
+      tabs.map((tab) => {
+        const { pendingActivationSpawn: _unused, ...rest } = tab
+        void _unused
+        return rest
+      })
+    ])
+  )
 
   return {
     activeRepoId: snapshot.activeRepoId,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
-    tabsByWorktree: snapshot.tabsByWorktree,
+    tabsByWorktree: sanitizedTabsByWorktree,
     terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
     // Why: session:set fully replaces the persisted object, so every write path
     // must carry forward which worktrees still had live PTYs. Dropping this
@@ -156,6 +214,18 @@ export function buildWorkspaceSessionPayload(
     unifiedTabs: snapshot.unifiedTabsByWorktree,
     tabGroups: snapshot.groupsByWorktree,
     tabGroupLayouts: snapshot.layoutByWorktree,
-    activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree
+    activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree,
+    activeConnectionIdsAtShutdown: connectedTargetIds.length > 0 ? connectedTargetIds : undefined,
+    remoteSessionIdsByTabId:
+      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined,
+    // Why: per-worktree focus-recency for Cmd+J's empty-query ordering.
+    // Omit when empty so sessions written by builds that never stamped
+    // anything don't bloat the payload. See
+    // docs/cmd-j-empty-query-ordering.md.
+    lastVisitedAtByWorktreeId:
+      snapshot.lastVisitedAtByWorktreeId &&
+      Object.keys(snapshot.lastVisitedAtByWorktreeId).length > 0
+        ? snapshot.lastVisitedAtByWorktreeId
+        : undefined
   }
 }

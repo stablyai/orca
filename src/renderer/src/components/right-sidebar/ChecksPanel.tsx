@@ -1,8 +1,9 @@
 /* eslint-disable max-lines -- Why: the checks panel co-locates PR header, checks, comments,
 merge actions, and conflict state in one component to keep the data flow straightforward. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import PRActions from './PRActions'
@@ -17,9 +18,9 @@ import {
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 
 export default function ChecksPanel(): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const repos = useAppStore((s) => s.repos)
+  const repo = useRepoById(activeWorktree?.repoId ?? null)
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
@@ -69,21 +70,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   // Find active worktree and repo
-  const { worktree, repo } = useMemo(() => {
-    if (!activeWorktreeId) {
-      return { worktree: null, repo: null }
-    }
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      const wt = worktrees.find((w) => w.id === activeWorktreeId)
-      if (wt) {
-        const r = repos.find((rp) => rp.id === wt.repoId)
-        return { worktree: wt, repo: r ?? null }
-      }
-    }
-    return { worktree: null, repo: null }
-  }, [activeWorktreeId, worktreesByRepo, repos])
-
-  const branch = worktree ? worktree.branch.replace(/^refs\/heads\//, '') : ''
+  const branch = activeWorktree ? activeWorktree.branch.replace(/^refs\/heads\//, '') : ''
   const isFolder = repo ? isFolderRepo(repo) : false
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
@@ -340,7 +327,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [pr])
 
   // ── Empty state ──
-  if (!worktree) {
+  if (!activeWorktree) {
     return (
       <div className="px-4 py-6">
         <div className="text-sm font-medium text-foreground">No worktree selected</div>
@@ -491,8 +478,8 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
 
         {/* Merge / Delete Worktree actions */}
-        {worktree && repo && (
-          <PRActions pr={pr} repo={repo} worktree={worktree} onRefreshPR={handleRefreshPR} />
+        {activeWorktree && repo && (
+          <PRActions pr={pr} repo={repo} worktree={activeWorktree} onRefreshPR={handleRefreshPR} />
         )}
       </div>
 

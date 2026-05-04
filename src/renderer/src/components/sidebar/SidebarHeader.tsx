@@ -16,6 +16,7 @@ import {
   DropdownMenuRadioItem
 } from '@/components/ui/dropdown-menu'
 import type { WorktreeCardProperty } from '../../../../shared/types'
+import SidebarFilter from './SidebarFilter'
 
 const GROUP_BY_OPTIONS = [
   { id: 'none', label: 'All' },
@@ -29,7 +30,11 @@ const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'ci', label: 'CI checks' },
   { id: 'issue', label: 'Linked issue' },
   { id: 'pr', label: 'Linked PR' },
-  { id: 'comment', label: 'Comment' }
+  { id: 'comment', label: 'Comment' },
+  // Why: toggles the inline "Agent activity" list rendered below each
+  // workspace card body (see WorktreeCard → WorktreeCardAgents). Off hides
+  // the list; there is no alternate surface.
+  { id: 'inline-agents', label: 'Agent activity' }
 ]
 
 const SORT_OPTIONS = [
@@ -53,13 +58,22 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  // Why: hide the 'Agents in card' checkbox entirely when the experimental
+  // live-agent-activity feature is off — toggling it is a no-op otherwise
+  // (WorktreeCard gates rendering on the same flag), so surfacing a dead
+  // checkbox is just misleading chrome.
+  const liveAgentsEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
+  const visiblePropertyOptions = liveAgentsEnabled
+    ? PROPERTY_OPTIONS
+    : PROPERTY_OPTIONS.filter((opt) => opt.id !== 'inline-agents')
 
   return (
-    <div className="flex h-8 items-center justify-between px-4 mt-1">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+    <div className="flex h-8 items-center justify-between px-2 gap-2">
+      <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
         Workspaces
       </span>
       <div className="flex items-center gap-1.5 shrink-0">
+        <SidebarFilter />
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -70,7 +84,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                   className="text-muted-foreground"
                   aria-label="View options"
                 >
-                  <SlidersHorizontal className="size-3.5" />
+                  <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -126,7 +140,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
 
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Show properties</DropdownMenuLabel>
-            {PROPERTY_OPTIONS.map((opt) => (
+            {visiblePropertyOptions.map((opt) => (
               <DropdownMenuCheckboxItem
                 key={opt.id}
                 checked={worktreeCardProperties.includes(opt.id)}
@@ -153,13 +167,13 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               aria-label="New workspace"
               disabled={!canCreateWorktree}
             >
-              <Plus className="size-3.5" />
+              <Plus className="size-3.5" strokeWidth={2.25} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={6}>
             {canCreateWorktree
               ? `New workspace (${newWorktreeShortcutLabel})`
-              : 'Add a Git repo to create worktrees'}
+              : 'Add a Git project to create worktrees'}
           </TooltipContent>
         </Tooltip>
       </div>

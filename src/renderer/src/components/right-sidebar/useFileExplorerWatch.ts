@@ -23,6 +23,7 @@ type UseFileExplorerWatchParams = {
   refreshTree: () => Promise<void>
   inlineInput: InlineInput | null
   dragSourcePath: string | null
+  isNativeDragOver: boolean
 }
 
 export function getExternalFileChangeRelativePath(
@@ -76,7 +77,8 @@ export function useFileExplorerWatch({
   refreshDir,
   refreshTree,
   inlineInput,
-  dragSourcePath
+  dragSourcePath,
+  isNativeDragOver
 }: UseFileExplorerWatchParams): void {
   // Keep refs for values accessed inside the event handler to avoid
   // re-subscribing the IPC listener on every render.
@@ -94,6 +96,9 @@ export function useFileExplorerWatch({
 
   const dragSourceRef = useRef(dragSourcePath)
   dragSourceRef.current = dragSourcePath
+
+  const isNativeDragOverRef = useRef(isNativeDragOver)
+  isNativeDragOverRef.current = isNativeDragOver
 
   // Why: refreshDir and refreshTree are stored as refs so the merged
   // subscribe+event effect does not re-subscribe the IPC listener when
@@ -239,8 +244,15 @@ export function useFileExplorerWatch({
     const handleFsChanged = (payload: FsChangedPayload): void => {
       // Why: defer watcher-triggered refreshes while inline input or drag-drop
       // is active to avoid displacing the inline input row or shifting rows
-      // under the drag cursor (design §6.2).
-      if (inlineInputRef.current !== null || dragSourceRef.current !== null) {
+      // under the drag cursor (design §6.2). Native OS file drags (e.g. PDFs)
+      // never set dragSourcePath, so we also check isNativeDragOver to prevent
+      // FS create events from the import racing with the tree refresh and
+      // causing the virtualizer to snap the scroll position.
+      if (
+        inlineInputRef.current !== null ||
+        dragSourceRef.current !== null ||
+        isNativeDragOverRef.current
+      ) {
         deferredRef.current.push(payload)
         return
       }
@@ -259,7 +271,12 @@ export function useFileExplorerWatch({
 
   // ── Flush deferred events when interaction ends ────────────────────
   useEffect(() => {
-    if (inlineInput === null && dragSourcePath === null && deferredRef.current.length > 0) {
+    if (
+      inlineInput === null &&
+      dragSourcePath === null &&
+      !isNativeDragOver &&
+      deferredRef.current.length > 0
+    ) {
       const deferred = deferredRef.current.splice(0)
       // Why: replay every deferred payload through `processPayload` so the
       // tree cache reconciles to disk state after inline input or drag ends
@@ -279,5 +296,5 @@ export function useFileExplorerWatch({
         void refreshTreeRef.current()
       }
     }
-  }, [inlineInput, dragSourcePath, worktreePath])
+  }, [inlineInput, dragSourcePath, isNativeDragOver, worktreePath])
 }

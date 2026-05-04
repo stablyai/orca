@@ -7,7 +7,6 @@ export type HeadlessEmulatorOptions = {
   cols: number
   rows: number
   scrollback?: number
-  onData?: (data: string) => void
 }
 
 const DEFAULT_SCROLLBACK = 5000
@@ -57,9 +56,17 @@ export class HeadlessEmulator {
     this.serializer = new SerializeAddon()
     this.terminal.loadAddon(this.serializer)
 
-    if (opts.onData) {
-      this.terminal.onData(opts.onData)
-    }
+    // Why no onData wiring: this emulator exists purely for state tracking
+    // (snapshots, cwd, mode flags). It MUST NOT respond to terminal query
+    // sequences (DA1/DA2, DSR, OSC 10/11/12, DECRPM). The emulator parses
+    // data in-process synchronously before `handleSubprocessData` forwards
+    // it to the renderer over IPC, so any reply it emits would land on the
+    // shell's stdin ahead of the renderer's xterm reply and win the race.
+    // The renderer is the authoritative responder (it has the real theme,
+    // cursor position, and paste mode); a daemon-side reply would be a
+    // double-reply with wrong values. OSC 11 was the visible casualty:
+    // Claude Code's /theme auto always saw the emulator's default-black
+    // background regardless of Orca's configured terminal theme.
   }
 
   write(data: string): Promise<void> {

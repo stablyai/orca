@@ -12,6 +12,7 @@ export type EditingTarget = {
   identityFile: string
   proxyCommand: string
   jumpHost: string
+  relayGracePeriodSeconds: string
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -22,7 +23,8 @@ export const EMPTY_FORM: EditingTarget = {
   username: '',
   identityFile: '',
   proxyCommand: '',
-  jumpHost: ''
+  jumpHost: '',
+  relayGracePeriodSeconds: '300'
 }
 
 type SshTargetFormProps = {
@@ -41,7 +43,13 @@ export function SshTargetForm({
   onCancel
 }: SshTargetFormProps): React.JSX.Element {
   return (
-    <div className="space-y-4 rounded-lg border border-border/50 bg-card/40 p-4">
+    <form
+      className="space-y-4 rounded-lg border border-border/50 bg-card/40 p-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSave()
+      }}
+    >
       <p className="text-sm font-medium">{editingId ? 'Edit SSH Target' : 'New SSH Target'}</p>
 
       <div className="grid grid-cols-2 gap-4">
@@ -116,16 +124,32 @@ export function SshTargetForm({
             Optional. Equivalent to ProxyJump / ssh -J.
           </p>
         </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label>Relay Grace Period (seconds)</Label>
+          <Input
+            type="number"
+            value={form.relayGracePeriodSeconds}
+            onChange={(e) =>
+              onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
+            }
+            placeholder="300"
+            min={60}
+            max={3600}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            How long the relay keeps terminals alive after disconnect. Default: 300 (5 minutes).
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onSave}>
+        <Button type="submit" size="sm">
           {editingId ? 'Save Changes' : 'Add Target'}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
       </div>
-    </div>
+    </form>
   )
 }
