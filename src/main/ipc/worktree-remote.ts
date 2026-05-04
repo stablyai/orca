@@ -21,6 +21,7 @@ import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -41,6 +42,20 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
+  }
+}
+
+// Why (§3.3): two-phase spinner. Main process fires `'fetching'` immediately
+// after kicking off `git fetch` and `'creating'` after that fetch resolves
+// (or is determined to be cache-fresh). Renderer swaps its spinner label in
+// response; fallback is the static "Creating worktree..." label if no event
+// arrives (e.g. renderer races destruction of the window).
+export function emitCreateWorktreeProgress(
+  mainWindow: BrowserWindow,
+  phase: 'fetching' | 'creating'
+): void {
+  if (!mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('createWorktree:progress', { phase })
   }
 }
 
@@ -205,13 +220,55 @@ export async function createLocalWorktree(
   args: CreateWorktreeArgs,
   repo: Repo,
   store: Store,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
 
   const username = getGitUsername(repo.path)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
+
+  // Why (§3.3): determine the base branch (and therefore the remote we need to
+  // fetch) FIRST, so the fetch can overlap all pre-create work below. Neither
+  // of these calls depends on the suffix loop / PR probe / branch-conflict
+  // resolution, so they are safe to hoist.
+  const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
+  if (!baseBranch) {
+    // Why: getDefaultBaseRef may return null when none of origin/HEAD,
+    // origin/main, origin/master, local main, or local master exist. Don't
+    // fall back to a hardcoded 'origin/main' — passing a non-existent ref to
+    // `git worktree add` produces an opaque error. Fail here with a clear
+    // message so the UI can prompt the user to pick a base branch explicitly.
+    throw new Error(
+      'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
+    )
+  }
+
+  // Why (§3.3 Lifecycle): fire fetch via the shared 30s-window cache on the
+  // runtime so repeat creates on the same repo reuse the in-flight promise
+  // and dispatch probes benefit from the freshness window. Kicked off BEFORE
+  // the suffix loop / PR probe / path resolution so those operations overlap
+  // the network round-trip — the `await` right before `addWorktree` is the
+  // only point that actually requires fetch completion.
+  //
+  // Why `runtime` is optional: a handful of legacy IPC test harnesses still
+  // call createLocalWorktree without the runtime. In that case we fall back
+  // to the old fire-and-forget behavior (which those tests already expect).
+  // Production `worktrees.ts` always passes runtime, so the happy path
+  // always gets the cache.
+  const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+  const fetchPromise: Promise<void> = runtime
+    ? runtime.fetchRemoteWithCache(repo.path, remote)
+    : gitExecFileAsync(['fetch', remote], { cwd: repo.path })
+        .then(() => undefined)
+        .catch(() => undefined)
+
+  // Why: emit a progress event so the renderer dialog can switch its spinner
+  // label to "Checking for updates..." while the fetch is in flight, then
+  // "Creating worktree..." after we await it. Renderer falls back to the
+  // static "Creating worktree..." label if no event arrives.
+  emitCreateWorktreeProgress(mainWindow, 'fetching')
   // Why: WSL worktrees live under ~/orca/workspaces inside the WSL
   // filesystem. Validate against that root, not the Windows workspace dir.
   // If WSL home lookup fails, keep using the configured workspace root so
@@ -298,20 +355,6 @@ export async function createLocalWorktree(
     )
   }
 
-  // Determine base branch.
-  //
-  // Why: getDefaultBaseRef may return null when none of origin/HEAD,
-  // origin/main, origin/master, local main, or local master exist. In that
-  // case we must not fall back to a hardcoded 'origin/main' — passing a
-  // non-existent ref to `git worktree add` produces an opaque error. Fail
-  // here with a clear message so the UI can prompt the user to pick a base
-  // branch explicitly.
-  const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
-  if (!baseBranch) {
-    throw new Error(
-      'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
-    )
-  }
   // Why: `ask` is a pre-create choice gate, not a post-create side effect.
   // Resolve it before mutating git state so missing UI input cannot strand
   // a real worktree on disk while the renderer reports "create failed". The
@@ -348,16 +391,16 @@ export async function createLocalWorktree(
     }
   }
 
-  // Why: `git fetch` previously blocked worktree creation for 1–5s on every
-  // click, even though the fetch result isn't actually required — the
-  // subsequent `git worktree add` uses whatever local ref `baseBranch` points
-  // at. Kicking fetch off in parallel lets the worktree be created off the
-  // last-known tip while the fetch completes in the background; the next
-  // user action (pull, diff, PR create) will see the refreshed remote state.
-  const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-  void gitExecFileAsync(['fetch', remote], { cwd: repo.path }).catch(() => {
-    // Fetch is best-effort — don't block worktree creation if offline
-  })
+  // Why (§3.3): gate on the fetch we fired at the top of this function.
+  // Pre-create probes (branch-conflict, PR probe, path resolution, sparse
+  // prep) already ran concurrently with the fetch; in the warm case this
+  // await is a no-op. In the cold case the spinner has already shown
+  // "Checking for updates..." so the user sees the wait is legible.
+  //
+  // `fetchRemoteWithCache` never rejects (log-and-proceed on offline
+  // failure), so the bare `await` does not need a try/catch here.
+  await fetchPromise
+  emitCreateWorktreeProgress(mainWindow, 'creating')
 
   await (sparseDirectories.length > 0
     ? addSparseWorktree(

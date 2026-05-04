@@ -2,9 +2,11 @@
 import { existsSync, mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { createConnection } from 'net'
+import { createConnection, type Socket } from 'net'
 import { describe, expect, it, vi } from 'vitest'
+import Database from 'better-sqlite3'
 import { OrcaRuntimeService } from './orca-runtime'
+import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
@@ -44,6 +46,62 @@ async function sendRequest(
       socket.write(`${JSON.stringify(request)}\n`)
     })
   })
+}
+
+// Why: long-poll keepalive tests need every frame, not just the first, because
+// we need to count `_keepalive` frames before the terminal success/failure.
+// Also exposes the socket so tests can close it mid-wait to exercise the
+// long-poll counter decrement path.
+type FramedSession = {
+  socket: Socket
+  frames: Record<string, unknown>[]
+  done: Promise<void>
+}
+
+function openFramedSession(endpoint: string, request: Record<string, unknown>): FramedSession {
+  const frames: Record<string, unknown>[] = []
+  const socket = createConnection(endpoint)
+  let buffer = ''
+  socket.setEncoding('utf8')
+  const done = new Promise<void>((resolve, reject) => {
+    socket.once('error', (err) => {
+      // Why: ECONNRESET is expected when we deliberately destroy the socket
+      // mid-wait to probe the counter decrement; surface other errors.
+      if ((err as NodeJS.ErrnoException).code === 'ECONNRESET') {
+        resolve()
+        return
+      }
+      reject(err)
+    })
+    socket.on('close', () => resolve())
+    socket.on('data', (chunk: string) => {
+      buffer += chunk
+      let newlineIndex = buffer.indexOf('\n')
+      while (newlineIndex !== -1) {
+        const raw = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+        if (raw) {
+          const frame = JSON.parse(raw) as Record<string, unknown>
+          frames.push(frame)
+          // Why: the server leaves the socket open after writing the terminal
+          // frame (short RPCs expect the client to close); close the client
+          // side so `done` resolves once we've captured the response.
+          if (frame._keepalive !== true) {
+            socket.end()
+          }
+        }
+        newlineIndex = buffer.indexOf('\n')
+      }
+    })
+    socket.on('connect', () => {
+      socket.write(`${JSON.stringify(request)}\n`)
+    })
+  })
+  return { socket, frames, done }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 describe('OrcaRuntimeRpcServer', () => {
@@ -501,5 +559,242 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.stop()
+  })
+
+  // Why: §6 tests for the transport keepalive + long-poll counter path in §3.1.
+  // Exercise the real socket (not a mock) so we catch buffer/flush regressions
+  // that a unit-level test would miss.
+  describe('long-poll transport (§3.1)', () => {
+    it('emits keepalive frames while a check --wait handler blocks', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      // Why: 50ms keepalive lets us collect ≥3 frames within a 300ms wait
+      // window without slowing the suite.
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 50
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_wait',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: {
+            terminal: 'term_nobody',
+            wait: true,
+            timeoutMs: 300
+          }
+        })
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminals = session.frames.filter((f) => f.ok !== undefined)
+        expect(terminals).toHaveLength(1)
+        expect(terminals[0]).toMatchObject({ id: 'req_wait', ok: true })
+        // Why: 300ms wait with 50ms keepalive → expect roughly 5 keepalives;
+        // assert ≥3 to tolerate scheduler jitter without flaking.
+        expect(keepalives.length).toBeGreaterThanOrEqual(3)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('releases long-poll slot when client closes mid-wait', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 2
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const endpoint = metadata!.transports[0]!.endpoint
+
+        // Fill the cap with two long waits (10s each — we'll kill them).
+        const a = openFramedSession(endpoint, {
+          id: 'req_a',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_a', wait: true, timeoutMs: 10_000 }
+        })
+        const b = openFramedSession(endpoint, {
+          id: 'req_b',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_b', wait: true, timeoutMs: 10_000 }
+        })
+        // Let the two waits land in the handler and increment the counter.
+        await sleep(100)
+        expect(server['activeLongPolls']).toBe(2)
+
+        // Kill one client mid-wait; counter must drop to 1.
+        a.socket.destroy()
+        await a.done
+        // Give Node one tick to fire the close event on the server socket.
+        await sleep(50)
+        expect(server['activeLongPolls']).toBe(1)
+
+        // The freed slot must admit a new long-poll immediately.
+        const c = openFramedSession(endpoint, {
+          id: 'req_c',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_c', wait: true, timeoutMs: 100 }
+        })
+        await c.done
+        const cTerminal = c.frames.find((f) => f.ok !== undefined)
+        expect(cTerminal).toMatchObject({ ok: true, id: 'req_c' })
+
+        b.socket.destroy()
+        await b.done
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('responds runtime_busy once the long-poll cap is saturated', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 1
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const endpoint = metadata!.transports[0]!.endpoint
+
+        const a = openFramedSession(endpoint, {
+          id: 'req_a',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_a', wait: true, timeoutMs: 5_000 }
+        })
+        await sleep(100)
+        expect(server['activeLongPolls']).toBe(1)
+
+        // Second long-poll overflows the cap → runtime_busy.
+        const overflow = await sendRequest(endpoint, {
+          id: 'req_overflow',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_b', wait: true, timeoutMs: 5_000 }
+        })
+        expect(overflow).toMatchObject({
+          id: 'req_overflow',
+          ok: false,
+          error: { code: 'runtime_busy' }
+        })
+        // The failing request must not have counted against the cap.
+        expect(server['activeLongPolls']).toBe(1)
+
+        // Short RPCs still succeed even when the long-poll cap is full.
+        const short = await sendRequest(endpoint, {
+          id: 'req_short',
+          authToken: metadata!.authToken,
+          method: 'status.get'
+        })
+        expect(short).toMatchObject({ id: 'req_short', ok: true })
+
+        a.socket.destroy()
+        await a.done
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+  })
+
+  // Why: §6 test for the idempotent + hard-fail schema migration. A broken
+  // migration must crash startup loudly rather than serve traffic against a
+  // schema missing the delivered_at column.
+  describe('orchestration DB migration (§3.2)', () => {
+    it('is idempotent when delivered_at already exists', () => {
+      // First open creates the column; second open should be a no-op.
+      const db1 = new OrchestrationDb(':memory:')
+      db1.close()
+      // File path reuse is meaningless with :memory:, so use a tmp file.
+      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
+      const a = new OrchestrationDb(tmpPath)
+      a.close()
+      // Second construction must not throw "duplicate column name".
+      expect(() => {
+        const b = new OrchestrationDb(tmpPath)
+        b.close()
+      }).not.toThrow()
+    })
+
+    it('hard-fails startup when the migration cannot be applied', () => {
+      // Simulate a migration error by monkey-patching better-sqlite3's exec.
+      // If ALTER TABLE throws for any reason (e.g. disk full, permissions),
+      // the constructor must propagate — not swallow and serve half-broken.
+      //
+      // Why the pre-seeded v2 DB: after the schema bundle, fresh DBs are
+      // initialized directly at v3 via createTables() (which already includes
+      // `delivered_at`), so the v2 → v3 ALTER is a no-op for new installs.
+      // To exercise the hard-fail path we need a DB that actually has work
+      // to migrate — a v2-shape file without the delivered_at column — so
+      // the guarded ALTER runs and the stub can fire.
+      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
+      const seed = new Database(tmpPath)
+      seed.exec(`
+        CREATE TABLE messages (
+          id            TEXT NOT NULL,
+          from_handle   TEXT NOT NULL,
+          to_handle     TEXT NOT NULL,
+          subject       TEXT NOT NULL,
+          body          TEXT NOT NULL DEFAULT '',
+          type          TEXT NOT NULL DEFAULT 'status'
+            CHECK(type IN (
+              'status', 'dispatch', 'worker_done', 'merge_ready',
+              'escalation', 'handoff', 'decision_gate', 'heartbeat'
+            )),
+          priority      TEXT NOT NULL DEFAULT 'normal'
+            CHECK(priority IN ('normal', 'high', 'urgent')),
+          thread_id     TEXT,
+          payload       TEXT,
+          read          INTEGER NOT NULL DEFAULT 0,
+          sequence      INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `)
+      seed.pragma('user_version = 2')
+      seed.close()
+
+      const realPrototype = Database.prototype as unknown as {
+        exec: (sql: string) => unknown
+      }
+      const originalExec = realPrototype.exec
+      realPrototype.exec = function (sql: string) {
+        if (sql.includes('ALTER TABLE messages ADD COLUMN delivered_at')) {
+          throw new Error('simulated migration failure')
+        }
+        return originalExec.call(this, sql)
+      }
+      try {
+        expect(() => new OrchestrationDb(tmpPath)).toThrow('simulated migration failure')
+      } finally {
+        realPrototype.exec = originalExec
+      }
+    })
   })
 })

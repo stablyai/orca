@@ -36,4 +36,27 @@ const Failure = z.object({
   _meta: MetaFailure
 })
 
-export const RuntimeRpcEnvelopeSchema = z.discriminatedUnion('ok', [Success, Failure])
+// Why: transport-layer keepalive frame (server→client only). Not a terminal
+// frame — the client reads past it and keeps waiting for the real
+// success/failure. `id` and `_meta` are deliberately absent: keepalives carry
+// no method-level semantics and aren't tied to a particular request (one
+// connection handles one request today). See design doc §3.1.
+const Keepalive = z.object({
+  _keepalive: z.literal(true)
+})
+
+// Why: switched from z.discriminatedUnion('ok', …) to z.union because
+// keepalives have no `ok` field. Client code must branch on
+// `'_keepalive' in frame` before treating the frame as Success/Failure.
+export const RuntimeRpcEnvelopeSchema = z.union([Success, Failure, Keepalive])
+
+export type RuntimeRpcKeepaliveFrame = z.infer<typeof Keepalive>
+
+export function isKeepaliveFrame(frame: unknown): frame is RuntimeRpcKeepaliveFrame {
+  return (
+    typeof frame === 'object' &&
+    frame !== null &&
+    '_keepalive' in frame &&
+    (frame as { _keepalive: unknown })._keepalive === true
+  )
+}

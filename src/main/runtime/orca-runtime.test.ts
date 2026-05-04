@@ -484,32 +484,44 @@ describe('OrcaRuntimeService', () => {
 
   it('delivers pending orchestration messages to an already-idle agent', async () => {
     vi.useFakeTimers()
-    const runtime = new OrcaRuntimeService(store)
-    const db = new OrchestrationDb(':memory:')
-    const write = vi.fn().mockReturnValue(true)
-    runtime.setOrchestrationDb(db)
-    runtime.setPtyController({
-      write,
-      kill: vi.fn(),
-      getForegroundProcess: async () => null
-    })
-    syncSinglePty(runtime)
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new OrchestrationDb(':memory:')
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setOrchestrationDb(db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
 
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
-    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-    db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
 
-    runtime.deliverPendingMessagesForHandle(terminal.handle)
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-    expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello'))
-    // Why: markAsRead is deferred until the 500ms delayed Enter is confirmed,
-    // so we must advance timers past the split-write delay.
-    await vi.advanceTimersByTimeAsync(500)
-    expect(write).toHaveBeenCalledWith('pty-1', '\r')
-    expect(db.getUnreadMessages(terminal.handle)).toHaveLength(0)
-    db.close()
-    vi.useRealTimers()
+      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello'))
+      // Why: the split Enter write lands after the 500ms delay, so we advance
+      // past it before asserting on delivered_at.
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+
+      // Why: design doc §3.2 splits delivered vs. read — push-on-idle stamps
+      // `delivered_at` but must *not* flip `read`, since only the check caller
+      // (the agent) is authorized to consume messages from its queue. The
+      // injected banner is a courtesy; the rows stay unread so the agent can
+      // still observe them via `check` and resolve the consumption race.
+      const unread = db.getUnreadMessages(terminal.handle)
+      expect(unread).toHaveLength(1)
+      expect(unread[0].read).toBe(0)
+      expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('adopts preallocated ORCA_TERMINAL_HANDLE as a valid runtime handle', async () => {

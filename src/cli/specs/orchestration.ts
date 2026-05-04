@@ -23,8 +23,23 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: 'Check messages for a terminal',
     usage:
-      'orca orchestration check [--terminal <handle>] [--unread] [--types <type,...>] [--inject] [--wait] [--timeout-ms <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'unread', 'types', 'inject', 'wait', 'timeout-ms']
+      'orca orchestration check [--terminal <handle>] [--unread | --all] [--types <type,...>] [--inject] [--wait] [--timeout-ms <n>] [--json]\n' +
+      '  --unread (default): return only unread messages and mark them read.\n' +
+      '  --all: return every message for the handle; does not mark read.\n' +
+      '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
+      '          Emits JSON heartbeat lines to stderr every 15s so the caller can\n' +
+      '          tell the process is alive. Filter with `grep -v _heartbeat` or\n' +
+      '          `jq "select(._heartbeat|not)"` when merging streams with 2>&1.',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'terminal',
+      'unread',
+      'all',
+      'types',
+      'inject',
+      'wait',
+      'timeout-ms'
+    ]
   },
   {
     path: ['orchestration', 'reply'],
@@ -34,9 +49,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'inbox'],
-    summary: 'Show all messages across recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit']
+    summary: 'Show messages across (or for) recipients',
+    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full']
   },
   {
     path: ['orchestration', 'task-create'],
@@ -56,20 +71,29 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Update a task status',
     usage:
       'orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result']
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result'],
+    notes: ['Valid --status values: pending, ready, dispatched, completed, failed, blocked.']
   },
   {
     path: ['orchestration', 'dispatch'],
     summary: 'Dispatch a task to a terminal',
     usage:
-      'orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--inject] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'to', 'from', 'inject']
+      'orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--inject] [--dry-run] [--return-preamble] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'to', 'from', 'inject', 'dry-run', 'return-preamble']
   },
   {
     path: ['orchestration', 'dispatch-show'],
     summary: 'Show dispatch context for a task',
-    usage: 'orca orchestration dispatch-show --task <task_id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task']
+    usage:
+      'orca orchestration dispatch-show --task <task_id> [--preamble] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'preamble', 'from']
+  },
+  {
+    path: ['orchestration', 'ask'],
+    summary: 'Ask the coordinator a question and block until answered',
+    usage:
+      'orca orchestration ask --to <handle> --question <text> [--options <csv>] [--timeout-ms <n>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'to', 'question', 'options', 'timeout-ms', 'from']
   },
   {
     path: ['orchestration', 'run'],

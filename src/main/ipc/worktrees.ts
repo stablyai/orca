@@ -146,7 +146,7 @@ export function registerWorktreeHandlers(
         return createRemoteWorktree(args, repo, store, mainWindow)
       }
 
-      return createLocalWorktree(args, repo, store, mainWindow)
+      return createLocalWorktree(args, repo, store, mainWindow, runtime)
     }
   )
 

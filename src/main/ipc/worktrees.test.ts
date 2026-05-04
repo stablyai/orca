@@ -248,7 +248,16 @@ describe('registerWorktreeHandlers', () => {
     ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([])
 
-    registerWorktreeHandlers(mainWindow as never, store as never, {} as never)
+    // Why: createLocalWorktree routes `git fetch` through
+    // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). A minimal stub
+    // keeps these tests focused on create-flow semantics; the full
+    // cache behavior is covered by fetch-remote-cache.test.ts.
+    const runtimeStub = {
+      fetchRemoteWithCache: async () => {
+        /* noop — fetch mocked at gitExecFileAsync level via gitExecFileAsyncMock */
+      }
+    }
+    registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
 
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {

@@ -39,6 +39,13 @@ export type RpcRequest = {
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
+  // Why: long-poll handlers (e.g. orchestration.check with wait=true) need to
+  // observe the underlying socket's lifetime so they can release their slot
+  // and resolve their inner waiters immediately when a client disconnects
+  // instead of running down the configured timeoutMs. Undefined outside the
+  // runtime-rpc transport (direct in-process callers don't need it).
+  // See design doc §3.1 counter-lifecycle.
+  signal?: AbortSignal
 }
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown

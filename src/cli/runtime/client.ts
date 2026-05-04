@@ -5,6 +5,14 @@ import { getCliStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 
+// Why: for `orchestration.check --wait` the caller's method-level
+// `params.timeoutMs` is the inner waiter budget; we extend the client-side
+// socket timeout to `timeoutMs + GRACE_MS` so the client's own idle timer
+// never fires before the server-side waiter has had a chance to resolve and
+// emit its terminal frame. The 10 s grace absorbs round-trip + one final
+// keepalive window. See design doc §3.1.
+const LONG_POLL_CLIENT_GRACE_MS = 10_000
+
 export class RuntimeClient {
   private readonly userDataPath: string
   private readonly requestTimeoutMs: number
@@ -25,16 +33,28 @@ export class RuntimeClient {
     }
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const metadata = readMetadata(this.userDataPath)
-    const response = await sendRequest<TResult>(
-      metadata,
-      method,
-      params,
-      options?.timeoutMs ?? this.requestTimeoutMs
-    )
+    const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
+    const response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs)
     if (!response.ok) {
       throw new RuntimeRpcFailureError(response)
     }
     return response
+  }
+
+  // Why: centralises the per-method timeout policy. `orchestration.check` with
+  // `wait: true` is the only long-poll today, and its inner waiter budget
+  // lives in `params.timeoutMs`. We widen the client-side socket timeout to
+  // `timeoutMs + grace` so it doesn't fire before the server has a chance to
+  // resolve. Without this, a 5 min wait would still die at the 60 s default.
+  // See design doc §3.1.
+  private resolveMethodTimeoutMs(method: string, params?: unknown): number {
+    if (method === 'orchestration.check' && isWaitingCheck(params)) {
+      const inner = Number((params as { timeoutMs?: unknown }).timeoutMs)
+      if (Number.isFinite(inner) && inner > 0) {
+        return Math.max(inner + LONG_POLL_CLIENT_GRACE_MS, this.requestTimeoutMs)
+      }
+    }
+    return this.requestTimeoutMs
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
@@ -66,4 +86,13 @@ export class RuntimeClient {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isWaitingCheck(params: unknown): boolean {
+  return (
+    typeof params === 'object' &&
+    params !== null &&
+    'wait' in params &&
+    (params as { wait: unknown }).wait === true
+  )
 }

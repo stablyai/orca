@@ -31,7 +31,7 @@ export class RpcDispatcher {
     this.registry = buildRegistry(methods)
   }
 
-  async dispatch(request: RpcRequest): Promise<RpcResponse> {
+  async dispatch(request: RpcRequest, options?: { signal?: AbortSignal }): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
     if (!method) {
@@ -61,7 +61,10 @@ export class RpcDispatcher {
     }
 
     try {
-      const result = await method.handler(parsedParams.value, { runtime: this.runtime })
+      const result = await method.handler(parsedParams.value, {
+        runtime: this.runtime,
+        signal: options?.signal
+      })
       return successResponse(request.id, meta, result)
     } catch (error) {
       return this.mapError(request, meta, error)

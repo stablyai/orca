@@ -197,6 +197,31 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
   })
 
+  it('rejects unknown task-update status with an enum-aware error', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['orchestration', 'task-update', '--id', 'task_x', '--status', 'complete'],
+      '/tmp/repo'
+    )
+
+    const output = [...errSpy.mock.calls, ...logSpy.mock.calls]
+      .flat()
+      .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
+      .join('\n')
+    expect(output).toContain("invalid status 'complete'")
+    expect(output).toContain('pending, ready, dispatched, completed, failed, blocked')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    // Reset exitCode so subsequent tests don't inherit the failure.
+    process.exitCode = priorExitCode
+    errSpy.mockRestore()
+  })
+
   it('passes dev mode to injected orchestration dispatches', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
     process.env.ORCA_USER_DATA_PATH = '/tmp/orca-dev'
