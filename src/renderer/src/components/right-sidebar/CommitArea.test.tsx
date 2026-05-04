@@ -67,11 +67,24 @@ function primaryHasSpinner(node: unknown): boolean {
 
 function hasText(node: unknown, text: string): boolean {
   let found = false
-  visit(node, (entry) => {
-    const children = entry.props?.children
-    if (typeof children === 'string' && children.includes(text)) {
-      found = true
+  const walk = (value: unknown): void => {
+    if (typeof value === 'string') {
+      if (value.includes(text)) {
+        found = true
+      }
+      return
     }
+    if (Array.isArray(value)) {
+      value.forEach(walk)
+      return
+    }
+    const element = value as ReactElementLike | null
+    if (element && typeof element === 'object' && 'props' in element) {
+      walk(element.props?.children)
+    }
+  }
+  visit(node, (entry) => {
+    walk(entry.props?.children)
   })
   return found
 }
@@ -245,14 +258,21 @@ describe('CommitArea', () => {
     expect(hasText(element, 'pre-commit hook failed')).toBe(true)
   })
 
-  it('uses the resolved label on the primary button (e.g. Commit & Push)', () => {
+  it('keeps the primary button labelled Commit when the tree is staged, even with commits to push', () => {
+    // Why: the primary never compounds ("Commit & Push"). Users commit first,
+    // then the primary rotates to Push. Compound flows remain in the dropdown,
+    // so we check only the primary button, not the whole tree.
     const props = baseProps({
       stagedCount: 1,
       hasMessage: true,
       upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
     })
     const element = CommitArea(props)
-    expect(hasText(element, 'Commit & Push')).toBe(true)
+    const primary = findPrimaryButton(element)
+    expect(hasText(primary, 'Commit')).toBe(true)
+    expect(hasText(primary, 'Commit & Push')).toBe(false)
+    expect(hasText(primary, 'Commit & Sync')).toBe(false)
+    expect(hasText(primary, 'Commit & Publish')).toBe(false)
   })
 
   // Why: fetching from the dropdown sets isRemoteOperationActive, but the
@@ -294,22 +314,6 @@ describe('CommitArea', () => {
       isRemoteOperationActive: true
     })
     const element = CommitArea({ ...props, isRemoteOperationActive: true })
-    expect(primaryHasSpinner(element)).toBe(true)
-  })
-
-  // Why: compound primaries (Commit & Push etc.) chain commit → remote
-  // back-to-back, so the spinner must stay lit through both phases. Using
-  // OR on the two flags keeps the spinner unbroken across the handoff.
-  it('shows a spinner on a Commit & Push primary during the remote phase (isCommitting false, remote active)', () => {
-    const props = baseProps({
-      stagedCount: 1,
-      hasMessage: true,
-      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
-      isCommitting: false,
-      isRemoteOperationActive: true
-    })
-    const element = CommitArea(props)
-    // Primary resolves to 'commit_push', which is a compound commit kind.
     expect(primaryHasSpinner(element)).toBe(true)
   })
 })

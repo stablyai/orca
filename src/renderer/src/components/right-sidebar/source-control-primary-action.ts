@@ -113,43 +113,16 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
 
   const hasStaged = stagedCount > 0
 
-  // 4. Has staged files + message → compound commit actions (or plain commit
-  //    when we don't yet know the remote state).
+  // 4. Has staged files + message → plain Commit. The primary button never
+  //    compounds ("Commit & Push" etc.) — after the commit lands, the primary
+  //    naturally rotates to the appropriate remote action (Push / Sync /
+  //    Publish Branch) via step 6 below. Users who want the one-click
+  //    compound flow can still reach it from the dropdown.
   if (hasStaged && hasMessage) {
-    if (!upstreamStatus) {
-      // Why: upstream status hasn't resolved yet. Fall back to a plain commit
-      // so we don't promise a remote action ("Commit & Publish") that might
-      // be wrong once the real status lands.
-      return {
-        kind: 'commit',
-        label: 'Commit',
-        title: 'Commit staged changes',
-        disabled: false
-      }
-    }
-    if (!upstreamStatus.hasUpstream) {
-      return {
-        kind: 'commit_publish',
-        label: 'Commit & Publish',
-        title: 'Commit staged changes and publish this branch',
-        disabled: false
-      }
-    }
-    if (upstreamStatus.behind > 0) {
-      // Why: compound commit labels and tooltips omit ahead/behind counts
-      // because the commit itself bumps ahead by at least one — surfacing
-      // the pre-commit numbers would be stale the moment the action fires.
-      return {
-        kind: 'commit_sync',
-        label: 'Commit & Sync',
-        title: 'Commit staged changes, then pull and push',
-        disabled: false
-      }
-    }
     return {
-      kind: 'commit_push',
-      label: 'Commit & Push',
-      title: 'Commit staged changes and push to remote',
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Commit staged changes',
       disabled: false
     }
   }

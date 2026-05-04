@@ -62,57 +62,28 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
-  it('returns a plain Commit when upstream status has not resolved yet', () => {
-    // Why: until fetchUpstreamStatus lands for the worktree we don't know the
-    // true remote state. Falling back to a plain Commit prevents flashing
-    // Commit & Publish before the real status arrives.
-    const result = resolvePrimaryAction(
-      inputs({ stagedCount: 1, hasMessage: true, upstreamStatus: undefined })
-    )
-    expect(result.kind).toBe('commit')
-    expect(result.label).toBe('Commit')
-    expect(result.disabled).toBe(false)
-  })
-
-  it('offers Commit & Publish for staged+message when no upstream', () => {
-    const result = resolvePrimaryAction(
-      inputs({
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
-      })
-    )
-    expect(result.kind).toBe('commit_publish')
-    expect(result.label).toBe('Commit & Publish')
-    expect(result.disabled).toBe(false)
-  })
-
-  it('offers Commit & Sync for staged+message when behind > 0', () => {
-    const result = resolvePrimaryAction(
-      inputs({
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 1 }
-      })
-    )
-    expect(result.kind).toBe('commit_sync')
-    expect(result.label).toBe('Commit & Sync')
-    // Why: compound commit labels/tooltips drop the pre-commit counts — the
-    // commit itself bumps ahead by at least one, so surfacing stale numbers
-    // would mislead the user.
-    expect(result.title).toBe('Commit staged changes, then pull and push')
-  })
-
-  it('offers Commit & Push for staged+message when upstream is ahead-only or in sync', () => {
-    const result = resolvePrimaryAction(
-      inputs({
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: upstreamInSync
-      })
-    )
-    expect(result.kind).toBe('commit_push')
-    expect(result.label).toBe('Commit & Push')
+  // Why: the primary button never compounds ("Commit & Push" etc.) — it
+  // always reads "Commit" whenever there are staged files with a message,
+  // regardless of remote state. Compound flows remain available from the
+  // dropdown; after the commit lands, the primary naturally rotates to
+  // Push / Sync / Publish Branch.
+  it('returns plain Commit for staged+message regardless of upstream state', () => {
+    const upstreams = [
+      undefined,
+      { hasUpstream: false as const, ahead: 0, behind: 0 },
+      { hasUpstream: true as const, ahead: 0, behind: 0 },
+      { hasUpstream: true as const, ahead: 3, behind: 0 },
+      { hasUpstream: true as const, ahead: 2, behind: 1 },
+      { hasUpstream: true as const, ahead: 0, behind: 4 }
+    ]
+    for (const upstreamStatus of upstreams) {
+      const result = resolvePrimaryAction(
+        inputs({ stagedCount: 1, hasMessage: true, upstreamStatus })
+      )
+      expect(result.kind).toBe('commit')
+      expect(result.label).toBe('Commit')
+      expect(result.disabled).toBe(false)
+    }
   })
 
   it('disables Commit with a message-needed hint when staged but no message', () => {

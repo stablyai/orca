@@ -1436,30 +1436,13 @@ export function CommitArea({
   // the existing style) — the browser scrolls internally past 12 rows.
   const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
   // Why: the spinner must track the primary action itself, not every
-  // background remote op. A Fetch triggered from the dropdown sets
+  // background remote op. Fetching from the dropdown sets
   // isRemoteOperationActive — if we spun the primary on that flag while the
-  // primary is plain "Commit", we'd be telling the user their commit is
-  // running when it isn't. Scope by action kind:
-  //   - plain 'commit'            → spins on isCommitting only
-  //   - pure remote (push / pull  → spins on isRemoteOperationActive only
-  //       / sync / publish)
-  //   - compound commit_* kinds   → spin on either flag, because the handler
-  //     runs commit then the remote op back-to-back (isCommitting first,
-  //     then isRemoteOperationActive); using a single OR keeps the spinner
-  //     unbroken across the two phases. A dropdown Fetch fired while the
-  //     primary is a compound kind will also spin it, but resolvePrimaryAction
-  //     disables compound primaries whenever a remote op is active, so the
-  //     spinner accompanies a disabled button — ambient "something is
-  //     running" state, not a misleading "your compound action is running"
-  //     claim.
-  const kind = primaryAction.kind
-  const isCompoundCommit =
-    kind === 'commit_push' || kind === 'commit_sync' || kind === 'commit_publish'
-  const showSpinner = isCompoundCommit
-    ? isCommitting || isRemoteOperationActive
-    : kind === 'commit'
-      ? isCommitting
-      : isRemoteOperationActive
+  // primary was "Commit", we'd be telling the user their commit was running
+  // when it isn't. The primary is always either the 'commit' kind or a
+  // pure remote kind (push / pull / sync / publish); compound commit_*
+  // kinds are dropdown-only and never reach this component.
+  const showSpinner = primaryAction.kind === 'commit' ? isCommitting : isRemoteOperationActive
 
   return (
     <div className="px-3 pb-2">
