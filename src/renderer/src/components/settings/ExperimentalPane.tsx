@@ -218,9 +218,8 @@ export function ExperimentalPane({
             <div className="min-w-0 shrink space-y-1.5">
               <Label>Mobile Pairing</Label>
               <p className="text-xs text-muted-foreground">
-                Control Orca from your phone by scanning a QR code. Beta / early preview &mdash; not
-                ready for general use, shared with internal testers for feedback. Get started from
-                the{' '}
+                Control Orca from your phone by scanning a QR code. Beta / early preview &mdash;
+                expect bugs and breaking changes. Get started from the{' '}
                 <button
                   type="button"
                   // Why: points at the current mobile release tag rather than
