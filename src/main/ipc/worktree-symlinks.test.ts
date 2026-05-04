@@ -5,12 +5,14 @@ import {
   statSync,
   lstatSync,
   readlinkSync,
-  rmSync
+  rmSync,
+  symlinkSync,
+  existsSync
 } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createWorktreeSymlinks } from './worktree-symlinks'
+import { createWorktreeSymlinks, removeWorktreeSymlinks } from './worktree-symlinks'
 
 describe('createWorktreeSymlinks', () => {
   let root: string
@@ -156,6 +158,70 @@ describe('createWorktreeSymlinks', () => {
   it('is a no-op for an empty paths list', async () => {
     await createWorktreeSymlinks(primary, worktree, [])
     expect(warn).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+  })
+})
+
+describe('removeWorktreeSymlinks', () => {
+  let root: string
+  let primary: string
+  let worktree: string
+  let error: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-unlink-'))
+    primary = join(root, 'primary')
+    worktree = join(root, 'worktree')
+    mkdirSync(primary, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    error.mockRestore()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('unlinks configured symlinks from the worktree', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    mkdirSync(join(primary, 'node_modules'))
+    symlinkSync(join(primary, '.env'), join(worktree, '.env'), 'file')
+    symlinkSync(join(primary, 'node_modules'), join(worktree, 'node_modules'), 'dir')
+
+    await removeWorktreeSymlinks(worktree, ['.env', 'node_modules'])
+
+    expect(existsSync(join(worktree, '.env'))).toBe(false)
+    expect(existsSync(join(worktree, 'node_modules'))).toBe(false)
+    // Source is untouched.
+    expect(statSync(join(primary, '.env')).isFile()).toBe(true)
+    expect(statSync(join(primary, 'node_modules')).isDirectory()).toBe(true)
+  })
+
+  it('leaves a regular file at the configured path alone', async () => {
+    // Why: a user who created a real file at `.env` (instead of symlinking)
+    // must not lose it just because `.env` is in the configured list.
+    writeFileSync(join(worktree, '.env'), 'USER_WROTE_THIS=1\n')
+
+    await removeWorktreeSymlinks(worktree, ['.env'])
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
+  })
+
+  it('ignores missing entries', async () => {
+    await removeWorktreeSymlinks(worktree, ['.env', 'node_modules'])
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('rejects unsafe paths without touching the filesystem', async () => {
+    // Parent-dir traversal is silently skipped; no unlink attempted.
+    writeFileSync(join(root, 'outside-file'), 'DO_NOT_DELETE')
+    await removeWorktreeSymlinks(worktree, ['../outside-file'])
+    expect(existsSync(join(root, 'outside-file'))).toBe(true)
+  })
+
+  it('is a no-op for an empty paths list', async () => {
+    await removeWorktreeSymlinks(worktree, [])
     expect(error).not.toHaveBeenCalled()
   })
 })

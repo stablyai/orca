@@ -37,6 +37,7 @@ import { rebuildAuthorizedRootsCache, ensureAuthorizedRootsCache } from './files
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { getLocalPtyProvider } from './pty'
+import { removeWorktreeSymlinks } from './worktree-symlinks'
 
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
@@ -310,6 +311,20 @@ export function registerWorktreeHandlers(
         if (!result.success) {
           console.error(`[hooks] archive hook failed for ${worktreePath}:`, result.output)
         }
+      }
+
+      // Why: `git worktree remove` (non-force) refuses to delete a worktree
+      // that has untracked files, and a symlink pointing into the primary
+      // checkout looks untracked to git. Unlink the user-configured symlinks
+      // first so the normal delete path keeps working — otherwise every
+      // deletion would require the Force Delete toast once the feature is on.
+      const settings = store.getSettings()
+      if (
+        settings.experimentalWorktreeSymlinks &&
+        repo.symlinkPaths &&
+        repo.symlinkPaths.length > 0
+      ) {
+        await removeWorktreeSymlinks(worktreePath, repo.symlinkPaths)
       }
 
       try {

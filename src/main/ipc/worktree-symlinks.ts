@@ -1,4 +1,4 @@
-import { symlink, mkdir, stat } from 'fs/promises'
+import { symlink, mkdir, stat, lstat, unlink } from 'fs/promises'
 import { dirname, isAbsolute, resolve } from 'path'
 
 /** Create filesystem symlinks from the primary checkout into a freshly-created
@@ -65,6 +65,44 @@ export async function createWorktreeSymlinks(
         `[worktree-symlinks] Failed to symlink "${rel}" (${source} -> ${target}):`,
         error
       )
+    }
+  }
+}
+
+/** Remove previously-created symlinks from a worktree before deletion.
+ *
+ *  Why: `git worktree remove` refuses to delete a worktree that has modified
+ *  or untracked files. A symlink pointing at the primary's `node_modules`
+ *  looks "untracked" to git, so users would hit "It has changed files. Use
+ *  Force Delete" on every deletion once they've configured this feature.
+ *  Unlink the known symlinks up front so the non-force path keeps working.
+ *
+ *  Safety: only removes entries that are actually symbolic links. A regular
+ *  file or directory at the same path is left alone — we never want to clobber
+ *  something the user created that happens to share a name with a configured
+ *  entry. Missing entries (ENOENT) are silently ignored. */
+export async function removeWorktreeSymlinks(
+  worktreePath: string,
+  paths: readonly string[]
+): Promise<void> {
+  for (const rawPath of paths) {
+    const rel = rawPath.trim().replace(/^[\\/]+/, '')
+    if (!rel || isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) {
+      continue
+    }
+    const target = resolve(worktreePath, rel)
+    try {
+      const s = await lstat(target)
+      if (!s.isSymbolicLink()) {
+        continue
+      }
+    } catch {
+      continue
+    }
+    try {
+      await unlink(target)
+    } catch (error) {
+      console.error(`[worktree-symlinks] Failed to unlink "${rel}" (${target}):`, error)
     }
   }
 }
