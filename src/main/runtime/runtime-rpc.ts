@@ -321,6 +321,9 @@ export class OrcaRuntimeRpcServer {
     }
     if (longPoll) {
       this.activeLongPolls += 1
+      // Why: arm the keepalive timer only for long-polls. Short RPCs never
+      // touch it so the `setInterval` is never created. See §3.1.
+      context?.startKeepalive()
     }
 
     try {

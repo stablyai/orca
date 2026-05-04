@@ -102,6 +102,12 @@ export class UnixSocketTransport implements RpcTransport {
     // receive this signal through the message context and the server uses it
     // to cancel long-poll handlers the instant the client socket closes. See
     // §3.1 counter-lifecycle.
+    // Invariant: the CLI (`src/cli/runtime/transport.ts`) opens a fresh socket
+    // per request and closes it after the terminal frame, so at most one
+    // dispatch is ever in flight on a connection. If that ever changes (e.g.
+    // a persistent socket with sequential requests), move the AbortController
+    // to per-dispatch scope — otherwise completing request N would abort
+    // request N+1 when the socket closes.
     const abortController = new AbortController()
 
     socket.setEncoding('utf8')
@@ -143,34 +149,42 @@ export class UnixSocketTransport implements RpcTransport {
     })
   }
 
-  // Why: wraps the message handler so the transport can run a keepalive
-  // timer for the lifetime of the dispatch, automatically stopping it when
-  // the server calls `reply()`. Short RPCs resolve before the first tick so
-  // the timer never actually writes a frame. See §3.1.
+  // Why: the keepalive timer is opt-in per request via `startKeepalive()`.
+  // Short RPCs never call it and pay no timer overhead; only long-poll
+  // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
   private dispatchMessage(socket: Socket, rawMessage: string, signal: AbortSignal): void {
     let replied = false
-    const keepaliveTimer: NodeJS.Timeout = setInterval(() => {
-      if (replied || socket.destroyed || !socket.writable) {
-        return
-      }
-      socket.write('{"_keepalive":true}\n')
-    }, this.keepaliveIntervalMs)
-    // Why: don't hold the process open solely on the keepalive interval.
-    if (typeof keepaliveTimer.unref === 'function') {
-      keepaliveTimer.unref()
-    }
+    let keepaliveTimer: NodeJS.Timeout | null = null
 
     const reply = (response: string): void => {
       if (replied) {
         return
       }
       replied = true
-      clearInterval(keepaliveTimer)
+      if (keepaliveTimer) {
+        clearInterval(keepaliveTimer)
+      }
       if (!socket.destroyed && socket.writable) {
         socket.write(`${response}\n`)
       }
     }
 
-    this.messageHandler?.(rawMessage, reply, { signal })
+    const startKeepalive = (): void => {
+      if (keepaliveTimer || replied) {
+        return
+      }
+      keepaliveTimer = setInterval(() => {
+        if (replied || socket.destroyed || !socket.writable) {
+          return
+        }
+        socket.write('{"_keepalive":true}\n')
+      }, this.keepaliveIntervalMs)
+      // Why: don't hold the process open solely on the keepalive interval.
+      if (typeof keepaliveTimer.unref === 'function') {
+        keepaliveTimer.unref()
+      }
+    }
+
+    this.messageHandler?.(rawMessage, reply, { signal, startKeepalive })
   }
 }
