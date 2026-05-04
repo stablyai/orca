@@ -19,6 +19,7 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import { stripCredentialsFromMessage } from '../../../../shared/git-remote-error'
 
 export type DiffSource =
   | 'unstaged'
@@ -372,17 +373,6 @@ function openWorkspaceEditorItem(
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
 const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
 
-// Why: git stderr can embed a remote URL that includes credentials when the
-// caller (or a helper) injected them. Two forms must be handled: the classic
-// `https://user:token@github.com/...` and the token-only `https://token@.../`
-// form that GitHub's fine-grained PAT flow recommends. Either can leak a
-// secret to anyone shoulder-surfing or reading a screenshot. Replace the full
-// credential-and-@ segment with the bare scheme so the host+path remains
-// legible.
-function stripGitCredentials(message: string): string {
-  return message.replace(/(https?:\/\/)([^@\s/]+:)?[^@\s/]+@/g, '$1')
-}
-
 // Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
 // server-side pre-receive hook message) should not blow up the toast. Cap the
 // detail length so the toast stays readable; the underlying error is still
@@ -402,11 +392,11 @@ function extractPublishFailureDetail(message: string): string | null {
     .filter(Boolean)
   const fatalLine = lines.find((line) => line.startsWith('fatal:'))
   if (fatalLine) {
-    return truncateDetail(stripGitCredentials(fatalLine.slice('fatal:'.length).trim()))
+    return truncateDetail(stripCredentialsFromMessage(fatalLine.slice('fatal:'.length).trim()))
   }
   const remoteLine = lines.find((line) => line.startsWith('remote:'))
   if (remoteLine) {
-    return truncateDetail(stripGitCredentials(remoteLine.slice('remote:'.length).trim()))
+    return truncateDetail(stripCredentialsFromMessage(remoteLine.slice('remote:'.length).trim()))
   }
   return null
 }

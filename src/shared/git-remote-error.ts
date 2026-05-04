@@ -1,9 +1,11 @@
 // Why: git's stderr often embeds the full remote URL, which can include an
-// embedded credential — either `https://user:token@host/...` (the classic
-// user+pass form) OR `https://token@host/...` (token-only, which GitHub's
-// "fine-grained PAT" docs explicitly recommend). Both must be redacted. We
-// match an optional `user:` segment followed by a secret then `@`.
-const CREDENTIAL_URL_PATTERN = /(https?:\/\/)([^\s/@]+:)?[^\s/@]+@/g
+// embedded credential — either `scheme://user:token@host/...` (the classic
+// user+pass form) OR `scheme://token@host/...` (token-only, which GitHub's
+// "fine-grained PAT" docs explicitly recommend). Both must be redacted. The
+// scheme match covers any credential-bearing URL scheme (HTTPS plus SSH/git
+// variants like `ssh://`, `git://`, `git+ssh://`) since Orca supports SSH
+// remotes and git stderr can surface any of them.
+const CREDENTIAL_URL_PATTERN = /([a-z][a-z0-9+.-]*:\/\/)([^\s/@]+:)?[^\s/@]+@/gi
 
 export function stripCredentialsFromMessage(message: string): string {
   return message.replace(CREDENTIAL_URL_PATTERN, '$1')

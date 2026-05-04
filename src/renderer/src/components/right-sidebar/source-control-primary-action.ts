@@ -91,13 +91,17 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     // Why: when the candidate label is "Commit", the generic "remote
     // operation in progress…" tooltip mismatches the visible label. Point
     // the user at the fact that the commit will wait, keeping the label and
-    // the explanation consistent.
+    // the explanation consistent. Conflicts take precedence over the remote
+    // tooltip because resolving them is the only action the user can start
+    // while the remote op runs.
+    const title = hasUnresolvedConflicts
+      ? 'Resolve conflicts before committing'
+      : candidate.kind === 'commit'
+        ? 'Remote operation in progress — try again once it finishes'
+        : 'Remote operation in progress…'
     return {
       ...candidate,
-      title:
-        candidate.kind === 'commit'
-          ? 'Remote operation in progress — try again once it finishes'
-          : 'Remote operation in progress…',
+      title,
       disabled: true
     }
   }

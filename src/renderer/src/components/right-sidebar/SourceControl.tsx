@@ -559,10 +559,9 @@ function SourceControlInner(): React.JSX.Element {
           return
         }
         await syncBranch(activeWorktreeId, worktreePath, connectionId)
-      } catch (error) {
+      } catch {
         // Why: remote action failures are surfaced by editor-slice actions to keep
         // one consistent toast path and avoid duplicate notifications in the UI.
-        void error
       }
     },
     [activeWorktreeId, fetchBranch, pullBranch, pushBranch, syncBranch, worktreePath]

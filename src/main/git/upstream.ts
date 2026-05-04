@@ -1,5 +1,5 @@
 import type { GitUpstreamStatus } from '../../shared/types'
-import { isNoUpstreamError } from '../../shared/git-remote-error'
+import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { gitExecFileAsync } from './runner'
 
 export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus> {
@@ -45,6 +45,8 @@ export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstre
         behind: 0
       }
     }
-    throw error
+    // Why: parity with gitPush/gitPull/gitFetch — normalize before crossing
+    // the IPC boundary so renderers don't see execFile stderr preambles or local paths.
+    throw new Error(normalizeGitErrorMessage(error))
   }
 }

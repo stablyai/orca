@@ -231,7 +231,9 @@ export class GitHandler {
       if (isNoUpstreamError(error)) {
         return { hasUpstream: false, ahead: 0, behind: 0 }
       }
-      throw error
+      // Why: match fetch/push/pull normalization so execFile preamble and local
+      // paths don't leak to the renderer.
+      throw new Error(normalizeGitErrorMessage(error))
     }
   }
 

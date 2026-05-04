@@ -102,14 +102,14 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   // Why: compound commit labels omit counts because the commit itself changes
   // ahead/behind — surfacing pre-commit numbers would be misleading (e.g.
   // "Commit & Push (2)" would still read "2" after the commit lands at 3).
-  // When the branch has no upstream, the primary button surfaces
-  // "Commit & Publish" as a one-click path. Point the dropdown at that
-  // compound action instead of contradicting it with a "publish first"
-  // instruction that ignores the offered shortcut.
+  // On an unpublished branch, Commit & Push is unavailable: the user must
+  // Publish Branch first (offered via the primary action), after which
+  // Commit & Push becomes enabled. Tooltips mirror pushItem/syncItem copy
+  // so the "publish first" instruction is consistent across the menu.
   const commitPushTitle = upstreamLoading
     ? 'Checking branch status…'
     : !hasUpstream
-      ? 'Use Commit & Publish to publish and push in one step'
+      ? 'Publish the branch first to push commits'
       : (commitDisabledReason ?? 'Commit staged changes and push')
   const commitPushItem: DropdownItem = {
     kind: 'commit_push',
@@ -123,10 +123,10 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
       return 'Checking branch status…'
     }
     if (!hasUpstream) {
-      // Why: same reasoning as commitPushTitle — stay consistent with the
-      // primary's Commit & Publish offer rather than telling the user to
-      // publish first.
-      return 'Use Commit & Publish, then sync'
+      // Why: mirror pushItem/syncItem — direct the user to Publish Branch
+      // (the primary action on an unpublished branch) rather than naming a
+      // nonexistent compound action.
+      return 'Publish the branch first to sync commits'
     }
     if (behind === 0) {
       return 'Nothing to pull — use Commit & Push instead'
