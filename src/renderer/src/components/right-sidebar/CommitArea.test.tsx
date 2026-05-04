@@ -256,13 +256,17 @@ describe('CommitArea', () => {
   })
 
   // Why: fetching from the dropdown sets isRemoteOperationActive, but the
-  // primary button is "Commit" — painting a spinner on it told the user their
-  // commit was running. The spinner must track the primary action itself, not
-  // every background remote op.
-  it('does not show a spinner on a Commit primary when a dropdown remote op is running', () => {
+  // primary button is plain "Commit" — painting a spinner on it told the
+  // user their commit was running. The spinner must track the primary
+  // action itself, not every background remote op.
+  it('does not show a spinner on a plain Commit primary when a dropdown remote op is running', () => {
     const props = baseProps({
+      // stagedCount + no message resolves to plain 'commit' kind (disabled
+      // because the message is empty). This is the scenario the user hit:
+      // a Commit button that falsely claimed their commit was in flight
+      // while a dropdown-triggered Fetch was the actual work.
       stagedCount: 1,
-      hasMessage: true,
+      hasMessage: false,
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
       isCommitting: false,
       isRemoteOperationActive: true
@@ -290,6 +294,22 @@ describe('CommitArea', () => {
       isRemoteOperationActive: true
     })
     const element = CommitArea({ ...props, isRemoteOperationActive: true })
+    expect(primaryHasSpinner(element)).toBe(true)
+  })
+
+  // Why: compound primaries (Commit & Push etc.) chain commit → remote
+  // back-to-back, so the spinner must stay lit through both phases. Using
+  // OR on the two flags keeps the spinner unbroken across the handoff.
+  it('shows a spinner on a Commit & Push primary during the remote phase (isCommitting false, remote active)', () => {
+    const props = baseProps({
+      stagedCount: 1,
+      hasMessage: true,
+      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
+      isCommitting: false,
+      isRemoteOperationActive: true
+    })
+    const element = CommitArea(props)
+    // Primary resolves to 'commit_push', which is a compound commit kind.
     expect(primaryHasSpinner(element)).toBe(true)
   })
 })
