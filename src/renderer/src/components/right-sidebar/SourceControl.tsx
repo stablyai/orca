@@ -35,6 +35,11 @@ import { Button } from '@/components/ui/button'
 import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
+  getDiscardAllPaths,
+  runDiscardAllForArea,
+  type DiscardAllArea
+} from './discard-all-sequence'
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -836,43 +841,32 @@ function SourceControlInner(): React.JSX.Element {
   // the conflict or lose the resolution (no v1 UX to explain this clearly).
   // There is no bulk discard IPC, so we serialize per-file discard calls that
   // run the same editor-quiesce + external-change notification as the row action.
-  // For the staged area we first bulk-unstage so discard (which only resets the
-  // working tree to HEAD) isn't left with a stale index that still carries the
-  // staged delta — without the unstage the file would reappear in "Changes"
-  // as the inverse of the staged modification.
+  // The sequencing + filter rules live in discard-all-sequence.ts so they can
+  // be unit-tested independently of the full component (staged area needs a
+  // bulk-unstage first, and a failed unstage must skip the discard loop).
   const handleRevertAllInArea = useCallback(
-    async (area: 'staged' | 'unstaged' | 'untracked') => {
+    async (area: DiscardAllArea) => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = grouped[area]
-        .filter(
-          (entry) =>
-            entry.conflictStatus !== 'unresolved' && entry.conflictStatus !== 'resolved_locally'
-        )
-        .map((entry) => entry.path)
+      const paths = getDiscardAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
       setIsExecutingBulk(true)
       try {
-        if (area === 'staged') {
-          const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-          try {
-            await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
-          } catch (error) {
-            // Why: bail before per-file discard if the bulk unstage fails.
-            // Otherwise we'd reset the worktree to HEAD while leaving the
-            // staged delta in the index, producing phantom "Changes" rows
-            // that are the inverse of what the user just "discarded".
+        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const result = await runDiscardAllForArea(area, paths, {
+          bulkUnstage: (filePaths) =>
+            window.api.git.bulkUnstage({ worktreePath, filePaths, connectionId }),
+          discardOne: (filePath) => handleDiscard(filePath),
+          onError: (error) => {
             console.error('[SourceControl] bulk unstage failed in discard-all', error)
-            return
           }
+        })
+        if (!result.aborted) {
+          clearSelection()
         }
-        for (const path of paths) {
-          await handleDiscard(path)
-        }
-        clearSelection()
       } finally {
         setIsExecutingBulk(false)
       }
@@ -2097,7 +2091,7 @@ function EmptyState({
   )
 }
 
-function ActionButton({
+export function ActionButton({
   icon: Icon,
   title,
   onClick,
