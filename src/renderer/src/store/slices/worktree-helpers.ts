@@ -36,6 +36,14 @@ export type WorktreeSlice = {
    */
   everActivatedWorktreeIds: Set<string>
   /**
+   * Persisted focus-recency timestamp per worktree, used as the primary
+   * ordering signal for Cmd+J's empty-query Worktrees section. Stamped by
+   * `markWorktreeVisited` from user-initiated activations
+   * (activateAndRevealWorktree), NOT from background activity events or raw
+   * `setActiveWorktree` calls. See docs/cmd-j-empty-query-ordering.md.
+   */
+  lastVisitedAtByWorktreeId: Record<string, number>
+  /**
    * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
    * `true` only after the first launch where every repo's `worktrees.list` IPC
    * call succeeded AND at least one repo returned a non-empty result — at that
@@ -65,6 +73,28 @@ export type WorktreeSlice = {
    *  ghostty's "show until interact" model. Persists isUnread=false. */
   clearWorktreeUnread: (worktreeId: string) => void
   bumpWorktreeActivity: (worktreeId: string) => void
+  /**
+   * Monotonic stamp of the focus-recency timestamp for a worktree. No-op if
+   * the supplied (or current) timestamp is not strictly greater than the
+   * stored value. Called from user-initiated activations only. See
+   * docs/cmd-j-empty-query-ordering.md.
+   */
+  markWorktreeVisited: (worktreeId: string, visitedAt?: number) => void
+  /**
+   * Drop `lastVisitedAtByWorktreeId` entries whose worktree IDs no longer
+   * exist. Must be called AFTER worktree hydration completes — repos load
+   * async, so pruning on raw rehydrate would nuke timestamps for worktrees
+   * whose repo hasn't yet hydrated.
+   */
+  pruneLastVisitedTimestamps: () => void
+  /**
+   * One-shot migration fixup: if the active worktree has no stored
+   * focus-recency timestamp after session hydration, seed it with the
+   * current time. Different semantics from `markWorktreeVisited` — this
+   * only fills in a missing entry on first load, it does not record a
+   * fresh visit.
+   */
+  seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]
   /**

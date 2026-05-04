@@ -17,6 +17,7 @@ import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
+import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
@@ -159,6 +160,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -177,37 +179,55 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const hasQuery = deferredQuery.trim().length > 0
 
-  const sortedWorktrees = useMemo(() => {
-    const visibleWorktrees = allWorktrees.filter((worktree) => {
-      if (worktree.isArchived) {
-        return false
-      }
-      // Why: keep the jump palette aligned with the sidebar. If the user
-      // opted to hide the default-branch workspace, surfacing it here via
-      // Cmd+J would reintroduce the entry they asked to remove.
-      // Drift warning: this check must stay in lockstep with the sidebar's
-      // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
-      // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
-      // but adding a new filter axis (e.g. a second toggle) here would need
-      // the matching change in the sidebar pipeline — otherwise Cmd+J and
-      // the sidebar will show different lists.
-      if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
-        return false
-      }
-      return true
-    })
-    // Why: on empty query, show pure recency (matches sidebar's 'recent' sort
-    // rationale in smart-sort.ts) so Cmd+J is a predictable "jump back to what
-    // I was just on" surface. Typing swaps in smart-sort to rank matches.
-    // Deps over-include on the empty-query branch; acceptable since they
-    // change infrequently and branching the memo isn't worth it.
-    return hasQuery
-      ? sortWorktreesSmart(visibleWorktrees, tabsByWorktree, repoMap, prCache)
-      : [...visibleWorktrees].sort(
-          (a, b) =>
-            b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
-        )
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache, hasQuery, hideDefaultBranchWorkspace])
+  // Why: keep the jump palette aligned with the sidebar. If the user
+  // opted to hide the default-branch workspace, surfacing it here via
+  // Cmd+J would reintroduce the entry they asked to remove.
+  // Drift warning: this check must stay in lockstep with the sidebar's
+  // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
+  // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
+  // but adding a new filter axis (e.g. a second toggle) here would need
+  // the matching change in the sidebar pipeline — otherwise Cmd+J and
+  // the sidebar will show different lists.
+  const visibleWorktrees = useMemo(
+    () =>
+      allWorktrees.filter((worktree) => {
+        if (worktree.isArchived) {
+          return false
+        }
+        if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
+          return false
+        }
+        return true
+      }),
+    [allWorktrees, hideDefaultBranchWorkspace]
+  )
+
+  // Why: empty-query rows use focus-recency (lastVisitedAtByWorktreeId) with
+  // lastActivityAt fallback so SSH / quiet worktrees don't get pushed below
+  // the fold by noisy local worktrees. Current worktree is excluded from the
+  // empty-query rows per product model (Cmd+J is a switch surface, not a
+  // "show me everything" surface), but kept in visibleWorktreesForState so
+  // empty-state/loading logic remains unaffected.
+  // See docs/cmd-j-empty-query-ordering.md.
+  const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
+    () =>
+      orderEmptyQueryWorktrees({
+        visibleWorktrees,
+        activeWorktreeId,
+        lastVisitedAtByWorktreeId
+      }),
+    [visibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
+  )
+
+  // Why: typed queries still route through sortWorktreesSmart — switcher
+  // ranking only diverges from smart-sort on the empty-query branch.
+  const sortedWorktrees = useMemo(
+    () =>
+      hasQuery
+        ? sortWorktreesSmart(visibleWorktrees, tabsByWorktree, repoMap, prCache)
+        : switchableWorktreesForRows,
+    [hasQuery, visibleWorktrees, switchableWorktreesForRows, tabsByWorktree, repoMap, prCache]
+  )
 
   const browserSortedWorktrees = useMemo(() => {
     // Why: browser-tab search is explicitly cross-worktree, so it must keep
@@ -387,7 +407,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     canCreateWorktree && createWorktreeName.length > 0 && worktreeItems.length === 0
 
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
-  const hasAnyWorktrees = sortedWorktrees.length > 0
+  // Why: empty-state / "has any worktrees?" uses the full visible list
+  // (including current) so the palette never claims to be empty just
+  // because the only visible worktree is the currently active one.
+  // See docs/cmd-j-empty-query-ordering.md.
+  const hasAnyWorktrees = visibleWorktreesForState.length > 0
   const hasAnyBrowserPages = browserPageEntries.length > 0
 
   useEffect(() => {
@@ -710,6 +734,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       return {
         title: 'No results match your search',
         subtitle: 'Try a name, branch, repo, comment, PR, page title, or URL.'
+      }
+    }
+    // Why: empty-query rows exclude the current worktree, so a single-worktree
+    // setup has hasAnyWorktrees=true but zero switchable rows. Without this
+    // branch the palette would claim "No active worktrees" while one is open
+    // — misleading. See docs/cmd-j-empty-query-ordering.md.
+    if (!hasQuery && hasAnyWorktrees && !hasAnyBrowserPages) {
+      return {
+        title: 'No other worktrees to switch to',
+        subtitle: 'Type to search or create a new worktree.'
       }
     }
     return {

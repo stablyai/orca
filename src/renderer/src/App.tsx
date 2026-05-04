@@ -105,7 +105,9 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
-      updateSettings: s.updateSettings
+      updateSettings: s.updateSettings,
+      pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
+      seedActiveWorktreeLastVisitedIfMissing: s.seedActiveWorktreeLastVisitedIfMissing
     }))
   )
 
@@ -232,6 +234,16 @@ function App(): React.JSX.Element {
           actions.hydrateTabsSession(session)
           actions.hydrateEditorSession(session)
           actions.hydrateBrowserSession(session)
+          // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
+          // no longer exist. Must run AFTER hydration — before this point,
+          // async repo loads may not have populated worktreesByRepo yet and
+          // pruning would delete timestamps for worktrees that are about to
+          // appear. Seed the restored active worktree's timestamp if missing
+          // so users upgrading from a pre-feature build don't see the active
+          // worktree sink in the empty-query list.
+          // See docs/cmd-j-empty-query-ordering.md.
+          actions.pruneLastVisitedTimestamps()
+          actions.seedActiveWorktreeLastVisitedIfMissing()
           await actions.fetchBrowserSessionProfiles()
 
           // Why: SSH connections must be re-established BEFORE terminal

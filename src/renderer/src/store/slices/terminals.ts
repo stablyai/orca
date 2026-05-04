@@ -1510,6 +1510,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         activeTabIdByWorktree,
         tabsByWorktree,
         worktreesByRepo,
+        // Why: restore the per-worktree focus-recency map. Pruning of stale
+        // entries happens later (App.tsx calls pruneLastVisitedTimestamps
+        // after hydration) — not here — because SSH worktrees may still be
+        // appearing in worktreesByRepo at this moment.
+        lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,

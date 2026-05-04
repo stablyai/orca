@@ -460,6 +460,7 @@ describe('useIpcEvents updater integration', () => {
           createTab,
           setActiveView,
           setActiveWorktree,
+          markWorktreeVisited: vi.fn(),
           setActiveTabType,
           setActiveTab,
           revealWorktreeInSidebar,

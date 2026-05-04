@@ -25,34 +25,28 @@ import { setOptIn, track } from '../telemetry/client'
 import type { EventName, EventProps } from '../../shared/telemetry-events'
 
 export function registerTelemetryHandlers(): void {
-  ipcMain.handle(
-    'telemetry:track',
-    (_event, name: unknown, props: unknown): void => {
-      // Strict input typing: non-string names are dropped at the boundary
-      // before the validator even sees them. The validator would also drop
-      // (unknown event name), but the main-side narrow keeps the attack
-      // surface minimal — a flood of bogus payloads does not exercise the
-      // Zod parser for no reason.
-      if (typeof name !== 'string') {
-        return
-      }
-      // `props` may legitimately be omitted; treat `undefined`/`null` as an
-      // empty object before the validator. Anything else non-object (e.g.
-      // a string, a number) is a boundary violation.
-      if (props !== null && props !== undefined && typeof props !== 'object') {
-        return
-      }
-      // The casts to `EventName` / `EventProps<EventName>` here are
-      // pass-through only — this file does NOT pretend the renderer's
-      // name/props are type-safe. The validator inside `track()` is the
-      // single enforcement point at runtime; these casts only feed the
-      // typed channel that the validator will re-check.
-      track(
-        name as EventName,
-        (props ?? {}) as EventProps<EventName>
-      )
+  ipcMain.handle('telemetry:track', (_event, name: unknown, props: unknown): void => {
+    // Strict input typing: non-string names are dropped at the boundary
+    // before the validator even sees them. The validator would also drop
+    // (unknown event name), but the main-side narrow keeps the attack
+    // surface minimal — a flood of bogus payloads does not exercise the
+    // Zod parser for no reason.
+    if (typeof name !== 'string') {
+      return
     }
-  )
+    // `props` may legitimately be omitted; treat `undefined`/`null` as an
+    // empty object before the validator. Anything else non-object (e.g.
+    // a string, a number) is a boundary violation.
+    if (props !== null && props !== undefined && typeof props !== 'object') {
+      return
+    }
+    // The casts to `EventName` / `EventProps<EventName>` here are
+    // pass-through only — this file does NOT pretend the renderer's
+    // name/props are type-safe. The validator inside `track()` is the
+    // single enforcement point at runtime; these casts only feed the
+    // typed channel that the validator will re-check.
+    track(name as EventName, (props ?? {}) as EventProps<EventName>)
+  })
 
   ipcMain.handle('telemetry:setOptIn', (_event, optedIn: unknown): void => {
     // Strict input typing — renderer can pass anything over IPC.

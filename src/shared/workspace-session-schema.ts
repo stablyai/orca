@@ -204,7 +204,12 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   tabGroupLayouts: z.record(z.string(), tabGroupLayoutNodeSchema).optional(),
   activeGroupIdByWorktree: z.record(z.string(), z.string()).optional(),
   activeConnectionIdsAtShutdown: z.array(z.string()).optional(),
-  remoteSessionIdsByTabId: z.record(z.string(), z.string()).optional()
+  remoteSessionIdsByTabId: z.record(z.string(), z.string()).optional(),
+  // Why: the sort comparator in order-empty-query-worktrees.ts would produce
+  // NaN (undefined sort order) if a corrupted session file carried NaN or
+  // Infinity here. Constrain to finite non-negative numbers so a bad on-disk
+  // value is rejected at parse time rather than silently breaking Cmd+J.
+  lastVisitedAtByWorktreeId: z.record(z.string(), z.number().finite().nonnegative()).optional()
 })
 
 export type ParsedWorkspaceSession =

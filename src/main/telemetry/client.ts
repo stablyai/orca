@@ -86,11 +86,7 @@ let storeRef: Store | null = null
 // be bounded by `resolveConsent` + the validator.
 let testTransportEnabled = false
 
-function buildCommonProps(
-  installId: string,
-  sid: string,
-  channel: 'stable' | 'rc'
-): CommonProps {
+function buildCommonProps(installId: string, sid: string, channel: 'stable' | 'rc'): CommonProps {
   // `.max(64)` on every free-form string field in `commonPropsSchema` is the
   // upper bound; node's platform / arch / release strings are always well
   // under that in practice. We do not truncate here because the validator's

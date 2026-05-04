@@ -59,7 +59,10 @@ function makeFakeStore(settings: GlobalSettings): Store {
     getSettings: vi.fn(() => settings),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
       if (updates.telemetry) {
-        settings.telemetry = { ...settings.telemetry, ...updates.telemetry } as typeof settings.telemetry
+        settings.telemetry = {
+          ...settings.telemetry,
+          ...updates.telemetry
+        } as typeof settings.telemetry
       }
       return settings
     })

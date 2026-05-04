@@ -403,6 +403,13 @@ export type WorkspaceSessionState = {
    *  shutdown from renderer state so remote PTYs can be reattached via
    *  the relay's pty.attach RPC on startup. */
   remoteSessionIdsByTabId?: Record<string, string>
+  /** Per-worktree focus-recency timestamps used by the Cmd+J empty-query
+   *  ordering. Separate from worktree.lastActivityAt (background signal)
+   *  and worktreeNavHistory (Back/Forward stack). See
+   *  docs/cmd-j-empty-query-ordering.md. Absent in sessions written by
+   *  older builds — hydration tolerates missing/partial maps and the
+   *  active worktree is seeded on first restore. */
+  lastVisitedAtByWorktreeId?: Record<string, number>
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────

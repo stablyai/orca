@@ -27,7 +27,10 @@ import { registerTelemetryHandlers } from './telemetry'
 function captureHandlers(): void {
   handlers.clear()
   for (const call of handleMock.mock.calls) {
-    const [channel, handler] = call as [string, typeof handlers extends Map<string, infer V> ? V : never]
+    const [channel, handler] = call as [
+      string,
+      typeof handlers extends Map<string, infer V> ? V : never
+    ]
     handlers.set(channel, handler)
   }
 }
