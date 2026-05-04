@@ -14,6 +14,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
     "expo": "^55.0.17",
+    "expo-build-properties": "^55.0.13",
     "expo-camera": "^55.0.16",
     "expo-constants": "^55.0.15",
     "expo-crypto": "^55.0.14",
