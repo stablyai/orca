@@ -36,9 +36,12 @@ import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
   getDiscardAllPaths,
+  getStageAllPaths,
+  getUnstageAllPaths,
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
+import { toast } from 'sonner'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -631,9 +634,7 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || isExecutingBulk) {
         return
       }
-      const paths = grouped[area]
-        .filter((entry) => entry.conflictStatus !== 'unresolved')
-        .map((entry) => entry.path)
+      const paths = getStageAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
@@ -653,7 +654,7 @@ function SourceControlInner(): React.JSX.Element {
     if (!worktreePath || isExecutingBulk) {
       return
     }
-    const paths = grouped.staged.map((entry) => entry.path)
+    const paths = getUnstageAllPaths(grouped.staged)
     if (paths.length === 0) {
       return
     }
@@ -808,32 +809,45 @@ function SourceControlInner(): React.JSX.Element {
     [worktreePath, activeWorktreeId]
   )
 
-  const handleDiscard = useCallback(
+  // Why: split into two variants — `discardSingle` throws so bulk callers can
+  // aggregate failures into a single toast via `runDiscardAllForArea`'s
+  // onError, while `handleDiscard` swallows for the per-row fire-and-forget UI
+  // contract (no individual failure toast).
+  const discardSingle = useCallback(
     async (filePath: string) => {
       if (!worktreePath || !activeWorktreeId) {
         return
       }
-      try {
-        // Why: git discard replaces the working tree version of this file. Any
-        // pending editor autosave must be quiesced first so it cannot recreate
-        // the discarded edits after git restores the file.
-        await requestEditorSaveQuiesce({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath: filePath
-        })
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await window.api.git.discard({ worktreePath, filePath, connectionId })
-        notifyEditorExternalFileChange({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath: filePath
-        })
-      } catch {
-        // git operation failed silently
-      }
+      // Why: git discard replaces the working tree version of this file. Any
+      // pending editor autosave must be quiesced first so it cannot recreate
+      // the discarded edits after git restores the file.
+      await requestEditorSaveQuiesce({
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        relativePath: filePath
+      })
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.discard({ worktreePath, filePath, connectionId })
+      notifyEditorExternalFileChange({
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        relativePath: filePath
+      })
     },
     [activeWorktreeId, worktreePath]
+  )
+
+  const handleDiscard = useCallback(
+    async (filePath: string) => {
+      try {
+        await discardSingle(filePath)
+      } catch {
+        // Why: per-row discard is fire-and-forget for the UI; failures are not
+        // surfaced individually. Bulk callers use `discardSingle` directly so
+        // they can aggregate failures into a single toast.
+      }
+    },
+    [discardSingle]
   )
 
   // Why: "Discard all" mirrors the per-row discard rules — it skips unresolved
@@ -856,14 +870,38 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(true)
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        // Why: `onError` fires once per failure — both for the bulk-unstage
+        // pre-step and for each per-file discard failure. Aggregate into one
+        // toast after the sequence completes so a partial failure across N
+        // files doesn't spam N error toasts.
+        const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
           bulkUnstage: (filePaths) =>
             window.api.git.bulkUnstage({ worktreePath, filePaths, connectionId }),
-          discardOne: (filePath) => handleDiscard(filePath),
+          discardOne: discardSingle,
           onError: (error) => {
-            console.error('[SourceControl] bulk unstage failed in discard-all', error)
+            errors.push(error)
+            console.error('[SourceControl] discard-all failure', error)
           }
         })
+        if (result.aborted) {
+          toast.error('Discard all failed — unable to unstage files before discard', {
+            description: errors[0] instanceof Error ? errors[0].message : undefined
+          })
+        } else if (result.failed.length > 0) {
+          // Why: only include the first error message to avoid a huge toast
+          // body on bulk failures; a short sample of failed paths gives users
+          // enough context to retry or investigate.
+          const firstMsg = errors[0] instanceof Error ? errors[0].message : undefined
+          const sample = result.failed.slice(0, 3).join(', ')
+          const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
+          toast.error(
+            `Failed to discard ${result.failed.length} file${result.failed.length === 1 ? '' : 's'}`,
+            {
+              description: firstMsg ? `${firstMsg} (e.g. ${sample}${more})` : `${sample}${more}`
+            }
+          )
+        }
         if (!result.aborted) {
           clearSelection()
         }
@@ -871,7 +909,7 @@ function SourceControlInner(): React.JSX.Element {
         setIsExecutingBulk(false)
       }
     },
-    [worktreePath, activeWorktreeId, grouped, isExecutingBulk, clearSelection, handleDiscard]
+    [worktreePath, activeWorktreeId, grouped, isExecutingBulk, clearSelection, discardSingle]
   )
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
@@ -1131,19 +1169,21 @@ function SourceControlInner(): React.JSX.Element {
                 // would surprise users who don't realize a filter is active.
                 // The +/- is hidden when the filter is active to avoid that
                 // mismatch between what's shown and what would be staged.
-                const canStageAll =
-                  !normalizedFilter &&
-                  (area === 'unstaged' || area === 'untracked') &&
-                  grouped[area].some((entry) => entry.conflictStatus !== 'unresolved')
+                // Why: visibility and execution both resolve paths through the
+                // same helpers (`getStageAllPaths`/`getUnstageAllPaths`/
+                // `getDiscardAllPaths`) so the button can never show for a set
+                // the handler would then filter to empty.
+                const stageAllPaths =
+                  area === 'unstaged' || area === 'untracked'
+                    ? getStageAllPaths(grouped[area], area)
+                    : []
+                const canStageAll = !normalizedFilter && stageAllPaths.length > 0
                 const canUnstageAll =
-                  !normalizedFilter && area === 'staged' && grouped.staged.length > 0
-                const canRevertAll =
                   !normalizedFilter &&
-                  grouped[area].some(
-                    (entry) =>
-                      entry.conflictStatus !== 'unresolved' &&
-                      entry.conflictStatus !== 'resolved_locally'
-                  )
+                  area === 'staged' &&
+                  getUnstageAllPaths(grouped.staged).length > 0
+                const canRevertAll =
+                  !normalizedFilter && getDiscardAllPaths(grouped[area], area).length > 0
                 return (
                   <div key={area}>
                     <SectionHeader
@@ -1156,12 +1196,18 @@ function SourceControlInner(): React.JSX.Element {
                       onToggle={() => toggleSection(area)}
                       actions={
                         <>
-                          {/* Why: bulk action buttons are hover-only to avoid
-                              cluttering the section header with persistent
-                              icons. They reveal when the section row is
-                              hovered (group/section on SectionHeader). */}
-                          {canRevertAll && (
-                            <div className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                          {/* Why: bulk action buttons are hover-only on
+                              pointer devices to avoid cluttering the section
+                              header with persistent icons. On no-hover
+                              pointers (touch, and SSH sessions where hover
+                              state is unreliable — see AGENTS.md "SSH Use
+                              Case"), force them visible so they're reachable
+                              without tabbing. One outer wrapper so that
+                              focusing any action reveals all three siblings —
+                              otherwise keyboard users tab into an invisible
+                              next stop. */}
+                          <div className="flex items-center opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                            {canRevertAll && (
                               <ActionButton
                                 icon={Undo2}
                                 // Why: for untracked files, discard deletes the file
@@ -1177,23 +1223,21 @@ function SourceControlInner(): React.JSX.Element {
                                 }}
                                 disabled={isExecutingBulk}
                               />
-                            </div>
-                          )}
-                          {canStageAll && (
-                            <div className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                            )}
+                            {canStageAll && (
                               <ActionButton
                                 icon={Plus}
                                 title="Stage all"
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  void handleStageAllInArea(area)
+                                  if (area === 'unstaged' || area === 'untracked') {
+                                    void handleStageAllInArea(area)
+                                  }
                                 }}
                                 disabled={isExecutingBulk}
                               />
-                            </div>
-                          )}
-                          {canUnstageAll && (
-                            <div className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                            )}
+                            {canUnstageAll && (
                               <ActionButton
                                 icon={Minus}
                                 title="Unstage all"
@@ -1203,8 +1247,8 @@ function SourceControlInner(): React.JSX.Element {
                                 }}
                                 disabled={isExecutingBulk}
                               />
-                            </div>
-                          )}
+                            )}
+                          </div>
                           {items.some((entry) => entry.conflictStatus === 'unresolved') ? (
                             <Button
                               type="button"
@@ -2106,6 +2150,12 @@ export function ActionButton({
   // label matches the rest of the sidebar chrome (consistent styling, no OS
   // delay quirks, dismissible on pointer leave).
   //
+  // Why (no local TooltipProvider): the app root mounts a single
+  // TooltipProvider (see App.tsx); nesting another one here gives this subtree
+  // its own delay-timing state and breaks Radix's "skip the open delay when
+  // moving between adjacent tooltip triggers" handoff between sibling action
+  // buttons in the section header.
+  //
   // Why (disabled handling): Radix's TooltipTrigger asChild on a disabled
   // <button> gets pointer-events blocked in Chromium, which suppresses the
   // tooltip entirely — a regression vs. the native `title` attribute it
@@ -2113,35 +2163,33 @@ export function ActionButton({
   // `isExecutingBulk` early-return to no-op the click during bulk ops;
   // `aria-disabled` + visual dimming preserves the disabled affordance.
   return (
-    <TooltipProvider delayDuration={400}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className={cn(
-              'h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground',
-              disabled && 'opacity-50 cursor-not-allowed'
-            )}
-            aria-label={title}
-            aria-disabled={disabled}
-            onClick={(event) => {
-              if (disabled) {
-                event.preventDefault()
-                return
-              }
-              onClick(event)
-            }}
-          >
-            <Icon className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {title}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className={cn(
+            'h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground',
+            disabled && 'opacity-50 cursor-not-allowed'
+          )}
+          aria-label={title}
+          aria-disabled={disabled}
+          onClick={(event) => {
+            if (disabled) {
+              event.preventDefault()
+              return
+            }
+            onClick(event)
+          }}
+        >
+          <Icon className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {title}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

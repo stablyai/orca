@@ -21,19 +21,53 @@ export function getDiscardAllPaths(
     .map((entry) => entry.path)
 }
 
+export type StageAllArea = 'unstaged' | 'untracked'
+
+/**
+ * Collect the paths a "Stage all" action should operate on.
+ * Unresolved conflict rows are excluded — `git add` on a conflicted file
+ * silently clears the `u` record before the user has reviewed it.
+ * `resolved_locally` rows are intentionally INCLUDED: staging them is how the
+ * user finalises the resolution and mirrors the per-row Stage button.
+ */
+export function getStageAllPaths(entries: readonly GitStatusEntry[], area: StageAllArea): string[] {
+  return entries
+    .filter((entry) => entry.area === area && entry.conflictStatus !== 'unresolved')
+    .map((entry) => entry.path)
+}
+
+/**
+ * Collect the paths an "Unstage all" action should operate on.
+ * Every staged row is eligible — `git reset HEAD` on a staged conflict
+ * row is safe and mirrors the per-row Unstage action.
+ */
+export function getUnstageAllPaths(entries: readonly GitStatusEntry[]): string[] {
+  return entries.filter((entry) => entry.area === 'staged').map((entry) => entry.path)
+}
+
 export type DiscardAllDeps = {
   /** Unstage the given paths in one IPC round-trip. Only called for 'staged'. */
   bulkUnstage: (paths: string[]) => Promise<void>
   /** Discard a single path (restore working-tree to HEAD, or rm if untracked). */
   discardOne: (path: string) => Promise<void>
-  /** Called if bulkUnstage rejects. Lets the caller surface an error. */
+  /**
+   * Called when either the pre-step (bulkUnstage) rejects OR an individual
+   * `discardOne` rejects. Invoked once per failure so callers can surface
+   * each error (e.g. a toast per stuck file) rather than swallowing them.
+   */
   onError?: (error: unknown) => void
 }
 
 export type DiscardAllResult = {
-  /** Paths that reached the discard step. */
+  /** Paths whose `discardOne` call resolved successfully. */
   discarded: string[]
-  /** True if we bailed before the discard loop (e.g. bulkUnstage failed). */
+  /** Paths whose `discardOne` call rejected. Best-effort: the loop continues past these. */
+  failed: string[]
+  /**
+   * True only when the pre-step (bulk unstage for the 'staged' area) failed
+   * and we never entered the per-file discard loop. Per-file failures do
+   * NOT set this flag — they are reported via `failed`.
+   */
   aborted: boolean
 }
 
@@ -47,6 +81,11 @@ export type DiscardAllResult = {
  * discarded. If the unstage fails we MUST skip the discard loop entirely for
  * the same reason: a stale index with a clean worktree is a worse state than
  * the one the user started in.
+ *
+ * Per-file `discardOne` failures are best-effort: we continue past a failed
+ * file so a single stuck path does not block the rest of the bulk action.
+ * Failed paths are reported via `failed`, `onError` is invoked once per
+ * failure, and `aborted` remains `false` because the loop ran end-to-end.
  */
 export async function runDiscardAllForArea(
   area: DiscardAllArea,
@@ -54,7 +93,7 @@ export async function runDiscardAllForArea(
   deps: DiscardAllDeps
 ): Promise<DiscardAllResult> {
   if (paths.length === 0) {
-    return { discarded: [], aborted: false }
+    return { discarded: [], failed: [], aborted: false }
   }
 
   if (area === 'staged') {
@@ -62,14 +101,22 @@ export async function runDiscardAllForArea(
       await deps.bulkUnstage([...paths])
     } catch (error) {
       deps.onError?.(error)
-      return { discarded: [], aborted: true }
+      return { discarded: [], failed: [], aborted: true }
     }
   }
 
   const discarded: string[] = []
+  const failed: string[] = []
   for (const path of paths) {
-    await deps.discardOne(path)
-    discarded.push(path)
+    try {
+      await deps.discardOne(path)
+      discarded.push(path)
+    } catch (error) {
+      // Best-effort: record and continue so one stuck file doesn't block the
+      // rest of the bulk action.
+      failed.push(path)
+      deps.onError?.(error)
+    }
   }
-  return { discarded, aborted: false }
+  return { discarded, failed, aborted: false }
 }

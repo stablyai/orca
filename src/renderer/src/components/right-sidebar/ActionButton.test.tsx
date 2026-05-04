@@ -55,16 +55,24 @@ function findTooltipContentText(node: unknown): string {
   return texts.join(' ')
 }
 
+// Why: ActionButton's onClick handler only touches these three fields, so a
+// narrow event type is both correct and avoids a forbidden `as unknown as X`
+// double-cast on the event value.
+type MinimalMouseEvent = Pick<
+  React.MouseEvent,
+  'preventDefault' | 'stopPropagation' | 'defaultPrevented'
+>
+
 function makeClickEvent(): {
-  event: React.MouseEvent
+  event: MinimalMouseEvent
   preventDefault: ReturnType<typeof vi.fn>
 } {
   const preventDefault = vi.fn()
-  const event = {
+  const event: MinimalMouseEvent = {
     preventDefault,
     stopPropagation: vi.fn(),
     defaultPrevented: false
-  } as unknown as React.MouseEvent
+  }
   return { event, preventDefault }
 }
 
@@ -94,7 +102,7 @@ describe('ActionButton', () => {
     const element = ActionButton({ ...baseProps, onClick })
     const button = findInnerButton(element)
     const { event } = makeClickEvent()
-    ;(button.props.onClick as (e: React.MouseEvent) => void)(event)
+    ;(button.props.onClick as (e: MinimalMouseEvent) => void)(event)
     expect(onClick).toHaveBeenCalledWith(event)
   })
 
@@ -132,7 +140,7 @@ describe('ActionButton', () => {
     const element = ActionButton({ ...baseProps, onClick, disabled: true })
     const button = findInnerButton(element)
     const { event, preventDefault } = makeClickEvent()
-    ;(button.props.onClick as (e: React.MouseEvent) => void)(event)
+    ;(button.props.onClick as (e: MinimalMouseEvent) => void)(event)
     // Why: keyboard Enter/Space also fires onClick on a non-DOM-disabled
     // button. The guard must block both pointer and keyboard activation
     // while `disabled` is true, even though the inner handler is trusted
