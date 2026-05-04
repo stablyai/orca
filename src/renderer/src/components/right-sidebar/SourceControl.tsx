@@ -617,6 +617,51 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [worktreePath, bulkUnstagePaths, clearSelection, activeWorktreeId])
 
+  // Why: "Stage all" on the Changes section intentionally skips unresolved
+  // conflict rows. `git add` on a conflicted file silently clears the `u`
+  // record — the only live signal we have — before the user has reviewed it,
+  // which mirrors the per-row Stage suppression above.
+  const handleStageAllInArea = useCallback(
+    async (area: 'unstaged' | 'untracked') => {
+      if (!worktreePath || isExecutingBulk) {
+        return
+      }
+      const paths = grouped[area]
+        .filter((entry) => entry.conflictStatus !== 'unresolved')
+        .map((entry) => entry.path)
+      if (paths.length === 0) {
+        return
+      }
+      setIsExecutingBulk(true)
+      try {
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await window.api.git.bulkStage({ worktreePath, filePaths: paths, connectionId })
+        clearSelection()
+      } finally {
+        setIsExecutingBulk(false)
+      }
+    },
+    [worktreePath, grouped, activeWorktreeId, isExecutingBulk, clearSelection]
+  )
+
+  const handleUnstageAll = useCallback(async () => {
+    if (!worktreePath || isExecutingBulk) {
+      return
+    }
+    const paths = grouped.staged.map((entry) => entry.path)
+    if (paths.length === 0) {
+      return
+    }
+    setIsExecutingBulk(true)
+    try {
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+      clearSelection()
+    } finally {
+      setIsExecutingBulk(false)
+    }
+  }, [worktreePath, grouped.staged, activeWorktreeId, isExecutingBulk, clearSelection])
+
   const refreshBranchCompare = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
       return
@@ -784,6 +829,46 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [activeWorktreeId, worktreePath]
+  )
+
+  // Why: "Discard all" mirrors the per-row discard rules — it skips unresolved
+  // and resolved_locally rows because discarding those can silently re-create
+  // the conflict or lose the resolution (no v1 UX to explain this clearly).
+  // There is no bulk discard IPC, so we serialize per-file discard calls that
+  // run the same editor-quiesce + external-change notification as the row action.
+  // For the staged area we first bulk-unstage so discard (which only resets the
+  // working tree to HEAD) isn't left with a stale index that still carries the
+  // staged delta — without the unstage the file would reappear in "Changes"
+  // as the inverse of the staged modification.
+  const handleRevertAllInArea = useCallback(
+    async (area: 'staged' | 'unstaged' | 'untracked') => {
+      if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
+        return
+      }
+      const paths = grouped[area]
+        .filter(
+          (entry) =>
+            entry.conflictStatus !== 'unresolved' && entry.conflictStatus !== 'resolved_locally'
+        )
+        .map((entry) => entry.path)
+      if (paths.length === 0) {
+        return
+      }
+      setIsExecutingBulk(true)
+      try {
+        if (area === 'staged') {
+          const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+          await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+        }
+        for (const path of paths) {
+          await handleDiscard(path)
+        }
+        clearSelection()
+      } finally {
+        setIsExecutingBulk(false)
+      }
+    },
+    [worktreePath, activeWorktreeId, grouped, isExecutingBulk, clearSelection, handleDiscard]
   )
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
@@ -1038,6 +1123,24 @@ function SourceControlInner(): React.JSX.Element {
                   return null
                 }
                 const isCollapsed = collapsedSections.has(area)
+                // Why: "Stage all"/"Unstage all" operate on the *unfiltered*
+                // group for the area — acting on just the filter-visible subset
+                // would surprise users who don't realize a filter is active.
+                // The +/- is hidden when the filter is active to avoid that
+                // mismatch between what's shown and what would be staged.
+                const canStageAll =
+                  !normalizedFilter &&
+                  (area === 'unstaged' || area === 'untracked') &&
+                  grouped[area].some((entry) => entry.conflictStatus !== 'unresolved')
+                const canUnstageAll =
+                  !normalizedFilter && area === 'staged' && grouped.staged.length > 0
+                const canRevertAll =
+                  !normalizedFilter &&
+                  grouped[area].some(
+                    (entry) =>
+                      entry.conflictStatus !== 'unresolved' &&
+                      entry.conflictStatus !== 'resolved_locally'
+                  )
                 return (
                   <div key={area}>
                     <SectionHeader
@@ -1049,37 +1152,82 @@ function SourceControlInner(): React.JSX.Element {
                       isCollapsed={isCollapsed}
                       onToggle={() => toggleSection(area)}
                       actions={
-                        items.some((entry) => entry.conflictStatus === 'unresolved') ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (activeWorktreeId && worktreePath) {
-                                openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
-                              }
-                            }}
-                          >
-                            View all
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (activeWorktreeId && worktreePath) {
-                                openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
-                              }
-                            }}
-                          >
-                            View all
-                          </Button>
-                        )
+                        <>
+                          {/* Why: bulk action buttons are hover-only to avoid
+                              cluttering the section header with persistent
+                              icons. They reveal when the section row is
+                              hovered (group/section on SectionHeader). */}
+                          {canRevertAll && (
+                            <div className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                              <ActionButton
+                                icon={Undo2}
+                                title="Discard all"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void handleRevertAllInArea(area)
+                                }}
+                                disabled={isExecutingBulk}
+                              />
+                            </div>
+                          )}
+                          {canStageAll && (
+                            <div className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                              <ActionButton
+                                icon={Plus}
+                                title="Stage all"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void handleStageAllInArea(area)
+                                }}
+                                disabled={isExecutingBulk}
+                              />
+                            </div>
+                          )}
+                          {canUnstageAll && (
+                            <div className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                              <ActionButton
+                                icon={Minus}
+                                title="Unstage all"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void handleUnstageAll()
+                                }}
+                                disabled={isExecutingBulk}
+                              />
+                            </div>
+                          )}
+                          {items.some((entry) => entry.conflictStatus === 'unresolved') ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (activeWorktreeId && worktreePath) {
+                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
+                                }
+                              }}
+                            >
+                              View all
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (activeWorktreeId && worktreePath) {
+                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
+                                }
+                              }}
+                            >
+                              View all
+                            </Button>
+                          )}
+                        </>
                       }
                     />
                     {!isCollapsed &&
@@ -1420,25 +1568,31 @@ function SectionHeader({
   onToggle: () => void
   actions?: React.ReactNode
 }): React.JSX.Element {
+  // Why: wrap the toggle button and actions in a shared rounded container
+  // so the hover background spans the entire row instead of clipping around
+  // the label. The outer div keeps the vertical spacing that separates
+  // sections; the inner wrapper owns the hover rectangle.
   return (
-    <div className="group/section flex items-center pl-1 pr-3 pt-3 pb-1">
-      <button
-        type="button"
-        className="flex flex-1 items-center gap-1 rounded-md px-0.5 py-0.5 text-left text-xs font-semibold uppercase tracking-wider text-foreground/70 hover:bg-accent hover:text-accent-foreground"
-        onClick={onToggle}
-      >
-        <ChevronDown
-          className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
-        />
-        <span>{label}</span>
-        <span className="text-[11px] font-medium tabular-nums">{count}</span>
-        {conflictCount > 0 && (
-          <span className="text-[11px] font-medium text-destructive/80">
-            · {conflictCount} conflict{conflictCount === 1 ? '' : 's'}
-          </span>
-        )}
-      </button>
-      <div className="shrink-0 flex items-center">{actions}</div>
+    <div className="pl-1 pr-3 pt-3 pb-1">
+      <div className="group/section flex items-center rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
+        <button
+          type="button"
+          className="flex flex-1 items-center gap-1 px-0.5 py-0.5 text-left text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground"
+          onClick={onToggle}
+        >
+          <ChevronDown
+            className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+          />
+          <span>{label}</span>
+          <span className="text-[11px] font-medium tabular-nums">{count}</span>
+          {conflictCount > 0 && (
+            <span className="text-[11px] font-medium text-destructive/80">
+              · {conflictCount} conflict{conflictCount === 1 ? '' : 's'}
+            </span>
+          )}
+        </button>
+        <div className="shrink-0 flex items-center">{actions}</div>
+      </div>
     </div>
   )
 }
@@ -1931,23 +2085,38 @@ function EmptyState({
 function ActionButton({
   icon: Icon,
   title,
-  onClick
+  onClick,
+  disabled
 }: {
   icon: React.ComponentType<{ className?: string }>
   title: string
   onClick: (event: React.MouseEvent) => void
+  disabled?: boolean
 }): React.JSX.Element {
+  // Why: use the Radix Tooltip instead of the native `title` attribute so the
+  // label matches the rest of the sidebar chrome (consistent styling, no OS
+  // delay quirks, dismissible on pointer leave).
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      className="h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground"
-      title={title}
-      onClick={onClick}
-    >
-      <Icon className="size-3.5" />
-    </Button>
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground"
+            aria-label={title}
+            onClick={onClick}
+            disabled={disabled}
+          >
+            <Icon className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {title}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
