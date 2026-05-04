@@ -2,15 +2,21 @@ name: Homebrew Cask Bump
 
 # Why: keep the stablyai/homebrew-orca tap in sync with GitHub Releases.
 # Triggers:
-#   - release.published with !prerelease → release workflow just finalized a
-#     stable tag (see publish-release step in release.yml)
-#   - workflow_call → release.yml finished publishing a stable tag
+#   - workflow_call → release-cut.yml finished publishing a stable tag
 #   - workflow_dispatch → manual backfill for a specific tag
 #
 # The job computes the sha256 of orca-macos-arm64.dmg + orca-macos-x64.dmg
 # from the release, templates Casks/orca.rb in this repo with the new
 # version and hashes, then PRs the result into stablyai/homebrew-orca. It
 # does NOT run for -rc.* tags: the stable cask should only track GA.
+#
+# Why no `release.published` trigger: other products shipped from this repo
+# (e.g. mobile under `mobile-v*`) also publish GitHub Releases. A blanket
+# `release.published` trigger would fire this workflow for any of them and
+# attempt to download `orca-macos-*.dmg` from a non-desktop release, at
+# best 404ing and at worst (if the filter were weaker) rewriting the cask
+# to a non-desktop version. The tap is only ever bumped by the desktop
+# release pipeline calling this workflow directly.
 
 on:
   workflow_call:
@@ -19,8 +25,6 @@ on:
         description: Release tag to sync (e.g. v1.3.25)
         required: true
         type: string
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -31,12 +35,15 @@ on:
 jobs:
   bump-cask:
     runs-on: ubuntu-latest
-    # Why: skip prereleases and RC tags. The stable cask tracks GA only; a
-    # beta channel would be a separate cask in a separate job.
+    # Why: defense in depth. The desktop release pipeline already refuses
+    # to invoke this workflow for `-rc.*` tags, but a manual backfill could
+    # still pass one in — reject it here so the stable cask can never point
+    # at an RC. Also requires the desktop tag shape `v<digit>...` so a
+    # mis-typed mobile tag like `mobile-v0.0.1` is rejected up front.
     if: >
-      inputs.tag != '' ||
-      (github.event.release.prerelease == false &&
-       !contains(github.event.release.tag_name, '-rc.'))
+      inputs.tag != '' &&
+      !contains(inputs.tag, '-rc.') &&
+      startsWith(inputs.tag, 'v')
     permissions:
       contents: read
     steps:

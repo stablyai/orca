@@ -80,7 +80,7 @@ All releases are cut from the **Cut Release** GitHub Actions workflow. There is 
    - **ref**: the branch, tag, or SHA to build from. Defaults to `main`.
 3. Run it.
 
-The workflow resolves the next version from GitHub Releases, bumps `package.json`, tags, pushes, and kicks off the multi-platform build via `release.yml`.
+The workflow resolves the next version from GitHub Releases, bumps `package.json`, tags, pushes, and runs the multi-platform build + publish inline.
 
 **How the next version is chosen:**
 

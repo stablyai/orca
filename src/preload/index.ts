@@ -212,6 +212,12 @@ const api = {
       kind?: 'git' | 'folder'
     }): Promise<unknown> => ipcRenderer.invoke('repos:addRemote', args),
 
+    create: (args: {
+      parentPath: string
+      name: string
+      kind: 'git' | 'folder'
+    }): Promise<unknown> => ipcRenderer.invoke('repos:create', args),
+
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
 
     update: (args: { repoId: string; updates: Record<string, unknown> }): Promise<unknown> =>
@@ -1448,6 +1454,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTab', listener)
+    },
+    onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
+      ipcRenderer.on('ui:switchTabAcrossAllTypes', listener)
+      return () => ipcRenderer.removeListener('ui:switchTabAcrossAllTypes', listener)
     },
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)

@@ -31,6 +31,7 @@ type WorkspaceSessionSnapshot = Pick<
   | 'repos'
   | 'worktreesByRepo'
   | 'lastKnownRelayPtyIdByTabId'
+  | 'lastVisitedAtByWorktreeId'
 >
 
 /** Build the editor-file portion of the workspace session for persistence.
@@ -216,6 +217,15 @@ export function buildWorkspaceSessionPayload(
     activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree,
     activeConnectionIdsAtShutdown: connectedTargetIds.length > 0 ? connectedTargetIds : undefined,
     remoteSessionIdsByTabId:
-      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined
+      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined,
+    // Why: per-worktree focus-recency for Cmd+J's empty-query ordering.
+    // Omit when empty so sessions written by builds that never stamped
+    // anything don't bloat the payload. See
+    // docs/cmd-j-empty-query-ordering.md.
+    lastVisitedAtByWorktreeId:
+      snapshot.lastVisitedAtByWorktreeId &&
+      Object.keys(snapshot.lastVisitedAtByWorktreeId).length > 0
+        ? snapshot.lastVisitedAtByWorktreeId
+        : undefined
   }
 }

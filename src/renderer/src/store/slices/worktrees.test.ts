@@ -748,3 +748,45 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(store.getState().tabsByWorktree).toBe(before)
   })
 })
+
+describe('markWorktreeVisited', () => {
+  it('is monotonic: an older timestamp does not regress the stored value', () => {
+    const store = createTestStore()
+    store.getState().markWorktreeVisited('wt-1', 1000)
+    expect(store.getState().lastVisitedAtByWorktreeId['wt-1']).toBe(1000)
+
+    store.getState().markWorktreeVisited('wt-1', 500)
+    expect(store.getState().lastVisitedAtByWorktreeId['wt-1']).toBe(1000)
+
+    store.getState().markWorktreeVisited('wt-1', 1000)
+    expect(store.getState().lastVisitedAtByWorktreeId['wt-1']).toBe(1000)
+
+    store.getState().markWorktreeVisited('wt-1', 2000)
+    expect(store.getState().lastVisitedAtByWorktreeId['wt-1']).toBe(2000)
+  })
+
+  it('seedActiveWorktreeLastVisitedIfMissing seeds only when missing', () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-1',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+    store.getState().seedActiveWorktreeLastVisitedIfMissing()
+    expect(store.getState().lastVisitedAtByWorktreeId['wt-1']).toBeTypeOf('number')
+
+    const existing = store.getState().lastVisitedAtByWorktreeId['wt-1']
+    store.getState().seedActiveWorktreeLastVisitedIfMissing()
+    expect(store.getState().lastVisitedAtByWorktreeId['wt-1']).toBe(existing)
+  })
+
+  it('pruneLastVisitedTimestamps drops entries for unknown worktree IDs', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'stale-id': 200 }
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/a': 100 })
+  })
+})

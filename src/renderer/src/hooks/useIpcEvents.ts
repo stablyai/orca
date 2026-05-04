@@ -14,7 +14,11 @@ import type { SshConnectionState } from '../../../shared/ssh-types'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
-import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
+import {
+  handleSwitchTab,
+  handleSwitchTabAcrossAllTypes,
+  handleSwitchTerminalTab
+} from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -216,6 +220,11 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         store.setActiveView('terminal')
         store.setActiveWorktree(worktreeId)
+        // Why: CLI-driven terminal creation is a user-initiated worktree switch
+        // and must stamp focus recency for Cmd+J. Doesn't route through
+        // activateAndRevealWorktree because it has custom terminal-creation
+        // logic; see docs/cmd-j-empty-query-ordering.md.
+        store.markWorktreeVisited(worktreeId)
         const tab = store.createTab(worktreeId)
         store.setActiveTabType('terminal')
         store.setActiveTab(tab.id)
@@ -246,6 +255,9 @@ export function useIpcEvents(): void {
           }
           store.setActiveView('terminal')
           store.setActiveWorktree(worktreeId)
+          // Why: CLI-driven terminal-create request is user-initiated; stamp
+          // focus recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
+          store.markWorktreeVisited(worktreeId)
           const tab = store.createTab(worktreeId)
           store.setActiveTabType('terminal')
           store.setActiveTab(tab.id)
@@ -287,6 +299,9 @@ export function useIpcEvents(): void {
       window.api.ui.onFocusTerminal(({ tabId, worktreeId }) => {
         const store = useAppStore.getState()
         store.setActiveWorktree(worktreeId)
+        // Why: CLI-driven focus is a user-initiated switch; stamp focus
+        // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
+        store.markWorktreeVisited(worktreeId)
         store.setActiveView('terminal')
         store.setActiveTab(tabId)
         store.revealWorktreeInSidebar(worktreeId)
@@ -546,6 +561,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
+    unsubs.push(window.api.ui.onSwitchTabAcrossAllTypes(handleSwitchTabAcrossAllTypes))
     unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
 
     // Hydrate initial rate limit state then subscribe to push updates

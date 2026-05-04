@@ -238,6 +238,22 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
 
+    // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
+    // the generic modifier-chord gate below because that gate rejects Alt.
+    // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.
+    const isPrimaryMod =
+      process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
+    if (
+      isPrimaryMod &&
+      input.alt &&
+      (input.code === 'BracketRight' || input.code === 'BracketLeft')
+    ) {
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:switchTabAcrossAllTypes', input.code === 'BracketRight' ? 1 : -1)
+      return
+    }
+
     // Why: terminal-only tab switching is intentionally Ctrl+PageUp/PageDown on
     // every platform. Handle it before the primary-modifier gate so macOS Ctrl
     // (non-primary there) still forwards out of focused browser guests.

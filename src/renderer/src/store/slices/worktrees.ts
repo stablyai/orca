@@ -62,6 +62,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   deleteStateByWorktreeId: {},
   sortEpoch: 0,
   everActivatedWorktreeIds: new Set<string>(),
+  lastVisitedAtByWorktreeId: {},
   hasHydratedWorktreePurge: false,
 
   fetchWorktrees: async (repoId) => {
@@ -353,6 +354,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextEverActivatedWorktreeIds = s.everActivatedWorktreeIds.has(worktreeId)
           ? new Set([...s.everActivatedWorktreeIds].filter((id) => id !== worktreeId))
           : s.everActivatedWorktreeIds
+        const nextLastVisitedAtByWorktreeId =
+          worktreeId in s.lastVisitedAtByWorktreeId
+            ? (() => {
+                const next = { ...s.lastVisitedAtByWorktreeId }
+                delete next[worktreeId]
+                return next
+              })()
+            : s.lastVisitedAtByWorktreeId
         return {
           worktreesByRepo: next,
           tabsByWorktree: nextTabs,
@@ -397,6 +406,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
           activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
           everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
+          lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
           sortEpoch: s.sortEpoch + 1
         }
       })
@@ -549,6 +559,66 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         console.error('Failed to persist worktree activity timestamp:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })
+  },
+
+  markWorktreeVisited: (worktreeId, visitedAt) => {
+    // Why: Cmd+J's empty-query ordering needs a focus-recency signal that is
+    // distinct from worktree.lastActivityAt (which is driven by background
+    // PTY/activity events). Monotonic: CLI- and IPC-driven activations can
+    // race, so older timestamps must not regress the stored value. See
+    // docs/cmd-j-empty-query-ordering.md.
+    set((s) => {
+      const now = visitedAt ?? Date.now()
+      const prev = s.lastVisitedAtByWorktreeId[worktreeId] ?? 0
+      if (!(now > prev)) {
+        return {}
+      }
+      return {
+        lastVisitedAtByWorktreeId: {
+          ...s.lastVisitedAtByWorktreeId,
+          [worktreeId]: now
+        }
+      }
+    })
+  },
+
+  pruneLastVisitedTimestamps: () => {
+    set((s) => {
+      const validIds = new Set<string>()
+      for (const list of Object.values(s.worktreesByRepo)) {
+        for (const w of list) {
+          validIds.add(w.id)
+        }
+      }
+      let changed = false
+      const next: Record<string, number> = {}
+      for (const [id, ts] of Object.entries(s.lastVisitedAtByWorktreeId)) {
+        if (validIds.has(id)) {
+          next[id] = ts
+        } else {
+          changed = true
+        }
+      }
+      return changed ? { lastVisitedAtByWorktreeId: next } : {}
+    })
+  },
+
+  seedActiveWorktreeLastVisitedIfMissing: () => {
+    set((s) => {
+      const id = s.activeWorktreeId
+      if (!id) {
+        return {}
+      }
+      if (s.lastVisitedAtByWorktreeId[id] != null) {
+        return {}
+      }
+      return {
+        lastVisitedAtByWorktreeId: {
+          ...s.lastVisitedAtByWorktreeId,
+          [id]: Date.now()
+        }
+      }
+    })
   },
 
   setActiveWorktree: (worktreeId) => {
@@ -887,6 +957,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // Top-level actives
         openFiles: nextOpenFiles,
         everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
+        lastVisitedAtByWorktreeId: omitByWorktree(s.lastVisitedAtByWorktreeId),
         activeWorktreeId: removedActive ? null : s.activeWorktreeId,
         activeFileId: activeFileCleared ? null : s.activeFileId,
         activeBrowserTabId: removedActive ? null : s.activeBrowserTabId,
