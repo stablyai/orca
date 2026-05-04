@@ -98,17 +98,13 @@ export class UnixSocketTransport implements RpcTransport {
   private handleConnection(socket: Socket): void {
     let buffer = ''
     let oversized = false
-    // Why: a single AbortController per connection. Any in-flight dispatches
-    // receive this signal through the message context and the server uses it
-    // to cancel long-poll handlers the instant the client socket closes. See
-    // §3.1 counter-lifecycle.
-    // Invariant: the CLI (`src/cli/runtime/transport.ts`) opens a fresh socket
-    // per request and closes it after the terminal frame, so at most one
-    // dispatch is ever in flight on a connection. If that ever changes (e.g.
-    // a persistent socket with sequential requests), move the AbortController
-    // to per-dispatch scope — otherwise completing request N would abort
-    // request N+1 when the socket closes.
-    const abortController = new AbortController()
+    // Why: each in-flight dispatch registers its own AbortController here so
+    // `socket.on('close')` can abort them all at once. Keeping the set scoped
+    // to the connection (rather than a single shared controller) means
+    // completing one dispatch does not abort any other dispatch still running
+    // on the same socket — future-proofing for a persistent CLI socket that
+    // multiplexes sequential requests.
+    const inflight = new Set<AbortController>()
 
     socket.setEncoding('utf8')
     socket.setNoDelay(true)
@@ -119,7 +115,10 @@ export class UnixSocketTransport implements RpcTransport {
       socket.destroy()
     })
     socket.on('close', () => {
-      abortController.abort()
+      for (const ctrl of inflight) {
+        ctrl.abort()
+      }
+      inflight.clear()
     })
     socket.on('data', (chunk: string) => {
       if (oversized) {
@@ -142,7 +141,7 @@ export class UnixSocketTransport implements RpcTransport {
         const rawMessage = buffer.slice(0, newlineIndex).trim()
         buffer = buffer.slice(newlineIndex + 1)
         if (rawMessage) {
-          this.dispatchMessage(socket, rawMessage, abortController.signal)
+          this.dispatchMessage(socket, rawMessage, inflight)
         }
         newlineIndex = buffer.indexOf('\n')
       }
@@ -152,15 +151,26 @@ export class UnixSocketTransport implements RpcTransport {
   // Why: the keepalive timer is opt-in per request via `startKeepalive()`.
   // Short RPCs never call it and pay no timer overhead; only long-poll
   // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
-  private dispatchMessage(socket: Socket, rawMessage: string, signal: AbortSignal): void {
+  private dispatchMessage(
+    socket: Socket,
+    rawMessage: string,
+    inflight: Set<AbortController>
+  ): void {
     let replied = false
     let keepaliveTimer: NodeJS.Timeout | null = null
+    // Why: per-dispatch AbortController so completing one request does not
+    // abort any sibling request running on the same connection. The
+    // connection-level `socket.on('close')` iterates `inflight` to cancel all
+    // outstanding dispatches at once.
+    const abortController = new AbortController()
+    inflight.add(abortController)
 
     const reply = (response: string): void => {
       if (replied) {
         return
       }
       replied = true
+      inflight.delete(abortController)
       if (keepaliveTimer) {
         clearInterval(keepaliveTimer)
       }
@@ -185,6 +195,9 @@ export class UnixSocketTransport implements RpcTransport {
       }
     }
 
-    this.messageHandler?.(rawMessage, reply, { signal, startKeepalive })
+    this.messageHandler?.(rawMessage, reply, {
+      signal: abortController.signal,
+      startKeepalive
+    })
   }
 }
