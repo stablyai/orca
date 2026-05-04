@@ -14,11 +14,17 @@ export async function createWorktreeSymlinks(
   paths: readonly string[]
 ): Promise<void> {
   for (const rawPath of paths) {
-    const rel = rawPath.trim().replace(/^\/+/, '')
-    if (!rel || isAbsolute(rel) || rel.split('/').includes('..')) {
-      // Why: reject anything that could escape the primary checkout. Users
-      // can only configure paths relative to the repo root; absolute paths
-      // and `..` traversal are not supported.
+    // Why: strip leading separators (both `/` and `\`) before the guard so
+    // Windows-style input like `\foo` is normalized the same way POSIX `/foo`
+    // is, and the traversal check below sees the already-relative form.
+    const rel = rawPath.trim().replace(/^[\\/]+/, '')
+    // Why: split on both separators so a Windows-authored `..\escape` is
+    // rejected the same way POSIX `../escape` is. `path.isAbsolute` catches
+    // drive-letter absolutes (`C:\...`); the split catches relative
+    // backslash traversal that `.split('/')` would otherwise miss.
+    if (!rel || isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) {
+      // Users can only configure paths relative to the repo root; absolute
+      // paths and `..` traversal are not supported.
       console.warn(`[worktree-symlinks] Skipping unsafe path "${rawPath}"`)
       continue
     }
@@ -26,8 +32,10 @@ export async function createWorktreeSymlinks(
     const source = resolve(primaryPath, rel)
     const target = resolve(worktreePath, rel)
 
+    let sourceIsDirectory = false
     try {
-      await stat(source)
+      const s = await stat(source)
+      sourceIsDirectory = s.isDirectory()
     } catch {
       // Source doesn't exist in primary checkout — nothing to link to. This is
       // a common case for fresh clones where `node_modules` hasn't been
@@ -47,7 +55,11 @@ export async function createWorktreeSymlinks(
 
     try {
       await mkdir(dirname(target), { recursive: true })
-      await symlink(source, target)
+      // Why: Windows requires an explicit `type` ('dir' vs 'file' vs
+      // 'junction') for `fs.symlink`. On POSIX the argument is ignored, so
+      // passing it unconditionally is safe and removes a Windows-only
+      // failure mode when Node can't auto-detect from the source.
+      await symlink(source, target, sourceIsDirectory ? 'dir' : 'file')
     } catch (error) {
       console.error(
         `[worktree-symlinks] Failed to symlink "${rel}" (${source} -> ${target}):`,
