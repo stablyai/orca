@@ -1435,7 +1435,15 @@ export function CommitArea({
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
   // the existing style) — the browser scrolls internally past 12 rows.
   const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
-  const showSpinner = isCommitting || isRemoteOperationActive
+  // Why: the spinner must track the primary action itself, not every
+  // background remote op. Fetching from the dropdown sets
+  // isRemoteOperationActive — if we spun the primary on that flag while the
+  // primary is a Commit / Commit & Push / etc., we'd be telling the user
+  // their commit is running when it isn't. Commit-prefixed primaries spin
+  // only on isCommitting; pure remote primaries spin on
+  // isRemoteOperationActive (their own action).
+  const primaryIsCommitFamily = primaryAction.kind.startsWith('commit')
+  const showSpinner = primaryIsCommitFamily ? isCommitting : isRemoteOperationActive
 
   return (
     <div className="px-3 pb-2">

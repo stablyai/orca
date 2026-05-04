@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RefreshCw } from 'lucide-react'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
@@ -51,6 +52,17 @@ function findPrimaryButton(node: unknown): ReactElementLike {
     throw new Error('primary button not found')
   }
   return buttons[0]
+}
+
+function primaryHasSpinner(node: unknown): boolean {
+  const primary = findPrimaryButton(node)
+  let found = false
+  visit(primary, (entry) => {
+    if (entry.type === RefreshCw) {
+      found = true
+    }
+  })
+  return found
 }
 
 function hasText(node: unknown, text: string): boolean {
@@ -241,5 +253,43 @@ describe('CommitArea', () => {
     })
     const element = CommitArea(props)
     expect(hasText(element, 'Commit & Push')).toBe(true)
+  })
+
+  // Why: fetching from the dropdown sets isRemoteOperationActive, but the
+  // primary button is "Commit" — painting a spinner on it told the user their
+  // commit was running. The spinner must track the primary action itself, not
+  // every background remote op.
+  it('does not show a spinner on a Commit primary when a dropdown remote op is running', () => {
+    const props = baseProps({
+      stagedCount: 1,
+      hasMessage: true,
+      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+      isCommitting: false,
+      isRemoteOperationActive: true
+    })
+    const element = CommitArea(props)
+    expect(primaryHasSpinner(element)).toBe(false)
+  })
+
+  it('shows a spinner on a Commit primary while the commit itself is in flight', () => {
+    const props = baseProps({
+      stagedCount: 1,
+      hasMessage: true,
+      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+      isCommitting: true
+    })
+    const element = CommitArea({ ...props, isCommitting: true })
+    expect(primaryHasSpinner(element)).toBe(true)
+  })
+
+  it('shows a spinner on a remote primary (Push) while the remote op is active', () => {
+    const props = baseProps({
+      stagedCount: 0,
+      hasMessage: false,
+      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
+      isRemoteOperationActive: true
+    })
+    const element = CommitArea({ ...props, isRemoteOperationActive: true })
+    expect(primaryHasSpinner(element)).toBe(true)
   })
 })
