@@ -858,7 +858,16 @@ function SourceControlInner(): React.JSX.Element {
       try {
         if (area === 'staged') {
           const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-          await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+          try {
+            await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+          } catch (error) {
+            // Why: bail before per-file discard if the bulk unstage fails.
+            // Otherwise we'd reset the worktree to HEAD while leaving the
+            // staged delta in the index, producing phantom "Changes" rows
+            // that are the inverse of what the user just "discarded".
+            console.error('[SourceControl] bulk unstage failed in discard-all', error)
+            return
+          }
         }
         for (const path of paths) {
           await handleDiscard(path)
@@ -1161,7 +1170,13 @@ function SourceControlInner(): React.JSX.Element {
                             <div className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
                               <ActionButton
                                 icon={Undo2}
-                                title="Discard all"
+                                // Why: for untracked files, discard deletes the file
+                                // outright (rm -rf via git.discard's untracked branch).
+                                // A generic "Discard all" label hides that severity —
+                                // label explicitly for the destructive variant.
+                                title={
+                                  area === 'untracked' ? 'Delete all untracked' : 'Discard all'
+                                }
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   void handleRevertAllInArea(area)
@@ -2096,6 +2111,13 @@ function ActionButton({
   // Why: use the Radix Tooltip instead of the native `title` attribute so the
   // label matches the rest of the sidebar chrome (consistent styling, no OS
   // delay quirks, dismissible on pointer leave).
+  //
+  // Why (disabled handling): Radix's TooltipTrigger asChild on a disabled
+  // <button> gets pointer-events blocked in Chromium, which suppresses the
+  // tooltip entirely — a regression vs. the native `title` attribute it
+  // replaced. We keep the button interactive and rely on the caller's
+  // `isExecutingBulk` early-return to no-op the click during bulk ops;
+  // `aria-disabled` + visual dimming preserves the disabled affordance.
   return (
     <TooltipProvider delayDuration={400}>
       <Tooltip>
@@ -2104,10 +2126,19 @@ function ActionButton({
             type="button"
             variant="ghost"
             size="icon-xs"
-            className="h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground"
+            className={cn(
+              'h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground',
+              disabled && 'opacity-50 cursor-not-allowed'
+            )}
             aria-label={title}
-            onClick={onClick}
-            disabled={disabled}
+            aria-disabled={disabled}
+            onClick={(event) => {
+              if (disabled) {
+                event.preventDefault()
+                return
+              }
+              onClick(event)
+            }}
           >
             <Icon className="size-3.5" />
           </Button>
