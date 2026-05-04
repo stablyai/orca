@@ -13,7 +13,11 @@ import type { SshConnectionState } from '../../../shared/ssh-types'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
-import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
+import {
+  handleSwitchTab,
+  handleSwitchTabAcrossAllTypes,
+  handleSwitchTerminalTab
+} from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -515,6 +519,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
+    unsubs.push(window.api.ui.onSwitchTabAcrossAllTypes(handleSwitchTabAcrossAllTypes))
     unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
 
     // Hydrate initial rate limit state then subscribe to push updates

@@ -1368,6 +1368,11 @@ const api = {
       ipcRenderer.on('ui:switchTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTab', listener)
     },
+    onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
+      ipcRenderer.on('ui:switchTabAcrossAllTypes', listener)
+      return () => ipcRenderer.removeListener('ui:switchTabAcrossAllTypes', listener)
+    },
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTerminalTab', listener)

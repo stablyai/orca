@@ -1,18 +1,16 @@
 import { useEffect, useEffectEvent } from 'react'
 import type { UnifiedTerminalItem } from './useTerminalTabs'
-import {
-  getNextTabWithinActiveType,
-  type TabCycleType,
-  type TypeCyclableTab
-} from './tab-type-cycle'
+import { getNextTabAcrossAllTypes, getNextTabWithinActiveType } from './tab-type-cycle'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 
 type UseTerminalShortcutsParams = {
   activeWorktreeId: string | null
   activeTabId: string | null
   activeFileId: string | null
-  activeBrowserTabId?: string | null
-  activeTabType: TabCycleType
+  // Why: unifiedTabs only contains 'terminal' | 'editor' entries (no browsers),
+  // so this hook's cycling is constrained to those two types. Browser tab
+  // cycling is handled elsewhere where browser tabs are actually in scope.
+  activeTabType: 'terminal' | 'editor'
   unifiedTabs: UnifiedTerminalItem[]
   hasDirtyFiles: boolean
   onNewTab: () => void
@@ -20,14 +18,12 @@ type UseTerminalShortcutsParams = {
   onCloseFile: (fileId: string) => void
   onActivateTerminalTab: (tabId: string) => void
   onActivateEditorTab: (fileId: string) => void
-  onActivateBrowserTab?: (tabId: string) => void
 }
 
 export function useTerminalShortcuts({
   activeWorktreeId,
   activeTabId,
   activeFileId,
-  activeBrowserTabId = null,
   activeTabType,
   unifiedTabs,
   hasDirtyFiles,
@@ -35,8 +31,7 @@ export function useTerminalShortcuts({
   onCloseTab,
   onCloseFile,
   onActivateTerminalTab,
-  onActivateEditorTab,
-  onActivateBrowserTab
+  onActivateEditorTab
 }: UseTerminalShortcutsParams): void {
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     // Accept Cmd on macOS, Ctrl on other platforms
@@ -62,20 +57,39 @@ export function useTerminalShortcuts({
       return
     }
 
-    // Why: use event.code instead of event.key because on macOS, Shift+[
-    // reports '{' as the key value (the shifted character), not '['.
-    if (!event.shiftKey || (event.code !== 'BracketRight' && event.code !== 'BracketLeft')) {
+    // Why: accept either Shift (type-scoped chord) or Alt (all-types chord).
+    // Use event.code rather than event.key because on macOS, Shift+[ reports
+    // '{' and Option+[ composes to a dead/accent character, so event.key
+    // wouldn't reliably match across layouts.
+    if (
+      (!event.shiftKey && !event.altKey) ||
+      (event.code !== 'BracketRight' && event.code !== 'BracketLeft')
+    ) {
       return
     }
 
-    const nextTab = getNextTabWithinActiveType({
-      tabs: unifiedTabs as TypeCyclableTab[],
-      activeTabType,
-      activeTabId,
-      activeFileId,
-      activeBrowserTabId,
-      direction: event.code === 'BracketRight' ? 1 : -1
-    })
+    const direction = event.code === 'BracketRight' ? 1 : -1
+    // Why: UnifiedTerminalItem has { type: 'terminal' | 'editor', id }, which is
+    // structurally assignable to TypeCyclableTab ({ type, id, tabId? }) with a
+    // narrower `type`. No cast needed — passing null for activeBrowserTabId
+    // since browser tabs can never appear in unifiedTabs.
+    const nextTab = event.altKey
+      ? getNextTabAcrossAllTypes({
+          tabs: unifiedTabs,
+          activeTabType,
+          activeTabId,
+          activeFileId,
+          activeBrowserTabId: null,
+          direction
+        })
+      : getNextTabWithinActiveType({
+          tabs: unifiedTabs,
+          activeTabType,
+          activeTabId,
+          activeFileId,
+          activeBrowserTabId: null,
+          direction
+        })
     if (!nextTab) {
       return
     }
@@ -84,11 +98,6 @@ export function useTerminalShortcuts({
 
     if (nextTab.type === 'terminal') {
       onActivateTerminalTab(nextTab.id)
-      return
-    }
-
-    if (nextTab.type === 'browser') {
-      onActivateBrowserTab?.(nextTab.id)
       return
     }
 

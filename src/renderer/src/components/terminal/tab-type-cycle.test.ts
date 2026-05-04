@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getNextTabWithinActiveType, type TypeCyclableTab } from './tab-type-cycle'
+import {
+  getNextTabAcrossAllTypes,
+  getNextTabWithinActiveType,
+  type TypeCyclableTab
+} from './tab-type-cycle'
 
 const mixedTabs: TypeCyclableTab[] = [
   { type: 'terminal', id: 'term-1' },
@@ -114,5 +118,102 @@ describe('getNextTabWithinActiveType', () => {
         direction: 1
       })
     ).toEqual({ type: 'editor', id: 'file-c', tabId: 'tab-c' })
+  })
+})
+
+describe('getNextTabAcrossAllTypes', () => {
+  it('cycles to the next tab regardless of type when a terminal is active', () => {
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs: mixedTabs,
+        activeTabType: 'terminal',
+        activeTabId: 'term-1',
+        activeFileId: 'file-1',
+        activeBrowserTabId: 'browser-1',
+        direction: 1
+      })
+    ).toEqual({ type: 'editor', id: 'file-1', tabId: 'tab-file-1' })
+  })
+
+  it('wraps from the last tab back to the first', () => {
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs: mixedTabs,
+        activeTabType: 'browser',
+        activeTabId: 'term-1',
+        activeFileId: 'file-1',
+        activeBrowserTabId: 'browser-2',
+        direction: 1
+      })
+    ).toEqual({ type: 'terminal', id: 'term-1' })
+  })
+
+  it('cycles backward across types', () => {
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs: mixedTabs,
+        activeTabType: 'editor',
+        activeTabId: 'term-1',
+        activeFileId: 'file-1',
+        activeBrowserTabId: 'browser-1',
+        direction: -1
+      })
+    ).toEqual({ type: 'terminal', id: 'term-1' })
+  })
+
+  it('returns null when only one tab exists total', () => {
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs: [{ type: 'terminal', id: 'term-1' }],
+        activeTabType: 'terminal',
+        activeTabId: 'term-1',
+        activeFileId: null,
+        activeBrowserTabId: null,
+        direction: 1
+      })
+    ).toBeNull()
+  })
+
+  it('prefers the active group tab id to disambiguate split duplicates', () => {
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs: [
+          { type: 'editor', id: 'file-a', tabId: 'tab-a' },
+          { type: 'terminal', id: 'term-1' },
+          { type: 'editor', id: 'file-a', tabId: 'tab-b' },
+          { type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' }
+        ],
+        activeTabType: 'editor',
+        activeTabId: 'term-1',
+        activeFileId: 'file-a',
+        activeBrowserTabId: null,
+        activeGroupTabId: 'tab-b',
+        direction: 1
+      })
+    ).toEqual({ type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' })
+  })
+
+  it('uses direction-aware fallback when the active tab id is missing', () => {
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs: mixedTabs,
+        activeTabType: 'terminal',
+        activeTabId: 'nonexistent',
+        activeFileId: null,
+        activeBrowserTabId: null,
+        direction: 1
+      })
+    ).toEqual(mixedTabs[0])
+
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs: mixedTabs,
+        activeTabType: 'terminal',
+        activeTabId: 'nonexistent',
+        activeFileId: null,
+        activeBrowserTabId: null,
+        direction: -1
+      })
+    ).toEqual(mixedTabs.at(-1))
   })
 })

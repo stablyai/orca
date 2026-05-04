@@ -15,7 +15,11 @@ vi.mock('@/components/tab-bar/group-tab-order', () => ({
   getActiveTabNavOrder: getActiveTabNavOrderMock
 }))
 
-import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
+import {
+  handleSwitchTab,
+  handleSwitchTabAcrossAllTypes,
+  handleSwitchTerminalTab
+} from './ipc-tab-switch'
 
 type ActiveTabType = 'terminal' | 'editor' | 'browser'
 
@@ -258,5 +262,54 @@ describe('handleSwitchTab', () => {
     expect(store.setActiveFile).toHaveBeenCalledWith('file-2')
     expect(store.activateTab).not.toHaveBeenCalled()
     expect(store.setActiveTabType).toHaveBeenCalledWith('editor')
+  })
+})
+
+describe('handleSwitchTabAcrossAllTypes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('crosses tab types, e.g. terminal → editor', () => {
+    const store = makeStore('terminal')
+    store.activeTabId = 'term-1'
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'terminal', id: 'term-1' },
+      { type: 'editor', id: 'file-1', tabId: 'tab-file-1' },
+      { type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' }
+    ])
+
+    expect(handleSwitchTabAcrossAllTypes(1)).toBe(true)
+    expect(store.setActiveFile).toHaveBeenCalledWith('file-1')
+    expect(store.activateTab).toHaveBeenCalledWith('tab-file-1')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('editor')
+  })
+
+  it('wraps around across types', () => {
+    const store = makeStore('browser')
+    store.activeBrowserTabId = 'browser-1'
+    store.activeGroupIdByWorktree = {}
+    store.groupsByWorktree = {}
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'terminal', id: 'term-1' },
+      { type: 'editor', id: 'file-1', tabId: 'tab-file-1' },
+      { type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' }
+    ])
+
+    expect(handleSwitchTabAcrossAllTypes(1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-1')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')
+  })
+
+  it('returns false when only one tab exists total', () => {
+    const store = makeStore('terminal')
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-1' }])
+
+    expect(handleSwitchTabAcrossAllTypes(1)).toBe(false)
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+    expect(store.setActiveTabType).not.toHaveBeenCalled()
   })
 })
