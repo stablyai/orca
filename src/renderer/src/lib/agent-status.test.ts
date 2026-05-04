@@ -208,6 +208,16 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('~/codex-scratch')).toBe('idle')
     expect(detectAgentStatusFromTitle('~/codex already built')).toBe('idle')
   })
+
+  // Why: short agent names are unsafe under substring detection. Telemetry now
+  // records explicit launch facts rather than widening OSC-title inference, so
+  // this detector must not grow aliases that turn ordinary shell titles like
+  // "timestamp ready" into agent activity.
+  it('does not treat ordinary words containing "amp" as agent titles', () => {
+    expect(detectAgentStatusFromTitle('timestamp ready')).toBeNull()
+    expect(detectAgentStatusFromTitle('clamp working')).toBeNull()
+    expect(detectAgentStatusFromTitle('example permission needed')).toBeNull()
+  })
 })
 
 // Why: regression guard for the STRONG_WORKING_KEYWORDS_RE path-separator

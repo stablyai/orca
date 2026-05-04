@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import {
@@ -63,6 +63,30 @@ export function SshDisconnectedDialog({
     ? 'Reconnecting to the remote host...'
     : (STATUS_MESSAGES[status] ?? 'This remote repository is not connected.')
   const showReconnect = isReconnectable(status)
+
+  useEffect(() => {
+    // Window-level Enter handler. The dialog typically appears while focus
+    // is inside an embedded terminal (xterm) or editor (monaco) that
+    // aggressively reclaims focus, so dialog-scoped key handlers never
+    // fire. Listening on window (capture phase) catches Enter regardless
+    // of where focus actually lives while the dialog is open.
+    if (!open || !showReconnect || isConnecting) {
+      return undefined
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Enter' || event.defaultPrevented) {
+        return
+      }
+      if (event.isComposing) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      void handleReconnect()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [open, showReconnect, isConnecting, handleReconnect])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

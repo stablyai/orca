@@ -1,7 +1,9 @@
 import { Node, mergeAttributes } from '@tiptap/core'
+import { getMarkdownDocLinkTarget } from './markdown-doc-links'
 
 const INLINE_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_INLINE:'
 const BLOCK_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_BLOCK:'
+const DOC_LINK_PLACEHOLDER_PREFIX = '[[ORCA_DOC_LINK:'
 const PLACEHOLDER_SUFFIX = ']]'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
@@ -169,6 +171,28 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
         result += createPlaceholder('inline', inlineHtml)
         index += inlineHtml.length
         continue
+      }
+    }
+
+    // Why: doc link encoding runs inside the same while loop (not a separate
+    // pre-pass) so that fenced code blocks and backtick code spans are already
+    // skipped by the guards above. The [[ORCA_ prefix check prevents re-encoding
+    // sibling placeholders that were already emitted earlier in this pass.
+    if (
+      content[index] === '[' &&
+      content[index + 1] === '[' &&
+      !content.startsWith('[[ORCA_', index) &&
+      !isEscaped(content, index)
+    ) {
+      const closingIndex = content.indexOf(']]', index + 2)
+      if (closingIndex !== -1) {
+        const rawTarget = content.slice(index + 2, closingIndex)
+        const target = getMarkdownDocLinkTarget(rawTarget)
+        if (target) {
+          result += `${DOC_LINK_PLACEHOLDER_PREFIX}${target}${PLACEHOLDER_SUFFIX}`
+          index = closingIndex + 2
+          continue
+        }
       }
     }
 

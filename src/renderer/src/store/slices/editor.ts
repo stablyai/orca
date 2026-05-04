@@ -124,6 +124,13 @@ export type ActivityBarPosition = 'top' | 'side'
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 
+// Why: orthogonal to MarkdownViewMode. 'changes' flips the editor tab to a
+// diff-against-HEAD rendering (working tree incl. unsaved draft vs HEAD) in
+// place of the normal editor, without creating a separate tab. The per-tab
+// Tab.contentType stays 'editor' for the whole lifetime; this slice drives
+// what EditorPanel *renders* for that tab. See reviews/changes-view-mode-plan.md.
+export type EditorViewMode = 'edit' | 'changes'
+
 /** Enough state to restore a tab via `openFile` after `closeFile` (id is always filePath). */
 export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
 
@@ -142,6 +149,12 @@ export type EditorSlice = {
   // Markdown view mode per file (fileId -> mode)
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
+
+  // Editor view mode per file (fileId -> mode). Orthogonal to markdownViewMode:
+  // a markdown file can be in Raw+Changes, Rendered+Changes, etc. Absent entry
+  // means 'edit'.
+  editorViewMode: Record<string, EditorViewMode>
+  setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
 
   // Right sidebar
   rightSidebarOpen: boolean
@@ -367,6 +380,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
     })),
 
+  // Editor view mode (edit vs changes-diff). See EditorViewMode.
+  editorViewMode: {},
+  setEditorViewMode: (fileId, mode) =>
+    set((s) => {
+      // Why: default is 'edit'. Writing 'edit' explicitly when no entry exists
+      // would grow the record unnecessarily; delete instead so the shape stays
+      // minimal and hydration round-trips cleanly.
+      if (mode === 'edit') {
+        if (!(fileId in s.editorViewMode)) {
+          return s
+        }
+        const next = { ...s.editorViewMode }
+        delete next[fileId]
+        return { editorViewMode: next }
+      }
+      return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
+    }),
+
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
@@ -520,6 +551,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                     ([fileId]) => fileId !== replacedPreview.id
                   )
                 )
+          const nextEditorViewMode =
+            replacedPreview.id === id
+              ? s.editorViewMode
+              : Object.fromEntries(
+                  Object.entries(s.editorViewMode).filter(
+                    ([fileId]) => fileId !== replacedPreview.id
+                  )
+                )
           // Why: editorCursorLine entries accumulate per file; clean up the
           // evicted preview's entry so it does not leak across tab replacements.
           const nextEditorCursorLine =
@@ -566,6 +605,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             editorDrafts: nextEditorDrafts,
             editorCursorLine: nextEditorCursorLine,
             markdownViewMode: nextMarkdownViewMode,
+            editorViewMode: nextEditorViewMode,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             ...previewTabBarUpdate,
             ...activeResult
@@ -738,6 +778,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       delete newEditorDrafts[fileId]
       const newMarkdownViewMode = { ...s.markdownViewMode }
       delete newMarkdownViewMode[fileId]
+      const newEditorViewMode = { ...s.editorViewMode }
+      delete newEditorViewMode[fileId]
       // Why: editorCursorLine entries are keyed by fileId and accumulate on
       // every cursor move. Without cleanup they grow without bound across a
       // long session as files are opened and closed.
@@ -862,6 +904,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         markdownViewMode: newMarkdownViewMode,
+        editorViewMode: newEditorViewMode,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingEditorReveal: null,
         recentlyClosedEditorTabsByWorktree: nextRecentlyClosed
@@ -948,6 +991,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           activeFileId: null,
           activeTabType: 'terminal',
           markdownViewMode: {},
+          editorViewMode: {},
           pendingEditorReveal: null
         }
       }
@@ -959,6 +1003,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
       const newMarkdownViewMode = Object.fromEntries(
         Object.entries(s.markdownViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
+      )
+      const newEditorViewMode = Object.fromEntries(
+        Object.entries(s.editorViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
       )
       const newEditorCursorLine = Object.fromEntries(
         Object.entries(s.editorCursorLine).filter(([fileId]) => remainingFileIds.has(fileId))
@@ -1021,6 +1068,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             : s.activeBrowserTabId,
         activeTabType: browserTabsForWorktree.length > 0 ? 'browser' : 'terminal',
         markdownViewMode: newMarkdownViewMode,
+        editorViewMode: newEditorViewMode,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,

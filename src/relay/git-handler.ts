@@ -1,23 +1,19 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { existsSync } from 'fs'
-import { readFile, rm } from 'fs/promises'
+import { rm } from 'fs/promises'
 import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
-import {
-  parseStatusOutput,
-  parseUnmergedEntry,
-  parseBranchDiff,
-  parseWorktreeList
-} from './git-handler-utils'
+import { parseBranchDiff, parseWorktreeList } from './git-handler-utils'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
   branchDiffEntries,
   validateGitExecArgs
 } from './git-handler-ops'
+import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
+import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -35,6 +31,7 @@ export class GitHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('git.status', (p) => this.getStatus(p))
+    this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
     this.dispatcher.onRequest('git.diff', (p) => this.getDiff(p))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
@@ -73,66 +70,7 @@ export class GitHandler {
   }
 
   private async getStatus(params: Record<string, unknown>) {
-    const worktreePath = params.worktreePath as string
-    this.context.validatePath(worktreePath)
-    const conflictOperation = await this.detectConflictOperation(worktreePath)
-    const entries: Record<string, unknown>[] = []
-
-    try {
-      const { stdout } = await this.git(
-        ['status', '--porcelain=v2', '--untracked-files=all'],
-        worktreePath
-      )
-
-      const parsed = parseStatusOutput(stdout)
-      entries.push(...parsed.entries)
-
-      for (const uLine of parsed.unmergedLines) {
-        const entry = parseUnmergedEntry(worktreePath, uLine)
-        if (entry) {
-          entries.push(entry)
-        }
-      }
-    } catch {
-      // Not a git repo or git not available
-    }
-
-    return { entries, conflictOperation }
-  }
-
-  private async detectConflictOperation(worktreePath: string): Promise<string> {
-    const gitDir = await this.resolveGitDir(worktreePath)
-    try {
-      if (existsSync(path.join(gitDir, 'MERGE_HEAD'))) {
-        return 'merge'
-      }
-      if (
-        existsSync(path.join(gitDir, 'rebase-merge')) ||
-        existsSync(path.join(gitDir, 'rebase-apply'))
-      ) {
-        return 'rebase'
-      }
-      if (existsSync(path.join(gitDir, 'CHERRY_PICK_HEAD'))) {
-        return 'cherry-pick'
-      }
-    } catch {
-      // fs error
-    }
-    return 'unknown'
-  }
-
-  private async resolveGitDir(worktreePath: string): Promise<string> {
-    const dotGitPath = path.join(worktreePath, '.git')
-    try {
-      const contents = await readFile(dotGitPath, 'utf-8')
-      const match = contents.match(/^gitdir:\s*(.+)\s*$/m)
-      if (match) {
-        return path.resolve(worktreePath, match[1])
-      }
-    } catch {
-      // .git is a directory
-    }
-    return dotGitPath
+    return getStatusOp(this.git.bind(this), this.context.validatePath.bind(this.context), params)
   }
 
   private async getDiff(params: Record<string, unknown>) {
@@ -146,8 +84,13 @@ export class GitHandler {
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
-    const staged = params.staged as boolean
-    return computeDiff(this.gitBuffer.bind(this), worktreePath, filePath, staged)
+    return computeDiff(
+      this.gitBuffer.bind(this),
+      worktreePath,
+      filePath,
+      params.staged as boolean,
+      params.compareAgainstHead as boolean | undefined
+    )
   }
 
   private async stage(params: Record<string, unknown>) {
@@ -155,6 +98,15 @@ export class GitHandler {
     this.context.validatePath(worktreePath)
     const filePath = params.filePath as string
     await this.git(['add', '--', filePath], worktreePath)
+  }
+
+  private async commit(
+    params: Record<string, unknown>
+  ): Promise<{ success: boolean; error?: string }> {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+    const message = params.message as string
+    return commitChangesRelay(this.git.bind(this), worktreePath, message)
   }
 
   private async unstage(params: Record<string, unknown>) {
@@ -219,7 +171,7 @@ export class GitHandler {
   private async conflictOperation(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
-    return this.detectConflictOperation(worktreePath)
+    return detectConflictOperation(worktreePath)
   }
 
   private async branchCompare(params: Record<string, unknown>) {
@@ -296,54 +248,14 @@ export class GitHandler {
   }
 
   private async addWorktree(params: Record<string, unknown>) {
-    const repoPath = params.repoPath as string
-    this.context.validatePath(repoPath)
-    const branchName = params.branchName as string
-    const targetDir = params.targetDir as string
-    this.context.validatePath(targetDir)
-    const base = params.base as string | undefined
-    const track = params.track as boolean | undefined
-
-    // Why: a branchName starting with '-' would be interpreted as a git flag,
-    // potentially changing the command's semantics (e.g. "--detach").
-    if (branchName.startsWith('-') || (base && base.startsWith('-'))) {
-      throw new Error('Branch name and base ref must not start with "-"')
-    }
-
-    const args = ['worktree', 'add']
-    if (track) {
-      args.push('--track')
-    }
-    args.push('-b', branchName, targetDir)
-    if (base) {
-      args.push(base)
-    }
-
-    await this.git(args, repoPath)
+    return addWorktreeOp(this.git.bind(this), this.context.validatePath.bind(this.context), params)
   }
 
   private async removeWorktree(params: Record<string, unknown>) {
-    const worktreePath = params.worktreePath as string
-    this.context.validatePath(worktreePath)
-    const force = params.force as boolean | undefined
-
-    let repoPath = worktreePath
-    try {
-      const { stdout } = await this.git(['rev-parse', '--git-common-dir'], worktreePath)
-      const commonDir = stdout.trim()
-      if (commonDir && commonDir !== '.git') {
-        repoPath = path.resolve(worktreePath, commonDir, '..')
-      }
-    } catch {
-      // Fall through with worktreePath as repo
-    }
-
-    const args = ['worktree', 'remove']
-    if (force) {
-      args.push('--force')
-    }
-    args.push(worktreePath)
-    await this.git(args, repoPath)
-    await this.git(['worktree', 'prune'], repoPath)
+    return removeWorktreeOp(
+      this.git.bind(this),
+      this.context.validatePath.bind(this.context),
+      params
+    )
   }
 }

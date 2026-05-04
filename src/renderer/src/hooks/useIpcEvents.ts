@@ -38,8 +38,31 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.worktrees.onChanged((data: { repoId: string }) => {
-        useAppStore.getState().fetchWorktrees(data.repoId)
+      window.api.worktrees.onChanged(async (data: { repoId: string }) => {
+        // Why: diff before vs. after fetchWorktrees to detect server-side
+        // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
+        // and purge worktree-scoped state for removed ids. Without this,
+        // `ptyIdsByTabId` would retain entries for tabs whose worktree is
+        // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
+        // misclassifying the zombie as bound (design §2c, §4.4).
+        const state = useAppStore.getState()
+        const before = new Set((state.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        await state.fetchWorktrees(data.repoId)
+        const afterState = useAppStore.getState()
+        const after = new Set((afterState.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        const removed: string[] = []
+        for (const id of before) {
+          if (!after.has(id)) {
+            removed.push(id)
+          }
+        }
+        if (removed.length > 0) {
+          console.warn(
+            `[worktree-purge] diff-based purge removing state for ${removed.length} worktree(s):`,
+            removed
+          )
+          afterState.purgeWorktreeTerminalState(removed)
+        }
       })
     )
 
@@ -195,6 +218,11 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         store.setActiveView('terminal')
         store.setActiveWorktree(worktreeId)
+        // Why: CLI-driven terminal creation is a user-initiated worktree switch
+        // and must stamp focus recency for Cmd+J. Doesn't route through
+        // activateAndRevealWorktree because it has custom terminal-creation
+        // logic; see docs/cmd-j-empty-query-ordering.md.
+        store.markWorktreeVisited(worktreeId)
         const tab = store.createTab(worktreeId)
         store.setActiveTabType('terminal')
         store.setActiveTab(tab.id)
@@ -225,6 +253,9 @@ export function useIpcEvents(): void {
           }
           store.setActiveView('terminal')
           store.setActiveWorktree(worktreeId)
+          // Why: CLI-driven terminal-create request is user-initiated; stamp
+          // focus recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
+          store.markWorktreeVisited(worktreeId)
           const tab = store.createTab(worktreeId)
           store.setActiveTabType('terminal')
           store.setActiveTab(tab.id)
@@ -266,6 +297,9 @@ export function useIpcEvents(): void {
       window.api.ui.onFocusTerminal(({ tabId, worktreeId }) => {
         const store = useAppStore.getState()
         store.setActiveWorktree(worktreeId)
+        // Why: CLI-driven focus is a user-initiated switch; stamp focus
+        // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
+        store.markWorktreeVisited(worktreeId)
         store.setActiveView('terminal')
         store.setActiveTab(tabId)
         store.revealWorktreeInSidebar(worktreeId)

@@ -127,6 +127,16 @@ const browserLoadErrorSchema = z.object({
   validatedUrl: z.string()
 })
 
+const browserViewportPresetIdSchema = z.enum([
+  'mobile-s',
+  'mobile-m',
+  'mobile-l',
+  'tablet',
+  'laptop',
+  'laptop-l',
+  'desktop'
+])
+
 // Why: cast to WorkspaceSessionState's embedded BrowserWorkspace so future
 // additive fields in the type flow through without requiring a schema edit.
 const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
@@ -157,7 +167,11 @@ const browserPageSchema = z.object({
   canGoBack: z.boolean(),
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number()
+  createdAt: z.number(),
+  // Why: optional+nullable so sessions persisted before viewport presets were
+  // added still validate; without this, zod would strip the field during
+  // restore and reset the user's chosen preset on every app restart.
+  viewportPresetId: browserViewportPresetIdSchema.nullable().optional()
 })
 
 const browserHistoryEntrySchema = z.object({
@@ -190,7 +204,12 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   tabGroupLayouts: z.record(z.string(), tabGroupLayoutNodeSchema).optional(),
   activeGroupIdByWorktree: z.record(z.string(), z.string()).optional(),
   activeConnectionIdsAtShutdown: z.array(z.string()).optional(),
-  remoteSessionIdsByTabId: z.record(z.string(), z.string()).optional()
+  remoteSessionIdsByTabId: z.record(z.string(), z.string()).optional(),
+  // Why: the sort comparator in order-empty-query-worktrees.ts would produce
+  // NaN (undefined sort order) if a corrupted session file carried NaN or
+  // Infinity here. Constrain to finite non-negative numbers so a bad on-disk
+  // value is rejected at parse time rather than silently breaking Cmd+J.
+  lastVisitedAtByWorktreeId: z.record(z.string(), z.number().finite().nonnegative()).optional()
 })
 
 export type ParsedWorkspaceSession =

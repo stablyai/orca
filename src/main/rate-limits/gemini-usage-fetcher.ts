@@ -203,22 +203,25 @@ async function fetchViaOauthCreds(
 export async function fetchGeminiRateLimits(
   geminiCliOAuthEnabled = false
 ): Promise<ProviderRateLimits> {
+  if (!geminiCliOAuthEnabled) {
+    // Why: the OAuth sources include other apps' data folders on macOS.
+    // Do not touch them during background polling unless the user opts in.
+    return {
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Gemini CLI OAuth is disabled in settings',
+      status: 'unavailable'
+    }
+  }
+
   try {
     const authJson = await readAuthJson()
     const result =
       authJson?.google?.type === 'oauth'
         ? await fetchViaAuthJson(authJson.google, geminiCliOAuthEnabled)
         : await (async () => {
-            if (!geminiCliOAuthEnabled) {
-              return {
-                provider: 'gemini',
-                session: null,
-                weekly: null,
-                updatedAt: Date.now(),
-                error: 'Gemini CLI OAuth is disabled in settings',
-                status: 'unavailable'
-              } as ProviderRateLimits
-            }
             const creds = await readGeminiCredentials()
             return !creds
               ? ({

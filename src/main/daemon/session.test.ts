@@ -41,6 +41,7 @@ function createMockSubprocess() {
     onExit(cb: (code: number) => void) {
       onExit = cb
     },
+    dispose() {},
     // Helpers for tests to simulate subprocess events
     simulateData(data: string) {
       onData?.(data)

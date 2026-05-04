@@ -196,7 +196,7 @@ describe('attachMainWindowServices', () => {
     }
   })
 
-  it('denies browser-session permissions, display capture, and downloads by default', () => {
+  it('denies browser-session permissions, display capture, and downloads by default', async () => {
     const browserSessionOnMock = vi.fn()
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
@@ -214,35 +214,39 @@ describe('attachMainWindowServices', () => {
     const browserPermissionHandler = setPermissionRequestHandlerMock.mock.calls[1][0] as (
       wc: unknown,
       permission: string,
-      callback: (allowed: boolean) => void
+      callback: (allowed: boolean) => void,
+      details?: unknown
     ) => void
-    const permissionCallback = vi.fn()
-    const guestWebContents = { id: 401, getURL: vi.fn(() => 'https://example.com/account') }
-    browserPermissionHandler(guestWebContents, 'fullscreen', permissionCallback)
-    browserPermissionHandler(guestWebContents, 'media', permissionCallback)
-
-    expect(permissionCallback.mock.calls).toEqual([[true], [false]])
+    const cb = vi.fn()
+    const guestWc = { id: 401, getURL: vi.fn(() => 'https://example.com/account') }
+    browserPermissionHandler(guestWc, 'fullscreen', cb)
+    browserPermissionHandler(guestWc, 'notifications', cb)
+    // Why: `media` routes through macOS TCC instead of being denied outright,
+    // so pages inside the in-app browser can use camera/mic once Orca has been
+    // granted Camera/Microphone at the OS level.
+    browserPermissionHandler(guestWc, 'media', cb, { mediaTypes: ['video'] })
+    await vi.waitFor(() => expect(cb.mock.calls).toEqual([[true], [false], [true]]))
     expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledTimes(1)
     expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
       guestWebContentsId: 401,
-      permission: 'media',
+      permission: 'notifications',
       rawUrl: 'https://example.com/account'
     })
 
-    const browserPermissionCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
+    const browserCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
       wc: unknown,
-      permission: string
+      permission: string,
+      origin: string,
+      details?: { mediaType?: 'video' | 'audio' | 'unknown' }
     ) => boolean
-    expect(browserPermissionCheckHandler(null, 'fullscreen')).toBe(true)
-    expect(browserPermissionCheckHandler(null, 'notifications')).toBe(false)
+    expect(browserCheckHandler(null, 'fullscreen', '')).toBe(true)
+    expect(browserCheckHandler(null, 'notifications', '')).toBe(false)
+    expect(browserCheckHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
 
-    const displayMediaHandler = setDisplayMediaRequestHandlerMock.mock.calls[0][0] as (
-      request: unknown,
-      callback: (streams: { video: null; audio: null }) => void
-    ) => void
-    const displayCallback = vi.fn()
-    displayMediaHandler(null, displayCallback)
-    expect(displayCallback).toHaveBeenCalledWith({ video: undefined, audio: undefined })
+    const displayMediaHandler = setDisplayMediaRequestHandlerMock.mock.calls[0][0]
+    const displayCb = vi.fn()
+    displayMediaHandler(null, displayCb)
+    expect(displayCb).toHaveBeenCalledWith({ video: undefined, audio: undefined })
 
     const willDownloadHandler = browserSessionOnMock.mock.calls.find(
       ([eventName]) => eventName === 'will-download'

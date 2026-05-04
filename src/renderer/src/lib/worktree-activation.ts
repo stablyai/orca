@@ -90,6 +90,14 @@ export function activateAndRevealWorktree(
   // clears unread, bumps dead PTY generations, triggers GitHub refresh
   state.setActiveWorktree(worktreeId)
 
+  // Why: record focus recency for Cmd+J's empty-query ordering BEFORE any
+  // later async step (initial terminal / reveal) could throw — the user
+  // already perceives the switch as successful the instant activeWorktreeId
+  // flips, so the recency stamp must land with the same guarantee. Separate
+  // from recordWorktreeVisit (nav-history) and from worktree.lastActivityAt
+  // (background signal) on purpose — see docs/cmd-j-empty-query-ordering.md.
+  state.markWorktreeVisited(worktreeId)
+
   // Why: activateAndRevealWorktree always ends in 'terminal' view (step 2),
   // and Settings/Tasks transitions do not pass through this function, so no
   // view-guard is needed here. The guard skips re-recording when the caller
@@ -112,9 +120,6 @@ export function activateAndRevealWorktree(
   // Why: revealWorktreeInSidebar relies on the worktree card being rendered
   // in the sidebar. If sidebar filters exclude the target, the card is never
   // rendered and the reveal silently no-ops.
-  if (state.searchQuery) {
-    state.setSearchQuery('')
-  }
   if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
     state.setFilterRepoIds([])
   }

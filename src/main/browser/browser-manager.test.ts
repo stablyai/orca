@@ -1117,4 +1117,167 @@ describe('browserManager', () => {
       guestOffMock.mock.calls.filter(([eventName]) => eventName === 'before-input-event')
     ).toHaveLength(2)
   })
+
+  describe('setViewportOverride', () => {
+    function makeGuest(id: number): {
+      guest: Record<string, unknown>
+      debuggerSendCommand: ReturnType<typeof vi.fn>
+      debuggerIsAttached: ReturnType<typeof vi.fn>
+      debuggerAttach: ReturnType<typeof vi.fn>
+    } {
+      const debuggerSendCommand = vi.fn().mockResolvedValue(undefined)
+      const debuggerIsAttached = vi.fn(() => true)
+      const debuggerAttach = vi.fn()
+      const guest = {
+        id,
+        isDestroyed: vi.fn(() => false),
+        getType: vi.fn(() => 'webview'),
+        getUserAgent: vi.fn(
+          () =>
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
+        ),
+        setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+        setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+        on: guestOnMock,
+        off: guestOffMock,
+        openDevTools: guestOpenDevToolsMock,
+        debugger: {
+          isAttached: debuggerIsAttached,
+          attach: debuggerAttach,
+          sendCommand: debuggerSendCommand
+        }
+      }
+      return { guest, debuggerSendCommand, debuggerIsAttached, debuggerAttach }
+    }
+
+    it('returns false when the tab is not registered', async () => {
+      const result = await browserManager.setViewportOverride('missing', {
+        width: 375,
+        height: 667,
+        deviceScaleFactor: 2,
+        mobile: true
+      })
+      expect(result).toBe(false)
+    })
+
+    it('applies device metrics, touch emulation, and a mobile UA for mobile presets', async () => {
+      const { guest, debuggerSendCommand } = makeGuest(4242)
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-mobile',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+      webContentsFromIdMock.mockReset()
+      webContentsFromIdMock.mockReturnValue(guest)
+
+      const ok = await browserManager.setViewportOverride('tab-mobile', {
+        width: 375,
+        height: 667,
+        deviceScaleFactor: 2,
+        mobile: true
+      })
+      expect(ok).toBe(true)
+
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setDeviceMetricsOverride', {
+        width: 375,
+        height: 667,
+        deviceScaleFactor: 2,
+        mobile: true
+      })
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setTouchEmulationEnabled', {
+        enabled: true,
+        maxTouchPoints: 5
+      })
+      const uaCall = debuggerSendCommand.mock.calls.find(
+        (call) => call[0] === 'Emulation.setUserAgentOverride'
+      )
+      expect(uaCall).toBeDefined()
+      expect(uaCall?.[1]).toMatchObject({
+        userAgent: expect.stringContaining('iPhone')
+      })
+      // Chrome major from the guest UA should be spliced into the mobile UA.
+      expect(uaCall?.[1]).toMatchObject({
+        userAgent: expect.stringContaining('CriOS/134')
+      })
+    })
+
+    it('clears device metrics and disables touch for override=null', async () => {
+      const { guest, debuggerSendCommand } = makeGuest(4343)
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-clear',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+
+      const ok = await browserManager.setViewportOverride('tab-clear', null)
+      expect(ok).toBe(true)
+
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.clearDeviceMetricsOverride', {})
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setTouchEmulationEnabled', {
+        enabled: false,
+        maxTouchPoints: 0
+      })
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: ''
+      })
+    })
+
+    it('attaches the debugger if not already attached and does not detach after', async () => {
+      const { guest, debuggerSendCommand, debuggerAttach } = makeGuest(4444)
+      ;(guest.debugger as { isAttached: ReturnType<typeof vi.fn> }).isAttached = vi.fn(() => false)
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-attach',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+
+      await browserManager.setViewportOverride('tab-attach', {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+
+      expect(debuggerAttach).toHaveBeenCalledWith('1.3')
+      expect(debuggerSendCommand).toHaveBeenCalled()
+      // Why: detaching would clear Page.addScriptToEvaluateOnNewDocument
+      // (anti-detection). Guard regression.
+      expect((guest.debugger as { detach?: unknown }).detach ?? undefined).toBeUndefined()
+    })
+
+    it('returns false when debugger.attach throws (e.g. DevTools already open)', async () => {
+      const { guest, debuggerSendCommand, debuggerAttach } = makeGuest(4545)
+      ;(guest.debugger as { isAttached: ReturnType<typeof vi.fn> }).isAttached = vi.fn(() => false)
+      // Why: Electron throws from debugger.attach if another client (e.g. the
+      // user's open DevTools window) is already attached. setViewportOverride
+      // must surface this as a clean `false` rather than an unhandled rejection.
+      debuggerAttach.mockImplementation(() => {
+        throw new Error('Another debugger is already attached')
+      })
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-attach-throws',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+
+      const ok = await browserManager.setViewportOverride('tab-attach-throws', {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+
+      expect(ok).toBe(false)
+      expect(debuggerAttach).toHaveBeenCalledWith('1.3')
+      expect(debuggerSendCommand).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -52,6 +52,9 @@ const Settings = lazy(() => import('./components/settings/Settings'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
+// Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
+// the user opts into the experimental flag.
+const SidekickOverlay = lazy(() => import('./components/sidekick/SidekickOverlay'))
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -93,7 +96,6 @@ function App(): React.JSX.Element {
       hydrateEditorSession: s.hydrateEditorSession,
       hydrateBrowserSession: s.hydrateBrowserSession,
       fetchBrowserSessionProfiles: s.fetchBrowserSessionProfiles,
-      fetchDetectedBrowsers: s.fetchDetectedBrowsers,
       reconnectPersistedTerminals: s.reconnectPersistedTerminals,
       setDeferredSshReconnectTargets: s.setDeferredSshReconnectTargets,
       setSshConnectionState: s.setSshConnectionState,
@@ -103,7 +105,9 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
-      updateSettings: s.updateSettings
+      updateSettings: s.updateSettings,
+      pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
+      seedActiveWorktreeLastVisitedIfMissing: s.seedActiveWorktreeLastVisitedIfMissing
     }))
   )
 
@@ -133,6 +137,7 @@ function App(): React.JSX.Element {
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
@@ -146,6 +151,8 @@ function App(): React.JSX.Element {
   // subscriptions (agentStatusByPaneKey, agentStatusEpoch, etc.) instead of
   // keeping them alive behind an early-return inside the hook bodies.
   const agentDashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
+  const sidekickEnabled = useAppStore((s) => s.settings?.experimentalSidekick === true)
+  const sidekickVisible = useAppStore((s) => s.sidekickVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
@@ -227,8 +234,17 @@ function App(): React.JSX.Element {
           actions.hydrateTabsSession(session)
           actions.hydrateEditorSession(session)
           actions.hydrateBrowserSession(session)
+          // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
+          // no longer exist. Must run AFTER hydration — before this point,
+          // async repo loads may not have populated worktreesByRepo yet and
+          // pruning would delete timestamps for worktrees that are about to
+          // appear. Seed the restored active worktree's timestamp if missing
+          // so users upgrading from a pre-feature build don't see the active
+          // worktree sink in the empty-query list.
+          // See docs/cmd-j-empty-query-ordering.md.
+          actions.pruneLastVisitedTimestamps()
+          actions.seedActiveWorktreeLastVisitedIfMissing()
           await actions.fetchBrowserSessionProfiles()
-          await actions.fetchDetectedBrowsers()
 
           // Why: SSH connections must be re-established BEFORE terminal
           // reconnect so that reconnectPersistedTerminals can route SSH-backed
@@ -325,8 +341,9 @@ function App(): React.JSX.Element {
             sidebarWidth: 280,
             rightSidebarWidth: 350,
             groupBy: 'none',
-            sortBy: 'name',
+            sortBy: 'recent',
             showActiveOnly: false,
+            hideDefaultBranchWorkspace: false,
             filterRepoIds: [],
             collapsedGroups: [],
             uiZoomLevel: 0,
@@ -457,6 +474,7 @@ function App(): React.JSX.Element {
         groupBy,
         sortBy,
         showActiveOnly,
+        hideDefaultBranchWorkspace,
         filterRepoIds
       })
     }, 150)
@@ -469,6 +487,7 @@ function App(): React.JSX.Element {
     groupBy,
     sortBy,
     showActiveOnly,
+    hideDefaultBranchWorkspace,
     filterRepoIds
   ])
 
@@ -1041,7 +1060,7 @@ function App(): React.JSX.Element {
                 a few pixels, which reads as layout jitter. */}
             {workspaceActive && !rightSidebarOpen && (
               <div
-                className="absolute top-0 right-0 z-10 flex items-center h-[42px]"
+                className="absolute top-0 right-0 z-10 flex items-center h-[36px]"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
                 {rightSidebarToggle}
@@ -1084,6 +1103,15 @@ function App(): React.JSX.Element {
         {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
         {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
       </Suspense>
+      {/* Why: mount SidekickOverlay only when the experimental flag is on AND
+          the user hasn't hit "Hide sidekick" in the status-bar menu. Both
+          conditions must be true — see design doc (sidekick-overlay.md) on why
+          the two toggles are kept independent. */}
+      {sidekickEnabled && sidekickVisible ? (
+        <Suspense fallback={null}>
+          <SidekickOverlay />
+        </Suspense>
+      ) : null}
       <UpdateCard />
       <StarNagCard />
       <ZoomOverlay />

@@ -149,9 +149,14 @@ export default function BrowserTab({
           }}
         >
           {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-          <Globe
-            className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-          />
+          {/* Why: the browser tab icon is the only non-terminal, non-editor
+              surface in the tab strip. Coloring the Globe blue (matching the
+              in-app browser's identity and the default tab insertion bar)
+              gives it a distinct, recognizable anchor so users can spot
+              browser tabs at a glance even when the strip is saturated. We
+              keep full color on both active and inactive tabs — dimming to
+              muted-foreground made the icon read as "disabled" in practice. */}
+          <Globe className="w-3 h-3 mr-1 shrink-0 text-blue-500" />
           <span className="truncate max-w-[100px] mr-1">{getBrowserTabLabel(tab)}</span>
           {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
             <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />

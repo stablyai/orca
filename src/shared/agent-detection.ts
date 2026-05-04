@@ -16,6 +16,11 @@ const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
 const GEMINI_IDLE = '\u25C7' // ◇
 const GEMINI_PERMISSION = '\u270B' // ✋
 
+// Why: this list is for OSC-title detection only. It is intentionally narrower
+// than the full set of launchable agents because short names like "amp" are
+// unsafe under the substring-based detector and would classify ordinary shell
+// titles like "timestamp ready" as agent activity. Product telemetry uses the
+// explicit launch/session facts Orca owns, not this inference path.
 export const AGENT_NAMES = ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode', 'aider']
 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles

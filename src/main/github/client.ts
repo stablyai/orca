@@ -1,6 +1,9 @@
 /* eslint-disable max-lines -- Why: co-locating all GitHub client functions keeps the
 concurrency acquire/release pattern and error handling consistent across operations. */
 import type {
+  ClassifiedError,
+  IssueSourcePreference,
+  ListWorkItemsResult,
   PRInfo,
   PRMergeableState,
   PRCheckDetail,
@@ -20,7 +23,10 @@ import {
   release,
   getOwnerRepo,
   getIssueOwnerRepo,
+  getOwnerRepoForRemote,
+  resolveIssueSource,
   classifyGhError,
+  classifyListIssuesError,
   type OwnerRepo
 } from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
@@ -341,14 +347,27 @@ function buildWorkItemListArgs(args: {
   return out
 }
 
+// Why: internal shape shared by listRecentWorkItems / listQueriedWorkItems so
+// listWorkItems can lift per-side errors into the IPC envelope. The issue-side
+// error is the specific new class of silent wrongness introduced by #1076 —
+// PR-side errors existed before and are explicitly out of scope for this
+// feature per the parent design doc §6.
+type PartialWorkItemsResult = {
+  items: MainWorkItem[]
+  issuesError?: ClassifiedError
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
   prOwnerRepo: OwnerRepo | null,
   limit: number
-): Promise<MainWorkItem[]> {
+): Promise<PartialWorkItemsResult> {
   if (issueOwnerRepo || prOwnerRepo) {
-    const [issuesResult, prsResult] = await Promise.all([
+    // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
+    // PR half — the UI renders partial results plus a banner for the failing
+    // side, matching the parent design doc's partial-failure rule (§2).
+    const [issuesSettled, prsSettled] = await Promise.allSettled([
       issueOwnerRepo
         ? ghExecFileAsync(
             [
@@ -397,20 +416,61 @@ async function listRecentWorkItems(
           )
     ])
 
-    const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[])
-      // Why: the GitHub issues REST endpoint also returns pull requests with a
-      // `pull_request` marker. The new-workspace task picker needs distinct
-      // issue vs PR buckets, so drop PR-shaped issue rows here before merging.
-      .filter((item) => !('pull_request' in item))
-      .map(mapIssueWorkItem)
+    let issues: MainWorkItem[] = []
+    let issuesError: ClassifiedError | undefined
+    if (issuesSettled.status === 'fulfilled') {
+      issues = (JSON.parse(issuesSettled.value.stdout) as Record<string, unknown>[])
+        // Why: the GitHub issues REST endpoint also returns pull requests with a
+        // `pull_request` marker. The new-workspace task picker needs distinct
+        // issue vs PR buckets, so drop PR-shaped issue rows here before merging.
+        .filter((item) => !('pull_request' in item))
+        .map(mapIssueWorkItem)
+    } else {
+      const stderr =
+        issuesSettled.reason instanceof Error
+          ? issuesSettled.reason.message
+          : String(issuesSettled.reason)
+      issuesError = classifyListIssuesError(stderr)
+    }
 
-    const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map((item) =>
-      mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
-    )
+    let prs: MainWorkItem[] = []
+    if (prsSettled.status === 'fulfilled') {
+      prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[]).map((item) =>
+        mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
+      )
+    } else {
+      // Why: PR-side failures must preserve the pre-diff behavior of
+      // Promise.all by re-throwing so the rejection propagates up through
+      // listWorkItems to the renderer's cross-repo aggregator (which counts
+      // the repo as failed). This feature is scoped to the issue-side silent
+      // wrongness from #1076; PR errors must not be silently swallowed here.
+      // Why: if the issue side ALSO failed, the classified issuesError would
+      // otherwise be silently dropped when we throw the PR reason. Log it so
+      // debugging both-sides-failed scenarios (e.g. 403 on both endpoints)
+      // isn't blind to the issue-side classification.
+      if (issuesError) {
+        console.warn(
+          'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
+          issuesError.type,
+          issuesError.message
+        )
+      }
+      throw prsSettled.reason
+    }
 
-    return sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+    return {
+      items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit),
+      issuesError
+    }
   }
 
+  // Why: the fallback path (non-GitHub remote — neither issueOwnerRepo nor
+  // prOwnerRepo resolved) intentionally stays on Promise.all rather than the
+  // Promise.allSettled + per-side classification used above. There are no
+  // `sources` to surface on this branch and nothing for the partial-failure
+  // banner to render, so a single-side failure here means the whole call is
+  // effectively unusable for the feature — reject-all matches reality. If
+  // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
     ghExecFileAsync(
       [
@@ -447,7 +507,9 @@ async function listRecentWorkItems(
     mapPullRequestWorkItem(item, null)
   )
 
-  return sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+  return {
+    items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+  }
 }
 
 async function listQueriedWorkItems(
@@ -457,67 +519,82 @@ async function listQueriedWorkItems(
   query: ParsedTaskQuery,
   limit: number,
   before?: string
-): Promise<MainWorkItem[]> {
-  const fetchers: Promise<MainWorkItem[]>[] = []
+): Promise<PartialWorkItemsResult> {
   const issueScope = query.scope !== 'pr'
   const prScope = query.scope !== 'issue'
 
-  if (issueScope) {
-    fetchers.push(
-      (async () => {
-        const args = buildWorkItemListArgs({
-          kind: 'issue',
-          ownerRepo: issueOwnerRepo,
-          limit,
-          query,
-          before
-        })
-        try {
-          const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
-          return (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
-        } catch {
-          return []
-        }
-      })()
-    )
-  }
+  // Why: run the issue and PR fetches in parallel but surface the
+  // issue-side error separately so the IPC envelope can carry it up. PR-side
+  // failures retain the prior swallow-and-log behavior per parent doc §6.
+  const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
+    if (!issueScope) {
+      return { items: [] }
+    }
+    const args = buildWorkItemListArgs({
+      kind: 'issue',
+      ownerRepo: issueOwnerRepo,
+      limit,
+      query,
+      before
+    })
+    try {
+      const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
+      return {
+        items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
+      }
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err)
+      return { items: [], issuesError: classifyListIssuesError(stderr) }
+    }
+  })()
 
-  if (prScope) {
-    fetchers.push(
-      (async () => {
-        const args = buildWorkItemListArgs({
-          kind: 'pr',
-          ownerRepo: prOwnerRepo,
-          limit,
-          query,
-          before
-        })
-        try {
-          const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
-          return (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
-            mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
-          )
-        } catch {
-          return []
-        }
-      })()
-    )
-  }
+  const prFetch = (async (): Promise<MainWorkItem[]> => {
+    if (!prScope) {
+      return []
+    }
+    const args = buildWorkItemListArgs({
+      kind: 'pr',
+      ownerRepo: prOwnerRepo,
+      limit,
+      query,
+      before
+    })
+    try {
+      const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
+      return (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
+        mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
+      )
+    } catch (err) {
+      console.warn('listQueriedWorkItems PRs partial failure:', err)
+      return []
+    }
+  })()
 
-  const results = await Promise.all(fetchers)
-  return sortWorkItemsByUpdatedAt(results.flat()).slice(0, limit)
+  const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
+  return {
+    items: sortWorkItemsByUpdatedAt([...issueResult.items, ...prItems]).slice(0, limit),
+    issuesError: issueResult.issuesError
+  }
 }
 
 export async function listWorkItems(
   repoPath: string,
   limit = 24,
   query?: string,
-  before?: string
-): Promise<MainWorkItem[]> {
-  const [issueOwnerRepo, prOwnerRepo] = await Promise.all([
-    getIssueOwnerRepo(repoPath),
-    getOwnerRepo(repoPath)
+  before?: string,
+  preference?: IssueSourcePreference
+): Promise<ListWorkItemsResult<MainWorkItem>> {
+  // Why: resolve the raw upstream candidate alongside the preference-aware
+  // issue source. The selector needs to know whether an upstream remote
+  // *exists* to decide whether to render — independent of whether the user
+  // has picked 'origin' (which would otherwise make `sources.issues` equal
+  // origin and hide the selector permanently).
+  const [issueResolved, prOwnerRepo, upstreamCandidate] = await Promise.all([
+    resolveIssueSource(repoPath, preference),
+    getOwnerRepo(repoPath),
+    getOwnerRepoForRemote(repoPath, 'upstream')
   ])
+  const issueOwnerRepo = issueResolved.source
   const trimmedQuery = query?.trim() ?? ''
   await acquire()
   try {
@@ -525,19 +602,28 @@ export async function listWorkItems(
     // count this repo as failed and surface the partial-failure banner. A
     // catch-all here would make an auth/network failure indistinguishable from
     // an empty result and silently under-report per-repo failures.
-    if (!trimmedQuery) {
-      return await listRecentWorkItems(repoPath, issueOwnerRepo, prOwnerRepo, limit)
-    }
+    const partial = !trimmedQuery
+      ? await listRecentWorkItems(repoPath, issueOwnerRepo, prOwnerRepo, limit)
+      : await listQueriedWorkItems(
+          repoPath,
+          issueOwnerRepo,
+          prOwnerRepo,
+          parseTaskQuery(trimmedQuery),
+          limit,
+          before
+        )
 
-    const parsedQuery = parseTaskQuery(trimmedQuery)
-    return await listQueriedWorkItems(
-      repoPath,
-      issueOwnerRepo,
-      prOwnerRepo,
-      parsedQuery,
-      limit,
-      before
-    )
+    const errors = partial.issuesError ? { issues: partial.issuesError } : undefined
+    return {
+      items: partial.items,
+      sources: {
+        issues: issueOwnerRepo,
+        prs: prOwnerRepo,
+        upstreamCandidate: upstreamCandidate ?? null
+      },
+      ...(errors ? { errors } : {}),
+      ...(issueResolved.fellBack ? { issueSourceFellBack: true } : {})
+    }
   } finally {
     release()
   }
@@ -631,11 +717,16 @@ function defaultOpenWorkItemQuery(): ParsedTaskQuery {
 // Why: uses GitHub's search API to get total_count without fetching items.
 // This powers the pagination bar so the user sees total pages upfront.
 // Cached for 120s to avoid burning the search rate limit (30 req/min).
-export async function countWorkItems(repoPath: string, query?: string): Promise<number> {
-  const [issueOwnerRepo, prOwnerRepo] = await Promise.all([
-    getIssueOwnerRepo(repoPath),
+export async function countWorkItems(
+  repoPath: string,
+  query?: string,
+  preference?: IssueSourcePreference
+): Promise<number> {
+  const [issueResolved, prOwnerRepo] = await Promise.all([
+    resolveIssueSource(repoPath, preference),
     getOwnerRepo(repoPath)
   ])
+  const issueOwnerRepo = issueResolved.source
   const ownerRepo = prOwnerRepo ?? issueOwnerRepo
   if (!ownerRepo) {
     return 0

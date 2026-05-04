@@ -21,7 +21,7 @@ import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'setup') => void,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void
 ) {

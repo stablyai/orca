@@ -9,11 +9,15 @@ import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
+  BrowserViewportOverride,
   CreateWorktreeArgs,
+  CustomSidekick,
   FsChangedPayload,
   GitHubAssignableUser,
   GitHubCommentResult,
+  GitHubWorkItem,
   GhosttyImportPreview,
+  ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
   SearchResult
@@ -191,6 +195,10 @@ const api = {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable')
   },
 
+  pwsh: {
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable')
+  },
+
   repos: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
 
@@ -203,6 +211,12 @@ const api = {
       displayName?: string
       kind?: 'git' | 'folder'
     }): Promise<unknown> => ipcRenderer.invoke('repos:addRemote', args),
+
+    create: (args: {
+      parentPath: string
+      name: string
+      kind: 'git' | 'folder'
+    }): Promise<unknown> => ipcRenderer.invoke('repos:create', args),
 
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
 
@@ -379,6 +393,13 @@ const api = {
         callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
+    },
+
+    management: {
+      listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
+      killAll: () => ipcRenderer.invoke('pty:management:killAll'),
+      killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
+      restart: () => ipcRenderer.invoke('pty:management:restart')
     }
   },
 
@@ -452,7 +473,8 @@ const api = {
       limit?: number
       query?: string
       before?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('gh:listWorkItems', args),
+    }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
+      ipcRenderer.invoke('gh:listWorkItems', args),
 
     prChecks: (args: {
       repoPath: string
@@ -599,6 +621,16 @@ const api = {
     forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow')
   },
 
+  // Why: telemetry uses a loose untyped surface at the preload boundary on
+  // purpose — the main-side validator (src/main/telemetry/validator.ts) is
+  // the single enforcement point, not the preload types. The renderer gets
+  // typed `track<N>()` / `setOptIn()` wrappers via
+  // src/renderer/src/lib/telemetry.ts, which is what call sites import.
+  telemetryTrack: (name: string, props: Record<string, unknown>): Promise<void> =>
+    ipcRenderer.invoke('telemetry:track', name, props),
+  telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
+    ipcRenderer.invoke('telemetry:setOptIn', optedIn),
+
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
 
@@ -713,6 +745,14 @@ const api = {
       ipcRenderer.invoke('shell:copyFile', args)
   },
 
+  sidekick: {
+    import: (): Promise<CustomSidekick | null> => ipcRenderer.invoke('sidekick:import'),
+    read: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('sidekick:read', id, fileName),
+    delete: (id: string, fileName: string): Promise<void> =>
+      ipcRenderer.invoke('sidekick:delete', id, fileName)
+  },
+
   browser: {
     registerGuest: (args: {
       browserPageId: string
@@ -726,6 +766,11 @@ const api = {
 
     openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:openDevTools', args),
+
+    setViewportOverride: (args: {
+      browserPageId: string
+      override: BrowserViewportOverride | null
+    }): Promise<boolean> => ipcRenderer.invoke('browser:setViewportOverride', args),
 
     onGuestLoadFailed: (
       callback: (args: {
@@ -1116,6 +1161,11 @@ const api = {
       connectionId?: string
     }): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> =>
       ipcRenderer.invoke('fs:readFile', args),
+    listMarkdownDocuments: (args: {
+      rootPath: string
+      connectionId?: string
+    }): Promise<{ filePath: string; relativePath: string; basename: string; name: string }[]> =>
+      ipcRenderer.invoke('fs:listMarkdownDocuments', args),
     writeFile: (args: {
       filePath: string
       content: string
@@ -1158,6 +1208,7 @@ const api = {
     importExternalPaths: (args: {
       sourcePaths: string[]
       destDir: string
+      connectionId?: string
     }): Promise<{
       results: (
         | {
@@ -1179,6 +1230,18 @@ const api = {
           }
       )[]
     }> => ipcRenderer.invoke('fs:importExternalPaths', args),
+    resolveDroppedPathsForAgent: (args: {
+      paths: string[]
+      worktreePath: string
+      connectionId?: string
+    }): Promise<{
+      resolvedPaths: string[]
+      skipped: {
+        sourcePath: string
+        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+      }[]
+      failed: { sourcePath: string; reason: string }[]
+    }> => ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
     watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:watchWorktree', args),
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
@@ -1200,6 +1263,7 @@ const api = {
       worktreePath: string
       filePath: string
       staged: boolean
+      compareAgainstHead?: boolean
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:diff', args),
     branchCompare: (args: {
@@ -1214,6 +1278,11 @@ const api = {
       oldPath?: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
+    commit: (args: {
+      worktreePath: string
+      message: string
+      connectionId?: string
+    }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
     stage: (args: {
       worktreePath: string
       filePath: string

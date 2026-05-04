@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the GH item dialog keeps its header, conversation, files, and checks tabs co-located so the read-only PR/Issue surface stays in one place while this view evolves. */
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlignJustify,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -11,7 +12,10 @@ import {
   CircleDot,
   ExternalLink,
   FileText,
+  Folder,
+  FolderOpen,
   GitPullRequest,
+  LayoutList,
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
@@ -36,6 +40,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
+import { buildDiffTree, type DiffTreeNode } from '@/components/pr-diff-tree'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-helpers'
 import {
   filterPRCommentsByAudience,
@@ -57,8 +62,9 @@ import {
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
-
+import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import type {
+  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubWorkItem,
@@ -67,6 +73,29 @@ import type {
   GitHubReaction,
   PRComment
 } from '../../../shared/types'
+import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
+
+// Why: the GH item dialog can be opened from any work-item list surface and
+// doesn't have the full owner/repo context the list's cache entry carries.
+// Parsing the canonical `https://github.com/{owner}/{repo}/...` URL is the
+// simplest reliable source — the URL is already present on every work item
+// and survives the main-process → IPC boundary. Non-GitHub hosts return null,
+// which matches the indicator's suppression rule.
+function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname !== 'github.com') {
+      return null
+    }
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    if (segments.length < 2) {
+      return null
+    }
+    return { owner: segments[0], repo: segments[1] }
+  } catch {
+    return null
+  }
+}
 
 // Why: the editor's DiffViewer loads Monaco, which is heavy and should not be
 // pulled into the dialog's bundle until the user actually opens the Files tab.
@@ -315,6 +344,130 @@ type FileRowProps = {
   baseSha: string | undefined
 }
 
+type DiffViewMode = 'flat' | 'tree'
+
+// ─── Tree view components ────────────────────────────────────────────
+
+type DiffTreeNodeProps = {
+  node: DiffTreeNode
+  depth: number
+  repoPath: string
+  prNumber: number
+  headSha: string | undefined
+  baseSha: string | undefined
+  onCommentAdded: (comment: PRComment) => void
+}
+
+function PRDiffTreeNode({
+  node,
+  depth,
+  repoPath,
+  prNumber,
+  headSha,
+  baseSha,
+  onCommentAdded
+}: DiffTreeNodeProps): React.JSX.Element {
+  const [open, setOpen] = useState(true)
+
+  if (node.kind === 'file') {
+    return (
+      <PRFileRow
+        file={node.file}
+        repoPath={repoPath}
+        prNumber={prNumber}
+        headSha={headSha}
+        baseSha={baseSha}
+        onCommentAdded={onCommentAdded}
+        // Why: tree-view file rows are indented by a CSS left-padding proportional
+        // to depth so the expand chevron of PRFileRow stays at position 0 while
+        // the folder hierarchy is communicated purely through indentation.
+        indentDepth={depth}
+        label={node.name}
+      />
+    )
+  }
+
+  // Directory node
+  return (
+    <div role="treeitem" aria-expanded={open}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition hover:bg-muted/40"
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
+        aria-label={`${open ? 'Collapse' : 'Expand'} folder ${node.name}`}
+      >
+        {open ? (
+          <>
+            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+            <FolderOpen className="size-3.5 shrink-0 text-amber-400" />
+          </>
+        ) : (
+          <>
+            <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+            <Folder className="size-3.5 shrink-0 text-amber-400" />
+          </>
+        )}
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+          {node.name}
+        </span>
+      </button>
+      {open && (
+        <div role="group">
+          {node.children.map((child) => (
+            <PRDiffTreeNode
+              key={child.kind === 'file' ? child.file.path : child.path}
+              node={child}
+              depth={depth + 1}
+              repoPath={repoPath}
+              prNumber={prNumber}
+              headSha={headSha}
+              baseSha={baseSha}
+              onCommentAdded={onCommentAdded}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type PRDiffTreeViewProps = {
+  files: GitHubPRFile[]
+  repoPath: string
+  prNumber: number
+  headSha: string | undefined
+  baseSha: string | undefined
+  onCommentAdded: (comment: PRComment) => void
+}
+
+function PRDiffTreeView({
+  files,
+  repoPath,
+  prNumber,
+  headSha,
+  baseSha,
+  onCommentAdded
+}: PRDiffTreeViewProps): React.JSX.Element {
+  const tree = useMemo(() => buildDiffTree(files), [files])
+  return (
+    <div role="tree" aria-label="Changed files">
+      {tree.map((node) => (
+        <PRDiffTreeNode
+          key={node.kind === 'file' ? node.file.path : node.path}
+          node={node}
+          depth={0}
+          repoPath={repoPath}
+          prNumber={prNumber}
+          headSha={headSha}
+          baseSha={baseSha}
+          onCommentAdded={onCommentAdded}
+        />
+      ))}
+    </div>
+  )
+}
+
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
@@ -396,8 +549,14 @@ function PRFileRow({
   prNumber,
   headSha,
   baseSha,
-  onCommentAdded
-}: FileRowProps & { onCommentAdded: (comment: PRComment) => void }): React.JSX.Element {
+  onCommentAdded,
+  indentDepth = 0,
+  label
+}: FileRowProps & {
+  onCommentAdded: (comment: PRComment) => void
+  indentDepth?: number
+  label?: string
+}): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [loading, setLoading] = useState(false)
@@ -469,11 +628,12 @@ function PRFileRow({
   )
 
   return (
-    <div className="border-b border-border/50">
+    <div className="border-b border-border/50" {...(label != null ? { role: 'treeitem' } : {})}>
       <button
         type="button"
         onClick={handleToggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-muted/40"
+        className="flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40"
+        style={{ paddingLeft: `${12 + indentDepth * 16}px` }}
       >
         {expanded ? (
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -491,13 +651,44 @@ function PRFileRow({
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
           {file.oldPath && file.oldPath !== file.path ? (
-            <>
-              <span className="text-muted-foreground">{file.oldPath}</span>
-              <span className="mx-1 text-muted-foreground">→</span>
-              {file.path}
-            </>
+            label ? (
+              // Why: in tree view we only have room for basenames, but still need to
+              // communicate the rename so the user doesn't have to expand or switch
+              // to flat view to discover what was renamed. When basenames match (i.e.
+              // only the directory changed), we include the parent directory so the
+              // display isn't a meaningless "foo.ts → foo.ts".
+              (() => {
+                const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
+                if (oldBase === label) {
+                  const oldParts = file.oldPath!.split('/')
+                  const newParts = file.path.split('/')
+                  const oldShort = oldParts.slice(-2).join('/')
+                  const newShort = newParts.slice(-2).join('/')
+                  return (
+                    <>
+                      <span className="text-muted-foreground">{oldShort}</span>
+                      <span className="mx-1 text-muted-foreground">→</span>
+                      {newShort}
+                    </>
+                  )
+                }
+                return (
+                  <>
+                    <span className="text-muted-foreground">{oldBase}</span>
+                    <span className="mx-1 text-muted-foreground">→</span>
+                    {label}
+                  </>
+                )
+              })()
+            ) : (
+              <>
+                <span className="text-muted-foreground">{file.oldPath}</span>
+                <span className="mx-1 text-muted-foreground">→</span>
+                {file.path}
+              </>
+            )
           ) : (
-            file.path
+            (label ?? file.path)
           )}
         </span>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
@@ -1894,6 +2085,68 @@ function GHCommentComposer({
   )
 }
 
+// Why: the dialog doesn't carry the resolved PR-source slug the Tasks view's
+// list cache carries, so we reach into workItemsCache to recover it. We scope
+// the lookup to the dialog's own `repoPath` via the public
+// `getWorkItemsAnySourcesForRepo` selector keyed by (repoPath, limit) —
+// scanning the whole cache risks picking a sibling repo's PR-source when two
+// selected repos share the same issue-source (e.g. two forks of the same
+// upstream), producing an incorrect "Issues from" chip or incorrectly
+// suppressing it. The selector keys primarily on the first-page entry
+// (PER_REPO_FETCH_LIMIT, empty query) because sources are repo-level and
+// don't vary by search query. If that slot is empty — e.g. the Tasks view is
+// filtering by a typed query and only populated the query-keyed entry — the
+// selector falls back to scanning cache entries prefixed by this same
+// `repoPath::` and reuses sources from the first match. Falling back to hiding
+// the indicator when we still can't find a match matches the parent design
+// doc §1 rule: hide when either side is unknown rather than guessing.
+function WorkItemIssueSourceIndicator({
+  url,
+  repoPath
+}: {
+  url: string
+  repoPath: string | null
+}): React.JSX.Element | null {
+  // Why: subscribe to a single store-side selector that returns the resolved
+  // sources for this repo — either the primary `(repoPath, PER_REPO_FETCH_LIMIT, '')`
+  // entry or the first sibling cache entry that has sources (the Tasks view may
+  // write cache entries keyed by a user-typed search query, so the primary slot
+  // can be empty even when sources are known). Sources are repo-level
+  // (query-independent), so any sibling entry is safe. When the primary slot
+  // is populated its reference is stable across unrelated cache writes; when
+  // the fallback path is used a sibling cache rewrite may produce a new
+  // `sources` object and trigger a harmless extra render. That's cheap — the
+  // indicator is small and the cache rewrite rate is bounded by user-initiated
+  // refresh/search actions.
+  const sources = useAppStore((s) =>
+    s.getWorkItemsAnySourcesForRepo(repoPath ?? '', PER_REPO_FETCH_LIMIT)
+  )
+  const issues = useMemo<GitHubOwnerRepo | null>(() => {
+    const fromUrl = parseOwnerRepoFromItemUrl(url)
+    if (!fromUrl) {
+      return null
+    }
+    // Prefer the cache's resolved issue-source when it matches the URL-derived
+    // slug — the cache entry is authoritative (canonicalized by the main
+    // process) while the URL parse is a best-effort fallback.
+    const cachedIssues = sources?.issues
+    if (cachedIssues && sameGitHubOwnerRepo(cachedIssues, fromUrl)) {
+      return cachedIssues
+    }
+    return fromUrl
+  }, [url, sources])
+  const prs = sources?.prs ?? null
+
+  if (!issues || !prs || sameGitHubOwnerRepo(issues, prs)) {
+    return null
+  }
+  return (
+    <div className="mt-1">
+      <IssueSourceIndicator issues={issues} prs={prs} variant="item" />
+    </div>
+  )
+}
+
 export default function GitHubItemDialog({
   workItem,
   repoPath,
@@ -1906,6 +2159,7 @@ export default function GitHubItemDialog({
   const [error, setError] = useState<string | null>(null)
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('flat')
   const workItemId = workItem?.id
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
@@ -2092,6 +2346,9 @@ export default function GitHubItemDialog({
                       </span>
                     )}
                   </div>
+                  {workItem.type === 'issue' && (
+                    <WorkItemIssueSourceIndicator url={workItem.url} repoPath={repoPath} />
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Tooltip>
@@ -2202,17 +2459,75 @@ export default function GitHubItemDialog({
                           </div>
                         ) : (
                           <div>
-                            {files.map((file) => (
-                              <PRFileRow
-                                key={file.path}
-                                file={file}
+                            {/* Files-tab toolbar: view-mode toggle */}
+                            <div className="flex items-center justify-end gap-1 border-b border-border/40 px-3 py-1.5">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    id="pr-files-flat-view"
+                                    type="button"
+                                    onClick={() => setDiffViewMode('flat')}
+                                    aria-label="Flat view"
+                                    aria-pressed={diffViewMode === 'flat'}
+                                    className={cn(
+                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                      diffViewMode === 'flat'
+                                        ? 'bg-muted text-foreground'
+                                        : 'text-muted-foreground'
+                                    )}
+                                  >
+                                    <AlignJustify className="size-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={4}>
+                                  Flat view
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    id="pr-files-tree-view"
+                                    type="button"
+                                    onClick={() => setDiffViewMode('tree')}
+                                    aria-label="Tree view"
+                                    aria-pressed={diffViewMode === 'tree'}
+                                    className={cn(
+                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                      diffViewMode === 'tree'
+                                        ? 'bg-muted text-foreground'
+                                        : 'text-muted-foreground'
+                                    )}
+                                  >
+                                    <LayoutList className="size-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={4}>
+                                  Tree view
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                            {diffViewMode === 'flat' ? (
+                              files.map((file) => (
+                                <PRFileRow
+                                  key={file.path}
+                                  file={file}
+                                  repoPath={repoPath ?? ''}
+                                  prNumber={workItem.number}
+                                  headSha={details?.headSha}
+                                  baseSha={details?.baseSha}
+                                  onCommentAdded={appendOptimisticComment}
+                                />
+                              ))
+                            ) : (
+                              <PRDiffTreeView
+                                files={files}
                                 repoPath={repoPath ?? ''}
                                 prNumber={workItem.number}
                                 headSha={details?.headSha}
                                 baseSha={details?.baseSha}
                                 onCommentAdded={appendOptimisticComment}
                               />
-                            ))}
+                            )}
                           </div>
                         )}
                       </TabsContent>

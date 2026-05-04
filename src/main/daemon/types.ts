@@ -68,6 +68,11 @@ export type CreateOrAttachRequest = {
      *  instead of defaulting to COMSPEC (which is always cmd.exe on Windows)
      *  or the hard-coded powershell.exe fallback. */
     shellOverride?: string
+    /** Why: the UI keeps PowerShell as one shell family, but the runtime may
+     *  need to substitute pwsh.exe for powershell.exe when the user selected
+     *  PowerShell 7+. Forward the persisted implementation choice so the daemon
+     *  PTY path resolves the same effective executable as LocalPtyProvider. */
+    terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
   }
 }
@@ -222,6 +227,14 @@ export type SessionInfo = {
   cols: number
   rows: number
   createdAt: number
+}
+
+// Why: SessionInfo + source protocol version, so the Manage Sessions UI can
+// label legacy-backed sessions. Populated by the router/adapter at RPC time;
+// never transmitted over the daemon wire (daemon only speaks its own
+// protocol version and doesn't know about other versions).
+export type DaemonSessionInfo = SessionInfo & {
+  protocolVersion: number
 }
 
 // ─── Events (Daemon → Client, on stream socket) ────────────────────

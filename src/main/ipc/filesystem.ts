@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
-import { readdir, readFile, writeFile, stat, lstat } from 'fs/promises'
+import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
 import { extname } from 'path'
 import type { ChildProcess } from 'child_process'
 import { wslAwareSpawn } from '../git/runner'
@@ -12,6 +12,7 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitStatusResult,
+  MarkdownDocument,
   SearchOptions,
   SearchResult
 } from '../../shared/types'
@@ -27,6 +28,7 @@ import {
   getStatus,
   detectConflictOperation,
   getDiff,
+  commitChanges,
   stageFile,
   unstageFile,
   bulkStageFiles,
@@ -47,11 +49,15 @@ import {
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
+import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+// Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
+// ordinary JSON/log files inaccessible before the editor can degrade features.
+const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+const BINARY_PROBE_BYTES = 8192
 // Why: previewable binaries (PDFs, images) are rendered by the viewer as
 // base64 blobs, not parsed as text — 5MB is tight for real-world PDFs, and
 // raising this cap only affects binary preview, not text/search paths.
@@ -83,6 +89,17 @@ function isBinaryBuffer(buffer: Buffer): boolean {
     }
   }
   return false
+}
+
+async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
+  const handle = await open(filePath, 'r')
+  try {
+    const probe = Buffer.alloc(BINARY_PROBE_BYTES)
+    const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
+    return isBinaryBuffer(probe.subarray(0, bytesRead))
+  } finally {
+    await handle.close()
+  }
 }
 
 export function registerFilesystemHandlers(store: Store): void {
@@ -133,15 +150,15 @@ export function registerFilesystemHandlers(store: Store): void {
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_FILE_SIZE
+      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
         throw new Error(
           `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
         )
       }
 
-      const buffer = await readFile(filePath)
       if (mimeType) {
+        const buffer = await readFile(filePath)
         return {
           content: buffer.toString('base64'),
           isBinary: true,
@@ -153,11 +170,39 @@ export function registerFilesystemHandlers(store: Store): void {
         }
       }
 
+      // Why: the text cap is intentionally larger than the old binary cap.
+      // Probe unknown large files first so archives do not get fully buffered
+      // just to discover they are not editable text.
+      if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
+        return { content: '', isBinary: true }
+      }
+
+      const buffer = await readFile(filePath)
       if (isBinaryBuffer(buffer)) {
         return { content: '', isBinary: true }
       }
 
       return { content: buffer.toString('utf-8'), isBinary: false }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:listMarkdownDocuments',
+    async (
+      _event,
+      args: { rootPath: string; connectionId?: string }
+    ): Promise<MarkdownDocument[]> => {
+      if (args.connectionId) {
+        const provider = getSshFilesystemProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+        }
+        const relativePaths = await provider.listFiles(args.rootPath)
+        return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
+      }
+
+      const rootPath = await resolveRegisteredWorktreePath(args.rootPath, store)
+      return listMarkdownDocuments(rootPath)
     }
   )
 
@@ -435,18 +480,51 @@ export function registerFilesystemHandlers(store: Store): void {
     'git:diff',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; staged: boolean; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePath: string
+        staged: boolean
+        compareAgainstHead?: boolean
+        connectionId?: string
+      }
     ): Promise<GitDiffResult> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.getDiff(args.worktreePath, args.filePath, args.staged)
+        return provider.getDiff(
+          args.worktreePath,
+          args.filePath,
+          args.staged,
+          args.compareAgainstHead
+        )
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      return getDiff(worktreePath, filePath, args.staged)
+      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead)
+    }
+  )
+
+  ipcMain.handle(
+    'git:commit',
+    async (
+      _event,
+      args: { worktreePath: string; message: string; connectionId?: string }
+    ): Promise<{ success: boolean; error?: string }> => {
+      // Why: validate at the IPC boundary so the renderer gets a clear error instead of an opaque execFile failure.
+      if (typeof args.message !== 'string' || args.message.trim().length === 0) {
+        throw new Error('Commit message is required')
+      }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.commit(args.worktreePath, args.message)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return commitChanges(worktreePath, args.message)
     }
   )
 

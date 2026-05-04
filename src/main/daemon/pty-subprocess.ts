@@ -1,4 +1,5 @@
 import * as pty from 'node-pty'
+import { win32 as pathWin32 } from 'path'
 import type { SubprocessHandle } from './session'
 import {
   getAttributionShellLaunchConfig,
@@ -8,6 +9,8 @@ import {
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
+import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
+import { isPwshAvailable } from '../pwsh'
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -20,6 +23,7 @@ export type PtySubprocessOptions = {
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
   shellOverride?: string
+  terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
 }
 
 function getDefaultCwd(): string {
@@ -67,16 +71,37 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // setting, relayed by main) takes priority over env.COMSPEC — otherwise
   // Windows always resolves to cmd.exe (COMSPEC) or PowerShell by fallback,
   // no matter which shell the user actually picked.
-  const shellPath = opts.shellOverride || resolvePtyShellPath(env)
+  let shellPath = opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let spawnCwd = opts.cwd || getDefaultCwd()
 
   if (process.platform === 'win32') {
+    const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
+    // Why: daemon spawn requests can carry either a canonical shell family
+    // (`powershell.exe`) or a concrete PowerShell executable path from a
+    // one-off override. Normalize both forms back to the PowerShell family so
+    // the shared resolver can still fall back to inbox powershell.exe when
+    // pwsh.exe was requested but is unavailable.
+    const shouldResolvePowerShellFamily =
+      opts.terminalWindowsPowerShellImplementation !== undefined ||
+      pathWin32.basename(shellPath) === shellPath
+    shellPath = shouldResolvePowerShellFamily
+      ? (resolveEffectiveWindowsPowerShell({
+          shellFamily:
+            normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+              ? 'powershell.exe'
+              : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                ? normalizedShellFamily
+                : undefined,
+          implementation: opts.terminalWindowsPowerShellImplementation,
+          pwshAvailable: isPwshAvailable()
+        }) ?? shellPath)
+      : shellPath
     // Why: matches LocalPtyProvider — CMD needs chcp 65001, PowerShell needs
     // $PROFILE dot-sourcing, WSL needs a --bash entry with a translated cwd.
-    // Previously the daemon passed `[]` here which made every shell launch as
-    // a bare interactive process; that silently degraded PowerShell (no
-    // profile) and never worked at all for WSL (which needs explicit args).
+    // Reuse the same shared launch-args helper after resolving the effective
+    // PowerShell executable so daemon-backed terminals preserve parity with the
+    // in-process PTY path.
     const resolved = resolveWindowsShellLaunchArgs(shellPath, spawnCwd, getDefaultCwd())
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
@@ -117,8 +142,21 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // exiting and the JS onExit callback firing. An uncaught Napi::Error
   // propagates to std::terminate, killing the entire daemon process.
   let dead = false
+  let disposed = false
   proc.onExit(() => {
     dead = true
+    // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
+    // (unixTerminal.js:219-229). After the child exits, the master socket's
+    // 'close' event can fire before our dispose() path gets to neutralize
+    // proc.kill — the child's pid may have already been recycled, so SIGHUP
+    // lands on an unrelated process. Neutralizing here, synchronously inside
+    // the onExit callback, closes that window: once the child is reaped,
+    // proc.kill is a no-op no matter which teardown ordering wins.
+    // Windows is excluded because WindowsTerminal.destroy relies on kill() to
+    // close the ConPTY agent — neutralizing would leak the agent + fds.
+    if (process.platform !== 'win32') {
+      ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+    }
   })
 
   return {
@@ -157,6 +195,13 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
     },
     forceKill: () => {
+      // Why: once the child has been reaped (dead=true via onExit) or dispose
+      // has run, proc.pid refers to a recycled pid. Sending SIGKILL would
+      // terminate an unrelated process. The fd release is handled by
+      // dispose()/destroy(); forceKill is strictly for signalling a live child.
+      if (dead) {
+        return
+      }
       try {
         process.kill(proc.pid, 'SIGKILL')
       } catch {
@@ -168,6 +213,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
     },
     signal: (sig) => {
+      // Why: same recycled-pid hazard as forceKill. Once dead, silently drop
+      // the signal rather than risk sending it to an unrelated process.
+      if (dead) {
+        return
+      }
       try {
         process.kill(proc.pid, sig)
       } catch {
@@ -179,6 +229,35 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     },
     onExit: (cb) => {
       onExitCb = cb
+    },
+    dispose: () => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      dead = true
+      onDataCb = null
+      onExitCb = null
+      // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
+      // (unixTerminal.js:219-229). The socket close fires asynchronously; by then
+      // the child may have exited and its pid been recycled to an unrelated
+      // process. Without this neutralization, SIGHUP can be delivered to a
+      // Chrome tab, editor, or other user process — silent cross-app corruption.
+      // `_socket.destroy()` still releases the fd; only the dangerous SIGHUP is
+      // removed.
+      //
+      // Platform guard: WindowsTerminal.destroy implements the ConPTY close by
+      // CALLING `this.kill()` via `_deferNoArgs` (windowsTerminal.js:141-146).
+      // Neutralizing kill on Windows turns destroy() into a no-op and leaks the
+      // ConPTY agent. The SIGHUP hazard is POSIX-only, so the guard is too.
+      if (process.platform !== 'win32') {
+        ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      }
+      try {
+        ;(proc as unknown as { destroy?: () => void }).destroy?.()
+      } catch {
+        /* swallow — already torn down, or native-side error we can't recover from */
+      }
     }
   }
 }

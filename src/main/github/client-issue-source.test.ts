@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: the issue-source test suite covers the
+heuristic split (#1076), the partial-failure envelope (feature 1), and the
+three-state preference matrix (feature 2) as one surface so a regression in
+any of them blocks the same merge gate. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
 
@@ -6,6 +10,8 @@ const {
   ghExecFileAsyncMock,
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
+  getOwnerRepoForRemoteMock,
+  resolveIssueSourceMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
@@ -13,6 +19,8 @@ const {
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
+  getOwnerRepoForRemoteMock: vi.fn(),
+  resolveIssueSourceMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -25,6 +33,8 @@ vi.mock('./gh-utils', async () => {
     ghExecFileAsync: ghExecFileAsyncMock,
     getOwnerRepo: getOwnerRepoMock,
     getIssueOwnerRepo: getIssueOwnerRepoMock,
+    getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
+    resolveIssueSource: resolveIssueSourceMock,
     acquire: acquireMock,
     release: releaseMock,
     _resetOwnerRepoCache: vi.fn()
@@ -39,9 +49,24 @@ describe('GitHub issue source split', () => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
+    getOwnerRepoForRemoteMock.mockReset()
+    resolveIssueSourceMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
+    // Why: default the preference-aware resolver to 'auto' semantics so the
+    // pre-existing test cases (which don't think about preference at all)
+    // still pass. `listWorkItems` now calls `resolveIssueSource` instead of
+    // `getIssueOwnerRepo` directly — we delegate back to the single-call
+    // mock to preserve the one-fetch-per-test invariant each test sets up.
+    resolveIssueSourceMock.mockImplementation(async () => ({
+      source: await getIssueOwnerRepoMock(),
+      fellBack: false
+    }))
+    // Default the upstream-candidate lookup to null so existing tests that
+    // only mock `getIssueOwnerRepo` + `getOwnerRepo` don't need to think
+    // about it. Tests that care set it explicitly.
+    getOwnerRepoForRemoteMock.mockResolvedValue(null)
     _resetOwnerRepoCache()
   })
 
@@ -223,6 +248,59 @@ describe('GitHub issue source split', () => {
     expect(item?.type).toBe('pr')
   })
 
+  it('surfaces a 403 from upstream issues through the listWorkItems envelope', async () => {
+    // Why: parent design doc §3 / acceptance criterion 2 — the IPC envelope
+    // must carry a classified error for the failing side so the renderer can
+    // swap the empty-state for a retryable banner. `sources` must stay
+    // populated so the banner copy can name the repo that failed.
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 403: Resource not accessible by integration'))
+      .mockResolvedValueOnce({ stdout: '[]' })
+
+    const result = await listWorkItems('/repo-root', 10)
+
+    expect(result.items).toEqual([])
+    expect(result.sources).toMatchObject({
+      issues: { owner: 'stablyai', repo: 'orca' },
+      prs: { owner: 'fork', repo: 'orca' }
+    })
+    expect(result.errors?.issues?.type).toBe('permission_denied')
+  })
+
+  it('returns partial results when upstream issues fail but origin PRs succeed', async () => {
+    // Why: parent design doc §2 partial-failure rule — a failing source must
+    // not zero out the succeeding source. The UI renders origin PRs with a
+    // banner above the list, not an empty state. Ensures the IPC shape
+    // carries both the successful items and the error for the failing side.
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 403: Resource not accessible by integration'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Fork PR',
+            state: 'open',
+            html_url: 'https://github.com/fork/orca/pull/42',
+            labels: [],
+            updated_at: '2026-03-31T00:00:00Z',
+            user: { login: 'octocat' },
+            draft: false,
+            head: { ref: 'feature' },
+            base: { ref: 'main' }
+          }
+        ])
+      })
+
+    const result = await listWorkItems('/repo-root', 10)
+
+    expect(result.items.map((i) => i.id)).toEqual(['pr:42'])
+    expect(result.errors?.issues?.type).toBe('permission_denied')
+  })
+
   it('raw number lookup does not fall through on transient upstream errors', async () => {
     // Why: with issue source split, a non-404 upstream failure must not silently
     // route to origin's PR #N — that would return an unrelated item.
@@ -234,5 +312,171 @@ describe('GitHub issue source split', () => {
     expect(item).toBeNull()
     expect(getOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  describe('per-repo issue-source preference', () => {
+    // Why: 3 preference states × 2 remote-topology states = 6 cases per the
+    // design doc §9. These tests isolate `listWorkItems` against a mocked
+    // `resolveIssueSource` to verify the preference is threaded all the way
+    // to the gh call and that `fellBack` propagates into the envelope.
+
+    it("preference='auto' + upstream exists → queries upstream", async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'stablyai', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
+
+      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto')
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+        1,
+        [
+          'api',
+          '--cache',
+          '120s',
+          'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+        ],
+        { cwd: '/repo-root' }
+      )
+      expect(result.issueSourceFellBack).toBeUndefined()
+    })
+
+    it("preference='auto' + no upstream → queries origin", async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'solo', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'solo', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
+
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+        1,
+        [
+          'api',
+          '--cache',
+          '120s',
+          'repos/solo/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+        ],
+        { cwd: '/repo-root' }
+      )
+    })
+
+    it("preference='upstream' + upstream exists → queries upstream", async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'stablyai', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'upstream')
+
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+        1,
+        expect.arrayContaining([
+          'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+        ]),
+        { cwd: '/repo-root' }
+      )
+      expect(result.issueSourceFellBack).toBeUndefined()
+    })
+
+    it("preference='upstream' + no upstream → falls back to origin with fellBack=true", async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'solo', repo: 'orca' },
+        fellBack: true
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'solo', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'upstream')
+
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+        1,
+        expect.arrayContaining([
+          'repos/solo/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+        ]),
+        { cwd: '/repo-root' }
+      )
+      expect(result.issueSourceFellBack).toBe(true)
+    })
+
+    it("preference='origin' + upstream exists → queries origin (not upstream)", async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'fork', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      await listWorkItems('/repo-root', 10, undefined, undefined, 'origin')
+
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+        1,
+        expect.arrayContaining([
+          'repos/fork/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+        ]),
+        { cwd: '/repo-root' }
+      )
+    })
+
+    it("preference='origin' + no upstream → queries origin", async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'solo', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'solo', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      await listWorkItems('/repo-root', 10, undefined, undefined, 'origin')
+
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+        1,
+        expect.arrayContaining([
+          'repos/solo/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+        ]),
+        { cwd: '/repo-root' }
+      )
+    })
+
+    it('surfaces upstreamCandidate in sources regardless of effective preference', async () => {
+      // Why: the renderer selector needs to keep rendering after the user picks
+      // 'origin'. That requires the envelope to carry the raw upstream even
+      // when `sources.issues` has collapsed onto origin.
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'fork', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'origin')
+
+      expect(result.sources).toEqual({
+        issues: { owner: 'fork', repo: 'orca' },
+        prs: { owner: 'fork', repo: 'orca' },
+        upstreamCandidate: { owner: 'stablyai', repo: 'orca' }
+      })
+    })
   })
 })

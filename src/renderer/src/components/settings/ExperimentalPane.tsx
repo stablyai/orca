@@ -55,6 +55,13 @@ export function ExperimentalPane({
   hiddenExperimentalUnlocked = false
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  // Why: when the user flips the experimental toggle ON, ensure the
+  // 'inline-agents' view-mode checkbox is added to the Workspaces view
+  // options so the inline agent activity list is visible without a second
+  // click. Users who previously had the toggle on in an earlier rc get the
+  // same behavior retroactively via the persistence migration in
+  // main/persistence.ts — this handler covers fresh opt-ins going forward.
+  const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
   // Why: the "enabled at startup" flags are the effective runtime state, read
   // directly from main once on mount. Each banner compares the user's current
   // setting against this snapshot to tell them a restart is still required.
@@ -84,8 +91,9 @@ export function ExperimentalPane({
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_PANE_SEARCH_ENTRIES[0]
   ])
+  const showSidekick = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[1]])
   const showOrchestration = matchesSettingsSearch(searchQuery, [
-    EXPERIMENTAL_PANE_SEARCH_ENTRIES[1]
+    EXPERIMENTAL_PANE_SEARCH_ENTRIES[2]
   ])
 
   const [orchestrationEnabled, setOrchestrationEnabled] = useState<boolean>(() => {
@@ -168,11 +176,20 @@ export function ExperimentalPane({
               type="button"
               role="switch"
               aria-checked={settings.experimentalAgentDashboard}
-              onClick={() =>
-                updateSettings({
-                  experimentalAgentDashboard: !settings.experimentalAgentDashboard
-                })
-              }
+              onClick={() => {
+                const next = !settings.experimentalAgentDashboard
+                updateSettings({ experimentalAgentDashboard: next })
+                if (next) {
+                  // Why: mirrors the one-shot persistence migration for users
+                  // who already had the toggle on before 'inline-agents'
+                  // existed. Reading from the live store keeps this honest
+                  // instead of stale-propping through a parent re-render.
+                  const currentProps = useAppStore.getState().worktreeCardProperties ?? []
+                  if (!currentProps.includes('inline-agents')) {
+                    toggleWorktreeCardProperty('inline-agents')
+                  }
+                }
+              }}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
                 settings.experimentalAgentDashboard ? 'bg-foreground' : 'bg-muted-foreground/30'
               }`}
@@ -212,11 +229,50 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
+      {showSidekick ? (
+        <SearchableSetting
+          title="Sidekick"
+          description="Floating animated sidekick in the bottom-right corner."
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[1].keywords}
+          className="space-y-3 px-1 py-2"
+          id="experimental-sidekick"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-1.5">
+              <Label>Sidekick</Label>
+              <p className="text-xs text-muted-foreground">
+                Shows a small animated sidekick pinned to the bottom-right corner. Pick a character
+                (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG
+                from the status-bar sidekick menu. Hide it any time from the same menu without
+                disabling this setting.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.experimentalSidekick}
+              onClick={() => {
+                updateSettings({ experimentalSidekick: !settings.experimentalSidekick })
+              }}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.experimentalSidekick ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
+                  settings.experimentalSidekick ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </SearchableSetting>
+      ) : null}
+
       {showOrchestration ? (
         <SearchableSetting
           title="Agent Orchestration"
           description="Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[1].keywords}
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[2].keywords}
           className="space-y-3 px-1 py-2"
         >
           <div className="flex items-start justify-between gap-4">

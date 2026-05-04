@@ -175,18 +175,12 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     expect(result.error).toContain('Gemini project ID not found')
   })
 
-  it('returns unavailable when geminiCliOAuthEnabled=false and no google entry in auth.json', async () => {
-    readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('auth.json')) {
-        return JSON.stringify({ 'opencode-go': { type: 'api', key: 'k' } })
-      }
-      throw { code: 'ENOENT' }
-    })
-
+  it('returns unavailable without reading OAuth files when geminiCliOAuthEnabled=false', async () => {
     const result = await fetchGeminiRateLimits(false)
 
     expect(result.status).toBe('unavailable')
     expect(result.error).toContain('disabled')
+    expect(readFileMock).not.toHaveBeenCalled()
     // No network calls should have been made.
     expect(netFetchMock).not.toHaveBeenCalled()
   })

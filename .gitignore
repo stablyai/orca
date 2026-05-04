@@ -13,6 +13,7 @@ src/**/*.d.ts
 !src/preload/index.d.ts
 !src/renderer/src/env.d.ts
 !src/renderer/src/mermaid.d.ts
+!src/types/build-constants.d.ts
 
 # Dependencies
 node_modules/

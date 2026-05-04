@@ -42,10 +42,18 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
   // lsof returns ALL open files (sockets, log files, TTYs) and the first `n`-line
   // could be any of them — not the actual working directory.
   try {
-    const { stdout: output } = await execFile('lsof', ['-p', String(pid), '-d', 'cwd', '-Fn'], {
-      encoding: 'utf-8',
-      timeout: 3000
-    })
+    // Why: `-a` ANDs the -p and -d filters. Without it, macOS lsof ORs them
+    // and emits cwd records for every process on the system, so the n-line
+    // scan below picks up the first unrelated process (often pid ~391 with
+    // cwd `/`) and returns `/` regardless of the target pid's real cwd.
+    const { stdout: output } = await execFile(
+      'lsof',
+      ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+      {
+        encoding: 'utf-8',
+        timeout: 3000
+      }
+    )
     const lines = output.split('\n')
     for (const line of lines) {
       if (line.startsWith('n') && line.includes('/')) {

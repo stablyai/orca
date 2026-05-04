@@ -24,6 +24,11 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
+import {
+  workItemsCacheKey,
+  type WorkItemsCacheSources,
+  type WorkItemsCacheError
+} from '@/store/slices/github'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -52,6 +57,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
+import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
@@ -66,7 +73,12 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
-import type { GitHubWorkItem, LinearIssue, TaskViewPresetId } from '../../../shared/types'
+import type {
+  GitHubOwnerRepo,
+  GitHubWorkItem,
+  LinearIssue,
+  TaskViewPresetId
+} from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 
 type TaskSource = 'github' | 'linear'
@@ -604,6 +616,40 @@ function PaginationBar({
   )
 }
 
+// Why: feature 1 — shape of the per-repo view derived from `workItemsCache`,
+// used by both the indicator render and the `hasDivergentSources` guard.
+// Hoisted to module scope so the type isn't re-parsed per render and so the
+// guard below can narrow it without a forward reference.
+type RepoSourceState = {
+  repoId: string
+  repoPath: string
+  sources: WorkItemsCacheSources | null
+  error: WorkItemsCacheError | null
+}
+
+// Why: type-guard predicate used to filter `perRepoSourceState` down to rows
+// whose issue-source and PR-source slugs differ. Hoisted to module scope so
+// the predicate isn't re-allocated on every TaskPage render.
+const hasDivergentSources = (
+  s: RepoSourceState
+): s is RepoSourceState & {
+  sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
+} => !!s.sources?.issues && !!s.sources.prs && !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
+
+// Why: the selector keeps rendering even after the user picks 'origin' (which
+// collapses `sources.issues` onto origin). Upstream-candidate divergence is
+// the right render gate — a repo that has an `upstream` remote pointing
+// somewhere different from origin is always a candidate for the toggle,
+// regardless of the current effective preference.
+const hasUpstreamCandidateDivergence = (
+  s: RepoSourceState
+): s is RepoSourceState & {
+  sources: { prs: GitHubOwnerRepo; upstreamCandidate: GitHubOwnerRepo }
+} =>
+  !!s.sources?.prs &&
+  !!s.sources.upstreamCandidate &&
+  !sameGitHubOwnerRepo(s.sources.prs, s.sources.upstreamCandidate)
+
 export default function TaskPage(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const pageData = useAppStore((s) => s.taskPageData)
@@ -615,6 +661,12 @@ export default function TaskPage(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
+  const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
+  // Why: bumped by `setIssueSourcePreference` after cache eviction so the
+  // fetch effect below re-runs and repopulates work-items against the new
+  // source. Eviction alone isn't enough because the effect's deps don't
+  // include `workItemsCache`.
+  const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
@@ -750,6 +802,12 @@ export default function TaskPage(): React.JSX.Element {
   // user clicking the refresh button (force=true) vs. re-running for any
   // other reason — e.g. a repo change while the nonce happens to be > 0.
   const lastFetchedNonceRef = useRef(-1)
+  // Why: analogous to `lastFetchedNonceRef` for the invalidation nonce. A
+  // preference flip should force the dispatch past fetch-dedupe (same repos +
+  // same query, cache just evicted — without `force: true` the fan-out could
+  // collapse onto a stale in-flight request that resolved against the
+  // pre-flip source).
+  const lastFetchedInvalidationNonceRef = useRef(0)
   // Why: pages holds all fetched pages of work items. Page 0 is seeded from
   // cache for instant first paint; subsequent pages are loaded via date cursors.
   const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
@@ -780,7 +838,10 @@ export default function TaskPage(): React.JSX.Element {
   // this dialog for a read/review surface. The dialog's "Use" button routes
   // through the same direct-launch flow as the row-level "Use" CTA so
   // behavior is consistent regardless of entry point.
-  const [dialogWorkItemId, setDialogWorkItemId] = useState<string | null>(null)
+  const [dialogWorkItemKey, setDialogWorkItemKey] = useState<{
+    id: string
+    repoId: string
+  } | null>(null)
   const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
 
   const workItemsCache = useAppStore((s) => s.workItemsCache)
@@ -790,23 +851,122 @@ export default function TaskPage(): React.JSX.Element {
   // Why: derive the dialog's work item from the store cache so it reflects
   // optimistic patches (e.g. table-cell status toggle). Falls back to the
   // snapshot stored at click time for newly-created stubs not yet in the cache.
+  // Disambiguates by repoId so issues with the same number fetched from
+  // multiple repos (e.g. fork + non-fork, both routed through the same
+  // upstream) resolve to the clicked row's repo, not the first one scanned.
   const dialogWorkItem = useMemo(() => {
-    if (!dialogWorkItemId) {
+    if (!dialogWorkItemKey) {
       return null
     }
     for (const entry of Object.values(workItemsCache)) {
-      const found = entry?.data?.find((wi) => wi.id === dialogWorkItemId)
+      const found = entry?.data?.find(
+        (wi) => wi.id === dialogWorkItemKey.id && wi.repoId === dialogWorkItemKey.repoId
+      )
       if (found) {
         return found
       }
     }
     return dialogWorkItemFallback
-  }, [dialogWorkItemId, workItemsCache, dialogWorkItemFallback])
+  }, [dialogWorkItemKey, workItemsCache, dialogWorkItemFallback])
 
   const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
-    setDialogWorkItemId(item?.id ?? null)
+    setDialogWorkItemKey(item ? { id: item.id, repoId: item.repoId } : null)
     setDialogWorkItemFallback(item)
   }, [])
+
+  // Why: feature 1 — render the "Issues from {owner}/{repo}" indicator per
+  // selected repo whose issue-source and PR-source slugs differ, and surface
+  // a per-repo retryable banner when the issue-side fetch failed. Both derive
+  // from the same `workItemsCache` entry the list already consumes, so no
+  // extra IPC round-trip is needed. The `RepoSourceState` shape itself lives
+  // at module scope so the type isn't re-parsed per render.
+  // Why: subscribe to `workItemsCache` directly (already bound above) and
+  // memoize the derived per-repo view. The alternative —
+  // `useAppStore(useShallow(...))` — doesn't help here because the selector
+  // would allocate a wrapper object per repo and zustand's shallow compare
+  // uses `Object.is` on each element, so every cache mutation would still
+  // force a re-render. Memoizing over stable inputs re-derives only when the
+  // cache, selection, or query changes. The dialog's `WorkItemIssueSourceIndicator`
+  // subscribes to a single `getWorkItemsAnySourcesForRepo(repoPath, limit)`
+  // selector that returns a stable `WorkItemsCacheSources | null` reference,
+  // so it doesn't need `useShallow` — unrelated cache writes don't force a
+  // re-render because the selector result's reference identity is preserved
+  // between unchanged entries.
+  const perRepoSourceState = useMemo<RepoSourceState[]>(() => {
+    const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
+    return selectedRepos.map((r) => {
+      const key = workItemsCacheKey(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
+      const entry = workItemsCache[key]
+      return {
+        repoId: r.id,
+        repoPath: r.path,
+        sources: entry?.sources ?? null,
+        error: entry?.error ?? null
+      }
+    })
+  }, [selectedRepos, appliedTaskSearch, workItemsCache])
+
+  // Why: surface a one-time toast per session per repo when the user's
+  // preferred `'upstream'` is no longer configured and we fell back to
+  // origin. Gated on a ref-backed set so repeated list refreshes don't
+  // re-toast. We deliberately do NOT auto-reset the preference — the user
+  // may re-add `upstream` later and expect it to pick up again.
+  const fellBackToastedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (taskSource !== 'github') {
+      return
+    }
+    const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
+    for (const r of selectedRepos) {
+      const key = workItemsCacheKey(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
+      const entry = workItemsCache[key]
+      if (!entry?.issueSourceFellBack) {
+        continue
+      }
+      if (fellBackToastedRef.current.has(r.id)) {
+        continue
+      }
+      const prSlug = entry.sources?.prs
+        ? `${entry.sources.prs.owner}/${entry.sources.prs.repo}`
+        : r.displayName
+      toast.message(
+        `Your preferred issue source (upstream) is no longer configured for ${prSlug}. Using origin.`
+      )
+      fellBackToastedRef.current.add(r.id)
+    }
+  }, [selectedRepos, appliedTaskSearch, workItemsCache, taskSource])
+
+  // Why: on a partial-failure retry the cache still holds successful-side
+  // data, so `tasksLoading` (which is gated on `anyUncached`) never flips
+  // true and the Retry button would otherwise give no feedback. Track
+  // retry-in-flight per repo (keyed by `repoPath`) so that clicking Retry
+  // on one banner only flips that banner's button into its "Retrying…"
+  // state — other still-failing banners stay in their "Retry" state rather
+  // than misleadingly flipping in lockstep. The fetch effect clears the set
+  // when the nonce-driven refresh settles.
+  const [retryingRepoPaths, setRetryingRepoPaths] = useState<ReadonlySet<string>>(() => new Set())
+
+  const handleRetryIssuesFetch = useCallback(
+    (repoPath: string) => {
+      const repo = selectedRepos.find((r) => r.path === repoPath)
+      if (!repo) {
+        return
+      }
+      // Why: bumping the shared refresh nonce reuses the Tasks list's
+      // single fetch path — nonce changes are treated as force=true so
+      // retry doesn't silently dedupe onto a still-failing in-flight request.
+      // The nonce bump refreshes ALL selected repos, but the Retrying…
+      // state is scoped to the clicked repo so other banners stay in their
+      // "Retry" state rather than misleadingly flipping to "Retrying…".
+      setRetryingRepoPaths((prev) => {
+        const next = new Set(prev)
+        next.add(repoPath)
+        return next
+      })
+      setTaskRefreshNonce((n) => n + 1)
+    },
+    [selectedRepos]
+  )
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
@@ -1030,10 +1190,17 @@ export default function TaskPage(): React.JSX.Element {
   }, [taskSearchInput])
 
   useEffect(() => {
+    // Why: both early-return branches must clear `retryingRepoPaths` — if the
+    // user clicks Retry and then switches `taskSource` away from 'github' (or
+    // somehow ends up with zero repos selected) before the fetch dispatches,
+    // neither the `.then` nor the `.catch` below will fire, and the Retry
+    // button would stay stuck in its disabled/Retrying state indefinitely.
     if (taskSource !== 'github') {
+      setRetryingRepoPaths(new Set())
       return
     }
     if (selectedRepos.length === 0) {
+      setRetryingRepoPaths(new Set())
       return
     } // unreachable — multi-combobox forbids empty
 
@@ -1076,12 +1243,41 @@ export default function TaskPage(): React.JSX.Element {
     // Preserve the existing nonce-gated force behavior.
     const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
     lastFetchedNonceRef.current = taskRefreshNonce
+    // Why: a preference flip bumps `workItemsInvalidationNonce`. Treat that
+    // bump as a forced refresh so the fan-out bypasses the in-flight dedupe
+    // map — otherwise an overlapping request started before the flip could
+    // resolve the new fetch and repopulate the cache with pre-flip data.
+    const preferenceInvalidated =
+      workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
+    lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
 
     const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+    // Why: snapshot the retrying paths at effect-dispatch so overlapping
+    // retries don't clear each other's pending state. An earlier cancelled
+    // effect settling after a newer retry starts would otherwise wipe the
+    // newer retry's repo from the set. Clearing only the paths captured
+    // when this effect dispatched preserves later additions.
+    const dispatchedRetryPaths = retryingRepoPaths
     void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
-      force: forceRefresh && taskRefreshNonce > 0
+      force: (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
     })
       .then(({ items, failedCount: failed }) => {
+        // Why: clear only the repos this effect was responsible for
+        // retrying (the snapshot captured at dispatch time). Overlapping
+        // retries — a second click while a prior fetch is still in flight
+        // — must not clear the newer repo from the set, so we can't just
+        // reset the whole set here. The early-return branches above reset
+        // the whole set because those branches won't dispatch a fetch.
+        setRetryingRepoPaths((prev) => {
+          if (dispatchedRetryPaths.size === 0) {
+            return prev
+          }
+          const next = new Set(prev)
+          for (const p of dispatchedRetryPaths) {
+            next.delete(p)
+          }
+          return next
+        })
         if (cancelled) {
           return
         }
@@ -1093,6 +1289,22 @@ export default function TaskPage(): React.JSX.Element {
       .catch((err) => {
         // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a
         // reject here means an IPC-level or programmer error — surface it.
+        // Clear only the repos this effect was responsible for retrying
+        // (the snapshot captured at dispatch time). Overlapping retries —
+        // a second click while a prior fetch is still in flight — must
+        // not clear the newer repo from the set, so we can't just reset
+        // the whole set here. The early-return branches above reset the
+        // whole set because those branches won't dispatch a fetch.
+        setRetryingRepoPaths((prev) => {
+          if (dispatchedRetryPaths.size === 0) {
+            return prev
+          }
+          const next = new Set(prev)
+          for (const p of dispatchedRetryPaths) {
+            next.delete(p)
+          }
+          return next
+        })
         if (cancelled) {
           return
         }
@@ -1118,9 +1330,10 @@ export default function TaskPage(): React.JSX.Element {
     }
     // Why: getCachedWorkItems and fetchWorkItemsAcrossRepos are stable zustand
     // selectors; depending on them would re-run the effect on unrelated store
-    // updates.
+    // updates. `workItemsInvalidationNonce` is explicitly included so a
+    // preference flip (which only evicts cache) re-dispatches this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRepos, appliedTaskSearch, taskRefreshNonce, taskSource])
+  }, [selectedRepos, appliedTaskSearch, taskRefreshNonce, taskSource, workItemsInvalidationNonce])
 
   const handleApplyTaskSearch = useCallback((): void => {
     const trimmed = taskSearchInput.trim()
@@ -1777,6 +1990,78 @@ export default function TaskPage(): React.JSX.Element {
                         ) : null}
                       </div>
                     </div>
+
+                    {(() => {
+                      // Why: unify feature 1 (indicator) and feature 2 (selector)
+                      // into a single chip per repo. Rendering both separately
+                      // produced visually redundant output — two local-repo
+                      // dot-labels, duplicate slugs. The selector's active pill
+                      // + tooltip already announce the source, so the "Issues
+                      // from {slug}" chip is only shown when the selector does
+                      // not render (no upstream remote — nothing to toggle).
+                      const rows = perRepoSourceState.filter(
+                        (s) => hasUpstreamCandidateDivergence(s) || hasDivergentSources(s)
+                      )
+                      if (rows.length === 0) {
+                        return null
+                      }
+                      return (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {rows.map((s) => {
+                            const repo = selectedRepos.find((r) => r.id === s.repoId)
+                            const showDotLabel = selectedRepos.length > 1 && repo
+                            const selectorRenderable = hasUpstreamCandidateDivergence(s)
+                            // Why: the static indicator has its own wrapping
+                            // chip styles, so we render it standalone and don't
+                            // nest it inside our own chip — nesting would
+                            // double-border it.
+                            if (!selectorRenderable && hasDivergentSources(s)) {
+                              return (
+                                <IssueSourceIndicator
+                                  key={s.repoId}
+                                  issues={s.sources.issues}
+                                  prs={s.sources.prs}
+                                  localRepo={
+                                    showDotLabel && repo
+                                      ? { displayName: repo.displayName, color: repo.badgeColor }
+                                      : undefined
+                                  }
+                                />
+                              )
+                            }
+                            if (!selectorRenderable || !repo) {
+                              return null
+                            }
+                            // Why: must be a <div> (not <span>) because the child
+                            // <IssueSourceSelector> renders a <div role="group">, and
+                            // a block-level <div> nested inside an inline <span> is
+                            // invalid HTML — React emits a hydration warning and
+                            // browsers may auto-close the span. `issueSourceChipClass`
+                            // uses `inline-flex`, so the visual rendering is identical.
+                            return (
+                              <div key={s.repoId} className={issueSourceChipClass}>
+                                {showDotLabel ? (
+                                  <RepoDotLabel
+                                    name={repo.displayName}
+                                    color={repo.badgeColor}
+                                    dotClassName="size-1.5"
+                                    className="text-[10px] text-muted-foreground"
+                                  />
+                                ) : null}
+                                <IssueSourceSelector
+                                  preference={repo.issueSourcePreference}
+                                  origin={s.sources.prs}
+                                  upstream={s.sources.upstreamCandidate}
+                                  onChange={(next) => {
+                                    void setIssueSourcePreference(repo.id, repo.path, next)
+                                  }}
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
                   </div>
                 ) : linearStatus.connected ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
@@ -1927,6 +2212,53 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
+                {perRepoSourceState
+                  .filter((s) => s.error)
+                  .map((s) => {
+                    const err = s.error!
+                    // Why: parent design doc §2 — when the issue fetch fails
+                    // (e.g. a 403 on a private upstream) we render a retryable
+                    // banner with slug-qualified copy instead of a silent
+                    // empty list. The [Retry] action re-invokes the fetch
+                    // with force=true via the shared refresh nonce so any
+                    // still-failing in-flight request is invalidated first.
+                    return (
+                      <div
+                        key={`source-err-${s.repoId}`}
+                        role="alert"
+                        // Why: aria-atomic ensures screen readers re-announce the full banner
+                        // when retry produces a new error on the same repo. Without it, React's
+                        // reconciliation (stable key per repo) may diff-only the changed text
+                        // node and some assistive tech will miss the update.
+                        aria-atomic="true"
+                        className="flex items-center justify-between gap-3 border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                      >
+                        <span>
+                          Couldn&apos;t load issues from{' '}
+                          <span className="font-mono">
+                            {err.source.owner}/{err.source.repo}
+                          </span>{' '}
+                          — {err.message}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRetryIssuesFetch(s.repoPath)}
+                          disabled={tasksLoading || retryingRepoPaths.has(s.repoPath)}
+                        >
+                          {retryingRepoPaths.has(s.repoPath) ? (
+                            <span className="flex items-center gap-1">
+                              <LoaderCircle className="h-3 w-3 animate-spin" />
+                              Retrying…
+                            </span>
+                          ) : (
+                            'Retry'
+                          )}
+                        </Button>
+                      </div>
+                    )
+                  })}
+
                 {tasksLoading && filteredWorkItems.length === 0 ? (
                   // Why: shimmer skeleton stands in for the first ~3 rows while
                   // the initial fetch is in flight, so the card is never empty
@@ -1962,7 +2294,17 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
-                {!tasksLoading && filteredWorkItems.length === 0 ? (
+                {/* Why: suppress the generic empty state when any error banner is
+                    visible (IPC reject via tasksError, cross-repo partial failure
+                    via failedCount, or per-repo issue-side error). Showing
+                    "No matching GitHub work" next to "Couldn't load issues from X/Y"
+                    is contradictory and misleads the user into thinking they
+                    typed the wrong query. */}
+                {!tasksLoading &&
+                filteredWorkItems.length === 0 &&
+                !tasksError &&
+                failedCount === 0 &&
+                perRepoSourceState.every((s) => !s.error) ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-base font-medium text-foreground">No matching GitHub work</p>
                     <p className="mt-2 text-sm text-muted-foreground">
@@ -1982,7 +2324,12 @@ export default function TaskPage(): React.JSX.Element {
                       // <button> is invalid HTML and triggers React hydration
                       // errors that break rendering of the whole page.
                       <div
-                        key={item.id}
+                        // Why: combine repoId with item.id because two selected repos
+                        // that route issues through the same upstream (e.g. fork +
+                        // non-fork both resolving to stablyai/orca) surface the same
+                        // item.id under different repoIds. React treats a bare id as
+                        // a collision and warns + silently drops rows otherwise.
+                        key={`${item.repoId}:${item.id}`}
                         role="button"
                         tabIndex={0}
                         onClick={() => setDialogWorkItem(item)}
@@ -2339,11 +2686,76 @@ export default function TaskPage(): React.JSX.Element {
         >
           <DialogHeader>
             <DialogTitle>New GitHub issue</DialogTitle>
-            <DialogDescription>
-              {selectedRepos.length > 1
-                ? 'Opens a new issue in the selected repository.'
-                : `Opens a new issue in ${newIssueTargetRepo?.displayName ?? 'this repository'}.`}
-            </DialogDescription>
+            {(() => {
+              // Why: parent design doc §1 surface 2 — the composer is the
+              // non-negotiable surface because User D's regression (filing a
+              // personal TODO against upstream/fork after #1076 changed
+              // routing) is specifically about this dialog. The description
+              // line doubles as the source indicator: inlining the resolved
+              // `{owner}/{repo}` slug (e.g. "stablyai/orca") means the
+              // destination is impossible to miss before the user submits,
+              // without needing a secondary chip that duplicates the info.
+              // Falls back to the local displayName when the slug isn't
+              // resolved yet (pre-IPC cache hit, or non-GitHub remote). The
+              // multi-repo case uses the same computation — the Select below
+              // drives `newIssueTargetRepo`, so the active target is known.
+              const entry = newIssueTargetRepo
+                ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+                : undefined
+              const issuesSlug = entry?.sources?.issues
+                ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
+                : null
+              const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
+              return <DialogDescription>Filing in {issuesSlug ?? fallback}</DialogDescription>
+            })()}
+            {(() => {
+              // Why: mirror the Tasks-view selector in the composer so User D
+              // (fork contributor filing a personal TODO against their own
+              // fork) can flip the target *at the moment of filing* — the
+              // only moment that matters for this regression. Reuses the
+              // same cache entry the description line reads so no extra
+              // IPC round-trip is needed.
+              //
+              // Why sibling of DialogDescription (not nested inside it):
+              // DialogDescription renders a <p>, and `IssueSourceSelector`
+              // renders a <div role="group"> with <button>s inside. Nesting
+              // a div inside a <p> is invalid HTML — React emits a hydration
+              // warning and some a11y tools flag it. Rendering the selector
+              // as a sibling keeps both surfaces in the same header band
+              // without the nesting violation.
+              if (!newIssueTargetRepo) {
+                return null
+              }
+              const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+              if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.prs) {
+                return null
+              }
+              if (sameGitHubOwnerRepo(entry.sources.prs, entry.sources.upstreamCandidate)) {
+                return null
+              }
+              return (
+                <div className="mt-1">
+                  <IssueSourceSelector
+                    preference={newIssueTargetRepo.issueSourcePreference}
+                    origin={entry.sources.prs}
+                    upstream={entry.sources.upstreamCandidate}
+                    disabled={newIssueSubmitting}
+                    // Why: the composer only files issues, so the "Issues from
+                    // <slug>" tooltip restates what the surrounding form already
+                    // implies. Keep it on the Tasks header (that page also lists
+                    // PRs, which the selector doesn't affect).
+                    suppressTooltip
+                    onChange={(next) => {
+                      void setIssueSourcePreference(
+                        newIssueTargetRepo.id,
+                        newIssueTargetRepo.path,
+                        next
+                      )
+                    }}
+                  />
+                </div>
+              )
+            })()}
           </DialogHeader>
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (

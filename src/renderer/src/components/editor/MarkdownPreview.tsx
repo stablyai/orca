@@ -23,12 +23,18 @@ import { toast } from 'sonner'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { detectLanguage } from '@/lib/language-detect'
-import type { Worktree } from '../../../../shared/types'
+import type { MarkdownDocument, Worktree } from '../../../../shared/types'
 import {
   fileUrlToAbsolutePath,
   getMarkdownPreviewLinkTarget,
   resolveMarkdownPreviewHref
 } from './markdown-preview-links'
+import {
+  createMarkdownDocumentIndex,
+  parseMarkdownDocLinkHref,
+  remarkMarkdownDocLinks,
+  resolveMarkdownDocLink
+} from './markdown-doc-links'
 import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-internal-links'
 import { useLocalImageSrc } from './useLocalImageSrc'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
@@ -47,6 +53,8 @@ type MarkdownPreviewProps = {
   filePath: string
   scrollCacheKey: string
   initialAnchor?: string | null
+  markdownDocuments?: MarkdownDocument[]
+  onOpenDocument?: (document: MarkdownDocument) => void | Promise<void>
 }
 
 const markdownPreviewSanitizeSchema = {
@@ -144,7 +152,9 @@ export default function MarkdownPreview({
   content,
   filePath,
   scrollCacheKey,
-  initialAnchor = null
+  initialAnchor = null,
+  markdownDocuments = [],
+  onOpenDocument
 }: MarkdownPreviewProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -172,6 +182,10 @@ export default function MarkdownPreview({
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
   const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
+  const markdownDocumentIndex = useMemo(
+    () => createMarkdownDocumentIndex(markdownDocuments),
+    [markdownDocuments]
+  )
   const frontMatterInner = useMemo(() => {
     if (!frontMatter) {
       return ''
@@ -410,7 +424,36 @@ export default function MarkdownPreview({
     sluggerRef.current.reset()
     const slugger = sluggerRef.current
     return {
-      a: ({ href, children, ...props }) => {
+      a: ({ href, children, className, ...props }) => {
+        const docLinkTarget = parseMarkdownDocLinkHref(href)
+        if (docLinkTarget !== null) {
+          const resolution = resolveMarkdownDocLink(docLinkTarget, markdownDocumentIndex)
+          const resolvedDocument = resolution.status === 'resolved' ? resolution.document : null
+          const title =
+            resolution.status === 'ambiguous' ? 'Document link is ambiguous' : 'Document not found'
+
+          const handleDocLinkClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
+            event.preventDefault()
+            if (resolvedDocument && onOpenDocument) {
+              void onOpenDocument(resolvedDocument)
+            }
+          }
+
+          return (
+            <a
+              {...props}
+              href={href}
+              className={`${className ?? ''} ${
+                resolvedDocument ? 'markdown-doc-link' : 'markdown-doc-link-broken'
+              }`.trim()}
+              title={resolvedDocument ? undefined : title}
+              onClick={handleDocLinkClick}
+            >
+              {children}
+            </a>
+          )
+        }
+
         const handleClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
           if (!href) {
             return
@@ -547,7 +590,13 @@ export default function MarkdownPreview({
         }
 
         return (
-          <a {...props} href={href} onClick={handleClick} style={{ cursor: 'pointer' }}>
+          <a
+            {...props}
+            href={href}
+            className={className}
+            onClick={handleClick}
+            style={{ cursor: 'pointer' }}
+          >
             {children}
           </a>
         )
@@ -644,6 +693,8 @@ export default function MarkdownPreview({
     filePath,
     isDark,
     isMac,
+    markdownDocumentIndex,
+    onOpenDocument,
     openFile,
     openMarkdownPreview,
     scrollToAnchor,
@@ -748,7 +799,13 @@ export default function MarkdownPreview({
         )}
         <Markdown
           components={components}
-          remarkPlugins={[remarkGfm, remarkBreaks, remarkFrontmatter, remarkMath]}
+          remarkPlugins={[
+            remarkGfm,
+            remarkBreaks,
+            remarkFrontmatter,
+            remarkMath,
+            remarkMarkdownDocLinks
+          ]}
           // Why: raw HTML must be sanitized before any trusted renderer expands
           // it into richer DOM. Running KaTeX and syntax highlighting after
           // sanitize preserves VS Code-style math/code rendering without having

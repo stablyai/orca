@@ -20,7 +20,8 @@
  */
 
 import { rebuild } from '@electron/rebuild'
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const projectDir = process.cwd()
@@ -40,6 +41,40 @@ if (ignoreModules.length > 0) {
 // ABI regardless of the package manager's store layout.
 const NATIVE_MODULES = ['better-sqlite3', 'node-pty', 'cpu-features']
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
+
+// Why: cpu-features ships without `buildcheck.gypi`; its own `install` script
+// generates it by running `node buildcheck.js > buildcheck.gypi` before
+// node-gyp. @electron/rebuild with `force: true` invokes node-gyp directly
+// and bypasses that install hook, so if the file is missing (fresh install,
+// store prune, or a prior failed run) node-gyp aborts with
+// "buildcheck.gypi not found". Regenerate it here before rebuilding.
+if (!ignoreModules.includes('cpu-features')) {
+  const cpuFeatureDirs = globSync(
+    'node_modules/.pnpm/cpu-features@*/node_modules/cpu-features',
+    { cwd: projectDir },
+  )
+  for (const relDir of cpuFeatureDirs) {
+    const dir = resolve(projectDir, relDir)
+    const gypiPath = resolve(dir, 'buildcheck.gypi')
+    if (existsSync(gypiPath)) {
+      continue
+    }
+    try {
+      const out = execFileSync(process.execPath, ['buildcheck.js'], {
+        cwd: dir,
+        encoding: 'utf8',
+      })
+      writeFileSync(gypiPath, out)
+      console.log(`[rebuild] Generated ${relDir}/buildcheck.gypi`)
+    } catch (/** @type {any} */ err) {
+      console.error(
+        `[rebuild] Failed to generate ${relDir}/buildcheck.gypi:`,
+        err?.message ?? err,
+      )
+      process.exit(1)
+    }
+  }
+}
 
 try {
   await rebuild({

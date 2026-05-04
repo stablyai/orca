@@ -13,7 +13,8 @@ import {
   deleteActiveClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentials,
   readManagedClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentials
+  writeActiveClaudeKeychainCredentials,
+  writeManagedClaudeKeychainCredentials
 } from './keychain'
 
 export type ClaudeRuntimeAuthPreparation = {
@@ -122,12 +123,58 @@ export class ClaudeRuntimeAuthService {
       return
     }
 
+    // Why: Claude CLI refreshes expired OAuth tokens and writes them back to
+    // .credentials.json. If we detect the runtime file differs from what Orca
+    // last wrote, the CLI must have refreshed — so we preserve those tokens
+    // back to managed storage before overwriting runtime with managed state.
+    if (this.lastSyncedAccountId === activeAccount.id) {
+      await this.readBackRefreshedTokens(activeAccount)
+    }
+
     this.writeRuntimeCredentials(credentialsJson)
     if (process.platform === 'darwin') {
       await writeActiveClaudeKeychainCredentials(credentialsJson)
     }
     this.writeRuntimeOauthAccount(this.readManagedOauthAccount(activeAccount))
     this.lastSyncedAccountId = activeAccount.id
+  }
+
+  // Why: called by ClaudeAccountService before syncForCurrentSelection() after
+  // re-auth or add-account. Those flows write fresh tokens to managed storage,
+  // so the read-back must be skipped to avoid overwriting them with stale
+  // runtime tokens.
+  clearLastWrittenCredentialsJson(): void {
+    this.lastWrittenCredentialsJson = null
+  }
+
+  private async readBackRefreshedTokens(account: ClaudeManagedAccount): Promise<void> {
+    try {
+      if (this.lastWrittenCredentialsJson === null) {
+        return
+      }
+
+      const paths = this.pathResolver.getRuntimePaths()
+      if (!existsSync(paths.credentialsPath)) {
+        return
+      }
+
+      const runtimeContents = readFileSync(paths.credentialsPath, 'utf-8')
+      if (runtimeContents === this.lastWrittenCredentialsJson) {
+        return
+      }
+
+      if (process.platform === 'darwin') {
+        await writeManagedClaudeKeychainCredentials(account.id, runtimeContents)
+      } else {
+        const credentialsPath = join(account.managedAuthPath, '.credentials.json')
+        writeFileAtomically(credentialsPath, runtimeContents, { mode: 0o600 })
+      }
+    } catch (error) {
+      // Why: read-back is best-effort. A transient fs error must not block the
+      // forward sync path — the worst case is one more stale-token cycle, which
+      // is strictly better than failing the entire sync.
+      console.warn('[claude-runtime-auth] Failed to read back refreshed tokens:', error)
+    }
   }
 
   private getPreparation(): ClaudeRuntimeAuthPreparation {

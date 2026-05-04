@@ -22,6 +22,20 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    title: 'Sidekick',
+    description: 'Floating animated sidekick in the bottom-right corner.',
+    keywords: [
+      'experimental',
+      'sidekick',
+      'pet',
+      'mascot',
+      'overlay',
+      'animated',
+      'corner',
+      'character'
+    ]
+  },
+  {
     title: 'Agent Orchestration',
     description:
       'Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates.',

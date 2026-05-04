@@ -15,11 +15,22 @@ import { useAppStore } from '@/store'
  * a new caller can't accidentally skip it.
  */
 export async function runSleepWorktree(worktreeId: string): Promise<void> {
-  const { activeWorktreeId, setActiveWorktree, shutdownWorktreeTerminals } = useAppStore.getState()
+  const {
+    activeWorktreeId,
+    setActiveWorktree,
+    shutdownWorktreeBrowsers,
+    shutdownWorktreeTerminals
+  } = useAppStore.getState()
   if (activeWorktreeId === worktreeId) {
     setActiveWorktree(null)
   }
   try {
+    // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
+    // so destroyPersistentWebview unregisters the Chromium guests before any
+    // other teardown runs, terminals second so the PTY kill uses the same
+    // ordering on both paths. Without the browser thunk here, sleep leaks
+    // browserPagesByWorkspace entries and live webviews for the slept worktree.
+    await shutdownWorktreeBrowsers(worktreeId)
     await shutdownWorktreeTerminals(worktreeId)
   } catch (err) {
     // Why: callers are fire-and-forget; surface the failure as a toast and

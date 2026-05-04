@@ -978,6 +978,54 @@ describe('setActiveWorktree', () => {
     expect(s.unreadTerminalTabs[tabB.id]).toBeUndefined()
   })
 
+  // Why: ownership regression (design §1.3). shutdownWorktreeTerminals used to
+  // delete browserTabsByWorktree[worktreeId] and reset
+  // activeBrowserTabId/activeTabType as a side effect — now those mutations
+  // belong exclusively to shutdownWorktreeBrowsers. If a refactor reintroduces
+  // the side effect, both thunks will write the same keys and race.
+  it('leaves browser state untouched when shutting down terminals', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeBrowserTabId: 'workspace-1',
+      activeTabType: 'browser',
+      browserTabsByWorktree: {
+        [wt]: [
+          {
+            id: 'workspace-1',
+            worktreeId: wt,
+            label: 'ws1',
+            sessionProfileId: null,
+            pageIds: [],
+            activePageId: null,
+            url: 'about:blank',
+            title: 'ws1',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      } as never,
+      activeBrowserTabIdByWorktree: { [wt]: 'workspace-1' }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt)
+
+    const s = store.getState()
+    expect(s.browserTabsByWorktree[wt]).toBeDefined()
+    expect(s.activeBrowserTabIdByWorktree[wt]).toBe('workspace-1')
+    expect(s.activeBrowserTabId).toBe('workspace-1')
+    expect(s.activeTabType).toBe('browser')
+  })
+
   it('returns to the landing state when closing the last terminal tab in the active worktree', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

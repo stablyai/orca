@@ -15,9 +15,11 @@ import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { initTelemetry, shutdownTelemetry } from './telemetry/client'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
 import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
@@ -29,6 +31,7 @@ import {
   patchPackagedProcessPath
 } from './startup/configure-process'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
+import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
@@ -42,7 +45,7 @@ import { claudeHookService } from './claude/hook-service'
 import { codexHookService } from './codex/hook-service'
 import { geminiHookService } from './gemini/hook-service'
 import { cursorHookService } from './cursor/hook-service'
-import { getPtyIdForPaneKey, registerPaneKeyTeardownListener } from './ipc/pty'
+import { getPtyIdForPaneKey, registerPaneKeyTeardownListener, getLocalPtyProvider } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 
@@ -87,18 +90,67 @@ if (app.isPackaged && process.platform !== 'win32') {
   })
 }
 configureDevUserDataPath(is.dev)
-installDevParentDisconnectQuit(is.dev)
-installDevParentWatchdog(is.dev)
-// Why: must run after configureDevUserDataPath (which redirects userData to
-// orca-dev in dev mode) but before app.setName('Orca') inside whenReady
-// (which would change the resolved path on case-sensitive filesystems).
-initDataPath()
-// Why: same timing constraint as initDataPath — capture the userData path
-// before app.setName changes it. See persistence.ts:20-28.
-initStatsPath()
-initClaudeUsagePath()
-initCodexUsagePath()
-enableMainProcessGpuFeatures()
+
+function focusExistingWindow(): void {
+  // Why: the second-instance event fires on the *primary* Electron process
+  // after another launch tries (and fails) to acquire the lock. Bring the
+  // existing window forward so the user sees the same focus behaviour as
+  // re-clicking the dock/taskbar icon, rather than a silent no-op.
+  //
+  // Why show() as well as restore() + focus(): isMinimized() only covers the
+  // dock-minimised case. A hidden window (close-to-tray on macOS via Cmd+W,
+  // or a window on a different macOS Space) is NOT minimised, so focus()
+  // alone is a silent no-op. show() handles those plus Windows taskbar
+  // focus-steal, which focus() alone does not reliably trigger.
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore()
+    }
+    if (!mainWindow.isVisible()) {
+      mainWindow.show()
+    }
+    mainWindow.focus()
+  }
+  // Pre-window case: the primary is still booting and will call
+  // openMainWindow() from whenReady(). No action needed here.
+}
+
+// Why: the lock must be acquired AFTER configureDevUserDataPath — Electron
+// derives the lock identity from the `userData` path, so this placement lets
+// dev (`orca-dev`) and packaged (`orca`) runs lock in separate namespaces
+// instead of serialising against each other.
+const hasSingleInstanceLock = acquireSingleInstanceLock(app, focusExistingWindow)
+if (!hasSingleInstanceLock) {
+  if (is.dev) {
+    // Why: packaged runs have no attached console, but dev runs do. Emit a
+    // single line so a `pnpm dev` operator does not mistake a silent exit
+    // for a broken launcher.
+    console.log(
+      '[single-instance] Another Orca instance is already running against this userData path — focusing existing window.'
+    )
+  }
+  app.quit()
+}
+
+// Why: when the lock is held by another process, we've already called
+// app.quit() above. Skip every remaining file-writing side effect so this
+// transient process never touches userData, and let handler registration
+// below happen — those handlers only fire after whenReady, which app.quit()
+// prevents from ever dispatching.
+if (hasSingleInstanceLock) {
+  installDevParentDisconnectQuit(is.dev)
+  installDevParentWatchdog(is.dev)
+  // Why: must run after configureDevUserDataPath (which redirects userData to
+  // orca-dev in dev mode) but before app.setName('Orca') inside whenReady
+  // (which would change the resolved path on case-sensitive filesystems).
+  initDataPath()
+  // Why: same timing constraint as initDataPath — capture the userData path
+  // before app.setName changes it. See persistence.ts:20-28.
+  initStatsPath()
+  initClaudeUsagePath()
+  initCodexUsagePath()
+  enableMainProcessGpuFeatures()
+}
 
 function openMainWindow(): BrowserWindow {
   if (!store) {
@@ -322,6 +374,13 @@ app.whenReady().then(async () => {
   }
 
   store = new Store()
+  // Why: telemetry must initialize before any IPC handler / renderer can
+  // call `track()`. The client is a no-op in dev/contributor builds
+  // (`IS_OFFICIAL_BUILD === false`) and a no-op while `TELEMETRY_ENABLED`
+  // is false in PR 2 — so this call is safe to run early; it only records
+  // the Store reference, seeds common props, and resets per-session burst
+  // caps. Actual transport initialization is still gated by both flags.
+  initTelemetry(store)
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
@@ -345,7 +404,14 @@ app.whenReady().then(async () => {
       .filter((account) => account.id !== settings.activeCodexManagedAccountId)
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
-  runtime = new OrcaRuntimeService(store, stats)
+  runtime = new OrcaRuntimeService(store, stats, {
+    // Why: resolve the PTY provider lazily. initDaemonPtyProvider() runs later
+    // inside attachMainWindowServices and calls setLocalPtyProvider(routedAdapter)
+    // to swap the in-process provider for the daemon-routed one. Capturing the
+    // provider reference eagerly here would freeze the pre-daemon LocalPtyProvider
+    // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
+    getLocalProvider: () => getLocalPtyProvider()
+  })
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
@@ -527,11 +593,6 @@ app.on('will-quit', (e) => {
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
   killAllPty()
   void closeAllWatchers()
-  if (runtimeRpc) {
-    void runtimeRpc.stop().catch((error) => {
-      console.error('[runtime] Failed to stop local RPC transport:', error)
-    })
-  }
   store?.flush()
 
   // Why: disconnectDaemon writes final checkpoints via async getSnapshot RPCs.
@@ -540,10 +601,49 @@ app.on('will-quit', (e) => {
   // app.quit() re-fires will-quit, but the second pass skips straight through.
   if (!daemonDisconnectDone) {
     e.preventDefault()
-    disconnectDaemon().finally(() => {
-      daemonDisconnectDone = true
-      app.quit()
-    })
+    // Why: capture ownership synchronously (before any await) so the guard
+    // still has the right pid/runtimeId to compare against if shutdown
+    // partially clears global state. Evaluating these inside .then() would
+    // let a later teardown path null them out mid-chain.
+    const ownedPid = process.pid
+    const ownedRuntimeId = runtime?.getRuntimeId()
+    // Why: the construction of rpcStopAndClear AND the allSettled() below must
+    // both live inside the `!daemonDisconnectDone` guard. will-quit re-fires
+    // after app.quit() below; without this guard, the second pass would
+    // re-invoke runtimeRpc.stop() (redundant rmSync on an already-removed
+    // socket) and re-run the ownership-guarded clear against a metadata file
+    // that may now belong to the auto-updater's replacement process.
+    const rpcStopAndClear = runtimeRpc
+      ? runtimeRpc
+          .stop()
+          .then(() => {
+            if (ownedRuntimeId) {
+              clearRuntimeMetadataIfOwned(app.getPath('userData'), ownedPid, ownedRuntimeId)
+            }
+          })
+          .catch((error) => {
+            console.error('[runtime] Failed to stop local RPC transport:', error)
+          })
+      : Promise.resolve()
+    // Why: Promise.allSettled — we need BOTH the daemon disconnect and the
+    // RPC stop + owned-metadata clear to complete before Electron exits.
+    // Using allSettled (not all) preserves the existing fail-open posture:
+    // if disconnectDaemon rejects, we still quit instead of hanging the app.
+    //
+    // Telemetry shutdown folds in after the daemon/RPC teardown and BEFORE
+    // app.quit(): the PostHog client has up to 2s of bounded flush. Errors
+    // inside `shutdownTelemetry()` are caught by the client itself — we
+    // catch again here defensively so a flush failure cannot cancel the
+    // quit chain.
+    Promise.allSettled([disconnectDaemon(), rpcStopAndClear])
+      .then(() => shutdownTelemetry())
+      .catch(() => {
+        /* swallow — telemetry must never prevent app.quit() */
+      })
+      .then(() => {
+        daemonDisconnectDone = true
+        app.quit()
+      })
   }
 })
 

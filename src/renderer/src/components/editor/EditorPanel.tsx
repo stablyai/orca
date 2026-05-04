@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
-import MarkdownViewToggle from './MarkdownViewToggle'
+import EditorViewToggle, { CSV_VIEW_MODE_METADATA } from './EditorViewToggle'
 import { EditorContent } from './EditorContent'
 import { scrollTopCache, cursorPositionCache, diffViewStateCache } from '@/lib/scroll-cache'
 import type { GitDiffResult } from '../../../../shared/types'
@@ -42,10 +42,12 @@ import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
+  getEditorToggleModes,
   getMarkdownPreviewShortcutLabel,
   getMarkdownViewModes,
   isMarkdownPreviewShortcut
 } from './markdown-preview-controls'
+import type { EditorToggleValue } from './EditorViewToggle'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -111,7 +113,11 @@ function inFlightReadKey(connectionId: string | undefined, filePath: string): st
   return `${connectionId ?? ''}::${filePath}`
 }
 
-function inFlightDiffKey(file: OpenFile, connectionId: string | undefined): string {
+function inFlightDiffKey(
+  file: OpenFile,
+  connectionId: string | undefined,
+  compareAgainstHead = false
+): string {
   // Why: diff content depends on the file path AND which diff source is
   // being rendered (unstaged/staged/branch). Branch diffs further depend
   // on the base+head oids so switching compare points doesn't alias, and
@@ -121,7 +127,7 @@ function inFlightDiffKey(file: OpenFile, connectionId: string | undefined): stri
     file.diffSource === 'branch' && file.branchCompare
       ? `${file.branchCompare.baseOid ?? ''}..${file.branchCompare.headOid ?? ''}::${file.branchOldPath ?? ''}`
       : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${file.filePath}::${branch}`
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}`
 }
 
 function EditorPanelInner({
@@ -140,6 +146,8 @@ function EditorPanelInner({
   const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+  const editorViewMode = useAppStore((s) => s.editorViewMode)
+  const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const closeFile = useAppStore((s) => s.closeFile)
@@ -155,9 +163,21 @@ function EditorPanelInner({
   const activeFileMode = activeFile?.mode ?? null
   const activeFileDiffSource = activeFile?.diffSource
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
-
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
+  // Why: Changes view mode only applies on top of a regular edit-mode tab. It
+  // swaps the MonacoEditor for a DiffViewer (HEAD vs working tree incl. unsaved
+  // draft) without creating a new tab. Transient tabs (diff, conflict-review,
+  // markdown-preview) keep their own rendering pipeline.
+  // Binary content short-circuits to the binary placeholder in EditorContent
+  // before isChangesMode is consulted, so we must also exclude binary files
+  // here — otherwise the header toggle would still show Changes as selected
+  // and expose the inline/side-by-side toggle even though no diff is rendered.
+  const isChangesMode =
+    !!activeFile &&
+    activeFile.mode === 'edit' &&
+    editorViewMode[activeFile.id] === 'changes' &&
+    !fileContents[activeFile.id]?.isBinary
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
@@ -190,6 +210,13 @@ function EditorPanelInner({
 
   const openFilesRef = useRef(openFiles)
   openFilesRef.current = openFiles
+
+  // Why: the external-file-change handler below needs to consult the latest
+  // editorViewMode, but we do not want to re-register its window listener
+  // every time an unrelated editor-mode toggle flips. A ref lets the handler
+  // read the current value without adding editorViewMode to the effect deps.
+  const editorViewModeRef = useRef(editorViewMode)
+  editorViewModeRef.current = editorViewMode
 
   useEffect(() => {
     const closeMenu = (): void => setPathMenuOpen(false)
@@ -286,10 +313,15 @@ function EditorPanelInner({
       if (activeFile.conflict?.kind === 'conflict-placeholder') {
         return
       }
-      if (fileContents[activeFile.id]) {
-        return
+      if (!fileContents[activeFile.id]) {
+        void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
       }
-      void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
+      // Why: Changes view mode needs the HEAD-side blob as well as the
+      // working-tree content. Kick off the diff load alongside the normal
+      // file read so both are ready by the time DiffViewer mounts.
+      if (isChangesMode && !diffContents[activeFile.id]) {
+        void loadDiffContent(activeFile)
+      }
     } else if (
       activeFile.mode === 'diff' &&
       activeFile.diffSource !== undefined &&
@@ -301,7 +333,7 @@ function EditorPanelInner({
       }
       void loadDiffContent(activeFile)
     }
-  }, [activeFile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeFile?.id, isChangesMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!copiedPathToast) {
@@ -362,7 +394,20 @@ function EditorPanelInner({
           ? file.branchCompare
           : null
       const connectionId = getConnectionId(file.worktreeId) ?? undefined
-      const key = inFlightDiffKey(file, connectionId)
+      // Why: Changes view mode runs on top of an edit-mode tab and asks git
+      // for an unstaged diff against HEAD for that file. Use the 'unstaged'
+      // diff-source key so multiple Changes tabs across split panes share one
+      // IPC round-trip with any open unstaged diff-tab for the same path.
+      // Compute this once and reuse it for both the dedup key and the IPC
+      // branch selection so the two can never drift apart.
+      const effectiveDiffSource: typeof file.diffSource =
+        file.mode === 'edit' ? 'unstaged' : file.diffSource
+      const compareAgainstHead = file.mode === 'edit'
+      const key = inFlightDiffKey(
+        { ...file, diffSource: effectiveDiffSource },
+        connectionId,
+        compareAgainstHead
+      )
       // Why: same rationale as inFlightFileReads above — a single external
       // change fans out to every mounted EditorPanel, and two split panes
       // showing the same diff tab should share one git.diff IPC instead of
@@ -370,7 +415,7 @@ function EditorPanelInner({
       let pending = inFlightDiffReads.get(key)
       if (!pending) {
         pending = (
-          file.diffSource === 'branch' && branchCompare
+          effectiveDiffSource === 'branch' && branchCompare
             ? window.api.git.branchDiff({
                 worktreePath,
                 compare: {
@@ -386,7 +431,8 @@ function EditorPanelInner({
             : window.api.git.diff({
                 worktreePath,
                 filePath: file.relativePath,
-                staged: file.diffSource === 'staged',
+                staged: effectiveDiffSource === 'staged',
+                compareAgainstHead,
                 connectionId
               })
         ) as Promise<DiffContent>
@@ -412,6 +458,40 @@ function EditorPanelInner({
       }))
     }
   }, [])
+
+  // Why: refetch the HEAD-side blob for Changes mode when the worktree's git
+  // status array identity changes. A commit, pull, or rebase updates the
+  // status poll result, which is the cheapest signal we have that HEAD moved
+  // — without this, users see a stale diff after committing from Changes mode.
+  // Subscribing to the status array keeps parity with the Changes sidebar.
+  const changesStatusEntries = activeFile?.worktreeId
+    ? gitStatusByWorktree[activeFile.worktreeId]
+    : undefined
+  // Why: depend on the primitive identifiers of the active file rather than
+  // the `activeFile` object. `openFiles` is rebuilt on any store update that
+  // touches an open file (dirty flips, saves, status polling), so the
+  // `activeFile` object reference changes on many unrelated renders. Each
+  // identity change would otherwise retrigger the effect and dispatch a
+  // spurious git.diff IPC that the in-flight dedup map cannot coalesce
+  // across time. Resolve the current file via `openFilesRef` inside the
+  // effect so we still pass a live OpenFile to loadDiffContent.
+  useEffect(() => {
+    if (!isChangesMode || !activeFile?.id) {
+      return
+    }
+    const current = openFilesRef.current.find((f) => f.id === activeFile.id)
+    if (!current) {
+      return
+    }
+    void loadDiffContent(current)
+  }, [
+    changesStatusEntries,
+    isChangesMode,
+    activeFile?.id,
+    activeFile?.worktreeId,
+    activeFile?.relativePath,
+    loadDiffContent
+  ])
 
   const handleContentChange = useCallback(
     (content: string) => {
@@ -484,6 +564,31 @@ function EditorPanelInner({
     [activeFile, openFiles]
   )
 
+  // Why: hooks must run unconditionally, so this useCallback lives above the
+  // `if (!activeFile) return null` guard; the callback itself no-ops when
+  // no file is active. Memoised to match the other editor handlers in this
+  // file and avoid churning EditorViewToggle's onChange identity.
+  const handleEditorToggleChange = useCallback(
+    (next: EditorToggleValue): void => {
+      const fileId = activeFile?.id
+      if (!fileId) {
+        return
+      }
+      if (next === 'changes') {
+        setEditorViewMode(fileId, 'changes')
+        return
+      }
+      // Why: selecting any non-Changes segment implicitly exits Changes mode.
+      // For markdown/mermaid files, also persist the chosen language sub-mode
+      // so that next time Changes is toggled off, the file returns to that view.
+      setEditorViewMode(fileId, 'edit')
+      if (next !== 'edit') {
+        setMarkdownViewMode(fileId, next)
+      }
+    },
+    [activeFile?.id, setEditorViewMode, setMarkdownViewMode]
+  )
+
   // Why: global Cmd+S (from Terminal.tsx) dispatches this event when
   // focus is outside the editor content area. Delegate to handleSave
   // so untitled files still show the rename dialog.
@@ -541,6 +646,16 @@ function EditorPanelInner({
       for (const file of matchingFiles) {
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
           void loadFileContent(file.filePath, file.id, file.worktreeId)
+          // Why: if this edit tab is currently in Changes view mode, the
+          // rendered DiffViewer also depends on the HEAD-side blob. An
+          // external write (e.g. a git checkout) can change both the working
+          // tree *and* shift the reference blob, so refetch the diff too.
+          // Read through a ref so the handler reflects the subscribed store
+          // value without forcing the listener to re-register on every mode
+          // toggle.
+          if (editorViewModeRef.current[file.id] === 'changes') {
+            void loadDiffContent(file)
+          }
         } else if (
           file.mode === 'diff' &&
           file.diffSource !== 'combined-uncommitted' &&
@@ -795,6 +910,9 @@ function EditorPanelInner({
     activeFile.diffSource !== undefined &&
     activeFile.diffSource !== 'combined-uncommitted' &&
     activeFile.diffSource !== 'combined-branch'
+  // Why: Changes view mode renders a DiffViewer, so expose the same inline /
+  // side-by-side toggle the diff-tab path already offers.
+  const isDiffSurface = isSingleDiff || isChangesMode
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-uncommitted' ||
@@ -828,6 +946,7 @@ function EditorPanelInner({
 
   const isMarkdown = resolvedLanguage === 'markdown'
   const isMermaid = resolvedLanguage === 'mermaid'
+  const isCsv = resolvedLanguage === 'csv' || resolvedLanguage === 'tsv'
   // Why: "Open Preview to the Side" only applies to edit-mode tabs whose
   // language has a registered renderer. Diff tabs already have their own
   // toggle set and there is no clear semantic for previewing a diff.
@@ -868,6 +987,33 @@ function EditorPanelInner({
     markdownViewModes.includes(storedMarkdownViewMode)
       ? storedMarkdownViewMode
       : defaultMarkdownViewMode
+  // Why: the header toggle surfaces both the language-specific view mode
+  // (Source / Rich / Preview) and the orthogonal Changes view mode in one
+  // segmented control. Plain code files (no language-specific modes) still get
+  // an Edit | Changes toggle because Changes applies to every editable tab.
+  const editorToggleModes = getEditorToggleModes({
+    language: resolvedLanguage,
+    mode: activeFile.mode,
+    diffSource: activeFile.diffSource
+  })
+  const isBinaryEditSurface =
+    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
+  // Why: edit-mode binary/image tabs already have their own dedicated renderers
+  // and cannot enter the Changes diff surface. Hide that segment rather than
+  // offering a toggle state the renderer will immediately ignore.
+  const availableEditorToggleModes = isBinaryEditSurface
+    ? editorToggleModes.filter((mode) => mode !== 'changes')
+    : editorToggleModes
+  // Why: a toggle with a single option is just a decorative pill with nothing
+  // to switch to. Binary plain-code tabs end up here after 'changes' is
+  // stripped — on main they had no header toggle at all, so requiring >1 mode
+  // preserves that behavior instead of leaving a lone "Edit" segment.
+  const hasEditorToggle = availableEditorToggleModes.length > 1
+  const effectiveToggleValue: EditorToggleValue = isChangesMode
+    ? 'changes'
+    : hasViewModeToggle
+      ? mdViewMode
+      : 'edit'
   const canShowMarkdownPreview = canOpenMarkdownPreview({
     language: resolvedLanguage,
     mode: activeFile.mode,
@@ -1020,7 +1166,7 @@ function EditorPanelInner({
               </Tooltip>
             </TooltipProvider>
           )}
-          {isSingleDiff && (
+          {isDiffSurface && (
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1037,11 +1183,12 @@ function EditorPanelInner({
               </Tooltip>
             </TooltipProvider>
           )}
-          {hasViewModeToggle && (
-            <MarkdownViewToggle
-              mode={mdViewMode}
-              modes={markdownViewModes}
-              onChange={(mode) => setMarkdownViewMode(activeFile.id, mode)}
+          {hasEditorToggle && (
+            <EditorViewToggle
+              value={effectiveToggleValue}
+              modes={availableEditorToggleModes}
+              onChange={handleEditorToggleChange}
+              metadataOverride={isCsv ? CSV_VIEW_MODE_METADATA : undefined}
             />
           )}
           {hasViewModeToggle && isMarkdown && (
@@ -1088,7 +1235,9 @@ function EditorPanelInner({
           resolvedLanguage={resolvedLanguage}
           isMarkdown={isMarkdown}
           isMermaid={isMermaid}
+          isCsv={isCsv}
           mdViewMode={mdViewMode}
+          isChangesMode={isChangesMode}
           sideBySide={sideBySide}
           pendingEditorReveal={pendingEditorReveal}
           handleContentChange={handleContentChange}

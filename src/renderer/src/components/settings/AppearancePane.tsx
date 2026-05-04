@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { UIZoomControl } from './UIZoomControl'
@@ -12,32 +12,116 @@ type AppearancePaneProps = {
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
 }
 
-export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+const STATUS_BAR_TOGGLES: readonly {
+  id: StatusBarItem
+  title: string
+  description: string
+  keywords: string[]
+  toggleDescription: string
+}[] = [
+  {
+    id: 'claude',
+    title: 'Claude Usage',
+    description: 'Show Claude token and cost usage in the status bar.',
+    keywords: ['status bar', 'claude', 'usage', 'tokens', 'cost', 'anthropic'],
+    toggleDescription: 'Show Claude token and cost usage for the active workspace.'
+  },
+  {
+    id: 'codex',
+    title: 'Codex Usage',
+    description: 'Show Codex token and cost usage in the status bar.',
+    keywords: ['status bar', 'codex', 'usage', 'tokens', 'cost', 'openai'],
+    toggleDescription: 'Show Codex token and cost usage for the active workspace.'
+  },
+  {
+    id: 'gemini',
+    title: 'Gemini Usage',
+    description: 'Show Gemini token and cost usage in the status bar.',
+    keywords: ['status bar', 'gemini', 'usage', 'tokens', 'cost', 'google'],
+    toggleDescription: 'Show Gemini token and cost usage for the active workspace.'
+  },
+  {
+    id: 'opencode-go',
+    title: 'OpenCode Go Usage',
+    description: 'Show OpenCode Go token and cost usage in the status bar.',
+    keywords: ['status bar', 'opencode', 'opencode-go', 'usage', 'tokens', 'cost'],
+    toggleDescription: 'Show OpenCode Go token and cost usage for the active workspace.'
+  },
+  {
+    id: 'ssh',
+    title: 'SSH Status',
+    description: 'Show the active SSH connection status in the status bar.',
+    keywords: ['status bar', 'ssh', 'remote', 'connection', 'host'],
+    toggleDescription:
+      'Show the active SSH connection. Only visible once an SSH target is configured.'
+  },
+  {
+    id: 'sessions',
+    title: 'Terminal Sessions',
+    description: 'Show the terminal session count in the status bar.',
+    keywords: ['status bar', 'terminal', 'sessions', 'count', 'pty'],
+    toggleDescription: 'Show the number of active terminal sessions across all workspaces.'
+  },
+  {
+    id: 'memory',
+    title: 'Memory Monitoring',
+    description: 'Show memory and CPU usage in the status bar.',
+    keywords: ['status bar', 'memory', 'ram', 'cpu', 'monitoring', 'usage', 'performance'],
+    toggleDescription: 'Show total memory and CPU usage. Click it to see a per-workspace breakdown.'
+  }
+]
+
+const THEME_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Theme',
     description: 'Choose how Orca looks in the app window.',
     keywords: ['dark', 'light', 'system']
-  },
+  }
+]
+
+const ZOOM_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'UI Zoom',
     description: 'Scale the entire application interface.',
     keywords: ['zoom', 'scale', 'shortcut']
-  },
+  }
+]
+
+const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Open Right Sidebar by Default',
     description: 'Automatically expand the file explorer panel when creating a new worktree.',
     keywords: ['layout', 'file explorer', 'sidebar']
-  },
+  }
+]
+
+const TITLEBAR_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Titlebar Agent Activity',
     description: 'Show the number of active agents in the titlebar.',
     keywords: ['titlebar', 'agent', 'badge', 'active', 'count', 'status']
-  },
+  }
+]
+
+const STATUS_BAR_ENTRIES: SettingsSearchEntry[] = STATUS_BAR_TOGGLES.map(
+  ({ title, description, keywords }) => ({ title, description, keywords })
+)
+
+const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Show Tasks Button',
     description: 'Show the Tasks button at the top of the left sidebar.',
     keywords: ['tasks', 'sidebar', 'button', 'hide', 'show', 'github', 'linear']
   }
+]
+
+export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  ...THEME_ENTRIES,
+  ...ZOOM_ENTRIES,
+  ...LAYOUT_ENTRIES,
+  ...TITLEBAR_ENTRIES,
+  ...STATUS_BAR_ENTRIES,
+  ...SIDEBAR_ENTRIES
 ]
 
 export function AppearancePane({
@@ -49,14 +133,11 @@ export function AppearancePane({
   const isMac = navigator.userAgent.includes('Mac')
   const zoomInLabel = isMac ? '⌘+' : 'Ctrl +'
   const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
-  const themeEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(0, 1)
-  const zoomEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(1, 2)
-  const layoutEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(2, 3)
-  const titlebarEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(3, 4)
-  const sidebarEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(4)
+  const statusBarItems = useAppStore((state) => state.statusBarItems)
+  const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
 
   const visibleSections = [
-    matchesSettingsSearch(searchQuery, themeEntries) ? (
+    matchesSettingsSearch(searchQuery, THEME_ENTRIES) ? (
       <section key="theme" className="space-y-4">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Theme</h3>
@@ -89,7 +170,7 @@ export function AppearancePane({
         </SearchableSetting>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, zoomEntries) ? (
+    matchesSettingsSearch(searchQuery, ZOOM_ENTRIES) ? (
       <section key="zoom" className="space-y-4">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">UI Zoom</h3>
@@ -110,7 +191,7 @@ export function AppearancePane({
         </SearchableSetting>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, layoutEntries) ? (
+    matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
       <section key="layout" className="space-y-4">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Layout</h3>
@@ -152,7 +233,7 @@ export function AppearancePane({
         </SearchableSetting>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, titlebarEntries) ? (
+    matchesSettingsSearch(searchQuery, TITLEBAR_ENTRIES) ? (
       <section key="titlebar" className="space-y-4">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Titlebar</h3>
@@ -194,7 +275,52 @@ export function AppearancePane({
         </SearchableSetting>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, sidebarEntries) ? (
+    matchesSettingsSearch(searchQuery, STATUS_BAR_ENTRIES) ? (
+      <section key="status-bar" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Status Bar</h3>
+          <p className="text-xs text-muted-foreground">
+            Choose which indicators appear at the bottom of the window. You can also right-click the
+            status bar for the same toggles.
+          </p>
+        </div>
+
+        {STATUS_BAR_TOGGLES.map((toggle) => {
+          const enabled = statusBarItems.includes(toggle.id)
+          return (
+            <SearchableSetting
+              key={toggle.id}
+              title={toggle.title}
+              description={toggle.description}
+              keywords={toggle.keywords}
+              className="flex items-center justify-between gap-4 px-1 py-2"
+            >
+              <div className="space-y-0.5">
+                <Label>{toggle.title}</Label>
+                <p className="text-xs text-muted-foreground">{toggle.toggleDescription}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-label={toggle.title}
+                aria-checked={enabled}
+                onClick={() => toggleStatusBarItem(toggle.id)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                  enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                    enabled ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </SearchableSetting>
+          )
+        })}
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, SIDEBAR_ENTRIES) ? (
       <section key="sidebar" className="space-y-4">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Sidebar</h3>

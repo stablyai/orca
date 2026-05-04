@@ -1,11 +1,17 @@
 import React from 'react'
+import { CircleCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// Why: shared state-dot primitive so the dashboard and the sidebar's agent
-// hover render the same state vocabulary identically. The dot sits next to the
-// agent icon (Claude/Codex/etc.) — they are two distinct glyphs: one for *who*
-// (icon) and one for *what state* (dot). Keeping them separate keeps each
-// glyph scannable at a glance instead of fused into a single decorated icon.
+// Why: shared state-indicator primitive so the dashboard and the sidebar's
+// agent hover share a single state vocabulary. Most states render as a dot;
+// 'working' renders a spinner. 'done' intentionally diverges from the
+// sidebar's StatusIndicator: the dashboard uses a check icon so completion
+// is visually distinct from 'idle' (grey dot) and the sidebar's 'active'
+// (emerald dot), while the sidebar collapses 'done'/'active' to the same
+// emerald dot and relies on a tooltip. It sits next to the agent icon
+// (Claude/Codex/etc.) — two distinct glyphs: one for *who* (agent icon) and
+// one for *what state* (this indicator). Keeping them separate keeps each
+// scannable instead of fused into one decorated icon.
 
 export type AgentDotState =
   | 'working'
@@ -49,6 +55,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
 }: Props): React.JSX.Element {
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
+  const icon = size === 'md' ? 'size-3' : 'size-2.5'
 
   if (state === 'working') {
     return (
@@ -66,6 +73,21 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     )
   }
 
+  if (state === 'done') {
+    // Why: the dashboard lists many agents, so a check glyph scans well for
+    // agent-reported completion and keeps 'done' visually distinct from
+    // 'idle' and other dot states at a glance. The sidebar's StatusIndicator
+    // intentionally diverges (emerald dot + tooltip) — see file header.
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  }
+
   return (
     <span
       className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -77,11 +99,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           inner,
           state === 'blocked' || state === 'waiting' || state === 'permission'
             ? 'bg-red-500'
-            : state === 'done'
-              ? // Why: emerald-500 matches StatusIndicator's done dot so the
-                // dashboard and sidebar read as the same state.
-                'bg-emerald-500'
-              : 'bg-neutral-500/40'
+            : 'bg-neutral-500/40'
         )}
       />
     </span>

@@ -31,6 +31,7 @@ function createMockSubprocess(): SubprocessHandle & {
     onExit(cb) {
       onExitCb = cb
     },
+    dispose: vi.fn(),
     _simulateData(data: string) {
       onDataCb?.(data)
     },
@@ -726,6 +727,72 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
 
       respawnAdapter.dispose()
+    })
+  })
+
+  // Why: the restart flow (docs/daemon-staleness-ux.md §Phase 1 step 1) relies
+  // on these two primitives to fan synthetic pty:exit out to every attached
+  // session *before* tearing the adapter down. The design doc calls out
+  // session.ts:246-252 as the reason — the daemon's kill-all-and-shutdown
+  // explicitly does NOT fan exits back through onExit. Without the fanout the
+  // renderer would black-hole writes against a disposed adapter.
+  describe('fanoutSyntheticExits / getActiveSessionIds (restart primitives)', () => {
+    it('reports every live spawn in getActiveSessionIds', async () => {
+      const { id: id1 } = await adapter.spawn({ cols: 80, rows: 24 })
+      const { id: id2 } = await adapter.spawn({ cols: 80, rows: 24 })
+      const active = adapter.getActiveSessionIds()
+      expect(active).toContain(id1)
+      expect(active).toContain(id2)
+      expect(active).toHaveLength(2)
+    })
+
+    it('emits a synthetic exit for every active id with the supplied code', () => {
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+
+      const ids = ['sess-a', 'sess-b', 'sess-c']
+      const internals = adapter as unknown as { activeSessionIds: Set<string> }
+      for (const id of ids) {
+        internals.activeSessionIds.add(id)
+      }
+
+      adapter.fanoutSyntheticExits(-1)
+
+      expect(exits).toHaveLength(3)
+      expect(exits.map((e) => e.id).sort()).toEqual([...ids].sort())
+      for (const { code } of exits) {
+        expect(code).toBe(-1)
+      }
+    })
+
+    it('clears activeSessionIds after fanout so a second call is a no-op', () => {
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+
+      const internals = adapter as unknown as { activeSessionIds: Set<string> }
+      internals.activeSessionIds.add('sess-a')
+
+      adapter.fanoutSyntheticExits(-1)
+      expect(exits).toHaveLength(1)
+      expect(adapter.getActiveSessionIds()).toEqual([])
+
+      adapter.fanoutSyntheticExits(-1)
+      expect(exits).toHaveLength(1)
+    })
+
+    it('propagates to every registered exit listener in order', () => {
+      const aExits: { id: string; code: number }[] = []
+      const bExits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => aExits.push(payload))
+      adapter.onExit((payload) => bExits.push(payload))
+
+      const internals = adapter as unknown as { activeSessionIds: Set<string> }
+      internals.activeSessionIds.add('sess-a')
+
+      adapter.fanoutSyntheticExits(-1)
+
+      expect(aExits).toEqual([{ id: 'sess-a', code: -1 }])
+      expect(bExits).toEqual([{ id: 'sess-a', code: -1 }])
     })
   })
 })

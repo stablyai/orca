@@ -20,11 +20,10 @@ const StatusIndicator = React.memo(function StatusIndicator({
 }: StatusIndicatorProps) {
   // Why: surface the status label as a native tooltip so hovering the dot
   // reveals the state — matters especially for 'active' vs 'done', which
-  // share the same emerald dot until TODO(#1265) lands (see color-branch
-  // comment below). Callers pass aria-hidden="true" alongside an sr-only
-  // label, so the `title` attribute is ignored by AT and only serves
-  // sighted users on hover. Callers can override by passing their own
-  // `title`.
+  // share the same emerald dot. Callers pass aria-hidden="true" alongside
+  // an sr-only label, so the `title` attribute is ignored by AT and only
+  // serves sighted users on hover. Callers can override by passing their
+  // own `title`.
   const resolvedTitle = title ?? getWorktreeStatusLabel(status)
 
   if (status === 'working') {
@@ -52,16 +51,9 @@ const StatusIndicator = React.memo(function StatusIndicator({
             ? 'bg-red-500'
             : status === 'done' || status === 'active'
               ? // Green dot for both hook-reported 'done' and the heuristic
-                // 'active' (terminal open, quiet). Without the 'active'
-                // branch users without the experimental agent-tracking
-                // setting never reach 'done' and lose the green dot
-                // entirely. Working uses a yellow spinner so working vs
-                // done differ by both hue and motion; 'inactive' stays grey.
-                // TODO(#1265): differentiate 'active' (quiet terminal)
-                // from 'done' (agent-reported completion) visually — today
-                // both share emerald, so with the experimental tracking
-                // toggle on a newly-opened quiet terminal reads the same
-                // as a completed agent.
+                // 'active' (terminal open, quiet). Working uses a yellow
+                // spinner so working vs done differ by motion; 'inactive'
+                // stays grey.
                 'bg-emerald-500'
               : 'bg-neutral-500/40'
         )}

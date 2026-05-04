@@ -12,7 +12,9 @@ const {
   registerNotificationHandlersMock,
   registerDeveloperPermissionHandlersMock,
   registerSettingsHandlersMock,
+  registerTelemetryHandlersMock,
   registerShellHandlersMock,
+  registerSidekickHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   registerFilesystemHandlersMock,
@@ -42,7 +44,9 @@ const {
   registerNotificationHandlersMock: vi.fn(),
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
+  registerTelemetryHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
+  registerSidekickHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
@@ -110,8 +114,16 @@ vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
 }))
 
+vi.mock('./telemetry', () => ({
+  registerTelemetryHandlers: registerTelemetryHandlersMock
+}))
+
 vi.mock('./shell', () => ({
   registerShellHandlers: registerShellHandlersMock
+}))
+
+vi.mock('./sidekick', () => ({
+  registerSidekickHandlers: registerSidekickHandlersMock
 }))
 
 vi.mock('./session', () => ({
@@ -184,7 +196,9 @@ describe('registerCoreHandlers', () => {
     registerNotificationHandlersMock.mockReset()
     registerDeveloperPermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
+    registerTelemetryHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
+    registerSidekickHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
@@ -229,6 +243,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalled()
+    expect(registerSidekickHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)

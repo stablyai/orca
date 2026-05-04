@@ -28,7 +28,7 @@ vi.mock('react', async () => {
   }
 })
 
-vi.mock('@/store', () => ({
+vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
     selector({ settingsSearchQuery: '' })
 }))
@@ -37,9 +37,76 @@ vi.mock('@/lib/keyboard-layout/use-effective-mac-option-as-alt', () => ({
   useDetectedOptionAsAlt: () => 'us'
 }))
 
+vi.mock('@/lib/keyboard-layout/detect-option-as-alt', () => ({
+  detectedCategoryToDefault: () => 'left-option'
+}))
+
 vi.mock('@/components/terminal-pane/pane-helpers', () => ({
   isMacUserAgent: () => false,
   isWindowsUserAgent: () => false
+}))
+
+vi.mock('../ui/button', () => ({
+  Button: function Button() {
+    return null
+  }
+}))
+
+vi.mock('../ui/input', () => ({
+  Input: function Input() {
+    return null
+  }
+}))
+
+vi.mock('../ui/label', () => ({
+  Label: function Label() {
+    return null
+  }
+}))
+
+vi.mock('../ui/separator', () => ({
+  Separator: function Separator() {
+    return null
+  }
+}))
+
+vi.mock('../ui/toggle-group', () => ({
+  ToggleGroup: function ToggleGroup() {
+    return null
+  },
+  ToggleGroupItem: function ToggleGroupItem() {
+    return null
+  }
+}))
+
+vi.mock('./SettingsFormControls', () => ({
+  NumberField: function NumberField() {
+    return null
+  },
+  FontAutocomplete: function FontAutocomplete() {
+    return null
+  }
+}))
+
+vi.mock('./TerminalThemeSections', () => ({
+  DarkTerminalThemeSection: function DarkTerminalThemeSection() {
+    return null
+  },
+  LightTerminalThemeSection: function LightTerminalThemeSection() {
+    return null
+  }
+}))
+
+vi.mock('./TerminalWindowSection', () => ({
+  TerminalWindowSection: function TerminalWindowSection() {
+    return null
+  }
+}))
+
+vi.mock('./GhosttyImportModal', () => ({
+  GhosttyImportModal: function GhosttyImportModal() {
+    return null
+  }
 }))
 
 vi.mock('@/lib/terminal-theme', () => ({

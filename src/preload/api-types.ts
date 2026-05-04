@@ -6,10 +6,12 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
+  BrowserViewportOverride,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CreateWorktreeArgs,
   CreateWorktreeResult,
+  CustomSidekick,
   DirEntry,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -17,7 +19,7 @@ import type {
   GitBranchCompareResult,
   GitConflictOperation,
   GitDiffResult,
-  GitStatusEntry,
+  GitStatusResult,
   GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
@@ -26,6 +28,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
+  ListWorkItemsResult,
   IssueInfo,
   LinearViewer,
   LinearConnectionStatus,
@@ -36,6 +39,7 @@ import type {
   LinearLabel,
   LinearMember,
   LinearTeam,
+  MarkdownDocument,
   GitHubIssueUpdate,
   NotificationDispatchRequest,
   NotificationDispatchResult,
@@ -124,6 +128,10 @@ export type BrowserApi = {
   }) => Promise<void>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
+  setViewportOverride: (args: {
+    browserPageId: string
+    override: BrowserViewportOverride | null
+  }) => Promise<boolean>
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
@@ -206,6 +214,32 @@ export type PreflightApi = {
   detectAgents: () => Promise<string[]>
   refreshAgents: () => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
+}
+
+// Why: renderer-facing mirror of the daemon's `SessionInfo` + protocolVersion
+// annotation (src/main/daemon/types.ts `DaemonSessionInfo`). Kept here instead
+// of imported from main because the preload boundary must not depend on
+// main-only protocol types — those are subprocess-facing. Keep the two shapes
+// in sync when adding fields on either side; the Manage Sessions panel reads
+// these directly.
+export type PtyManagementSession = {
+  sessionId: string
+  state: 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
+  shellState: 'pending' | 'ready' | 'timed_out' | 'unsupported'
+  isAlive: boolean
+  pid: number | null
+  cwd: string | null
+  cols: number
+  rows: number
+  createdAt: number
+  protocolVersion: number
+}
+
+export type PtyManagementApi = {
+  listSessions: () => Promise<{ sessions: PtyManagementSession[] }>
+  killAll: () => Promise<{ killedCount: number; remainingCount: number }>
+  killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
+  restart: () => Promise<{ success: boolean }>
 }
 
 export type ExportApi = {
@@ -309,7 +343,15 @@ export type PreloadApi = {
     update: (args: {
       repoId: string
       updates: Partial<
-        Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+        Pick<
+          Repo,
+          | 'displayName'
+          | 'badgeColor'
+          | 'hookSettings'
+          | 'worktreeBaseRef'
+          | 'kind'
+          | 'issueSourcePreference'
+        >
       >
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
@@ -322,6 +364,12 @@ export type PreloadApi = {
       remotePath: string
       displayName?: string
       kind?: 'git' | 'folder'
+    }) => Promise<{ repo: Repo } | { error: string }>
+    // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
+    create: (args: {
+      parentPath: string
+      name: string
+      kind: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
@@ -392,6 +440,7 @@ export type PreloadApi = {
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
+    management: PtyManagementApi
   }
   feedback: {
     submit: (args: {
@@ -437,7 +486,7 @@ export type PreloadApi = {
       limit?: number
       query?: string
       before?: string
-    }) => Promise<Omit<GitHubWorkItem, 'repoId'>[]>
+    }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (args: {
       repoPath: string
       prNumber: number
@@ -525,6 +574,14 @@ export type PreloadApi = {
     complete: () => Promise<void>
     forceShow: () => Promise<void>
   }
+  /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
+   *  the main-side validator is the single enforcement point. Renderer call
+   *  sites should import `track<N>()` from `src/renderer/src/lib/telemetry.ts`
+   *  for the `EventMap`-based type safety, not reach for this directly. */
+  telemetryTrack: (name: string, props: Record<string, unknown>) => Promise<void>
+  /** Flip the persisted opt-in preference. Subject to a per-session
+   *  consent-mutation rate limit on the main side (≤5/session). */
+  telemetrySetOptIn: (optedIn: boolean) => Promise<void>
   settings: {
     get: () => Promise<GlobalSettings>
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
@@ -580,6 +637,11 @@ export type PreloadApi = {
     pickImage: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
+  }
+  sidekick: {
+    import: () => Promise<CustomSidekick | null>
+    read: (id: string, fileName: string) => Promise<ArrayBuffer | null>
+    delete: (id: string, fileName: string) => Promise<void>
   }
   browser: BrowserApi
   hooks: {
@@ -637,6 +699,10 @@ export type PreloadApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }>
+    listMarkdownDocuments: (args: {
+      rootPath: string
+      connectionId?: string
+    }) => Promise<MarkdownDocument[]>
     writeFile: (args: { filePath: string; content: string; connectionId?: string }) => Promise<void>
     createFile: (args: { filePath: string; connectionId?: string }) => Promise<void>
     createDir: (args: { dirPath: string; connectionId?: string }) => Promise<void>
@@ -657,7 +723,11 @@ export type PreloadApi = {
       excludePaths?: string[]
     }) => Promise<string[]>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
-    importExternalPaths: (args: { sourcePaths: string[]; destDir: string }) => Promise<{
+    importExternalPaths: (args: {
+      sourcePaths: string[]
+      destDir: string
+      connectionId?: string
+    }) => Promise<{
       results: (
         | {
             sourcePath: string
@@ -678,15 +748,24 @@ export type PreloadApi = {
           }
       )[]
     }>
+    resolveDroppedPathsForAgent: (args: {
+      paths: string[]
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<{
+      resolvedPaths: string[]
+      skipped: {
+        sourcePath: string
+        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+      }[]
+      failed: { sourcePath: string; reason: string }[]
+    }>
     watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   git: {
-    status: (args: {
-      worktreePath: string
-      connectionId?: string
-    }) => Promise<{ entries: GitStatusEntry[] }>
+    status: (args: { worktreePath: string; connectionId?: string }) => Promise<GitStatusResult>
     conflictOperation: (args: {
       worktreePath: string
       connectionId?: string
@@ -695,6 +774,7 @@ export type PreloadApi = {
       worktreePath: string
       filePath: string
       staged: boolean
+      compareAgainstHead?: boolean
       connectionId?: string
     }) => Promise<GitDiffResult>
     branchCompare: (args: {
@@ -714,6 +794,11 @@ export type PreloadApi = {
       oldPath?: string
       connectionId?: string
     }) => Promise<GitDiffResult>
+    commit: (args: {
+      worktreePath: string
+      message: string
+      connectionId?: string
+    }) => Promise<{ success: boolean; error?: string }>
     stage: (args: {
       worktreePath: string
       filePath: string
@@ -904,6 +989,9 @@ export type PreloadApi = {
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
   }
   wsl: {
+    isAvailable: () => Promise<boolean>
+  }
+  pwsh: {
     isAvailable: () => Promise<boolean>
   }
   agentStatus: {

@@ -21,9 +21,11 @@ import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
+import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { registerShellHandlers } from './shell'
+import { registerSidekickHandlers } from './sidekick'
 import { registerUIHandlers } from './ui'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
@@ -81,6 +83,7 @@ export function registerCoreHandlers(
   registerNotificationHandlers(store)
   registerDeveloperPermissionHandlers()
   registerSettingsHandlers(store)
+  registerTelemetryHandlers()
   registerBrowserHandlers()
   // Why: applyPendingCookieImport MUST run before restorePersistedUserAgent
   // because the latter calls session.fromPartition() which initializes
@@ -89,6 +92,7 @@ export function registerCoreHandlers(
   browserSessionRegistry.applyPendingCookieImport()
   browserSessionRegistry.restorePersistedUserAgent()
   registerShellHandlers()
+  registerSidekickHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
   registerFilesystemHandlers(store)

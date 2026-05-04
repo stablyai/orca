@@ -5,7 +5,7 @@
 // stays easy to audit in one sitting.
 import { randomBytes } from 'crypto'
 import { createServer, type Server, type Socket } from 'net'
-import { chmodSync, existsSync, rmSync } from 'fs'
+import { chmodSync, existsSync, readdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -51,6 +51,16 @@ export class OrcaRuntimeRpcServer {
   async start(): Promise<void> {
     if (this.server) {
       return
+    }
+
+    // Why: processes killed by SIGKILL / OOM-kill / forced-shutdown skip
+    // stop() and leave behind `o-<pid>-*.sock` files in userData. Sweeping
+    // dead-pid sockets at startup keeps the directory from accumulating
+    // orphans over the app's lifetime. Named-pipe transports on Windows do
+    // not leave filesystem entries in userData, so the sweep is a no-op
+    // there.
+    if (this.platform !== 'win32') {
+      sweepOrphanedRuntimeSockets(this.userDataPath, this.pid)
     }
 
     const transport = createRuntimeTransportMetadata(
@@ -210,6 +220,61 @@ export class OrcaRuntimeRpcServer {
       startedAt: this.runtime.getStartedAt()
     }
     writeRuntimeMetadata(this.userDataPath, metadata)
+  }
+}
+
+/**
+ * Why: the regex MUST stay in lockstep with createRuntimeTransportMetadata()
+ * below, which emits `o-${pid}-${endpointSuffix}.sock` where endpointSuffix
+ * is `[A-Za-z0-9_-]{1,4}` (derived from a sanitised runtimeId prefix, or
+ * `'rt'` as the fallback). The invariant is covered by a unit test so any
+ * future change to the transport-name shape trips CI.
+ */
+export const RUNTIME_SOCKET_NAME_REGEX = /^o-(\d+)-[A-Za-z0-9_-]+\.sock$/
+
+export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number): void {
+  let entries: string[]
+  try {
+    entries = readdirSync(userDataPath)
+  } catch {
+    // Why: first-launch userData may not exist yet; the cold-start path
+    // below will create it. Nothing to sweep in that case.
+    return
+  }
+  for (const entry of entries) {
+    const match = RUNTIME_SOCKET_NAME_REGEX.exec(entry)
+    if (!match) {
+      continue
+    }
+    const pid = Number(match[1])
+    if (!Number.isFinite(pid)) {
+      continue
+    }
+    // Why: never touch the current process's socket. start() already
+    // rmSync's it if it exists, but belt-and-braces — a bug in the own-pid
+    // path here would rmSync a socket we're about to bind to.
+    if (pid === ownPid) {
+      continue
+    }
+    try {
+      // Why: signal 0 is the POSIX liveness probe — it delivers no signal
+      // but returns success iff the pid resolves AND the caller has
+      // permission to signal it. ESRCH = no such process; EPERM = pid
+      // exists but owned by another user, which is extremely unusual on a
+      // desktop app's userData dir but we conservatively leave those
+      // sockets alone.
+      process.kill(pid, 0)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+        try {
+          rmSync(join(userDataPath, entry), { force: true })
+        } catch {
+          // Why: best-effort sweep — a permission error on unlink is fine
+          // to ignore; the socket will be cleaned by a later start() or
+          // by the OS on reboot.
+        }
+      }
+    }
   }
 }
 

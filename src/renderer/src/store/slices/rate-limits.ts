@@ -12,7 +12,14 @@ export type RateLimitSlice = {
 }
 
 export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice> = (set) => ({
-  rateLimits: { claude: null, codex: null, gemini: null, opencodeGo: null, inactiveClaudeAccounts: [], inactiveCodexAccounts: [] },
+  rateLimits: {
+    claude: null,
+    codex: null,
+    gemini: null,
+    opencodeGo: null,
+    inactiveClaudeAccounts: [],
+    inactiveCodexAccounts: []
+  },
 
   fetchRateLimits: async () => {
     try {

@@ -10,6 +10,7 @@ import { findWorktreeById } from '../store/slices/worktree-helpers'
 import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
 import { getConnectionId } from '../lib/connection-context'
 import { extractIpcErrorMessage } from '../lib/ipc-error'
+import { basename } from '../lib/path'
 import {
   Dialog,
   DialogContent,
@@ -22,15 +23,22 @@ import { Button } from '@/components/ui/button'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
 import {
+  ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
+  type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
-import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
+import BrowserPane from './browser-pane/BrowserPane'
+import { destroyPersistentWebview } from './browser-pane/webview-registry'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import {
+  collectBrowserWebviewIds,
+  destroyWorkspaceWebviews
+} from '../store/slices/browser-webview-cleanup'
 import {
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
@@ -43,9 +51,17 @@ import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
+import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import CodexRestartChip from './CodexRestartChip'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
+
+// Why: after a close-dialog handler advances the queue and renders the next
+// dialog, gate new handler runs for this long so a stray carry-over click
+// from the prior dialog can't silently act on the new one. Short enough to
+// feel responsive on a deliberate follow-up click; long enough to absorb the
+// trailing edge of a physical double-click (~150 ms on most hardware).
+const CLOSE_DIALOG_DEBOUNCE_MS = 200
 
 function Terminal(): React.JSX.Element | null {
   const allWorktrees = useAllWorktrees()
@@ -70,7 +86,6 @@ function Terminal(): React.JSX.Element | null {
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const openFile = useAppStore((s) => s.openFile)
   const closeFile = useAppStore((s) => s.closeFile)
-  const closeAllFiles = useAppStore((s) => s.closeAllFiles)
   const pinFile = useAppStore((s) => s.pinFile)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -140,6 +155,24 @@ function Terminal(): React.JSX.Element | null {
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
+  const pendingEditorCloseQueueRef = useRef<string[]>([])
+
+  // Why: while a save-and-close is awaiting the file to disappear from
+  // openFiles, concurrent queueEditorCloseRequests calls (e.g. user clicks X
+  // on another dirty tab, or a split-group dispatch fires
+  // ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT) must not re-open the dialog over
+  // the in-flight save. Track the in-flight file here so
+  // getNextQueuedEditorClose can skip it as an un-advanceable head.
+  const inFlightSaveFileIdRef = useRef<string | null>(null)
+
+  // Why: after a Save/Discard/Cancel handler dismisses its dialog and advances
+  // the queue, a rapid second physical click can land on the freshly-rendered
+  // next dialog's button before the user has read the filename — silently
+  // discarding or saving work they didn't consciously choose to act on. Gate
+  // the three handlers on this ref and release after CLOSE_DIALOG_DEBOUNCE_MS
+  // so the stray click from the previous dialog is absorbed while a genuine
+  // new click on the next dialog still works.
+  const isClosingRef = useRef(false)
 
   // Window close confirmation dialog — shown when the user tries to close the
   // window (X button, Cmd+Q) while terminals with running processes exist.
@@ -178,76 +211,136 @@ function Terminal(): React.JSX.Element | null {
     )
   }, [])
 
+  const waitForFileClosed = useCallback((fileId: string, timeoutMs: number): Promise<boolean> => {
+    if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+      return Promise.resolve(true)
+    }
+    return new Promise((resolve) => {
+      let unsub: (() => void) | null = null
+      const timeoutId = window.setTimeout(() => {
+        unsub?.()
+        resolve(false)
+      }, timeoutMs)
+      unsub = useAppStore.subscribe((state) => {
+        if (!state.openFiles.some((f) => f.id === fileId)) {
+          window.clearTimeout(timeoutId)
+          unsub?.()
+          resolve(true)
+        }
+      })
+      // Why: zustand only fires subscribers on subsequent state changes. If
+      // the file closed between the initial guard and subscribe, the
+      // transition was missed — re-check synchronously after subscribe.
+      if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+        window.clearTimeout(timeoutId)
+        unsub?.()
+        resolve(true)
+      }
+    })
+  }, [])
+
+  const getNextQueuedEditorClose = useCallback((): string | null => {
+    // Why: bulk close actions can enqueue files that become clean or disappear
+    // before they reach the front. Drain those entries eagerly so the dialog
+    // only blocks on tabs that still require an explicit close decision.
+    while (pendingEditorCloseQueueRef.current.length > 0) {
+      const fileId = pendingEditorCloseQueueRef.current[0]
+      // Why: if a save is still in-flight for this fileId, do not re-open the
+      // dialog on top of it. waitForFileClosed will re-advance the queue once
+      // the file finishes closing (or the save times out).
+      if (inFlightSaveFileIdRef.current === fileId) {
+        return null
+      }
+      const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
+      if (!file) {
+        pendingEditorCloseQueueRef.current.shift()
+        continue
+      }
+      if (!file.isDirty) {
+        closeFile(fileId)
+        pendingEditorCloseQueueRef.current.shift()
+        continue
+      }
+      return fileId
+    }
+    return null
+  }, [closeFile])
+
+  const advanceEditorCloseQueue = useCallback(() => {
+    const nextFileId = getNextQueuedEditorClose()
+    if (nextFileId) {
+      // Why: the queue can cross worktree boundaries during window-close
+      // flows. Switch to the target file's worktree before opening the
+      // dialog so the UI behind the dialog matches the filename in it.
+      const state = useAppStore.getState()
+      const file = state.openFiles.find((f) => f.id === nextFileId)
+      if (file && file.worktreeId !== state.activeWorktreeId) {
+        setActiveWorktree(file.worktreeId)
+      }
+      setActiveFile(nextFileId)
+      setActiveTabType('editor')
+      setSaveDialogFileId(nextFileId)
+      return
+    }
+    setSaveDialogFileId(null)
+    const pendingWindowClose = windowCloseAfterDirtyRef.current
+    if (pendingWindowClose) {
+      windowCloseAfterDirtyRef.current = null
+      proceedToNativeWindowClose(pendingWindowClose.isQuitting)
+    }
+  }, [
+    getNextQueuedEditorClose,
+    proceedToNativeWindowClose,
+    setActiveFile,
+    setActiveTabType,
+    setActiveWorktree
+  ])
+
+  const queueEditorCloseRequests = useCallback(
+    (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
+      if (pendingWindowClose) {
+        windowCloseAfterDirtyRef.current = pendingWindowClose
+      }
+      pendingEditorCloseQueueRef.current = appendUniqueOpenFileIds(
+        pendingEditorCloseQueueRef.current,
+        fileIds,
+        new Set(useAppStore.getState().openFiles.map((file) => file.id))
+      )
+      advanceEditorCloseQueue()
+    },
+    [advanceEditorCloseQueue]
+  )
+
   const handleCloseFile = useCallback(
     (fileId: string) => {
       const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
       if (file?.isDirty) {
-        setSaveDialogFileId(fileId)
+        queueEditorCloseRequests([fileId])
         return
       }
       closeFile(fileId)
     },
-    [closeFile]
+    [closeFile, queueEditorCloseRequests]
   )
 
   const handleSaveDialogSave = useCallback(async () => {
+    if (isClosingRef.current) {
+      return
+    }
     if (!saveDialogFileId) {
       return
     }
+    isClosingRef.current = true
     const fileId = saveDialogFileId
-    const pendingWindowClose = windowCloseAfterDirtyRef.current
     const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
     if (!file) {
-      setSaveDialogFileId(null)
-      windowCloseAfterDirtyRef.current = null
-      return
-    }
-
-    if (pendingWindowClose) {
-      setSaveDialogFileId(null)
-      // Why: save-and-close must flush the latest draft even when the visible
-      // editor panel has already unmounted. The headless autosave controller
-      // owns that write path now, so the dialog signals it through a custom
-      // event instead of poking at editor component refs.
-      window.dispatchEvent(
-        new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } })
+      pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+        (id) => id !== fileId
       )
-
-      const waitForFileClosed = (timeoutMs: number): Promise<boolean> => {
-        if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
-          return Promise.resolve(true)
-        }
-        return new Promise((resolve) => {
-          let unsub: (() => void) | null = null
-          const timeoutId = window.setTimeout(() => {
-            unsub?.()
-            resolve(false)
-          }, timeoutMs)
-          unsub = useAppStore.subscribe((state) => {
-            if (!state.openFiles.some((f) => f.id === fileId)) {
-              window.clearTimeout(timeoutId)
-              unsub?.()
-              resolve(true)
-            }
-          })
-        })
-      }
-
-      const closed = await waitForFileClosed(10_000)
-      if (!closed) {
-        toast.error('Save timed out or failed. Fix errors before closing.')
-        setSaveDialogFileId(fileId)
-        return
-      }
-
-      const nextDirty = useAppStore.getState().openFiles.filter((f) => f.isDirty)
-      if (nextDirty.length > 0) {
-        setSaveDialogFileId(nextDirty[0].id)
-      } else {
-        const { isQuitting } = pendingWindowClose
-        windowCloseAfterDirtyRef.current = null
-        proceedToNativeWindowClose(isQuitting)
-      }
+      advanceEditorCloseQueue()
+      setTimeout(() => {
+        isClosingRef.current = false
+      }, CLOSE_DIALOG_DEBOUNCE_MS)
       return
     }
 
@@ -255,54 +348,122 @@ function Terminal(): React.JSX.Element | null {
     // editor panel has already unmounted. The headless autosave controller
     // owns that write path now, so the dialog signals it through a custom
     // event instead of poking at editor component refs.
-    window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
     setSaveDialogFileId(null)
-  }, [saveDialogFileId, proceedToNativeWindowClose])
+    window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
+    inFlightSaveFileIdRef.current = fileId
+    let closed = false
+    try {
+      closed = await waitForFileClosed(fileId, 10_000)
+    } finally {
+      // Why: clear the in-flight ref regardless of success/timeout so the
+      // queue head is no longer treated as un-advanceable by
+      // getNextQueuedEditorClose before we re-advance the queue below.
+      if (inFlightSaveFileIdRef.current === fileId) {
+        inFlightSaveFileIdRef.current = null
+      }
+    }
+    if (!closed) {
+      // Why: the save may have resolved in the tiny gap after the timeout
+      // fired. Re-check synchronously so we don't re-open a stale dialog
+      // for a file that is already gone — drain the queue entry and
+      // advance instead. Toast only for the genuine timeout case.
+      if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+        pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+          (id) => id !== fileId
+        )
+        advanceEditorCloseQueue()
+        setTimeout(() => {
+          isClosingRef.current = false
+        }, CLOSE_DIALOG_DEBOUNCE_MS)
+        return
+      }
+      toast.error('Save timed out or failed. Fix errors before closing.')
+      setSaveDialogFileId(fileId)
+      // Why: a genuine timeout leaves the user back on the same dialog, so
+      // release the guard immediately — a new click here is a deliberate
+      // retry, not a stray carry-over from a prior dialog.
+      isClosingRef.current = false
+      return
+    }
+    pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+      (id) => id !== fileId
+    )
+    advanceEditorCloseQueue()
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
+  }, [advanceEditorCloseQueue, saveDialogFileId, waitForFileClosed])
 
   const handleSaveDialogDiscard = useCallback(async () => {
+    if (isClosingRef.current) {
+      return
+    }
     if (!saveDialogFileId) {
       return
     }
+    isClosingRef.current = true
     const fileId = saveDialogFileId
-    const pendingWindowClose = windowCloseAfterDirtyRef.current
 
-    if (pendingWindowClose) {
-      // Why: autosave runs on a background timer. Wait for any pending/in-flight
-      // write to settle before honoring "Don't Save", otherwise the file can be
-      // written after the user explicitly chose to discard their edits.
-      try {
-        await requestEditorSaveQuiesce({ fileId })
-      } catch {
-        // Quiesce failed — proceed with discard anyway so the user isn't stuck.
-      }
-      setSaveDialogFileId(null)
-      markFileDirty(fileId, false)
-      closeFile(fileId)
-
-      const nextDirty = useAppStore.getState().openFiles.filter((f) => f.isDirty)
-      if (nextDirty.length > 0) {
-        setSaveDialogFileId(nextDirty[0].id)
-      } else {
-        const { isQuitting } = pendingWindowClose
-        windowCloseAfterDirtyRef.current = null
-        proceedToNativeWindowClose(isQuitting)
-      }
-      return
-    }
+    // Why: dismiss the dialog synchronously before awaiting quiesce. A rapid
+    // double-click on "Don't Save" would otherwise fire the handler twice
+    // with the same captured fileId, causing two concurrent queue advances
+    // after the quiesce settles. Mirrors handleSaveDialogSave's early clear.
+    setSaveDialogFileId(null)
 
     // Why: autosave runs on a background timer. Wait for any pending/in-flight
     // write to settle before honoring "Don't Save", otherwise the file can be
     // written after the user explicitly chose to discard their edits.
-    await requestEditorSaveQuiesce({ fileId })
+    try {
+      await requestEditorSaveQuiesce({ fileId })
+    } catch (error) {
+      // Why: quiesce failure must not trap the user in a close dialog loop, but
+      // silently swallowing it also hides broken autosave state. Warn so a
+      // stuck controller is visible in devtools instead of disappearing.
+      console.warn('Autosave quiesce failed before discard', error)
+    }
     markFileDirty(fileId, false)
     closeFile(fileId)
-    setSaveDialogFileId(null)
-  }, [saveDialogFileId, closeFile, markFileDirty, proceedToNativeWindowClose])
+    pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+      (id) => id !== fileId
+    )
+    advanceEditorCloseQueue()
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
+  }, [advanceEditorCloseQueue, closeFile, markFileDirty, saveDialogFileId])
 
   const handleSaveDialogCancel = useCallback(() => {
+    if (isClosingRef.current) {
+      return
+    }
+    isClosingRef.current = true
+    pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
   }, [])
+
+  useEffect(() => {
+    const onRequestEditorClose = (event: Event): void => {
+      const customEvent = event as CustomEvent<EditorRequestFileCloseDetail>
+      const fileId = customEvent.detail?.fileId
+      if (!fileId) {
+        return
+      }
+      queueEditorCloseRequests([fileId])
+    }
+    window.addEventListener(
+      ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
+      onRequestEditorClose as EventListener
+    )
+    return () =>
+      window.removeEventListener(
+        ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
+        onRequestEditorClose as EventListener
+      )
+  }, [queueEditorCloseRequests])
 
   useEffect(() => {
     if (tabs.length === 0) {
@@ -539,7 +700,7 @@ function Terminal(): React.JSX.Element | null {
       }
       const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
-        destroyPersistentWebview(tabId)
+        destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
         closeBrowserTab(tabId)
         if (state.activeWorktreeId === owningWorktreeId) {
           const worktreeFile = state.openFiles.find((file) => file.worktreeId === owningWorktreeId)
@@ -565,7 +726,7 @@ function Terminal(): React.JSX.Element | null {
           setActiveBrowserTab(nextTab.id)
         }
       }
-      destroyPersistentWebview(tabId)
+      destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
       closeBrowserTab(tabId)
     },
     [
@@ -595,6 +756,7 @@ function Terminal(): React.JSX.Element | null {
       }
       const state = useAppStore.getState()
       const order = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
+      const dirtyFileIds: string[] = []
       for (const id of order) {
         if (id === tabId) {
           continue
@@ -604,22 +766,24 @@ function Terminal(): React.JSX.Element | null {
         } else if (
           state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
         ) {
-          if (
-            state.activeFileId === id &&
-            state.openFiles.find((file) => file.id === id)?.isDirty
-          ) {
+          const file = state.openFiles.find((candidate) => candidate.id === id)
+          if (file?.isDirty) {
+            dirtyFileIds.push(id)
             continue
           }
           closeFile(id)
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
-          destroyPersistentWebview(id)
+          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
         }
       }
+      if (dirtyFileIds.length > 0) {
+        queueEditorCloseRequests(dirtyFileIds)
+      }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab]
+    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -634,23 +798,49 @@ function Terminal(): React.JSX.Element | null {
         return
       }
       const rightIds = currentOrder.slice(index + 1)
+      const dirtyFileIds: string[] = []
       for (const id of rightIds) {
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
           state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
         ) {
+          const file = state.openFiles.find((candidate) => candidate.id === id)
+          if (file?.isDirty) {
+            dirtyFileIds.push(id)
+            continue
+          }
           closeFile(id)
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
-          destroyPersistentWebview(id)
+          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
         }
       }
+      if (dirtyFileIds.length > 0) {
+        queueEditorCloseRequests(dirtyFileIds)
+      }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab]
+    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
+
+  const handleCloseAllFiles = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const state = useAppStore.getState()
+    const filesInWorktree = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
+    const dirtyFileIds = filesInWorktree.filter((file) => file.isDirty).map((file) => file.id)
+    for (const file of filesInWorktree) {
+      if (!file.isDirty) {
+        closeFile(file.id)
+      }
+    }
+    if (dirtyFileIds.length > 0) {
+      queueEditorCloseRequests(dirtyFileIds)
+    }
+  }, [activeWorktreeId, closeFile, queueEditorCloseRequests])
 
   const handleActivateTab = useCallback(
     (tabId: string) => {
@@ -881,8 +1071,10 @@ function Terminal(): React.JSX.Element | null {
 
       const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
       if (dirtyFiles.length > 0) {
-        windowCloseAfterDirtyRef.current = { isQuitting }
-        setSaveDialogFileId(dirtyFiles[0].id)
+        queueEditorCloseRequests(
+          dirtyFiles.map((file) => file.id),
+          { isQuitting }
+        )
         return
       }
 
@@ -915,31 +1107,40 @@ function Terminal(): React.JSX.Element | null {
         }
       )
     })
-  }, [])
+  }, [queueEditorCloseRequests])
 
-  // Why: removeWorktree cleans up browser tab state in the store but cannot
-  // call destroyPersistentWebview (renderer-only DOM code). This subscriber
-  // detects when browser tabs disappear from a worktree (e.g. worktree deleted)
-  // and destroys orphaned webview elements to prevent memory leaks.
-  const prevBrowserTabIdsRef = useRef<Set<string>>(new Set())
+  // Why: browser page state can disappear through store-only paths (CLI tab
+  // close, worktree deletion). The store cannot call destroyPersistentWebview
+  // because that function owns renderer DOM nodes, so this subscriber tears down
+  // webviews whose backing page records were removed.
+  const prevBrowserWebviewIdsRef = useRef<Set<string>>(
+    collectBrowserWebviewIds(
+      useAppStore.getState().browserTabsByWorktree,
+      useAppStore.getState().browserPagesByWorkspace
+    )
+  )
   useEffect(() => {
     let prevBrowserTabs = useAppStore.getState().browserTabsByWorktree
+    let prevBrowserPages = useAppStore.getState().browserPagesByWorkspace
     return useAppStore.subscribe((state) => {
-      if (state.browserTabsByWorktree === prevBrowserTabs) {
+      if (
+        state.browserTabsByWorktree === prevBrowserTabs &&
+        state.browserPagesByWorkspace === prevBrowserPages
+      ) {
         return
       }
       prevBrowserTabs = state.browserTabsByWorktree
-      const currentIds = new Set(
-        Object.values(state.browserTabsByWorktree)
-          .flat()
-          .map((tab) => tab.id)
+      prevBrowserPages = state.browserPagesByWorkspace
+      const currentIds = collectBrowserWebviewIds(
+        state.browserTabsByWorktree,
+        state.browserPagesByWorkspace
       )
-      for (const prevId of prevBrowserTabIdsRef.current) {
+      for (const prevId of prevBrowserWebviewIdsRef.current) {
         if (!currentIds.has(prevId)) {
           destroyPersistentWebview(prevId)
         }
       }
-      prevBrowserTabIdsRef.current = currentIds
+      prevBrowserWebviewIdsRef.current = currentIds
     })
   }, [])
 
@@ -1018,7 +1219,7 @@ function Terminal(): React.JSX.Element | null {
             onActivateBrowserTab={handleActivateBrowserTab}
             onCloseBrowserTab={handleCloseBrowserTab}
             onDuplicateBrowserTab={handleDuplicateBrowserTab}
-            onCloseAllFiles={closeAllFiles}
+            onCloseAllFiles={handleCloseAllFiles}
             onPinFile={pinFile}
             tabBarOrder={tabBarOrder}
           />,
@@ -1202,7 +1403,7 @@ function Terminal(): React.JSX.Element | null {
             <DialogTitle className="text-sm">Unsaved Changes</DialogTitle>
             <DialogDescription className="text-xs">
               {saveDialogFile
-                ? `"${saveDialogFile.relativePath.split('/').pop()}" has unsaved changes. Do you want to save before closing?`
+                ? `"${basename(saveDialogFile.relativePath)}" has unsaved changes. Do you want to save before closing?`
                 : 'This file has unsaved changes.'}
             </DialogDescription>
           </DialogHeader>

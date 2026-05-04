@@ -1,16 +1,44 @@
+/* eslint-disable max-lines -- Why: co-locating issue list/create/update/
+comment operations keeps the shared acquire/release + error-classification
+pattern obvious. Each function is short; the file is long because the
+surface is broad. */
 import type {
+  ClassifiedError,
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubIssueUpdate,
   IssueInfo,
+  IssueSourcePreference,
   PRComment
 } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, classifyGhError } from './gh-utils'
+// prettier-ignore
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError } from './gh-utils'
+
+// Why: distinguishes a successful-empty listing from a failed fetch. The
+// previous `catch { return [] }` conflated a 403 on a private upstream with an
+// empty backlog. Callers decide how to surface `error`.
+//
+// Why no `fellBack` here: the fell-back signal for the renderer toast rides on
+// `ListWorkItemsResult.issueSourceFellBack` (the Tasks list's envelope). The
+// only consumer of `listIssues` — the `gh:listIssues` IPC handler — unwraps
+// to `.items` and has no UI hook to surface a fallback toast. Adding a dead
+// `fellBack` field here invited drift between the JSDoc promise and reality.
+export type IssueListResult = {
+  items: IssueInfo[]
+  error?: ClassifiedError
+}
 
 /**
  * Get a single issue by number.
  * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
+ *
+ * Why this path doesn't take a preference: linked-issue lookups persist a
+ * number to a worktree at creation time. Routing detail lookups through the
+ * live per-repo preference would silently flip an existing link to a
+ * different repo after the user toggled the selector — the opposite of what
+ * #1186 / the parent design doc guard against. List and create paths honor
+ * preference; number-resolution stays on the heuristic.
  */
 export async function getIssue(repoPath: string, issueNumber: number): Promise<IssueInfo | null> {
   const ownerRepo = await getIssueOwnerRepo(repoPath)
@@ -46,9 +74,20 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
 /**
  * List issues for a repo.
  * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
+ *
+ * Why: returns a structured result so a 403 (e.g. fork contributor without
+ * read access to a private upstream) surfaces as an error the UI can render
+ * instead of collapsing to "No issues". The empty-list-on-error behavior this
+ * replaces was explicitly flagged as a merge-blocker in the parent design doc
+ * (§3) — silently hiding failures re-creates the same silent-source-switch
+ * class of wrongness #1186 warned against, one level deeper.
  */
-export async function listIssues(repoPath: string, limit = 20): Promise<IssueInfo[]> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+export async function listIssues(
+  repoPath: string,
+  limit = 20,
+  preference?: IssueSourcePreference
+): Promise<IssueListResult> {
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   await acquire()
   try {
     if (ownerRepo) {
@@ -61,8 +100,16 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
         ],
         { cwd: repoPath }
       )
-      const data = JSON.parse(stdout) as unknown[]
-      return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+      const data = JSON.parse(stdout) as Record<string, unknown>[]
+      // Why: the GitHub REST `/repos/{owner}/{repo}/issues` endpoint returns
+      // pull requests alongside issues (PRs carry a `pull_request` key).
+      // Strip them here so `listIssues` only returns true issues, matching the
+      // filter applied in `listRecentWorkItems` (src/main/github/client.ts).
+      return {
+        items: data
+          .filter((d) => !('pull_request' in d))
+          .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+      }
     }
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
@@ -70,9 +117,15 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
       { cwd: repoPath }
     )
     const data = JSON.parse(stdout) as unknown[]
-    return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
-  } catch {
-    return []
+    return {
+      items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+    }
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err)
+    return {
+      items: [],
+      error: classifyListIssuesError(stderr)
+    }
   } finally {
     release()
   }
@@ -86,13 +139,14 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
 export async function createIssue(
   repoPath: string,
   title: string,
-  body: string
+  body: string,
+  preference?: IssueSourcePreference
 ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -131,6 +185,15 @@ export async function createIssue(
 /**
  * Update an existing GitHub issue. Fans out to separate gh commands for
  * state changes vs field edits since `gh issue edit` does not support state.
+ *
+ * Why this path doesn't take a preference (mirrors `getIssue`): mutations
+ * target an issue number already bound to a worktree / linked elsewhere in
+ * the UI. Routing an update through the live per-repo preference would let
+ * a user open upstream#N, toggle the selector to origin, save, and silently
+ * write to origin#N — a different issue (or 404). That is the exact
+ * silent-source-switch class of wrongness #1186 / the parent design doc
+ * guard against. List and create paths honor preference; mutations stay on
+ * the heuristic `getIssueOwnerRepo`.
  */
 export async function updateIssue(
   repoPath: string,
@@ -207,6 +270,18 @@ export async function updateIssue(
   return { ok: true }
 }
 
+/**
+ * Add a comment to an existing GitHub issue.
+ *
+ * Why this path doesn't take a preference (mirrors `getIssue` / `updateIssue`):
+ * a comment is posted against an issue number already bound to a worktree or
+ * surfaced from a prior read. Routing through the live per-repo preference
+ * would let a user read upstream#N, toggle the selector to origin, and have
+ * their reply silently post on origin#N — a different issue entirely. That
+ * is the same silent-source-switch class of wrongness #1186 / the parent
+ * design doc guard against. List and create paths honor preference;
+ * mutations stay on the heuristic `getIssueOwnerRepo`.
+ */
 export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
@@ -254,8 +329,11 @@ export async function addIssueComment(
   }
 }
 
-export async function listLabels(repoPath: string): Promise<string[]> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+export async function listLabels(
+  repoPath: string,
+  preference?: IssueSourcePreference
+): Promise<string[]> {
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return []
   }
@@ -282,8 +360,11 @@ export async function listLabels(repoPath: string): Promise<string[]> {
   }
 }
 
-export async function listAssignableUsers(repoPath: string): Promise<GitHubAssignableUser[]> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+export async function listAssignableUsers(
+  repoPath: string,
+  preference?: IssueSourcePreference
+): Promise<GitHubAssignableUser[]> {
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return []
   }

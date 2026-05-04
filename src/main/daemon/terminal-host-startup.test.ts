@@ -11,7 +11,8 @@ function mockSubprocess(): SubprocessHandle {
     forceKill: vi.fn(),
     signal: vi.fn(),
     onData: () => {},
-    onExit: () => {}
+    onExit: () => {},
+    dispose: vi.fn()
   } as SubprocessHandle
 }
 

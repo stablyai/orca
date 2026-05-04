@@ -30,6 +30,12 @@ export type PtySpawnOptions = {
    *  changing the user's persistent default shell setting. Only consulted on
    *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
   shellOverride?: string
+  /** Why: PowerShell is the top-level shell family in product terms, but on
+   *  Windows we may need to choose between inbox Windows PowerShell 5.1 and
+   *  pwsh.exe at spawn time. Threading the persisted implementation choice
+   *  through spawn options keeps local PTY and daemon PTY semantics aligned
+   *  without promoting pwsh into a separate shell family. */
+  terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
 }
 
 export type PtySpawnResult = {
@@ -126,7 +132,13 @@ export type IFilesystemProvider = {
 
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
-  getDiff(worktreePath: string, filePath: string, staged: boolean): Promise<GitDiffResult>
+  commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  getDiff(
+    worktreePath: string,
+    filePath: string,
+    staged: boolean,
+    compareAgainstHead?: boolean
+  ): Promise<GitDiffResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>

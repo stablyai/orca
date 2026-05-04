@@ -62,6 +62,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   deleteStateByWorktreeId: {},
   sortEpoch: 0,
   everActivatedWorktreeIds: new Set<string>(),
+  lastVisitedAtByWorktreeId: {},
+  hasHydratedWorktreePurge: false,
 
   fetchWorktrees: async (repoId) => {
     try {
@@ -96,7 +98,68 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchAllWorktrees: async () => {
     const { repos } = get()
-    await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
+
+    // Why: once the one-shot hydration-time purge has fired, subsequent
+    // calls just need to refresh each repo's cached list. No need to
+    // double-probe the IPC for the per-repo success signal.
+    if (get().hasHydratedWorktreePurge) {
+      await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
+      return
+    }
+
+    // Why: users upgrading from a pre-fix build may have persisted
+    // tabsByWorktree entries for worktrees that were deleted in the previous
+    // session. Without the hydration-time purge below those entries would
+    // keep zombie PTYs misclassified as "bound" in SessionsStatusSegment
+    // (design §2c), which means the user would still need a second restart
+    // post-upgrade to reclaim memory.
+    //
+    // Safety gate: fetchWorktrees swallows IPC errors (catch at :93-95)
+    // and short-circuits on empty-replace when cached data exists
+    // (empty-guard at :82-84). Neither signal bubbles up to the caller, so
+    // we can't distinguish "threw" from "returned []" from "returned ≥1"
+    // by inspecting post-state alone. If we declared the union of
+    // worktreesByRepo authoritative without confirming every repo
+    // succeeded, a single transient git error at launch would wipe every
+    // tabsByWorktree entry for the affected repo — the exact data-loss
+    // class the empty-guard exists to prevent. Probe the IPC directly to
+    // get the precise per-repo result, and defer the purge until every
+    // repo returns success AND at least one has >0 worktrees. In steady
+    // state this fires on the first fully-successful launch; in the
+    // degraded state it simply waits.
+    const results = await Promise.all(
+      repos.map(async (r) => {
+        try {
+          const list = await window.api.worktrees.list({ repoId: r.id })
+          await get().fetchWorktrees(r.id)
+          return { repoId: r.id, ok: list.length > 0 }
+        } catch (err) {
+          console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
+          return { repoId: r.id, ok: false as const }
+        }
+      })
+    )
+
+    const allSucceeded = results.length > 0 && results.every((r) => r.ok)
+    if (!allSucceeded) {
+      // Defer; try again on the next fetchAllWorktrees call.
+      return
+    }
+    const validIds = new Set<string>()
+    for (const list of Object.values(get().worktreesByRepo)) {
+      for (const w of list) {
+        validIds.add(w.id)
+      }
+    }
+    const stale = Object.keys(get().tabsByWorktree).filter((id) => !validIds.has(id))
+    if (stale.length > 0) {
+      console.warn(
+        `[worktree-purge] hydration-time purge removing stale state for ${stale.length} worktree(s):`,
+        stale
+      )
+      get().purgeWorktreeTerminalState(stale)
+    }
+    set({ hasHydratedWorktreePurge: true })
   },
 
   createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit', sparseCheckout) => {
@@ -119,13 +182,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             setupDecision,
             sparseCheckout
           })
-          set((s) => ({
-            worktreesByRepo: {
-              ...s.worktreesByRepo,
-              [repoId]: [...(s.worktreesByRepo[repoId] ?? []), result.worktree]
-            },
-            sortEpoch: s.sortEpoch + 1
-          }))
+          // Why: a file watcher (worktrees.onChanged) can fire between the
+          // backend creating the worktree and this callback running, causing
+          // fetchWorktrees to add the worktree first. Appending unconditionally
+          // then produces a duplicate entry in worktreesByRepo, which gives
+          // React duplicate keys and can corrupt terminal DOM containers.
+          set((s) => {
+            const current = s.worktreesByRepo[repoId] ?? []
+            const alreadyPresent = current.some((w) => w.id === result.worktree.id)
+            return {
+              worktreesByRepo: {
+                ...s.worktreesByRepo,
+                [repoId]: alreadyPresent ? current : [...current, result.worktree]
+              },
+              sortEpoch: s.sortEpoch + 1
+            }
+          })
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
@@ -164,6 +236,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // they are created. We must tear those PTYs down before asking Git to remove
       // the working tree or Windows and some shells can keep the directory in use
       // and make delete look broken even though the git state itself is fine.
+      //
+      // Why browsers first: `shutdownWorktreeTerminals` used to own the
+      // `browserTabsByWorktree[worktreeId]` delete as a side effect, which would
+      // race `shutdownWorktreeBrowsers`' read of the same map. After the §1.3
+      // split, terminals no longer touches browser state, but we still call
+      // browsers first so destroyPersistentWebview sees the workspaces in place
+      // and the Chromium guests are unregistered before any other teardown work
+      // can intercept them.
+      await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
       await window.api.worktrees.remove({ worktreeId, force, skipArchive })
       const tabs = get().tabsByWorktree[worktreeId] ?? []
@@ -194,6 +275,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextActiveFileIdByWorktree[worktreeId]
         const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
         delete nextActiveBrowserTabIdByWorktree[worktreeId]
+        // Why: closeBrowserTab — which shutdownWorktreeBrowsers delegates to —
+        // pushes a snapshot into recentlyClosedBrowserTabsByWorktree for the
+        // Cmd+Shift+T undo path. That is correct for UI close, but wrong when
+        // the owning worktree itself is being deleted: the snapshots reference
+        // workspaces and pages that can never be restored. Purge the worktree
+        // key symmetrically with browserTabsByWorktree. Per-workspace page
+        // snapshots are already cleared upstream by closeBrowserTab.
+        const nextRecentlyClosedBrowserTabsByWorktree = {
+          ...s.recentlyClosedBrowserTabsByWorktree
+        }
+        delete nextRecentlyClosedBrowserTabsByWorktree[worktreeId]
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
         delete nextActiveTabTypeByWorktree[worktreeId]
         const nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
@@ -243,10 +335,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
         const nextMarkdownViewMode =
           removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
+        const nextEditorViewMode =
+          removedFileIds.size > 0 ? { ...s.editorViewMode } : s.editorViewMode
         if (removedFileIds.size > 0) {
           for (const fileId of removedFileIds) {
             delete nextEditorDrafts[fileId]
             delete nextMarkdownViewMode[fileId]
+            delete nextEditorViewMode[fileId]
           }
         }
         const nextExpandedDirs = { ...s.expandedDirs }
@@ -259,6 +354,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextEverActivatedWorktreeIds = s.everActivatedWorktreeIds.has(worktreeId)
           ? new Set([...s.everActivatedWorktreeIds].filter((id) => id !== worktreeId))
           : s.everActivatedWorktreeIds
+        const nextLastVisitedAtByWorktreeId =
+          worktreeId in s.lastVisitedAtByWorktreeId
+            ? (() => {
+                const next = { ...s.lastVisitedAtByWorktreeId }
+                delete next[worktreeId]
+                return next
+              })()
+            : s.lastVisitedAtByWorktreeId
         return {
           worktreesByRepo: next,
           tabsByWorktree: nextTabs,
@@ -278,6 +381,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: newOpenFiles,
           browserTabsByWorktree: nextBrowserTabsByWorktree,
+          recentlyClosedBrowserTabsByWorktree: nextRecentlyClosedBrowserTabsByWorktree,
           activeFileIdByWorktree: nextActiveFileIdByWorktree,
           activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
           activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
@@ -290,6 +394,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
+          editorViewMode: nextEditorViewMode,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,
           gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,
@@ -301,6 +406,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
           activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
           everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
+          lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
           sortEpoch: s.sortEpoch + 1
         }
       })
@@ -453,6 +559,66 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         console.error('Failed to persist worktree activity timestamp:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })
+  },
+
+  markWorktreeVisited: (worktreeId, visitedAt) => {
+    // Why: Cmd+J's empty-query ordering needs a focus-recency signal that is
+    // distinct from worktree.lastActivityAt (which is driven by background
+    // PTY/activity events). Monotonic: CLI- and IPC-driven activations can
+    // race, so older timestamps must not regress the stored value. See
+    // docs/cmd-j-empty-query-ordering.md.
+    set((s) => {
+      const now = visitedAt ?? Date.now()
+      const prev = s.lastVisitedAtByWorktreeId[worktreeId] ?? 0
+      if (!(now > prev)) {
+        return {}
+      }
+      return {
+        lastVisitedAtByWorktreeId: {
+          ...s.lastVisitedAtByWorktreeId,
+          [worktreeId]: now
+        }
+      }
+    })
+  },
+
+  pruneLastVisitedTimestamps: () => {
+    set((s) => {
+      const validIds = new Set<string>()
+      for (const list of Object.values(s.worktreesByRepo)) {
+        for (const w of list) {
+          validIds.add(w.id)
+        }
+      }
+      let changed = false
+      const next: Record<string, number> = {}
+      for (const [id, ts] of Object.entries(s.lastVisitedAtByWorktreeId)) {
+        if (validIds.has(id)) {
+          next[id] = ts
+        } else {
+          changed = true
+        }
+      }
+      return changed ? { lastVisitedAtByWorktreeId: next } : {}
+    })
+  },
+
+  seedActiveWorktreeLastVisitedIfMissing: () => {
+    set((s) => {
+      const id = s.activeWorktreeId
+      if (!id) {
+        return {}
+      }
+      if (s.lastVisitedAtByWorktreeId[id] != null) {
+        return {}
+      }
+      return {
+        lastVisitedAtByWorktreeId: {
+          ...s.lastVisitedAtByWorktreeId,
+          [id]: Date.now()
+        }
+      }
+    })
   },
 
   setActiveWorktree: (worktreeId) => {
@@ -667,5 +833,137 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  allWorktrees: () => Object.values(get().worktreesByRepo).flat()
+  allWorktrees: () => Object.values(get().worktreesByRepo).flat(),
+
+  purgeWorktreeTerminalState: (worktreeIds: string[]) => {
+    if (worktreeIds.length === 0) {
+      return
+    }
+    set((s) => {
+      const worktreeIdSet = new Set(worktreeIds)
+
+      // Collect every tab id (and removed file id) we are about to orphan.
+      const doomedTabIds = new Set<string>()
+      const removedFileIds = new Set<string>()
+      for (const id of worktreeIdSet) {
+        for (const tab of s.tabsByWorktree[id] ?? []) {
+          doomedTabIds.add(tab.id)
+        }
+      }
+      for (const file of s.openFiles) {
+        if (worktreeIdSet.has(file.worktreeId)) {
+          removedFileIds.add(file.id)
+        }
+      }
+
+      const omitByWorktree = <T>(obj: Record<string, T>): Record<string, T> => {
+        let changed = false
+        const out = { ...obj }
+        for (const id of worktreeIdSet) {
+          if (id in out) {
+            delete out[id]
+            changed = true
+          }
+        }
+        return changed ? out : obj
+      }
+      const omitByTabId = <T>(obj: Record<string, T>): Record<string, T> => {
+        let changed = false
+        const out = { ...obj }
+        for (const tabId of doomedTabIds) {
+          if (tabId in out) {
+            delete out[tabId]
+            changed = true
+          }
+        }
+        return changed ? out : obj
+      }
+      const omitByFileId = <T>(obj: Record<string, T>): Record<string, T> => {
+        let changed = false
+        const out = { ...obj }
+        for (const fileId of removedFileIds) {
+          if (fileId in out) {
+            delete out[fileId]
+            changed = true
+          }
+        }
+        return changed ? out : obj
+      }
+
+      const nextOpenFiles = s.openFiles.some((f) => worktreeIdSet.has(f.worktreeId))
+        ? s.openFiles.filter((f) => !worktreeIdSet.has(f.worktreeId))
+        : s.openFiles
+
+      const removedActive = s.activeWorktreeId != null && worktreeIdSet.has(s.activeWorktreeId)
+      const activeFileCleared = s.activeFileId != null && removedFileIds.has(s.activeFileId)
+      const activeTabCleared = s.activeTabId != null && doomedTabIds.has(s.activeTabId)
+
+      const nextEverActivatedWorktreeIds = (() => {
+        let hit = false
+        for (const id of worktreeIdSet) {
+          if (s.everActivatedWorktreeIds.has(id)) {
+            hit = true
+            break
+          }
+        }
+        if (!hit) {
+          return s.everActivatedWorktreeIds
+        }
+        const next = new Set(s.everActivatedWorktreeIds)
+        for (const id of worktreeIdSet) {
+          next.delete(id)
+        }
+        return next
+      })()
+
+      return {
+        // Worktree-scoped terminal/tab state
+        tabsByWorktree: omitByWorktree(s.tabsByWorktree),
+        terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
+        ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
+        runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
+        // Delete state
+        deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
+        // File search
+        fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
+        // Browser state
+        browserTabsByWorktree: omitByWorktree(s.browserTabsByWorktree),
+        recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
+        activeBrowserTabIdByWorktree: omitByWorktree(s.activeBrowserTabIdByWorktree),
+        // Editor state
+        activeFileIdByWorktree: omitByWorktree(s.activeFileIdByWorktree),
+        activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
+        activeTabIdByWorktree: omitByWorktree(s.activeTabIdByWorktree),
+        tabBarOrderByWorktree: omitByWorktree(s.tabBarOrderByWorktree),
+        pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
+        // Split-tab / unified tab state
+        unifiedTabsByWorktree: omitByWorktree(s.unifiedTabsByWorktree),
+        groupsByWorktree: omitByWorktree(s.groupsByWorktree),
+        layoutByWorktree: omitByWorktree(s.layoutByWorktree),
+        activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
+        // Git status caches
+        gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
+        gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),
+        trackedConflictPathsByWorktree: omitByWorktree(s.trackedConflictPathsByWorktree),
+        gitBranchChangesByWorktree: omitByWorktree(s.gitBranchChangesByWorktree),
+        gitBranchCompareSummaryByWorktree: omitByWorktree(s.gitBranchCompareSummaryByWorktree),
+        gitBranchCompareRequestKeyByWorktree: omitByWorktree(
+          s.gitBranchCompareRequestKeyByWorktree
+        ),
+        expandedDirs: omitByWorktree(s.expandedDirs),
+        // Per-file editor state for removed files
+        editorDrafts: omitByFileId(s.editorDrafts),
+        markdownViewMode: omitByFileId(s.markdownViewMode),
+        // Top-level actives
+        openFiles: nextOpenFiles,
+        everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
+        lastVisitedAtByWorktreeId: omitByWorktree(s.lastVisitedAtByWorktreeId),
+        activeWorktreeId: removedActive ? null : s.activeWorktreeId,
+        activeFileId: activeFileCleared ? null : s.activeFileId,
+        activeBrowserTabId: removedActive ? null : s.activeBrowserTabId,
+        activeTabId: activeTabCleared ? null : s.activeTabId,
+        activeTabType: removedActive || activeFileCleared ? 'terminal' : s.activeTabType
+      }
+    })
+  }
 })

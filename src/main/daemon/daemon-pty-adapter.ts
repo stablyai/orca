@@ -13,7 +13,8 @@ import {
   type CreateOrAttachResult,
   type DaemonEvent,
   type GetSnapshotResult,
-  type ListSessionsResult
+  type ListSessionsResult,
+  type SessionInfo
 } from './types'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 
@@ -39,6 +40,7 @@ export class TerminalKilledError extends Error {
 }
 
 export class DaemonPtyAdapter implements IPtyProvider {
+  readonly protocolVersion: number
   private client: DaemonClient
   private historyManager: HistoryManager | null
   private historyReader: HistoryReader | null
@@ -71,6 +73,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private static CHECKPOINT_INTERVAL_MS = 5_000
 
   constructor(opts: DaemonPtyAdapterOptions) {
+    this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
     this.client = new DaemonClient({
       socketPath: opts.socketPath,
       tokenPath: opts.tokenPath,
@@ -79,7 +82,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
-    this.supportsCheckpoints = (opts.protocolVersion ?? PROTOCOL_VERSION) >= 4
+    this.supportsCheckpoints = this.protocolVersion >= 4
   }
 
   getHistoryManager(): HistoryManager | null {
@@ -120,6 +123,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // the override makes the daemon path behave the same as the in-process
       // LocalPtyProvider.
       shellOverride: opts.shellOverride,
+      terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
       shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     })
 
@@ -359,6 +363,42 @@ export class DaemonPtyAdapter implements IPtyProvider {
         cwd: s.cwd ?? '',
         title: 'shell'
       }))
+  }
+
+  // Why: the Manage Sessions panel needs the full SessionInfo (pid, state,
+  // createdAt) per session for display; listProcesses drops that detail for
+  // the IPtyProvider contract. Keep both in parallel rather than widening
+  // the provider surface.
+  async listSessions(): Promise<SessionInfo[]> {
+    await this.ensureConnected()
+    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+    return result.sessions.filter((s) => s.isAlive)
+  }
+
+  getActiveSessionIds(): string[] {
+    return [...this.activeSessionIds]
+  }
+
+  // Why: used by the "Restart daemon" handler to synthesize pty:exit for every
+  // live session *before* tearing down the adapter. The daemon's own
+  // kill-all-and-shutdown path explicitly suppresses onExit fanout
+  // (session.ts:246-252), so without this the renderer panes would black-hole
+  // writes to a disposed adapter forever. Reuses the existing exitListeners
+  // path so downstream cleanup (clearProviderPtyState, markClaudePtyExited,
+  // renderer pty:exit) runs exactly as it does on natural exit.
+  fanoutSyntheticExits(code: number): void {
+    const ids = [...this.activeSessionIds]
+    this.activeSessionIds.clear()
+    for (const id of ids) {
+      // Why: listener throws are intentionally *not* caught — matches the
+      // natural onExit fanout in setupEventRouting, so synthetic exits don't
+      // diverge in error semantics from real ones. A throwing listener is a
+      // bug that should surface loudly, not be silently swallowed.
+      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+      for (const listener of [...this.exitListeners]) {
+        listener({ id, code })
+      }
+    }
   }
 
   async getDefaultShell(): Promise<string> {

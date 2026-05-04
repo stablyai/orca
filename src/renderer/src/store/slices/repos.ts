@@ -16,7 +16,15 @@ export type RepoSlice = {
   updateRepo: (
     repoId: string,
     updates: Partial<
-      Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+      Pick<
+        Repo,
+        | 'displayName'
+        | 'badgeColor'
+        | 'hookSettings'
+        | 'worktreeBaseRef'
+        | 'kind'
+        | 'issueSourcePreference'
+      >
     >
   ) => Promise<void>
   setActiveRepo: (repoId: string | null) => void

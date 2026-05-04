@@ -70,7 +70,11 @@ async function doResolve(pid: number): Promise<string> {
   }
 
   try {
-    const { stdout } = await execFile('lsof', ['-p', String(pid), '-d', 'cwd', '-Fn'], {
+    // Why: `-a` ANDs the -p and -d filters. Without it, macOS lsof ORs them
+    // and emits cwd records for every process on the system, so the n-line
+    // scan below picks up the first unrelated process (often pid ~391 with
+    // cwd `/`) and returns `/` regardless of the target pid's real cwd.
+    const { stdout } = await execFile('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], {
       encoding: 'utf-8',
       timeout: LSOF_TIMEOUT_MS
     })

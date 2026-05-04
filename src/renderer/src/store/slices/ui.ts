@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
+  CustomSidekick,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
@@ -38,6 +39,8 @@ import {
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
+import { DEFAULT_SIDEKICK_ID, isBundledSidekickId } from '../../components/sidekick/sidekick-models'
+import { revokeCustomSidekickBlobUrl } from '../../components/sidekick/sidekick-blob-cache'
 
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -174,14 +177,14 @@ export type UISlice = {
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
   clearOrcaHookTrustForRepo: (repoId: string) => void
-  searchQuery: string
-  setSearchQuery: (q: string) => void
   groupBy: 'none' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
+  hideDefaultBranchWorkspace: boolean
+  setHideDefaultBranchWorkspace: (v: boolean) => void
   filterRepoIds: string[]
   setFilterRepoIds: (ids: string[]) => void
   collapsedGroups: Set<string>
@@ -192,6 +195,20 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
+  /** Whether the experimental sidekick overlay is currently visible. Persisted
+   *  so "Hide sidekick" from the status-bar menu survives reload. Independent
+   *  of the experimentalSidekick settings flag — the feature flag gates
+   *  whether the overlay can ever render; this controls whether it does now. */
+  sidekickVisible: boolean
+  setSidekickVisible: (v: boolean) => void
+  /** Which sidekick is active — either a bundled id or a custom UUID.
+   *  Persisted alongside sidekickVisible via the PersistedUIState pipeline. */
+  sidekickId: string
+  setSidekickId: (id: string) => void
+  /** User-uploaded sidekick images. Metadata only — bytes live in main's userData. */
+  customSidekicks: CustomSidekick[]
+  addCustomSidekick: (model: CustomSidekick) => void
+  removeCustomSidekick: (id: string) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
@@ -417,9 +434,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { trustedOrcaHooks: next }
     }),
 
-  searchQuery: '',
-  setSearchQuery: (q) => set({ searchQuery: q }),
-
   groupBy: 'none',
   // Why: group keys are mode-specific (e.g. repo id vs PR status), so
   // collapsed state from one mode is meaningless in another. Clearing
@@ -429,11 +443,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
 
-  sortBy: 'name',
+  sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
 
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
+
+  hideDefaultBranchWorkspace: false,
+  setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
 
   filterRepoIds: [],
   setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
@@ -479,6 +496,53 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ statusBarVisible: v })
   },
 
+  // Why: default true so a user who enables experimentalSidekick sees the
+  // sidekick immediately. Hide sidekick from the status-bar menu flips this
+  // to false; the value is persisted via the standard PersistedUIState pipeline.
+  sidekickVisible: true,
+  setSidekickVisible: (v) => {
+    window.api.ui.set({ sidekickVisible: v }).catch(console.error)
+    set({ sidekickVisible: v })
+  },
+
+  sidekickId: DEFAULT_SIDEKICK_ID,
+  setSidekickId: (id) => {
+    window.api.ui.set({ sidekickId: id }).catch(console.error)
+    set({ sidekickId: id })
+  },
+
+  customSidekicks: [],
+  addCustomSidekick: (model) =>
+    set((s) => {
+      const next = [...s.customSidekicks.filter((m) => m.id !== model.id), model]
+      window.api.ui.set({ customSidekicks: next }).catch(console.error)
+      return { customSidekicks: next }
+    }),
+  removeCustomSidekick: (id) =>
+    set((s) => {
+      const target = s.customSidekicks.find((m) => m.id === id)
+      if (!target) {
+        return s
+      }
+      const next = s.customSidekicks.filter((m) => m.id !== id)
+      window.api.ui.set({ customSidekicks: next }).catch(console.error)
+      // Why: if the user removes the currently-active custom sidekick, fall
+      // back to the bundled default so the overlay doesn't render nothing.
+      const fallback = s.sidekickId === id ? DEFAULT_SIDEKICK_ID : s.sidekickId
+      if (fallback !== s.sidekickId) {
+        window.api.ui.set({ sidekickId: fallback }).catch(console.error)
+      }
+      // Why: revoke the cached blob: URL so the underlying Blob is released;
+      // otherwise it stays in memory for the rest of the session.
+      revokeCustomSidekickBlobUrl(id)
+      // Why: best-effort — the bytes are owned by main. If the disk delete
+      // fails, the orphaned image stays in userData; each import uses a fresh
+      // UUID so the file won't be hit again, and the renderer's metadata
+      // index no longer references it.
+      window.api.sidekick.delete(id, target.fileName).catch(console.error)
+      return { customSidekicks: next, sidekickId: fallback }
+    }),
+
   pendingRevealWorktreeId: null,
   revealWorktreeInSidebar: (worktreeId) => set({ pendingRevealWorktreeId: worktreeId }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktreeId: null }),
@@ -522,6 +586,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // transient render detail. Restoring it on launch keeps the filtered
         // worktree list stable across restarts instead of silently widening it.
         showActiveOnly: ui.showActiveOnly,
+        hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),
         uiZoomLevel: ui.uiZoomLevel ?? 0,
@@ -529,6 +594,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
         statusBarItems: ui.statusBarItems ?? [...DEFAULT_STATUS_BAR_ITEMS],
         statusBarVisible: ui.statusBarVisible ?? true,
+        // Why: absent → true so existing users see the sidekick the first time
+        // they enable the experimental flag. Only an explicit Hide sidekick
+        // dismissal persists a `false` value.
+        sidekickVisible: ui.sidekickVisible ?? true,
+        customSidekicks: Array.isArray(ui.customSidekicks) ? ui.customSidekicks : [],
+        // Why: accept the persisted id if it matches a bundled sidekick or a
+        // known custom one; otherwise fall back so the overlay never renders
+        // nothing (e.g. custom sidekick was removed by another session).
+        sidekickId: ((): string => {
+          const id = ui.sidekickId
+          if (typeof id !== 'string') {
+            return DEFAULT_SIDEKICK_ID
+          }
+          if (isBundledSidekickId(id)) {
+            return id
+          }
+          const custom = Array.isArray(ui.customSidekicks) ? ui.customSidekicks : []
+          if (custom.some((m) => m.id === id)) {
+            return id
+          }
+          return DEFAULT_SIDEKICK_ID
+        })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,

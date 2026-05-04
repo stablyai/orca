@@ -23,6 +23,7 @@ function createMockSubprocess(): SubprocessHandle & {
     onExit(cb) {
       onExitCb = cb
     },
+    dispose: vi.fn(),
     simulateData(data: string) {
       onDataCb?.(data)
     },

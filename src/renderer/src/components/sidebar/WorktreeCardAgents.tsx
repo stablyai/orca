@@ -54,6 +54,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
+  const markWorktreeVisited = useAppStore((s) => s.markWorktreeVisited)
 
   // Why: per-worktree collapse is session-only UI state. Single-primitive
   // subscription so the card only re-renders when THIS worktree's collapsed
@@ -89,13 +90,23 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     (tabId: string, paneKey: string) => {
       acknowledgeAgents([paneKey])
       setActiveWorktree(worktreeId)
+      // Why: sidebar agent-tab click is a user-initiated switch; stamp focus
+      // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
+      markWorktreeVisited(worktreeId)
       setActiveView('terminal')
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
         setActiveTab(tabId)
       }
     },
-    [worktreeId, setActiveWorktree, setActiveTab, setActiveView, acknowledgeAgents]
+    [
+      worktreeId,
+      setActiveWorktree,
+      setActiveTab,
+      setActiveView,
+      acknowledgeAgents,
+      markWorktreeVisited
+    ]
   )
 
   const handleToggleCollapsed = useCallback(
@@ -154,6 +165,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
                 // agent identity icon right next to it. 'sm' keeps the two
                 // distinguishable at a glance.
                 stateDotSize="sm"
+                // Why: in the per-card inline list clicking the row jumps
+                // directly to the agent, so the expand chevron is redundant.
+                // Keep the identity glyph (Claude/Gemini/…) so users can tell
+                // agents apart at a glance within a worktree.
+                hideExpand
               />
             </div>
           ))}

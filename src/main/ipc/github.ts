@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: all GitHub IPC handlers stay co-located so
+the repo-path validation, preference-threading, and stats wiring patterns are
+reviewable as one surface. Splitting by feature area would risk drifting
+validation/gate conventions across handler files. */
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
 import type { Repo, GitHubIssueUpdate } from '../../shared/types'
@@ -67,14 +71,17 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listIssues(repo.path, args.limit)
+    // Why: listIssues now returns { items, error? }. The IPC handler unwraps to
+    // the items array for the existing contract; feature 1's UI consumes the
+    // richer envelope through `gh:listWorkItems` instead.
+    return listIssues(repo.path, args.limit, repo.issueSourcePreference).then((r) => r.items)
   })
 
   ipcMain.handle(
     'gh:createIssue',
     (_event, args: { repoPath: string; title: string; body: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return createIssue(repo.path, args.title, args.body)
+      return createIssue(repo.path, args.title, args.body, repo.issueSourcePreference)
     }
   )
 
@@ -82,13 +89,19 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:listWorkItems',
     (_event, args: { repoPath: string; limit?: number; query?: string; before?: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return listWorkItems(repo.path, args.limit, args.query, args.before)
+      return listWorkItems(
+        repo.path,
+        args.limit,
+        args.query,
+        args.before,
+        repo.issueSourcePreference
+      )
     }
   )
 
   ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return countWorkItems(repo.path, args.query)
+    return countWorkItems(repo.path, args.query, repo.issueSourcePreference)
   })
 
   ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) =>
@@ -312,16 +325,23 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:listLabels', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listLabels(repo.path)
+    return listLabels(repo.path, repo.issueSourcePreference)
   })
 
   ipcMain.handle('gh:listAssignableUsers', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listAssignableUsers(repo.path)
+    return listAssignableUsers(repo.path, repo.issueSourcePreference)
   })
 
   // Star operations target the Orca repo itself — no repoPath validation needed
   ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', () => starOrca())
+
+  // Why: issue-source preference writes go through the generic `repos:update`
+  // IPC (extended in this PR to accept `issueSourcePreference`). Routing
+  // through the same channel keeps a single write path, guarantees the
+  // `repos:changed` broadcast is emitted, and avoids two channels racing to
+  // persist the same field with different validation and eviction semantics.
+  // Reads piggyback on the `Repo` record already delivered by `repos:list`.
 }

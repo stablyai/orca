@@ -13,6 +13,7 @@ export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
 export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
 export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
 export const ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT = 'orca:editor-request-cmd-save'
+export const ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT = 'orca:editor-request-file-close'
 
 export type EditorPathMutationTarget = {
   worktreeId: string
@@ -41,6 +42,10 @@ export type EditorSaveFileDetail = EditorSaveFileTarget & {
 export type EditorFileSavedDetail = {
   fileId: string
   content: string
+}
+
+export type EditorRequestFileCloseDetail = {
+  fileId: string
 }
 
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
@@ -129,6 +134,14 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
       reject(new Error('Editor save controller is unavailable.'))
     }
   })
+}
+
+export function requestEditorFileClose(fileId: string): void {
+  window.dispatchEvent(
+    new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {
+      detail: { fileId }
+    })
+  )
 }
 
 export function notifyEditorExternalFileChange(target: EditorPathMutationTarget): void {

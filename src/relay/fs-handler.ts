@@ -1,26 +1,10 @@
-import {
-  readdir,
-  readFile,
-  writeFile,
-  stat,
-  lstat,
-  mkdir,
-  rename,
-  cp,
-  rm,
-  realpath
-} from 'fs/promises'
-import { extname } from 'path'
+import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
 import {
-  MAX_FILE_SIZE,
-  MAX_PREVIEWABLE_BINARY_SIZE,
   DEFAULT_MAX_RESULTS,
-  IMAGE_MIME_TYPES,
-  isBinaryBuffer,
   searchWithRg,
   listFilesWithRg,
   checkRgAvailable
@@ -29,6 +13,7 @@ import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
+import { readRelayFileContent } from './fs-handler-file-read'
 
 type WatchState = {
   rootPath: string
@@ -86,23 +71,7 @@ export class FsHandler {
   private async readFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
     await this.context.validatePathResolved(filePath)
-    const stats = await stat(filePath)
-    const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
-    const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_FILE_SIZE
-    if (stats.size > sizeLimit) {
-      throw new Error(
-        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
-      )
-    }
-
-    const buffer = await readFile(filePath)
-    if (mimeType) {
-      return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
-    }
-    if (isBinaryBuffer(buffer)) {
-      return { content: '', isBinary: true }
-    }
-    return { content: buffer.toString('utf-8'), isBinary: false }
+    return readRelayFileContent(filePath)
   }
 
   private async writeFile(params: Record<string, unknown>) {
