@@ -361,17 +361,26 @@
 /* Why: workspace view still needs a full titlebar-height strip above the
    sidebar so the native macOS traffic lights and sidebar chrome sit in the
    same vertical band they use in settings/landing. The center and right
-   workspace columns are offset separately to align with this 42px baseline. */
+   workspace columns are offset separately to align with this 36px baseline
+   (4px drag strip + 32px tab row). */
 .titlebar-left {
-  height: 42px;
-  min-height: 42px;
+  height: 36px;
+  min-height: 36px;
   display: flex;
   flex-direction: row;
   align-items: center;
   overflow: hidden;
   flex-shrink: 0;
   background: var(--bg-titlebar, var(--card));
-  border-bottom: 1px solid var(--border);
+  /* Why: draw the divider via inset shadow instead of border-bottom so the
+     flex content area spans the full 36px. With border-bottom + border-box,
+     the content area shrinks to 35px and flex-centered controls land at
+     y=17.5, a half-pixel below the native traffic-light center at y=18
+     (set via setWindowButtonPosition in createMainWindow.ts). The shadow
+     paints the same 1px seam without stealing layout space, so the sidebar
+     toggle, agent badge, and back/forward arrows align pixel-perfectly
+     with the traffic lights. */
+  box-shadow: inset 0 -1px 0 var(--border);
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -405,6 +414,11 @@
    .sidebar-toggle spacing stays unchanged for other titlebar icons. */
 .sidebar-toggle-compact {
   padding: 4px 5px;
+  color: var(--foreground);
+}
+
+.sidebar-toggle-compact:disabled {
+  color: var(--muted-foreground);
 }
 
 .sidebar-toggle:disabled {

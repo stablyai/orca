@@ -1048,7 +1048,7 @@ function App(): React.JSX.Element {
                 a few pixels, which reads as layout jitter. */}
             {workspaceActive && !rightSidebarOpen && (
               <div
-                className="absolute top-0 right-0 z-10 flex items-center h-[42px]"
+                className="absolute top-0 right-0 z-10 flex items-center h-[36px]"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
                 {rightSidebarToggle}

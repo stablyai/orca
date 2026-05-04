@@ -31,11 +31,11 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
-// Why: the titlebar is 42px (border-box, 1px border-bottom).  The visual
-// center of the CSS-centered content sits at ~20 CSS px from the top.
-// At zoom factor z that becomes 20·z window px.  Traffic lights are
+// Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
+// center of the CSS-centered content sits at ~18 CSS px from the top.
+// At zoom factor z that becomes 18·z window px.  Traffic lights are
 // ~12px tall, so we position their top edge at (center − 6).
-const TITLEBAR_CSS_CENTER = 20
+const TITLEBAR_CSS_CENTER = 18
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600

@@ -302,7 +302,7 @@ function RightSidebarInner(): React.JSX.Element {
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <div className="flex items-center justify-between border-b border-border h-[42px] min-h-[42px] pl-2 pr-1">
+              <div className="flex items-center justify-between border-b border-border h-[36px] min-h-[36px] pl-2 pr-1">
                 <TooltipProvider delayDuration={400}>
                   <div className="flex items-center">{activityBarIcons}</div>
                   {closeButton}
@@ -316,7 +316,7 @@ function RightSidebarInner(): React.JSX.Element {
           </ContextMenu>
         ) : (
           /* ── Side layout: static title header ── */
-          <div className="flex items-center justify-between h-[42px] min-h-[42px] px-3 border-b border-border">
+          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
@@ -409,7 +409,7 @@ function ActivityBarButton({
         <button
           className={cn(
             'relative flex items-center justify-center transition-colors',
-            isTop ? 'h-[42px] w-9' : 'w-10 h-10',
+            isTop ? 'h-[36px] w-9' : 'w-10 h-10',
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
