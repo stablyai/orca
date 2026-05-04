@@ -22,15 +22,24 @@ export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstre
       }
     )
 
-    const [aheadText = '0', behindText = '0'] = countsStdout.trim().split(/\s+/)
-    const ahead = Number.parseInt(aheadText, 10)
-    const behind = Number.parseInt(behindText, 10)
+    const tokens = countsStdout.trim().split(/\s+/)
+    if (tokens.length !== 2) {
+      // Why: 'rev-list --left-right --count HEAD...@{u}' must emit exactly two
+      // tokens; anything else (empty stdout, truncation, unexpected locale) is a
+      // real failure and must not be silently reported as "in sync" 0/0.
+      throw new Error(`Unexpected git rev-list output: ${JSON.stringify(countsStdout)}`)
+    }
+    const ahead = Number.parseInt(tokens[0]!, 10)
+    const behind = Number.parseInt(tokens[1]!, 10)
+    if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
+      throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(countsStdout)}`)
+    }
 
     return {
       hasUpstream: true,
       upstreamName,
-      ahead: Number.isFinite(ahead) ? ahead : 0,
-      behind: Number.isFinite(behind) ? behind : 0
+      ahead,
+      behind
     }
   } catch (error) {
     // Why: we only swallow clearly-no-upstream signals — that's an expected
@@ -47,6 +56,6 @@ export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstre
     }
     // Why: parity with gitPush/gitPull/gitFetch — normalize before crossing
     // the IPC boundary so renderers don't see execFile stderr preambles or local paths.
-    throw new Error(normalizeGitErrorMessage(error))
+    throw new Error(normalizeGitErrorMessage(error, 'upstream'))
   }
 }

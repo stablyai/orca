@@ -6,7 +6,7 @@ export async function gitPush(worktreePath: string, publish = false): Promise<vo
     const args = publish ? ['push', '--set-upstream', 'origin', 'HEAD'] : ['push']
     await gitExecFileAsync(args, { cwd: worktreePath })
   } catch (error) {
-    throw new Error(normalizeGitErrorMessage(error))
+    throw new Error(normalizeGitErrorMessage(error, 'push'))
   }
 }
 
@@ -17,7 +17,7 @@ export async function gitPull(worktreePath: string): Promise<void> {
   try {
     await gitExecFileAsync(['pull'], { cwd: worktreePath })
   } catch (error) {
-    throw new Error(normalizeGitErrorMessage(error))
+    throw new Error(normalizeGitErrorMessage(error, 'pull'))
   }
 }
 
@@ -25,6 +25,6 @@ export async function gitFetch(worktreePath: string): Promise<void> {
   try {
     await gitExecFileAsync(['fetch', '--prune'], { cwd: worktreePath })
   } catch (error) {
-    throw new Error(normalizeGitErrorMessage(error))
+    throw new Error(normalizeGitErrorMessage(error, 'fetch'))
   }
 }

@@ -1,14 +1,17 @@
-// Why: git's stderr often embeds the full remote URL, which can include an
-// embedded credential — either `scheme://user:token@host/...` (the classic
-// user+pass form) OR `scheme://token@host/...` (token-only, which GitHub's
-// "fine-grained PAT" docs explicitly recommend). Both must be redacted. The
-// scheme match covers any credential-bearing URL scheme (HTTPS plus SSH/git
-// variants like `ssh://`, `git://`, `git+ssh://`) since Orca supports SSH
-// remotes and git stderr can surface any of them.
-const CREDENTIAL_URL_PATTERN = /([a-z][a-z0-9+.-]*:\/\/)([^\s/@]+:)?[^\s/@]+@/gi
+// Why: git's stderr often embeds the full remote URL, which can include a
+// credential. Redact carefully: classic `user:password@` forms always carry
+// a credential on any scheme (HTTPS, ssh://, git://, git+ssh://), but a
+// lone `user@` is a credential ONLY for HTTP(S) (e.g. token-only PATs like
+// `https://ghp_xxx@host`). For `ssh://git@host/...` the `git` login is
+// required by the SSH remote — stripping it would produce a broken URL in
+// the surfaced error and hide which remote actually failed. The two
+// scheme-scoped patterns below keep SSH user-info intact while still
+// scrubbing passwords on any scheme and HTTPS token-only forms.
+const USERPASS_URL_PATTERN = /([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi
+const HTTPS_TOKEN_URL_PATTERN = /(https?:\/\/)[^\s/@:]+@/gi
 
 export function stripCredentialsFromMessage(message: string): string {
-  return message.replace(CREDENTIAL_URL_PATTERN, '$1')
+  return message.replace(USERPASS_URL_PATTERN, '$1').replace(HTTPS_TOKEN_URL_PATTERN, '$1')
 }
 
 function extractTailLine(message: string): string {
@@ -23,16 +26,29 @@ function extractTailLine(message: string): string {
   return lines.at(-1) ?? message
 }
 
-export function normalizeGitErrorMessage(error: unknown): string {
+export type GitRemoteOperation = 'push' | 'pull' | 'fetch' | 'upstream'
+
+export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOperation): string {
   if (!(error instanceof Error)) {
     return 'Git remote operation failed.'
   }
 
-  const raw = error.message
+  // Why: scrub credentials up-front so every downstream branch — including
+  // any future refactor that returns a substring of `raw` — operates on
+  // already-redacted text. The fast-path branches below return fixed
+  // literals today, but this hardens against accidental leakage later.
+  const raw = stripCredentialsFromMessage(error.message)
 
-  if (raw.includes('non-fast-forward') || raw.includes('fetch first')) {
-    // Why: this specific guidance tells users the safe recovery path instead
-    // of surfacing raw git stderr that varies across git versions/locales.
+  // Why: `non-fast-forward` / `fetch first` can appear on fetch (after a
+  // remote force-push updating a tracking ref) and on pull (with
+  // `pull.ff=only`), so the "pull or sync first" guidance only makes sense
+  // when the user was actually pushing. For other operations, fall through
+  // to the generic tail-line path. `operation === undefined` keeps the
+  // legacy push-shaped message for any caller that hasn't been updated yet.
+  if (
+    (operation === 'push' || operation === undefined) &&
+    (raw.includes('non-fast-forward') || raw.includes('fetch first'))
+  ) {
     return 'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
   }
 
@@ -48,9 +64,9 @@ export function normalizeGitErrorMessage(error: unknown): string {
     return 'Branch has no upstream. Publish the branch first.'
   }
 
-  // Fallthrough: extract only the tail stderr line and scrub any embedded
-  // credential before returning. See CREDENTIAL_URL_PATTERN comment above.
-  return stripCredentialsFromMessage(extractTailLine(raw))
+  // Fallthrough: extract only the tail stderr line. `raw` was already
+  // credential-scrubbed at the top of the function, so no further scrub needed.
+  return extractTailLine(raw)
 }
 
 // Why: we only swallow clearly-no-upstream signals — an expected state, not a
@@ -61,12 +77,20 @@ export function normalizeGitErrorMessage(error: unknown): string {
 // which would cause every non-repo/corrupt failure to spuriously look like
 // no-upstream. We also do NOT match 'no such branch' — that phrase is too
 // broad and can mask real errors on corrupt refs or sparse-checkout failures.
-const NO_UPSTREAM_ERROR_PATTERN =
+// Additionally gate the phrase match on a `fatal:` prefix: git always
+// prefixes these diagnostics with `fatal:`, so requiring it prevents
+// `HEAD does not point` / `Needed a single revision` from matching unrelated
+// output (e.g. hook stdout, progress lines) and silently hiding real
+// corrupt-repo / unborn-HEAD / ambiguous-ref failures behind a spurious
+// "0 ahead / 0 behind, no upstream" UI state.
+const NO_UPSTREAM_PHRASE_PATTERN =
   /no upstream configured|no tracking information|HEAD does not point|Needed a single revision/i
+const FATAL_PREFIX_PATTERN = /(^|\n)fatal:/i
 
 export function isNoUpstreamError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
-  return NO_UPSTREAM_ERROR_PATTERN.test(error.message)
+  const message = error.message
+  return FATAL_PREFIX_PATTERN.test(message) && NO_UPSTREAM_PHRASE_PATTERN.test(message)
 }

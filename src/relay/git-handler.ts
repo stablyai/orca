@@ -215,14 +215,23 @@ export class GitHandler {
         ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
         worktreePath
       )
-      const [aheadText = '0', behindText = '0'] = countsStdout.trim().split(/\s+/)
-      const ahead = Number.parseInt(aheadText, 10)
-      const behind = Number.parseInt(behindText, 10)
+      const tokens = countsStdout.trim().split(/\s+/)
+      if (tokens.length !== 2) {
+        // Why: 'rev-list --left-right --count HEAD...@{u}' must emit exactly two
+        // tokens; anything else (empty stdout, SSH transport truncation, unexpected
+        // locale) is a real failure and must not be silently reported as "in sync" 0/0.
+        throw new Error(`Unexpected git rev-list output: ${JSON.stringify(countsStdout)}`)
+      }
+      const ahead = Number.parseInt(tokens[0]!, 10)
+      const behind = Number.parseInt(tokens[1]!, 10)
+      if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
+        throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(countsStdout)}`)
+      }
       return {
         hasUpstream: true,
         upstreamName,
-        ahead: Number.isFinite(ahead) ? ahead : 0,
-        behind: Number.isFinite(behind) ? behind : 0
+        ahead,
+        behind
       }
     } catch (error) {
       // Why: we only swallow the 'no upstream configured' error — that's an
@@ -233,7 +242,7 @@ export class GitHandler {
       }
       // Why: match fetch/push/pull normalization so execFile preamble and local
       // paths don't leak to the renderer.
-      throw new Error(normalizeGitErrorMessage(error))
+      throw new Error(normalizeGitErrorMessage(error, 'upstream'))
     }
   }
 
@@ -246,7 +255,7 @@ export class GitHandler {
       // Why: mirror the local gitFetch normalization so SSH users see the same
       // actionable messages instead of raw git stderr (which varies across
       // versions/locales and may embed credentials).
-      throw new Error(normalizeGitErrorMessage(error))
+      throw new Error(normalizeGitErrorMessage(error, 'fetch'))
     }
   }
 
@@ -260,7 +269,7 @@ export class GitHandler {
     } catch (error) {
       // Why: mirror the local gitPush normalization so SSH users see the same
       // "non-fast-forward / pull first" guidance instead of raw git stderr.
-      throw new Error(normalizeGitErrorMessage(error))
+      throw new Error(normalizeGitErrorMessage(error, 'push'))
     }
   }
 
@@ -274,7 +283,7 @@ export class GitHandler {
     } catch (error) {
       // Why: mirror the local gitPull normalization so SSH users see the same
       // actionable messages instead of raw git stderr.
-      throw new Error(normalizeGitErrorMessage(error))
+      throw new Error(normalizeGitErrorMessage(error, 'pull'))
     }
   }
 

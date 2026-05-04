@@ -588,15 +588,19 @@ export function registerFilesystemHandlers(store: Store): void {
       _event,
       args: { worktreePath: string; publish?: boolean; connectionId?: string }
     ): Promise<void> => {
+      // Why: coerce to strict boolean at the IPC boundary so a malformed
+      // renderer payload (e.g. string 'false') can't silently enable
+      // --set-upstream mode. Mirrors the relay handler in src/relay/git-handler.ts.
+      const publish = args.publish === true
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.pushBranch(args.worktreePath, args.publish)
+        return provider.pushBranch(args.worktreePath, publish)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await gitPush(worktreePath, args.publish)
+      await gitPush(worktreePath, publish)
     }
   )
 
