@@ -284,15 +284,6 @@ export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks 
   }
 }
 
-export function setupScriptsMatch(
-  repo: Repo,
-  worktreePath: string,
-  primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
-): boolean {
-  const worktreeSetupScript = getEffectiveHooks(repo, worktreePath)?.scripts.setup
-  return primarySetupScript === worktreeSetupScript
-}
-
 export function getEffectiveSetupRunPolicy(repo: Repo): SetupRunPolicy {
   return repo.hookSettings?.setupRunPolicy ?? getDefaultRepoHookSettings().setupRunPolicy!
 }

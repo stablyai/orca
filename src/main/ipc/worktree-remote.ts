@@ -2,9 +2,9 @@
 // Why: extracted from worktrees.ts to keep the main IPC module under the
 // max-lines threshold. Worktree creation helpers (local and remote) live
 // here so the IPC dispatch file stays focused on handler wiring. The
-// recently added sparse-checkout flow plus the worktree-bound setup-script
-// trust gate pushed this file marginally over the per-file limit; matches
-// the eslint-disable pattern other files in src/renderer use when a
+// sparse-checkout flow plus the post-create setup-runner wiring pushed
+// this file marginally over the per-file limit; matches the
+// eslint-disable pattern other files in src/renderer use when a
 // cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
@@ -22,12 +22,7 @@ import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import {
-  createSetupRunnerScript,
-  getEffectiveHooks,
-  setupScriptsMatch,
-  shouldRunSetupForCreate
-} from '../hooks'
+import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -317,12 +312,12 @@ export async function createLocalWorktree(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
   }
-  const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
   // Why: `ask` is a pre-create choice gate, not a post-create side effect.
   // Resolve it before mutating git state so missing UI input cannot strand
   // a real worktree on disk while the renderer reports "create failed". The
-  // actual run/skip decision is recomputed after the worktree exists, gated
-  // on the worktree's own setup script matching the primary's preview.
+  // actual run/skip decision is recomputed after the worktree exists against
+  // the worktree-bound setup script.
+  const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
   if (primarySetupScript) {
     shouldRunSetupForCreate(repo, args.setupDecision)
   }
@@ -414,15 +409,19 @@ export async function createLocalWorktree(
   // adds 100ms+ to every create.
   invalidateAuthorizedRootsCache()
 
+  // Why: the worktree's own `orca.yaml` (at the tip of the base branch) is
+  // authoritative for what runs post-creation. The repo-level trust already
+  // granted by the user in the pre-create flow covers execution of that
+  // script; we intentionally do not re-gate on content equality with the
+  // primary checkout's preview, because benign divergence (whitespace,
+  // comments, or any setup-script edit that has landed on the base branch
+  // but not yet been pulled into the primary checkout) was silently
+  // disabling setup with no UI signal. See #1280 for the original gate and
+  // the regression this replaced.
   let setup: CreateWorktreeResult['setup']
   const setupScript = getEffectiveHooks(repo, worktreePath)?.scripts.setup
-  const setupMatchesPreview = setupScriptsMatch(repo, worktreePath, primarySetupScript)
   let shouldLaunchSetup = false
-  if (setupScript && !setupMatchesPreview) {
-    console.warn(
-      `[hooks] setup hook skipped for ${worktreePath}: worktree setup script differs from the primary checkout setup script shown to the user`
-    )
-  } else if (setupScript) {
+  if (setupScript) {
     try {
       shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
     } catch (error) {
