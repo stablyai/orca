@@ -35,8 +35,24 @@ describe('applyTerminalAttributionEnv', () => {
     return execFileSync('git', args, {
       cwd: repo,
       encoding: 'utf8',
-      env: { ...process.env, ...env }
+      env: { ...getCleanProcessEnv(), ...env }
     })
+  }
+
+  function getCleanProcessEnv(): NodeJS.ProcessEnv {
+    const env = { ...process.env }
+    delete env.ORCA_ENABLE_GIT_ATTRIBUTION
+    delete env.ORCA_GIT_COMMIT_TRAILER
+    delete env.ORCA_GH_PR_FOOTER
+    delete env.ORCA_GH_ISSUE_FOOTER
+    delete env.ORCA_ATTRIBUTION_SHIM_DIR
+    delete env.ORCA_REAL_GIT
+    delete env.ORCA_REAL_GH
+    env.PATH = (env.PATH ?? '')
+      .split(process.platform === 'win32' ? ';' : ':')
+      .filter((entry) => !entry.replace(/\\/g, '/').includes('/orca-terminal-attribution/'))
+      .join(process.platform === 'win32' ? ';' : ':')
+    return env
   }
 
   it('does not amend HEAD when git commit --dry-run exits successfully', () => {

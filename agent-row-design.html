@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent row — spacing polish only</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .spinner {
+        width: 10px; height: 10px;
+        border: 2px solid #eab308;
+        border-top-color: transparent;
+        border-radius: 9999px;
+        animation: spin 0.8s linear infinite;
+      }
+      .claude { color: #d97706; }
+    </style>
+  </head>
+  <body class="bg-neutral-100 p-10 text-neutral-900">
+    <div class="mx-auto max-w-xl space-y-8">
+
+      <!-- ================ BEFORE ================ -->
+      <section>
+        <h2 class="mb-3 text-sm font-semibold text-neutral-600">Before</h2>
+        <div class="rounded-md border border-neutral-200 bg-white p-3 shadow-sm">
+          <div class="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-neutral-400">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            AGENTS (3)
+          </div>
+          <div class="divide-y divide-neutral-200/60">
+            <div class="flex flex-col py-0.5">
+              <div class="flex items-center gap-1.5 px-1">
+                <span class="inline-flex h-2.5 w-2.5 items-center justify-center">
+                  <span class="spinner"></span>
+                </span>
+                <span class="claude"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+                <span class="text-[11px] font-semibold truncate flex-1">yes</span>
+                <span class="text-[10px] text-neutral-400">1m</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-neutral-400"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-neutral-400"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+              <div class="pl-5 text-[10px] text-neutral-500 truncate">Revert pushed as 610ffbadb2. Gate the migration behind flag.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================ AFTER — spacing only ================ -->
+      <section>
+        <h2 class="mb-3 text-sm font-semibold text-neutral-600">After — spacing only</h2>
+
+        <!-- Same glyphs as today. Only changed:
+             • row padding py-1.5 px-2 (was py-0.5 px-1)
+             • gap-2 between state / agent / text (was 1.5)
+             • title leading-[18px], subtitle leading-[16px] (was leading-snug/tight)
+             • subtitle indent matches agent icon (pl-[26px])
+             • right cluster gap-1 with time → hover swap, no always-on icons
+             • title normal+muted when visited, semibold+fg when unvisited -->
+
+        <div class="rounded-lg border border-neutral-200 bg-white p-2 shadow-sm">
+
+          <button class="group mb-0.5 flex w-full items-center gap-1 rounded px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-neutral-400 hover:text-neutral-600">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            <span>Agents (5)</span>
+          </button>
+
+          <div class="flex flex-col">
+
+            <!-- WORKING, unvisited -->
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-100/80">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center">
+                  <span class="spinner"></span>
+                </span>
+                <span class="inline-flex shrink-0 claude">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+                </span>
+                <span class="min-w-0 flex-1 truncate text-[12px] font-semibold leading-[18px] text-neutral-900">implement retry logic for websocket disconnects</span>
+                <span class="ml-1 flex shrink-0 items-center gap-1">
+                  <span class="text-[10.5px] tabular-nums text-neutral-400 group-hover:hidden">12s</span>
+                  <button class="hidden rounded p-0.5 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 group-hover:inline-flex">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  </button>
+                  <button class="rounded p-0.5 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                </span>
+              </div>
+              <div class="mt-0.5 flex min-w-0 items-center gap-1 pl-[26px] text-[11px] leading-[16px] text-neutral-500">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span class="shrink-0 font-mono text-[10.5px] text-neutral-600">Bash</span>
+                <span class="truncate text-neutral-400">pnpm test src/ws/*.test.ts --watch</span>
+              </div>
+            </div>
+
+            <!-- DONE, visited — existing CircleCheck glyph kept as-is -->
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-100/80">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                </span>
+                <span class="inline-flex shrink-0 claude">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+                </span>
+                <span class="min-w-0 flex-1 truncate text-[12px] leading-[18px] text-neutral-600">Revert pushed as 610ffbadb2. Gate the migration.</span>
+                <span class="ml-1 shrink-0 text-[10.5px] tabular-nums text-neutral-400">2m</span>
+              </div>
+              <div class="mt-0.5 truncate pl-[26px] text-[11px] leading-[16px] text-neutral-400">Post-deploy health check passed; ready for review.</div>
+            </div>
+
+            <!-- WAITING / needs attention -->
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-100/80">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center">
+                  <span class="block h-2 w-2 rounded-full bg-red-500"></span>
+                </span>
+                <span class="inline-flex shrink-0 claude">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+                </span>
+                <span class="min-w-0 flex-1 truncate text-[12px] font-semibold leading-[18px] text-neutral-900">Approve running <code class="rounded bg-neutral-100 px-1 font-mono text-[10.5px]">rm -rf dist/</code>?</span>
+                <span class="ml-1 shrink-0 text-[10.5px] tabular-nums text-neutral-400">just now</span>
+              </div>
+              <div class="mt-0.5 truncate pl-[26px] text-[11px] leading-[16px] text-red-500/90">Waiting for your input</div>
+            </div>
+
+            <!-- DONE + interrupted tag -->
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-100/80">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                </span>
+                <span class="inline-flex shrink-0 claude">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+                </span>
+                <span class="min-w-0 flex-1 truncate text-[12px] leading-[18px] text-neutral-600">local.env points to staging</span>
+                <span class="shrink-0 rounded bg-rose-500/10 px-1.5 py-px text-[10px] font-medium leading-4 text-rose-600">interrupted</span>
+                <span class="ml-1 shrink-0 text-[10.5px] tabular-nums text-neutral-400">8m</span>
+              </div>
+              <div class="mt-0.5 truncate pl-[26px] text-[11px] leading-[16px] text-neutral-400">Post-deploy health check (last 45 minutes)</div>
+            </div>
+
+            <!-- IDLE -->
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-100/80">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center">
+                  <span class="block h-1.5 w-1.5 rounded-full bg-neutral-400/50"></span>
+                </span>
+                <span class="inline-flex shrink-0 claude">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+                </span>
+                <span class="min-w-0 flex-1 truncate text-[12px] leading-[18px] text-neutral-400 italic">Idle</span>
+                <span class="ml-1 shrink-0 text-[10.5px] tabular-nums text-neutral-400">1h</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Dark -->
+        <h2 class="mt-10 mb-3 text-sm font-semibold text-neutral-600">Dark</h2>
+        <div class="rounded-lg border border-neutral-800 bg-neutral-900 p-2 shadow-sm">
+          <div class="mb-0.5 flex items-center gap-1 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            <span>Agents (3)</span>
+          </div>
+          <div class="flex flex-col">
+
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-800/60">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center"><span class="spinner"></span></span>
+                <span class="inline-flex shrink-0 text-amber-400"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+                <span class="min-w-0 flex-1 truncate text-[12px] font-semibold leading-[18px] text-neutral-100">implement retry logic for websocket disconnects</span>
+                <span class="ml-1 shrink-0 text-[10.5px] tabular-nums text-neutral-500">12s</span>
+              </div>
+              <div class="mt-0.5 flex min-w-0 items-center gap-1 pl-[26px] text-[11px] leading-[16px] text-neutral-500">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span class="shrink-0 font-mono text-[10.5px] text-neutral-400">Bash</span>
+                <span class="truncate text-neutral-500">pnpm test src/ws/*.test.ts --watch</span>
+              </div>
+            </div>
+
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-800/60">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                </span>
+                <span class="inline-flex shrink-0 text-amber-400"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+                <span class="min-w-0 flex-1 truncate text-[12px] leading-[18px] text-neutral-400">Revert pushed as 610ffbadb2. Gate the migration.</span>
+                <span class="ml-1 shrink-0 text-[10.5px] tabular-nums text-neutral-500">2m</span>
+              </div>
+              <div class="mt-0.5 truncate pl-[26px] text-[11px] leading-[16px] text-neutral-500">Post-deploy health check passed; ready for review.</div>
+            </div>
+
+            <div class="group flex flex-col rounded-md px-2 py-1.5 hover:bg-neutral-800/60">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-3 w-3 shrink-0 items-center justify-center"><span class="block h-2 w-2 rounded-full bg-red-500"></span></span>
+                <span class="inline-flex shrink-0 text-amber-400"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+                <span class="min-w-0 flex-1 truncate text-[12px] font-semibold leading-[18px] text-neutral-100">Approve running <code class="rounded bg-neutral-800 px-1 font-mono text-[10.5px]">rm -rf dist/</code>?</span>
+                <span class="ml-1 shrink-0 text-[10.5px] tabular-nums text-neutral-500">just now</span>
+              </div>
+              <div class="mt-0.5 truncate pl-[26px] text-[11px] leading-[16px] text-red-400">Waiting for your input</div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-lg border border-neutral-200 bg-white p-4 text-[13px] leading-6 text-neutral-700">
+        <h3 class="mb-2 text-sm font-semibold text-neutral-900">Spacing diff</h3>
+        <ul class="list-disc space-y-1 pl-5">
+          <li>Row padding <code>py-0.5 px-1</code> → <code>py-1.5 px-2</code>. Rows breathe.</li>
+          <li>Inner gap <code>gap-1.5</code> → <code>gap-2</code>. State dot and agent icon no longer collide.</li>
+          <li>State slot normalized to <code>h-3 w-3</code>; agent icon stays 14px — consistent left edge.</li>
+          <li>Subtitle indent <code>pl-5</code> → <code>pl-[26px]</code> to line up under the agent icon, not between the two glyphs.</li>
+          <li>Title <code>leading-[18px]</code>, subtitle <code>leading-[16px]</code>. Fixes cramped <code>leading-snug</code> on 10–11px text.</li>
+          <li>Dividers removed; hover background separates rows.</li>
+          <li>Always-on dismiss/expand glyphs → hover-only, with 2px chip padding for a real 24×24 hit target.</li>
+          <li>Title weight: <code>font-semibold text-foreground</code> when unvisited or needs-attention, <code>text-muted-foreground</code> normal when read — stops read rows from shouting.</li>
+        </ul>
+      </section>
+    </div>
+  </body>
+</html>

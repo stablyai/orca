@@ -6,7 +6,9 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory,
   createWorktreeNavHistorySlice,
-  setWorktreeNavActivator
+  findPrevLiveWorktreeHistoryIndex,
+  setWorktreeNavActivator,
+  setWorktreeNavViewActivator
 } from './worktree-nav-history'
 
 type MinimalState = Pick<
@@ -15,6 +17,7 @@ type MinimalState = Pick<
   | 'worktreeNavHistoryIndex'
   | 'isNavigatingHistory'
   | 'recordWorktreeVisit'
+  | 'recordViewVisit'
   | 'goBackWorktree'
   | 'goForwardWorktree'
   | 'worktreesByRepo'
@@ -179,6 +182,104 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
 
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
     expect(store.getState().isNavigatingHistory).toBe(false)
+  })
+})
+
+describe('worktree-nav-history slice: Tasks entries', () => {
+  afterEach(() => {
+    setWorktreeNavActivator(null)
+    setWorktreeNavViewActivator(null)
+  })
+
+  it('A -> Tasks -> B, back lands on Tasks then A', () => {
+    const store = createHistoryStore(['a', 'b'])
+    const activated: string[] = []
+    const viewed: string[] = []
+    setWorktreeNavActivator((id) => {
+      activated.push(id as string)
+      return { primaryTabId: null }
+    })
+    setWorktreeNavViewActivator((v) => {
+      viewed.push(v)
+    })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().recordViewVisit('tasks')
+    store.getState().recordWorktreeVisit('b')
+
+    expect(store.getState().worktreeNavHistory).toEqual(['a', 'tasks', 'b'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(2)
+
+    store.getState().goBackWorktree()
+    expect(viewed).toEqual(['tasks'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+
+    store.getState().goBackWorktree()
+    expect(activated).toEqual(['a'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('dedupes Tasks against the current Tasks entry', () => {
+    const store = createHistoryStore(['a'])
+    store.getState().recordWorktreeVisit('a')
+    store.getState().recordViewVisit('tasks')
+    store.getState().recordViewVisit('tasks')
+    store.getState().recordViewVisit('tasks')
+
+    expect(store.getState().worktreeNavHistory).toEqual(['a', 'tasks'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+  })
+
+  it('skips a dead worktree between two Tasks entries', () => {
+    // 'b' is deleted; history is [tasks, b, tasks].
+    const store = createHistoryStore([])
+    const viewed: string[] = []
+    setWorktreeNavViewActivator((v) => {
+      viewed.push(v)
+    })
+
+    store.setState({
+      worktreeNavHistory: ['tasks', 'b', 'tasks'],
+      worktreeNavHistoryIndex: 2
+    })
+
+    store.getState().goBackWorktree()
+    expect(viewed).toEqual(['tasks'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('closeTaskPage-style rewind: A -> Tasks, rewind moves index to A', () => {
+    const store = createHistoryStore(['a'])
+    store.getState().recordWorktreeVisit('a')
+    store.getState().recordViewVisit('tasks')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+
+    // Simulate closeTaskPage's rewind logic.
+    const prev = findPrevLiveWorktreeHistoryIndex(store.getState() as AppState)
+    expect(prev).toBe(0)
+    store.setState({ worktreeNavHistoryIndex: prev ?? store.getState().worktreeNavHistoryIndex })
+
+    // Forward re-opens Tasks.
+    setWorktreeNavActivator(() => ({ primaryTabId: null }))
+    const viewed: string[] = []
+    setWorktreeNavViewActivator((v) => {
+      viewed.push(v)
+    })
+
+    store.getState().goForwardWorktree()
+    expect(viewed).toEqual(['tasks'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+  })
+
+  it('closeTaskPage-style rewind with only-Tasks history leaves index at 0', () => {
+    const store = createHistoryStore([])
+    store.getState().recordViewVisit('tasks')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+
+    const prev = findPrevLiveWorktreeHistoryIndex(store.getState() as AppState)
+    expect(prev).toBeNull()
+    // closeTaskPage leaves the index unchanged when there's no prior live entry.
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 })
 

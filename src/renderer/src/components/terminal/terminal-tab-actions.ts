@@ -2,12 +2,15 @@ import { useAppStore } from '@/store'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 
-export function createNewTerminalTab(activeWorktreeId: string | null): void {
+export function createNewTerminalTab(
+  activeWorktreeId: string | null,
+  shellOverride?: string
+): void {
   if (!activeWorktreeId) {
     return
   }
   const state = useAppStore.getState()
-  const newTab = state.createTab(activeWorktreeId)
+  const newTab = state.createTab(activeWorktreeId, undefined, shellOverride)
   state.setActiveTabType('terminal')
   // Why: persist the tab bar order with the new terminal at the end of the
   // current visual order. Without this, reconcileTabOrder falls back to

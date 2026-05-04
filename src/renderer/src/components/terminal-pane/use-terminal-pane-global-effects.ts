@@ -1,16 +1,19 @@
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
+  SYNC_FIT_PANES_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
   type FocusTerminalPaneDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { shellEscapePath } from './pane-helpers'
 import { fitAndFocusPanes, fitPanes, hasDimensionsChanged } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
+import { handleTerminalFileDrop } from './terminal-drop-handler'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
+  worktreeId: string
+  cwd?: string
   isActive: boolean
   isVisible: boolean
   managerRef: React.RefObject<PaneManager | null>
@@ -24,6 +27,8 @@ type UseTerminalPaneGlobalEffectsArgs = {
 
 export function useTerminalPaneGlobalEffects({
   tabId,
+  worktreeId,
+  cwd,
   isActive,
   isVisible,
   managerRef,
@@ -34,6 +39,10 @@ export function useTerminalPaneGlobalEffects({
   isVisibleRef,
   toggleExpandPane
 }: UseTerminalPaneGlobalEffectsArgs): void {
+  const worktreeIdRef = useRef(worktreeId)
+  worktreeIdRef.current = worktreeId
+  const cwdRef = useRef(cwd)
+  cwdRef.current = cwd
   // Why: starts as `true` so the first render with isVisible=false triggers
   // suspendRendering(). Without this, background worktrees that mount hidden
   // (isVisible=false from the start) never suspend their WebGL contexts —
@@ -231,6 +240,29 @@ export function useTerminalPaneGlobalEffects({
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
   }, [tabId, managerRef])
 
+  // Why: sidebar open/close toggles dispatch SYNC_FIT_PANES_EVENT from a
+  // useLayoutEffect (pre-paint, same frame as the width change) so the
+  // terminal fits synchronously with the new container size, eliminating the
+  // ~16ms "old cols, new container width" flash that a deferred
+  // ResizeObserver rAF would otherwise produce. xterm's terminal.resize()
+  // natively preserves viewportY across reflows (verified in
+  // scroll-reflow.test.ts "reference: undisturbed"), so a bare fitAllPanes()
+  // is all we need — no capture/restore dance. The subsequent per-pane
+  // ResizeObserver rAF and the 150ms debounced global fit become no-ops
+  // because proposeDimensions() will match current cols/rows (early-return
+  // branch in safeFit). Listener is global (not gated on isVisible/isActive)
+  // so background tabs also fit, keeping their scroll position intact for
+  // when the user switches back.
+  useEffect(() => {
+    const onSyncFit = (): void => {
+      managerRef.current?.fitAllPanes()
+    }
+    window.addEventListener(SYNC_FIT_PANES_EVENT, onSyncFit)
+    return () => {
+      window.removeEventListener(SYNC_FIT_PANES_EVENT, onSyncFit)
+    }
+  }, [managerRef])
+
   useEffect(() => {
     if (!isVisible) {
       return
@@ -302,23 +334,17 @@ export function useTerminalPaneGlobalEffects({
       if (!manager) {
         return
       }
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
-      if (!pane) {
+      const wtId = worktreeIdRef.current
+      if (!wtId) {
         return
       }
-      const transport = paneTransportsRef.current.get(pane.id)
-      if (!transport) {
-        return
-      }
-      // Why: preload consumes native OS drops before React sees them, so the
-      // terminal cannot rely on DOM `drop` events for external files. Reusing
-      // the active PTY transport preserves the existing CLI behavior for drag-
-      // and-drop path insertion instead of opening those files in the editor.
-      // Why: appending a trailing space keeps multiple paths separated in the
-      // terminal input, matching standard drag-and-drop UX conventions.
-      for (const path of data.paths) {
-        transport.sendInput(`${shellEscapePath(path)} `)
-      }
+      void handleTerminalFileDrop({
+        manager,
+        paneTransports: paneTransportsRef.current,
+        worktreeId: wtId,
+        cwd: cwdRef.current,
+        data
+      })
     })
   }, [isActive, managerRef, paneTransportsRef])
 }

@@ -10,6 +10,16 @@ import {
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 
+function isTerminalTabSwitchChord(input: Electron.Input): boolean {
+  return (
+    Boolean(input.control) &&
+    !input.meta &&
+    !input.alt &&
+    !input.shift &&
+    (input.code === 'PageDown' || input.code === 'PageUp')
+  )
+}
+
 export function setupGuestContextMenu(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -228,6 +238,16 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
 
+    // Why: terminal-only tab switching is intentionally Ctrl+PageUp/PageDown on
+    // every platform. Handle it before the primary-modifier gate so macOS Ctrl
+    // (non-primary there) still forwards out of focused browser guests.
+    if (isTerminalTabSwitchChord(input)) {
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:switchTerminalTab', input.code === 'PageDown' ? 1 : -1)
+      return
+    }
+
     // Why: browser guests need a broader modifier-chord gate than the main
     // window because they also forward guest-specific tab shortcuts
     // (Cmd/Ctrl+T/W/Shift+B/Shift+[ / ]) in addition to the shared allowlist
@@ -282,7 +302,7 @@ export function setupGuestShortcutForwarding(args: {
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
     } else if (action?.type === 'openNewWorkspace') {
-      renderer.send('ui:openNewWorkspace')
+      renderer.send('ui:openNewWorkspace', action.tab)
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else {

@@ -76,9 +76,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   kiro: {
-    detectCmd: 'kiro',
-    launchCmd: 'kiro',
-    expectedProcess: 'kiro',
+    // Why: the official Kiro installer (https://cli.kiro.dev/install) places a
+    // binary named `kiro-cli` on PATH — there is no `kiro` binary. Keep the
+    // TuiAgent id as 'kiro' for stored preferences, but detect/launch/identify
+    // the real binary name so the agent is recognized as active.
+    detectCmd: 'kiro-cli',
+    launchCmd: 'kiro-cli',
+    expectedProcess: 'kiro-cli',
     promptInjectionMode: 'stdin-after-start'
   },
   crush: {

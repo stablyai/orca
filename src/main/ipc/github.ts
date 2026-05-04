@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: all GitHub IPC handlers stay co-located so
+the repo-path validation, preference-threading, and stats wiring patterns are
+reviewable as one surface. Splitting by feature area would risk drifting
+validation/gate conventions across handler files. */
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
 import type { Repo, GitHubIssueUpdate } from '../../shared/types'
@@ -9,6 +13,7 @@ import {
   getRepoSlug,
   listIssues,
   listWorkItems,
+  countWorkItems,
   getWorkItem,
   createIssue,
   updateIssue,
@@ -19,6 +24,8 @@ import {
   getPRChecks,
   getPRComments,
   resolveReviewThread,
+  addPRReviewComment,
+  addPRReviewCommentReply,
   updatePRTitle,
   mergePR,
   checkOrcaStarred,
@@ -26,6 +33,7 @@ import {
 } from '../github/client'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import type { GitHubPRFile } from '../../shared/types'
+import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
 
 // Why: returns the full Repo object instead of just the path string so that
 // callers have access to repo.id for stat tracking and other context.
@@ -63,34 +71,45 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listIssues(repo.path, args.limit)
+    // Why: listIssues now returns { items, error? }. The IPC handler unwraps to
+    // the items array for the existing contract; feature 1's UI consumes the
+    // richer envelope through `gh:listWorkItems` instead.
+    return listIssues(repo.path, args.limit, repo.issueSourcePreference).then((r) => r.items)
   })
 
   ipcMain.handle(
     'gh:createIssue',
     (_event, args: { repoPath: string; title: string; body: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return createIssue(repo.path, args.title, args.body)
+      return createIssue(repo.path, args.title, args.body, repo.issueSourcePreference)
     }
   )
 
   ipcMain.handle(
     'gh:listWorkItems',
-    (_event, args: { repoPath: string; limit?: number; query?: string }) => {
+    (_event, args: { repoPath: string; limit?: number; query?: string; before?: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return listWorkItems(repo.path, args.limit, args.query)
+      return listWorkItems(
+        repo.path,
+        args.limit,
+        args.query,
+        args.before,
+        repo.issueSourcePreference
+      )
     }
   )
 
-  ipcMain.handle('gh:workItem', (_event, args: { repoPath: string; number: number }) => {
+  ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return getWorkItem(repo.path, args.number)
+    return countWorkItems(repo.path, args.query, repo.issueSourcePreference)
   })
 
-  ipcMain.handle('gh:workItemDetails', (_event, args: { repoPath: string; number: number }) => {
-    const repo = assertRegisteredRepo(args.repoPath, store)
-    return getWorkItemDetails(repo.path, args.number)
-  })
+  ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) =>
+    dispatchWorkItem(args, assertRegisteredRepo(args.repoPath, store).path, getWorkItem)
+  )
+  ipcMain.handle('gh:workItemDetails', (_event, args: WorkItemArgs) =>
+    dispatchWorkItem(args, assertRegisteredRepo(args.repoPath, store).path, getWorkItemDetails)
+  )
 
   ipcMain.handle(
     'gh:prFileContents',
@@ -159,6 +178,105 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   )
 
   ipcMain.handle(
+    'gh:addPRReviewCommentReply',
+    (
+      _event,
+      args: {
+        repoPath: string
+        prNumber: number
+        commentId: number
+        body: string
+        threadId?: string
+        path?: string
+        line?: number
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid PR number' }
+      }
+      if (
+        typeof args.commentId !== 'number' ||
+        !Number.isInteger(args.commentId) ||
+        args.commentId < 1
+      ) {
+        return { ok: false, error: 'Invalid comment ID' }
+      }
+      if (!args.body?.trim()) {
+        return { ok: false, error: 'Comment body required' }
+      }
+      return addPRReviewCommentReply(
+        repo.path,
+        args.prNumber,
+        args.commentId,
+        args.body.trim(),
+        args.threadId,
+        args.path,
+        args.line
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:addPRReviewComment',
+    (
+      _event,
+      args: {
+        repoPath: string
+        prNumber: number
+        commitId: string
+        path: string
+        line: number
+        startLine?: number
+        body: string
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid PR number' }
+      }
+      if (typeof args.line !== 'number' || !Number.isInteger(args.line) || args.line < 1) {
+        return { ok: false, error: 'Invalid line number' }
+      }
+      if (
+        args.startLine !== undefined &&
+        (typeof args.startLine !== 'number' ||
+          !Number.isInteger(args.startLine) ||
+          args.startLine < 1 ||
+          args.startLine > args.line)
+      ) {
+        return { ok: false, error: 'Invalid start line' }
+      }
+      if (!args.commitId?.trim()) {
+        return { ok: false, error: 'Missing PR head SHA' }
+      }
+      if (!args.path?.trim()) {
+        return { ok: false, error: 'File path required' }
+      }
+      if (!args.body?.trim()) {
+        return { ok: false, error: 'Comment body required' }
+      }
+      return addPRReviewComment({
+        repoPath: repo.path,
+        prNumber: args.prNumber,
+        commitId: args.commitId.trim(),
+        path: args.path,
+        line: args.line,
+        startLine: args.startLine,
+        body: args.body.trim()
+      })
+    }
+  )
+
+  ipcMain.handle(
     'gh:updatePRTitle',
     (_event, args: { repoPath: string; prNumber: number; title: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
@@ -207,16 +325,23 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:listLabels', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listLabels(repo.path)
+    return listLabels(repo.path, repo.issueSourcePreference)
   })
 
   ipcMain.handle('gh:listAssignableUsers', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listAssignableUsers(repo.path)
+    return listAssignableUsers(repo.path, repo.issueSourcePreference)
   })
 
   // Star operations target the Orca repo itself — no repoPath validation needed
   ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', () => starOrca())
+
+  // Why: issue-source preference writes go through the generic `repos:update`
+  // IPC (extended in this PR to accept `issueSourcePreference`). Routing
+  // through the same channel keeps a single write path, guarantees the
+  // `repos:changed` broadcast is emitted, and avoids two channels racing to
+  // persist the same field with different validation and eviction semantics.
+  // Reads piggyback on the `Repo` record already delivered by `repos:list`.
 }

@@ -109,6 +109,9 @@ describe('useIpcEvents updater integration', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest,
           settings: { terminalFontSize: 13 }
@@ -168,11 +171,15 @@ describe('useIpcEvents updater integration', () => {
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
           set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
         },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
@@ -194,14 +201,19 @@ describe('useIpcEvents updater integration', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: (listener: (data: { requestId: string }) => void) => {
             credentialResolvedListenerRef.current = listener
             return () => {}
           }
-        }
+        },
+        agentStatus: { onSet: () => () => {} }
       }
     })
 
@@ -257,6 +269,9 @@ describe('useIpcEvents updater integration', () => {
       setRateLimitsFromPush: vi.fn(),
       setSshConnectionState,
       setSshTargetLabels: vi.fn(),
+      setPortForwards: vi.fn(),
+      clearPortForwards: vi.fn(),
+      setDetectedPorts: vi.fn(),
       enqueueSshCredentialRequest: vi.fn(),
       removeSshCredentialRequest: vi.fn(),
       clearRemoteDetectedAgents: vi.fn(),
@@ -346,11 +361,15 @@ describe('useIpcEvents updater integration', () => {
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
           set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
         },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
@@ -369,14 +388,19 @@ describe('useIpcEvents updater integration', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
             sshStateListenerRef.current = listener
             return () => {}
           },
           onCredentialRequest: () => () => {},
-          onCredentialResolved: () => () => {}
-        }
+          onCredentialResolved: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} }
       }
     })
 
@@ -436,6 +460,7 @@ describe('useIpcEvents updater integration', () => {
           createTab,
           setActiveView,
           setActiveWorktree,
+          markWorktreeVisited: vi.fn(),
           setActiveTabType,
           setActiveTab,
           revealWorktreeInSidebar,
@@ -457,6 +482,9 @@ describe('useIpcEvents updater integration', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           clearTabPtyId: vi.fn(),
@@ -522,11 +550,15 @@ describe('useIpcEvents updater integration', () => {
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
           set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
         },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
@@ -545,11 +577,16 @@ describe('useIpcEvents updater integration', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
-        }
+        },
+        agentStatus: { onSet: () => () => {} }
       }
     })
 
@@ -629,6 +666,9 @@ describe('useIpcEvents browser tab close routing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           settings: { terminalFontSize: 13 },
@@ -710,11 +750,15 @@ describe('useIpcEvents browser tab close routing', () => {
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
           set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
         },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
@@ -733,11 +777,16 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
-        }
+        },
+        agentStatus: { onSet: () => () => {} }
       }
     })
 
@@ -801,6 +850,9 @@ describe('useIpcEvents browser tab close routing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           settings: { terminalFontSize: 13 },
@@ -883,11 +935,15 @@ describe('useIpcEvents browser tab close routing', () => {
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
           set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
         },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
@@ -906,11 +962,16 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
-        }
+        },
+        agentStatus: { onSet: () => () => {} }
       }
     })
 
@@ -972,6 +1033,9 @@ describe('useIpcEvents browser tab close routing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           settings: { terminalFontSize: 13 },
@@ -1051,11 +1115,15 @@ describe('useIpcEvents browser tab close routing', () => {
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
           set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
         },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
@@ -1074,11 +1142,16 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
-        }
+        },
+        agentStatus: { onSet: () => () => {} }
       }
     })
 
@@ -1160,6 +1233,9 @@ describe('useIpcEvents shortcut hint clearing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           clearTabPtyId: vi.fn(),
@@ -1228,11 +1304,15 @@ describe('useIpcEvents shortcut hint clearing', () => {
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
           set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
         },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
@@ -1251,11 +1331,16 @@ describe('useIpcEvents shortcut hint clearing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
-        }
+        },
+        agentStatus: { onSet: () => () => {} }
       }
     })
 
@@ -1280,5 +1365,211 @@ describe('useIpcEvents shortcut hint clearing', () => {
     expect(dispatchEvent).toHaveBeenCalledTimes(2)
     expect(toggleSidebar).toHaveBeenCalledTimes(1)
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+  })
+})
+
+describe('useIpcEvents CLI-created worktree activation', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.unstubAllGlobals()
+  })
+
+  // Why: regression guard. The CLI "create agent" flow emits
+  // `ui:activateWorktree` to switch the user to the new workspace. A prior
+  // implementation hand-rolled the activation (setActiveRepo + setActiveView
+  // + setActiveWorktree + ensureWorktreeHasInitialTerminal +
+  // revealWorktreeInSidebar), which bypassed recordWorktreeVisit and left
+  // the back/forward buttons ignoring the CLI-driven switch. This test pins
+  // the handler to the canonical `activateAndRevealWorktree` helper, which
+  // is the single place that records the visit in history.
+  it('routes CLI-driven activation through activateAndRevealWorktree so back/forward history is recorded', async () => {
+    const activateAndRevealWorktree = vi.fn()
+    const fetchWorktrees = vi.fn().mockResolvedValue(undefined)
+    const activateWorktreeListenerRef: {
+      current:
+        | ((data: {
+            repoId: string
+            worktreeId: string
+            setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+          }) => void)
+        | null
+    } = { current: null }
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        getState: () => ({
+          fetchRepos: vi.fn(),
+          fetchWorktrees,
+          setUpdateStatus: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          activeWorktreeId: 'wt-old',
+          activeView: 'terminal',
+          setActiveView: vi.fn(),
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          updateBrowserPageState: vi.fn(),
+          activeTabType: 'terminal',
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          setSshConnectionState: vi.fn(),
+          setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
+          enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest: vi.fn(),
+          clearTabPtyId: vi.fn(),
+          settings: { terminalFontSize: 13 }
+        })
+      }
+    }))
+
+    vi.doMock('@/lib/ui-zoom', () => ({
+      applyUIZoom: vi.fn()
+    }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree,
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({
+      dispatchZoomLevelChanged: vi.fn()
+    }))
+
+    vi.stubGlobal('window', {
+      api: {
+        repos: { onChanged: () => () => {} },
+        worktrees: { onChanged: () => () => {} },
+        ui: {
+          onOpenSettings: () => () => {},
+          onToggleLeftSidebar: () => () => {},
+          onToggleRightSidebar: () => () => {},
+          onToggleWorktreePalette: () => () => {},
+          onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
+          onJumpToWorktreeIndex: () => () => {},
+          onWorktreeHistoryNavigate: () => () => {},
+          onActivateWorktree: (
+            listener: (data: {
+              repoId: string
+              worktreeId: string
+              setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+            }) => void
+          ) => {
+            activateWorktreeListenerRef.current = listener
+            return () => {}
+          },
+          onCreateTerminal: () => () => {},
+          onRequestTerminalCreate: () => () => {},
+          replyTerminalCreate: () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onCloseTerminal: () => () => {},
+          onNewBrowserTab: () => () => {},
+          onRequestTabCreate: () => () => {},
+          replyTabCreate: () => {},
+          onRequestTabClose: () => () => {},
+          replyTabClose: () => {},
+          onNewTerminalTab: () => () => {},
+          onCloseActiveTab: () => () => {},
+          onSwitchTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
+          onToggleStatusBar: () => () => {},
+          onFullscreenChanged: () => () => {},
+          onTerminalZoom: () => () => {},
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
+        },
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: {
+          onGuestLoadFailed: () => () => {},
+          onOpenLinkInOrcaTab: () => () => {},
+          onNavigationUpdate: () => () => {},
+          onActivateView: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
+          onCredentialResolved: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} }
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof activateWorktreeListenerRef.current !== 'function') {
+      throw new Error('Expected onActivateWorktree listener to be registered')
+    }
+
+    const setup = { runnerScriptPath: '/tmp/setup.sh', envVars: { FOO: 'bar' } }
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-new',
+      setup
+    })
+
+    // Wait for the async IPC handler (it awaits fetchWorktrees before activating).
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // Worktrees must be fetched first so activateAndRevealWorktree can resolve
+    // the CLI-created worktree out of store state.
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
+
+    // The core regression guard: the handler must delegate to the canonical
+    // activation helper (which records the visit in history) rather than
+    // hand-rolling the activation steps and skipping recordWorktreeVisit.
+    // `setup` must be passed through the `setup` opt — not positionally
+    // mis-aliased into `startup`, which was a latent bug in the original
+    // hand-rolled path.
+    expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-new', { setup })
   })
 })

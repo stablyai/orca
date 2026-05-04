@@ -247,7 +247,8 @@ describe('OrcaRuntimeRpcServer', () => {
         writes.push(data)
         return true
       },
-      kill: () => true
+      kill: () => true,
+      getForegroundProcess: async () => null
     })
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
 
@@ -341,7 +342,7 @@ describe('OrcaRuntimeRpcServer', () => {
       id: 'req_send',
       ok: true
     })
-    expect(writes).toEqual(['continue\r'])
+    expect(writes).toEqual(['continue', '\r'])
 
     const waitPromise = sendRequest(metadata!.transport!.endpoint, {
       id: 'req_wait',

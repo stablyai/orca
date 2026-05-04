@@ -1,11 +1,4 @@
-import type {
-  LinearIssue,
-  LinearIssueUpdate,
-  LinearComment,
-  LinearWorkflowState,
-  LinearLabel,
-  LinearMember
-} from '../../shared/types'
+import type { LinearIssue, LinearIssueUpdate, LinearComment } from '../../shared/types'
 import { acquire, release, getClient, isAuthError, clearToken } from './client'
 import { mapLinearIssue } from './mappers'
 
@@ -120,6 +113,45 @@ export async function listIssues(
   }
 }
 
+export async function createIssue(
+  teamId: string,
+  title: string,
+  description?: string
+): Promise<
+  { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+> {
+  const client = getClient()
+  if (!client) {
+    return { ok: false, error: 'Not connected to Linear' }
+  }
+
+  await acquire()
+  try {
+    const result = await client.createIssue({
+      teamId,
+      title,
+      ...(description ? { description } : {})
+    })
+    if (!result.success) {
+      return { ok: false, error: 'Linear create failed' }
+    }
+    const issue = await result.issue
+    if (!issue) {
+      return { ok: false, error: 'Issue was created but could not be retrieved' }
+    }
+    return { ok: true, id: issue.id, identifier: issue.identifier, url: issue.url }
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken()
+      throw error
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: message }
+  } finally {
+    release()
+  }
+}
+
 export async function updateIssue(
   id: string,
   updates: LinearIssueUpdate
@@ -229,87 +261,6 @@ export async function getIssueComments(issueId: string): Promise<LinearComment[]
       throw error
     }
     console.warn('[linear] getIssueComments failed:', error)
-    return []
-  } finally {
-    release()
-  }
-}
-
-export async function getTeamStates(teamId: string): Promise<LinearWorkflowState[]> {
-  const client = getClient()
-  if (!client) {
-    return []
-  }
-
-  await acquire()
-  try {
-    const team = await client.team(teamId)
-    const states = await team.states()
-    return states.nodes
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        color: s.color,
-        position: s.position
-      }))
-      .sort((a, b) => a.position - b.position)
-  } catch (error) {
-    if (isAuthError(error)) {
-      clearToken()
-      throw error
-    }
-    console.warn('[linear] getTeamStates failed:', error)
-    return []
-  } finally {
-    release()
-  }
-}
-
-export async function getTeamLabels(teamId: string): Promise<LinearLabel[]> {
-  const client = getClient()
-  if (!client) {
-    return []
-  }
-
-  await acquire()
-  try {
-    const team = await client.team(teamId)
-    const labels = await team.labels()
-    return labels.nodes.map((l) => ({ id: l.id, name: l.name, color: l.color }))
-  } catch (error) {
-    if (isAuthError(error)) {
-      clearToken()
-      throw error
-    }
-    console.warn('[linear] getTeamLabels failed:', error)
-    return []
-  } finally {
-    release()
-  }
-}
-
-export async function getTeamMembers(teamId: string): Promise<LinearMember[]> {
-  const client = getClient()
-  if (!client) {
-    return []
-  }
-
-  await acquire()
-  try {
-    const team = await client.team(teamId)
-    const members = await team.members()
-    return members.nodes.map((m) => ({
-      id: m.id,
-      displayName: m.displayName,
-      avatarUrl: m.avatarUrl ?? undefined
-    }))
-  } catch (error) {
-    if (isAuthError(error)) {
-      clearToken()
-      throw error
-    }
-    console.warn('[linear] getTeamMembers failed:', error)
     return []
   } finally {
     release()

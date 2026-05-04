@@ -14,7 +14,7 @@ module.exports = {
     '!**/.vscode/*',
     '!src/*',
     '!electron.vite.config.{js,ts,mjs,cjs}',
-    '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}',
+    '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
     '!config/*'
@@ -25,7 +25,20 @@ module.exports = {
   // when the CLI runs outside the asar archive.
   // Why: daemon-entry.js is forked as a separate Node.js process and must be
   // accessible on disk (not inside the asar archive) for child_process.fork().
-  asarUnpack: ['out/cli/**', 'out/shared/**', 'out/main/daemon-entry.js', 'out/main/chunks/**', 'resources/**'],
+  // Why: the CLI is compiled by tsc (not bundled), so its runtime imports
+  // resolve at runtime via Node's normal module lookup. The shim launches
+  // the CLI with ELECTRON_RUN_AS_NODE, which bypasses Electron's asar
+  // integration — dependencies inside the asar archive are invisible to
+  // require(). Unpack CLI runtime deps so they resolve from
+  // app.asar.unpacked/node_modules/.
+  asarUnpack: [
+    'out/cli/**',
+    'out/shared/**',
+    'out/main/daemon-entry.js',
+    'out/main/chunks/**',
+    'resources/**',
+    'node_modules/zod/**'
+  ],
   afterPack: async (context) => {
     const resourcesDir =
       context.electronPlatformName === 'darwin'
@@ -68,8 +81,21 @@ module.exports = {
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {
+      NSAppleEventsUsageDescription:
+        'Orca allows terminal-launched developer tools to automate local apps when you request it.',
+      NSBluetoothAlwaysUsageDescription:
+        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+      NSBluetoothPeripheralUsageDescription:
+        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
       NSCameraUsageDescription: "Application requests access to the device's camera.",
+      NSLocationUsageDescription:
+        'Orca allows terminal-launched developer tools to access location when you request it.',
+      NSLocalNetworkUsageDescription:
+        'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+      NSAudioCaptureUsageDescription:
+        'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
+      NSBonjourServices: ['_http._tcp', '_https._tcp'],
       NSDocumentsFolderUsageDescription:
         "Application requests access to the user's Documents folder.",
       NSDownloadsFolderUsageDescription:

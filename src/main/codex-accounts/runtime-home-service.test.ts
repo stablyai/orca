@@ -39,10 +39,13 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
+    editorMinimapEnabled: false,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
     terminalLineHeight: 1,
+    terminalGpuAcceleration: 'auto',
+    terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
     terminalCursorBlink: false,
     terminalThemeDark: 'orca-dark',
@@ -63,6 +66,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
     showTitlebarAgentActivity: true,
+    showTasksButton: true,
     diffDefaultView: 'inline',
     notifications: {
       enabled: true,
@@ -83,13 +87,17 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
+    opencodeSessionCookie: '',
+    opencodeWorkspaceId: '',
+    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
-    experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
+    experimentalAgentDashboard: false,
+    experimentalSidekick: false,
     experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
+    terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides
   }
@@ -493,6 +501,225 @@ describe('CodexRuntimeHomeService', () => {
 
     service.clearSystemDefaultSnapshot()
     expect(existsSync(snapshotPath)).toBe(false)
+  })
+
+  it('reads back CLI-refreshed tokens into managed storage on subsequent sync', async () => {
+    const runtimeAuthPath = join(testState.fakeHomeDir, '.codex', 'auth.json')
+    writeFileSync(runtimeAuthPath, '{"account":"system"}\n', 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"tokens":"original"}\n'
+    )
+    const managedAuthPath = join(managedHomePath, 'auth.json')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // Simulate CLI refreshing the token in ~/.codex/auth.json
+    writeFileSync(runtimeAuthPath, '{"tokens":"refreshed"}\n', 'utf-8')
+
+    // Next sync should read back the refreshed token to managed storage
+    service.syncForCurrentSelection()
+
+    expect(readFileSync(managedAuthPath, 'utf-8')).toBe('{"tokens":"refreshed"}\n')
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"tokens":"refreshed"}\n')
+  })
+
+  it('skips read-back on first sync after restart (lastWrittenAuthJson is null)', async () => {
+    const runtimeAuthPath = join(testState.fakeHomeDir, '.codex', 'auth.json')
+    // Pre-populate runtime with different content to simulate a CLI refresh while Orca was down
+    writeFileSync(runtimeAuthPath, '{"tokens":"refreshed-while-down"}\n', 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"tokens":"original"}\n'
+    )
+    const managedAuthPath = join(managedHomePath, 'auth.json')
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'user@example.com',
+            managedHomePath,
+            providerAccountId: null,
+            workspaceLabel: null,
+            workspaceAccountId: null,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1'
+      })
+    )
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    // After restart, managed storage should NOT be overwritten by unknown runtime state
+    expect(readFileSync(managedAuthPath, 'utf-8')).toBe('{"tokens":"original"}\n')
+    // Runtime should be overwritten with managed (conservative behavior)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"tokens":"original"}\n')
+  })
+
+  it('skips read-back during account switch', async () => {
+    const runtimeAuthPath = join(testState.fakeHomeDir, '.codex', 'auth.json')
+    writeFileSync(runtimeAuthPath, '{"account":"system"}\n', 'utf-8')
+    const managedHomePath1 = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"tokens":"account1"}\n'
+    )
+    const managedHomePath2 = createManagedAuth(
+      testState.userDataDir,
+      'account-2',
+      '{"tokens":"account2"}\n'
+    )
+    const managedAuthPath2 = join(managedHomePath2, 'auth.json')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user1@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'user2@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // Switch to account-2 — runtime still has account-1 tokens
+    settings.activeCodexManagedAccountId = 'account-2'
+    service.syncForCurrentSelection()
+
+    // Account-2's managed auth should NOT be contaminated with account-1's runtime tokens
+    expect(readFileSync(managedAuthPath2, 'utf-8')).toBe('{"tokens":"account2"}\n')
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"tokens":"account2"}\n')
+  })
+
+  it('detects external login on managed→system-default transition', async () => {
+    const runtimeAuthPath = join(testState.fakeHomeDir, '.codex', 'auth.json')
+    writeFileSync(runtimeAuthPath, '{"account":"system"}\n', 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"account":"managed"}\n'
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // External `codex auth login` overwrites runtime auth
+    writeFileSync(runtimeAuthPath, '{"account":"external-login"}\n', 'utf-8')
+
+    // Deselect managed account
+    settings.activeCodexManagedAccountId = null
+    service.syncForCurrentSelection()
+
+    // Should keep the external login, not restore stale system snapshot
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"external-login"}\n')
+    // Snapshot should be deleted so next capture picks up the external login
+    expect(
+      existsSync(join(testState.userDataDir, 'codex-runtime-home', 'system-default-auth.json'))
+    ).toBe(false)
+  })
+
+  it('does not clobber fresh tokens after clearLastWrittenAuthJson', async () => {
+    const runtimeAuthPath = join(testState.fakeHomeDir, '.codex', 'auth.json')
+    writeFileSync(runtimeAuthPath, '{"account":"system"}\n', 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"tokens":"original"}\n'
+    )
+    const managedAuthPath = join(managedHomePath, 'auth.json')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // Simulate re-auth: managed storage gets fresh tokens
+    writeFileSync(managedAuthPath, '{"tokens":"reauthed"}\n', 'utf-8')
+
+    // Clear tracking before sync (as CodexAccountService would)
+    service.clearLastWrittenAuthJson()
+    service.syncForCurrentSelection()
+
+    // Fresh re-auth tokens should survive — not be clobbered by stale runtime read-back
+    expect(readFileSync(managedAuthPath, 'utf-8')).toBe('{"tokens":"reauthed"}\n')
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"tokens":"reauthed"}\n')
   })
 
   it('preserves conflicting legacy session files under deterministic names', async () => {

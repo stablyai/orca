@@ -49,7 +49,7 @@ function browserTab(id: string, groupId: string, entityId: string, sortOrder: nu
 }
 
 describe('getGroupVisibleTabOrder', () => {
-  it('returns terminal/browser tabs keyed by entityId and editor tabs keyed by unified id', () => {
+  it('returns active-group refs with backing ids plus unified tab ids', () => {
     const group: TabGroup = {
       id: 'g1',
       worktreeId: 'wt',
@@ -70,9 +70,9 @@ describe('getGroupVisibleTabOrder', () => {
         new Set()
       )
     ).toEqual([
-      { type: 'terminal', id: 'term-1' },
-      { type: 'editor', id: 'tab-e1' },
-      { type: 'terminal', id: 'term-2' }
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+      { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' },
+      { type: 'terminal', id: 'term-2', tabId: 'tab-t2' }
     ])
   })
 
@@ -115,7 +115,7 @@ describe('getGroupVisibleTabOrder', () => {
       terminalTab('tab-t2', 'g1', 'term-zombie', 1)
     ]
     expect(getGroupVisibleTabOrder(group, tabs, new Set(['term-1']), new Set(), new Set())).toEqual(
-      [{ type: 'terminal', id: 'term-1' }]
+      [{ type: 'terminal', id: 'term-1', tabId: 'tab-t1' }]
     )
   })
 
@@ -140,9 +140,9 @@ describe('getGroupVisibleTabOrder', () => {
         new Set(['browser-1'])
       )
     ).toEqual([
-      { type: 'terminal', id: 'term-1' },
-      { type: 'browser', id: 'browser-1' },
-      { type: 'editor', id: 'tab-e1' }
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+      { type: 'browser', id: 'browser-1', tabId: 'tab-b1' },
+      { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
     ])
   })
 })
@@ -200,6 +200,45 @@ describe('getActiveTabNavOrder', () => {
       'term-2',
       'term-3',
       'term-1'
+    ])
+  })
+
+  it('keeps the active group editor ref isolated when the same file is open in another group', () => {
+    const activeGroup: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-e1',
+      tabOrder: ['tab-e1', 'tab-t1']
+    }
+    const otherGroup: TabGroup = {
+      id: 'g2',
+      worktreeId: 'wt',
+      activeTabId: 'tab-e2',
+      tabOrder: ['tab-e2', 'tab-t2']
+    }
+    const tabs: Tab[] = [
+      editorTab('tab-e1', 'g1', '/repo/file.md', 0),
+      terminalTab('tab-t1', 'g1', 'term-1', 1),
+      editorTab('tab-e2', 'g2', '/repo/file.md', 2),
+      terminalTab('tab-t2', 'g2', 'term-2', 3)
+    ]
+    const state = makeState({
+      activeGroupIdByWorktree: { wt: 'g1' },
+      groupsByWorktree: { wt: [activeGroup, otherGroup] },
+      unifiedTabsByWorktree: { wt: tabs },
+      tabsByWorktree: {
+        // @ts-expect-error — minimal shape for terminal presence only
+        wt: [{ id: 'term-1' }, { id: 'term-2' }]
+      },
+      openFiles: [
+        // @ts-expect-error — minimal OpenFile shape; nav helper only reads `id` and `worktreeId`
+        { id: '/repo/file.md', worktreeId: 'wt' }
+      ]
+    })
+
+    expect(getActiveTabNavOrder(state, 'wt')).toEqual([
+      { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' },
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' }
     ])
   })
 

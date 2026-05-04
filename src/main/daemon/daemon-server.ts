@@ -4,7 +4,13 @@ import { writeFileSync, chmodSync, unlinkSync } from 'fs'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session'
-import { PROTOCOL_VERSION, NOTIFY_PREFIX, type HelloMessage, type DaemonRequest } from './types'
+import {
+  PROTOCOL_VERSION,
+  NOTIFY_PREFIX,
+  SessionNotFoundError,
+  type HelloMessage,
+  type DaemonRequest
+} from './types'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -16,6 +22,7 @@ export type DaemonServerOptions = {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    shellOverride?: string
   }) => SubprocessHandle
 }
 
@@ -193,6 +200,8 @@ export class DaemonServer {
           cwd: p.cwd,
           env: p.env,
           command: p.command,
+          shellOverride: p.shellOverride,
+          terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
           streamClient: {
             onData: (data) => {
@@ -230,11 +239,25 @@ export class DaemonServer {
       }
 
       case 'write':
-        this.host.write(request.payload.sessionId, request.payload.data)
+        try {
+          this.host.write(request.payload.sessionId, request.payload.data)
+        } catch (err) {
+          if (err instanceof SessionNotFoundError) {
+            this.sendExitEvent(client, request.payload.sessionId, -1)
+          }
+          throw err
+        }
         return {}
 
       case 'resize':
-        this.host.resize(request.payload.sessionId, request.payload.cols, request.payload.rows)
+        try {
+          this.host.resize(request.payload.sessionId, request.payload.cols, request.payload.rows)
+        } catch (err) {
+          if (err instanceof SessionNotFoundError) {
+            this.sendExitEvent(client, request.payload.sessionId, -1)
+          }
+          throw err
+        }
         return {}
 
       case 'kill':
@@ -251,7 +274,7 @@ export class DaemonServer {
         return {}
 
       case 'getCwd':
-        return { cwd: this.host.getCwd(request.payload.sessionId) }
+        return { cwd: await this.host.getCwd(request.payload.sessionId) }
 
       case 'clearScrollback':
         this.host.clearScrollback(request.payload.sessionId)
@@ -259,6 +282,9 @@ export class DaemonServer {
 
       case 'listSessions':
         return { sessions: this.host.listSessions() }
+
+      case 'getSnapshot':
+        return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
       case 'ping':
         return { pong: true }
@@ -273,5 +299,26 @@ export class DaemonServer {
       default:
         throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
     }
+  }
+
+  private sendExitEvent(
+    client: ConnectedClient | undefined,
+    sessionId: string,
+    code: number
+  ): void {
+    if (!client?.streamSocket) {
+      return
+    }
+    // Why: write/resize are notification-heavy and intentionally do not wait
+    // for replies. If their target session is gone, this synthetic exit is the
+    // only signal the renderer gets to clear stale terminal pane bindings.
+    client.streamSocket.write(
+      encodeNdjson({
+        type: 'event',
+        event: 'exit',
+        sessionId,
+        payload: { code }
+      })
+    )
   }
 }

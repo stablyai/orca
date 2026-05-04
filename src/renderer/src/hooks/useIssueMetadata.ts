@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { LinearWorkflowState, LinearLabel, LinearMember } from '../../../shared/types'
+import type {
+  GitHubAssignableUser,
+  LinearWorkflowState,
+  LinearLabel,
+  LinearMember
+} from '../../../shared/types'
 
 type MetadataState<T> = {
   data: T
@@ -19,7 +24,7 @@ function isCacheFresh<T>(cache: Map<string, CachedMetadata<T>>, key: string): bo
 // ─── GitHub ────────────────────────────────────────────────
 
 const ghLabelCache = new Map<string, CachedMetadata<string[]>>()
-const ghAssigneeCache = new Map<string, CachedMetadata<string[]>>()
+const ghAssigneeCache = new Map<string, CachedMetadata<GitHubAssignableUser[]>>()
 
 export function useRepoLabels(repoPath: string | null): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
@@ -77,8 +82,8 @@ export function useRepoLabels(repoPath: string | null): MetadataState<string[]> 
   return state
 }
 
-export function useRepoAssignees(repoPath: string | null): MetadataState<string[]> {
-  const [state, setState] = useState<MetadataState<string[]>>({
+export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubAssignableUser[]> {
+  const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
     loading: false,
     error: null
@@ -113,7 +118,7 @@ export function useRepoAssignees(repoPath: string | null): MetadataState<string[
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        const data = users as string[]
+        const data = users as GitHubAssignableUser[]
         ghAssigneeCache.set(repoPath, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })

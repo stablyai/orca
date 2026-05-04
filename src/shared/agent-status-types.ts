@@ -9,7 +9,14 @@ export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // regularly and users may run custom agents. Any non-empty string is accepted;
 // well-known names are kept as a convenience union for internal code that
 // wants to pattern-match on common agents.
-export type WellKnownAgentType = 'claude' | 'codex' | 'gemini' | 'opencode' | 'aider' | 'unknown'
+export type WellKnownAgentType =
+  | 'claude'
+  | 'codex'
+  | 'gemini'
+  | 'opencode'
+  | 'cursor'
+  | 'aider'
+  | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
 /** A snapshot of a previous agent state, used to render activity blocks.

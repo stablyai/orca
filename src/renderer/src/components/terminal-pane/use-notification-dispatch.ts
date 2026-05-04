@@ -11,9 +11,9 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
  */
 export function useNotificationDispatch(
   worktreeId: string
-): (event: { source: 'terminal-bell' }) => void {
+): (event: { source: 'terminal-bell' | 'agent-task-complete'; terminalTitle?: string }) => void {
   return useCallback(
-    (event: { source: 'terminal-bell' }) => {
+    (event: { source: 'terminal-bell' | 'agent-task-complete'; terminalTitle?: string }) => {
       const state = useAppStore.getState()
 
       // Why: shutdownWorktreeTerminals clears ptyIdsByTabId synchronously
@@ -42,6 +42,7 @@ export function useNotificationDispatch(
         worktreeId,
         repoLabel: repo?.displayName,
         worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
+        terminalTitle: event.terminalTitle,
         isActiveWorktree: state.activeWorktreeId === worktreeId
       })
     },

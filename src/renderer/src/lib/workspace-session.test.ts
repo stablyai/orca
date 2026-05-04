@@ -56,6 +56,10 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
       ]
     },
     activeBrowserTabIdByWorktree: { 'wt-1': 'browser-1' },
+    lastKnownRelayPtyIdByTabId: {},
+    sshConnectionStates: new Map(),
+    repos: [],
+    worktreesByRepo: {},
     browserPagesByWorkspace: {
       'browser-1': [
         {
@@ -99,6 +103,29 @@ describe('buildWorkspaceSessionPayload', () => {
       ]
     })
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
+  })
+
+  it('uses lastKnownRelayPtyIdByTabId fallback for SSH worktrees with null ptyIds', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', title: 'shell', ptyId: 'pty-1', worktreeId: 'wt-1' } as never],
+          'wt-ssh': [{ id: 'tab-ssh', title: 'remote', ptyId: null, worktreeId: 'wt-ssh' } as never]
+        },
+        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'relay-sess-42' },
+        repos: [{ id: 'repo-ssh', connectionId: 'conn-1' } as never],
+        worktreesByRepo: {
+          'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never]
+        },
+        sshConnectionStates: new Map([
+          ['conn-1', { status: 'connected', targetId: 'conn-1', error: null, reconnectAttempt: 0 }]
+        ]) as never
+      })
+    )
+
+    expect(payload.activeWorktreeIdsOnShutdown).toContain('wt-ssh')
+    expect(payload.remoteSessionIdsByTabId).toEqual({ 'tab-ssh': 'relay-sess-42' })
+    expect(payload.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
   })
 
   it('drops transient active editor markers that do not point at restored edit files', () => {

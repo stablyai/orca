@@ -9,14 +9,20 @@ import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
  * mapping here so the prefetch warms exactly the cache key the page will look
  * up on mount.
  */
+export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
+
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'issues':
+      return 'is:issue is:open'
     case 'my-issues':
-      return 'assignee:@me is:open'
-    case 'review':
-      return 'review-requested:@me is:open'
+      return 'assignee:@me is:issue is:open'
+    case 'prs':
+      return 'is:pr is:open'
     case 'my-prs':
-      return 'author:@me is:open'
+      return 'author:@me is:pr is:open'
+    case 'review':
+      return 'review-requested:@me is:pr is:open'
     default:
       return 'is:open'
   }

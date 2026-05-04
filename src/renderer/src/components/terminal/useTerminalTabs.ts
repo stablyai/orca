@@ -156,6 +156,10 @@ export function useTerminalTabs() {
   ])
 
   const handleNewTab = useCallback(() => createNewTerminalTab(activeWorktreeId), [activeWorktreeId])
+  const handleNewTabWithShell = useCallback(
+    (shell: string) => createNewTerminalTab(activeWorktreeId, shell),
+    [activeWorktreeId]
+  )
 
   const handlePtyExit = useCallback(
     (tabId: string, ptyId: string) => {
@@ -196,6 +200,7 @@ export function useTerminalTabs() {
     setTabColor,
     closeAllFiles,
     handleNewTab,
+    handleNewTabWithShell,
     handleCloseTab: closeTerminalTab,
     handlePtyExit,
     handleCloseOthers,

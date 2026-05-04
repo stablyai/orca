@@ -50,7 +50,7 @@ test.describe('Tab Rename (Inline)', () => {
     expect(tab).toBeDefined()
     // Why: mirror what the UI renders (customTitle ?? title) so locators that
     // key off the tab's visible text match what's actually on screen.
-    return tab!.title ?? ''
+    return tab!.customTitle ?? tab!.title ?? ''
   }
 
   function tabLocatorByTitle(
@@ -124,6 +124,12 @@ test.describe('Tab Rename (Inline)', () => {
     await renameInput.press('Escape')
 
     await expect(renameInput).toBeHidden()
+    // Why: the final assertion must be on user-observable DOM, not the store's
+    // customTitle field. A render-layer bug where the tab silently paints the
+    // in-progress "Should Be Discarded" text would leave customTitle null
+    // (Escape cleared it) yet flash the discarded label to the user — the
+    // original title must still be the one rendered on the tab.
+    await expect(tabLocatorByTitle(orcaPage, originalTitle)).toBeVisible()
     await expect
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
       .toBe(null)
@@ -131,6 +137,13 @@ test.describe('Tab Rename (Inline)', () => {
 
   test('renaming to an empty string resets the tab to its default title', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    // Snapshot the default (non-custom) title first so the DOM assertion later
+    // can verify the tab reverts to *this exact* rendered text — a store-only
+    // `customTitle === null` check would pass even if the rendered label was
+    // stuck on "Seeded Custom".
+    const defaultTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    expect(defaultTitle.length).toBeGreaterThan(0)
 
     // Why: seed a custom title directly via the store so this test asserts the
     // "empty string → reset" behavior independently from the double-click flow.
@@ -163,6 +176,9 @@ test.describe('Tab Rename (Inline)', () => {
     await renameInput.fill('')
     await renameInput.press('Enter')
 
+    // User-observable DOM assertion: the tab element must re-render with the
+    // original default title, not the "Seeded Custom" override.
+    await expect(tabLocatorByTitle(orcaPage, defaultTitle)).toBeVisible()
     await expect
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
       .toBe(null)
@@ -258,9 +274,11 @@ test.describe('Tab Rename (Inline)', () => {
 
     // Why: create enough terminal tabs that flex space runs out. 15 is well
     // above the threshold at which the pre-fix input collapsed, and it keeps
-    // the test fast. The width fix pins the input to 130px, so even saturated,
-    // it should stay near that size — we assert ≥100px to allow a bit of slack
-    // for fonts/padding/containers differing between environments.
+    // the test fast. The width fix pins the input to 72px (matching the
+    // slimmer tab title box), so even saturated, it should stay near that
+    // size — we assert ≥60px to allow a bit of slack for fonts/padding/
+    // containers differing between environments. The meaningful guarantee is
+    // that the input does not collapse to ~0 when flex space is saturated.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
       if (!store) {
@@ -289,7 +307,7 @@ test.describe('Tab Rename (Inline)', () => {
 
     const box = await renameInput.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.width).toBeGreaterThanOrEqual(100)
+    expect(box!.width).toBeGreaterThanOrEqual(60)
   })
 
   test('middle-clicking inside the rename input does not close the tab', async ({ orcaPage }) => {

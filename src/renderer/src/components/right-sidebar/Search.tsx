@@ -24,7 +24,6 @@ export default function Search(): React.JSX.Element {
     activeWorktreeId ? s.fileSearchStateByWorktree[activeWorktreeId] : null
   )
   const fileSearchQuery = searchState?.query ?? ''
-  const fileSearchQueryDetailsExpanded = searchState?.queryDetailsExpanded ?? false
   const fileSearchCaseSensitive = searchState?.caseSensitive ?? false
   const fileSearchWholeWord = searchState?.wholeWord ?? false
   const fileSearchUseRegex = searchState?.useRegex ?? false
@@ -262,29 +261,6 @@ export default function Search(): React.JSX.Element {
     [activeWorktreeId, openFile, setPendingEditorReveal]
   )
 
-  const hasFilePatternFilters =
-    fileSearchIncludePattern.trim().length > 0 || fileSearchExcludePattern.trim().length > 0
-  const searchDetailsVisible = fileSearchQueryDetailsExpanded || hasFilePatternFilters
-
-  const handleToggleSearchDetails = useCallback(() => {
-    const nextExpanded = !searchDetailsVisible
-    updateActiveSearchState({ queryDetailsExpanded: nextExpanded })
-
-    // Why: VS Code shifts focus into the newly revealed include field so the
-    // details toggle acts as an entry point for scope filters instead of only
-    // changing layout. Collapsing returns focus to the main query input.
-    window.setTimeout(() => {
-      if (nextExpanded) {
-        includeInputRef.current?.focus()
-        includeInputRef.current?.select()
-        return
-      }
-
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    }, 0)
-  }, [searchDetailsVisible, updateActiveSearchState])
-
   if (!activeWorktreeId) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
@@ -301,7 +277,6 @@ export default function Search(): React.JSX.Element {
         excludeInputRef={excludeInputRef}
         query={fileSearchQuery}
         loading={fileSearchLoading}
-        detailsVisible={searchDetailsVisible}
         caseSensitive={fileSearchCaseSensitive}
         wholeWord={fileSearchWholeWord}
         useRegex={fileSearchUseRegex}
@@ -310,7 +285,6 @@ export default function Search(): React.JSX.Element {
         onQueryChange={handleQueryChange}
         onKeyDown={handleKeyDown}
         onClearSearch={handleClearSearch}
-        onToggleSearchDetails={handleToggleSearchDetails}
         onToggleCaseSensitive={() => {
           updateActiveSearchState({ caseSensitive: !fileSearchCaseSensitive })
           rerunSearch()
@@ -324,19 +298,11 @@ export default function Search(): React.JSX.Element {
           rerunSearch()
         }}
         onIncludeChange={(value) => {
-          updateActiveSearchState({
-            includePattern: value,
-            queryDetailsExpanded:
-              value.trim().length > 0 || fileSearchExcludePattern.trim().length > 0
-          })
+          updateActiveSearchState({ includePattern: value })
           rerunSearch()
         }}
         onExcludeChange={(value) => {
-          updateActiveSearchState({
-            excludePattern: value,
-            queryDetailsExpanded:
-              fileSearchIncludePattern.trim().length > 0 || value.trim().length > 0
-          })
+          updateActiveSearchState({ excludePattern: value })
           rerunSearch()
         }}
       />

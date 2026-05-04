@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Copy,
   ExternalLink,
+  Eye,
   File,
   FilePlus,
   Files,
@@ -22,6 +23,8 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { detectLanguage } from '@/lib/language-detect'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
@@ -236,6 +239,8 @@ export function FileExplorerRow({
   onNativeDragTargetChange,
   onNativeDragExpandDir
 }: FileExplorerRowProps): React.JSX.Element {
+  const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
     rowDropDir,
@@ -350,6 +355,21 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
+          <ContextMenuItem
+            onSelect={() =>
+              openMarkdownPreview({
+                filePath: node.path,
+                relativePath: node.relativePath,
+                worktreeId: activeWorktreeId,
+                language: 'markdown'
+              })
+            }
+          >
+            <Eye />
+            Open Markdown Preview
           </ContextMenuItem>
         )}
         <ContextMenuItem onSelect={() => window.api.shell.openPath(node.path)}>

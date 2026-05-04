@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { join, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { app } from 'electron'
+import { getSpawnArgsForWindows } from '../win32-utils'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
@@ -105,9 +106,13 @@ export class CodexAccountService {
         activeCodexManagedAccountId: account.id
       })
       this.safeSyncCanonicalConfigToManagedHomes()
+      this.runtimeHome.clearLastWrittenAuthJson()
       this.runtimeHome.syncForCurrentSelection()
 
-      await this.rateLimits.refreshForCodexAccountChange()
+      // Why: the new account becomes active, so the previous active account is
+      // now inactive and its last-known usage should be cached for the switcher.
+      const outgoingAccountId = settings.activeCodexManagedAccountId
+      await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId)
       return this.getSnapshot()
     } catch (error) {
       this.safeRemoveManagedHome(managedHomePath)
@@ -145,6 +150,7 @@ export class CodexAccountService {
       codexManagedAccounts: updatedAccounts
     })
     this.safeSyncCanonicalConfigToManagedHomes()
+    this.runtimeHome.clearLastWrittenAuthJson()
     this.runtimeHome.syncForCurrentSelection()
 
     // Why: re-auth can change which actual Codex identity the managed home
@@ -170,7 +176,14 @@ export class CodexAccountService {
     this.runtimeHome.syncForCurrentSelection()
 
     this.safeRemoveManagedHome(account.managedHomePath)
-    await this.rateLimits.refreshForCodexAccountChange()
+    // Why: a removed account can no longer appear in the switcher dropdown,
+    // so purge its cached usage to avoid stale entries.
+    this.rateLimits.evictInactiveCodexCache(accountId)
+    await this.rateLimits.refreshForCodexAccountChange(
+      settings.activeCodexManagedAccountId === accountId
+        ? settings.activeCodexManagedAccountId
+        : undefined
+    )
     return this.getSnapshot()
   }
 
@@ -179,13 +192,16 @@ export class CodexAccountService {
       this.requireAccount(accountId)
     }
 
+    const previousSettings = this.store.getSettings()
+    const outgoingAccountId = previousSettings.activeCodexManagedAccountId
+
     this.store.updateSettings({
       activeCodexManagedAccountId: accountId
     })
     this.safeSyncCanonicalConfigToManagedHomes()
     this.runtimeHome.syncForCurrentSelection()
 
-    await this.rateLimits.refreshForCodexAccountChange()
+    await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId)
     return this.getSnapshot()
   }
 
@@ -390,13 +406,17 @@ export class CodexAccountService {
   private async runCodexLogin(managedHomePath: string): Promise<void> {
     await new Promise<void>((resolvePromise, rejectPromise) => {
       const codexCommand = resolveCodexCommand()
-      const child = spawn(codexCommand, ['login'], {
+      // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file
+      // (e.g. codex.cmd from npm). Node's child_process.spawn cannot execute
+      // batch scripts directly without shell:true, but shell:true with an args
+      // array causes DEP0190 because args are concatenated, not escaped.
+      // Fix: detect batch scripts and invoke cmd.exe /c explicitly.
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
+      const child = spawn(spawnCmd, spawnArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file
-        // (e.g. codex.cmd from npm). Node's child_process.spawn cannot execute
-        // batch scripts directly — it needs cmd.exe as an intermediary. Setting
-        // shell: true on win32 avoids the EINVAL error this would otherwise cause.
-        shell: process.platform === 'win32',
+        // Why: route through cmd.exe for .cmd/.bat entrypoints would otherwise
+        // flash a console window in the packaged GUI app on Windows.
+        windowsHide: true,
         env: {
           ...process.env,
           CODEX_HOME: managedHomePath

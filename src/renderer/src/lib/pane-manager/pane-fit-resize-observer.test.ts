@@ -42,7 +42,10 @@ function createPane(): ManagedPaneInternal {
     container: {} as never,
     xtermContainer: {} as never,
     linkTooltip: {} as never,
+    terminalGpuAcceleration: 'auto',
     gpuRenderingEnabled: true,
+    webglAttachmentDeferred: false,
+    webglDisabledAfterContextLoss: false,
     fitAddon: {
       fit: vi.fn(),
       proposeDimensions: vi.fn(() => ({ cols: 80, rows: 24 }))
@@ -54,14 +57,15 @@ function createPane(): ManagedPaneInternal {
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
     webglAddon: null,
+    ligaturesAddon: null,
     compositionHandler: null,
+    debugLabel: null,
     pendingSplitScrollState: {
       wasAtBottom: true,
       firstVisibleLineContent: '',
       viewportY: 0,
       totalLines: 24
-    } satisfies ScrollState,
-    pendingDragScrollState: null
+    } satisfies ScrollState
   }
 }
 

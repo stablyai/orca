@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { HeadlessEmulator } from './headless-emulator'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { PostReadyFlushGate } from './post-ready-flush-gate'
@@ -16,6 +17,10 @@ export type SubprocessHandle = {
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number) => void): void
+  /** Release the native PTY handle via node-pty's own destroy() path.
+   *  Idempotent. Safe to call after exit. Called by Session on every teardown
+   *  path (natural exit, kill, force-kill, native throw, session dispose). */
+  dispose(): void
 }
 
 export type SessionOptions = {
@@ -191,39 +196,101 @@ export class Session {
       return
     }
 
-    // Why: if kill() was called but the subprocess hasn't exited yet, our
-    // killTimer is the only thing that would forceKill a stuck subprocess.
-    // Clearing it below without force-killing would leak an orphaned process,
-    // so mirror forceDispose(): issue the force-kill, notify attached clients
-    // (handleSubprocessExit is guarded by _disposed and won't broadcast later),
-    // and clear the terminating flag for a consistent final state.
+    // Why: captured BEFORE the `_state = 'exited'` flip below. This check
+    // guards the "dispose while kill() was already in flight" case — if true,
+    // the child hasn't reaped yet and we need to forceKill it here (the 5s
+    // killTimer is also about to be cleared by #teardownSubprocess). Do NOT
+    // move this capture below #teardownSubprocess or the `_state = 'exited'`
+    // assignment — #teardownSubprocess flips `_disposed` but the invariant
+    // depends on the PRE-flip value of `_state`.
     const wasTerminating = this._isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.attachedClients.slice() : []
     if (wasTerminating) {
-      this.subprocess.forceKill()
+      try {
+        this.subprocess.forceKill()
+      } catch {
+        /* child may already be gone */
+      }
       this._exitCode = -1
       this._isTerminating = false
     }
 
-    this._disposed = true
+    this.#teardownSubprocess()
     this._state = 'exited'
-
-    if (this.shellReadyTimer) {
-      clearTimeout(this.shellReadyTimer)
-      this.shellReadyTimer = null
-    }
-    if (this.killTimer) {
-      clearTimeout(this.killTimer)
-      this.killTimer = null
-    }
-    this.postReadyFlushGate.clear()
 
     this.attachedClients = []
     this.preReadyStdinQueue = []
+    this.postReadyFlushGate.clear()
     this.emulator.dispose()
 
     for (const client of clientsToNotify) {
       client.onExit(-1)
+    }
+  }
+
+  /** Public: fd-release-only teardown for sessions that have ALREADY exited
+   *  (state === 'exited') but are still retained in the host's map. Callers
+   *  MUST NOT use this on live sessions — it skips SIGKILL.
+   *
+   *  Why a separate method: after handleSubprocessExit fires, proc.pid refers
+   *  to a child that has been reaped; on POSIX that pid is eligible for reuse
+   *  and may now belong to an unrelated process. forceKillAndDisposeSubprocess
+   *  would send SIGKILL to that recycled pid. This method only releases the
+   *  PTY master fd via node-pty's destroy() (which is neutralized against the
+   *  SIGHUP-to-pid hazard by the onExit handler in pty-subprocess.ts). */
+  disposeSubprocess(): void {
+    this.#teardownSubprocess()
+    this._state = 'exited'
+  }
+
+  /** Public: orderly-shutdown path used by TerminalHost.dispose() for sessions
+   *  that are still live. Force-kills the child (SIGKILL is not ignorable),
+   *  then releases the PTY master fd synchronously via node-pty's destroy().
+   *  Bypasses the 5s KILL_TIMEOUT_MS fallback so daemon shutdown reaps
+   *  stubborn children AND frees the ptmx fd on the same tick. Does NOT fan
+   *  out onExit to attached clients — renderer reconnects cold after daemon
+   *  exit. Callers MUST check isAlive first; see disposeSubprocess() for the
+   *  already-exited case. */
+  forceKillAndDisposeSubprocess(): void {
+    // Why: forceKill before #teardownSubprocess. The helper's subprocess.dispose()
+    // neutralizes node-pty's proc.kill on POSIX (to kill the SIGHUP-to-recycled-pid
+    // hazard). subprocess.forceKill uses process.kill(pid, 'SIGKILL') directly
+    // (pty-subprocess.ts) — unaffected by the neutralization, because it does not
+    // go through proc.kill. SIGKILL is not ignorable; any child that would have
+    // survived the 5s timer is reaped immediately.
+    try {
+      this.subprocess.forceKill()
+    } catch {
+      /* swallow — child may already be gone */
+    }
+    this.#teardownSubprocess()
+    this._state = 'exited'
+  }
+
+  /** Private: shared teardown helper called by dispose(), forceDispose(), and
+   *  forceKillAndDisposeSubprocess(). Flips `_disposed`, clears pending timers,
+   *  and forwards to subprocess.dispose() exactly once. Does NOT set `_state` —
+   *  the caller owns the state transition AFTER capturing any invariants that
+   *  depend on the pre-flip value (see the wasTerminating capture in dispose). */
+  #teardownSubprocess(): void {
+    if (this._disposed) {
+      return
+    }
+    this._disposed = true
+    if (this.killTimer) {
+      clearTimeout(this.killTimer)
+      this.killTimer = null
+    }
+    if (this.shellReadyTimer) {
+      clearTimeout(this.shellReadyTimer)
+      this.shellReadyTimer = null
+    }
+    try {
+      this.subprocess.dispose()
+    } catch (err) {
+      // Why: dispose() is documented never to throw, but if it does we must not
+      // prevent callers from completing their own cleanup (fanout, map removal).
+      console.warn('[Session] subprocess.dispose() threw:', err)
     }
   }
 
@@ -264,6 +331,19 @@ export class Session {
       this.shellReadyTimer = null
     }
     this.postReadyFlushGate.clear()
+
+    // Why: release the ptmx fd on the natural-exit path. Without this, the
+    // node-pty wrapper's _socket stays alive until GC and the master fd leaks
+    // (see docs/fix-pty-fd-leak.md). Do NOT route through #teardownSubprocess:
+    // that helper flips `_disposed = true`, which would short-circuit a later
+    // Session.dispose() call from TerminalHost's dead-session cleanup at
+    // terminal-host.ts:83 — skipping attachedClients/emulator/postReadyFlushGate
+    // cleanup. Call subprocess.dispose() directly inside try/catch.
+    try {
+      this.subprocess.dispose()
+    } catch {
+      /* swallow — must not prevent exit-code fanout below */
+    }
 
     for (const client of this.attachedClients) {
       client.onExit(code)
@@ -320,25 +400,28 @@ export class Session {
     if (this._state === 'exited') {
       return
     }
-    this.subprocess.forceKill()
-    this._disposed = true
+    // Why: forceKill BEFORE #teardownSubprocess. Order is load-bearing — the
+    // helper's subprocess.dispose() neutralizes proc.kill on POSIX (to defuse
+    // the SIGHUP-to-recycled-pid hazard inside node-pty). forceKill uses
+    // process.kill(pid, 'SIGKILL') directly and is unaffected by that
+    // neutralization. Must NOT flip `_disposed` here before #teardownSubprocess
+    // runs, or the helper would early-return and skip subprocess.dispose() —
+    // the ptmx fd would leak on every kill-timeout (this whole doc's target).
+    try {
+      this.subprocess.forceKill()
+    } catch {
+      /* already dead */
+    }
     this._exitCode = -1
-    this._state = 'exited'
     this._isTerminating = false
 
-    if (this.shellReadyTimer) {
-      clearTimeout(this.shellReadyTimer)
-      this.shellReadyTimer = null
-    }
-    if (this.killTimer) {
-      clearTimeout(this.killTimer)
-      this.killTimer = null
-    }
-    this.postReadyFlushGate.clear()
+    this.#teardownSubprocess()
+    this._state = 'exited'
 
     const clients = this.attachedClients
     this.attachedClients = []
     this.preReadyStdinQueue = []
+    this.postReadyFlushGate.clear()
     this.emulator.dispose()
 
     for (const client of clients) {

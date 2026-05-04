@@ -13,6 +13,7 @@ src/**/*.d.ts
 !src/preload/index.d.ts
 !src/renderer/src/env.d.ts
 !src/renderer/src/mermaid.d.ts
+!src/types/build-constants.d.ts
 
 # Dependencies
 node_modules/
@@ -36,11 +37,13 @@ package-lock.json
 # IDE
 .vscode/
 .idea/
+.serena/
 *.swp
 *.swo
 *~
 
 # OS
+*.stackdump
 .DS_Store
 Thumbs.db
 
@@ -61,6 +64,7 @@ tmp/
 .tmp/
 design-docs/
 .context/
+.atl/
 
 # Local-only design/planning docs (not checked in)
 docs/*-design.md
@@ -77,3 +81,8 @@ docs/design-*.md
 # Playwright
 test-results/
 playwright-report/
+
+# Agent skill installations (machine-local, populated by agent tooling)
+/.claude/skills/
+/.agents/skills/
+/skills-lock.json

@@ -1,21 +1,42 @@
+/* eslint-disable max-lines -- Why: this file contains a multi-line inline
+   JS plugin source emitted into OpenCode's plugins directory as a single
+   file; splitting the plugin source across TS modules would obscure the
+   runtime artifact and scatter tightly coupled string-template logic. */
 import { app } from 'electron'
 import { join } from 'path'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
+import { createHash } from 'crypto'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 
-// Why: ptyId today is allocated by Orca (safe UUID-shape), but both entry
-// points construct a filesystem path with it and one of them calls
-// rmSync(..., recursive) on the result. Reject obviously unsafe IDs as a
-// belt-and-braces guard so a future caller (or a bug that forwards an
-// external ID) cannot escape userData/opencode-hooks/.
-function isSafePtyId(ptyId: string): boolean {
-  if (!ptyId || ptyId.length === 0 || ptyId.length > 128) {
-    return false
-  }
-  // Allow alphanumeric, dash, underscore, period (but not leading period or
-  // any slashes/backslashes).
-  return /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(ptyId) && !ptyId.includes('..')
+// Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
+// "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
+// filesystem path (slashes, colons). Earlier the id was a simple numeric
+// counter, so rejecting anything with "/" or ":" was a safe guard against
+// path traversal. After the daemon-parity refactor (#1148) the sessionId
+// shape changed, and the old regex silently rejected every legitimate id,
+// leaving OPENCODE_CONFIG_DIR unset and the plugin never loading.
+//
+// Keep an input-bounds guard (non-empty, bounded length) for defense in
+// depth, and derive the on-disk directory name via hash so any caller's id —
+// including ones containing path separators — produces a short, stable,
+// filesystem-safe name. Hashing also eliminates path-traversal risk at the
+// source: the directory name is always 32 hex chars, never a prefix/suffix
+// of the caller's input.
+// Why: 1024 is a generous sanity cap — daemon-shaped ids embed a worktree
+// filesystem path plus "@@<uuid>", and this bound prevents pathological inputs
+// from burning CPU in the SHA-256 step. Since the id is hashed anyway, 1024
+// is decoupled from PATH_MAX.
+function isUsableId(id: string): boolean {
+  return typeof id === 'string' && id.length > 0 && id.length <= 1024
+}
+
+function toSafeDirName(id: string): string {
+  // Why: SHA-256 truncated to 32 hex chars (128 bits) is ample for a
+  // per-session directory name — collisions require ~2^64 concurrent sessions
+  // to become likely, far beyond any real workload. Hex keeps the name
+  // portable across all filesystems (no base64 padding, no `/`).
+  return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
 function getOpenCodePluginSource(): string {
@@ -27,9 +48,90 @@ function getOpenCodePluginSource(): string {
   // mapping is done plugin-side (SessionBusy / SessionIdle / PermissionRequest)
   // so the server-side normalizer can keep its one-event-per-case switch shape.
   return [
-    'function getHookUrl() {',
-    '  const port = process.env.ORCA_AGENT_HOOK_PORT;',
-    '  return port ? `http://127.0.0.1:${port}/hook/opencode` : null;',
+    '// Why: process-lifetime guard so a recurring parse error on a malformed',
+    "// endpoint file does not spam OpenCode's stderr once per hook post.",
+    '// This guard lives inside the plugin source because the plugin runs in',
+    "// OpenCode's Node process (not Orca's) and has no access to server.ts's",
+    '// equivalent warnedVersions / warnedEnvs Sets.',
+    'let warnedBadEndpoint = false;',
+    '',
+    '// Why: message.part.updated can fire many times per second during a',
+    '// streaming assistant reply, and each post() calls resolveHookCoords()',
+    '// which reads the endpoint file. The file only changes on Orca restart',
+    '// (rare), so a stat+mtime check is substantially cheaper than a full',
+    '// readFileSync+parse on every streamed part. On stat error we fall',
+    '// through to parse so the fail-open behavior is preserved.',
+    'let cachedEndpointKey = "";',
+    'let cachedEndpointValues = null;',
+    '',
+    'function readEndpointFile() {',
+    '  const path = process.env.ORCA_AGENT_HOOK_ENDPOINT;',
+    '  if (!path) return null;',
+    '  try {',
+    '    const fs = require("fs");',
+    '    try {',
+    '      const stat = fs.statSync(path);',
+    '      // Why: cache key combines mtime + size + inode. renameSync (used by',
+    '      // writeEndpointFile on the Orca side) allocates a fresh inode on',
+    '      // POSIX and a new Windows file ID on NTFS, so ino changes on every',
+    '      // legitimate rewrite even when mtimeMs resolution is coarse and size',
+    '      // happens to match.',
+    '      const cacheKey = stat.mtimeMs + ":" + stat.size + ":" + stat.ino;',
+    '      if (cacheKey === cachedEndpointKey && cachedEndpointValues) {',
+    '        return cachedEndpointValues;',
+    '      }',
+    '      const contents = fs.readFileSync(path, "utf8");',
+    '      const out = {};',
+    '      for (const line of contents.split(/\\r?\\n/)) {',
+    '        // Why: Windows endpoint.cmd uses `set KEY=VALUE`; Unix endpoint.env',
+    '        // uses `KEY=VALUE`. Making `set ` optional lets the same parser',
+    '        // handle both without platform detection in the plugin. Allow',
+    '        // digits in the key for forward-compat with future ORCA_AGENT_HOOK_*',
+    '        // names that may contain numerics, and strip a trailing CR so',
+    '        // mixed-EOL files with lone `\\r` do not leak CR into the value.',
+    '        const m = line.match(/^(?:set\\s+)?([A-Z0-9_]+)=(.*)$/);',
+    '        if (m) out[m[1]] = m[2].replace(/\\r$/, "");',
+    '      }',
+    '      cachedEndpointKey = cacheKey;',
+    '      cachedEndpointValues = out;',
+    '      return out;',
+    '    } catch (ioErr) {',
+    '      // Why: any stat or read failure (file yanked mid-read, permission',
+    '      // race, unlink between stat and readFileSync) must invalidate the',
+    '      // cache so a transient failure does not lock in a stale parse for',
+    '      // the remaining process lifetime; rethrow to the outer catch.',
+    '      cachedEndpointKey = "";',
+    '      cachedEndpointValues = null;',
+    '      throw ioErr;',
+    '    }',
+    '  } catch (err) {',
+    '    // Why: warn once per process if the file exists but is unreadable or',
+    '    // malformed — a persistent, silently-swallowed parse error would',
+    '    // otherwise leave the plugin falling back to stale process.env on',
+    '    // every post with no signal. ENOENT / missing env var is the normal',
+    '    // pre-install case; stay silent for it.',
+    '    if (err && err.code !== "ENOENT" && !warnedBadEndpoint) {',
+    '      warnedBadEndpoint = true;',
+    '      console.warn("[orca-hook] failed to parse endpoint file:", err.message);',
+    '    }',
+    '    return null;',
+    '  }',
+    '}',
+    '',
+    'function resolveHookCoords() {',
+    '  // Why: prefer the on-disk endpoint file over process.env because env was',
+    '  // frozen when OpenCode was fork()ed — stale after an Orca restart. The',
+    '  // file is rewritten on every Orca start(), so sourcing it per post lets',
+    '  // a long-running OpenCode session reach the current server. Falls back',
+    '  // to process.env when the file is absent (first-run / pre-endpoint-file / Orca',
+    '  // never started writing the file).',
+    '  const fileEnv = readEndpointFile() || {};',
+    '  return {',
+    '    port: fileEnv.ORCA_AGENT_HOOK_PORT || process.env.ORCA_AGENT_HOOK_PORT,',
+    '    token: fileEnv.ORCA_AGENT_HOOK_TOKEN || process.env.ORCA_AGENT_HOOK_TOKEN,',
+    '    env: fileEnv.ORCA_AGENT_HOOK_ENV || process.env.ORCA_AGENT_HOOK_ENV || "",',
+    '    version: fileEnv.ORCA_AGENT_HOOK_VERSION || process.env.ORCA_AGENT_HOOK_VERSION || "",',
+    '  };',
     '}',
     '',
     'function getStatusType(event) {',
@@ -81,16 +183,20 @@ function getOpenCodePluginSource(): string {
     '}',
     '',
     'async function post(hookEventName, extraProperties) {',
-    '  const url = getHookUrl();',
-    '  const token = process.env.ORCA_AGENT_HOOK_TOKEN;',
+    '  // Why: resolve coords per post — the endpoint file may have been',
+    '  // rewritten by a newer Orca since the last call. Pane/tab/worktree IDs',
+    '  // stay on process.env because they are per-PTY (stable for the life of',
+    '  // the OpenCode process), not per-Orca-instance.',
+    '  const coords = resolveHookCoords();',
     '  const paneKey = process.env.ORCA_PANE_KEY;',
-    '  if (!url || !token || !paneKey) return;',
+    '  if (!coords.port || !coords.token || !paneKey) return;',
+    '  const url = `http://127.0.0.1:${coords.port}/hook/opencode`;',
     '  const body = JSON.stringify({',
     '    paneKey,',
     '    tabId: process.env.ORCA_TAB_ID || "",',
     '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
-    '    env: process.env.ORCA_AGENT_HOOK_ENV || "",',
-    '    version: process.env.ORCA_AGENT_HOOK_VERSION || "",',
+    '    env: coords.env,',
+    '    version: coords.version,',
     '    payload: { hook_event_name: hookEventName, ...(extraProperties || {}) },',
     '  });',
     '  try {',
@@ -98,7 +204,7 @@ function getOpenCodePluginSource(): string {
     '      method: "POST",',
     '      headers: {',
     '        "Content-Type": "application/json",',
-    '        "X-Orca-Agent-Hook-Token": token,',
+    '        "X-Orca-Agent-Hook-Token": coords.token,',
     '      },',
     '      body,',
     '    });',
@@ -210,13 +316,13 @@ function getOpenCodePluginSource(): string {
 // pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
   clearPty(ptyId: string): void {
-    if (!isSafePtyId(ptyId)) {
+    if (!isUsableId(ptyId)) {
       return
     }
-    // Why: writePluginConfig creates a directory per PTY under userData. Without
-    // cleanup these accumulate across sessions since ptyId is a monotonically
-    // increasing counter. Remove the directory when the PTY is torn down.
-    const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
+    // Why: writePluginConfig creates a directory per PTY under userData.
+    // Without cleanup these accumulate across sessions. Using getConfigDir
+    // keeps cleanup aligned with the path writePluginConfig created.
+    const configDir = this.getConfigDir(ptyId)
     try {
       rmSync(configDir, { recursive: true, force: true })
     } catch {
@@ -242,11 +348,15 @@ export class OpenCodeHookService {
     return { OPENCODE_CONFIG_DIR: configDir }
   }
 
+  private getConfigDir(ptyId: string): string {
+    return join(app.getPath('userData'), 'opencode-hooks', toSafeDirName(ptyId))
+  }
+
   private writePluginConfig(ptyId: string): string | null {
-    if (!isSafePtyId(ptyId)) {
+    if (!isUsableId(ptyId)) {
       return null
     }
-    const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
+    const configDir = this.getConfigDir(ptyId)
     const pluginsDir = join(configDir, 'plugins')
     try {
       mkdirSync(pluginsDir, { recursive: true })
@@ -264,5 +374,6 @@ export class OpenCodeHookService {
 export const openCodeHookService = new OpenCodeHookService()
 export const _internals = {
   getOpenCodePluginSource,
-  isSafePtyId
+  isUsableId,
+  toSafeDirName
 }

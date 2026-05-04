@@ -53,9 +53,15 @@ export function useFileExplorerAutoReveal({
       return
     }
 
-    // Only auto-reveal regular edit-mode files, not diffs or conflict reviews
+    // Why: markdown preview tabs are separate UI surfaces, but they still map
+    // to one concrete file on disk and should keep Explorer selection in sync
+    // just like a normal edit tab. Diffs and conflict-review tabs do not.
     const activeFile = openFiles.find((f) => f.id === activeFileId)
-    if (!activeFile || activeFile.worktreeId !== activeWorktreeId || activeFile.mode !== 'edit') {
+    if (
+      !activeFile ||
+      activeFile.worktreeId !== activeWorktreeId ||
+      (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')
+    ) {
       return
     }
 

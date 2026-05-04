@@ -14,11 +14,15 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
   return ''
 }
 
-// Why: the bg-accent vs. bg-card contrast alone is too subtle to tell which
-// tab is active at a glance, especially in light mode. VS Code solves this
-// with a 1–2px colored bar across the top of the active tab
-// (tab.activeBorderTop). We mirror that here with an absolutely-positioned
-// child span so it sits above the tab content without shifting layout and
-// without conflicting with drop-indicator pseudo-elements during a drag.
+// Why: the active tab no longer recolors its background, so this 1px top
+// border is the ONLY cue distinguishing the selected tab. Absolutely
+// positioned with z-10 so it overlays the tab chrome without shifting layout
+// and without conflicting with drop-indicator pseudo-elements during a drag.
+// `-top-px` pulls it onto the tab's own 1px top border so the blue bar
+// REPLACES the faint gray line rather than stacking below it. Horizontal
+// inset is 0 (not -1px): negative insets on the last tab bleed into the
+// strip's scrollWidth, so clicking between active tabs flips the strip
+// between "fits exactly" and "overflows by 1px", which jitters every tab by
+// 1px because the browser preserves scrollLeft near the end.
 export const ACTIVE_TAB_INDICATOR_CLASSES =
-  'pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[#1e3d9c] z-10'
+  'pointer-events-none absolute inset-x-0 -top-px h-px bg-[#1e3d9c] z-10'

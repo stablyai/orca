@@ -144,6 +144,111 @@ describe('createEditorSlice markdown view state', () => {
   })
 })
 
+describe('createEditorSlice editor view mode', () => {
+  it('stores changes mode as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    expect(store.getState().editorViewMode).toEqual({ '/repo/app.ts': 'changes' })
+  })
+
+  it('deletes the entry when mode resets to edit', () => {
+    const store = createEditorStore()
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'edit')
+
+    expect(store.getState().editorViewMode).toEqual({})
+  })
+
+  it('is a no-op when resetting a file that was never in changes mode', () => {
+    const store = createEditorStore()
+    const before = store.getState().editorViewMode
+
+    store.getState().setEditorViewMode('/repo/app.ts', 'edit')
+
+    expect(store.getState().editorViewMode).toBe(before)
+  })
+
+  it('drops editor view mode when the file is closed', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/app.ts',
+      relativePath: 'app.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorViewMode('/repo/app.ts', 'changes')
+
+    store.getState().closeFile('/repo/app.ts')
+
+    expect(store.getState().editorViewMode).toEqual({})
+  })
+})
+
+describe('createEditorSlice openMarkdownPreview', () => {
+  it('opens markdown preview as a separate read-only tab', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/docs/README.md',
+        mode: 'edit'
+      }),
+      expect.objectContaining({
+        id: 'markdown-preview::/repo/docs/README.md',
+        mode: 'markdown-preview',
+        markdownPreviewSourceFileId: '/repo/docs/README.md'
+      })
+    ])
+    expect(store.getState().activeFileId).toBe('markdown-preview::/repo/docs/README.md')
+  })
+
+  it('retargets an existing preview tab instead of duplicating it', () => {
+    const store = createEditorStore()
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown'
+      },
+      { anchor: 'install' }
+    )
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'markdown-preview::/repo/docs/README.md',
+        mode: 'markdown-preview',
+        markdownPreviewAnchor: 'install'
+      })
+    ])
+  })
+})
+
 describe('createEditorSlice pending editor reveal', () => {
   it('stores the destination file path with the reveal payload', () => {
     const store = createEditorStore()

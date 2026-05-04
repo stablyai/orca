@@ -12,9 +12,13 @@ import type { ChangelogData } from '../../../shared/types'
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function releaseUrlForVersion(version: string | null): string {
+  // Why: when no version is cached (typically a failed check), point at the
+  // plain releases listing rather than /releases/latest — /latest also breaks
+  // when GitHub's release API is degraded, and the listing is the most
+  // reliable manual fallback.
   return version
     ? `https://github.com/stablyai/orca/releases/tag/v${version}`
-    : 'https://github.com/stablyai/orca/releases/latest'
+    : 'https://github.com/stablyai/orca/releases'
 }
 
 function isAnimatedGif(url: string | undefined): boolean {
@@ -312,7 +316,9 @@ export function UpdateCard() {
   const errorCard: ErrorCardModel | null =
     status.state === 'error'
       ? {
-          title: 'Update Error',
+          // Why: title is scoped to the operation that failed so check-time
+          // failures (commonly GitHub-side) don't read as a bug in Orca.
+          title: cachedVersion ? 'Update Error' : 'Update Check Failed',
           summary: cachedVersion
             ? 'Could not complete the update.'
             : 'Could not check for updates.',

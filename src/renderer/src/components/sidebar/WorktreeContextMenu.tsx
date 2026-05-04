@@ -22,26 +22,28 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
+import { cn } from '@/lib/utils'
 import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
+import { runWorktreeDelete } from './delete-worktree-flow'
+import { runSleepWorktree } from './sleep-worktree-flow'
 
 type Props = {
   worktree: Worktree
   children: React.ReactNode
+  contentClassName?: string
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
-const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, children }: Props) {
+const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
+  worktree,
+  children,
+  contentClassName
+}: Props) {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const openModal = useAppStore((s) => s.openModal)
   const repo = useRepoById(worktree.repoId)
-  const skipDeleteConfirm = useAppStore((s) => s.settings?.skipDeleteWorktreeConfirm ?? false)
-  const shutdownWorktreeTerminals = useAppStore((s) => s.shutdownWorktreeTerminals)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -101,20 +103,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
 
   const handleCloseTerminals = useCallback(async () => {
-    // Why: shutting down the currently active worktree while its TerminalPane
-    // is still visible causes a visible "reboot" flicker and can crash the
-    // pane. clearTransientTerminalState nulls each tab's ptyId in place
-    // without bumping generation, so TerminalPane stays mounted while its
-    // PTYs are being killed; PTY exit callbacks then race against the live
-    // xterm instance. Boot the user to the landing page FIRST so the visible
-    // surface is detached before the async teardown runs.
-    if (activeWorktreeId === worktree.id) {
-      setActiveWorktree(null)
-    }
-    await shutdownWorktreeTerminals(worktree.id)
-  }, [worktree.id, shutdownWorktreeTerminals, activeWorktreeId, setActiveWorktree])
+    await runSleepWorktree(worktree.id)
+  }, [worktree.id])
 
   const handleDelete = useCallback(() => {
+    // Folder mode handled inline because it routes to a different modal;
+    // standard delete delegates to the shared runWorktreeDelete helper.
     setMenuOpen(false)
     if (isFolder) {
       // Why: folder mode reuses the worktree row UI for a synthetic root entry,
@@ -126,30 +120,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
       })
       return
     }
-    clearWorktreeDeleteState(worktree.id)
-    // Why: when the user has opted into skipping the confirmation, jump
-    // straight to the same delete-with-toast flow the dialog would run on
-    // confirm. The force-delete fallback still surfaces through the toast's
-    // "Force Delete" action, so the user never silently loses dirty work —
-    // they just skip the redundant "are you sure?" step for clean deletes.
-    // The dialog stays the entry point for the main worktree (guarded at the
-    // DropdownMenuItem level) and for any worktree that becomes unavailable
-    // mid-action, because those cases produce dialog-specific UI.
-    if (skipDeleteConfirm && !worktree.isMainWorktree) {
-      runWorktreeDeleteWithToast(worktree.id, worktree.displayName)
-      return
-    }
-    openModal('delete-worktree', { worktreeId: worktree.id })
-  }, [
-    worktree.id,
-    worktree.repoId,
-    worktree.displayName,
-    worktree.isMainWorktree,
-    clearWorktreeDeleteState,
-    isFolder,
-    openModal,
-    skipDeleteConfirm
-  ])
+    // Why delegate to runWorktreeDelete: keeps the skip-confirm vs. modal
+    // decision tree (and its rationale) in one place shared with the memory
+    // popover's inline Delete action. Folder mode short-circuits above
+    // because the confirm-remove-folder modal is unique to this caller.
+    runWorktreeDelete(worktree.id)
+  }, [worktree.id, worktree.repoId, worktree.displayName, isFolder, openModal])
 
   return (
     <>
@@ -175,7 +151,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
             style={{ left: menuPoint.x, top: menuPoint.y }}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-52" sideOffset={0} align="start">
+        <DropdownMenuContent className={cn('w-52', contentClassName)} sideOffset={0} align="start">
           <DropdownMenuItem onSelect={handleOpenInFinder} disabled={isDeleting}>
             <FolderOpen className="size-3.5" />
             Open in Finder

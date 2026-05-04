@@ -28,6 +28,10 @@ export function getEditorDisplayLabel(
     return 'Conflict Review'
   }
 
+  if (file.mode === 'markdown-preview') {
+    return `${getBaseLabel(file, variant)} (preview)`
+  }
+
   if (file.mode !== 'diff') {
     return getBaseLabel(file, variant)
   }

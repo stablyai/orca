@@ -8,9 +8,13 @@ const {
   registerGitHubHandlersMock,
   registerFeedbackHandlersMock,
   registerStatsHandlersMock,
+  registerMemoryHandlersMock,
   registerNotificationHandlersMock,
+  registerDeveloperPermissionHandlersMock,
   registerSettingsHandlersMock,
+  registerTelemetryHandlersMock,
   registerShellHandlersMock,
+  registerSidekickHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   registerFilesystemHandlersMock,
@@ -36,9 +40,13 @@ const {
   registerGitHubHandlersMock: vi.fn(),
   registerFeedbackHandlersMock: vi.fn(),
   registerStatsHandlersMock: vi.fn(),
+  registerMemoryHandlersMock: vi.fn(),
   registerNotificationHandlersMock: vi.fn(),
+  registerDeveloperPermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
+  registerTelemetryHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
+  registerSidekickHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
@@ -90,16 +98,32 @@ vi.mock('./stats', () => ({
   registerStatsHandlers: registerStatsHandlersMock
 }))
 
+vi.mock('./memory', () => ({
+  registerMemoryHandlers: registerMemoryHandlersMock
+}))
+
 vi.mock('./notifications', () => ({
   registerNotificationHandlers: registerNotificationHandlersMock
+}))
+
+vi.mock('./developer-permissions', () => ({
+  registerDeveloperPermissionHandlers: registerDeveloperPermissionHandlersMock
 }))
 
 vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
 }))
 
+vi.mock('./telemetry', () => ({
+  registerTelemetryHandlers: registerTelemetryHandlersMock
+}))
+
 vi.mock('./shell', () => ({
   registerShellHandlers: registerShellHandlersMock
+}))
+
+vi.mock('./sidekick', () => ({
+  registerSidekickHandlers: registerSidekickHandlersMock
 }))
 
 vi.mock('./session', () => ({
@@ -168,9 +192,13 @@ describe('registerCoreHandlers', () => {
     registerGitHubHandlersMock.mockReset()
     registerFeedbackHandlersMock.mockReset()
     registerStatsHandlersMock.mockReset()
+    registerMemoryHandlersMock.mockReset()
     registerNotificationHandlersMock.mockReset()
+    registerDeveloperPermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
+    registerTelemetryHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
+    registerSidekickHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
@@ -215,13 +243,16 @@ describe('registerCoreHandlers', () => {
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalled()
+    expect(registerSidekickHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerFeedbackHandlersMock).toHaveBeenCalled()
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
+    expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)
@@ -267,5 +298,8 @@ describe('registerCoreHandlers', () => {
     expect(registerCliHandlersMock).not.toHaveBeenCalled()
     expect(registerPreflightHandlersMock).not.toHaveBeenCalled()
     expect(registerBrowserHandlersMock).not.toHaveBeenCalled()
+    // Why: ipcMain.handle throws on duplicate channel registration, so the
+    // memory handler must not be wired up a second time on reactivation.
+    expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
   })
 })

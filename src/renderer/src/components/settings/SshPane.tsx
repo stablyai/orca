@@ -55,24 +55,27 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const setSshTargetLabels = useAppStore((s) => s.setSshTargetLabels)
 
-  const loadTargets = useCallback(async (opts?: { signal?: AbortSignal }) => {
-    try {
-      const result = (await window.api.ssh.listTargets()) as SshTarget[]
-      if (opts?.signal?.aborted) {
-        return
+  const loadTargets = useCallback(
+    async (opts?: { signal?: AbortSignal }) => {
+      try {
+        const result = (await window.api.ssh.listTargets()) as SshTarget[]
+        if (opts?.signal?.aborted) {
+          return
+        }
+        setTargets(result)
+        const labels = new Map<string, string>()
+        for (const t of result) {
+          labels.set(t.id, t.label)
+        }
+        setSshTargetLabels(labels)
+      } catch {
+        if (!opts?.signal?.aborted) {
+          toast.error('Failed to load SSH targets')
+        }
       }
-      setTargets(result)
-      const labels = new Map<string, string>()
-      for (const t of result) {
-        labels.set(t.id, t.label)
-      }
-      setSshTargetLabels(labels)
-    } catch {
-      if (!opts?.signal?.aborted) {
-        toast.error('Failed to load SSH targets')
-      }
-    }
-  }, [setSshTargetLabels])
+    },
+    [setSshTargetLabels]
+  )
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -92,12 +95,19 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       return
     }
 
+    const graceSeconds = parseInt(form.relayGracePeriodSeconds, 10)
+    if (isNaN(graceSeconds) || graceSeconds < 60 || graceSeconds > 3600) {
+      toast.error('Relay grace period must be between 60 and 3600 seconds')
+      return
+    }
+
     const target = {
       label: form.label.trim() || `${form.username}@${form.host}`,
       configHost: form.configHost.trim() || form.host.trim(),
       host: form.host.trim(),
       port,
       username: form.username.trim(),
+      relayGracePeriodSeconds: graceSeconds,
       ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {}),
       ...(form.proxyCommand.trim() ? { proxyCommand: form.proxyCommand.trim() } : {}),
       ...(form.jumpHost.trim() ? { jumpHost: form.jumpHost.trim() } : {})
@@ -147,7 +157,8 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       username: target.username,
       identityFile: target.identityFile ?? '',
       proxyCommand: target.proxyCommand ?? '',
-      jumpHost: target.jumpHost ?? ''
+      jumpHost: target.jumpHost ?? '',
+      relayGracePeriodSeconds: String(target.relayGracePeriodSeconds ?? 300)
     })
     setShowForm(true)
   }

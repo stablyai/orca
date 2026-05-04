@@ -9,10 +9,13 @@ import { useContextualCopySetup } from './useContextualCopySetup'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 
 type DiffViewerProps = {
   modelKey: string
+  originalModelKey?: string
+  modifiedModelKey?: string
   originalContent: string
   modifiedContent: string
   language: string
@@ -20,16 +23,25 @@ type DiffViewerProps = {
   relativePath: string
   sideBySide: boolean
   editable?: boolean
-  // Why: optional because DiffViewer is also used by GitHubItemDrawer for PR
+  // Why: optional because DiffViewer is also used by GitHubItemDialog for PR
   // review, where there is no local worktree to attach comments to. When
   // omitted, the per-line comment decorator is skipped.
   worktreeId?: string
+  onAddLineComment?: (args: {
+    lineNumber: number
+    startLine?: number
+    body: string
+  }) => Promise<boolean>
+  addLineCommentLabel?: string
+  addLineCommentPlaceholder?: string
   onContentChange?: (content: string) => void
   onSave?: (content: string) => void
 }
 
 export default function DiffViewer({
   modelKey,
+  originalModelKey,
+  modifiedModelKey,
   originalContent,
   modifiedContent,
   language,
@@ -38,6 +50,9 @@ export default function DiffViewer({
   sideBySide,
   editable,
   worktreeId,
+  onAddLineComment,
+  addLineCommentLabel,
+  addLineCommentPlaceholder,
   onContentChange,
   onSave
 }: DiffViewerProps): React.JSX.Element {
@@ -64,19 +79,26 @@ export default function DiffViewer({
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
+  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
-  const [popover, setPopover] = useState<{ lineNumber: number; top: number } | null>(null)
+  const [popover, setPopover] = useState<{
+    lineNumber: number
+    startLine?: number
+    top: number
+  } | null>(null)
 
-  // Why: gate the decorator on having a worktreeId. DiffViewer is reused by
-  // GitHubItemDrawer (PR review) where there is no local worktree to own the
-  // comment. Pass a nulled editor so the hook no-ops rather than calling it
-  // conditionally, which would violate the rules of hooks.
+  const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
+
+  // Why: gate the decorator on having a comment target. Local diffs persist
+  // notes to worktree metadata; GitHub PR diffs post line comments remotely.
   useDiffCommentDecorator({
-    editor: worktreeId ? modifiedEditor : null,
+    editor: hasLineCommentAction ? modifiedEditor : null,
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
-    comments: diffComments,
-    onAddCommentClick: ({ lineNumber, top }) => setPopover({ lineNumber, top }),
+    comments: worktreeId ? diffComments : [],
+    addButtonLabel: addLineCommentLabel,
+    onAddCommentClick: ({ lineNumber, startLine, top }) =>
+      setPopover({ lineNumber, startLine, top }),
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
@@ -105,7 +127,21 @@ export default function DiffViewer({
   }, [modifiedEditor, popover?.lineNumber])
 
   const handleSubmitComment = async (body: string): Promise<void> => {
-    if (!popover || !worktreeId) {
+    if (!popover) {
+      return
+    }
+    if (onAddLineComment) {
+      const ok = await onAddLineComment({
+        lineNumber: popover.lineNumber,
+        startLine: popover.startLine,
+        body
+      })
+      if (ok) {
+        setPopover(null)
+      }
+      return
+    }
+    if (!worktreeId) {
       return
     }
     // Why: await persistence before closing — if addDiffComment resolves null
@@ -135,10 +171,14 @@ export default function DiffViewer({
 
   const propsRef = useRef({ relativePath, language, onSave })
   propsRef.current = { relativePath, language, onSave }
+  const resolvedOriginalModelKey = originalModelKey ?? modelKey
+  const resolvedModifiedModelKey = modifiedModelKey ?? modelKey
 
   const handleMount: DiffOnMount = useCallback(
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
@@ -170,8 +210,13 @@ export default function DiffViewer({
       } else {
         diffEditor.focus()
       }
+
+      diffEditor.onDidDispose(() => {
+        lineNumberOptionsSubRef.current?.dispose()
+        lineNumberOptionsSubRef.current = null
+      })
     },
-    [editable, setupCopy, modelKey, filePath]
+    [editable, setupCopy, modelKey, filePath, sideBySide]
   )
 
   // Why: VS Code snapshots diff view state on deactivation, not on scroll events.
@@ -189,14 +234,31 @@ export default function DiffViewer({
     }
   }, [modelKey])
 
+  useEffect(() => {
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
+      return
+    }
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    return () => {
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = null
+    }
+  }, [sideBySide])
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 min-h-0 relative">
-        {popover && worktreeId && (
+        {popover && hasLineCommentAction && (
           <DiffCommentPopover
             key={popover.lineNumber}
             lineNumber={popover.lineNumber}
+            startLine={popover.startLine}
             top={popover.top}
+            placeholder={addLineCommentPlaceholder}
+            submitLabel={addLineCommentLabel}
+            submittingLabel="Posting…"
             onCancel={() => setPopover(null)}
             onSubmit={handleSubmitComment}
           />
@@ -212,8 +274,11 @@ export default function DiffViewer({
           // (staged, unstaged, branch compare versions). The kept Monaco models
           // must therefore key off the tab identity, not the raw file path, or
           // one diff tab can incorrectly reuse another tab's model contents.
-          originalModelPath={`diff:original:${modelKey}`}
-          modifiedModelPath={`diff:modified:${modelKey}`}
+          // Why: Changes mode sometimes needs to rotate only the original-side
+          // model after HEAD moves, while preserving the modified-side model's
+          // undo stack for continued editing.
+          originalModelPath={`diff:original:${resolvedOriginalModelKey}`}
+          modifiedModelPath={`diff:modified:${resolvedModifiedModelKey}`}
           keepCurrentOriginalModel
           keepCurrentModifiedModel
           options={{

@@ -49,6 +49,7 @@ export type RuntimeSyncedLeaf = {
   leafId: string
   paneRuntimeId: number
   ptyId: string | null
+  paneTitle?: string | null
 }
 
 export type RuntimeSyncWindowGraph = {

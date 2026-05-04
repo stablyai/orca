@@ -581,7 +581,7 @@ export default function LinearItemDrawer({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [issue?.id])
 
-  // Why: same pointer-events fix as GitHubItemDrawer — Radix may leave
+  // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
   // pointer-events: none on body when overlays transition.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {

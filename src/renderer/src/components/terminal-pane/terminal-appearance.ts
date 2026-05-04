@@ -2,6 +2,7 @@ import type { IDisposable, IParser, ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -11,6 +12,7 @@ import { buildFontFamily } from './layout-serialization'
 import { captureScrollState, restoreScrollState } from '@/lib/pane-manager/pane-tree-ops'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
+import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 
 // Contour/Kitty "color-scheme update" protocol (DEC mode 2031 + CSI 997):
 // the terminal pushes `CSI ?997;1n` for dark and `CSI ?997;2n` for light to
@@ -127,6 +129,24 @@ export function maybePushMode2031Flip(
   return true
 }
 
+export function hexToRgba(hex: string, alpha: number): string {
+  let clean = hex.replace('#', '')
+  if (clean.length === 3) {
+    clean = clean
+      .split('')
+      .map((c) => c + c)
+      .join('')
+  }
+  const r = parseInt(clean.slice(0, 2), 16)
+  const g = parseInt(clean.slice(2, 4), 16)
+  const b = parseInt(clean.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function isHexColor(value: string): boolean {
+  return HEX_COLOR_RE.test(value)
+}
+
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
@@ -139,14 +159,45 @@ export function applyTerminalAppearance(
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
-  const theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const paneBackground = theme?.background ?? '#000000'
+  let theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
+
+  // Why: merge user-imported Ghostty color overrides on top of the resolved
+  // base theme so individual colors can be tweaked without losing the rest.
+  if (theme && settings.terminalColorOverrides) {
+    theme = { ...theme, ...settings.terminalColorOverrides }
+  }
+
+  let paneBackground = theme?.background ?? '#000000'
+
+  // Why: Ghostty's background-opacity controls the terminal's base alpha.
+  // We convert the hex background to rgba and enable xterm transparency.
+  if (settings.terminalBackgroundOpacity !== undefined && theme?.background) {
+    paneBackground = hexToRgba(theme.background, settings.terminalBackgroundOpacity)
+    theme = { ...theme, background: paneBackground }
+  }
+
+  // Why: Ghostty's cursor-opacity applies alpha to the cursor color. We only
+  // convert when the resolved cursor is a hex value; named CSS colors are
+  // left untouched because hexToRgba expects a hex input.
+  if (settings.terminalCursorOpacity !== undefined && theme?.cursor && isHexColor(theme.cursor)) {
+    theme = { ...theme, cursor: hexToRgba(theme.cursor, settings.terminalCursorOpacity) }
+  }
+
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
+  const ligaturesEnabled = resolveTerminalLigaturesEnabled(
+    settings.terminalLigatures,
+    settings.terminalFontFamily
+  )
 
   for (const pane of manager.getPanes()) {
     if (theme) {
       pane.terminal.options.theme = theme
     }
+    // Why: xterm's allowTransparency has measurable rendering cost, so clear
+    // it explicitly when opacity is at (or above) 1 to avoid a stale `true`
+    // bleeding in from a prior opacity setting that has since been reset.
+    pane.terminal.options.allowTransparency =
+      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
     pane.terminal.options.cursorStyle = settings.terminalCursorStyle
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
     const paneSize = paneFontSizes.get(pane.id)
@@ -162,6 +213,12 @@ export function applyTerminalAppearance(
     // `effectiveMacOptionAsAlt` carries.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
     pane.terminal.options.lineHeight = settings.terminalLineHeight
+    // Why call unconditionally: the per-pane helper is a no-op when the
+    // current addon state already matches, so passing the resolved value on
+    // every appearance apply keeps newly-created panes in sync without a
+    // separate hook and lets live toggles (settings change, font swap)
+    // land immediately.
+    manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     try {
       const state = captureScrollState(pane.terminal)
       pane.fitAddon.fit()
@@ -183,6 +240,8 @@ export function applyTerminalAppearance(
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,
     dividerThicknessPx: paneStyles.dividerThicknessPx,
-    focusFollowsMouse: paneStyles.focusFollowsMouse
+    focusFollowsMouse: paneStyles.focusFollowsMouse,
+    paddingX: settings.terminalPaddingX,
+    paddingY: settings.terminalPaddingY
   })
 }

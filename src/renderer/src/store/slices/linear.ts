@@ -46,6 +46,9 @@ export type LinearSlice = {
   connectLinear: (
     apiKey: string
   ) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
+  testLinearConnection: () => Promise<
+    { ok: true; viewer: LinearViewer } | { ok: false; error: string }
+  >
   disconnectLinear: () => Promise<void>
   fetchLinearIssue: (id: string) => Promise<LinearIssue | null>
   searchLinearIssues: (query: string, limit?: number) => Promise<LinearIssue[]>
@@ -77,6 +80,31 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       } else if (!get().linearStatusChecked) {
         set({ linearStatusChecked: true })
       }
+    }
+  },
+
+  testLinearConnection: async () => {
+    try {
+      const result = (await window.api.linear.testConnection()) as
+        | { ok: true; viewer: LinearViewer }
+        | { ok: false; error: string }
+      if (result.ok) {
+        set({
+          linearStatus: { connected: true, viewer: result.viewer },
+          linearStatusChecked: true
+        })
+      } else {
+        // Why: testConnection clears the token on auth errors; reflect that
+        // locally so the UI drops back to the Connect state.
+        set({
+          linearStatus: { connected: false, viewer: null },
+          linearStatusChecked: true
+        })
+      }
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Test failed'
+      return { ok: false as const, error: message }
     }
   },
 

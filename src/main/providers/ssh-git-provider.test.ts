@@ -41,6 +41,19 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(statusResult)
   })
 
+  it('commit sends git.commit request', async () => {
+    const commitResult = { success: true }
+    mux.request.mockResolvedValue(commitResult)
+
+    const result = await provider.commit('/home/user/repo', 'feat: add source control commit')
+
+    expect(mux.request).toHaveBeenCalledWith('git.commit', {
+      worktreePath: '/home/user/repo',
+      message: 'feat: add source control commit'
+    })
+    expect(result).toEqual(commitResult)
+  })
+
   it('getDiff sends git.diff request', async () => {
     const diffResult = { kind: 'text', originalContent: '', modifiedContent: 'hello' }
     mux.request.mockResolvedValue(diffResult)

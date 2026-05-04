@@ -1,49 +1,18 @@
-import { relative, sep } from 'path'
+import { sep } from 'path'
+import type { ChildProcess } from 'child_process'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
 import { gitSpawn, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
-
-// Why: We use --hidden to surface dotfiles users commonly edit (e.g. .env,
-// .github workflows, .eslintrc) but must still exclude non-editable hidden
-// directories that would clutter quick-open results. A blocklist is used
-// instead of an allowlist so that novel dotfiles (e.g. .dockerignore) are
-// discoverable by default. Keep this list limited to tool-generated dirs
-// that are never hand-edited.
-const HIDDEN_DIR_BLOCKLIST = new Set([
-  '.git',
-  '.next',
-  '.nuxt',
-  '.cache',
-  '.stably',
-  '.vscode',
-  '.idea',
-  '.yarn',
-  '.pnpm-store',
-  '.terraform',
-  '.docker',
-  '.husky'
-])
-
-// Why: Avoids allocating a segments array per path. Walks the string to
-// extract each '/'-delimited segment and checks it against the blocklist.
-function shouldIncludeQuickOpenPath(path: string): boolean {
-  let start = 0
-  const len = path.length
-  while (start < len) {
-    let end = path.indexOf('/', start)
-    if (end === -1) {
-      end = len
-    }
-    const segment = path.substring(start, end)
-    if (segment === 'node_modules' || HIDDEN_DIR_BLOCKLIST.has(segment)) {
-      return false
-    }
-    start = end + 1
-  }
-  return true
-}
+import {
+  buildExcludePathPrefixes,
+  buildGitLsFilesArgsForQuickOpen,
+  buildRgArgsForQuickOpen,
+  normalizeQuickOpenRgLine,
+  shouldExcludeQuickOpenRelPath,
+  shouldIncludeQuickOpenPath
+} from '../../shared/quick-open-filter'
 
 export async function listQuickOpenFiles(
   rootPath: string,
@@ -54,93 +23,77 @@ export async function listQuickOpenFiles(
 
   // Why: when the main worktree sits at the repo root, linked worktrees are
   // nested subdirectories. Without excluding them, rg/git lists files from
-  // every worktree instead of just the active one.
-  const excludeGlobs: string[] = []
-  if (excludePaths?.length) {
-    const normalizedRoot = `${authorizedRootPath.replace(/[\\/]+$/, '')}/`
-    for (const abs of excludePaths) {
-      const rel = abs.startsWith(normalizedRoot)
-        ? abs.slice(normalizedRoot.length)
-        : relative(authorizedRootPath, abs).replace(/\\/g, '/')
-      if (rel && !rel.startsWith('..') && !rel.startsWith('/')) {
-        excludeGlobs.push(rel)
-      }
-    }
-  }
+  // every worktree instead of just the active one. The shared helper
+  // normalizes, validates, and root-relativizes every input.
+  const excludePathPrefixes = buildExcludePathPrefixes(authorizedRootPath, excludePaths)
 
   // Why: checking rg availability upfront avoids a race condition where
   // spawn('rg') emits 'close' before 'error' on some platforms, causing
   // the handler to resolve with empty results before the git fallback
-  // can run. The result is cached after the first check.
+  // can run.
   const rgAvailable = await checkRgAvailable(authorizedRootPath)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludeGlobs)
+    return listFilesWithGit(authorizedRootPath, excludePathPrefixes)
   }
 
-  // Why: We try fast string slicing first (O(1) per file), but fall back to
-  // path.relative() if the rg output doesn't start with the expected prefix.
-  // This handles edge cases where symlinks, bind mounts, Windows junctions,
-  // or custom ripgreprc --path-separator settings cause a mismatch.
-  const normalizedPrefix = `${authorizedRootPath.replace(/[\\/]+/g, '/').replace(/\/$/, '')}/`
-  const prefixLen = normalizedPrefix.length
-
   const files = new Set<string>()
+  const children: ChildProcess[] = []
+  // Why: when rg runs inside WSL, output paths are Linux-native
+  // (e.g. /home/user/repo/src/file.ts). Translate them back to Windows
+  // UNC paths up-front before the shared line normalizer runs.
+  const wslInfo = parseWslPath(authorizedRootPath)
+
+  const { primary, envPass } = buildRgArgsForQuickOpen({
+    // Why: rg evaluates root-relative exclude globs against cwd only when the
+    // search target is cwd-relative. With an absolute target, `!packages/app`
+    // filters output after traversal but does not prune the nested worktree.
+    searchRoot: '.',
+    excludePathPrefixes,
+    // On Windows, rg outputs '\\'-separated paths; force '/'. Also force on
+    // macOS/Linux for idempotence — it's a no-op there.
+    forceSlashSeparator: sep === '\\'
+  })
 
   const runRg = (args: string[]): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let buf = ''
       let done = false
-      const finish = (): void => {
+      let parseablePathCount = 0
+      const finish = (err?: Error): void => {
         if (done) {
           return
         }
         done = true
         clearTimeout(timer)
-        resolve()
+        if (err) {
+          reject(err)
+        } else {
+          resolve()
+        }
       }
 
-      // Why: when rg runs inside WSL, output paths are Linux-native
-      // (e.g. /home/user/repo/src/file.ts). Detect this upfront so we
-      // can translate them back to Windows UNC paths for prefix matching.
-      const wslInfo = parseWslPath(authorizedRootPath)
-
-      const processLine = (line: string): void => {
-        if (line.charCodeAt(line.length - 1) === 13 /* \r */) {
-          line = line.substring(0, line.length - 1)
-        }
-        if (!line) {
+      const processLine = (rawLine: string): void => {
+        const translated =
+          wslInfo && rawLine.startsWith('/') ? toWindowsWslPath(rawLine, wslInfo.distro) : rawLine
+        const relPath = normalizeQuickOpenRgLine(translated, { kind: 'cwd-relative' })
+        if (relPath === null) {
           return
         }
-
-        // Translate Linux paths from WSL rg output to Windows UNC paths
-        if (wslInfo) {
-          line = toWindowsWslPath(line, wslInfo.distro)
+        parseablePathCount++
+        if (!shouldIncludeQuickOpenPath(relPath)) {
+          return
         }
-
-        // Why: Normalize separators to '/' so the prefix check works on all
-        // platforms (Windows rg uses '\', macOS/Linux use '/').
-        const normalized = line.replace(/\\/g, '/')
-        let relPath: string
-        if (normalized.startsWith(normalizedPrefix)) {
-          relPath = normalized.substring(prefixLen)
-        } else {
-          // Fallback: symlink resolution or path-separator mismatch between
-          // Node and rg — use path.relative() which handles all edge cases.
-          relPath = relative(authorizedRootPath, line).replace(/\\/g, '/')
-          if (relPath.startsWith('..') || relPath.startsWith('/')) {
-            // Safety: path escapes the root — skip it entirely
-            return
-          }
+        if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
+          return
         }
-        if (shouldIncludeQuickOpenPath(relPath)) {
-          files.add(relPath)
-        }
+        files.add(relPath)
       }
 
       const child = wslAwareSpawn('rg', args, {
         cwd: authorizedRootPath,
         stdio: ['ignore', 'pipe', 'pipe']
       })
+      children.push(child)
       child.stdout!.setEncoding('utf-8')
       child.stdout!.on('data', (chunk: string) => {
         buf += chunk
@@ -151,69 +104,66 @@ export async function listQuickOpenFiles(
           start = newlineIdx + 1
           newlineIdx = buf.indexOf('\n', start)
         }
-        // Keep the incomplete trailing segment for the next chunk
         buf = start < buf.length ? buf.substring(start) : ''
       })
       child.stderr!.on('data', () => {
         /* drain */
       })
       child.once('error', () => {
-        finish()
+        // Why: treat spawn errors like an abnormal exit — discard residual
+        // buffer so a truncated final byte sequence cannot leak as a path.
+        buf = ''
+        finish(new Error('rg failed to start'))
       })
-      child.once('close', () => {
+      child.once('close', (code, signal) => {
+        if (signal) {
+          // Why: a signal exit means timeout/OOM/external kill. Returning the
+          // already-streamed prefix would recreate the false-empty bug this
+          // path is meant to avoid.
+          buf = ''
+          finish(new Error(`rg killed by ${signal}`))
+          return
+        }
         if (buf) {
           processLine(buf)
         }
-        finish()
+        if (code === 0 || code === 1) {
+          finish()
+        } else if (code === 2 && parseablePathCount > 0) {
+          // rg can return 2 for unreadable subdirectories while still listing
+          // usable files from the rest of the root.
+          finish()
+        } else {
+          finish(new Error(`rg exited with code ${code}`))
+        }
       })
-      const timer = setTimeout(() => child.kill(), 10000)
+      const timer = setTimeout(() => {
+        // Why: on timeout, the buffer is likely truncated mid-path. Discard
+        // it so Quick Open never displays a malformed entry.
+        buf = ''
+        child.kill()
+        finish(new Error('rg list timed out'))
+      }, 10000)
     })
   }
 
-  // Why: --hidden is needed so users can quick-open dotfiles they commonly
-  // edit (.env, .github/*, .eslintrc, etc.). Without it, rg skips all
-  // dot-prefixed paths. The HIDDEN_DIR_BLOCKLIST in shouldIncludeQuickOpenPath
-  // filters out tool-generated dirs that would clutter results.
-  //
-  // The second rg call adds --no-ignore-vcs to also surface .env* files that
-  // are typically in .gitignore. These are included because users frequently
-  // need to view/edit .env files from quick-open, and excluding them would
-  // force users to navigate manually. The files are read-only in search
-  // results — they are not committed or exposed outside the local editor.
+  const killSurvivors = (): void => {
+    // Why: if one rg pass fails, Promise.all rejects immediately while the
+    // sibling scan can keep walking a huge tree until timeout. Stop it so
+    // repeated Quick Open attempts do not accumulate local rg processes.
+    for (const child of children) {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill()
+      }
+    }
+  }
 
-  // Why: On Windows, rg outputs '\'-separated paths. Forcing '/' via
-  // --path-separator avoids per-line backslash replacement in processLine.
-  const rgSepArgs = sep === '\\' ? ['--path-separator', '/'] : []
-  const rgExcludeArgs = excludeGlobs.flatMap((g) => ['--glob', `!${g}/**`])
-
-  await Promise.all([
-    runRg([
-      '--files',
-      '--hidden',
-      ...rgSepArgs,
-      '--glob',
-      '!**/node_modules',
-      '--glob',
-      '!**/.git',
-      ...rgExcludeArgs,
-      authorizedRootPath
-    ]),
-    runRg([
-      '--files',
-      '--hidden',
-      '--no-ignore-vcs',
-      ...rgSepArgs,
-      '--glob',
-      '**/.env*',
-      '--glob',
-      '!**/node_modules',
-      '--glob',
-      '!**/.git',
-      ...rgExcludeArgs,
-      authorizedRootPath
-    ])
-  ])
-
+  try {
+    await Promise.all([runRg(primary), runRg(envPass)])
+  } catch (err) {
+    killSurvivors()
+    throw err
+  }
   return Array.from(files)
 }
 
@@ -221,13 +171,16 @@ export async function listQuickOpenFiles(
  * Fallback file lister using git ls-files. Used when rg is not available.
  *
  * Why two git ls-files calls: the first lists tracked + untracked-but-not-ignored
- * files (mirrors rg --files --hidden with gitignore respect). The second specifically
- * surfaces .env* files that are typically gitignored but users frequently need in
- * quick-open (mirrors the second rg call with --no-ignore-vcs).
+ * files (mirrors rg --files --hidden with gitignore respect). The second
+ * surfaces .env* files that are typically gitignored but users frequently
+ * need in quick-open (mirrors the second rg call with --no-ignore-vcs).
  */
-function listFilesWithGit(rootPath: string, excludeGlobs: string[] = []): Promise<string[]> {
+function listFilesWithGit(
+  rootPath: string,
+  excludePathPrefixes: readonly string[]
+): Promise<string[]> {
   const files = new Set<string>()
-  const excludePrefixes = excludeGlobs.map((g) => `${g.replace(/\\/g, '/')}/`)
+  const { primary, envPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
     return new Promise((resolve) => {
@@ -249,7 +202,10 @@ function listFilesWithGit(rootPath: string, excludeGlobs: string[] = []): Promis
         if (!line) {
           return
         }
-        if (excludePrefixes.some((p) => line.startsWith(p))) {
+        // Why: git exclude pathspecs prune most hits, but post-filter is
+        // still required because pathspec semantics differ subtly from the
+        // rg globs and exist as a correctness backstop.
+        if (shouldExcludeQuickOpenRelPath(line, excludePathPrefixes)) {
           return
         }
         if (shouldIncludeQuickOpenPath(line)) {
@@ -279,6 +235,7 @@ function listFilesWithGit(rootPath: string, excludeGlobs: string[] = []): Promis
         /* drain */
       })
       child.once('error', () => {
+        buf = ''
         finish()
       })
       child.once('close', () => {
@@ -287,18 +244,12 @@ function listFilesWithGit(rootPath: string, excludeGlobs: string[] = []): Promis
         }
         finish()
       })
-      const timer = setTimeout(() => child.kill(), 10000)
+      const timer = setTimeout(() => {
+        buf = ''
+        child.kill()
+      }, 10000)
     })
   }
 
-  return Promise.all([
-    // Why: --cached lists tracked files, --others lists untracked files,
-    // --exclude-standard respects .gitignore. Together this mirrors
-    // rg --files --hidden (which respects gitignore by default).
-    runGitLsFiles(['--cached', '--others', '--exclude-standard']),
-    // Why: surfaces .env* files that are typically gitignored. --others
-    // without --exclude-standard lists all untracked files; the pathspec
-    // restricts output to .env* only. Mirrors the rg --no-ignore-vcs call.
-    runGitLsFiles(['--others', '--', '**/.env*'])
-  ]).then(() => Array.from(files))
+  return Promise.all([runGitLsFiles(primary), runGitLsFiles(envPass)]).then(() => Array.from(files))
 }

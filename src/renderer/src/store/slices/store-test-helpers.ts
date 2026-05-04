@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/types'
 import type { OpenFile } from './editor'
 import { createRepoSlice } from './repos'
+import { createSparsePresetsSlice } from './sparse-presets'
 import { createWorktreeSlice } from './worktrees'
 import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
@@ -18,6 +19,7 @@ import { createGitHubSlice } from './github'
 import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
+import { createMemorySlice } from './memory'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
@@ -39,6 +41,7 @@ export const TEST_REPO = {
 export function createTestStore() {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
+    ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),
     ...createTerminalSlice(...a),
     ...createTabsSlice(...a),
@@ -48,6 +51,7 @@ export function createTestStore() {
     ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
+    ...createMemorySlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),

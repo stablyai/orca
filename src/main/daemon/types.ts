@@ -1,8 +1,11 @@
 // ─── Protocol Version ────────────────────────────────────────────────
-// Why: v1 daemons can survive app updates and keep using tmp-backed
-// shell-ready rcfiles. v2 forces a fresh daemon with durable wrapper paths.
-export const PROTOCOL_VERSION = 2
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1] as const
+// Why: daemons can survive app updates with long-lived shell env. Bump when
+// spawn-time env semantics change so stale sessions cannot bypass new behavior.
+// Why: bumped from 3 → 4 for the getSnapshot RPC. A surviving v3 daemon
+// would reject getSnapshot as unknown, silently failing all checkpoint
+// writes. The bump forces a stale daemon to be replaced on reconnect.
+export const PROTOCOL_VERSION = 4
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -59,6 +62,17 @@ export type CreateOrAttachRequest = {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
+     *  The daemon forwards this to its subprocess spawner so each tab honors
+     *  the shell picked in the "+" menu or the persisted default-shell setting,
+     *  instead of defaulting to COMSPEC (which is always cmd.exe on Windows)
+     *  or the hard-coded powershell.exe fallback. */
+    shellOverride?: string
+    /** Why: the UI keeps PowerShell as one shell family, but the runtime may
+     *  need to substitute pwsh.exe for powershell.exe when the user selected
+     *  PowerShell 7+. Forward the persisted implementation choice so the daemon
+     *  PTY path resolves the same effective executable as LocalPtyProvider. */
+    terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
   }
 }
@@ -149,6 +163,14 @@ export type PingRequest = {
   type: 'ping'
 }
 
+export type GetSnapshotRequest = {
+  id: string
+  type: 'getSnapshot'
+  payload: {
+    sessionId: string
+  }
+}
+
 export type DaemonRequest =
   | CreateOrAttachRequest
   | CancelCreateOrAttachRequest
@@ -162,6 +184,7 @@ export type DaemonRequest =
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest
+  | GetSnapshotRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 
@@ -186,6 +209,10 @@ export type CreateOrAttachResult = {
   shellState: ShellReadyState
 }
 
+export type GetSnapshotResult = {
+  snapshot: TerminalSnapshot | null
+}
+
 export type ListSessionsResult = {
   sessions: SessionInfo[]
 }
@@ -200,6 +227,14 @@ export type SessionInfo = {
   cols: number
   rows: number
   createdAt: number
+}
+
+// Why: SessionInfo + source protocol version, so the Manage Sessions UI can
+// label legacy-backed sessions. Populated by the router/adapter at RPC time;
+// never transmitted over the daemon wire (daemon only speaks its own
+// protocol version and doesn't know about other versions).
+export type DaemonSessionInfo = SessionInfo & {
+  protocolVersion: number
 }
 
 // ─── Events (Daemon → Client, on stream socket) ────────────────────

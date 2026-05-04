@@ -34,8 +34,15 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { rebuildAuthorizedRootsCache, ensureAuthorizedRootsCache } from './filesystem-auth'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
+import { getLocalPtyProvider } from './pty'
 
-export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerWorktreeHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: OrcaRuntimeService
+): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('worktrees:listAll')
@@ -172,7 +179,10 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
       // Skip the gh lookup when both hints are present (picker already has them).
       if (!headRefName) {
-        const item = await getWorkItem(repo.path, args.prNumber)
+        // Why: the caller already knows this is a PR number, so scope the
+        // lookup to `type: 'pr'` and skip the speculative issue-first probe
+        // that would hit the upstream issue tracker for fork checkouts.
+        const item = await getWorkItem(repo.path, args.prNumber, 'pr')
         if (!item || item.type !== 'pr') {
           return { error: `PR #${args.prNumber} not found.` }
         }
@@ -246,7 +256,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
   ipcMain.handle(
     'worktrees:remove',
-    async (_event, args: { worktreeId: string; force?: boolean }) => {
+    async (_event, args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
       const repo = store.getRepo(repoId)
       if (!repo) {
@@ -254,6 +264,31 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       }
       if (isFolderRepo(repo)) {
         throw new Error('Folder mode does not support deleting worktrees.')
+      }
+
+      // Why: kill every PTY belonging to this worktree BEFORE git-level
+      // removal. The renderer pre-kills via shutdownWorktreeTerminals, but
+      // defensive teardown here protects against: (a) a future renderer bug,
+      // (b) a disconnected window, (c) an out-of-band window.api.worktrees.remove
+      // caller. Placement is before the SSH early-return so local-host PTYs
+      // are still reaped for local repos; SSH-backed PTYs are handled by the
+      // remote provider's own teardown (design §4.3, §6).
+      if (!repo.connectionId) {
+        await killAllProcessesForWorktree(args.worktreeId, {
+          runtime,
+          localProvider: getLocalPtyProvider()
+        })
+          .then((r) => {
+            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+            if (total > 0) {
+              console.info(
+                `[worktree-teardown] ${args.worktreeId} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+              )
+            }
+          })
+          .catch((err) => {
+            console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
+          })
       }
 
       if (repo.connectionId) {
@@ -270,7 +305,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
       // Run archive hook before removal
       const hooks = getEffectiveHooks(repo)
-      if (hooks?.scripts.archive) {
+      if (hooks?.scripts.archive && !args.skipArchive) {
         const result = await runHook('archive', worktreePath, repo)
         if (!result.success) {
           console.error(`[hooks] archive hook failed for ${worktreePath}:`, result.output)

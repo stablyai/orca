@@ -86,6 +86,15 @@ export type OpenFile = {
   worktreeId: string
   language: string
   isDirty: boolean
+  /** Why: markdown preview tabs are separate editor tabs that mirror a source
+   *  markdown file's live draft. Storing the source file ID lets the preview
+   *  follow unsaved edits from the normal editor without becoming editable
+   *  itself or conflating the preview tab's identity with the source tab. */
+  markdownPreviewSourceFileId?: string
+  /** Optional hash fragment to reveal when a preview tab is opened from a
+   *  markdown link such as `./guide.md#setup`. Kept on tab state so repeated
+   *  "open preview" actions can retarget an already-open preview tab. */
+  markdownPreviewAnchor?: string
   diffSource?: DiffSource
   branchCompare?: BranchCompareSnapshot
   branchOldPath?: string
@@ -107,13 +116,20 @@ export type OpenFile = {
   // a strikethrough label plus a "deleted"/"renamed" suffix. Cleared if the
   // file reappears on disk at its original path.
   externalMutation?: 'deleted' | 'renamed'
-  mode: 'edit' | 'diff' | 'conflict-review'
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
 }
 
-export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
 export type ActivityBarPosition = 'top' | 'side'
 
-export type MarkdownViewMode = 'source' | 'rich'
+export type MarkdownViewMode = 'source' | 'rich' | 'preview'
+
+// Why: orthogonal to MarkdownViewMode. 'changes' flips the editor tab to a
+// diff-against-HEAD rendering (working tree incl. unsaved draft vs HEAD) in
+// place of the normal editor, without creating a separate tab. The per-tab
+// Tab.contentType stays 'editor' for the whole lifetime; this slice drives
+// what EditorPanel *renders* for that tab. See reviews/changes-view-mode-plan.md.
+export type EditorViewMode = 'edit' | 'changes'
 
 /** Enough state to restore a tab via `openFile` after `closeFile` (id is always filePath). */
 export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
@@ -133,6 +149,12 @@ export type EditorSlice = {
   // Markdown view mode per file (fileId -> mode)
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
+
+  // Editor view mode per file (fileId -> mode). Orthogonal to markdownViewMode:
+  // a markdown file can be in Raw+Changes, Rendered+Changes, etc. Absent entry
+  // means 'edit'.
+  editorViewMode: Record<string, EditorViewMode>
+  setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
 
   // Right sidebar
   rightSidebarOpen: boolean
@@ -176,6 +198,10 @@ export type EditorSlice = {
     rawHref: string | undefined,
     ctx: { sourceFilePath: string; worktreeId: string; worktreeRoot: string | null }
   ) => Promise<void>
+  openMarkdownPreview: (
+    file: Pick<OpenFile, 'filePath' | 'relativePath' | 'worktreeId' | 'language'>,
+    options?: { anchor?: string | null; targetGroupId?: string }
+  ) => void
   pinFile: (fileId: string, tabId?: string) => void
   closeFile: (fileId: string) => void
   closeAllFiles: () => void
@@ -254,7 +280,6 @@ export type EditorSlice = {
     string,
     {
       query: string
-      queryDetailsExpanded: boolean
       caseSensitive: boolean
       wholeWord: boolean
       useRegex: boolean
@@ -354,6 +379,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     set((s) => ({
       markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
     })),
+
+  // Editor view mode (edit vs changes-diff). See EditorViewMode.
+  editorViewMode: {},
+  setEditorViewMode: (fileId, mode) =>
+    set((s) => {
+      // Why: default is 'edit'. Writing 'edit' explicitly when no entry exists
+      // would grow the record unnecessarily; delete instead so the shape stays
+      // minimal and hydration round-trips cleanly.
+      if (mode === 'edit') {
+        if (!(fileId in s.editorViewMode)) {
+          return s
+        }
+        const next = { ...s.editorViewMode }
+        delete next[fileId]
+        return { editorViewMode: next }
+      }
+      return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
+    }),
 
   // Right sidebar
   rightSidebarOpen: false,
@@ -508,6 +551,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                     ([fileId]) => fileId !== replacedPreview.id
                   )
                 )
+          const nextEditorViewMode =
+            replacedPreview.id === id
+              ? s.editorViewMode
+              : Object.fromEntries(
+                  Object.entries(s.editorViewMode).filter(
+                    ([fileId]) => fileId !== replacedPreview.id
+                  )
+                )
           // Why: editorCursorLine entries accumulate per file; clean up the
           // evicted preview's entry so it does not leak across tab replacements.
           const nextEditorCursorLine =
@@ -554,6 +605,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             editorDrafts: nextEditorDrafts,
             editorCursorLine: nextEditorCursorLine,
             markdownViewMode: nextMarkdownViewMode,
+            editorViewMode: nextEditorViewMode,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             ...previewTabBarUpdate,
             ...activeResult
@@ -610,6 +662,76 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     )
   },
 
+  openMarkdownPreview: (file, options) => {
+    const id = `markdown-preview::${file.filePath}`
+    const anchor = options?.anchor || undefined
+    set((s) => {
+      const existing = s.openFiles.find((openFile) => openFile.id === id)
+      const worktreeId = file.worktreeId
+      const activeResult = {
+        activeFileId: id,
+        activeTabType: 'editor' as const,
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' as const }
+      }
+
+      if (existing) {
+        const needsUpdate =
+          existing.relativePath !== file.relativePath ||
+          existing.filePath !== file.filePath ||
+          existing.language !== file.language ||
+          existing.markdownPreviewSourceFileId !== file.filePath ||
+          existing.markdownPreviewAnchor !== anchor ||
+          existing.mode !== 'markdown-preview'
+        return needsUpdate
+          ? {
+              openFiles: s.openFiles.map((openFile) =>
+                openFile.id === id
+                  ? {
+                      ...openFile,
+                      filePath: file.filePath,
+                      relativePath: file.relativePath,
+                      worktreeId: file.worktreeId,
+                      language: file.language,
+                      markdownPreviewSourceFileId: file.filePath,
+                      markdownPreviewAnchor: anchor,
+                      mode: 'markdown-preview' as const
+                    }
+                  : openFile
+              ),
+              ...activeResult
+            }
+          : activeResult
+      }
+
+      const newFile: OpenFile = {
+        id,
+        filePath: file.filePath,
+        relativePath: file.relativePath,
+        worktreeId: file.worktreeId,
+        language: file.language,
+        isDirty: false,
+        markdownPreviewSourceFileId: file.filePath,
+        markdownPreviewAnchor: anchor,
+        mode: 'markdown-preview'
+      }
+
+      return {
+        openFiles: [...s.openFiles, newFile],
+        ...activeResult
+      }
+    })
+    void openWorkspaceEditorItem(
+      get(),
+      id,
+      file.worktreeId,
+      `${file.relativePath} (preview)`,
+      'editor',
+      false,
+      options?.targetGroupId
+    )
+  },
+
   pinFile: (fileId, tabId) => {
     set((s) => {
       const file = s.openFiles.find((f) => f.id === fileId)
@@ -656,6 +778,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       delete newEditorDrafts[fileId]
       const newMarkdownViewMode = { ...s.markdownViewMode }
       delete newMarkdownViewMode[fileId]
+      const newEditorViewMode = { ...s.editorViewMode }
+      delete newEditorViewMode[fileId]
       // Why: editorCursorLine entries are keyed by fileId and accumulate on
       // every cursor move. Without cleanup they grow without bound across a
       // long session as files are opened and closed.
@@ -742,8 +866,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const wtRecent = closedFile?.worktreeId
       // Why: untitled files that were never edited will be deleted from disk
       // after close. Adding them to the reopen stack would let Cmd+Shift+T
-      // try to reopen a path that no longer exists.
-      if (closedFile && wtRecent && !shouldDeleteFromDisk) {
+      // try to reopen a path that no longer exists. Preview tabs are also
+      // excluded — they are ephemeral views, not user-opened files.
+      if (
+        closedFile &&
+        wtRecent &&
+        !shouldDeleteFromDisk &&
+        closedFile.mode !== 'markdown-preview'
+      ) {
         const { id: _id, isDirty: _dirty, ...snap } = closedFile
         const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
         nextRecentlyClosed = {
@@ -774,6 +904,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         markdownViewMode: newMarkdownViewMode,
+        editorViewMode: newEditorViewMode,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingEditorReveal: null,
         recentlyClosedEditorTabsByWorktree: nextRecentlyClosed
@@ -860,6 +991,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           activeFileId: null,
           activeTabType: 'terminal',
           markdownViewMode: {},
+          editorViewMode: {},
           pendingEditorReveal: null
         }
       }
@@ -871,6 +1003,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
       const newMarkdownViewMode = Object.fromEntries(
         Object.entries(s.markdownViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
+      )
+      const newEditorViewMode = Object.fromEntries(
+        Object.entries(s.editorViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
       )
       const newEditorCursorLine = Object.fromEntries(
         Object.entries(s.editorCursorLine).filter(([fileId]) => remainingFileIds.has(fileId))
@@ -904,7 +1039,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       for (const f of [...closingFiles].reverse()) {
         // Why: untitled non-dirty files are deleted from disk after close —
         // skip them so the reopen stack doesn't reference vanished paths.
-        if (f.isUntitled && !f.isDirty) {
+        // Preview tabs are ephemeral views that shouldn't pollute the stack.
+        if ((f.isUntitled && !f.isDirty) || f.mode === 'markdown-preview') {
           continue
         }
         const { id: _id, isDirty: _dirty, ...snap } = f
@@ -932,6 +1068,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             : s.activeBrowserTabId,
         activeTabType: browserTabsForWorktree.length > 0 ? 'browser' : 'terminal',
         markdownViewMode: newMarkdownViewMode,
+        editorViewMode: newEditorViewMode,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
@@ -1637,7 +1774,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     set((s) => {
       const current = s.fileSearchStateByWorktree[worktreeId] || {
         query: '',
-        queryDetailsExpanded: false,
         caseSensitive: false,
         wholeWord: false,
         useRegex: false,

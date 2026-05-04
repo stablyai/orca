@@ -18,8 +18,8 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { GitHubWorkItem, TuiAgent } from '../../../shared/types'
-import StartFromField from '@/components/new-workspace/StartFromField'
+import type { SparsePreset, TuiAgent } from '../../../shared/types'
+import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -45,13 +45,6 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
-  baseBranch: string | undefined
-  onBaseBranchChange: (next: string | undefined) => void
-  onBaseBranchPrSelect: (baseBranch: string, item: GitHubWorkItem) => void
-  baseBranchLinkedPrNumber: number | null
-  selectedRepoPath: string | null
-  selectedRepoIsRemote: boolean
-  startFromResetHint: string | null
   setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
@@ -59,6 +52,10 @@ type NewWorkspaceComposerCardProps = {
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: string | null
+  canUseSparseCheckout: boolean
+  sparsePresets: SparsePreset[]
+  sparseSelectedPresetId: string | null
+  onSparseSelectPreset: (preset: SparsePreset | null) => void
 }
 
 function SetupCommandPreview({
@@ -188,20 +185,17 @@ export default function NewWorkspaceComposerCard({
   onCreate,
   note,
   onNoteChange,
-  baseBranch,
-  onBaseBranchChange,
-  onBaseBranchPrSelect,
-  baseBranchLinkedPrNumber,
-  selectedRepoPath,
-  selectedRepoIsRemote,
-  startFromResetHint,
   setupConfig,
   requiresExplicitSetupChoice,
   setupDecision,
   onSetupDecisionChange,
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
-  createError
+  createError,
+  canUseSparseCheckout,
+  sparsePresets,
+  sparseSelectedPresetId,
+  onSparseSelectPreset
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
@@ -327,6 +321,10 @@ export default function NewWorkspaceComposerCard({
                   variant="ghost"
                   size="icon-xs"
                   onClick={onOpenAgentSettings}
+                  // Why: keep Tab flow Name → Agent combobox. This settings
+                  // shortcut is a detour; making it tabbable forces a keystroke
+                  // on every workspace creation.
+                  tabIndex={-1}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                   aria-label="Open agent settings"
                 >
@@ -352,8 +350,8 @@ export default function NewWorkspaceComposerCard({
 
         <div
           className={cn(
-            'grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
-            advancedOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+            advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
           aria-hidden={!advancedOpen}
         >
@@ -362,20 +360,14 @@ export default function NewWorkspaceComposerCard({
                 textarea's 3px outset focus ring has horizontal breathing room
                 inside the overflow-hidden drawer above. Without it the ring
                 gets clipped on the right edge when the field is focused. */}
-            <div className="space-y-4 px-1 pt-1">
-              {repoId ? (
-                <StartFromField
-                  repoId={repoId}
-                  repoPath={selectedRepoPath}
-                  isRemoteRepo={selectedRepoIsRemote}
-                  baseBranch={baseBranch}
-                  baseBranchLinkedPrNumber={baseBranchLinkedPrNumber}
-                  onBaseBranchChange={onBaseBranchChange}
-                  onBaseBranchPrSelect={onBaseBranchPrSelect}
-                  resetHint={startFromResetHint}
-                />
-              ) : null}
-
+            <div
+              className={cn(
+                'space-y-4 px-1 pt-1 pb-3 transition-[opacity,transform] duration-150 ease-out',
+                advancedOpen
+                  ? 'translate-y-0 opacity-100 delay-200'
+                  : '-translate-y-1 opacity-0 delay-0'
+              )}
+            >
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Note</label>
                 <textarea
@@ -477,6 +469,22 @@ export default function NewWorkspaceComposerCard({
                   ) : null}
                 </div>
               ) : null}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Sparse checkout</label>
+                <SparseCheckoutPresetSelect
+                  repoId={repoId}
+                  presets={sparsePresets}
+                  selectedPresetId={sparseSelectedPresetId}
+                  onSelectPreset={onSparseSelectPreset}
+                  disabled={!canUseSparseCheckout}
+                />
+                {!canUseSparseCheckout ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Only available for local repositories.
+                  </p>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
@@ -23,6 +23,9 @@ import { reconcileTabOrder } from './reconcile-order'
 import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDragSplit'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { ShellIcon } from './shell-icons'
+import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 const isMac = navigator.userAgent.includes('Mac')
+const isWindows = navigator.userAgent.includes('Windows')
 const NEW_TERMINAL_SHORTCUT = isMac ? '⌘T' : 'Ctrl+T'
 const NEW_BROWSER_SHORTCUT = isMac ? '⌘⇧B' : 'Ctrl+Shift+B'
 const NEW_FILE_SHORTCUT = isMac ? '⌘⇧M' : 'Ctrl+Shift+M'
@@ -47,8 +51,13 @@ type TabBarProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onNewTerminalTab: () => void
+  /** On Windows, opens a new terminal with a specific shell instead of the default. */
+  onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewFileTab?: () => void
+  /** Whether WSL is installed on this Windows machine. When true, the "+"
+   *  dropdown shows a WSL option under the terminal submenu. */
+  wslAvailable?: boolean
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -108,6 +117,7 @@ function TabBarInner({
   onCloseOthers,
   onCloseToRight,
   onNewTerminalTab,
+  onNewTerminalWithShell,
   onNewBrowserTab,
   onNewFileTab,
   onSetCustomTitle,
@@ -127,14 +137,45 @@ function TabBarInner({
   onPinFile,
   tabBarOrder,
   onCreateSplitGroup,
-  hoveredTabInsertion
+  hoveredTabInsertion,
+  wslAvailable
 }: TabBarProps): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const defaultWindowsShell = useAppStore(
+    (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
+  )
+  const defaultWindowsPowerShellImplementation = useAppStore(
+    (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
+  )
+  const [pwshAvailable, setPwshAvailable] = useState(false)
+  useEffect(() => {
+    if (!isWindows) {
+      setPwshAvailable(false)
+      return
+    }
+
+    void window.api.pwsh.isAvailable().then(setPwshAvailable)
+  }, [])
   const resolvedGroupId = groupId ?? worktreeId
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
     [worktreeId, gitStatusByWorktree]
   )
+
+  // Why: Electron <webview> elements run in a separate process, so clicking
+  // inside one never dispatches a pointerdown on the renderer document.
+  // Radix DropdownMenu relies on document pointerdown to detect outside
+  // clicks, so it misses webview clicks entirely. Listening for window blur
+  // catches the moment focus leaves the renderer (including into a webview).
+  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  useEffect(() => {
+    if (!newTabMenuOpen) {
+      return
+    }
+    const dismiss = (): void => setNewTabMenuOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [newTabMenuOpen])
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(
@@ -197,27 +238,6 @@ function TabBarInner({
     }
     return indicators
   }, [activeIndicator, orderedItems])
-
-  const focusTerminalTabSurface = useCallback((tabId: string) => {
-    // Why: creating a terminal from the "+" menu is a two-step focus race:
-    // React must first mount the new TerminalPane/xterm, then Radix closes the
-    // menu. Even after suppressing trigger focus restore, the terminal's hidden
-    // textarea may not exist until the next paint. Double-rAF waits for that
-    // commit so the new tab, not the "+" button, ends up owning keyboard focus.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const scoped = document.querySelector(
-          `[data-terminal-tab-id="${tabId}"] .xterm-helper-textarea`
-        ) as HTMLElement | null
-        if (scoped) {
-          scoped.focus()
-          return
-        }
-        const fallback = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
-        fallback?.focus()
-      })
-    })
-  }, [])
 
   // Horizontal wheel scrolling for the tab strip
   const tabStripRef = useRef<HTMLDivElement>(null)
@@ -337,7 +357,14 @@ function TabBarInner({
             "+" button remains window-draggable. */}
         <div
           ref={tabStripRef}
-          className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden"
+          // Why: only `border-r` on the strip — the trailing edge must stay
+          // visible even when tabs overflow-scroll past the last tab. The
+          // left edge is instead painted by the FIRST tab's own `border-l`
+          // (see per-tab components) so its rendering is identical to every
+          // between-tab separator. A strip-level `border-l` would render at
+          // a different box than the tab's own `border-t`, producing a
+          // heavier-looking L-corner at the leftmost tab when inactive.
+          className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden border-r border-border"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {orderedItems.map((item, index) => {
@@ -416,12 +443,17 @@ function TabBarInner({
           })}
         </div>
       </SortableContext>
-      <DropdownMenu>
+      <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title="New tab"
+            // Why: aria-label matches the tooltip so E2E can locate the "+"
+            // affordance via getByRole('button', { name: 'New tab' }). The
+            // store-only createTab() round-trip that preceded this was a
+            // tautology — it would pass even if the + button had been deleted.
+            aria-label="New tab"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -438,20 +470,75 @@ function TabBarInner({
             e.preventDefault()
           }}
         >
-          <DropdownMenuItem
-            onSelect={() => {
-              onNewTerminalTab()
-              const newActiveTabId = useAppStore.getState().activeTabId
-              if (newActiveTabId) {
-                focusTerminalTabSurface(newActiveTabId)
-              }
-            }}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-          >
-            <TerminalSquare className="size-4 text-muted-foreground" />
-            New Terminal
-            <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {isWindows && onNewTerminalWithShell ? (
+            // Why: previously the Windows path nested shell choices under a
+            // Radix submenu. In practice the submenu frequently failed to open
+            // on hover/click, and even when it worked the two-step expansion
+            // hid the fact that multiple shells were available. Inlining all
+            // shells as flat items — default pinned to the top with the
+            // Ctrl+T hint — matches the "no popouts, show all options at
+            // once" rec. Each entry uses a shell-specific icon (ShellIcon)
+            // so PowerShell / CMD / WSL are distinguishable at a glance.
+            // Labels use "CMD Prompt" instead of "Command Prompt" to keep
+            // each row narrow enough that the shortcut hint fits without
+            // wrapping.
+            (() => {
+              const allShells: {
+                label: string
+                shell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+              }[] = [
+                { label: 'PowerShell', shell: 'powershell.exe' },
+                { label: 'CMD Prompt', shell: 'cmd.exe' },
+                ...(wslAvailable ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const) : [])
+              ]
+              const defaultEntry =
+                allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
+              const orderedShells = [
+                defaultEntry,
+                ...allShells.filter((s) => s.shell !== defaultEntry.shell)
+              ]
+              return orderedShells.map((entry, idx) => {
+                const isDefault = idx === 0
+                return (
+                  <DropdownMenuItem
+                    key={entry.shell}
+                    onSelect={() => {
+                      // Why: the top-level Windows shell menu models shell
+                      // categories, not concrete executables. When the user
+                      // picked PowerShell 7+ in advanced settings, launching the
+                      // "PowerShell" menu item must preserve that implementation
+                      // instead of forcing inbox powershell.exe.
+                      onNewTerminalWithShell(
+                        resolveWindowsShellLaunchTarget(
+                          entry.shell,
+                          defaultWindowsPowerShellImplementation,
+                          pwshAvailable
+                        )
+                      )
+                    }}
+                    className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+                  >
+                    <ShellIcon shell={entry.shell} size={14} />
+                    <span className="flex-1">New Terminal: {entry.label}</span>
+                    {isDefault ? (
+                      <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+                    ) : null}
+                  </DropdownMenuItem>
+                )
+              })
+            })()
+          ) : (
+            <DropdownMenuItem
+              onSelect={() => {
+                onNewTerminalTab()
+              }}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+            >
+              <TerminalSquare className="size-4 text-muted-foreground" />
+              New Terminal
+              <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onSelect={onNewBrowserTab}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"

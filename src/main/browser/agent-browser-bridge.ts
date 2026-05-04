@@ -1682,7 +1682,10 @@ export class AgentBrowserBridge {
 
     const destroy = (async (): Promise<void> => {
       try {
-        await this.runAgentBrowserRaw(sessionName, ['close'])
+        // Why: each browser tab uses its own named agent-browser session. Closing
+        // without --session only tears down the default session and leaves the tab
+        // session's daemon process running.
+        await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
       } catch {
         // Session may already be dead
       }

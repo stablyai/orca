@@ -18,7 +18,8 @@ type DecoratorArgs = {
   filePath: string
   worktreeId: string
   comments: DiffComment[]
-  onAddCommentClick: (args: { lineNumber: number; top: number }) => void
+  addButtonLabel?: string
+  onAddCommentClick: (args: { lineNumber: number; startLine?: number; top: number }) => void
   onDeleteComment: (commentId: string) => void
 }
 
@@ -34,6 +35,7 @@ export function useDiffCommentDecorator({
   filePath,
   worktreeId,
   comments,
+  addButtonLabel = 'Add note for the AI',
   onAddCommentClick,
   onDeleteComment
 }: DecoratorArgs): void {
@@ -63,11 +65,12 @@ export function useDiffCommentDecorator({
       return
     }
 
+    const zones = zonesRef.current
     const plus = document.createElement('button')
     plus.type = 'button'
     plus.className = 'orca-diff-comment-add-btn'
-    plus.title = 'Add note for the AI'
-    plus.setAttribute('aria-label', 'Add note for the AI')
+    plus.title = addButtonLabel
+    plus.setAttribute('aria-label', addButtonLabel)
     plus.innerHTML =
       '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>'
     plus.style.display = 'none'
@@ -99,6 +102,33 @@ export function useDiffCommentDecorator({
     // taller line-heights. Centering relative to lineHeight keeps the button
     // sitting neatly on whatever line the cursor is on.
     const BUTTON_SIZE = 18
+    let rangeDecorationIds: string[] = []
+    let dragState: { startLine: number; endLine: number } | null = null
+
+    const clearRangeDecoration = (): void => {
+      if (rangeDecorationIds.length > 0) {
+        rangeDecorationIds = editor.deltaDecorations(rangeDecorationIds, [])
+      }
+    }
+
+    const updateRangeDecoration = (startLine: number, endLine: number): void => {
+      const from = Math.min(startLine, endLine)
+      const to = Math.max(startLine, endLine)
+      rangeDecorationIds = editor.deltaDecorations(rangeDecorationIds, [
+        {
+          range: new monaco.Range(from, 1, to, 1),
+          options: {
+            isWholeLine: true,
+            className: 'orca-diff-comment-range-highlight'
+          }
+        }
+      ])
+    }
+
+    const getLineAtClientPoint = (clientX: number, clientY: number): number | null => {
+      return editor.getTargetAtClientPoint(clientX, clientY)?.position?.lineNumber ?? null
+    }
+
     const positionAtLine = (lineNumber: number): void => {
       const lineTop = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
       const top = Math.round(lineTop + (getLineHeight() - BUTTON_SIZE) / 2)
@@ -109,18 +139,52 @@ export function useDiffCommentDecorator({
       setDisplay('flex')
     }
 
-    const handleClick = (ev: MouseEvent): void => {
+    const finishRangeDrag = (ev: MouseEvent): void => {
       ev.preventDefault()
       ev.stopPropagation()
-      const ln = hoverLineRef.current
-      if (ln == null) {
+      document.removeEventListener('mousemove', handleRangeDragMove)
+      document.removeEventListener('mouseup', finishRangeDrag)
+      const currentDrag = dragState
+      dragState = null
+      clearRangeDecoration()
+      if (!currentDrag) {
         return
       }
-      const top = editor.getTopForLineNumber(ln) - editor.getScrollTop()
-      onAddCommentClickRef.current({ lineNumber: ln, top })
+      const startLine = Math.min(currentDrag.startLine, currentDrag.endLine)
+      const lineNumber = Math.max(currentDrag.startLine, currentDrag.endLine)
+      const top = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
+      onAddCommentClickRef.current({
+        lineNumber,
+        startLine: startLine === lineNumber ? undefined : startLine,
+        top
+      })
     }
-    plus.addEventListener('mousedown', (ev) => ev.stopPropagation())
-    plus.addEventListener('click', handleClick)
+
+    const handleRangeDragMove = (ev: MouseEvent): void => {
+      if (!dragState) {
+        return
+      }
+      const line = getLineAtClientPoint(ev.clientX, ev.clientY)
+      if (line == null || line === dragState.endLine) {
+        return
+      }
+      dragState = { ...dragState, endLine: line }
+      updateRangeDecoration(dragState.startLine, line)
+    }
+
+    const handleMouseDown = (ev: MouseEvent): void => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const line = hoverLineRef.current
+      if (line == null) {
+        return
+      }
+      dragState = { startLine: line, endLine: line }
+      updateRangeDecoration(line, line)
+      document.addEventListener('mousemove', handleRangeDragMove)
+      document.addEventListener('mouseup', finishRangeDrag)
+    }
+    plus.addEventListener('mousedown', handleMouseDown)
 
     const onMouseMove = editor.onMouseMove((e) => {
       // Why: Monaco reports null position when the cursor is over overlay DOM
@@ -161,7 +225,10 @@ export function useDiffCommentDecorator({
         d.dispose()
       }
       disposablesRef.current = []
-      plus.removeEventListener('click', handleClick)
+      document.removeEventListener('mousemove', handleRangeDragMove)
+      document.removeEventListener('mouseup', finishRangeDrag)
+      clearRangeDecoration()
+      plus.removeEventListener('mousedown', handleMouseDown)
       plus.remove()
       // Why: when the editor is swapped or torn down, its view zones go with
       // it. Unmount the React roots and clear tracking so a subsequent editor
@@ -169,12 +236,12 @@ export function useDiffCommentDecorator({
       // stale zone ids from a dead editor. The diff effect below deliberately
       // has no cleanup so comment-only changes don't cause a full zone
       // rebuild; this cleanup is the single place we reset zone tracking.
-      for (const entry of zonesRef.current.values()) {
+      for (const entry of zones.values()) {
         entry.root.unmount()
       }
-      zonesRef.current.clear()
+      zones.clear()
     }
-  }, [editor])
+  }, [addButtonLabel, editor])
 
   useEffect(() => {
     if (!editor) {

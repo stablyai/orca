@@ -11,7 +11,7 @@ export default function TabDragPreview({ drag }: { drag: TabDragItemData }): Rea
   const Icon =
     drag.tabType === 'browser' ? Globe : drag.tabType === 'editor' ? FileCode : TerminalIcon
   return (
-    <div className="pointer-events-none flex h-full w-full items-center gap-1.5 rounded-sm border border-border bg-accent px-3 text-sm text-foreground shadow-md">
+    <div className="pointer-events-none flex h-full w-full items-center gap-1.5 rounded-sm border border-border bg-accent px-2 text-xs text-foreground shadow-md">
       <Icon className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{drag.label}</span>
       {drag.color ? (

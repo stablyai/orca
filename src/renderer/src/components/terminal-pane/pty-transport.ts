@@ -7,10 +7,11 @@ import {
   clearWorkingIndicators,
   createAgentStatusTracker,
   normalizeTerminalTitle,
-  extractLastOscTitle
+  extractAllOscTitles
 } from '../../../../shared/agent-detection'
 import {
   ptyDataHandlers,
+  ptyReplayHandlers,
   ptyExitHandlers,
   ptyTeardownHandlers,
   ensurePtyDispatcher,
@@ -148,6 +149,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     command,
     connectionId,
     worktreeId,
+    shellOverride,
     onPtyExit,
     onTitleChange,
     onPtySpawn,
@@ -188,15 +190,32 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   function unregisterPtyHandlers(id: string): void {
     ptyDataHandlers.delete(id)
+    ptyReplayHandlers.delete(id)
     ptyExitHandlers.delete(id)
     ptyTeardownHandlers.delete(id)
   }
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
     ptyDataHandlers.delete(id)
+    ptyReplayHandlers.delete(id)
   }
 
   function applyObservedTerminalTitle(title: string): void {
+    // Why: cursor-agent's native OSC title is the literal string "Cursor Agent"
+    // and it re-emits that title many times per turn (on every internal redraw)
+    // even while it's actively working. Orca drives the cursor spinner/unread
+    // path by injecting its own synthesized "⠋ Cursor Agent" and "Cursor ready"
+    // frames from the hook server (see src/main/index.ts). If we let cursor's
+    // bare title through, it lands in `runtimePaneTitlesByTabId` — where
+    // `getWorktreeStatus` reads from — and flips the sidebar dot back to solid
+    // within a second of the spinner appearing. Dropping the bare title before
+    // it reaches the store leaves the synthesized frame as the last-applied
+    // state until the next hook event overwrites it. Match is literal (trimmed,
+    // case-insensitive) so any task/chat title cursor auto-generates still
+    // passes through unchanged.
+    if (title.trim().toLowerCase() === 'cursor agent') {
+      return
+    }
     lastEmittedTitle = normalizeTerminalTitle(title)
     onTitleChange?.(lastEmittedTitle, title)
     agentTracker?.handleTitle(title)
@@ -211,6 +230,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
   // logic across the two code paths that register a PTY.
   function registerPtyDataHandler(id: string): void {
+    // Why: relay pty.attach sends replay data via a dedicated pty:replay IPC
+    // channel. Route it through onReplayData so the renderer engages the
+    // replay guard and xterm auto-replies do not leak into the shell.
+    ptyReplayHandlers.set(id, (data) => {
+      if (storedCallbacks.onReplayData) {
+        storedCallbacks.onReplayData(data)
+      } else {
+        storedCallbacks.onData?.(data)
+      }
+    })
     ptyDataHandlers.set(id, (data) => {
       // Why: OSC 9999 is a renderer-only control protocol. Parse it before
       // xterm sees the bytes, and keep parser state across chunks so partial
@@ -232,13 +261,23 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onData?.(data)
       }
       if (onTitleChange) {
-        const title = extractLastOscTitle(data)
-        if (title !== null) {
+        // Why: feed EVERY OSC title in the chunk through the observer, not just
+        // the last one. node-pty + the main-process 8ms batch window commonly
+        // coalesce multiple title updates into a single IPC payload — for Pi's
+        // 80ms spinner + agent_end idle cycle, the last title in the chunk is
+        // the idle one and the intermediate working frames were silently
+        // dropped, so the worktree card never observed the working state.
+        // Processing titles in order preserves the working→idle transition
+        // that detectAgentStatusFromTitle and agentTracker both key off.
+        const titles = extractAllOscTitles(data)
+        if (titles.length > 0) {
           if (staleTitleTimer) {
             clearTimeout(staleTitleTimer)
             staleTitleTimer = null
           }
-          applyObservedTerminalTitle(title)
+          for (const title of titles) {
+            applyObservedTerminalTitle(title)
+          }
         } else if (lastEmittedTitle && detectAgentStatusFromTitle(lastEmittedTitle) === 'working') {
           if (staleTitleTimer) {
             clearTimeout(staleTitleTimer)
@@ -313,42 +352,64 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           command,
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
-          worktreeId
+          worktreeId,
+          ...(shellOverride ? { shellOverride } : {})
         })
+        const spawnResult = result as PtyConnectResult & { isReattach?: boolean }
 
         // If destroyed while spawn was in flight, kill the new pty and bail
         if (destroyed) {
-          window.api.pty.kill(result.id)
+          window.api.pty.kill(spawnResult.id)
           return
         }
 
-        ptyId = result.id
+        ptyId = spawnResult.id
         connected = true
 
         // Why: for deferred reattach (Option 2), the daemon returns snapshot/
         // coldRestore data from createOrAttach. Skip onPtySpawn for reattach —
         // it would reset lastActivityAt and destroy the recency sort order.
-        if (!result.isReattach && !result.coldRestore) {
-          onPtySpawn?.(result.id)
+        if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+          onPtySpawn?.(spawnResult.id)
         }
 
-        registerPtyDataHandler(result.id)
-        registerPtyExitHandler(result.id)
+        registerPtyDataHandler(spawnResult.id)
+        registerPtyExitHandler(spawnResult.id)
 
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
 
-        if (result.isReattach || result.coldRestore) {
+        if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
-            id: result.id,
-            snapshot: result.snapshot,
-            isAlternateScreen: result.isAlternateScreen,
-            coldRestore: result.coldRestore
+            id: spawnResult.id,
+            snapshot: spawnResult.snapshot,
+            snapshotCols: spawnResult.snapshotCols,
+            snapshotRows: spawnResult.snapshotRows,
+            isAlternateScreen: spawnResult.isAlternateScreen,
+            sessionExpired: spawnResult.sessionExpired,
+            coldRestore: spawnResult.coldRestore,
+            replay: spawnResult.replay
           } satisfies PtyConnectResult
         }
-        return result.id
+        return spawnResult.id
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        // Why: after "Kill All" from Settings → Manage Sessions, mounted panes
+        // can still trigger pty:spawn with the killed session ID (tab remount,
+        // navigating back to the workspace). The main-side adapter correctly
+        // rejects with TerminalKilledError ("...was explicitly killed") via
+        // its tombstone. Surfacing that rejection as a red "Terminal error,
+        // please file an issue" toast misrepresents an intentional user
+        // action as a bug. The pane will already render "Process exited" via
+        // the normal lifecycle — that is the correct signal. Match against
+        // both the raw Error.message and Electron's IPC-wrapped form
+        // ("Error invoking remote method 'pty:spawn': TerminalKilledError:
+        // ..."). The phrase "was explicitly killed" only appears in that one
+        // error type (see src/main/daemon/daemon-pty-adapter.ts), so a
+        // substring match is safe.
+        if (msg.includes('was explicitly killed')) {
+          return undefined
+        }
         // Why: on cold start, SSH provider isn't registered yet so pty:spawn
         // throws a raw IPC error. Replace with a friendly message since this
         // is an expected state, not an application crash.

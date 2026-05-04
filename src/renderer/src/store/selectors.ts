@@ -23,11 +23,15 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
     return cachedSnapshot
   }
 
-  const allWorktrees = Object.values(worktreesByRepo).flat()
+  // Why: a race between createWorktree (which appends) and fetchWorktrees
+  // (which replaces) can produce duplicate entries for the same worktree ID
+  // within a single repo's array. Deduplicating here prevents React from
+  // seeing duplicate keys, which can corrupt terminal DOM containers.
   const worktreeMap = new Map<string, Worktree>()
-  for (const worktree of allWorktrees) {
+  for (const worktree of Object.values(worktreesByRepo).flat()) {
     worktreeMap.set(worktree.id, worktree)
   }
+  const allWorktrees = Array.from(worktreeMap.values())
 
   const snapshot = { allWorktrees, worktreeMap }
   worktreeSnapshotCache.set(worktreesByRepo, snapshot)
@@ -111,7 +115,6 @@ export const useSidebarWidth = () => useAppStore((s) => s.sidebarWidth)
 export const useActiveView = () => useAppStore((s) => s.activeView)
 export const useActiveModal = () => useAppStore((s) => s.activeModal)
 export const useModalData = () => useAppStore((s) => s.modalData)
-export const useSearchQuery = () => useAppStore((s) => s.searchQuery)
 export const useGroupBy = () => useAppStore((s) => s.groupBy)
 export const useSortBy = () => useAppStore((s) => s.sortBy)
 export const useShowActiveOnly = () => useAppStore((s) => s.showActiveOnly)

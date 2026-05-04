@@ -61,7 +61,10 @@ describe('RelayDispatcher', () => {
     // Let the handler promise resolve
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(handler).toHaveBeenCalledWith({ foo: 'bar' })
+    expect(handler).toHaveBeenCalledWith(
+      { foo: 'bar' },
+      expect.objectContaining({ isStale: expect.any(Function) })
+    )
 
     // Should have sent a response (after keepalive timer writes)
     const responses = written.filter((buf) => {
@@ -215,5 +218,33 @@ describe('RelayDispatcher', () => {
 
     vi.advanceTimersByTime(10_000)
     expect(written.length).toBe(before)
+  })
+
+  it('drops in-flight responses after client invalidation', async () => {
+    let resolveHandler!: () => void
+    const handler = vi.fn(
+      (_params, context) =>
+        new Promise((resolve) => {
+          resolveHandler = () => resolve({ stale: context.isStale() })
+        })
+    )
+    dispatcher.onRequest('slow.method', handler)
+
+    const req: JsonRpcRequest = { jsonrpc: '2.0', id: 99, method: 'slow.method' }
+    dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
+    dispatcher.invalidateClient()
+    resolveHandler()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(handler).toHaveBeenCalled()
+    const responses = written.filter((buf) => {
+      const frame = decodeFirstFrame(buf)
+      if (frame.type !== MessageType.Regular) {
+        return false
+      }
+      const msg = JSON.parse(frame.payload.toString('utf-8'))
+      return msg.id === 99
+    })
+    expect(responses).toHaveLength(0)
   })
 })

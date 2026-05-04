@@ -254,14 +254,69 @@ describe('agent status retention + prefix sweep', () => {
       startedAt: now
     }
 
-    store.getState().retainAgent(retainedA)
-    store.getState().retainAgent(retainedB)
+    store.getState().retainAgents([retainedA, retainedB])
     store.getState().dismissRetainedAgentsByWorktree('wt-a')
 
     const retained = store.getState().retainedAgentsByPaneKey
     expect(retained['tab-a:0']).toBeUndefined()
     expect(retained['tab-b:0']).toBeDefined()
     expect(retained['tab-b:0'].worktreeId).toBe('wt-b')
+  })
+
+  it('dismissRetainedAgentsByWorktree plants retention suppressors for paneKeys that also have a live entry', () => {
+    // Why: regression guard for the "Dismiss all" resurrection bug. If a
+    // dismissed paneKey still has a live entry in agentStatusByPaneKey, the
+    // retention sync (collectRetainedAgentsOnDisappear) would re-retain the
+    // row the next time the live agent disappears — silently undoing the
+    // user's bulk dismissal. Mirror dismissRetainedAgent's hasLive-gated
+    // suppressor logic so the next live→gone transition is ignored.
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const now = Date.now()
+    const entryA: AgentStatusEntry = {
+      state: 'done',
+      prompt: '',
+      updatedAt: now,
+      stateStartedAt: now,
+      paneKey: 'tab-a:0',
+      stateHistory: []
+    }
+    const entryB: AgentStatusEntry = {
+      state: 'done',
+      prompt: '',
+      updatedAt: now,
+      stateStartedAt: now,
+      paneKey: 'tab-a:1',
+      stateHistory: []
+    }
+    const retainedA: RetainedAgentEntry = {
+      entry: entryA,
+      worktreeId: 'wt-a',
+      tab: { id: 'tab-a', title: 'claude' } as unknown as TerminalTab,
+      agentType: 'claude',
+      startedAt: now
+    }
+    const retainedB: RetainedAgentEntry = {
+      entry: entryB,
+      worktreeId: 'wt-a',
+      tab: { id: 'tab-a', title: 'claude' } as unknown as TerminalTab,
+      agentType: 'claude',
+      startedAt: now
+    }
+
+    // Set up a live entry for retainedA's paneKey only — retainedB is retained-only.
+    store
+      .getState()
+      .setAgentStatus('tab-a:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+    store.getState().retainAgents([retainedA, retainedB])
+    store.getState().dismissRetainedAgentsByWorktree('wt-a')
+
+    const suppressed = store.getState().retentionSuppressedPaneKeys
+    // hasLive → suppressor planted, so the next live→gone will not re-retain.
+    expect(suppressed['tab-a:0']).toBe(true)
+    // retained-only (no live entry) → no suppressor, to avoid indefinite
+    // leaks when no live→gone transition will ever fire for this paneKey.
+    expect(suppressed['tab-a:1']).toBeUndefined()
   })
 
   it('pruneRetainedAgents keeps only entries whose worktreeId is in the valid set', () => {
@@ -298,8 +353,7 @@ describe('agent status retention + prefix sweep', () => {
       startedAt: now
     }
 
-    store.getState().retainAgent(retainedA)
-    store.getState().retainAgent(retainedB)
+    store.getState().retainAgents([retainedA, retainedB])
     store.getState().pruneRetainedAgents(new Set(['wt-a']))
 
     const retained = store.getState().retainedAgentsByPaneKey

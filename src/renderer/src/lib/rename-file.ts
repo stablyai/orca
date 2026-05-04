@@ -42,18 +42,31 @@ function remapOpenTabsForRenamedPath(fromPath: string, toPath: string, worktreeP
     const draft = state.editorDrafts[file.id]
     const wasDirty = file.isDirty
 
-    state.closeFile(oldFilePath)
-    if (file.mode !== 'edit') {
+    // Why: preview tabs use a synthetic tab id (`markdown-preview::...`) that
+    // does not equal filePath. Closing by the real tab id keeps rename/move
+    // remaps correct for both editable and read-only markdown preview tabs.
+    state.closeFile(file.id)
+    if (file.mode === 'edit') {
+      state.openFile({
+        filePath: updatedPath,
+        relativePath: updatedRelative,
+        worktreeId: file.worktreeId,
+        language: detectLanguage(basename(updatedPath)),
+        mode: 'edit'
+      })
+    } else if (file.mode === 'markdown-preview') {
+      state.openMarkdownPreview(
+        {
+          filePath: updatedPath,
+          relativePath: updatedRelative,
+          worktreeId: file.worktreeId,
+          language: 'markdown'
+        },
+        { anchor: file.markdownPreviewAnchor ?? null }
+      )
+    } else {
       continue
     }
-
-    state.openFile({
-      filePath: updatedPath,
-      relativePath: updatedRelative,
-      worktreeId: file.worktreeId,
-      language: detectLanguage(basename(updatedPath)),
-      mode: 'edit'
-    })
 
     if (draft !== undefined) {
       state.setEditorDraft(updatedPath, draft)

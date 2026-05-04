@@ -1,9 +1,14 @@
 /* eslint-disable max-lines -- Why: co-locating all GitHub client functions keeps the
 concurrency acquire/release pattern and error handling consistent across operations. */
 import type {
+  ClassifiedError,
+  IssueSourcePreference,
+  ListWorkItemsResult,
   PRInfo,
   PRMergeableState,
   PRCheckDetail,
+  GitHubCommentResult,
+  GitHubPRReviewCommentInput,
   PRComment,
   GitHubViewer,
   GitHubWorkItem
@@ -11,7 +16,19 @@ import type {
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import { sortWorkItemsByUpdatedAt } from '../../shared/work-items'
 import { getPRConflictSummary } from './conflict-summary'
-import { execFileAsync, ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
+import {
+  execFileAsync,
+  ghExecFileAsync,
+  acquire,
+  release,
+  getOwnerRepo,
+  getIssueOwnerRepo,
+  getOwnerRepoForRemote,
+  resolveIssueSource,
+  classifyGhError,
+  classifyListIssuesError,
+  type OwnerRepo
+} from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -30,6 +47,7 @@ import {
   mapPRState,
   deriveCheckStatus
 } from './mappers'
+import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './comment-reactions'
 
 const ORCA_REPO = 'stablyai/orca'
 
@@ -211,13 +229,64 @@ function mapPullRequestWorkItem(
   }
 }
 
+async function fetchIssueWorkItem(
+  repoPath: string,
+  ownerRepo: OwnerRepo | null,
+  number: number
+): Promise<MainWorkItem | null> {
+  if (ownerRepo) {
+    const { stdout } = await ghExecFileAsync(
+      ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${number}`],
+      { cwd: repoPath }
+    )
+    const item = JSON.parse(stdout) as Record<string, unknown>
+    if ('pull_request' in item) {
+      return null
+    }
+    return mapIssueWorkItem(item)
+  }
+
+  const { stdout } = await ghExecFileAsync(
+    ['issue', 'view', String(number), '--json', 'number,title,state,url,labels,updatedAt,author'],
+    { cwd: repoPath }
+  )
+  return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
+}
+
+async function fetchPullRequestWorkItem(
+  repoPath: string,
+  ownerRepo: OwnerRepo | null,
+  number: number
+): Promise<MainWorkItem> {
+  if (ownerRepo) {
+    const { stdout } = await ghExecFileAsync(
+      ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
+      { cwd: repoPath }
+    )
+    return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo.owner)
+  }
+
+  const { stdout } = await ghExecFileAsync(
+    [
+      'pr',
+      'view',
+      String(number),
+      '--json',
+      'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
+    ],
+    { cwd: repoPath }
+  )
+  return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>)
+}
+
 function buildWorkItemListArgs(args: {
   kind: 'issue' | 'pr'
-  ownerRepo: { owner: string; repo: string } | null
+  ownerRepo: OwnerRepo | null
   limit: number
   query: ParsedTaskQuery
+  before?: string
 }): string[] {
-  const { kind, ownerRepo, limit, query } = args
+  const { kind, ownerRepo, limit, query, before } = args
   const fields =
     kind === 'issue'
       ? 'number,title,state,url,labels,updatedAt,author'
@@ -249,20 +318,20 @@ function buildWorkItemListArgs(args: {
       out.push('--label', label)
     }
   }
-  if (
-    kind === 'pr' &&
-    query.scope === 'pr' &&
-    query.state === 'open' &&
-    query.freeText === '' &&
-    !query.reviewRequested &&
-    !query.reviewedBy
-  ) {
+  // Why: only add --draft when the user explicitly typed `is:draft`. Previously
+  // this fired for any PR-scoped open query, which made `is:pr is:open` (the
+  // "PRs" preset) silently filter to drafts-only.
+  if (kind === 'pr' && query.draft) {
     out.push('--draft')
   }
 
-  // review-requested and reviewed-by are not supported as standalone gh CLI flags,
-  // so they must be passed as GitHub search qualifiers via --search.
   const searchParts: string[] = []
+  // Why: cursor-based pagination. GitHub search supports updated:<DATE to
+  // fetch items older than the cursor. We use the oldest item's updatedAt
+  // from the previous page as the cursor.
+  if (before) {
+    searchParts.push(`updated:<${before}`)
+  }
   if (kind === 'pr' && query.reviewRequested) {
     searchParts.push(`review-requested:${query.reviewRequested}`)
   }
@@ -278,47 +347,130 @@ function buildWorkItemListArgs(args: {
   return out
 }
 
+// Why: internal shape shared by listRecentWorkItems / listQueriedWorkItems so
+// listWorkItems can lift per-side errors into the IPC envelope. The issue-side
+// error is the specific new class of silent wrongness introduced by #1076 —
+// PR-side errors existed before and are explicitly out of scope for this
+// feature per the parent design doc §6.
+type PartialWorkItemsResult = {
+  items: MainWorkItem[]
+  issuesError?: ClassifiedError
+}
+
 async function listRecentWorkItems(
   repoPath: string,
-  ownerRepo: { owner: string; repo: string } | null,
+  issueOwnerRepo: OwnerRepo | null,
+  prOwnerRepo: OwnerRepo | null,
   limit: number
-): Promise<MainWorkItem[]> {
-  if (ownerRepo) {
-    const [issuesResult, prsResult] = await Promise.all([
-      ghExecFileAsync(
-        [
-          'api',
-          '--cache',
-          '120s',
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
-        ],
-        { cwd: repoPath }
-      ),
-      ghExecFileAsync(
-        [
-          'api',
-          '--cache',
-          '120s',
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls?per_page=${limit}&state=open&sort=updated&direction=desc`
-        ],
-        { cwd: repoPath }
-      )
+): Promise<PartialWorkItemsResult> {
+  if (issueOwnerRepo || prOwnerRepo) {
+    // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
+    // PR half — the UI renders partial results plus a banner for the failing
+    // side, matching the parent design doc's partial-failure rule (§2).
+    const [issuesSettled, prsSettled] = await Promise.allSettled([
+      issueOwnerRepo
+        ? ghExecFileAsync(
+            [
+              'api',
+              '--cache',
+              '120s',
+              `repos/${issueOwnerRepo.owner}/${issueOwnerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
+            ],
+            { cwd: repoPath }
+          )
+        : ghExecFileAsync(
+            [
+              'issue',
+              'list',
+              '--limit',
+              String(limit),
+              '--state',
+              'open',
+              '--json',
+              'number,title,state,url,labels,updatedAt,author'
+            ],
+            { cwd: repoPath }
+          ),
+      prOwnerRepo
+        ? ghExecFileAsync(
+            [
+              'api',
+              '--cache',
+              '120s',
+              `repos/${prOwnerRepo.owner}/${prOwnerRepo.repo}/pulls?per_page=${limit}&state=open&sort=updated&direction=desc`
+            ],
+            { cwd: repoPath }
+          )
+        : ghExecFileAsync(
+            [
+              'pr',
+              'list',
+              '--limit',
+              String(limit),
+              '--state',
+              'open',
+              '--json',
+              'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
+            ],
+            { cwd: repoPath }
+          )
     ])
 
-    const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[])
-      // Why: the GitHub issues REST endpoint also returns pull requests with a
-      // `pull_request` marker. The new-workspace task picker needs distinct
-      // issue vs PR buckets, so drop PR-shaped issue rows here before merging.
-      .filter((item) => !('pull_request' in item))
-      .map(mapIssueWorkItem)
+    let issues: MainWorkItem[] = []
+    let issuesError: ClassifiedError | undefined
+    if (issuesSettled.status === 'fulfilled') {
+      issues = (JSON.parse(issuesSettled.value.stdout) as Record<string, unknown>[])
+        // Why: the GitHub issues REST endpoint also returns pull requests with a
+        // `pull_request` marker. The new-workspace task picker needs distinct
+        // issue vs PR buckets, so drop PR-shaped issue rows here before merging.
+        .filter((item) => !('pull_request' in item))
+        .map(mapIssueWorkItem)
+    } else {
+      const stderr =
+        issuesSettled.reason instanceof Error
+          ? issuesSettled.reason.message
+          : String(issuesSettled.reason)
+      issuesError = classifyListIssuesError(stderr)
+    }
 
-    const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map((item) =>
-      mapPullRequestWorkItem(item, ownerRepo.owner)
-    )
+    let prs: MainWorkItem[] = []
+    if (prsSettled.status === 'fulfilled') {
+      prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[]).map((item) =>
+        mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
+      )
+    } else {
+      // Why: PR-side failures must preserve the pre-diff behavior of
+      // Promise.all by re-throwing so the rejection propagates up through
+      // listWorkItems to the renderer's cross-repo aggregator (which counts
+      // the repo as failed). This feature is scoped to the issue-side silent
+      // wrongness from #1076; PR errors must not be silently swallowed here.
+      // Why: if the issue side ALSO failed, the classified issuesError would
+      // otherwise be silently dropped when we throw the PR reason. Log it so
+      // debugging both-sides-failed scenarios (e.g. 403 on both endpoints)
+      // isn't blind to the issue-side classification.
+      if (issuesError) {
+        console.warn(
+          'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
+          issuesError.type,
+          issuesError.message
+        )
+      }
+      throw prsSettled.reason
+    }
 
-    return sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+    return {
+      items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit),
+      issuesError
+    }
   }
 
+  // Why: the fallback path (non-GitHub remote — neither issueOwnerRepo nor
+  // prOwnerRepo resolved) intentionally stays on Promise.all rather than the
+  // Promise.allSettled + per-side classification used above. There are no
+  // `sources` to surface on this branch and nothing for the partial-failure
+  // banner to render, so a single-side failure here means the whole call is
+  // effectively unusable for the feature — reject-all matches reality. If
+  // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
     ghExecFileAsync(
       [
@@ -355,59 +507,94 @@ async function listRecentWorkItems(
     mapPullRequestWorkItem(item, null)
   )
 
-  return sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+  return {
+    items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+  }
 }
 
 async function listQueriedWorkItems(
   repoPath: string,
-  ownerRepo: { owner: string; repo: string } | null,
+  issueOwnerRepo: OwnerRepo | null,
+  prOwnerRepo: OwnerRepo | null,
   query: ParsedTaskQuery,
-  limit: number
-): Promise<MainWorkItem[]> {
-  const fetchers: Promise<MainWorkItem[]>[] = []
+  limit: number,
+  before?: string
+): Promise<PartialWorkItemsResult> {
   const issueScope = query.scope !== 'pr'
   const prScope = query.scope !== 'issue'
 
-  if (issueScope) {
-    fetchers.push(
-      (async () => {
-        const args = buildWorkItemListArgs({ kind: 'issue', ownerRepo, limit, query })
-        try {
-          const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
-          return (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
-        } catch {
-          return []
-        }
-      })()
-    )
-  }
+  // Why: run the issue and PR fetches in parallel but surface the
+  // issue-side error separately so the IPC envelope can carry it up. PR-side
+  // failures retain the prior swallow-and-log behavior per parent doc §6.
+  const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
+    if (!issueScope) {
+      return { items: [] }
+    }
+    const args = buildWorkItemListArgs({
+      kind: 'issue',
+      ownerRepo: issueOwnerRepo,
+      limit,
+      query,
+      before
+    })
+    try {
+      const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
+      return {
+        items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
+      }
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err)
+      return { items: [], issuesError: classifyListIssuesError(stderr) }
+    }
+  })()
 
-  if (prScope) {
-    fetchers.push(
-      (async () => {
-        const args = buildWorkItemListArgs({ kind: 'pr', ownerRepo, limit, query })
-        try {
-          const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
-          return (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
-            mapPullRequestWorkItem(item, ownerRepo?.owner ?? null)
-          )
-        } catch {
-          return []
-        }
-      })()
-    )
-  }
+  const prFetch = (async (): Promise<MainWorkItem[]> => {
+    if (!prScope) {
+      return []
+    }
+    const args = buildWorkItemListArgs({
+      kind: 'pr',
+      ownerRepo: prOwnerRepo,
+      limit,
+      query,
+      before
+    })
+    try {
+      const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
+      return (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
+        mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
+      )
+    } catch (err) {
+      console.warn('listQueriedWorkItems PRs partial failure:', err)
+      return []
+    }
+  })()
 
-  const results = await Promise.all(fetchers)
-  return sortWorkItemsByUpdatedAt(results.flat()).slice(0, limit)
+  const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
+  return {
+    items: sortWorkItemsByUpdatedAt([...issueResult.items, ...prItems]).slice(0, limit),
+    issuesError: issueResult.issuesError
+  }
 }
 
 export async function listWorkItems(
   repoPath: string,
   limit = 24,
-  query?: string
-): Promise<MainWorkItem[]> {
-  const ownerRepo = await getOwnerRepo(repoPath)
+  query?: string,
+  before?: string,
+  preference?: IssueSourcePreference
+): Promise<ListWorkItemsResult<MainWorkItem>> {
+  // Why: resolve the raw upstream candidate alongside the preference-aware
+  // issue source. The selector needs to know whether an upstream remote
+  // *exists* to decide whether to render — independent of whether the user
+  // has picked 'origin' (which would otherwise make `sources.issues` equal
+  // origin and hide the selector permanently).
+  const [issueResolved, prOwnerRepo, upstreamCandidate] = await Promise.all([
+    resolveIssueSource(repoPath, preference),
+    getOwnerRepo(repoPath),
+    getOwnerRepoForRemote(repoPath, 'upstream')
+  ])
+  const issueOwnerRepo = issueResolved.source
   const trimmedQuery = query?.trim() ?? ''
   await acquire()
   try {
@@ -415,12 +602,183 @@ export async function listWorkItems(
     // count this repo as failed and surface the partial-failure banner. A
     // catch-all here would make an auth/network failure indistinguishable from
     // an empty result and silently under-report per-repo failures.
-    if (!trimmedQuery) {
-      return await listRecentWorkItems(repoPath, ownerRepo, limit)
+    const partial = !trimmedQuery
+      ? await listRecentWorkItems(repoPath, issueOwnerRepo, prOwnerRepo, limit)
+      : await listQueriedWorkItems(
+          repoPath,
+          issueOwnerRepo,
+          prOwnerRepo,
+          parseTaskQuery(trimmedQuery),
+          limit,
+          before
+        )
+
+    const errors = partial.issuesError ? { issues: partial.issuesError } : undefined
+    return {
+      items: partial.items,
+      sources: {
+        issues: issueOwnerRepo,
+        prs: prOwnerRepo,
+        upstreamCandidate: upstreamCandidate ?? null
+      },
+      ...(errors ? { errors } : {}),
+      ...(issueResolved.fellBack ? { issueSourceFellBack: true } : {})
+    }
+  } finally {
+    release()
+  }
+}
+
+function buildSearchQueryString(
+  ownerRepo: { owner: string; repo: string },
+  query: ParsedTaskQuery
+): string {
+  const parts: string[] = [`repo:${ownerRepo.owner}/${ownerRepo.repo}`]
+  if (query.scope === 'pr') {
+    parts.push('is:pull-request')
+  } else if (query.scope === 'issue') {
+    parts.push('is:issue')
+  }
+  if (query.state === 'open') {
+    parts.push('is:open')
+  } else if (query.state === 'closed') {
+    parts.push('is:closed')
+  } else if (query.state === 'merged') {
+    parts.push('is:merged')
+  }
+  if (query.draft) {
+    parts.push('draft:true')
+  }
+  if (query.assignee) {
+    parts.push(`assignee:${query.assignee}`)
+  }
+  if (query.author) {
+    parts.push(`author:${query.author}`)
+  }
+  if (query.reviewRequested) {
+    parts.push(`review-requested:${query.reviewRequested}`)
+  }
+  if (query.reviewedBy) {
+    parts.push(`reviewed-by:${query.reviewedBy}`)
+  }
+  for (const label of query.labels) {
+    parts.push(`label:${label}`)
+  }
+  if (query.freeText) {
+    parts.push(query.freeText)
+  }
+  return parts.join(' ')
+}
+
+async function countWorkItemsForQuery(
+  repoPath: string,
+  ownerRepo: OwnerRepo,
+  query: ParsedTaskQuery
+): Promise<number> {
+  const searchQ = buildSearchQueryString(ownerRepo, query)
+  const { stdout } = await ghExecFileAsync(
+    [
+      'api',
+      '--cache',
+      '120s',
+      `search/issues?q=${encodeURIComponent(searchQ)}&per_page=1`,
+      '--jq',
+      '.total_count'
+    ],
+    { cwd: repoPath }
+  )
+  return parseInt(stdout.trim(), 10) || 0
+}
+
+function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean {
+  // Why: GitHub treats owner and repo names as case-insensitive, so remotes
+  // with different casing (StablyAI/Orca vs stablyai/orca) point at the same
+  // repo and should not split into two search queries.
+  return (
+    left?.owner.toLowerCase() === right?.owner.toLowerCase() &&
+    left?.repo.toLowerCase() === right?.repo.toLowerCase()
+  )
+}
+
+function defaultOpenWorkItemQuery(): ParsedTaskQuery {
+  return {
+    scope: 'all',
+    state: 'open',
+    draft: false,
+    assignee: null,
+    author: null,
+    reviewRequested: null,
+    reviewedBy: null,
+    labels: [],
+    freeText: ''
+  }
+}
+
+// Why: uses GitHub's search API to get total_count without fetching items.
+// This powers the pagination bar so the user sees total pages upfront.
+// Cached for 120s to avoid burning the search rate limit (30 req/min).
+export async function countWorkItems(
+  repoPath: string,
+  query?: string,
+  preference?: IssueSourcePreference
+): Promise<number> {
+  const [issueResolved, prOwnerRepo] = await Promise.all([
+    resolveIssueSource(repoPath, preference),
+    getOwnerRepo(repoPath)
+  ])
+  const issueOwnerRepo = issueResolved.source
+  const ownerRepo = prOwnerRepo ?? issueOwnerRepo
+  if (!ownerRepo) {
+    return 0
+  }
+
+  const trimmedQuery = query?.trim() ?? ''
+  const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
+  const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+
+  await acquire()
+  try {
+    if (sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
+      return await countWorkItemsForQuery(repoPath, ownerRepo, effectiveQuery)
     }
 
-    const parsedQuery = parseTaskQuery(trimmedQuery)
-    return await listQueriedWorkItems(repoPath, ownerRepo, parsedQuery, limit)
+    const counts: Promise<number>[] = []
+    // Why: `draft`, `reviewRequested`, and `reviewedBy` are PR-only predicates.
+    // When present, the issue half would always return 0 and wastes a search
+    // API call — skip the issue half entirely in that case.
+    const hasPrOnlyFilter =
+      effectiveQuery.draft ||
+      effectiveQuery.reviewRequested !== null ||
+      effectiveQuery.reviewedBy !== null
+    if (
+      effectiveQuery.scope !== 'pr' &&
+      effectiveQuery.state !== 'merged' &&
+      !hasPrOnlyFilter &&
+      issueOwnerRepo
+    ) {
+      counts.push(
+        countWorkItemsForQuery(repoPath, issueOwnerRepo, { ...effectiveQuery, scope: 'issue' })
+      )
+    }
+    if (effectiveQuery.scope !== 'issue' && prOwnerRepo) {
+      counts.push(countWorkItemsForQuery(repoPath, prOwnerRepo, { ...effectiveQuery, scope: 'pr' }))
+    }
+    // Why: allSettled so a single failing search (e.g. transient network, rate
+    // limit on one side) doesn't silently zero out the total; sum only the
+    // fulfilled halves instead.
+    const results = await Promise.allSettled(counts)
+    let total = 0
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        total += r.value
+      } else {
+        console.warn('countWorkItems partial failure:', r.reason)
+      }
+    }
+    return total
+  } catch (err) {
+    console.warn('countWorkItems failed:', err)
+    return 0
   } finally {
     release()
   }
@@ -432,165 +790,38 @@ export async function getRepoSlug(
   return getOwnerRepo(repoPath)
 }
 
-export async function getWorkItem(repoPath: string, number: number): Promise<MainWorkItem | null> {
+export async function getWorkItem(
+  repoPath: string,
+  number: number,
+  type?: 'issue' | 'pr'
+): Promise<MainWorkItem | null> {
   await acquire()
   try {
-    const ownerRepo = await getOwnerRepo(repoPath)
-    if (ownerRepo) {
-      const { stdout } = await ghExecFileAsync(
-        ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${number}`],
-        { cwd: repoPath }
-      )
-      const item = JSON.parse(stdout) as Record<string, unknown>
-      if ('pull_request' in item) {
-        const prResult = await ghExecFileAsync(
-          ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
-          { cwd: repoPath }
-        )
-        const pr = JSON.parse(prResult.stdout) as Record<string, unknown>
-        const prHeadOwner = extractHeadOwnerLogin(pr)
-        return {
-          id: `pr:${String(pr.number)}`,
-          type: 'pr',
-          number: Number(pr.number),
-          title: String(pr.title ?? ''),
-          state:
-            pr.state === 'closed'
-              ? pr.merged_at
-                ? 'merged'
-                : 'closed'
-              : pr.draft
-                ? 'draft'
-                : 'open',
-          url: String(pr.html_url ?? pr.url ?? ''),
-          labels: Array.isArray(pr.labels)
-            ? pr.labels
-                .map((label) =>
-                  typeof label === 'object' && label !== null && 'name' in label
-                    ? String((label as { name?: unknown }).name ?? '')
-                    : ''
-                )
-                .filter(Boolean)
-            : [],
-          updatedAt: String(pr.updated_at ?? ''),
-          author:
-            typeof pr.user === 'object' && pr.user !== null && 'login' in pr.user
-              ? String((pr.user as { login?: unknown }).login ?? '')
-              : null,
-          branchName:
-            typeof pr.head === 'object' && pr.head !== null && 'ref' in pr.head
-              ? String((pr.head as { ref?: unknown }).ref ?? '')
-              : undefined,
-          baseRefName:
-            typeof pr.base === 'object' && pr.base !== null && 'ref' in pr.base
-              ? String((pr.base as { ref?: unknown }).ref ?? '')
-              : undefined,
-          // Why: only emit isCrossRepository when we actually know the head
-          // owner. Falsely claiming "not a fork" would let the picker try a
-          // normal-PR fetch against a fork head and fail.
-          ...(prHeadOwner !== null ? { isCrossRepository: prHeadOwner !== ownerRepo.owner } : {})
-        }
-      }
-
-      return {
-        id: `issue:${String(item.number)}`,
-        type: 'issue',
-        number: Number(item.number),
-        title: String(item.title ?? ''),
-        state: String(item.state ?? 'open') === 'closed' ? 'closed' : 'open',
-        url: String(item.html_url ?? item.url ?? ''),
-        labels: Array.isArray(item.labels)
-          ? item.labels
-              .map((label) =>
-                typeof label === 'object' && label !== null && 'name' in label
-                  ? String((label as { name?: unknown }).name ?? '')
-                  : ''
-              )
-              .filter(Boolean)
-          : [],
-        updatedAt: String(item.updated_at ?? ''),
-        author:
-          typeof item.user === 'object' && item.user !== null && 'login' in item.user
-            ? String((item.user as { login?: unknown }).login ?? '')
-            : null
-      }
+    if (type === 'issue') {
+      return await fetchIssueWorkItem(repoPath, await getIssueOwnerRepo(repoPath), number)
+    }
+    if (type === 'pr') {
+      return await fetchPullRequestWorkItem(repoPath, await getOwnerRepo(repoPath), number)
     }
 
     try {
-      const { stdout } = await ghExecFileAsync(
-        [
-          'issue',
-          'view',
-          String(number),
-          '--json',
-          'number,title,state,url,labels,updatedAt,author'
-        ],
-        { cwd: repoPath }
-      )
-      const item = JSON.parse(stdout) as Record<string, unknown>
-      return {
-        id: `issue:${String(item.number)}`,
-        type: 'issue',
-        number: Number(item.number),
-        title: String(item.title ?? ''),
-        state: String(item.state ?? 'open') === 'closed' ? 'closed' : 'open',
-        url: String(item.url ?? ''),
-        labels: Array.isArray(item.labels)
-          ? item.labels
-              .map((label) =>
-                typeof label === 'object' && label !== null && 'name' in label
-                  ? String((label as { name?: unknown }).name ?? '')
-                  : ''
-              )
-              .filter(Boolean)
-          : [],
-        updatedAt: String(item.updatedAt ?? ''),
-        author:
-          typeof item.author === 'object' && item.author !== null && 'login' in item.author
-            ? String((item.author as { login?: unknown }).login ?? '')
-            : null
+      const issue = await fetchIssueWorkItem(repoPath, await getIssueOwnerRepo(repoPath), number)
+      if (issue) {
+        return issue
       }
-    } catch {
-      const { stdout } = await ghExecFileAsync(
-        [
-          'pr',
-          'view',
-          String(number),
-          '--json',
-          'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
-        ],
-        { cwd: repoPath }
-      )
-      const item = JSON.parse(stdout) as Record<string, unknown>
-      return {
-        id: `pr:${String(item.number)}`,
-        type: 'pr',
-        number: Number(item.number),
-        title: String(item.title ?? ''),
-        state: item.isDraft ? 'draft' : String(item.state ?? 'open') === 'open' ? 'open' : 'closed',
-        url: String(item.url ?? ''),
-        labels: Array.isArray(item.labels)
-          ? item.labels
-              .map((label) =>
-                typeof label === 'object' && label !== null && 'name' in label
-                  ? String((label as { name?: unknown }).name ?? '')
-                  : ''
-              )
-              .filter(Boolean)
-          : [],
-        updatedAt: String(item.updatedAt ?? ''),
-        author:
-          typeof item.author === 'object' && item.author !== null && 'login' in item.author
-            ? String((item.author as { login?: unknown }).login ?? '')
-            : null,
-        branchName: String(item.headRefName ?? ''),
-        baseRefName: String(item.baseRefName ?? '')
-        // Why: ownerRepo is null on this path so we can't compare head vs base
-        // owners. Leave isCrossRepository undefined rather than guessing —
-        // falsely claiming "not a fork" would let the picker try a normal-PR
-        // fetch against a fork head and fail.
+    } catch (err) {
+      // Why: the issue lookup now targets `upstream` while the PR lookup targets `origin`,
+      // so a transient upstream failure (5xx, rate limit, network flake) on issue #N would
+      // silently fall through to origin's PR #N — potentially a completely unrelated item.
+      // Only fall through when the issue genuinely doesn't exist (404); re-throw everything
+      // else so the outer catch returns null and the caller sees a real failure instead of
+      // a wrong item. classifyGhError centralizes the 404/"not found" pattern-matching.
+      const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGhError(stderr).type !== 'not_found') {
+        throw err
       }
     }
+    return await fetchPullRequestWorkItem(repoPath, await getOwnerRepo(repoPath), number)
   } catch {
     return null
   } finally {
@@ -778,11 +1009,32 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           comments(first: 100) {
             nodes {
               databaseId
-              author { login avatarUrl(size: 48) }
+              author { __typename login avatarUrl(size: 48) }
               body
               createdAt
               url
               path
+              reactionGroups {
+                content
+                reactors {
+                  totalCount
+                }
+              }
+            }
+          }
+        }
+      }
+      comments(first: 100) {
+        nodes {
+          databaseId
+          author { __typename login avatarUrl(size: 48) }
+          body
+          createdAt
+          url
+          reactionGroups {
+            content
+            reactors {
+              totalCount
             }
           }
         }
@@ -850,7 +1102,7 @@ export async function getPRComments(
       // Parse issue comments (REST)
       type RESTComment = {
         id: number
-        user: { login: string; avatar_url: string } | null
+        user: { login: string; avatar_url: string; type?: string } | null
         body: string
         created_at: string
         html_url: string
@@ -864,7 +1116,8 @@ export async function getPRComments(
             authorAvatarUrl: c.user?.avatar_url ?? '',
             body: c.body ?? '',
             createdAt: c.created_at,
-            url: c.html_url
+            url: c.html_url,
+            isBot: c.user?.type === 'Bot'
           })
         )
       } else {
@@ -882,20 +1135,53 @@ export async function getPRComments(
         comments: {
           nodes: {
             databaseId: number
-            author: { login: string; avatarUrl: string } | null
+            author: { __typename?: string; login: string; avatarUrl: string } | null
             body: string
             createdAt: string
             url: string
             path: string
+            reactionGroups?: GitHubGraphQLReactionGroup[] | null
           }[]
         }
+      }
+      type GQLIssueComment = {
+        databaseId: number
+        author: { __typename?: string; login: string; avatarUrl: string } | null
+        body: string
+        createdAt: string
+        url: string
+        reactionGroups?: GitHubGraphQLReactionGroup[] | null
       }
       const reviewComments: PRComment[] = []
       if (threadsResult.status === 'fulfilled') {
         const threadsData = JSON.parse(threadsResult.value.stdout) as {
-          data: { repository: { pullRequest: { reviewThreads: { nodes: GQLThread[] } } } }
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: { nodes: GQLThread[] }
+                comments?: { nodes: GQLIssueComment[] }
+              }
+            }
+          }
         }
-        const threads = threadsData.data.repository.pullRequest.reviewThreads.nodes
+        const pullRequest = threadsData.data.repository.pullRequest
+        const graphQLIssueComments = (pullRequest.comments?.nodes ?? []).map(
+          (c): PRComment => ({
+            id: c.databaseId,
+            author: c.author?.login ?? 'ghost',
+            authorAvatarUrl: c.author?.avatarUrl ?? '',
+            body: c.body ?? '',
+            createdAt: c.createdAt,
+            url: c.url,
+            isBot: c.author?.__typename === 'Bot',
+            reactions: mapGraphQLReactionGroups(c.reactionGroups)
+          })
+        )
+        if (graphQLIssueComments.length > 0) {
+          issueComments = graphQLIssueComments
+        }
+
+        const threads = pullRequest.reviewThreads.nodes
         for (const thread of threads) {
           for (const c of thread.comments.nodes) {
             reviewComments.push({
@@ -905,6 +1191,8 @@ export async function getPRComments(
               body: c.body ?? '',
               createdAt: c.createdAt,
               url: c.url,
+              isBot: c.author?.__typename === 'Bot',
+              reactions: mapGraphQLReactionGroups(c.reactionGroups),
               path: c.path,
               threadId: thread.id,
               isResolved: thread.isResolved,
@@ -924,7 +1212,7 @@ export async function getPRComments(
       // since empty-body reviews (e.g. approvals with no comment) add noise.
       type RESTReview = {
         id: number
-        user: { login: string; avatar_url: string } | null
+        user: { login: string; avatar_url: string; type?: string } | null
         body: string
         state: string
         submitted_at: string
@@ -941,7 +1229,8 @@ export async function getPRComments(
               authorAvatarUrl: r.user?.avatar_url ?? '',
               body: r.body,
               createdAt: r.submitted_at,
-              url: r.html_url
+              url: r.html_url,
+              isBot: r.user?.type === 'Bot'
             })
           )
       } else {
@@ -1004,6 +1293,127 @@ export async function resolveReviewThread(
   } catch (err) {
     console.warn(`${mutation} failed:`, err)
     return false
+  } finally {
+    release()
+  }
+}
+
+function mapReviewCommentResponse(
+  data: {
+    id?: number
+    user: { login: string; avatar_url: string; type?: string } | null
+    body?: string
+    created_at?: string
+    html_url?: string
+    path?: string
+    line?: number | null
+  },
+  body: string,
+  path?: string,
+  line?: number,
+  startLine?: number,
+  threadId?: string
+): PRComment {
+  return {
+    id: data.id ?? Date.now(),
+    author: data.user?.login ?? 'You',
+    authorAvatarUrl: data.user?.avatar_url ?? '',
+    body: data.body ?? body,
+    createdAt: data.created_at ?? new Date().toISOString(),
+    url: data.html_url ?? '',
+    isBot: data.user?.type === 'Bot',
+    path: data.path ?? path,
+    line: data.line ?? line,
+    startLine,
+    threadId
+  }
+}
+
+export async function addPRReviewCommentReply(
+  repoPath: string,
+  prNumber: number,
+  commentId: number,
+  body: string,
+  threadId?: string,
+  path?: string,
+  line?: number
+): Promise<GitHubCommentResult> {
+  const ownerRepo = await getOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        '-X',
+        'POST',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}/comments/${commentId}/replies`,
+        '--raw-field',
+        `body=${body}`
+      ],
+      { cwd: repoPath }
+    )
+    return {
+      ok: true,
+      comment: mapReviewCommentResponse(JSON.parse(stdout), body, path, line, undefined, threadId)
+    }
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: classifyGhError(stderr).message }
+  } finally {
+    release()
+  }
+}
+
+export async function addPRReviewComment(
+  args: GitHubPRReviewCommentInput
+): Promise<GitHubCommentResult> {
+  const ownerRepo = await getOwnerRepo(args.repoPath)
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+  await acquire()
+  try {
+    const fields = [
+      'api',
+      '-X',
+      'POST',
+      `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${args.prNumber}/comments`,
+      '--raw-field',
+      `body=${args.body}`,
+      '--raw-field',
+      `commit_id=${args.commitId}`,
+      '--raw-field',
+      `path=${args.path}`,
+      '--field',
+      `line=${String(args.line)}`,
+      '--raw-field',
+      'side=RIGHT'
+    ]
+    if (typeof args.startLine === 'number' && args.startLine !== args.line) {
+      fields.push(
+        '--field',
+        `start_line=${String(args.startLine)}`,
+        '--raw-field',
+        'start_side=RIGHT'
+      )
+    }
+    const { stdout } = await ghExecFileAsync(fields, { cwd: args.repoPath })
+    return {
+      ok: true,
+      comment: mapReviewCommentResponse(
+        JSON.parse(stdout),
+        args.body,
+        args.path,
+        args.line,
+        args.startLine
+      )
+    }
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: classifyGhError(stderr).message }
   } finally {
     release()
   }

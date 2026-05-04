@@ -15,7 +15,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
 import {
   buildExplicitEntriesByTabId,
   buildWorktreeComparator,
@@ -24,11 +23,17 @@ import {
 import {
   type GroupHeaderRow,
   type Row,
+  ALL_GROUP_KEY,
   PINNED_GROUP_KEY,
   buildRows,
   getGroupKeyForWorktree
 } from './worktree-list-groups'
-import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
+import {
+  computeClearFilterActions,
+  computeVisibleWorktreeIds,
+  setVisibleWorktreeIds,
+  sidebarHasActiveFilters
+} from './visible-worktrees'
 import { useModifierHint } from '@/hooks/useModifierHint'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
@@ -76,6 +81,13 @@ type VirtualizedWorktreeViewportProps = {
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
   prCache: Record<string, unknown> | null
+  // Why: the viewport remounts when the row structure changes (see
+  // viewportResetKey) so the virtualizer's measurementsCache cannot hold
+  // heights tied to shifted indices. A fresh virtualizer would otherwise
+  // start at scrollTop 0, which makes the sidebar snap to the top whenever
+  // a worktree is deleted. The parent persists the last observed scrollTop
+  // in a ref and seeds the new virtualizer via initialOffset.
+  scrollOffsetRef: React.MutableRefObject<number>
 }
 
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
@@ -91,7 +103,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   clearPendingRevealWorktreeId,
   worktrees,
   repoMap,
-  prCache
+  prCache,
+  scrollOffsetRef
 }: VirtualizedWorktreeViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeWorktreeRowIndex = useMemo(
@@ -105,6 +118,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     estimateSize: () => 120,
     overscan: 10,
     gap: 6,
+    // Why: tells the virtualizer to start its internal scrollOffset at the
+    // ref value rather than 0, so the first getVirtualItems() call after
+    // remount picks the correct window of rows. The sibling useLayoutEffect
+    // mirrors this onto the actual scrollElement.scrollTop so the DOM and
+    // virtualizer stay aligned across remounts.
+    initialOffset: () => scrollOffsetRef.current,
     getItemKey: (index) => {
       const row = rows[index]
       if (!row) {
@@ -113,6 +132,51 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
     }
   })
+
+  // Why: the viewport remounts when row structure changes (see
+  // viewportResetKey). The fresh DOM element starts at scrollTop=0, which
+  // snaps the sidebar back to the top every time a worktree is added or
+  // deleted. Restoring the last observed scrollTop from a ref before the
+  // browser paints keeps the user's scroll position stable across remounts.
+  //
+  // The saved offset is only captured via our scroll listener; we
+  // suppress saving during the initial restoration pass so that the
+  // browser's clamp-to-current-scrollHeight (temporarily smaller because
+  // the virtualizer has not yet measured every row) doesn't overwrite the
+  // user's intended offset with a clamped value.
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) {
+      return
+    }
+    const targetOffset = scrollOffsetRef.current
+    let restoring = targetOffset > 0
+    if (restoring) {
+      el.scrollTop = targetOffset
+    }
+    const onScroll = (): void => {
+      if (restoring) {
+        // Virtualizer has not yet produced its final totalSize, so the
+        // browser may clamp our applied scrollTop to a lower value. Keep
+        // re-applying the target offset each tick until the DOM accepts
+        // it, then start recording user-driven scrolls.
+        if (el.scrollTop === targetOffset) {
+          restoring = false
+          return
+        }
+        if (el.scrollHeight - el.clientHeight >= targetOffset) {
+          el.scrollTop = targetOffset
+          if (el.scrollTop === targetOffset) {
+            restoring = false
+          }
+        }
+        return
+      }
+      scrollOffsetRef.current = el.scrollTop
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [scrollOffsetRef])
 
   React.useEffect(() => {
     if (!pendingRevealWorktreeId) {
@@ -134,6 +198,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         if (groupKey && collapsedGroups.has(groupKey)) {
           toggleGroup(groupKey)
         }
+      } else if (targetWorktree && groupBy === 'none') {
+        // Why: when any worktree is pinned, buildRows emits a sibling "All"
+        // header for the unpinned block (see worktree-list-groups.ts). If that
+        // header is collapsed, revealing an unpinned target would otherwise
+        // leave it hidden — uncollapse it so the card is actually visible.
+        if (collapsedGroups.has(ALL_GROUP_KEY)) {
+          toggleGroup(ALL_GROUP_KEY)
+        }
       }
     }
 
@@ -142,7 +214,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         (row) => row.type === 'item' && row.worktree.id === pendingRevealWorktreeId
       )
       if (targetIndex !== -1) {
-        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
+        // Why: `align: 'auto'` is a no-op when the card is already visible and
+        // otherwise scrolls the minimum amount to bring it into view. Using
+        // 'center' here made every worktree click re-center the sidebar, which
+        // is visually jumpy even when nothing needed to move. `behavior: 'smooth'`
+        // animates that minimum scroll so off-screen reveals slide into view
+        // instead of snapping — matching the native scroll-into-view feel.
+        virtualizer.scrollToIndex(targetIndex, { align: 'auto', behavior: 'smooth' })
       }
       clearPendingRevealWorktreeId()
     })
@@ -174,9 +252,18 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
-      const worktreeRows = rows.filter(
-        (r): r is Extract<Row, { type: 'item' }> => r.type === 'item'
-      )
+      // Why: derive the cycling order from an all-expanded layout, not the
+      // rendered rows. Otherwise Cmd+Shift+Up/Down would skip any worktree
+      // hidden in a collapsed group — in particular it couldn't cross the
+      // Pinned/All boundary when either section is collapsed. Reveal will
+      // uncollapse the target section (see pendingRevealWorktreeId effect).
+      const worktreeRows = buildRows(
+        groupBy,
+        worktrees,
+        repoMap,
+        prCache,
+        new Set<string>()
+      ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       if (worktreeRows.length === 0) {
         return
       }
@@ -208,7 +295,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
-    [rows, activeWorktreeId, virtualizer]
+    [rows, activeWorktreeId, virtualizer, groupBy, worktrees, repoMap, prCache]
   )
 
   useEffect(() => {
@@ -276,7 +363,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-orientation="vertical"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
-      className="flex-1 overflow-auto pl-1 pr-2 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="worktree-sidebar-scrollbar flex-1 overflow-auto pl-1 pr-px scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+      // Why: reserve scrollbar space so non-overlay scrollbars do not nudge worktree cards.
+      style={{ scrollbarGutter: 'stable' }}
     >
       <div
         role="presentation"
@@ -301,9 +390,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   tabIndex={0}
                   className={cn(
                     'group flex h-7 w-full items-center gap-1.5 px-1.5 text-left transition-all cursor-pointer',
-                    // First header sits right under the sidebar search bar, which
-                    // already supplies its own spacing — only offset secondary
-                    // group headers.
+                    // First header sits directly under SidebarHeader, which already
+                    // supplies its own spacing — only offset secondary group headers.
                     vItem.index !== firstHeaderIndex && 'mt-2',
                     row.repo ? 'overflow-hidden' : row.tone
                   )}
@@ -407,16 +495,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 })
 
 const WorktreeList = React.memo(function WorktreeList() {
+  // Why: persists the sidebar scroll offset across the VirtualizedWorktreeViewport
+  // remount that row-structure changes trigger. See viewportResetKey.
+  const sidebarScrollOffsetRef = useRef(0)
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const searchQuery = useAppStore((s) => s.searchQuery)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
@@ -433,15 +524,11 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
-  // PR cache is needed for PR-status grouping, smart sorting, search,
-  // and when the PR card property is visible.
+  // PR cache is needed for PR-status grouping, smart sorting, and when the
+  // PR card property is visible.
   const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' || sortBy === 'smart' || searchQuery || cardProps.includes('pr')
-      ? s.prCache
-      : null
+    groupBy === 'pr-status' || sortBy === 'smart' || cardProps.includes('pr') ? s.prCache : null
   )
-  // Subscribe to issue cache only during active search to avoid unnecessary re-renders.
-  const issueCache = useAppStore((s) => (searchQuery ? s.issueCache : null))
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
 
@@ -548,7 +635,13 @@ const WorktreeList = React.memo(function WorktreeList() {
     // Combined: O(E) index + O(N×T) scoring + O(N log N) sort, instead of
     // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
     // other modes ignore it.
-    const agentStatusForSort = AGENT_DASHBOARD_ENABLED ? state.agentStatusByPaneKey : undefined
+    // Why: smart-sort only weighs live agent status when the experimental
+    // agent-activity feature is opted in — that's what populates
+    // agentStatusByPaneKey via hooks. With the setting off, pass undefined
+    // so the comparator falls back to the persisted-sortOrder + title
+    // heuristics instead of scoring against an empty map.
+    const agentStatusForSort =
+      state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
     const explicitByTabId =
       sortBy === 'smart' ? buildExplicitEntriesByTabId(agentStatusForSort) : undefined
     const precomputedScores =
@@ -603,27 +696,23 @@ const WorktreeList = React.memo(function WorktreeList() {
   const visibleWorktrees = useMemo(() => {
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
-      searchQuery,
       showActiveOnly,
       tabsByWorktree,
       browserTabsByWorktree,
       activeWorktreeId,
-      repoMap,
-      prCache,
-      issueCache
+      hideDefaultBranchWorkspace,
+      repoMap
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     filterRepoIds,
-    searchQuery,
     showActiveOnly,
     activeWorktreeId,
+    hideDefaultBranchWorkspace,
     repoMap,
     tabsByWorktree,
     browserTabsByWorktree,
     sortedIds,
-    prCache,
-    issueCache,
     worktreeMap,
     worktreesByRepo
   ])
@@ -651,6 +740,10 @@ const WorktreeList = React.memo(function WorktreeList() {
   // an item while its header is added — net row count unchanged). Including
   // the header keys ensures the virtualizer remounts when group structure
   // changes, preventing stale height measurements from causing overlap.
+  // We also key on rows.length so add/delete invalidates the virtualizer's
+  // per-index measurementsCache; scroll position is preserved across the
+  // remount via the ref below so deleting an off-screen worktree doesn't
+  // snap the sidebar back to the top.
   const viewportResetKey = useMemo(() => {
     const headers = rows
       .filter((r): r is GroupHeaderRow => r.type === 'header')
@@ -702,16 +795,32 @@ const WorktreeList = React.memo(function WorktreeList() {
     [openModal]
   )
 
-  const hasFilters = !!(searchQuery || showActiveOnly || filterRepoIds.length)
-  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+  // Why: hideDefaultBranchWorkspace is counted as a filter here so the
+  // empty-sidebar escape hatch (Clear Filters button below) is reachable when
+  // it's the only reason the list is empty — otherwise a user whose only
+  // worktree is a default-branch row and who just toggled hide on would see
+  // "No worktrees found" with no way back short of reopening the filter menu.
+  const filterState = useMemo(
+    () => ({ showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace }),
+    [showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace]
+  )
+  const hasFilters = sidebarHasActiveFilters(filterState)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
 
   const clearFilters = useCallback(() => {
-    setSearchQuery('')
-    setShowActiveOnly(false)
-    setFilterRepoIds([])
-  }, [setSearchQuery, setShowActiveOnly, setFilterRepoIds])
+    const actions = computeClearFilterActions(filterState)
+    if (actions.resetShowActiveOnly) {
+      setShowActiveOnly(false)
+    }
+    if (actions.resetFilterRepoIds) {
+      setFilterRepoIds([])
+    }
+    if (actions.resetHideDefaultBranchWorkspace) {
+      setHideDefaultBranchWorkspace(false)
+    }
+  }, [setShowActiveOnly, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
 
   if (worktrees.length === 0) {
     return (
@@ -748,6 +857,7 @@ const WorktreeList = React.memo(function WorktreeList() {
       worktrees={worktrees}
       repoMap={repoMap}
       prCache={prCache}
+      scrollOffsetRef={sidebarScrollOffsetRef}
     />
   )
 })

@@ -1,9 +1,15 @@
+/* eslint-disable max-lines -- Why: work-items coverage stays in one file so
+the fan-out mock plumbing (issue + PR gh calls, allSettled handling) does
+not drift across split files. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   execFileAsyncMock,
   ghExecFileAsyncMock,
   getOwnerRepoMock,
+  getIssueOwnerRepoMock,
+  getOwnerRepoForRemoteMock,
+  resolveIssueSourceMock,
   gitExecFileAsyncMock,
   acquireMock,
   releaseMock
@@ -11,6 +17,9 @@ const {
   execFileAsyncMock: vi.fn(),
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
+  getIssueOwnerRepoMock: vi.fn(),
+  getOwnerRepoForRemoteMock: vi.fn(),
+  resolveIssueSourceMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -20,9 +29,14 @@ vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
   getOwnerRepo: getOwnerRepoMock,
+  getIssueOwnerRepo: getIssueOwnerRepoMock,
+  getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
+  resolveIssueSource: resolveIssueSourceMock,
   acquire: acquireMock,
   release: releaseMock,
-  _resetOwnerRepoCache: vi.fn()
+  _resetOwnerRepoCache: vi.fn(),
+  classifyGhError: (stderr: string) => ({ type: 'unknown', message: stderr }),
+  classifyListIssuesError: (stderr: string) => ({ type: 'unknown', message: stderr })
 }))
 
 vi.mock('../git/runner', () => ({
@@ -36,14 +50,26 @@ describe('listWorkItems', () => {
     execFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
+    getIssueOwnerRepoMock.mockReset()
+    getOwnerRepoForRemoteMock.mockReset()
+    resolveIssueSourceMock.mockReset()
     gitExecFileAsyncMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
+    // Why: preference-aware `listWorkItems` calls `resolveIssueSource`.
+    // Route through the same `getIssueOwnerRepoMock` so existing tests that
+    // only set up `getIssueOwnerRepoMock` continue to work.
+    resolveIssueSourceMock.mockImplementation(async () => ({
+      source: await getIssueOwnerRepoMock(),
+      fellBack: false
+    }))
+    getOwnerRepoForRemoteMock.mockResolvedValue(null)
     _resetOwnerRepoCache()
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
@@ -75,7 +101,11 @@ describe('listWorkItems', () => {
           }
         ])
       })
-    const items = await listWorkItems('/repo-root', 10, 'assignee:@me')
+    const { items, sources } = await listWorkItems('/repo-root', 10, 'assignee:@me')
+    expect(sources).toMatchObject({
+      issues: { owner: 'acme', repo: 'widgets' },
+      prs: { owner: 'acme', repo: 'widgets' }
+    })
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
@@ -137,6 +167,7 @@ describe('listWorkItems', () => {
   })
 
   it('routes draft queries to PR search only', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify([
@@ -154,7 +185,7 @@ describe('listWorkItems', () => {
         }
       ])
     })
-    const items = await listWorkItems('/repo-root', 10, 'is:pr is:draft')
+    const { items } = await listWorkItems('/repo-root', 10, 'is:pr is:draft')
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
@@ -190,6 +221,7 @@ describe('listWorkItems', () => {
   })
 
   it('passes review-requested as a --search qualifier (gh CLI has no dedicated flag)', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
@@ -207,6 +239,7 @@ describe('listWorkItems', () => {
   })
 
   it('returns open issues and PRs for the all-open preset query', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
@@ -238,7 +271,7 @@ describe('listWorkItems', () => {
           }
         ])
       })
-    const items = await listWorkItems('/repo-root', 10, 'is:open')
+    const { items } = await listWorkItems('/repo-root', 10, 'is:open')
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'issue',

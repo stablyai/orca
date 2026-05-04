@@ -592,6 +592,110 @@
   color: var(--muted-foreground);
 }
 
+.rich-markdown-doc-link-menu {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  width: min(360px, calc(100% - 24px));
+  max-height: 320px;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px);
+}
+
+.rich-markdown-doc-link-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.rich-markdown-doc-link-item:hover,
+.rich-markdown-doc-link-item.is-active {
+  background: var(--accent);
+}
+
+.rich-markdown-doc-link-item.is-empty {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-style: italic;
+  cursor: default;
+}
+
+.rich-markdown-doc-link-item.is-empty:hover {
+  background: transparent;
+}
+
+.rich-markdown-doc-link-footer {
+  padding: 6px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.rich-markdown-doc-link-hint {
+  padding: 6px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Doc Links ───────────────────────────────────────── */
+
+.rich-markdown-editor .rich-markdown-doc-link {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor .rich-markdown-doc-link {
+  color: #58a6ff;
+}
+
+.rich-markdown-editor .rich-markdown-doc-link.rich-markdown-doc-link--missing {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
+}
+
+.rich-markdown-mod-held .rich-markdown-editor .rich-markdown-doc-link {
+  cursor: pointer;
+}
+
+.rich-markdown-mod-held
+  .rich-markdown-editor
+  .rich-markdown-doc-link.rich-markdown-doc-link--missing {
+  cursor: default;
+}
+
+/* In-progress [[target]] text while cursor is inside. Matches the committed
+   doc-link styling so the visual doesn't jump when the atom node takes over. */
+.rich-markdown-editor .rich-markdown-doc-link-preview {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor .rich-markdown-doc-link-preview {
+  color: #58a6ff;
+}
+
+.rich-markdown-editor .rich-markdown-doc-link-preview.rich-markdown-doc-link-preview--missing {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
+}
+
 /* ── Link Bubble ──────────────────────────────────────── */
 
 .rich-markdown-link-bubble {

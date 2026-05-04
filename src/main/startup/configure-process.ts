@@ -169,33 +169,17 @@ export function installDevParentWatchdog(isDev: boolean): void {
   timer.unref()
 }
 
-function isLinuxWaylandSession(): boolean {
-  // Why: WAYLAND_DISPLAY is set directly by the Wayland compositor and is the
-  // same signal Electron's own ELECTRON_OZONE_PLATFORM_HINT=auto logic uses.
-  // XDG_SESSION_TYPE is the login-manager/PAM signal and is the belt-and-
-  // suspenders check for sessions where WAYLAND_DISPLAY isn't set at process
-  // start (nested Wayland, manual session startup). Both are inherited from
-  // the parent process, so they're available before app.whenReady where the
-  // GPU command-line switches must be appended.
-  return (
-    process.platform === 'linux' &&
-    (Boolean(process.env.WAYLAND_DISPLAY) || process.env.XDG_SESSION_TYPE === 'wayland')
-  )
-}
-
 export function enableMainProcessGpuFeatures(): void {
-  // Why: Chromium's Ozone/Wayland surface factory hard-aborts when Vulkan is
-  // enabled (see wayland_surface_factory.cc:251 — "--ozone-platform=wayland is
-  // not compatible with Vulkan"), leaving the renderer unable to compose and
-  // showing a blank/transparent window on Wayland-default distros like
-  // Arch/Omarchy/Hyprland and GNOME-Wayland. Skia Graphite is Vulkan-only on
-  // Linux (no OpenGL backend), so enabling it with Vulkan off would silently
-  // fall back to software rendering — gate it on the same Wayland signal.
-  // The X11 Vulkan path works, so we keep the acceleration there and on
-  // macOS/Windows.
-  if (isLinuxWaylandSession()) {
-    return
-  }
-  app.commandLine.appendSwitch('enable-features', 'Vulkan,UseSkiaGraphite')
-  app.commandLine.appendSwitch('enable-unsafe-webgpu')
+  const existingFeatures = app.commandLine.getSwitchValue('enable-features')
+  const features = [
+    // Why: mirror VS Code's conservative Electron GPU-channel startup flags
+    // instead of opting into Vulkan/SkiaGraphite/unsafe WebGPU globally.
+    // Terminal acceleration is controlled by xterm WebGL in the renderer.
+    'EarlyEstablishGpuChannel',
+    'EstablishGpuChannelAsync',
+    existingFeatures
+  ]
+    .filter(Boolean)
+    .join(',')
+  app.commandLine.appendSwitch('enable-features', features)
 }

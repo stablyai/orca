@@ -11,6 +11,7 @@ import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
+import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
@@ -44,6 +45,20 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             title: 'Default Worktree Base',
             description: 'Default base branch or ref when creating worktrees.',
             keywords: [repo.displayName, 'base ref', 'branch']
+          },
+          {
+            title: 'Sparse Checkout Presets',
+            description: 'Saved directory sets for sparse worktree creation.',
+            keywords: [
+              repo.displayName,
+              'sparse',
+              'checkout',
+              'preset',
+              'presets',
+              'directory',
+              'directories',
+              'monorepo'
+            ]
           }
         ]),
     {
@@ -181,6 +196,9 @@ export function RepositoryPane({
   const identityEntries = allEntries.filter((entry) =>
     ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
   )
+  const sparsePresetEntries = allEntries.filter((entry) =>
+    ['Sparse Checkout Presets'].includes(entry.title)
+  )
   const hooksEntries = allEntries.filter((entry) =>
     [
       'orca.yaml hooks',
@@ -233,7 +251,7 @@ export function RepositoryPane({
           keywords={[repo.displayName, repo.path, 'repository name']}
           className="space-y-2"
         >
-          <Label>Display Name</Label>
+          <Label className="text-sm font-semibold">Display Name</Label>
           <Input
             value={repo.displayName}
             onChange={(e) =>
@@ -251,7 +269,7 @@ export function RepositoryPane({
           keywords={[repo.displayName, 'color', 'badge']}
           className="space-y-2"
         >
-          <Label>Badge Color</Label>
+          <Label className="text-sm font-semibold">Badge Color</Label>
           <div className="flex flex-wrap gap-2">
             {REPO_COLORS.map((color) => (
               <button
@@ -276,7 +294,7 @@ export function RepositoryPane({
             keywords={[repo.displayName, 'base ref', 'branch']}
             className="space-y-3"
           >
-            <Label>Default Worktree Base</Label>
+            <Label className="text-sm font-semibold">Default Worktree Base</Label>
             <BaseRefPicker
               repoId={repo.id}
               currentBaseRef={repo.worktreeBaseRef}
@@ -291,6 +309,9 @@ export function RepositoryPane({
     symlinksEnabled &&
     matchesSettingsSearch(searchQuery, symlinkEntries) ? (
       <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateRepo} />
+    ) : null,
+    !isFolder && matchesSettingsSearch(searchQuery, sparsePresetEntries) ? (
+      <SparsePresetSettingsSection key="sparse-presets" repoId={repo.id} />
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
       <RepositoryHooksSection

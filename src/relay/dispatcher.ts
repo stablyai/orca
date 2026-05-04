@@ -11,7 +11,14 @@ import {
   type JsonRpcResponse
 } from './protocol'
 
-export type MethodHandler = (params: Record<string, unknown>) => Promise<unknown>
+export type RequestContext = {
+  isStale: () => boolean
+}
+
+export type MethodHandler = (
+  params: Record<string, unknown>,
+  context: RequestContext
+) => Promise<unknown>
 
 export type NotificationHandler = (params: Record<string, unknown>) => void
 
@@ -24,11 +31,41 @@ export class RelayDispatcher {
   private highestReceivedSeq = 0
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
   private disposed = false
+  // Why: incremented on every setWrite() call so async request handlers
+  // that started before a client swap can detect that their response
+  // would go to a different client and discard it instead of misrouting.
+  private generation = 0
 
   constructor(write: (data: Buffer) => void) {
     this.write = write
     this.decoder = new FrameDecoder((frame) => this.handleFrame(frame))
     this.startKeepalive()
+  }
+
+  // Why: when a client reconnects via Unix socket, the relay must redirect
+  // all outgoing frames (pty.data, keepalives, responses) to the new socket
+  // instead of the original stdout. Swapping the write callback avoids
+  // tearing down and reconstructing the entire dispatcher + handler tree.
+  //
+  // Why: sequence counters and decoder state must also reset because the new
+  // client's SshChannelMultiplexer starts at seq=1. Without resetting, the
+  // relay's highestReceivedSeq stays at the old client's last value, so it
+  // never acks the new client's frames until the new client's seq catches
+  // up — causing the client's unacked-timeout checker to accumulate stale
+  // timestamps that could eventually fire a false connection-dead signal.
+  setWrite(write: (data: Buffer) => void): void {
+    this.write = write
+    this.nextOutgoingSeq = 1
+    this.highestReceivedSeq = 0
+    this.decoder.reset()
+    this.generation++
+  }
+
+  // Why: in-flight mutating requests must become stale when the active client
+  // disconnects even if no replacement has connected yet. Otherwise a late
+  // pty.spawn/fs.watch completion can create remote state nobody can own.
+  invalidateClient(): void {
+    this.generation++
   }
 
   onRequest(method: string, handler: MethodHandler): void {
@@ -114,10 +151,25 @@ export class RelayDispatcher {
       return
     }
 
+    // Why: capture generation before the async handler runs. If a new
+    // client connects (setWrite increments generation) while this handler
+    // is in flight, the response belongs to the old client's request ID
+    // space. Sending it would misroute — the new client may have issued
+    // its own request with the same JSON-RPC id.
+    const gen = this.generation
+    const context: RequestContext = {
+      isStale: () => this.generation !== gen
+    }
     try {
-      const result = await handler(req.params ?? {})
+      const result = await handler(req.params ?? {}, context)
+      if (this.generation !== gen) {
+        return
+      }
       this.sendResponse(req.id, result)
     } catch (err) {
+      if (this.generation !== gen) {
+        return
+      }
       const message = err instanceof Error ? err.message : String(err)
       const code = (err as { code?: number }).code ?? -32000
       this.sendResponse(req.id, undefined, { code, message })

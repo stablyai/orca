@@ -24,6 +24,7 @@ export type RepoSlice = {
         | 'worktreeBaseRef'
         | 'kind'
         | 'symlinkPaths'
+        | 'issueSourcePreference'
       >
     >
   ) => Promise<void>
@@ -77,6 +78,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return null
       }
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
+      if (alreadyAdded) {
+        get().clearOrcaHookTrustForRepo(repo.id)
+      }
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
@@ -111,6 +115,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       const repo = result.repo
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
+      if (alreadyAdded) {
+        get().clearOrcaHookTrustForRepo(repo.id)
+      }
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
@@ -146,6 +153,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   removeRepo: async (repoId) => {
     try {
       await window.api.repos.remove({ repoId })
+
+      get().clearOrcaHookTrustForRepo(repoId)
 
       // Kill PTYs for all worktrees belonging to this repo
       const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)

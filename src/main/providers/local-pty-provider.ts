@@ -2,10 +2,14 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename, win32 as pathWin32 } from 'path'
+import { basename } from 'path'
+import { win32 as pathWin32 } from 'path'
+import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
+import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
-import { parseWslPath } from '../wsl'
+import { parseWslPath, isWslAvailable } from '../wsl'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -18,6 +22,7 @@ import {
   spawnShellWithFallback
 } from './local-pty-utils'
 import {
+  getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
   createShellReadyScanState,
   scanForShellReady,
@@ -77,6 +82,27 @@ function clearPtyState(id: string): void {
   ptyLoadGeneration.delete(id)
 }
 
+function destroyPtyProcess(proc: pty.IPty): void {
+  // Why: node-pty's UnixTerminal.destroy() closes the master socket, which
+  // releases the ptmx fd to the OS — without this call the fd leaks until GC
+  // (see docs/fix-pty-fd-leak.md). destroy() also registers a close listener
+  // that fires `this.kill('SIGHUP')` AFTER the socket closes. On POSIX, by
+  // the time that listener runs the child may have exited and its pid been
+  // recycled to an unrelated user process — SIGHUP would land on a Chrome tab,
+  // editor, etc. Neutralize proc.kill on this instance before calling
+  // destroy() to defuse the hazard. Windows exempt: WindowsTerminal.destroy
+  // IS a kill() call via _deferNoArgs, so neutralizing it would leak the
+  // ConPTY agent.
+  if (process.platform !== 'win32') {
+    ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+  }
+  try {
+    ;(proc as unknown as { destroy?: () => void }).destroy?.()
+  } catch {
+    /* swallow — already torn down */
+  }
+}
+
 function safeKillAndClean(id: string, proc: pty.IPty): void {
   disposePtyListeners(id)
   try {
@@ -84,6 +110,7 @@ function safeKillAndClean(id: string, proc: pty.IPty): void {
   } catch {
     /* Process may already be dead */
   }
+  destroyPtyProcess(proc)
   clearPtyState(id)
 }
 
@@ -97,6 +124,8 @@ export type LocalPtyProviderOptions = {
    *  IPC layer inject the persisted setting without coupling the provider to the
    *  settings store. Returns undefined when no preference is set. */
   getWindowsShell?: () => string | undefined
+  getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
+  pwshAvailable?: () => boolean
   onSpawned?: (id: string) => void
   onExit?: (id: string, code: number) => void
   onData?: (id: string, data: string, timestamp: number) => void
@@ -133,37 +162,49 @@ export class LocalPtyProvider implements IPtyProvider {
       effectiveCwd = getDefaultCwd()
       validationCwd = cwd
     } else if (process.platform === 'win32') {
-      shellPath = this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
-      // Why: use path.win32.basename so backslash-separated Windows paths
-      // are parsed correctly even when tests mock process.platform on Linux CI.
-      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
-      // Why: On CJK Windows (Chinese, Japanese, Korean), the console code page
-      // defaults to the system ANSI code page (e.g. 936/GBK for Chinese).
-      // ConPTY encodes its output pipe using this code page, but node-pty
-      // always decodes as UTF-8. Without switching to code page 65001 (UTF-8),
-      // multi-byte CJK characters are garbled because the GBK/Shift-JIS/EUC-KR
-      // byte sequences are misinterpreted as UTF-8.
-      if (shellBasename === 'cmd.exe') {
-        shellArgs = ['/K', 'chcp 65001 > nul']
-      } else if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-        // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
-        // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
-        // configuration. Dot-sourcing $PROFILE first restores the normal
-        // startup experience.
-        shellArgs = [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ]
-      } else {
-        shellArgs = []
-      }
-      effectiveCwd = cwd
-      validationCwd = cwd
+      // Why: shellOverride lets a single tab open in a different shell than the
+      // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
+      // changing the user's setting. It takes priority over the setting.
+      const shellFamily =
+        args.shellOverride ||
+        this.opts.getWindowsShell?.() ||
+        process.env.COMSPEC ||
+        'powershell.exe'
+      const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
+      // Why: shell selection can arrive either as a canonical setting value
+      // ('powershell.exe') or as a concrete PowerShell executable path from a
+      // one-off override. Normalize both forms back to the PowerShell family so
+      // the shared resolver can still fall back to inbox powershell.exe when
+      // pwsh.exe was requested but is unavailable.
+      const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
+      const shouldResolvePowerShellFamily =
+        powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
+      shellPath = shouldResolvePowerShellFamily
+        ? (resolveEffectiveWindowsPowerShell({
+            shellFamily:
+              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+                ? 'powershell.exe'
+                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                  ? normalizedShellFamily
+                  : undefined,
+            implementation: powerShellImplementation,
+            pwshAvailable: this.opts.pwshAvailable?.() ?? false
+          }) ?? shellFamily)
+        : shellFamily
+      // Why: one-off overrides and persisted shell-family selection keep the
+      // same priority, while the shared resolver chooses which PowerShell
+      // executable is safe to run right now if that family is selected.
+      // Why: both this path and the daemon-subprocess path must derive the
+      // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
+      // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
+      // wsl.exe /mnt/<drive> cwd translation in one place.
+      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      shellArgs = resolved.shellArgs
+      effectiveCwd = resolved.effectiveCwd
+      validationCwd = resolved.validationCwd
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
-      shellReadyLaunch = args.command ? getShellReadyLaunchConfig(shellPath) : null
-      shellArgs = shellReadyLaunch?.args ?? ['-l']
+      shellArgs = ['-l']
       effectiveCwd = cwd
       validationCwd = cwd
     }
@@ -174,7 +215,6 @@ export class LocalPtyProvider implements IPtyProvider {
     const spawnEnv: Record<string, string> = {
       ...process.env,
       ...args.env,
-      ...shellReadyLaunch?.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -182,7 +222,15 @@ export class LocalPtyProvider implements IPtyProvider {
       // autodetection, bat/delta paging hints). Sourced from ORCA_APP_VERSION
       // which main/index.ts seeds from app.getVersion() at startup; the
       // fallback keeps tests and non-Electron runs working.
-      TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev'
+      TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+      // Why: opt tools (Claude Code, ls --hyperlink, etc.) into emitting OSC 8
+      // hyperlinks. The `supports-hyperlinks` npm package gates on a hard-coded
+      // TERM_PROGRAM allowlist (iTerm.app / WezTerm / vscode) and returns false
+      // for TERM_PROGRAM=Orca, so callers drop OSC 8 output entirely and emit
+      // bare text instead. xterm.js in Orca parses OSC 8 and the pane's
+      // linkHandler routes clicks, so forcing the advertisement is safe and
+      // restores clickable refs like `owner/repo#123` / `PR#123`.
+      FORCE_HYPERLINK: '1'
     } as Record<string, string>
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]
@@ -200,6 +248,18 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const finalEnv = this.opts.buildSpawnEnv ? this.opts.buildSpawnEnv(id, spawnEnv) : spawnEnv
+    if (!wslInfo && process.platform !== 'win32') {
+      const shellLaunch = args.command
+        ? getShellReadyLaunchConfig(shellPath)
+        : finalEnv.ORCA_ATTRIBUTION_SHIM_DIR
+          ? getAttributionShellLaunchConfig(shellPath)
+          : null
+      if (shellLaunch) {
+        Object.assign(finalEnv, shellLaunch.env)
+        shellArgs = shellLaunch.args ?? shellArgs
+        shellReadyLaunch = args.command ? shellLaunch : null
+      }
+    }
 
     // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
     // Why: without this, all worktree terminals share a single global HISTFILE
@@ -300,12 +360,28 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const onExitDisposable = proc.onExit(({ exitCode }) => {
+      // Why: neutralize proc.kill the instant the child is reaped, before any
+      // other work in this callback. node-pty's UnixTerminal installs a
+      // `_socket.once('close', () => this.kill('SIGHUP'))` handler at destroy
+      // time, but the master socket can also emit 'close' on natural exit
+      // between this onExit callback starting and destroyPtyProcess() running
+      // below. If 'close' wins, SIGHUP is dispatched to proc.pid — which on
+      // POSIX has already been reaped and may have been recycled to an
+      // unrelated process. Synchronous neutralization here closes that window.
+      // Windows is exempt: WindowsTerminal.destroy is implemented via kill().
+      if (process.platform !== 'win32') {
+        ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      }
       if (shellReadyTimeout) {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null
       }
       startupCommandCleanup?.()
       clearPtyState(id)
+      // Why: release the master ptmx fd on the natural-exit path — without
+      // this, a shell that exits cleanly (the common case) never releases its
+      // fd until the next GC. See docs/fix-pty-fd-leak.md.
+      destroyPtyProcess(proc)
       this.opts.onExit?.(id, exitCode)
       for (const cb of exitListeners) {
         cb({ id, code: exitCode })
@@ -322,7 +398,12 @@ export class LocalPtyProvider implements IPtyProvider {
       })
     }
 
-    return { id }
+    // Why: publish the OS pid so ipc/pty can register the PTY with the memory
+    // collector without reaching back into the provider. `proc.pid` may be
+    // briefly 0/undefined if node-pty hasn't observed the forked child yet.
+    const rawPid = proc.pid
+    const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
+    return { id, pid }
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
@@ -350,6 +431,7 @@ export class LocalPtyProvider implements IPtyProvider {
     } catch {
       /* Process may already be dead */
     }
+    destroyPtyProcess(proc)
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
     ptyLoadGeneration.delete(id)
@@ -372,11 +454,19 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async getCwd(id: string): Promise<string> {
-    if (!ptyProcesses.has(id)) {
-      throw new Error(`PTY ${id} not found`)
+    const proc = ptyProcesses.get(id)
+    // Why: return '' (not throw) on unknown id — the renderer treats empty
+    // as "no result, try the next fallback layer". Throwing would surface a
+    // noisy rejection for a non-exceptional case (PTY just exited, pane
+    // still has its old id).
+    if (!proc) {
+      return ''
     }
-    // node-pty doesn't expose cwd; would need /proc on Linux or lsof on macOS
-    return ''
+    // Why: resolveProcessCwd returns '' when it can't resolve — let that
+    // empty surface so the renderer's fallback chain decides what to do.
+    // Handing back a fabricated initialCwd here would lie to the renderer
+    // and short-circuit that chain.
+    return resolveProcessCwd(proc.pid)
   }
   async getInitialCwd(_id: string): Promise<string> {
     return ''
@@ -441,10 +531,14 @@ export class LocalPtyProvider implements IPtyProvider {
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
     if (process.platform === 'win32') {
-      return [
+      const profiles: { name: string; path: string }[] = [
         { name: 'PowerShell', path: 'powershell.exe' },
         { name: 'Command Prompt', path: 'cmd.exe' }
       ]
+      if (isWslAvailable()) {
+        profiles.push({ name: 'WSL', path: 'wsl.exe' })
+      }
+      return profiles
     }
     const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
     return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
