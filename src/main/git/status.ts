@@ -126,9 +126,17 @@ export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstre
     }
   } catch (error) {
     // Why: we only swallow the 'no upstream configured' error — that's an
-    // expected state, not a failure. Other errors (auth, corruption, network)
-    // should surface to the user so they can act on them.
-    if (error instanceof Error && /no upstream|HEAD@\{u\}|does not point/i.test(error.message)) {
+    // expected state, not a failure. Other errors (auth, corruption, "not a
+    // git repository") should surface to the user so they can act on them.
+    // We explicitly avoid matching `HEAD@{u}` alone because execFile wraps
+    // errors with "Command failed: git rev-parse --abbrev-ref HEAD@{u}…",
+    // which would make every non-repo/corrupt failure look like no-upstream.
+    if (
+      error instanceof Error &&
+      /no upstream configured|no tracking information|HEAD does not point|Needed a single revision|no such branch/i.test(
+        error.message
+      )
+    ) {
       return {
         hasUpstream: false,
         ahead: 0,

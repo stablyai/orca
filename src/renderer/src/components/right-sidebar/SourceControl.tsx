@@ -1454,16 +1454,19 @@ export function CommitArea({
           chevron exposes the full action surface (fetch, pull, sync,
           publish, compound commits) without forcing morphing labels to
           carry every possible intent. */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-stretch">
         {/* Why: match the "Squash and merge" button in PRActions
             (size="xs", px-3 text-[11px]) so the sidebar has a consistent
-            action-button shape across Source Control and Checks. */}
+            action-button shape across Source Control and Checks. The primary
+            and chevron share a single rounded rectangle — rounded-r-none on
+            the primary and rounded-l-none + border-l on the chevron make the
+            pair read as one split button instead of two detached buttons. */}
         <Button
           type="button"
           size="xs"
           disabled={primaryAction.disabled}
           onClick={() => onPrimaryAction()}
-          className="flex-1 px-3 text-[11px]"
+          className="flex-1 rounded-r-none px-3 text-[11px]"
           title={primaryAction.title}
         >
           {showSpinner && <RefreshCw className="size-3.5 animate-spin" />}
@@ -1474,8 +1477,15 @@ export function CommitArea({
             <Button
               type="button"
               size="xs"
-              variant="outline"
-              className="px-2 text-[11px] shrink-0"
+              className={cn(
+                'rounded-l-none border-l border-primary-foreground/20 px-1.5 shrink-0',
+                // Why: mirror the primary's disabled dimming so the split
+                // button reads as one unit when Commit is unavailable. The
+                // chevron itself stays clickable — its dropdown exposes
+                // independently-gated remote actions (push / fetch / pull)
+                // that are still valid when the primary is disabled.
+                primaryAction.disabled && 'opacity-50'
+              )}
               aria-label="More commit and remote actions"
               title="More actions"
             >

@@ -353,13 +353,18 @@ describe('GitHandler', () => {
       }
     })
 
-    // TODO: once git-handler's upstreamStatus catch is narrowed to only swallow
-    // the `no upstream configured` error (rather than every git failure), add
-    // a test that a non-upstream failure — e.g. pointing at a registered but
-    // non-repo subdirectory — rethrows instead of returning { hasUpstream: false }.
-    // Today the handler's bare `catch {}` swallows all failures, so such a
-    // test would pass on both pre- and post-fix code and would not provide
-    // meaningful regression coverage.
+    it('rethrows upstreamStatus failures that are not "no upstream configured"', async () => {
+      // Why: the handler's catch is narrowed to only swallow the expected
+      // "no upstream" signal. A non-repo path should surface its error rather
+      // than silently returning hasUpstream=false, which would mask auth or
+      // corruption failures in production.
+      const nonRepoDir = path.join(tmpDir, 'not-a-repo')
+      await fs.mkdir(nonRepoDir, { recursive: true })
+
+      await expect(
+        dispatcher.callRequest('git.upstreamStatus', { worktreePath: nonRepoDir })
+      ).rejects.toBeDefined()
+    })
   })
 
   describe('listWorktrees', () => {

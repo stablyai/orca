@@ -63,6 +63,24 @@ describe('git remote operations', () => {
     expect(caught?.message).not.toContain('x-access-token')
   })
 
+  it('strips token-only credentials (https://TOKEN@host) from push error messages', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      new Error(
+        'Command failed: git push\nhttps://ghp_onlyToken@github.com/foo/bar.git\nfatal: remote error'
+      )
+    )
+
+    let caught: Error | undefined
+    try {
+      await gitPush('/repo', false)
+    } catch (error) {
+      caught = error as Error
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    expect(caught?.message).not.toContain('ghp_onlyToken')
+  })
+
   it('falls back to a generic message for non-Error rejections', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce('string')
 

@@ -1,14 +1,14 @@
 import { gitExecFileAsync } from './runner'
 
 // Why: git's stderr often embeds the full remote URL, which can include an
-// embedded credential (e.g. `https://x-access-token:TOKEN@github.com/...`) when
-// the caller injects one. Stripping these prefixes here is defensive — git's
-// wording varies across versions and locales, so we sanitize regardless of the
-// matched pattern before the message reaches logs, toasts, or telemetry.
-const CREDENTIAL_URL_PATTERN = /https?:\/\/[^\s/@]+:[^\s/@]+@/g
+// embedded credential — either `https://user:token@host/...` (the classic
+// user+pass form) OR `https://token@host/...` (token-only, which GitHub's
+// "fine-grained PAT" docs explicitly recommend). Both must be redacted. We
+// match an optional `user:` segment followed by a secret then `@`.
+const CREDENTIAL_URL_PATTERN = /(https?:\/\/)([^\s/@]+:)?[^\s/@]+@/g
 
 function stripCredentialsFromMessage(message: string): string {
-  return message.replace(CREDENTIAL_URL_PATTERN, '')
+  return message.replace(CREDENTIAL_URL_PATTERN, '$1')
 }
 
 function extractTailLine(message: string): string {
