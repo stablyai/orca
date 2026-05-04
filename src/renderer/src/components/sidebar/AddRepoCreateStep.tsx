@@ -7,11 +7,12 @@
 
 import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CornerDownRight, Folder, GitBranch, Home, Pencil } from 'lucide-react'
+import { Folder, GitBranch, Home, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
 
@@ -30,7 +31,13 @@ export function useCreateRepo(
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
+  // Why: monotonic ID so stale create callbacks can detect they were superseded
+  // when the user clicks Back or closes the dialog mid-create. Mirrors the
+  // cloneGenRef pattern in AddRepoDialog.
+  const createGenRef = useRef(0)
+
   const resetCreateState = useCallback(() => {
+    createGenRef.current++
     setCreateName('')
     setCreateParent('')
     setCreateKind('git')
@@ -52,6 +59,7 @@ export function useCreateRepo(
     if (!name || !parentPath) {
       return
     }
+    const gen = ++createGenRef.current
     setIsCreating(true)
     setCreateError(null)
     try {
@@ -60,6 +68,11 @@ export function useCreateRepo(
         name,
         kind: createKind
       })
+      // Why: if the user closed the dialog or clicked Back mid-create,
+      // createGenRef was bumped by resetCreateState. Ignore stale results.
+      if (gen !== createGenRef.current) {
+        return
+      }
       if ('error' in result) {
         setCreateError(result.error)
         return
@@ -69,6 +82,11 @@ export function useCreateRepo(
       // so the next step can find the repo immediately.
       const state = useAppStore.getState()
       const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
+      // Why: the IPC handler dedupes by path (see repos:create) and returns
+      // the existing repo unchanged. If its ID is already in our store, the
+      // handler took the dedup path — no new project was created, so don't
+      // claim one was.
+      const wasDeduped = existingIdx !== -1
       if (existingIdx === -1) {
         useAppStore.setState({ repos: [...state.repos, repo] })
       } else {
@@ -76,22 +94,49 @@ export function useCreateRepo(
         updated[existingIdx] = repo
         useAppStore.setState({ repos: updated })
       }
-      toast.success(createKind === 'git' ? 'Repository created' : 'Folder created', {
-        description: repo.displayName
-      })
-      setAddedRepo(repo)
+      if (wasDeduped) {
+        toast.info('Project already added', {
+          description: repo.displayName
+        })
+      } else {
+        toast.success('Project created', {
+          description: repo.displayName
+        })
+      }
       if (isGitRepoKind(repo)) {
+        // Why: setAddedRepo only drives the git "setup" step; the folder
+        // branch closes the dialog, which resets addedRepo to null anyway.
+        setAddedRepo(repo)
         await fetchWorktrees(repo.id)
+        if (gen !== createGenRef.current) {
+          return
+        }
         setStep('setup')
       } else {
-        // Plain folders skip the worktree setup step, same as Browse folder.
+        // Why: without activating the new folder, the dialog closes and users
+        // see no change. Matches addNonGitFolder's behavior in the store slice.
+        await fetchWorktrees(repo.id)
+        if (gen !== createGenRef.current) {
+          return
+        }
+        const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
+        if (folderWorktree) {
+          activateAndRevealWorktree(folderWorktree.id)
+        }
         closeModal()
       }
     } catch (err) {
+      if (gen !== createGenRef.current) {
+        return
+      }
       const message = err instanceof Error ? err.message : String(err)
       setCreateError(message)
     } finally {
-      setIsCreating(false)
+      // Why: only clear the loading state if this invocation is still current;
+      // a superseded create must not flip the flag back off for a new flow.
+      if (gen === createGenRef.current) {
+        setIsCreating(false)
+      }
     }
   }, [createName, createParent, createKind, fetchWorktrees, setStep, setAddedRepo, closeModal])
 
@@ -111,18 +156,6 @@ export function useCreateRepo(
 }
 
 // ── UI helpers ───────────────────────────────────────────────────────
-
-/** Swap `$HOME/...` for `~/...` and ellipsize the middle when very long. */
-function abbreviatePath(path: string): string {
-  const home =
-    typeof process !== 'undefined' ? (process.env?.HOME ?? process.env?.USERPROFILE ?? '') : ''
-  let display = home && path.startsWith(home) ? `~${path.slice(home.length)}` : path
-  if (display.length > 42) {
-    const tail = display.slice(-24)
-    display = `${display.slice(0, 14)}…${tail}`
-  }
-  return display
-}
 
 type KindCardProps = {
   kind: RepoKind
@@ -153,7 +186,16 @@ function KindCard({
       tabIndex={selected ? 0 : -1}
       onClick={onSelect}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // Why: WAI-ARIA radiogroup spec expects all four arrow keys to move
+        // selection. Left/Right handle the horizontal grid layout; Up/Down
+        // are added so vertical nav (e.g. screen-reader users, future layout
+        // changes) behaves the same.
+        if (
+          e.key === 'ArrowLeft' ||
+          e.key === 'ArrowRight' ||
+          e.key === 'ArrowUp' ||
+          e.key === 'ArrowDown'
+        ) {
           e.preventDefault()
           onArrowNav()
         } else if (e.key === ' ' || e.key === 'Enter') {
@@ -236,7 +278,11 @@ export function CreateStep({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-3.5 pt-1">
+      {/* Why: DialogContent is a CSS grid; grid items default to min-width:auto
+        (= content size), so a long path inside the Location row would blow out
+        the dialog width even with flex + truncate on the row itself. min-w-0
+        here caps the grid track at the dialog's max-width. */}
+      <div className="space-y-3.5 pt-1 min-w-0">
         {/* Kind toggle. Real radiogroup so screen readers announce it as a choice. */}
         <div
           ref={radioGroupRef}
@@ -292,12 +338,12 @@ export function CreateStep({
           <span className="text-[11px] font-medium text-muted-foreground block">Location</span>
 
           {createParent ? (
-            <div className="group flex items-center gap-2.5 rounded-md border border-border bg-background/40 h-11 px-3 text-sm">
+            <div className="group flex items-center gap-2.5 rounded-md border border-border bg-background/40 h-11 min-w-0 px-3 text-sm">
               <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/50 text-muted-foreground">
                 <Home className="size-3.5" />
               </span>
-              <span className="flex-1 truncate font-mono text-[12px]" title={createParent}>
-                {abbreviatePath(createParent)}
+              <span className="flex-1 min-w-0 truncate font-mono text-[12px]" title={createParent}>
+                {createParent}
               </span>
               <button
                 type="button"
@@ -326,17 +372,6 @@ export function CreateStep({
           )}
         </div>
 
-        {/* Preview the composed path, with the name emphasized. */}
-        {createParent && trimmedName && (
-          <div className="flex items-center gap-2 pl-0.5 text-[12px] text-muted-foreground">
-            <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground/60" />
-            <span className="font-mono truncate" title={`${createParent}/${trimmedName}`}>
-              <span>{abbreviatePath(createParent)}/</span>
-              <span className="text-foreground font-medium">{trimmedName}</span>
-            </span>
-          </div>
-        )}
-
         {createError && (
           <p className="text-[11px] text-destructive" role="alert">
             {createError}
@@ -344,7 +379,7 @@ export function CreateStep({
         )}
 
         <Button onClick={onCreate} disabled={!canSubmit} size="lg" className="w-full">
-          {isCreating ? 'Creating…' : createKind === 'git' ? 'Create repository' : 'Create folder'}
+          {isCreating ? 'Creating…' : 'Create project'}
         </Button>
       </div>
     </>

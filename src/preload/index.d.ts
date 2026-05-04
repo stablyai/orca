@@ -24,6 +24,12 @@ type ReposApi = {
     displayName?: string
     kind?: 'git' | 'folder'
   }) => Promise<{ repo: Repo } | { error: string }>
+  // Why: error union matches the IPC handler's return shape; renderer callers branch on 'error' in result.
+  create: (args: {
+    parentPath: string
+    name: string
+    kind: 'git' | 'folder'
+  }) => Promise<{ repo: Repo } | { error: string }>
   remove: (args: { repoId: string }) => Promise<void>
   update: (args: {
     repoId: string

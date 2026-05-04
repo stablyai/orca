@@ -11,28 +11,39 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { handleMock, mockStore, mkdirMock, accessMock, readdirMock, rmMock, gitExecFileAsyncMock } =
-  vi.hoisted(() => ({
-    handleMock: vi.fn(),
-    mockStore: {
-      getRepos: vi.fn().mockReturnValue([]),
-      addRepo: vi.fn(),
-      removeRepo: vi.fn(),
-      getRepo: vi.fn(),
-      updateRepo: vi.fn()
-    },
-    mkdirMock: vi.fn(),
-    accessMock: vi.fn(),
-    readdirMock: vi.fn(),
-    rmMock: vi.fn(),
-    gitExecFileAsyncMock: vi.fn()
-  }))
+const {
+  handleMock,
+  removeHandlerMock,
+  mockStore,
+  mkdirMock,
+  accessMock,
+  readdirMock,
+  rmMock,
+  gitExecFileAsyncMock,
+  rebuildAuthorizedRootsCacheMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
+  mockStore: {
+    getRepos: vi.fn().mockReturnValue([]),
+    addRepo: vi.fn(),
+    removeRepo: vi.fn(),
+    getRepo: vi.fn(),
+    updateRepo: vi.fn()
+  },
+  mkdirMock: vi.fn(),
+  accessMock: vi.fn(),
+  readdirMock: vi.fn(),
+  rmMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn(),
+  rebuildAuthorizedRootsCacheMock: vi.fn().mockResolvedValue(undefined)
+}))
 
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   ipcMain: {
     handle: handleMock,
-    removeHandler: vi.fn()
+    removeHandler: removeHandlerMock
   }
 }))
 
@@ -57,7 +68,7 @@ vi.mock('../git/repo', () => ({
 }))
 
 vi.mock('./filesystem-auth', () => ({
-  rebuildAuthorizedRootsCache: vi.fn().mockResolvedValue(undefined)
+  rebuildAuthorizedRootsCache: rebuildAuthorizedRootsCacheMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -71,7 +82,9 @@ vi.mock('./ssh', () => ({
 import { registerRepoHandlers } from './repos'
 
 type CreateArgs = { parentPath: string; name: string; kind: 'git' | 'folder' }
-type CreateResult = { repo: { id: string; path: string; kind: string } } | { error: string }
+type CreateResult =
+  | { repo: { id: string; path: string; kind: 'git' | 'folder' } }
+  | { error: string }
 
 describe('repos:create', () => {
   const handlers = new Map<string, (event: unknown, args: CreateArgs) => Promise<CreateResult>>()
@@ -94,9 +107,11 @@ describe('repos:create', () => {
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       handlers.set(channel, handler as (event: unknown, args: CreateArgs) => Promise<CreateResult>)
     })
+    removeHandlerMock.mockReset()
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     mockWindow.webContents.send.mockReset()
+    rebuildAuthorizedRootsCacheMock.mockReset().mockResolvedValue(undefined)
 
     // Default baseline: target does NOT exist yet, mkdir succeeds, git OK.
     accessMock.mockReset().mockRejectedValue(new Error('ENOENT'))
@@ -110,6 +125,13 @@ describe('repos:create', () => {
 
   it('registers the repos:create handler', () => {
     expect(handlers.has('repos:create')).toBe(true)
+  })
+
+  it('unregisters any previously-registered repos:create handler', () => {
+    // registerRepoHandlers must call removeHandler('repos:create') before
+    // ipcMain.handle to avoid the "second handler for same channel" throw
+    // when this module is re-registered (e.g., after a reload).
+    expect(removeHandlerMock).toHaveBeenCalledWith('repos:create')
   })
 
   // ── input validation ──────────────────────────────────────────────
@@ -243,6 +265,53 @@ describe('repos:create', () => {
     expect(result).toMatchObject({ error: expect.stringContaining('Failed to initialize') })
   })
 
+  it('surfaces an "initialize"-flavored error when git init itself fails', async () => {
+    // First git call (init) rejects — the commit step never runs.
+    gitExecFileAsyncMock.mockReset().mockRejectedValueOnce(new Error('init broke'))
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'initfail', kind: 'git' })
+
+    expect(rmMock).toHaveBeenCalledWith('/tmp/initfail', { recursive: true, force: true })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    // Loose match — handler distinguishes init vs commit failures, and we want
+    // to tolerate small wording tweaks as long as it still mentions "initialize".
+    expect(result).toMatchObject({ error: expect.stringContaining('initialize') })
+  })
+
+  it('rolls back directory when git commit fails (not just init)', async () => {
+    // init resolves, commit rejects — the failure must still trigger rollback
+    // and surface a commit-flavored error (distinct from the init-failure path).
+    gitExecFileAsyncMock
+      .mockReset()
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('commit broke'))
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'commitfail', kind: 'git' })
+
+    expect(rmMock).toHaveBeenCalledWith('/tmp/commitfail', { recursive: true, force: true })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ error: expect.stringContaining('commit') })
+  })
+
+  it('strips only .git/ when commit fails in a pre-existing empty folder', async () => {
+    // User pre-created an empty folder; git init succeeded, commit failed.
+    // The folder itself must survive (user owns it) but the half-init'd
+    // .git/ should be removed so the folder looks untouched.
+    accessMock.mockResolvedValueOnce(undefined)
+    readdirMock.mockResolvedValueOnce([])
+    gitExecFileAsyncMock
+      .mockReset()
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('commit broke'))
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'pre-existing', kind: 'git' })
+
+    expect(rmMock).toHaveBeenCalledWith('/tmp/pre-existing/.git', { recursive: true, force: true })
+    expect(rmMock).not.toHaveBeenCalledWith('/tmp/pre-existing', { recursive: true, force: true })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ error: expect.stringContaining('commit') })
+  })
+
   // ── friendly messaging ────────────────────────────────────────────
 
   it('surfaces a friendly message when git author identity is missing', async () => {
@@ -256,6 +325,7 @@ describe('repos:create', () => {
     const result = await callCreate({ parentPath: '/tmp', name: 'authorless', kind: 'git' })
 
     expect(rmMock).toHaveBeenCalledWith('/tmp/authorless', { recursive: true, force: true })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       error: expect.stringContaining('Git author identity is not configured')
     })
@@ -266,5 +336,44 @@ describe('repos:create', () => {
   it('notifies the renderer via repos:changed after a successful create', async () => {
     await callCreate({ parentPath: '/tmp', name: 'notified', kind: 'folder' })
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+  })
+
+  // ── authorized-roots cache refresh ────────────────────────────────
+
+  it('rebuilds the authorized-roots cache after a successful folder create', async () => {
+    // Roots cache must be refreshed so the renderer can read the new path
+    // without waiting for the next full reconciliation.
+    await callCreate({ parentPath: '/tmp', name: 'rooted', kind: 'folder' })
+    expect(rebuildAuthorizedRootsCacheMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT rebuild the authorized-roots cache on a validation failure', async () => {
+    const result = await callCreate({ parentPath: '/tmp', name: '   ', kind: 'git' })
+    expect(result).toEqual({ error: 'Name cannot be empty' })
+    expect(rebuildAuthorizedRootsCacheMock).not.toHaveBeenCalled()
+  })
+
+  it('does NOT rebuild the authorized-roots cache when dedup short-circuits', async () => {
+    const existing = { id: 'abc', path: '/tmp/dupe2', displayName: 'dupe2', kind: 'git' }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    await callCreate({ parentPath: '/tmp', name: 'dupe2', kind: 'git' })
+
+    expect(rebuildAuthorizedRootsCacheMock).not.toHaveBeenCalled()
+  })
+
+  // ── dedup-by-path ─────────────────────────────────────────────────
+
+  it('returns the existing repo when one already lives at the target path', async () => {
+    const existing = { id: 'abc', path: '/tmp/dupe', displayName: 'dupe', kind: 'git' }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'dupe', kind: 'git' })
+
+    expect(result).toEqual({ repo: existing })
+    // Short-circuit before any fs or git work.
+    expect(mkdirMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 })

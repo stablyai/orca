@@ -245,7 +245,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               onClick={handleBack}
             >
               <ArrowLeft className="size-3" />
-              Add another repo
+              Add another project
             </button>
           )}
           <div className="flex items-center gap-1.5">
@@ -261,11 +261,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         {step === 'add' ? (
           <>
             <DialogHeader>
-              <DialogTitle>Add a repository</DialogTitle>
+              <DialogTitle>Add a project</DialogTitle>
               <DialogDescription>
                 {repos.length === 0
-                  ? 'Add a repository to get started with Orca.'
-                  : 'Add another repository to manage with Orca.'}
+                  ? 'Add a project to get started with Orca.'
+                  : 'Add another project to manage with Orca.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -323,7 +323,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   setCreateError(null)
                   setStep('create')
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 Or start a new project from scratch
               </button>
