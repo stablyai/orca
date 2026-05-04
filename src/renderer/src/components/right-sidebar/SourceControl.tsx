@@ -32,6 +32,20 @@ import { cn } from '@/lib/utils'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import {
+  resolveDropdownItems,
+  resolvePrimaryAction,
+  type DropdownActionKind,
+  type DropdownEntry,
+  type PrimaryAction
+} from './source-control-primary-action'
 import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
@@ -93,103 +107,10 @@ const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
 }
 
 const BRANCH_REFRESH_INTERVAL_MS = 5000
-const REMOTE_STATUS_NO_UPSTREAM: GitUpstreamStatus = { hasUpstream: false, ahead: 0, behind: 0 }
 
-export type RemoteActionKind = 'publish' | 'push' | 'pull' | 'sync'
-
-export type RemoteActionState = {
-  kind: RemoteActionKind
-  label: string
-  disabled: boolean
-}
-
-export type RemoteStatusCounts = {
-  incoming: number
-  outgoing: number
-}
-
-export type RemoteHeaderActionViewModel = {
-  action: RemoteActionState
-  counts: RemoteStatusCounts
-  showDivergence: boolean
-}
-
-export function resolveRemoteStatusCounts(status: GitUpstreamStatus): RemoteStatusCounts {
-  if (!status.hasUpstream) {
-    return { incoming: 0, outgoing: 0 }
-  }
-  return {
-    incoming: Math.max(0, status.behind),
-    outgoing: Math.max(0, status.ahead)
-  }
-}
-
-export function resolveRemoteActionState(
-  status: GitUpstreamStatus,
-  options?: {
-    hasUncommittedChanges: boolean
-    hasConflictOperation: boolean
-    isRemoteOperationActive: boolean
-  }
-): RemoteActionState {
-  const hasUncommittedChanges = options?.hasUncommittedChanges ?? false
-  const hasConflictOperation = options?.hasConflictOperation ?? false
-  const isRemoteOperationActive = options?.isRemoteOperationActive ?? false
-
-  if (!status.hasUpstream) {
-    return {
-      kind: 'publish',
-      label: 'Publish Branch',
-      disabled: isRemoteOperationActive
-    }
-  }
-
-  const pullOrSyncBlocked = hasUncommittedChanges || hasConflictOperation
-  if (status.ahead > 0 && status.behind > 0) {
-    return {
-      kind: 'sync',
-      label: 'Sync Changes',
-      disabled: isRemoteOperationActive || pullOrSyncBlocked
-    }
-  }
-  if (status.behind > 0) {
-    return {
-      kind: 'pull',
-      label: 'Pull',
-      disabled: isRemoteOperationActive || pullOrSyncBlocked
-    }
-  }
-  if (status.ahead > 0) {
-    return {
-      kind: 'push',
-      label: 'Push',
-      disabled: isRemoteOperationActive
-    }
-  }
-
-  return {
-    kind: 'push',
-    label: 'Push',
-    disabled: isRemoteOperationActive
-  }
-}
-
-export function resolveRemoteHeaderActionViewModel(
-  status: GitUpstreamStatus,
-  options?: {
-    hasUncommittedChanges: boolean
-    hasConflictOperation: boolean
-    isRemoteOperationActive: boolean
-  }
-): RemoteHeaderActionViewModel {
-  const action = resolveRemoteActionState(status, options)
-  const counts = resolveRemoteStatusCounts(status)
-  return {
-    action,
-    counts,
-    showDivergence: status.hasUpstream && (counts.incoming > 0 || counts.outgoing > 0)
-  }
-}
+// Why: the pure state-machine logic now lives in
+// ./source-control-primary-action.ts. It is imported directly by callers
+// (tests and other components) instead of going through this module.
 
 type CommitDraftsByWorktree = Record<string, string>
 
@@ -246,6 +167,7 @@ function SourceControlInner(): React.JSX.Element {
   const pushBranch = useAppStore((s) => s.pushBranch)
   const pullBranch = useAppStore((s) => s.pullBranch)
   const syncBranch = useAppStore((s) => s.syncBranch)
+  const fetchBranch = useAppStore((s) => s.fetchBranch)
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
   const trackConflictPath = useAppStore((s) => s.trackConflictPath)
   const openDiff = useAppStore((s) => s.openDiff)
@@ -341,11 +263,13 @@ function SourceControlInner(): React.JSX.Element {
   const conflictOperation = activeWorktreeId
     ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
     : 'unknown'
-  // Why: keep fallback upstream status referentially stable so memo deps
-  // don't churn when no worktree-specific remote status has been fetched yet.
-  const remoteStatus: GitUpstreamStatus = activeWorktreeId
-    ? (remoteStatusesByWorktree[activeWorktreeId] ?? REMOTE_STATUS_NO_UPSTREAM)
-    : REMOTE_STATUS_NO_UPSTREAM
+  // Why: leave undefined until fetchUpstreamStatus resolves for this worktree.
+  // Substituting a synthetic { hasUpstream: false } flashes "Publish Branch"
+  // on every worktree switch — resolvePrimaryAction treats it as an
+  // unpublished branch until the real status lands a moment later.
+  const remoteStatus: GitUpstreamStatus | undefined = activeWorktreeId
+    ? remoteStatusesByWorktree[activeWorktreeId]
+    : undefined
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
@@ -393,15 +317,6 @@ function SourceControlInner(): React.JSX.Element {
 
   const effectiveBaseRef = activeRepo?.worktreeBaseRef ?? defaultBaseRef
   const hasUncommittedEntries = entries.length > 0
-  const remoteHeaderAction = useMemo(
-    () =>
-      resolveRemoteHeaderActionViewModel(remoteStatus, {
-        hasUncommittedChanges: hasUncommittedEntries,
-        hasConflictOperation: conflictOperation !== 'unknown',
-        isRemoteOperationActive
-      }),
-    [conflictOperation, hasUncommittedEntries, isRemoteOperationActive, remoteStatus]
-  )
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const prCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
@@ -534,17 +449,19 @@ function SourceControlInner(): React.JSX.Element {
     // still runs.
   }, [activeWorktreeId])
 
-  const handleCommit = useCallback(async (): Promise<void> => {
+  // Why: returns true on success so compound actions ("Commit & Push" etc.)
+  // can skip the follow-up remote operation when the commit itself failed.
+  const handleCommit = useCallback(async (): Promise<boolean> => {
     if (!activeWorktreeId || !worktreePath) {
-      return
+      return false
     }
     const message = commitMessage.trim()
     if (!message || grouped.staged.length === 0 || unresolvedConflicts.length > 0) {
-      return
+      return false
     }
 
     if (commitInFlightRef.current[activeWorktreeId]) {
-      return
+      return false
     }
     commitInFlightRef.current[activeWorktreeId] = true
 
@@ -562,7 +479,7 @@ function SourceControlInner(): React.JSX.Element {
           ...prev,
           [activeWorktreeId]: commitResult.error ?? 'Commit failed'
         }))
-        return
+        return false
       }
 
       // Why: the textarea stays enabled during the in-flight commit (only the
@@ -594,11 +511,13 @@ function SourceControlInner(): React.JSX.Element {
       } catch (refreshError) {
         console.error('[SourceControl] post-commit status refresh failed', refreshError)
       }
+      return true
     } catch (error) {
       setCommitErrors((prev) => ({
         ...prev,
         [activeWorktreeId]: error instanceof Error ? error.message : 'Commit failed'
       }))
+      return false
     } finally {
       setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
       commitInFlightRef.current[activeWorktreeId] = false
@@ -613,39 +532,138 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
-  const handleRemoteAction = useCallback(async (): Promise<void> => {
-    if (!activeWorktreeId || !worktreePath) {
-      return
-    }
+  // Why: a single dispatcher for every remote-only action the split button or
+  // chevron dropdown can trigger. Keeps the error-swallow pattern in one
+  // place — store slices already surface actionable toasts, so additional
+  // try/catch here would duplicate the notification.
+  const runRemoteAction = useCallback(
+    async (kind: 'push' | 'pull' | 'sync' | 'fetch' | 'publish'): Promise<void> => {
+      if (!activeWorktreeId || !worktreePath) {
+        return
+      }
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      try {
+        if (kind === 'publish') {
+          await pushBranch(activeWorktreeId, worktreePath, true, connectionId)
+          return
+        }
+        if (kind === 'push') {
+          await pushBranch(activeWorktreeId, worktreePath, false, connectionId)
+          return
+        }
+        if (kind === 'pull') {
+          await pullBranch(activeWorktreeId, worktreePath, connectionId)
+          return
+        }
+        if (kind === 'fetch') {
+          await fetchBranch(activeWorktreeId, worktreePath, connectionId)
+          return
+        }
+        await syncBranch(activeWorktreeId, worktreePath, connectionId)
+      } catch (error) {
+        // Why: remote action failures are surfaced by editor-slice actions to keep
+        // one consistent toast path and avoid duplicate notifications in the UI.
+        void error
+      }
+    },
+    [activeWorktreeId, fetchBranch, pullBranch, pushBranch, syncBranch, worktreePath]
+  )
 
-    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-    try {
-      if (remoteHeaderAction.action.kind === 'publish') {
-        await pushBranch(activeWorktreeId, worktreePath, true, connectionId)
+  // Why: compound actions must commit first and only run the follow-up remote
+  // op when the commit succeeds. handleCommit's return value carries that
+  // signal — a failure leaves commitError populated and short-circuits here
+  // so we never push a commit the user didn't actually land.
+  const runCompoundCommitAction = useCallback(
+    async (remoteKind: 'push' | 'sync' | 'publish'): Promise<void> => {
+      const ok = await handleCommit()
+      if (!ok) {
         return
       }
-      if (remoteHeaderAction.action.kind === 'push') {
-        await pushBranch(activeWorktreeId, worktreePath, false, connectionId)
-        return
+      await runRemoteAction(remoteKind)
+    },
+    [handleCommit, runRemoteAction]
+  )
+
+  const primaryAction: PrimaryAction = useMemo(
+    () =>
+      resolvePrimaryAction({
+        stagedCount: grouped.staged.length,
+        hasMessage: commitMessage.trim().length > 0,
+        hasUnresolvedConflicts: unresolvedConflicts.length > 0,
+        isCommitting,
+        isRemoteOperationActive,
+        upstreamStatus: remoteStatus
+      }),
+    [
+      commitMessage,
+      grouped.staged.length,
+      isCommitting,
+      isRemoteOperationActive,
+      remoteStatus,
+      unresolvedConflicts.length
+    ]
+  )
+
+  const dropdownItems: DropdownEntry[] = useMemo(
+    () =>
+      resolveDropdownItems({
+        stagedCount: grouped.staged.length,
+        hasMessage: commitMessage.trim().length > 0,
+        hasUnresolvedConflicts: unresolvedConflicts.length > 0,
+        isCommitting,
+        isRemoteOperationActive,
+        upstreamStatus: remoteStatus
+      }),
+    [
+      commitMessage,
+      grouped.staged.length,
+      isCommitting,
+      isRemoteOperationActive,
+      remoteStatus,
+      unresolvedConflicts.length
+    ]
+  )
+
+  // Why: maps both the primary button click and any chevron dropdown item
+  // click to the right handler. Commit-ish kinds flow through handleCommit
+  // (which returns a boolean); compound actions use runCompoundCommitAction;
+  // pure remote actions go through runRemoteAction.
+  const handleActionInvoke = useCallback(
+    (kind: DropdownActionKind): void => {
+      switch (kind) {
+        case 'commit':
+          void handleCommit()
+          return
+        case 'commit_push':
+          void runCompoundCommitAction('push')
+          return
+        case 'commit_sync':
+          void runCompoundCommitAction('sync')
+          return
+        case 'push':
+        case 'pull':
+        case 'sync':
+        case 'fetch':
+        case 'publish':
+          void runRemoteAction(kind)
       }
-      if (remoteHeaderAction.action.kind === 'pull') {
-        await pullBranch(activeWorktreeId, worktreePath, connectionId)
+    },
+    [handleCommit, runCompoundCommitAction, runRemoteAction]
+  )
+
+  // Why: the primary split-button kind includes 'commit_publish', which never
+  // appears as a dropdown row (the dropdown uses Publish Branch + Commit &
+  // Push as distinct entries). This helper collapses it onto the runCompound
+  // path so the primary button can reuse handleActionInvoke semantics.
+  const handlePrimaryClick = useCallback((): void => {
+    switch (primaryAction.kind) {
+      case 'commit_publish':
+        void runCompoundCommitAction('publish')
         return
-      }
-      await syncBranch(activeWorktreeId, worktreePath, connectionId)
-    } catch (error) {
-      // Why: remote action failures are surfaced by editor-slice actions to keep
-      // one consistent toast path and avoid duplicate notifications in the UI.
-      void error
+      default:
+        handleActionInvoke(primaryAction.kind as DropdownActionKind)
     }
-  }, [
-    activeWorktreeId,
-    pullBranch,
-    pushBranch,
-    remoteHeaderAction.action.kind,
-    syncBranch,
-    worktreePath
-  ])
+  }, [handleActionInvoke, primaryAction.kind, runCompoundCommitAction])
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
@@ -991,59 +1009,28 @@ function SourceControlInner(): React.JSX.Element {
               {value === 'all' ? 'All' : 'Uncommitted'}
             </button>
           ))}
-          <div className="ml-auto mb-1.5 flex items-center gap-2 min-w-0">
-            {/* Why: remote actions belong to the Source Control header action bar
-                so the commit composer stays focused only on commit authoring. */}
-            {(scope === 'all' || scope === 'uncommitted') && (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-1.5 text-[11px]"
-                  disabled={remoteHeaderAction.action.disabled}
-                  onClick={() => {
-                    void handleRemoteAction()
-                  }}
-                >
-                  {isRemoteOperationActive && <RefreshCw className="size-3 animate-spin" />}
-                  {remoteHeaderAction.action.label}
-                </Button>
-                {remoteHeaderAction.showDivergence && (
-                  <div className="flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
-                    {remoteHeaderAction.counts.incoming > 0 && (
-                      <span title="Incoming commits">↓{remoteHeaderAction.counts.incoming}</span>
-                    )}
-                    {remoteHeaderAction.counts.outgoing > 0 && (
-                      <span title="Outgoing commits">↑{remoteHeaderAction.counts.outgoing}</span>
-                    )}
-                  </div>
+          {prInfo && (
+            <div className="ml-auto mb-1.5 flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
+              <PullRequestIcon
+                className={cn(
+                  'size-3 shrink-0',
+                  prInfo.state === 'merged' && 'text-purple-500/80',
+                  prInfo.state === 'open' && 'text-emerald-500/80',
+                  prInfo.state === 'closed' && 'text-muted-foreground/60',
+                  prInfo.state === 'draft' && 'text-muted-foreground/50'
                 )}
-              </>
-            )}
-            {prInfo && (
-              <div className="flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
-                <PullRequestIcon
-                  className={cn(
-                    'size-3 shrink-0',
-                    prInfo.state === 'merged' && 'text-purple-500/80',
-                    prInfo.state === 'open' && 'text-emerald-500/80',
-                    prInfo.state === 'closed' && 'text-muted-foreground/60',
-                    prInfo.state === 'draft' && 'text-muted-foreground/50'
-                  )}
-                />
-                <a
-                  href={prInfo.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  PR #{prInfo.number}
-                </a>
-              </div>
-            )}
-          </div>
+              />
+              <a
+                href={prInfo.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                PR #{prInfo.number}
+              </a>
+            </div>
+          )}
         </div>
 
         {scope === 'all' && (
@@ -1204,11 +1191,12 @@ function SourceControlInner(): React.JSX.Element {
 
           {(scope === 'all' || scope === 'uncommitted') && (
             <CommitArea
-              stagedCount={grouped.staged.length}
-              hasUnresolvedConflicts={unresolvedConflicts.length > 0}
               commitMessage={commitMessage}
               commitError={commitError}
               isCommitting={isCommitting}
+              isRemoteOperationActive={isRemoteOperationActive}
+              primaryAction={primaryAction}
+              dropdownItems={dropdownItems}
               onCommitMessageChange={(value) => {
                 if (!activeWorktreeId) {
                   return
@@ -1217,9 +1205,8 @@ function SourceControlInner(): React.JSX.Element {
                   writeCommitDraftForWorktree(prev, activeWorktreeId, value)
                 )
               }}
-              onCommitSuccess={() => {
-                void handleCommit()
-              }}
+              onPrimaryAction={handlePrimaryClick}
+              onDropdownAction={handleActionInvoke}
             />
           )}
 
@@ -1399,47 +1386,33 @@ const SourceControl = React.memo(SourceControlInner)
 export default SourceControl
 
 type CommitAreaProps = {
-  stagedCount: number
-  hasUnresolvedConflicts: boolean
   commitMessage: string
   commitError: string | null
   isCommitting: boolean
+  isRemoteOperationActive: boolean
+  primaryAction: PrimaryAction
+  dropdownItems: DropdownEntry[]
   onCommitMessageChange: (message: string) => void
-  onCommitSuccess: () => void
+  onPrimaryAction: () => void
+  onDropdownAction: (kind: DropdownActionKind) => void
 }
 
 export function CommitArea({
-  stagedCount,
-  hasUnresolvedConflicts,
   commitMessage,
   commitError,
   isCommitting,
+  isRemoteOperationActive,
+  primaryAction,
+  dropdownItems,
   onCommitMessageChange,
-  onCommitSuccess
+  onPrimaryAction,
+  onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
   // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
   // the existing style) — the browser scrolls internally past 12 rows.
   const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
-  const hasMessage = commitMessage.trim().length > 0
-  const isCommitDisabled =
-    isCommitting || !hasMessage || stagedCount === 0 || hasUnresolvedConflicts
-
-  // Why: when the button is disabled, the title surfaces the reason so the
-  // user doesn't have to guess why Commit is greyed out. Part-2 may extend
-  // this into a split button (primary action + dropdown for Push / Sync /
-  // Commit & Push); the label stays as a plain "Commit" here so the shape
-  // lines up cleanly with the forthcoming "Remote Updates" section beneath it.
-  let disabledReason: string | undefined
-  if (isCommitting) {
-    disabledReason = 'Commit in progress…'
-  } else if (hasUnresolvedConflicts) {
-    disabledReason = 'Resolve conflicts before committing'
-  } else if (stagedCount === 0) {
-    disabledReason = 'Stage at least one file to commit'
-  } else if (!hasMessage) {
-    disabledReason = 'Enter a commit message to commit'
-  }
+  const showSpinner = isCommitting || isRemoteOperationActive
 
   return (
     <div className="px-3 pb-2">
@@ -1452,20 +1425,64 @@ export function CommitArea({
         aria-describedby={commitError ? 'commit-area-error' : undefined}
         className="mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
       />
-      {/* Why: match the "Squash and merge" button in PRActions
-          (size="xs", px-3 text-[11px]) so the sidebar has a consistent
-          action-button shape across Source Control and Checks. */}
-      <Button
-        type="button"
-        size="xs"
-        disabled={isCommitDisabled}
-        onClick={() => onCommitSuccess()}
-        className="w-full px-3 text-[11px]"
-        title={disabledReason}
-      >
-        {isCommitting && <RefreshCw className="size-3.5 animate-spin" />}
-        Commit
-      </Button>
+      {/* Why: primary + chevron sit together as a visual split button so the
+          edit → commit → push loop stays in a single vertical band. The
+          chevron exposes the full action surface (fetch, pull, sync,
+          publish, compound commits) without forcing morphing labels to
+          carry every possible intent. */}
+      <div className="flex items-center gap-1">
+        {/* Why: match the "Squash and merge" button in PRActions
+            (size="xs", px-3 text-[11px]) so the sidebar has a consistent
+            action-button shape across Source Control and Checks. */}
+        <Button
+          type="button"
+          size="xs"
+          disabled={primaryAction.disabled}
+          onClick={() => onPrimaryAction()}
+          className="flex-1 px-3 text-[11px]"
+          title={primaryAction.title}
+          aria-label={primaryAction.label}
+        >
+          {showSpinner && <RefreshCw className="size-3.5 animate-spin" />}
+          {primaryAction.label}
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              className="px-2 text-[11px] shrink-0"
+              aria-label="More commit and remote actions"
+              title="More actions"
+            >
+              <ChevronDown className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[14rem]">
+            {dropdownItems.map((entry, index) =>
+              entry.kind === 'separator' ? (
+                <DropdownMenuSeparator key={`sep-${index}`} />
+              ) : (
+                <DropdownMenuItem
+                  key={entry.kind}
+                  disabled={entry.disabled}
+                  title={entry.title}
+                  onSelect={(event) => {
+                    if (entry.disabled) {
+                      event.preventDefault()
+                      return
+                    }
+                    onDropdownAction(entry.kind)
+                  }}
+                >
+                  {entry.label}
+                </DropdownMenuItem>
+              )
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       {commitError && (
         // Why: role="alert" + aria-live="polite" lets screen readers announce
         // commit failures; the id ties the message to the textarea via

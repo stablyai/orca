@@ -283,6 +283,7 @@ export type EditorSlice = {
   ) => Promise<void>
   pullBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
   syncBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
+  fetchBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
@@ -360,8 +361,6 @@ function openWorkspaceEditorItem(
   return created?.id ?? fileId
 }
 
-const REMOTE_PULL_SYNC_GUARD_MESSAGE =
-  'Cannot pull/sync with uncommitted changes or active conflicts.'
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
 
 function extractPublishFailureDetail(message: string): string | null {
@@ -395,6 +394,17 @@ function resolveRemoteOperationErrorMessage(
     return 'Push rejected — remote has changes. Pull first, then try again.'
   }
 
+  // Why: `git pull` / merge refuses to run when the working tree has changes
+  // that would be overwritten; surface a single readable line instead of the
+  // multi-line git stderr (which lists every affected path).
+  if (
+    /local changes.*would be overwritten|Please commit your changes or stash them/i.test(
+      error.message
+    )
+  ) {
+    return 'Pull blocked — commit or stash your local changes first.'
+  }
+
   if (options?.publish) {
     // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
     // keeps the toast human-readable while preserving the actionable fatal reason.
@@ -417,12 +427,6 @@ function resolveRemoteOperationErrorMessage(
   }
 
   return error.message
-}
-
-function hasBlockedPullOrSync(state: EditorSlice, worktreeId: string): boolean {
-  const hasUncommittedEntries = (state.gitStatusByWorktree[worktreeId] ?? []).length > 0
-  const conflictOperation = state.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
-  return hasUncommittedEntries || conflictOperation !== 'unknown'
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
@@ -1835,10 +1839,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
   },
   pullBranch: async (worktreeId, worktreePath, connectionId) => {
-    if (hasBlockedPullOrSync(get(), worktreeId)) {
-      toast.error(REMOTE_PULL_SYNC_GUARD_MESSAGE)
-      return
-    }
     get().setRemoteOperationActive(true)
     try {
       await window.api.git.pull({ worktreePath, connectionId })
@@ -1856,20 +1856,45 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
   },
   syncBranch: async (worktreeId, worktreePath, connectionId) => {
-    if (hasBlockedPullOrSync(get(), worktreeId)) {
-      toast.error(REMOTE_PULL_SYNC_GUARD_MESSAGE)
-      return
-    }
     get().setRemoteOperationActive(true)
     try {
       await window.api.git.fetch({ worktreePath, connectionId })
       await window.api.git.pull({ worktreePath, connectionId })
-      await window.api.git.push({ worktreePath, connectionId })
+      // Why: push only if the pull left local commits that aren't on the
+      // remote. After a merge pull the ahead count can be >0 (local commits +
+      // the new merge commit) or 0 (pure fast-forward), and we avoid a
+      // no-op push round-trip in the fast-forward case.
+      const upstreamStatus = (await window.api.git.upstreamStatus({
+        worktreePath,
+        connectionId
+      })) as GitUpstreamStatus
+      if (upstreamStatus.ahead > 0) {
+        await window.api.git.push({ worktreePath, connectionId })
+      }
       const status = (await window.api.git.status({
         worktreePath,
         connectionId
       })) as GitStatusResult
       get().setGitStatus(worktreeId, status)
+      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+    } catch (error) {
+      toast.error(resolveRemoteOperationErrorMessage(error))
+      throw error
+    } finally {
+      get().setRemoteOperationActive(false)
+    }
+  },
+  fetchBranch: async (worktreeId, worktreePath, connectionId) => {
+    // Why: mirror pushBranch/pullBranch/syncBranch so the dropdown Fetch action
+    // participates in isRemoteOperationActive (disabling the split button while
+    // the fetch is in flight) and uses the same toast error path.
+    get().setRemoteOperationActive(true)
+    try {
+      await window.api.git.fetch({ worktreePath, connectionId })
+      // Why: fetch doesn't change the working tree, but the refreshed remote
+      // refs are the whole point of the action — update the upstream status so
+      // the primary label can adapt (e.g. gaining a "Pull" count) without
+      // waiting for the polling interval.
       await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
     } catch (error) {
       toast.error(resolveRemoteOperationErrorMessage(error))

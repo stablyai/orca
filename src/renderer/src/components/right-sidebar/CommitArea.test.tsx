@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
+import {
+  resolveDropdownItems,
+  resolvePrimaryAction,
+  type DropdownActionKind,
+  type PrimaryActionInputs
+} from './source-control-primary-action'
 
 type ReactElementLike = {
   type: unknown
@@ -35,17 +41,20 @@ function findTextarea(node: unknown): ReactElementLike {
   return found
 }
 
-function findCommitButton(node: unknown): ReactElementLike {
-  let found: ReactElementLike | null = null
+// Why: the split button renders two Button instances back-to-back — the
+// primary action and the chevron trigger. The primary is always the first
+// Button encountered in a depth-first walk, so we key on that position.
+function findPrimaryButton(node: unknown): ReactElementLike {
+  const buttons: ReactElementLike[] = []
   visit(node, (entry) => {
     if (entry.type === Button) {
-      found = entry
+      buttons.push(entry)
     }
   })
-  if (!found) {
-    throw new Error('commit button not found')
+  if (buttons.length === 0) {
+    throw new Error('primary button not found')
   }
-  return found
+  return buttons[0]
 }
 
 function hasText(node: unknown, text: string): boolean {
@@ -63,50 +72,77 @@ function flushPromises(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-const baseProps = {
-  stagedCount: 1,
-  hasUnresolvedConflicts: false,
-  commitMessage: 'feat: add commit area',
-  commitError: null as string | null,
-  isCommitting: false,
-  onCommitMessageChange: vi.fn(),
-  onCommitSuccess: vi.fn()
+function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
+  return {
+    stagedCount: 1,
+    hasMessage: true,
+    hasUnresolvedConflicts: false,
+    isCommitting: false,
+    isRemoteOperationActive: false,
+    upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+    ...overrides
+  }
+}
+
+function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
+  const inputs = buildInputs(overrides)
+  return {
+    commitMessage: 'feat: add commit area',
+    commitError: null as string | null,
+    isCommitting: inputs.isCommitting,
+    isRemoteOperationActive: inputs.isRemoteOperationActive,
+    primaryAction: resolvePrimaryAction(inputs),
+    dropdownItems: resolveDropdownItems(inputs),
+    onCommitMessageChange: vi.fn(),
+    onPrimaryAction: vi.fn(),
+    onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
+  }
 }
 
 describe('CommitArea', () => {
-  it('disables commit button when no staged files', () => {
-    const element = CommitArea({ ...baseProps, stagedCount: 0 })
-    const button = findCommitButton(element)
+  it('disables the primary button when no staged files', () => {
+    const element = CommitArea(baseProps({ stagedCount: 0 }))
+    const button = findPrimaryButton(element)
     expect(button.props.disabled).toBe(true)
   })
 
-  it('disables commit button when message is empty', () => {
-    const element = CommitArea({ ...baseProps, commitMessage: '   ' })
-    const button = findCommitButton(element)
+  it('disables the primary button when the commit message is empty', () => {
+    const props = baseProps({ hasMessage: false })
+    const element = CommitArea({ ...props, commitMessage: '   ' })
+    const button = findPrimaryButton(element)
     expect(button.props.disabled).toBe(true)
   })
 
-  it('disables commit button when unresolved conflicts exist', () => {
-    const element = CommitArea({ ...baseProps, hasUnresolvedConflicts: true })
-    const button = findCommitButton(element)
+  it('disables the primary button when unresolved conflicts exist', () => {
+    const element = CommitArea(baseProps({ hasUnresolvedConflicts: true }))
+    const button = findPrimaryButton(element)
     expect(button.props.disabled).toBe(true)
   })
 
-  it('enables commit button with staged files, message, and no conflicts', () => {
-    const element = CommitArea(baseProps)
-    const button = findCommitButton(element)
+  it('enables the primary button when staged + message + no conflicts', () => {
+    const element = CommitArea(baseProps())
+    const button = findPrimaryButton(element)
     expect(button.props.disabled).toBe(false)
   })
 
-  it('triggers commit when the button is clicked', () => {
-    const onCommitSuccess = vi.fn()
-    const element = CommitArea({ ...baseProps, onCommitSuccess })
-    const button = findCommitButton(element)
+  it('fires onPrimaryAction when the primary button is clicked', () => {
+    const onPrimaryAction = vi.fn()
+    const element = CommitArea({ ...baseProps(), onPrimaryAction })
+    const button = findPrimaryButton(element)
     ;(button.props.onClick as () => void)()
-    expect(onCommitSuccess).toHaveBeenCalledTimes(1)
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
   })
 
-  it('clears message and keeps error hidden after successful commit lifecycle', async () => {
+  it('keeps the textarea enabled while the commit is in flight', () => {
+    const element = CommitArea({
+      ...baseProps({ isCommitting: true }),
+      isCommitting: true
+    })
+    const textarea = findTextarea(element)
+    expect(textarea.props.disabled).toBeFalsy()
+  })
+
+  it('clears the message and keeps error hidden after a successful commit lifecycle', async () => {
     let commitMessage = 'feat: add commit area'
     let commitError: string | null = null
     let isCommitting = false
@@ -119,18 +155,25 @@ describe('CommitArea', () => {
       isCommitting = false
     })
 
-    const render = () =>
-      CommitArea({
-        ...baseProps,
+    const render = () => {
+      const inputs = buildInputs({
+        hasMessage: commitMessage.trim().length > 0,
+        isCommitting
+      })
+      return CommitArea({
+        ...baseProps(),
         commitMessage,
         commitError,
         isCommitting,
-        onCommitSuccess: () => {
+        primaryAction: resolvePrimaryAction(inputs),
+        dropdownItems: resolveDropdownItems(inputs),
+        onPrimaryAction: () => {
           void runCommit()
         }
       })
+    }
 
-    const button = findCommitButton(render())
+    const button = findPrimaryButton(render())
     ;(button.props.onClick as () => void)()
     await flushPromises()
 
@@ -140,7 +183,7 @@ describe('CommitArea', () => {
     expect(runCommit).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves message and shows error after failed commit lifecycle', async () => {
+  it('preserves the message and shows the error after a failed commit lifecycle', async () => {
     const initialMessage = 'feat: add commit area'
     let commitMessage = initialMessage
     let commitError: string | null = null
@@ -154,18 +197,25 @@ describe('CommitArea', () => {
       isCommitting = false
     })
 
-    const render = () =>
-      CommitArea({
-        ...baseProps,
+    const render = () => {
+      const inputs = buildInputs({
+        hasMessage: commitMessage.trim().length > 0,
+        isCommitting
+      })
+      return CommitArea({
+        ...baseProps(),
         commitMessage,
         commitError,
         isCommitting,
-        onCommitSuccess: () => {
+        primaryAction: resolvePrimaryAction(inputs),
+        dropdownItems: resolveDropdownItems(inputs),
+        onPrimaryAction: () => {
           void runCommit()
         }
       })
+    }
 
-    const button = findCommitButton(render())
+    const button = findPrimaryButton(render())
     ;(button.props.onClick as () => void)()
     await flushPromises()
 
@@ -175,14 +225,25 @@ describe('CommitArea', () => {
     expect(runCommit).toHaveBeenCalledTimes(1)
   })
 
-  it('locks the button while commit is in flight', () => {
-    const element = CommitArea({ ...baseProps, isCommitting: true })
-    const button = findCommitButton(element)
+  it('locks the primary button while the commit is in flight', () => {
+    const props = baseProps({ isCommitting: true })
+    const element = CommitArea({ ...props, isCommitting: true })
+    const button = findPrimaryButton(element)
     expect(button.props.disabled).toBe(true)
   })
 
-  it('shows an inline error message when commit fails', () => {
-    const element = CommitArea({ ...baseProps, commitError: 'pre-commit hook failed' })
+  it('shows an inline error message when the commit fails', () => {
+    const element = CommitArea({ ...baseProps(), commitError: 'pre-commit hook failed' })
     expect(hasText(element, 'pre-commit hook failed')).toBe(true)
+  })
+
+  it('uses the resolved label on the primary button (e.g. Commit & Push)', () => {
+    const props = baseProps({
+      stagedCount: 1,
+      hasMessage: true,
+      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+    })
+    const element = CommitArea(props)
+    expect(hasText(element, 'Commit & Push')).toBe(true)
   })
 })

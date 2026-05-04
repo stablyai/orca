@@ -245,7 +245,9 @@ export class GitHandler {
   private async pull(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
-    await this.git(['pull', '--ff-only'], worktreePath)
+    // Why: plain `git pull` uses the user's configured pull strategy (merge by
+    // default) so diverged branches reconcile instead of erroring out.
+    await this.git(['pull'], worktreePath)
   }
 
   private async branchDiff(params: Record<string, unknown>) {

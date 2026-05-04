@@ -22,7 +22,10 @@ export async function gitPush(worktreePath: string, publish = false): Promise<vo
 }
 
 export async function gitPull(worktreePath: string): Promise<void> {
-  await gitExecFileAsync(['pull', '--ff-only'], { cwd: worktreePath })
+  // Why: plain `git pull` uses the user's configured pull strategy (merge by
+  // default) so diverged branches reconcile instead of erroring out. Conflicts
+  // surface through the existing conflict-resolution flow.
+  await gitExecFileAsync(['pull'], { cwd: worktreePath })
 }
 
 export async function gitFetch(worktreePath: string): Promise<void> {

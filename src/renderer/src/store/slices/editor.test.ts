@@ -637,7 +637,7 @@ describe('createEditorSlice remote branch actions', () => {
     })
   })
 
-  it('blocks pull when uncommitted changes are present', async () => {
+  it('runs pull and refreshes status + upstream on success', async () => {
     const store = createEditorStore()
     store.getState().setGitStatus('wt-1', {
       conflictOperation: 'unknown',
@@ -646,41 +646,25 @@ describe('createEditorSlice remote branch actions', () => {
 
     await store.getState().pullBranch('wt-1', '/repo')
 
-    expect(gitPullMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Cannot pull/sync with uncommitted changes or active conflicts.'
-    )
+    expect(gitPullMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
-  it('blocks pull when a conflict operation is active', async () => {
+  it('surfaces a readable toast when pull reports local changes would be overwritten', async () => {
     const store = createEditorStore()
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'merge',
-      entries: []
-    })
-
-    await store.getState().pullBranch('wt-1', '/repo')
-
-    expect(gitPullMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Cannot pull/sync with uncommitted changes or active conflicts.'
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.ts\nPlease commit your changes or stash them before you merge.\nAborting'
+      )
     )
-  })
 
-  it('blocks sync when a conflict operation is active', async () => {
-    const store = createEditorStore()
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'rebase',
-      entries: []
-    })
+    await expect(store.getState().pullBranch('wt-1', '/repo')).rejects.toThrow()
 
-    await store.getState().syncBranch('wt-1', '/repo')
-
-    expect(gitFetchMock).not.toHaveBeenCalled()
-    expect(gitPullMock).not.toHaveBeenCalled()
-    expect(gitPushMock).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'Cannot pull/sync with uncommitted changes or active conflicts.'
+      'Pull blocked — commit or stash your local changes first.'
     )
   })
 
@@ -828,6 +812,30 @@ describe('createEditorSlice remote branch actions', () => {
     await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toBe('failure')
 
     expect(toastErrorMock).toHaveBeenCalledWith('Remote operation failed')
+  })
+
+  it('runs fetchBranch and refreshes upstream status on success', async () => {
+    const store = createEditorStore()
+    await store.getState().fetchBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a toast and clears the busy flag when fetch fails', async () => {
+    const store = createEditorStore()
+    gitFetchMock.mockRejectedValueOnce(new Error('network timeout'))
+
+    await expect(store.getState().fetchBranch('wt-1', '/repo')).rejects.toThrow('network timeout')
+
+    expect(toastErrorMock).toHaveBeenCalledWith('network timeout')
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 })
 
