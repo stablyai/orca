@@ -10,6 +10,13 @@ jobs:
   android-build:
     runs-on: ubuntu-latest
 
+    # Why: the "Create GitHub Release" step below uses the default GITHUB_TOKEN
+    # to call `gh release create`, which requires contents:write. Without this,
+    # the job builds the APK fine but fails at release time with
+    # "HTTP 403: Resource not accessible by integration".
+    permissions:
+      contents: write
+
     defaults:
       run:
         working-directory: mobile

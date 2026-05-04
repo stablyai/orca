@@ -218,8 +218,25 @@ export function ExperimentalPane({
             <div className="min-w-0 shrink space-y-1.5">
               <Label>Mobile Pairing</Label>
               <p className="text-xs text-muted-foreground">
-                Control Orca from your phone by scanning a QR code. This feature is experimental
-                &mdash; download the Orca mobile APK from the GitHub Releases page to get started.
+                Control Orca from your phone by scanning a QR code. Beta / early preview &mdash; not
+                ready for general use, shared with internal testers for feedback. Get started from
+                the{' '}
+                <button
+                  type="button"
+                  // Why: points at the current mobile release tag rather than
+                  // the generic /releases page, which is dominated by desktop
+                  // releases and forces the user to scroll. Update this URL
+                  // when cutting a new mobile-v* tag.
+                  onClick={() =>
+                    void window.api.shell.openUrl(
+                      'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.1'
+                    )
+                  }
+                  className="cursor-pointer underline underline-offset-2 hover:text-foreground"
+                >
+                  GitHub Releases page
+                </button>
+                .
               </p>
             </div>
             <button
