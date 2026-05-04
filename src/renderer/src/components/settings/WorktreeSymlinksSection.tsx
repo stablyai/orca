@@ -1,15 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { File, Folder, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { File, Folder, Link2, Plus, X } from 'lucide-react'
 import type { Repo } from '../../../../shared/types'
 import { Button } from '../ui/button'
-import { Label } from '../ui/label'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from '../ui/command'
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { cn } from '@/lib/utils'
 import { SearchableSetting } from './SearchableSetting'
 
 type WorktreeSymlinksSectionProps = {
@@ -25,14 +20,12 @@ export function WorktreeSymlinksSection({
   repo,
   updateRepo
 }: WorktreeSymlinksSectionProps): React.JSX.Element {
-  const [draft, setDraft] = useState('')
-  const [focused, setFocused] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [entries, setEntries] = useState<DirEntry[]>([])
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const blurTimerRef = useRef<number | null>(null)
 
   const paths = repo.symlinkPaths ?? []
-  const draftTrimmed = draft.trim().replace(/^\/+/, '')
+  const queryTrimmed = query.trim().replace(/^\/+/, '')
 
   useEffect(() => {
     let cancelled = false
@@ -42,13 +35,11 @@ export function WorktreeSymlinksSection({
         if (cancelled) {
           return
         }
-        setEntries(
-          list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }))
-        )
+        setEntries(list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory })))
       })
       .catch(() => {
-        // Non-fatal: without entries the combobox just works as a plain free-text
-        // input — the user can still type any path and commit it.
+        // Non-fatal: without entries the combobox still works as a free-text
+        // input — the user can type any path and commit it.
       })
     return () => {
       cancelled = true
@@ -56,52 +47,27 @@ export function WorktreeSymlinksSection({
   }, [repo.path, repo.connectionId])
 
   const filtered = useMemo(() => {
-    const query = draftTrimmed.toLowerCase()
-    const base = query
-      ? entries.filter((e) => e.name.toLowerCase().includes(query))
-      : entries
+    const q = queryTrimmed.toLowerCase()
+    const base = q ? entries.filter((e) => e.name.toLowerCase().includes(q)) : entries
     return base.slice(0, MAX_SUGGESTIONS)
-  }, [draftTrimmed, entries])
+  }, [queryTrimmed, entries])
 
-  const hasExactMatch = filtered.some((e) => e.name === draftTrimmed)
-  const showLiteralItem = draftTrimmed.length > 0 && !hasExactMatch && !paths.includes(draftTrimmed)
-  const showDropdown = focused && (filtered.length > 0 || showLiteralItem)
+  const hasExactMatch = filtered.some((e) => e.name === queryTrimmed)
+  const showLiteralItem = queryTrimmed.length > 0 && !hasExactMatch && !paths.includes(queryTrimmed)
 
   const commit = (rawName: string): void => {
     const trimmed = rawName.trim().replace(/^\/+/, '')
     if (!trimmed || paths.includes(trimmed)) {
-      setDraft('')
+      setQuery('')
       return
     }
     updateRepo(repo.id, { symlinkPaths: [...paths, trimmed] })
-    setDraft('')
+    setQuery('')
+    setOpen(false)
   }
 
   const handleRemove = (path: string): void => {
     updateRepo(repo.id, { symlinkPaths: paths.filter((p) => p !== path) })
-  }
-
-  const handleContainerFocus = (): void => {
-    if (blurTimerRef.current !== null) {
-      window.clearTimeout(blurTimerRef.current)
-      blurTimerRef.current = null
-    }
-    setFocused(true)
-  }
-
-  const handleContainerBlur = (e: React.FocusEvent<HTMLDivElement>): void => {
-    // Why: CommandItem click lands as a focus change *out* of the input before
-    // its onSelect fires. Defer closing so the click can register; if focus
-    // lands back inside the container (another item / the input), cancel the
-    // pending close.
-    const nextTarget = e.relatedTarget as Node | null
-    if (nextTarget && containerRef.current?.contains(nextTarget)) {
-      return
-    }
-    blurTimerRef.current = window.setTimeout(() => {
-      setFocused(false)
-      blurTimerRef.current = null
-    }, 120)
   }
 
   return (
@@ -118,42 +84,44 @@ export function WorktreeSymlinksSection({
         'env',
         'node_modules'
       ]}
-      className="space-y-3"
+      className="space-y-4"
     >
-      <div className="space-y-1">
-        <Label>Worktree Symlinks</Label>
-        <p className="text-xs text-muted-foreground">
-          When a new worktree is created, each path listed here will be symlinked from the primary
-          checkout. Type to search files and folders in the repo root, or add any relative path.
-        </p>
-      </div>
-
-      <div
-        ref={containerRef}
-        onFocus={handleContainerFocus}
-        onBlur={handleContainerBlur}
-        className="relative"
-      >
-        <Command shouldFilter={false} className="overflow-visible bg-transparent">
-          <CommandInput
-            value={draft}
-            onValueChange={setDraft}
-            placeholder="Type a path (e.g. .env or node_modules)…"
-            wrapperClassName="rounded-md border"
-          />
-          {showDropdown ? (
-            <div className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border bg-popover shadow-md">
-              <CommandList className="max-h-64">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Worktree Symlinks</h3>
+          <p className="text-xs text-muted-foreground">
+            When a new worktree is created, each path listed here will be symlinked from the primary
+            checkout.
+          </p>
+        </div>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <Plus className="size-3.5" />
+              Add Path
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 p-0">
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Type a path (e.g. .env or node_modules)…"
+                value={query}
+                onValueChange={setQuery}
+              />
+              <CommandList>
                 <CommandEmpty>No matches. Keep typing to add a custom path.</CommandEmpty>
                 {showLiteralItem ? (
                   <CommandItem
-                    value={`__literal__:${draftTrimmed}`}
-                    onSelect={() => commit(draftTrimmed)}
-                    className="gap-2"
+                    value={`__literal__:${queryTrimmed}`}
+                    onSelect={() => commit(queryTrimmed)}
+                    className="items-center gap-2 px-3 py-2"
                   >
                     <Plus className="size-3.5 text-muted-foreground" />
-                    <span className="text-sm">
-                      Add <code className="rounded bg-muted px-1 py-0.5 text-xs">{draftTrimmed}</code>
+                    <span className="text-xs">
+                      Add{' '}
+                      <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
+                        {queryTrimmed}
+                      </code>
                     </span>
                   </CommandItem>
                 ) : null}
@@ -165,14 +133,14 @@ export function WorktreeSymlinksSection({
                       value={entry.name}
                       disabled={alreadyAdded}
                       onSelect={() => commit(entry.name)}
-                      className="gap-2"
+                      className={cn('items-center gap-2 px-3 py-2', alreadyAdded && 'opacity-50')}
                     >
                       {entry.isDirectory ? (
                         <Folder className="size-3.5 text-muted-foreground" />
                       ) : (
                         <File className="size-3.5 text-muted-foreground" />
                       )}
-                      <span className="truncate text-sm">{entry.name}</span>
+                      <span className="truncate text-xs">{entry.name}</span>
                       {alreadyAdded ? (
                         <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
                           added
@@ -182,33 +150,51 @@ export function WorktreeSymlinksSection({
                   )
                 })}
               </CommandList>
-            </div>
-          ) : null}
-        </Command>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {paths.length === 0 ? (
-        <p className="text-xs italic text-muted-foreground">No paths configured.</p>
+        <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
+          No symlink paths configured for this repository.
+        </div>
       ) : (
-        <ul className="space-y-1">
-          {paths.map((path) => (
-            <li
-              key={path}
-              className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5"
-            >
-              <code className="truncate text-xs">{path}</code>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleRemove(path)}
-                aria-label={`Remove ${path}`}
-                className="h-6 w-6 p-0"
-              >
-                <X className="size-3.5" />
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="rounded-xl border border-border/50 bg-background/70 px-4 py-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-muted/30">
+              <Link2 className="size-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h4 className="text-sm font-medium">Linked paths</h4>
+                <span className="text-[11px] text-muted-foreground">
+                  {paths.length === 1 ? '1 path' : `${paths.length} paths`}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {paths.map((path) => (
+                  <span
+                    key={path}
+                    title={path}
+                    className="inline-flex min-w-0 max-w-full items-center gap-1 truncate rounded-md border border-border/50 bg-muted/35 py-1 pl-2 pr-1 font-mono text-[11px] text-foreground/80"
+                  >
+                    <span className="truncate">{path}</span>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => handleRemove(path)}
+                      aria-label={`Remove ${path}`}
+                      className="size-4 shrink-0 rounded-sm"
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </SearchableSetting>
   )
