@@ -33,14 +33,10 @@ import { getPaneIdsForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fi
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
-/** Map of tabId → buffer-capture callback, one per mounted TerminalPane.
- *  The beforeunload handler in App.tsx invokes every callback to populate
- *  Zustand with serialized buffers before flushing the session to disk.
- *  Sleep (shutdownWorktreeTerminals with keepIdentifiers: true) iterates
- *  only the entries whose tabId belongs to the worktree being slept, so
- *  SSH worktrees can capture scrollback before the relay SIGKILLs the
- *  remote PTY — see DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c. */
-export const shutdownBufferCaptures = new Map<string, () => void>()
+// Why: registry lives in a leaf module so the store slice can import it
+// without re-entering the `slice → TerminalPane → store → slice` cycle
+// that otherwise leaves createTerminalSlice undefined at store-init time.
+import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 
 const MAX_BUFFER_BYTES = 512 * 1024
 

@@ -1526,10 +1526,9 @@ describe('OrcaRuntimeService', () => {
 
       // The post-daemon provider's prefix-matching session must have been
       // shut down, proving the thunk resolved lazily at call time.
-      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
-        `${TEST_WORKTREE_ID}@@aaaaaaaa`,
-        true
-      )
+      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`, {
+        immediate: true
+      })
       // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })

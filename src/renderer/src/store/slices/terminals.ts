@@ -25,7 +25,7 @@ import {
   ensurePtyDispatcher,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/TerminalPane'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
