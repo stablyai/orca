@@ -211,7 +211,7 @@ describe('LocalPtyProvider', () => {
       // socket-close → SIGHUP-to-recycled-pid race (see docs/fix-pty-fd-leak.md).
       const killSpy = mockProc.kill
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
-      await provider.shutdown(id, true)
+      await provider.shutdown(id, { immediate: true })
       expect(killSpy).toHaveBeenCalled()
     })
 
@@ -219,12 +219,12 @@ describe('LocalPtyProvider', () => {
       const onExit = vi.fn()
       provider.configure({ onExit })
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
-      await provider.shutdown(id, true)
+      await provider.shutdown(id, { immediate: true })
       expect(onExit).toHaveBeenCalledWith(id, -1)
     })
 
     it('is a no-op for unknown PTY ids', async () => {
-      await provider.shutdown('nonexistent', true)
+      await provider.shutdown('nonexistent', { immediate: true })
       expect(mockProc.kill).not.toHaveBeenCalled()
     })
   })

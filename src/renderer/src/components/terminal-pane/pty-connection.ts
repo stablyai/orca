@@ -333,6 +333,12 @@ export function connectPanePty(
     command: paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
+    // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
+    // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
+    // pty:spawn returns. Daemon-host-only: SSH path leaves these undefined
+    // and the main-side guard short-circuits.
+    tabId: deps.tabId,
+    leafId: paneLeafId(pane.id),
     ...(shellOverride ? { shellOverride } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,

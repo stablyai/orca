@@ -31,7 +31,14 @@ export async function runSleepWorktree(worktreeId: string): Promise<void> {
     // ordering on both paths. Without the browser thunk here, sleep leaks
     // browserPagesByWorkspace entries and live webviews for the slept worktree.
     await shutdownWorktreeBrowsers(worktreeId)
-    await shutdownWorktreeTerminals(worktreeId)
+    // Why: sleep is reversible — the tab record stays in tabsByWorktree, the
+    // layout stays in terminalLayoutsByTabId, only the live PTY processes are
+    // released. keepIdentifiers preserves tab.ptyId / ptyIdsByLeafId /
+    // lastKnownRelayPtyIdByTabId so wake re-spawns against the same on-disk
+    // history dir (local) or relay session id (SSH); it also captures
+    // serializer buffers into buffersByLeafId for SSH wake to reseed
+    // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
+    await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
   } catch (err) {
     // Why: callers are fire-and-forget; surface the failure as a toast and
     // otherwise continue — the active-worktree reset already happened so we

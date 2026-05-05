@@ -384,6 +384,12 @@ const api = {
       worktreeId?: string
       sessionId?: string
       shellOverride?: string
+      // Why: closes the SIGKILL race documented in INVESTIGATION.md by
+      // letting main patch + sync-flush the (worktreeId, tabId, leafId →
+      // ptyId) binding before pty:spawn returns. Only the renderer's
+      // user-typing-Ctrl+T daemon-host path threads these.
+      tabId?: string
+      leafId?: string
       // Why: telemetry-plan.md§Agent launch semantics — main fires
       // `agent_started` only after the spawn succeeds. The renderer is the
       // source of truth for the launch metadata; main is the source of
@@ -418,7 +424,8 @@ const api = {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
 
-    kill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', { id }),
+    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
+      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),

@@ -450,6 +450,11 @@ export type PreloadApi = {
       // Preserved from the deleted index.d.ts PtyApi duplicate during the
       // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
       shellOverride?: string
+      // Why: closes the SIGKILL race documented in INVESTIGATION.md — main
+      // sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before
+      // pty:spawn returns. Only the renderer's daemon-host path threads these.
+      tabId?: string
+      leafId?: string
       // Why: telemetry-plan.md§Agent launch semantics — main emits
       // `agent_started` only after the PTY/session is created successfully,
       // so the renderer threads the launch metadata through this field and
@@ -469,7 +474,7 @@ export type PreloadApi = {
     write: (id: string, data: string) => void
     resize: (id: string, cols: number, rows: number) => void
     signal: (id: string, signal: string) => void
-    kill: (id: string) => Promise<void>
+    kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>

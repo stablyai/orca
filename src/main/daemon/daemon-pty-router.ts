@@ -63,8 +63,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).resize(id, cols, rows)
   }
 
-  async shutdown(id: string, immediate: boolean): Promise<void> {
-    await this.adapterFor(id).shutdown(id, immediate)
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    await this.adapterFor(id).shutdown(id, opts)
     this.sessionAdapters.delete(id)
   }
 

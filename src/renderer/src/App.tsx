@@ -438,7 +438,7 @@ function App(): React.JSX.Element {
       if (!useAppStore.getState().workspaceSessionReady) {
         return
       }
-      for (const capture of shutdownBufferCaptures) {
+      for (const capture of shutdownBufferCaptures.values()) {
         try {
           capture()
         } catch {

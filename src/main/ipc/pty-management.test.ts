@@ -238,10 +238,10 @@ describe('pty:management IPC handlers', () => {
       expect(result).toEqual({ killedCount: 3, remainingCount: 0 })
       // Each initial session receives exactly one shutdown — no retries.
       expect(current.shutdown).toHaveBeenCalledTimes(2)
-      expect(current.shutdown).toHaveBeenCalledWith('new-1', true)
-      expect(current.shutdown).toHaveBeenCalledWith('new-2', true)
+      expect(current.shutdown).toHaveBeenCalledWith('new-1', { immediate: true })
+      expect(current.shutdown).toHaveBeenCalledWith('new-2', { immediate: true })
       expect(legacy.shutdown).toHaveBeenCalledTimes(1)
-      expect(legacy.shutdown).toHaveBeenCalledWith('old-1', true)
+      expect(legacy.shutdown).toHaveBeenCalledWith('old-1', { immediate: true })
     })
 
     it('reports remainingCount when sessions refuse to die after the poll window', async () => {
@@ -327,8 +327,8 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(current.shutdown).toHaveBeenCalledWith('a', true)
-      expect(current.shutdown).toHaveBeenCalledWith('b', true)
+      expect(current.shutdown).toHaveBeenCalledWith('a', { immediate: true })
+      expect(current.shutdown).toHaveBeenCalledWith('b', { immediate: true })
       // 'a' rejected and is still alive → counts as remaining; 'b' reaped.
       expect(result).toEqual({ killedCount: 1, remainingCount: 1 })
     })
@@ -348,7 +348,7 @@ describe('pty:management IPC handlers', () => {
       }
 
       expect(result.success).toBe(true)
-      expect(legacy.shutdown).toHaveBeenCalledWith('old-1', true)
+      expect(legacy.shutdown).toHaveBeenCalledWith('old-1', { immediate: true })
       expect(current.shutdown).not.toHaveBeenCalled()
     })
 

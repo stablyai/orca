@@ -79,7 +79,7 @@ export type IPtyProvider = {
   attach(id: string): Promise<void>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
-  shutdown(id: string, immediate: boolean): Promise<void>
+  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>

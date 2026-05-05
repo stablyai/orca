@@ -256,6 +256,12 @@ export type IpcPtyTransportOptions = {
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */
   worktreeId?: string
+  /** Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
+   *  main patch + sync-flush the (worktreeId, tabId, leafId → ptyId) binding
+   *  before pty:spawn returns. Only the renderer's daemon-host path threads
+   *  these from the calling pane's (tabId, leafId). */
+  tabId?: string
+  leafId?: string
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim
