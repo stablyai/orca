@@ -6,13 +6,7 @@
  * This module detects WSL paths and routes command execution through `wsl.exe -d <distro>`
  * with translated Linux paths, so every call site gets WSL support for free.
  */
-import {
-  execFile,
-  execFileSync,
-  spawn,
-  type ChildProcess,
-  type SpawnOptions
-} from 'child_process'
+import { execFile, execFileSync, spawn, type ChildProcess, type SpawnOptions } from 'child_process'
 import { promisify } from 'util'
 import { parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 
@@ -99,9 +93,7 @@ function resolveCommand(
   // inside the bash -c string. Single quotes are safe for all chars except
   // single quotes themselves, which we escape as '\'' (end quote, escaped
   // literal, reopen quote).
-  const escapedArgs = translatedArgs.map(
-    (a) => `'${a.replace(/'/g, "'\\''")}'`
-  )
+  const escapedArgs = translatedArgs.map((a) => `'${a.replace(/'/g, "'\\''")}'`)
   // Why: when cwd is supplied as a WSL UNC path, prepend `cd <linuxPath> &&`
   // so the command runs in the expected directory. When the caller only
   // supplied a distro override (no cwd), skip the cd entirely — the gh CLI
@@ -193,10 +185,7 @@ export function gitExecFileSync(
  * Spawn a git child process. Drop-in replacement for
  * `spawn('git', args, { cwd, stdio, ... })`.
  */
-export function gitSpawn(
-  args: string[],
-  options: SpawnOptions & { cwd: string }
-): ChildProcess {
+export function gitSpawn(args: string[], options: SpawnOptions & { cwd: string }): ChildProcess {
   const resolved = resolveCommand('git', args, options.cwd)
   return spawn(resolved.binary, resolved.args, {
     ...options,
@@ -379,6 +368,58 @@ export async function ghExecFileAsync(
   throw lastError
 }
 
+// ─── glab CLI runner ────────────────────────────────────────────────
+// Why: parallel to gh CLI runner above. GitLab support is added by
+// cloning gh's surface rather than abstracting both behind a generic
+// runner — keeping them as parallel implementations matches the
+// project's clone-and-adapt approach for new providers and avoids
+// touching the working gh path. Reuses the shared retry/transient
+// helpers since HTTP-status- and TCP-error-based classification is
+// provider-agnostic.
+
+type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & { cwd?: string; wslDistro?: string }
+
+/**
+ * Async glab CLI execution. Drop-in replacement for
+ * `execFileAsync('glab', args, { cwd, encoding, ... })`.
+ *
+ * Retry policy mirrors ghExecFileAsync.
+ */
+export async function glabExecFileAsync(
+  args: string[],
+  options: GlabExecOptions = {}
+): Promise<{ stdout: string; stderr: string }> {
+  const resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
+  let lastError: unknown
+  for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const { stdout, stderr } = await execFileAsync(resolved.binary, resolved.args, {
+        cwd: resolved.cwd,
+        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+        maxBuffer: options.maxBuffer,
+        timeout: options.timeout,
+        env: options.env
+      })
+      return { stdout: stdout as string, stderr: stderr as string }
+    } catch (err) {
+      lastError = err
+      const { stderr } = extractExecError(err)
+      const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
+      if (!isLastAttempt && isTransientGhError(stderr)) {
+        const retryAfterMs = parseRetryAfterMs(stderr)
+        const delayMs =
+          retryAfterMs !== null
+            ? Math.min(retryAfterMs, GH_RETRY_AFTER_MAX_MS)
+            : GH_RETRY_DELAYS_MS[attempt]
+        await sleep(delayMs)
+        continue
+      }
+      throw err
+    }
+  }
+  throw lastError
+}
+
 // ─── Generic command runner (for rg, etc.) ──────────────────────────
 
 /**
@@ -406,10 +447,7 @@ export function wslAwareSpawn(
  * are Linux-native (/home/user/repo). The rest of Orca needs Windows UNC
  * paths (\\wsl.localhost\Ubuntu\home\user\repo) to read files via Node fs.
  */
-export function translateWslOutputPaths(
-  output: string,
-  originalCwd: string
-): string {
+export function translateWslOutputPaths(output: string, originalCwd: string): string {
   const wsl = parseWslPath(originalCwd)
   if (!wsl) {
     return output
@@ -417,9 +455,8 @@ export function translateWslOutputPaths(
 
   // Replace absolute Linux paths that start with / and look like filesystem
   // paths in structured git output (e.g. "worktree /home/user/repo/feature")
-  return output.replace(
-    /(?<=worktree )(\/.+)$/gm,
-    (_match, linuxPath: string) => toWindowsWslPath(linuxPath, wsl.distro)
+  return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
+    toWindowsWslPath(linuxPath, wsl.distro)
   )
 }
 
