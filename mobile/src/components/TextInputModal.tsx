@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.button
   },
   submitButton: {
-    backgroundColor: colors.accentBlue,
+    backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radii.button
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   submitText: {
-    color: '#fff',
+    color: colors.bgBase,
     fontSize: typography.bodySize,
     fontWeight: '600'
   }

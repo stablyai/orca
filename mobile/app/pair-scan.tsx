@@ -172,20 +172,28 @@ export default function PairScanScreen() {
 
       {status === 'scanning' && (
         <>
-          <View style={styles.cameraWrap}>
-            <CameraView
-              style={styles.camera}
-              facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={handleBarCodeScanned}
-            />
-            <View style={styles.reticle} pointerEvents="none">
-              <View style={[styles.corner, styles.cornerTL]} />
-              <View style={[styles.corner, styles.cornerTR]} />
-              <View style={[styles.corner, styles.cornerBL]} />
-              <View style={[styles.corner, styles.cornerBR]} />
+          {/* Why: unmount the camera while the paste sheet is open. The
+              user has clearly chosen the paste path; keeping the camera
+              streaming behind a sheet wastes power and looks weird if
+              they cancel the sheet and the QR was scanned silently in
+              the meantime. */}
+          {!pasteVisible && (
+            <View style={styles.cameraWrap}>
+              <CameraView
+                style={styles.camera}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={handleBarCodeScanned}
+              />
+              <View style={styles.reticle} pointerEvents="none">
+                <View style={[styles.corner, styles.cornerTL]} />
+                <View style={[styles.corner, styles.cornerTR]} />
+                <View style={[styles.corner, styles.cornerBL]} />
+                <View style={[styles.corner, styles.cornerBR]} />
+              </View>
             </View>
-          </View>
+          )}
+          {pasteVisible && <View style={styles.cameraPlaceholder} />}
           <Pressable
             style={({ pressed }) => [styles.pasteButton, pressed && styles.pasteButtonPressed]}
             onPress={() => setPasteVisible(true)}
@@ -283,6 +291,14 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: radii.camera,
     overflow: 'hidden'
+  },
+  // Why: holds the layout slot while the camera is unmounted during
+  // paste, so the bottom action button doesn't snap up to fill the
+  // empty space.
+  cameraPlaceholder: {
+    flex: 1,
+    backgroundColor: colors.bgPanel,
+    borderRadius: radii.camera
   },
   camera: {
     ...StyleSheet.absoluteFillObject
