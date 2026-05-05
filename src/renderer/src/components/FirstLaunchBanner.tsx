@@ -71,9 +71,17 @@ export function FirstLaunchBanner({
     // banner helper text until the next full relaunch. Mirror
     // PrivacyPane's handleToggle pattern which refetches for the same
     // reason before surfacing UI changes.
-    await acknowledgeBanner()
-    await fetchSettings()
-    onResolve()
+    try {
+      await acknowledgeBanner()
+      await fetchSettings()
+      onResolve()
+    } finally {
+      // Why: if `fetchSettings` rejects (IPC error during shutdown,
+      // settings file lock, etc.), `onResolve` never runs and the banner
+      // stays mounted. Without resetting `inFlight`, every button stays
+      // permanently disabled for the rest of the session.
+      setInFlight(false)
+    }
   }
 
   const handleTurnOff = async (): Promise<void> => {
@@ -86,9 +94,13 @@ export function FirstLaunchBanner({
     // `setOptIn` (client.ts). The renderer just needs to route through
     // `telemetrySetOptIn(false)` so the IPC handler derives the correct
     // `via` and fires the event.
-    await telemetrySetOptIn(false)
-    await fetchSettings()
-    onResolve()
+    try {
+      await telemetrySetOptIn(false)
+      await fetchSettings()
+      onResolve()
+    } finally {
+      setInFlight(false)
+    }
   }
 
   return (
