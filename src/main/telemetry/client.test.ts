@@ -275,7 +275,7 @@ describe('track()', () => {
   it('drops invalid events before calling capture', () => {
     // Raw error strings on agent_error are rejected by `.strict()`.
     track('agent_error', {
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_message: 'leaked message' // rejected by .strict()
     } as never)

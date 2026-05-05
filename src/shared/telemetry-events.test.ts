@@ -1,12 +1,10 @@
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
-// by `.strict()`), error_name is whitelisted, unknown enum values fail, and
-// any well-formed payload round-trips without coercion.
+// by `.strict()`), unknown enum values fail, and any well-formed payload
+// round-trips without coercion.
 
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_ERROR_NAME_WHITELIST,
-  agentErrorNameSchema,
   agentKindSchema,
   commonPropsSchema,
   errorClassSchema,
@@ -18,30 +16,10 @@ import {
 describe('agent_error schema', () => {
   it('round-trips a minimal {error_class, agent_kind} payload', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code'
     })
     expect(parsed.success).toBe(true)
-  })
-
-  it('round-trips every whitelisted error_name value', () => {
-    for (const name of AGENT_ERROR_NAME_WHITELIST) {
-      const parsed = eventSchemas.agent_error.safeParse({
-        error_class: 'auth_expired',
-        agent_kind: 'claude-code',
-        error_name: name
-      })
-      expect(parsed.success).toBe(true)
-    }
-  })
-
-  it('rejects error_name values outside the whitelist', () => {
-    const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
-      agent_kind: 'claude-code',
-      error_name: 'SomeNonWhitelistedName'
-    })
-    expect(parsed.success).toBe(false)
   })
 
   // Core invariant: `.strict()` rejects raw error strings. If this test ever
@@ -49,7 +27,7 @@ describe('agent_error schema', () => {
   // change.
   it('rejects error_message via .strict()', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_message: 'boom at /Users/alice/secret/path'
     })
@@ -58,9 +36,21 @@ describe('agent_error schema', () => {
 
   it('rejects error_stack via .strict()', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_stack: 'Error: boom\n    at /Users/alice/...'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects error_name (deferred — schema is enum-only)', () => {
+    // `error_name` was part of an earlier draft. The trimmed schema is
+    // enum-only; if a future PR re-introduces it as additive-optional,
+    // this test should be replaced rather than relaxed silently.
+    const parsed = eventSchemas.agent_error.safeParse({
+      error_class: 'unknown',
+      agent_kind: 'claude-code',
+      error_name: 'BinaryNotFound'
     })
     expect(parsed.success).toBe(false)
   })
@@ -75,7 +65,7 @@ describe('agent_error schema', () => {
 
   it('rejects unknown agent_kind enum values', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'made_up_agent'
     })
     expect(parsed.success).toBe(false)
@@ -211,12 +201,6 @@ describe('exported enum schemas', () => {
   it('settingsChangedKeySchema membership matches SETTINGS_CHANGED_WHITELIST', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
       expect(settingsChangedKeySchema.safeParse(key).success).toBe(true)
-    }
-  })
-
-  it('agentErrorNameSchema membership matches AGENT_ERROR_NAME_WHITELIST', () => {
-    for (const name of AGENT_ERROR_NAME_WHITELIST) {
-      expect(agentErrorNameSchema.safeParse(name).success).toBe(true)
     }
   })
 })

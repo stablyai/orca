@@ -918,8 +918,7 @@ export function registerPtyHandlers(
           const classified = classifyError(err)
           track('agent_error', {
             agent_kind: errorAgentKind,
-            error_class: classified.error_class,
-            ...(classified.error_name ? { error_name: classified.error_name } : {})
+            error_class: classified.error_class
           })
         }
         throw err
