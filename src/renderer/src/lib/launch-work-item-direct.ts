@@ -104,7 +104,6 @@ async function pasteWorkItemDraftWhenAgentReady(args: {
   const { primaryTabId, startupPlan, content } = args
   await pasteDraftWhenAgentReady({
     tabId: primaryTabId,
-    expectedProcess: startupPlan.expectedProcess,
     content,
     agent: startupPlan.agent,
     onTimeout: () =>

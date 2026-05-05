@@ -59,7 +59,6 @@ const READINESS_TIMEOUT_MS = 8000
  */
 export async function pasteDraftWhenAgentReady(args: {
   tabId: string
-  expectedProcess: string
   content: string
   agent?: TuiAgent
   timeoutMs?: number

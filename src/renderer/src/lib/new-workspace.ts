@@ -248,7 +248,6 @@ export async function ensureAgentStartupInTerminal(args: {
   if (draftPrompt) {
     await pasteDraftWhenAgentReady({
       tabId,
-      expectedProcess: startup.expectedProcess,
       content: draftPrompt,
       agent: startup.agent
     })

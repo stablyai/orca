@@ -81,8 +81,16 @@ export function ensurePtyDispatcher(): void {
   window.api.pty.onData((payload) => {
     ptyDataHandlers.get(payload.id)?.(payload.data)
     const sidecars = ptyDataSidecars.get(payload.id)
-    if (sidecars) {
-      for (const watcher of sidecars) {
+    if (sidecars && sidecars.size > 0) {
+      // Why: snapshot the Set before iterating because watchers commonly
+      // unsubscribe themselves on the very chunk that satisfies them
+      // (e.g. agent-paste-draft resolves on DECSET 2004 and immediately
+      // tears down). Iterating the live Set in that case can skip a
+      // watcher or — if a watcher synchronously subscribes a sibling —
+      // double-fire. The Set is never large (one watcher per active
+      // ready-wait), so the array allocation is cheap.
+      const snapshot = Array.from(sidecars)
+      for (const watcher of snapshot) {
         watcher(payload.data)
       }
     }
