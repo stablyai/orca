@@ -51,6 +51,11 @@ type Worktree = {
   repo: string
   branch: string
   displayName: string
+  // Why: on-disk worktree directory path. Needed by NewWorktreeModal so the
+  // marine-creature fallback dedupes against the actual filesystem basenames
+  // (matching the desktop's collision check), not against displayName which
+  // the user may have renamed.
+  path: string
   liveTerminalCount: number
   hasAttachedPty: boolean
   preview: string
@@ -1020,7 +1025,7 @@ export default function HostScreen() {
       <NewWorktreeModal
         visible={showNewWorktree}
         client={client}
-        existingWorktreeNames={worktrees.map((w) => w.displayName)}
+        existingWorktreePaths={worktrees.map((w) => w.path)}
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees()
           const params = new URLSearchParams({ name: worktreeName, created: '1' })

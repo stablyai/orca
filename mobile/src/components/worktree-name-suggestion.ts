@@ -1,21 +1,32 @@
 import { MARINE_CREATURES } from '../constants/marine-creatures'
 
 // Why: matches the desktop fallback in
-// src/renderer/src/components/sidebar/worktree-name-suggestions.ts so an empty
-// "Workspace name" field on mobile produces the same kind of distinct,
-// readable default the desktop UI uses (Nautilus, Seahorse, etc.). The
-// desktop version is repo-aware via its full worktree map; mobile only has a
-// flat list of existing display names per host, which is enough to avoid
-// collisions for the common case.
+// src/renderer/src/components/sidebar/worktree-name-suggestions.ts. The
+// "already exists locally" collision is on the on-disk worktree directory
+// name (the path basename), not the user-facing displayName — so we derive
+// the used set from path basenames just like the desktop does.
+
+function stripTrailingSeparators(p: string): string {
+  return p.replace(/[\\/]+$/, '')
+}
+
+// Why: cross-platform path basename — handles both POSIX ("/") and Windows
+// ("\\") separators, mirroring src/renderer/src/lib/path.ts so the mobile
+// suggestion logic agrees with the desktop's collision check.
+export function pathBasename(p: string): string {
+  const normalized = stripTrailingSeparators(p)
+  const idx = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
+  return idx === -1 ? normalized : normalized.slice(idx + 1)
+}
 
 function normalize(name: string): string {
   return name.trim().toLowerCase()
 }
 
-export function getSuggestedCreatureName(existingNames: readonly string[]): string {
+export function getSuggestedCreatureName(existingPaths: readonly string[]): string {
   const used = new Set<string>()
-  for (const name of existingNames) {
-    used.add(normalize(name))
+  for (const p of existingPaths) {
+    used.add(normalize(pathBasename(p)))
   }
   for (const candidate of MARINE_CREATURES) {
     if (!used.has(normalize(candidate))) return candidate

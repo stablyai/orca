@@ -249,10 +249,12 @@ function PickerListModal<T extends { id: string; label: string }>({
 type Props = {
   visible: boolean
   client: RpcClient | null
-  // Why: existing worktree display names from the host so we can pick a
-  // unique marine-creature default when the user leaves the name blank,
-  // matching the desktop UI's behavior.
-  existingWorktreeNames?: readonly string[]
+  // Why: existing worktree paths from the host so we can pick a unique
+  // marine-creature default when the user leaves the name blank, matching
+  // the desktop UI's behavior. The "already exists locally" collision is
+  // on the on-disk directory basename, so paths (not displayNames) are
+  // what the suggestion logic must dedupe against.
+  existingWorktreePaths?: readonly string[]
   onCreated: (worktreeId: string, name: string) => void
   onClose: () => void
 }
@@ -260,7 +262,7 @@ type Props = {
 export function NewWorktreeModal({
   visible,
   client,
-  existingWorktreeNames,
+  existingWorktreePaths,
   onCreated,
   onClose
 }: Props) {
@@ -283,7 +285,7 @@ export function NewWorktreeModal({
   // placeholder, not the suggested creature. The creature name is only used
   // as a server-bound fallback when the user submits with a blank field, so
   // it's recomputed lazily inside handleCreate() to stay fresh against
-  // existingWorktreeNames at submission time.
+  // existingWorktreePaths at submission time.
 
   useEffect(() => {
     if (!visible) {
@@ -382,7 +384,7 @@ export function NewWorktreeModal({
       // server invent one. We don't pre-fill or expose this in the UI;
       // see useComposerState in the desktop renderer.
       const trimmedName = name.trim()
-      const finalName = trimmedName || getSuggestedCreatureName(existingWorktreeNames ?? [])
+      const finalName = trimmedName || getSuggestedCreatureName(existingWorktreePaths ?? [])
 
       const params: Record<string, unknown> = {
         repo: `id:${selectedRepo.id}`,
