@@ -24,6 +24,7 @@ import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
+import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -829,6 +830,16 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.runtime.onTerminalFitOverrideChanged((event) => {
         setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
+      })
+    )
+
+    unsubs.push(
+      // Why: presence-lock driver state mirror. Updates the renderer's
+      // mobile-driver-state map so TerminalPane / pty-connection guards
+      // know which PTYs are currently driven by mobile. See
+      // docs/mobile-presence-lock.md.
+      window.api.runtime.onTerminalDriverChanged((event) => {
+        setDriverForPty(event.ptyId, event.driver)
       })
     )
 

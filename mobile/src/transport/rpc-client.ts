@@ -328,13 +328,29 @@ export function connect(
           typeof stream.params === 'object' &&
           typeof (stream.params as { terminal?: unknown }).terminal === 'string'
         ) {
+          // Why: the runtime registers cleanup under the composite key
+          // `${terminal}:${clientId}` so two phones subscribing to the same
+          // terminal handle don't evict each other. Echo that composite key
+          // back on unsubscribe; also include `client.id` so the server can
+          // reconstruct it if a stale build emits a bare-handle id. See
+          // docs/mobile-presence-lock.md.
+          const subscribeParams = stream.params as {
+            terminal: string
+            client?: { id?: string }
+          }
+          const clientId =
+            typeof subscribeParams.client?.id === 'string' ? subscribeParams.client.id : undefined
+          const subscriptionId = clientId
+            ? `${subscribeParams.terminal}:${clientId}`
+            : subscribeParams.terminal
           sendEncrypted({
             id: nextId(),
             deviceToken,
             method: 'terminal.unsubscribe',
-            // Why: the runtime keys terminal subscription cleanup by terminal
-            // handle, not by the RPC request id used to open the stream.
-            params: { subscriptionId: (stream.params as { terminal: string }).terminal }
+            params: {
+              subscriptionId,
+              ...(clientId ? { client: { id: clientId } } : {})
+            }
           })
         }
       }

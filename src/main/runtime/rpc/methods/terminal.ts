@@ -58,7 +58,18 @@ const TerminalRename = TerminalHandle.extend({
 const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
-  interrupt: z.unknown().optional()
+  interrupt: z.unknown().optional(),
+  // Why: identifies the caller for the driver state machine. Optional for
+  // backward compatibility with older mobile clients (server falls back to
+  // the most recent mobile actor when absent). New mobile builds populate
+  // this so multi-mobile semantics resolve correctly. See
+  // docs/mobile-presence-lock.md.
+  client: z
+    .object({
+      id: requiredString('Missing client ID'),
+      type: z.enum(['mobile', 'desktop']).default('desktop').optional()
+    })
+    .optional()
 })
 
 const TerminalWait = TerminalHandle.extend({
@@ -117,11 +128,28 @@ const TerminalSubscribe = TerminalHandle.extend({
 })
 
 const TerminalSetDisplayMode = TerminalHandle.extend({
-  mode: z.enum(['auto', 'phone', 'desktop'])
+  mode: z.enum(['auto', 'phone', 'desktop']),
+  // Why: identifies the caller for the driver state machine. Optional for
+  // backward compatibility with older mobile clients.
+  client: z
+    .object({
+      id: requiredString('Missing client ID'),
+      type: z.enum(['mobile', 'desktop']).default('desktop').optional()
+    })
+    .optional()
 })
 
 const TerminalUnsubscribe = z.object({
-  subscriptionId: requiredString('Missing subscription ID')
+  subscriptionId: requiredString('Missing subscription ID'),
+  // Why: required when subscribe registered the cleanup under the composite
+  // key `${terminal}:${clientId}`. If the caller passes a bare-handle
+  // subscriptionId (older clients), the server reconstructs the composite
+  // key from `client.id`. See docs/mobile-presence-lock.md.
+  client: z
+    .object({
+      id: requiredString('Missing client ID')
+    })
+    .optional()
 })
 
 export const TERMINAL_METHODS: RpcAnyMethod[] = [
@@ -161,13 +189,27 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime }) => ({
-      send: await runtime.sendTerminal(params.terminal, {
+    handler: async (params, { runtime }) => {
+      const result = await runtime.sendTerminal(params.terminal, {
         text: params.text,
         enter: params.enter === true,
         interrupt: params.interrupt === true
       })
-    })
+      // Why: deliberate mobile input is a take-floor action. Drives the
+      // `* → mobile{clientId}` driver transition so the desktop banner
+      // remounts (if previously reclaimed) and active phone-fit dims follow
+      // the most recent actor. Only mobile-typed callers take the floor;
+      // desktop callers (CLI / agents) do not. Older mobile builds without
+      // a `client` field continue to work — the runtime then keeps the
+      // current driver state.
+      if (params.client && params.client.type === 'mobile') {
+        const leaf = runtime.resolveLeafForHandle(params.terminal)
+        if (leaf?.ptyId) {
+          runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+        }
+      }
+      return { send: result }
+    }
   }),
   defineMethod({
     name: 'terminal.wait',
@@ -251,6 +293,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       runtime.setMobileDisplayMode(leaf.ptyId, params.mode)
       runtime.applyMobileDisplayMode(leaf.ptyId)
+      // Why: a deliberate mobile mode change is a take-floor action when
+      // moving to auto/phone (the user explicitly chose to drive at phone
+      // dims). Setting mode to desktop is intentionally NOT a take-floor
+      // action — that's a "watch from desktop dims" gesture.
+      if (params.client && params.client.type === 'mobile' && params.mode !== 'desktop') {
+        runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+      }
       return { mode: params.mode }
     }
   }),
@@ -362,7 +411,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             })
           : () => {}
 
-        const subscriptionId = params.terminal
+        // Why: composite subscriptionId per (terminal, clientId) so two
+        // mobile clients subscribing to the same terminal handle do not
+        // evict each other via registerSubscriptionCleanup's
+        // duplicate-key cleanup. See docs/mobile-presence-lock.md.
+        const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
         runtime.registerSubscriptionCleanup(subscriptionId, () => {
           unsubscribeData()
           unsubscribeResize()
@@ -380,7 +433,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
     handler: async (params, { runtime }) => {
+      // Why: the subscribe handler now registers cleanup under a composite
+      // key `${terminal}:${clientId}`. New mobile builds emit the composite
+      // key directly. Older builds emit a bare-handle subscriptionId; if
+      // they additionally provide `client.id`, reconstruct the composite
+      // key server-side. We always try the as-sent value first, then fall
+      // back to the reconstructed composite, so both wire formats work.
       runtime.cleanupSubscription(params.subscriptionId)
+      if (params.client && !params.subscriptionId.includes(':')) {
+        runtime.cleanupSubscription(`${params.subscriptionId}:${params.client.id}`)
+      }
       return { unsubscribed: true }
     }
   })

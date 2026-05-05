@@ -11,6 +11,7 @@ import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
+import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
   paneLeafId,
@@ -384,6 +385,16 @@ export function connectPanePty(
     if (isCodexPaneStale({ tabId: deps.tabId, panePtyId: currentPtyId })) {
       return
     }
+    // Why: presence-lock input drop. While mobile is the driver for this
+    // PTY, desktop keystrokes must not reach the shell — any input would
+    // race the mobile session and is also dimensionally wrong (PTY is at
+    // phone fit). Renderer-side guard belongs here so we don't even mark
+    // the pane as "interacted" (no unread clear, no take-floor cascade).
+    // The pty:write IPC has a defense-in-depth twin. See
+    // docs/mobile-presence-lock.md.
+    if (currentPtyId && isPtyLocked(currentPtyId)) {
+      return
+    }
     // Why: a real keystroke into the terminal is the unambiguous "user is
     // here" signal that dismisses the bell (ghostty "show until interact").
     // Guarded by the replay and codex-stale checks above so synthetic xterm
@@ -394,12 +405,17 @@ export function connectPanePty(
   })
 
   const onResizeDisposable = pane.terminal.onResize(({ cols, rows }) => {
-    // Why: when a mobile-fit override is active, the PTY is already at the
-    // correct phone dimensions. Suppress resize forwarding to avoid spurious
-    // SIGWINCH signals that could cause TUI flicker. Uses the transport's
-    // ptyId directly to avoid pane ID collisions across tabs.
+    // Why: when a mobile-fit override is active OR mobile is currently the
+    // driver of this PTY, the PTY is already at phone dims and any desktop
+    // resize is wrong. Suppress resize forwarding to avoid spurious SIGWINCH
+    // signals (TUI flicker / wrap corruption). Both checks are needed:
+    // - getFitOverrideForPty covers the "phone-fit dims" state.
+    // - isPtyLocked covers the broader "mobile driving" state, including
+    //   transitions where override may not be set (e.g. legacy code paths).
+    // The pty:resize IPC has a defense-in-depth twin. See
+    // docs/mobile-presence-lock.md.
     const currentPtyId = transport.getPtyId()
-    if (currentPtyId && getFitOverrideForPty(currentPtyId)) {
+    if (currentPtyId && (getFitOverrideForPty(currentPtyId) || isPtyLocked(currentPtyId))) {
       return
     }
     transport.resize(cols, rows)

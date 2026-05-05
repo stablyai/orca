@@ -998,6 +998,15 @@ export function registerPtyHandlers(
   )
 
   ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
+    // Why: defense-in-depth for the mobile-presence lock. The renderer's
+    // xterm.onData guard already drops desktop keystrokes when mobile is
+    // driving, but a stale view between the main-side state flip and the
+    // IPC arriving in the renderer can let one keystroke slip through.
+    // This server-side check catches it. See
+    // docs/mobile-presence-lock.md.
+    if (runtime?.getDriver(args.id).kind === 'mobile') {
+      return
+    }
     getProviderForPty(args.id).write(args.id, args.data)
   })
 
@@ -1012,6 +1021,16 @@ export function registerPtyHandlers(
     // of their correct split width. Suppressing ALL pty:resize during
     // this window prevents the cascade from corrupting PTY dimensions.
     if (runtime?.isResizeSuppressed()) {
+      return
+    }
+    // Why: presence-lock defense-in-depth. While mobile is driving,
+    // desktop-side resizes (auto-fit on window resize, split drag) must
+    // not reach the PTY. The renderer guard checks the driver state too,
+    // but this is the load-bearing layer because the renderer mirror lags
+    // by one IPC hop. Note: BOTH guards apply — isResizeSuppressed handles
+    // the safeFit cascade after take-back; this driver check handles the
+    // ongoing locked state. See docs/mobile-presence-lock.md.
+    if (runtime?.getDriver(args.id).kind === 'mobile') {
       return
     }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })

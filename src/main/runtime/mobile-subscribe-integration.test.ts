@@ -102,7 +102,8 @@ function createRuntime() {
     sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) => {
       notifications.push({ ptyId, mode, cols, rows })
-    }
+    },
+    terminalDriverChanged: vi.fn()
   })
 
   return { runtime, ptySizes, resizes, notifications }

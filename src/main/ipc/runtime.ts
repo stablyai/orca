@@ -39,14 +39,15 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   // code path as the mobile toggle button (terminal.setDisplayMode RPC).
   ipcMain.removeHandler('runtime:restoreTerminalFit')
   ipcMain.handle('runtime:restoreTerminalFit', (_event, args: { ptyId: string }) => {
-    const override = runtime.getTerminalFitOverride(args.ptyId)
-    if (!override) {
-      return { restored: false }
-    }
+    // Why: this IPC powers the desktop "Take back" button. Beyond restoring
+    // PTY dims (the original semantic), it now also reclaims the input
+    // floor for the desktop via the driver state machine. The lock banner
+    // unmounts and desktop input/resize are unblocked until the next
+    // mobile interaction takes the floor again. See
+    // docs/mobile-presence-lock.md.
     try {
-      runtime.setMobileDisplayMode(args.ptyId, 'desktop')
-      runtime.applyMobileDisplayMode(args.ptyId)
-      return { restored: true }
+      const reclaimed = runtime.reclaimTerminalForDesktop(args.ptyId)
+      return { restored: reclaimed }
     } catch {
       return { restored: false }
     }

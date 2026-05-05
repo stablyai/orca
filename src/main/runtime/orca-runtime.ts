@@ -218,6 +218,13 @@ type RuntimeNotifier = {
     cols: number,
     rows: number
   ): void
+  // Why: presence-based lock signal — desktop renderer mounts the lock
+  // banner when `driver.kind === 'mobile'` and unmounts otherwise. The
+  // structured payload (vs a `locked: boolean`) carries the active mobile
+  // actor's clientId so the renderer can disambiguate multi-phone scenarios
+  // and so a future write coordinator can use the same signal as scheduling
+  // input. See docs/mobile-presence-lock.md.
+  terminalDriverChanged(ptyId: string, driver: DriverState): void
 }
 
 type TerminalHandleRecord = {
@@ -285,6 +292,20 @@ export type MobileNotificationEvent = {
   body: string
   worktreeId?: string
 }
+
+// Why: presence-based driver state for the mobile-presence lock. Exactly one
+// driver per PTY at any moment. See docs/mobile-presence-lock.md.
+//   - `idle`: no mobile subscribers; desktop input flows freely
+//   - `desktop`: at least one mobile client subscribed but desktop reclaimed
+//      (or all mobile clients are passive `desktop`-mode watchers); desktop
+//      input flows freely
+//   - `mobile{clientId}`: a mobile client is the active driver; desktop
+//      input/resize are dropped server-side and the lock banner is mounted.
+//      `clientId` is the most recent mobile actor for this PTY.
+export type DriverState =
+  | { kind: 'idle' }
+  | { kind: 'desktop' }
+  | { kind: 'mobile'; clientId: string }
 
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
@@ -354,19 +375,41 @@ export class OrcaRuntimeService {
   // the mode regardless of subscriber state. In-memory only — modes reset on restart.
   private mobileDisplayModes = new Map<string, 'auto' | 'phone' | 'desktop'>()
 
-  // Why: tracks active mobile subscriber per PTY so the runtime can restore
+  // Why: tracks active mobile subscribers per PTY so the runtime can restore
   // desktop dimensions on unsubscribe and prevent orphaned overrides during
-  // rapid tab switches. Keyed by ptyId (single mobile client per terminal).
+  // rapid tab switches. Keyed by ptyId → inner map of clientId → subscriber.
+  // The two-level map preserves multi-mobile soundness: phone B subscribing
+  // does not silently overwrite phone A's record. See
+  // docs/mobile-presence-lock.md "Multi-mobile subscriber model".
+  // subscribedAt drives "earliest-by-subscribe-time" restore-target selection
+  // (only among subscribers with non-null previousCols/Rows; desktop-mode
+  // joins carry null and are skipped). lastActedAt drives "most-recent
+  // actor's viewport wins" for active phone-fit dims.
   private mobileSubscribers = new Map<
     string,
-    {
-      clientId: string
-      viewport: { cols: number; rows: number } | null
-      wasResizedToPhone: boolean
-      previousCols: number | null
-      previousRows: number | null
-    }
+    Map<
+      string,
+      {
+        clientId: string
+        viewport: { cols: number; rows: number } | null
+        wasResizedToPhone: boolean
+        previousCols: number | null
+        previousRows: number | null
+        subscribedAt: number
+        lastActedAt: number
+      }
+    >
   >()
+
+  // Why: per-PTY driver state. The "driver" is whoever currently owns the
+  // input/resize floor. While `kind === 'mobile'` the desktop renderer drops
+  // xterm.onData/onResize and shows the lock banner; `terminal.send` /
+  // `pty:write` and `pty:resize` IPC handlers also drop desktop-side calls
+  // server-side as defense-in-depth. The `clientId` carried on the mobile
+  // variant is the most recent mobile actor — used by
+  // `applyMobileDisplayMode` to pick the active phone-fit viewport. See
+  // docs/mobile-presence-lock.md.
+  private currentDriver = new Map<string, DriverState>()
 
   // Why: tracks the last PTY size set by the desktop renderer (via pty:resize
   // IPC). Unlike ptySizes (which is overwritten by server-side phone-fit
@@ -1116,6 +1159,11 @@ export class OrcaRuntimeService {
       )
       this.notifier?.terminalFitOverrideChanged(ptyId, 'mobile-fit', clampedCols, clampedRows)
 
+      // Why: mobile-fit via resizeForClient is a deliberate mobile action;
+      // the actor takes the floor. mobileTookFloor updates the actor's
+      // lastActedAt and re-applies phone-fit if previously in desktop mode.
+      this.mobileTookFloor(ptyId, clientId)
+
       return {
         cols: clampedCols,
         rows: clampedRows,
@@ -1193,15 +1241,24 @@ export class OrcaRuntimeService {
 
     // Immediately restore PTYs that this client had phone-fitted (no debounce —
     // client is gone, no point waiting for a re-subscribe that won't come).
-    for (const [ptyId, subscriber] of this.mobileSubscribers) {
-      if (subscriber.clientId !== clientId) {
+    // With the multi-mobile rekey, only the disconnecting client's record is
+    // removed from the inner map; peer mobile clients keep the floor and the
+    // banner stays mounted.
+    const ptysWithSurvivingPeers: string[] = []
+    for (const [ptyId, inner] of this.mobileSubscribers) {
+      const subscriber = inner.get(clientId)
+      if (!subscriber) {
         continue
       }
-
+      const wasResizedToPhone = subscriber.wasResizedToPhone
+      const { previousCols, previousRows } = subscriber
+      inner.delete(clientId)
+      if (inner.size > 0) {
+        ptysWithSurvivingPeers.push(ptyId)
+        continue
+      }
       this.mobileSubscribers.delete(ptyId)
-
-      if (subscriber.wasResizedToPhone) {
-        const { previousCols, previousRows } = subscriber
+      if (wasResizedToPhone) {
         if (previousCols != null && previousRows != null) {
           this.ptyController?.resize?.(ptyId, previousCols, previousRows)
           this.resizeHeadlessTerminal(ptyId, previousCols, previousRows)
@@ -1214,6 +1271,21 @@ export class OrcaRuntimeService {
           previousRows ?? 0
         )
         this.notifyFitOverrideListeners(ptyId, 'desktop-fit', previousCols ?? 0, previousRows ?? 0)
+      }
+      this.setDriver(ptyId, { kind: 'idle' })
+    }
+    // Why: if peers survived but the disconnecting client was the active
+    // driver, re-elect the most-recent surviving subscriber as the driver
+    // and re-fit if needed. This keeps the lock/dim-selection invariant.
+    for (const ptyId of ptysWithSurvivingPeers) {
+      const driver = this.getDriver(ptyId)
+      if (driver.kind === 'mobile' && driver.clientId === clientId) {
+        const inner = this.mobileSubscribers.get(ptyId)
+        const next = inner ? this.pickMostRecentActor(inner) : null
+        if (next) {
+          this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
+          this.applyMobileDisplayMode(ptyId)
+        }
       }
     }
 
@@ -1249,6 +1321,14 @@ export class OrcaRuntimeService {
       this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
       this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
     }
+    // Why: clear driver state and notify the renderer so any lock banner on
+    // this dead pane unmounts. Without this, the pane shows a stuck banner
+    // until tab teardown, and `getDriver(deadPtyId)` would keep returning a
+    // stale `mobile{X}` to any caller that hasn't yet seen the exit IPC.
+    if (this.currentDriver.has(ptyId)) {
+      this.currentDriver.delete(ptyId)
+      this.notifier?.terminalDriverChanged(ptyId, { kind: 'idle' })
+    }
     this.disposeHeadlessTerminal(ptyId)
     this.agentDetector?.onExit(ptyId)
     const pty = this.ptysById.get(ptyId)
@@ -1269,6 +1349,117 @@ export class OrcaRuntimeService {
     }
   }
 
+  // ─── Driver state (mobile-presence lock) ──────────────────────────
+  //
+  // See docs/mobile-presence-lock.md.
+
+  getDriver(ptyId: string): DriverState {
+    return this.currentDriver.get(ptyId) ?? { kind: 'idle' }
+  }
+
+  private setDriver(ptyId: string, next: DriverState): void {
+    const prev = this.getDriver(ptyId)
+    if (prev.kind === next.kind) {
+      if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
+        return
+      }
+      if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
+        return
+      }
+    }
+    if (next.kind === 'idle') {
+      this.currentDriver.delete(ptyId)
+    } else {
+      this.currentDriver.set(ptyId, next)
+    }
+    this.notifier?.terminalDriverChanged(ptyId, next)
+  }
+
+  // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
+  // resizeForClient / fresh subscribe with auto/phone). Records the actor as
+  // the most recent mobile driver and re-applies phone-fit if we were previously
+  // in `desktop` mode (mobile reclaims a take-back). Mobile-to-mobile hand-offs
+  // are no-ops for resize.
+  mobileTookFloor(ptyId: string, clientId: string): void {
+    const inner = this.mobileSubscribers.get(ptyId)
+    const sub = inner?.get(clientId)
+    if (sub) {
+      sub.lastActedAt = Date.now()
+    }
+    const prev = this.getDriver(ptyId)
+    const currentMode = this.mobileDisplayModes.get(ptyId)
+    // Why: a deliberate mobile action implies mobile is resuming control.
+    // If the display mode is currently 'desktop' (set by an earlier
+    // take-back), flip it back to 'auto' and re-apply so phone-fit takes
+    // hold again. Without flipping the mode, applyMobileDisplayMode would
+    // take the desktop branch and leave the PTY at desktop dims while the
+    // driver says `mobile`. The same path also covers the case where the
+    // driver flipped to `desktop` and we're returning to mobile control.
+    // See docs/mobile-presence-lock.md.
+    if (prev.kind === 'desktop' || currentMode === 'desktop') {
+      if (currentMode === 'desktop' || currentMode === undefined) {
+        this.mobileDisplayModes.set(ptyId, 'auto')
+      }
+      this.applyMobileDisplayMode(ptyId)
+    }
+    this.setDriver(ptyId, { kind: 'mobile', clientId })
+  }
+
+  // Why: invoked from `runtime:restoreTerminalFit` IPC (the desktop "Take
+  // back" button). Forces the PTY back to desktop dims and flips the driver
+  // to `desktop`, suppressing further mobile-driven dim changes until a
+  // mobile actor takes the floor again.
+  reclaimTerminalForDesktop(ptyId: string): boolean {
+    if (!this.isMobileSubscriberActive(ptyId)) {
+      return false
+    }
+    this.setMobileDisplayMode(ptyId, 'desktop')
+    this.applyMobileDisplayMode(ptyId)
+    this.setDriver(ptyId, { kind: 'desktop' })
+    return true
+  }
+
+  // Why: with multiple subscribers, the active phone-fit dims follow the
+  // most recent mobile actor (argmax(lastActedAt)). See
+  // docs/mobile-presence-lock.md "Active phone-fit dim selection".
+  private pickMostRecentActor(
+    inner: Map<string, { clientId: string; lastActedAt: number }>
+  ): { clientId: string; lastActedAt: number } | null {
+    let best: { clientId: string; lastActedAt: number } | null = null
+    for (const sub of inner.values()) {
+      if (best === null || sub.lastActedAt > best.lastActedAt) {
+        best = sub
+      }
+    }
+    return best
+  }
+
+  // Why: restore-target selection on last-subscriber-leaves picks the
+  // earliest-by-subscribe-time subscriber AMONG those with non-null
+  // previousCols/Rows. Desktop-mode joins carry null and are skipped — they
+  // never captured pre-fit dims by design.
+  private pickEarliestRestoreTarget(
+    inner: Map<
+      string,
+      { subscribedAt: number; previousCols: number | null; previousRows: number | null }
+    >
+  ): { previousCols: number; previousRows: number } | null {
+    let best: { subscribedAt: number; previousCols: number; previousRows: number } | null = null
+    for (const sub of inner.values()) {
+      if (sub.previousCols == null || sub.previousRows == null) {
+        continue
+      }
+      if (best === null || sub.subscribedAt < best.subscribedAt) {
+        best = {
+          subscribedAt: sub.subscribedAt,
+          previousCols: sub.previousCols,
+          previousRows: sub.previousRows
+        }
+      }
+    }
+    return best ? { previousCols: best.previousCols, previousRows: best.previousRows } : null
+  }
+
   // ─── Server-Authoritative Mobile Display Mode ─────────────────────
 
   setMobileDisplayMode(ptyId: string, mode: 'auto' | 'phone' | 'desktop'): void {
@@ -1284,13 +1475,23 @@ export class OrcaRuntimeService {
   }
 
   isMobileSubscriberActive(ptyId: string): boolean {
-    return this.mobileSubscribers.has(ptyId)
+    const inner = this.mobileSubscribers.get(ptyId)
+    return inner !== undefined && inner.size > 0
   }
 
   // Why: server-side auto-fit on mobile subscribe. The runtime is the single
   // source of truth — the mobile client just passes its viewport and the runtime
   // decides whether to resize. This eliminates the measure→RPC→resubscribe
   // pipeline that caused race conditions.
+  //
+  // Multi-mobile keying: each subscriber lives in `mobileSubscribers[ptyId]`'s
+  // inner map under its own clientId. Phone B subscribing does not overwrite
+  // phone A's record — both stay until each unsubscribes.
+  //
+  // Subscribe-in-desktop-mode rule: a subscribe with displayMode='desktop' is
+  // a passive watch; it does NOT take the floor. The driver remains
+  // `idle`/`desktop`. The lock banner is reserved for actual mobile
+  // interaction (input/resize/setDisplayMode/auto-or-phone subscribe).
   handleMobileSubscribe(
     ptyId: string,
     clientId: string,
@@ -1301,12 +1502,21 @@ export class OrcaRuntimeService {
       return false
     }
 
-    // Why: only cancel the restore timer for THIS ptyId (re-subscribe case).
-    // Other terminals' timers must fire so their banners clear on the desktop.
+    // Why: cancel ALL pending restore timers for this ptyId on any new
+    // subscribe — the timer is keyed by ptyId+old-clientId but with the
+    // multi-mobile rekey, "any new subscriber" supersedes "any old client's
+    // restore". Without this, A unsub → B sub within 300ms could fire A's
+    // timer and snap PTY to desktop dims while B is meant to drive.
     const pendingRestore = this.pendingRestoreTimers.get(ptyId)
-    if (pendingRestore && pendingRestore.clientId === clientId) {
+    if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
+    }
+
+    let inner = this.mobileSubscribers.get(ptyId)
+    if (!inner) {
+      inner = new Map()
+      this.mobileSubscribers.set(ptyId, inner)
     }
 
     // Why: prefer lastRendererSizes (the actual pane geometry reported by the
@@ -1314,38 +1524,55 @@ export class OrcaRuntimeService {
     // server-side PTY size, which may be stale — e.g. 214 full-width when the
     // pane is actually in a split at ~105). Fall back to existing subscriber's
     // previousCols (re-subscribe case) then currentSize (first subscribe).
-    const existing = this.mobileSubscribers.get(ptyId)
+    //
+    // Multi-mobile: if an existing subscriber on this PTY is already
+    // phone-fitted, the current PTY size is NOT a valid restore baseline for
+    // a *new* subscriber — it would point to a phone-fit dim, not the
+    // pre-mobile desktop size. Set previousCols/Rows to null so the new
+    // joiner is skipped from earliest-restore selection; the original
+    // subscriber's captured baseline remains the source of truth. See
+    // docs/mobile-presence-lock.md.
+    const existing = inner.get(clientId)
+    const someoneAlreadyFitted = [...inner.values()].some((s) => s.wasResizedToPhone)
     const currentSize = this.getTerminalSize(ptyId)
     const rendererSize = this.lastRendererSizes.get(ptyId)
-    const previousCols = existing?.previousCols ?? rendererSize?.cols ?? currentSize?.cols ?? null
-    const previousRows = existing?.previousRows ?? rendererSize?.rows ?? currentSize?.rows ?? null
+    const previousCols =
+      existing?.previousCols ??
+      (someoneAlreadyFitted ? null : (rendererSize?.cols ?? currentSize?.cols ?? null))
+    const previousRows =
+      existing?.previousRows ??
+      (someoneAlreadyFitted ? null : (rendererSize?.rows ?? currentSize?.rows ?? null))
+    const now = Date.now()
+    const subscribedAt = existing?.subscribedAt ?? now
 
-    // Why: always register the subscriber so applyMobileDisplayMode can find
-    // the viewport when the user later toggles from desktop to auto/phone.
-    // Without this, toggling to auto after subscribing in desktop mode sees
-    // hasSubscriber=false and can't perform the phone resize.
     if (mode === 'desktop') {
       // Why: set previousCols/Rows to null so we don't capture a stale PTY
       // size that may not match the actual pane geometry (e.g. 214 when the
       // pane is in a split at 105). When the user later toggles to auto/phone,
       // handleMobileSubscribe will capture currentSize at that point, which
       // will be correct because safeFit has had time to adjust the PTY.
-      this.mobileSubscribers.set(ptyId, {
+      inner.set(clientId, {
         clientId,
         viewport,
         wasResizedToPhone: false,
         previousCols: null,
-        previousRows: null
+        previousRows: null,
+        subscribedAt,
+        lastActedAt: now
       })
+      // Subscribe-in-desktop-mode is passive: leave driver at idle/desktop.
+      // Do not transition to mobile{clientId}.
       return false
     }
 
-    this.mobileSubscribers.set(ptyId, {
+    inner.set(clientId, {
       clientId,
       viewport,
       wasResizedToPhone: true,
       previousCols,
-      previousRows
+      previousRows,
+      subscribedAt,
+      lastActedAt: now
     })
 
     const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
@@ -1372,31 +1599,108 @@ export class OrcaRuntimeService {
       clientId
     })
 
+    // Subscribe-fresh with auto/phone mode counts as "take the floor".
+    this.setDriver(ptyId, { kind: 'mobile', clientId })
+
     return true
   }
 
   // Why: delayed restore prevents resize thrashing during rapid tab switches.
   // The 300ms debounce means only the final tab triggers a PTY restore;
   // intermediate terminals keep their current dims harmlessly.
+  //
+  // Multi-mobile: only the last subscriber leaving for this ptyId triggers
+  // restore + driver=idle. Peer mobile clients still on the inner map keep
+  // the lock banner mounted; if the disconnecting client was the active
+  // driver, we re-elect the most-recent surviving subscriber.
   handleMobileUnsubscribe(ptyId: string, clientId: string): void {
-    const subscriber = this.mobileSubscribers.get(ptyId)
-    if (!subscriber || subscriber.clientId !== clientId) {
+    const inner = this.mobileSubscribers.get(ptyId)
+    if (!inner) {
+      return
+    }
+    const subscriber = inner.get(clientId)
+    if (!subscriber) {
+      return
+    }
+    const wasResizedToPhone = subscriber.wasResizedToPhone
+
+    // Why: snapshot the earliest-by-subscribe-time restore target BEFORE
+    // mutating the inner map. If the disconnecting client is the original
+    // baseline-holder, that information must survive into the last-leaver
+    // restore path even after their record is deleted. See
+    // docs/mobile-presence-lock.md "Restore-target selection".
+    const restoreTargetSnapshot = this.pickEarliestRestoreTarget(inner)
+    inner.delete(clientId)
+
+    if (inner.size > 0) {
+      // Why: if the leaving client was the only one with a non-null restore
+      // baseline (typical when peer joiners subscribed against an
+      // already-phone-fitted PTY and got null prevCols), donate the baseline
+      // to the earliest surviving subscriber so a future last-leaver can
+      // still restore correctly. Without this, A leaves first, B leaves
+      // last with null prevCols → no restore fires. See
+      // docs/mobile-presence-lock.md.
+      if (
+        subscriber.previousCols != null &&
+        subscriber.previousRows != null &&
+        !this.pickEarliestRestoreTarget(inner)
+      ) {
+        let earliestSurvivor: { clientId: string; subscribedAt: number } | null = null
+        for (const sub of inner.values()) {
+          if (earliestSurvivor === null || sub.subscribedAt < earliestSurvivor.subscribedAt) {
+            earliestSurvivor = { clientId: sub.clientId, subscribedAt: sub.subscribedAt }
+          }
+        }
+        if (earliestSurvivor) {
+          const heir = inner.get(earliestSurvivor.clientId)
+          if (heir) {
+            heir.previousCols = subscriber.previousCols
+            heir.previousRows = subscriber.previousRows
+          }
+        }
+      }
+      // Peers still on the line. If the disconnecting client was the active
+      // mobile driver, re-elect the most-recent surviving subscriber so the
+      // banner remains correct and active phone-fit dims follow them.
+      const driver = this.getDriver(ptyId)
+      if (driver.kind === 'mobile' && driver.clientId === clientId) {
+        const next = this.pickMostRecentActor(inner)
+        if (next) {
+          this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
+          this.applyMobileDisplayMode(ptyId)
+        }
+      }
       return
     }
 
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    // Last subscriber leaving — clean up.
     this.mobileSubscribers.delete(ptyId)
+    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
 
-    if (mode === 'auto' && subscriber.wasResizedToPhone) {
+    // Why: emit driver=idle synchronously so the desktop banner unmounts
+    // immediately. The PTY restore runs inside the existing 300ms debounce
+    // (handles rapid tab-switch thrash). Brief visual mismatch (banner gone
+    // but PTY still squished for up to 300ms) is acceptable per design.
+    this.setDriver(ptyId, { kind: 'idle' })
+
+    if (mode === 'auto' && wasResizedToPhone) {
       const existing = this.pendingRestoreTimers.get(ptyId)
       if (existing) {
         clearTimeout(existing.timer)
       }
 
-      const { previousCols, previousRows } = subscriber
+      // Restore target: earliest-by-subscribe-time among non-null
+      // previousCols/Rows captured BEFORE deletion. Falls back to the
+      // disconnecting subscriber's own dims and finally lastRendererSizes
+      // (matches the existing first-insert capture path).
+      const fallback = this.lastRendererSizes.get(ptyId)
+      const previousCols =
+        restoreTargetSnapshot?.previousCols ?? subscriber.previousCols ?? fallback?.cols ?? null
+      const previousRows =
+        restoreTargetSnapshot?.previousRows ?? subscriber.previousRows ?? fallback?.rows ?? null
       const timer = setTimeout(() => {
         this.pendingRestoreTimers.delete(ptyId)
-        if (this.mobileSubscribers.has(ptyId)) {
+        if (this.isMobileSubscriberActive(ptyId)) {
           return
         }
         if (previousCols != null && previousRows != null) {
@@ -1424,34 +1728,49 @@ export class OrcaRuntimeService {
   // Why: called when mode changes via terminal.setDisplayMode. Applies the
   // mode change immediately if there's an active subscriber, and emits a
   // 'resized' event so the mobile client can reinitialize xterm inline.
+  //
+  // Multi-mobile: the most recent mobile actor's viewport drives the active
+  // phone-fit dims. The earliest-by-subscribe-time subscriber's
+  // previousCols/Rows drive the desktop-restore target.
   applyMobileDisplayMode(ptyId: string): void {
     const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
-    const subscriber = this.mobileSubscribers.get(ptyId)
+    const inner = this.mobileSubscribers.get(ptyId)
+    const subscriber = inner ? this.pickMostRecentActor(inner) : null
+    const subscriberRecord = subscriber && inner ? inner.get(subscriber.clientId) : null
 
     if (mode === 'desktop') {
-      if (subscriber?.wasResizedToPhone) {
-        const { previousCols, previousRows } = subscriber
-        if (previousCols != null && previousRows != null) {
-          this.ptyController?.resize?.(ptyId, previousCols, previousRows)
-          this.resizeHeadlessTerminal(ptyId, previousCols, previousRows)
+      // Find the first subscriber (any clientId) that was previously
+      // phone-fitted, and reset its flag. The desktop-restore target uses
+      // earliest-by-subscribe-time among non-null prevCols/Rows.
+      if (inner) {
+        const restore = this.pickEarliestRestoreTarget(inner)
+        let anyWasResized = false
+        for (const sub of inner.values()) {
+          if (sub.wasResizedToPhone) {
+            anyWasResized = true
+            sub.wasResizedToPhone = false
+          }
         }
-        subscriber.wasResizedToPhone = false
-        // Why: clear stale renderer size so the next mobile subscribe falls
-        // through to currentSize (which is correct after the server restore).
-        // Without this, a polluted 214 from a prior collateral safeFit cascade
-        // persists in lastRendererSizes and gets used as previousCols.
-        this.lastRendererSizes.delete(ptyId)
-        // Why: 500ms not 200ms — the desktop renderer's collateral safeFit
-        // cascade (IPC → React re-render → rAF → DOM measure → IPC back)
-        // takes ~360ms to propagate to background-tab terminals.
-        this.suppressResizesForMs(500)
-        this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(
-          ptyId,
-          'desktop-fit',
-          previousCols ?? 0,
-          previousRows ?? 0
-        )
+        if (anyWasResized && restore) {
+          this.ptyController?.resize?.(ptyId, restore.previousCols, restore.previousRows)
+          this.resizeHeadlessTerminal(ptyId, restore.previousCols, restore.previousRows)
+          // Why: clear stale renderer size so the next mobile subscribe falls
+          // through to currentSize (which is correct after the server restore).
+          // Without this, a polluted 214 from a prior collateral safeFit cascade
+          // persists in lastRendererSizes and gets used as previousCols.
+          this.lastRendererSizes.delete(ptyId)
+          // Why: 500ms not 200ms — the desktop renderer's collateral safeFit
+          // cascade (IPC → React re-render → rAF → DOM measure → IPC back)
+          // takes ~360ms to propagate to background-tab terminals.
+          this.suppressResizesForMs(500)
+          this.terminalFitOverrides.delete(ptyId)
+          this.notifier?.terminalFitOverrideChanged(
+            ptyId,
+            'desktop-fit',
+            restore.previousCols,
+            restore.previousRows
+          )
+        }
       }
       const size = this.getTerminalSize(ptyId)
       this.notifyTerminalResize(ptyId, {
@@ -1461,10 +1780,10 @@ export class OrcaRuntimeService {
         reason: 'mode-change'
       })
     } else if (mode === 'phone' || mode === 'auto') {
-      if (subscriber && !subscriber.wasResizedToPhone) {
-        const viewport = subscriber.viewport
+      if (subscriberRecord && !subscriberRecord.wasResizedToPhone) {
+        const viewport = subscriberRecord.viewport
         if (viewport) {
-          this.handleMobileSubscribe(ptyId, subscriber.clientId, viewport)
+          this.handleMobileSubscribe(ptyId, subscriberRecord.clientId, viewport)
         }
       }
       // Why: always emit the mode change even when no resize occurred (e.g.
@@ -1488,13 +1807,18 @@ export class OrcaRuntimeService {
   onExternalPtyResize(ptyId: string, cols: number, rows: number): void {
     this.lastRendererSizes.set(ptyId, { cols, rows })
 
-    const subscriber = this.mobileSubscribers.get(ptyId)
-    if (!subscriber) {
+    const inner = this.mobileSubscribers.get(ptyId)
+    if (!inner) {
       return
     }
-    if (!subscriber.wasResizedToPhone) {
-      subscriber.previousCols = cols
-      subscriber.previousRows = rows
+    // Capture the renderer-reported size as the next-restore target on any
+    // subscriber that hasn't yet been phone-fitted. Subscribers in
+    // wasResizedToPhone state already have a captured pre-fit baseline.
+    for (const sub of inner.values()) {
+      if (!sub.wasResizedToPhone) {
+        sub.previousCols = cols
+        sub.previousRows = rows
+      }
     }
   }
 

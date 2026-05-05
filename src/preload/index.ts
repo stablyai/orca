@@ -1741,6 +1741,22 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
+    },
+    onTerminalDriverChanged: (
+      callback: (event: {
+        ptyId: string
+        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          ptyId: string
+          driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+        }
+      ) => callback(data)
+      ipcRenderer.on('runtime:terminalDriverChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
     }
   },
 

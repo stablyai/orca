@@ -98,7 +98,8 @@ describe('fit override integration', () => {
       sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: (ptyId, mode, cols, rows) => {
         notifications.push({ ptyId, mode, cols, rows })
-      }
+      },
+      terminalDriverChanged: vi.fn()
     })
 
     // Simulate a synced leaf (mounted desktop pane)
@@ -200,7 +201,8 @@ describe('fit override integration', () => {
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn()
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
     })
 
     // Synced leaf = mounted desktop pane
@@ -261,7 +263,8 @@ describe('fit override integration', () => {
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn()
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
     })
 
     runtime.resizeForClient('pty-1', 'mobile-fit', 'phone-disconnect', 45, 20)

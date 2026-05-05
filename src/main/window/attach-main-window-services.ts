@@ -235,7 +235,9 @@ function registerRuntimeWindowLifecycle(
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
-      send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows })
+      send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
+    terminalDriverChanged: (ptyId, driver) =>
+      send('runtime:terminalDriverChanged', { ptyId, driver })
   })
   // Why: the runtime must fail closed while the renderer graph is being torn
   // down or rebuilt, otherwise future CLI calls could act on stale terminal

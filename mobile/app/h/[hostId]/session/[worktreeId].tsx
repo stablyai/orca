@@ -327,7 +327,15 @@ export default function SessionScreen() {
       const next: MobileDisplayMode = current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
       toggleInFlightRef.current.add(handle)
       try {
-        await client.sendRequest('terminal.setDisplayMode', { terminal: handle, mode: next })
+        await client.sendRequest('terminal.setDisplayMode', {
+          terminal: handle,
+          mode: next,
+          // Why: presence-lock take-floor signal. Sending mode=auto/phone
+          // is a deliberate "I want to drive at phone dims" gesture.
+          ...(deviceTokenRef.current
+            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+            : {})
+        })
       } catch {
         // Mode change failed — server state unchanged, UI stays in sync.
       } finally {
@@ -651,7 +659,13 @@ export default function SessionScreen() {
       await client.sendRequest('terminal.send', {
         terminal: activeHandle,
         text,
-        enter: true
+        enter: true,
+        // Why: presence-lock take-floor signal. Identifies this phone as
+        // the active mobile actor so the runtime can resolve multi-mobile
+        // contention (most-recent-actor's viewport wins).
+        ...(deviceTokenRef.current
+          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+          : {})
       })
     } catch {
       setInput(text)
@@ -667,7 +681,10 @@ export default function SessionScreen() {
       await client.sendRequest('terminal.send', {
         terminal: activeHandle,
         text: bytes,
-        enter: false
+        enter: false,
+        ...(deviceTokenRef.current
+          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+          : {})
       })
     } catch {
       // Transient failure

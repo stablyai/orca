@@ -203,7 +203,8 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -396,7 +397,8 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -591,7 +593,8 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -808,7 +811,8 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -999,7 +1003,8 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -1185,7 +1190,8 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -1369,7 +1375,8 @@ describe('useIpcEvents shortcut hint clearing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -1582,7 +1589,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
-          onTerminalFitOverrideChanged: () => () => {}
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
