@@ -91,6 +91,16 @@ export type Worktree = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  // Why: parallel slots for GitLab work-item references. Kept as separate
+  // fields (rather than reusing linkedIssue / linkedPR with a provider
+  // discriminator) so the persistence layer is unambiguous when a user
+  // has both a GitHub and a GitLab remote on the same repo, and so the
+  // existing GitHub renderer code keeps reading linkedPR / linkedIssue
+  // unchanged. Optional on the type so existing test fixtures and
+  // persisted older worktrees that never carried these fields continue
+  // to typecheck and load without migration.
+  linkedGitLabMR?: number | null
+  linkedGitLabIssue?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -111,6 +121,10 @@ export type WorktreeMeta = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  /** Optional for backward compatibility — see Worktree.linkedGitLabMR. */
+  linkedGitLabMR?: number | null
+  /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */
+  linkedGitLabIssue?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean

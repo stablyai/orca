@@ -91,6 +91,8 @@ export function makeWorktree(
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
