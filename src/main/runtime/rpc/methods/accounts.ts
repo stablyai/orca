@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 
+// Why: monotonically increasing per-process counter avoids the Date.now()
+// collision that fired when two near-simultaneous accounts.subscribe calls
+// collided on the same millisecond and one evicted the other through
+// registerSubscriptionCleanup's existing-key eviction path.
+let accountsSubscriptionSeq = 0
+
 const SelectAccountParams = z.object({
   accountId: z
     .union([z.string().min(1, 'Missing accountId'), z.null()])
@@ -62,18 +68,28 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'accounts.subscribe',
     params: null,
-    handler: async (_params, { runtime }, emit) => {
+    handler: async (_params, { runtime, connectionId }, emit) => {
       await new Promise<void>((resolve) => {
         const unsubscribe = runtime.onAccountsChanged((snapshot) => {
           emit({ type: 'snapshot', snapshot })
         })
 
-        const subscriptionId = `accounts-${Date.now()}`
-        runtime.registerSubscriptionCleanup(subscriptionId, () => {
-          unsubscribe()
-          emit({ type: 'end' })
-          resolve()
-        })
+        // Why: scope the id by connectionId so two sockets from the same
+        // device (host + accounts screen) cannot evict each other through
+        // registerSubscriptionCleanup's "existing key" branch, and append a
+        // per-process counter so two concurrent subscribes on the same
+        // socket also can't collide.
+        const seq = ++accountsSubscriptionSeq
+        const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
+        runtime.registerSubscriptionCleanup(
+          subscriptionId,
+          () => {
+            unsubscribe()
+            emit({ type: 'end' })
+            resolve()
+          },
+          connectionId
+        )
 
         // Why: emit the current snapshot synchronously so the phone has
         // something to render immediately, then kick a forced refresh that

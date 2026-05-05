@@ -31,6 +31,7 @@ import { TextInputModal } from '../src/components/TextInputModal'
 import { ActionSheetModal } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
+import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
 import { colors, spacing, radii } from '../src/theme/mobile-theme'
 
 function endpointLabel(endpoint: string): string {
@@ -109,16 +110,24 @@ function fetchWorktreeInfo(
   ) => void,
   disposed: () => boolean
 ) {
-  const markLoaded = () => {
-    setInfo((prev) => ({
-      ...prev,
-      [hostId]: {
-        hostId,
-        totalWorktrees: 0,
-        activeCount: 0,
-        lastActiveWorktree: null
+  // Why: only seed an empty zeroed entry when this host has no prior info
+  // at all (e.g., first ever load before any cache hydration). On a
+  // transient failure for a host that already has cached data, leave the
+  // cached entry alone so the Resume card and host-meta line don't
+  // momentarily flip to "0 worktrees" / disappear during reconnects.
+  const markLoadedIfMissing = () => {
+    setInfo((prev) => {
+      if (prev[hostId]) return prev
+      return {
+        ...prev,
+        [hostId]: {
+          hostId,
+          totalWorktrees: 0,
+          activeCount: 0,
+          lastActiveWorktree: null
+        }
       }
-    }))
+    })
   }
 
   client
@@ -142,11 +151,11 @@ function fetchWorktreeInfo(
           }
         }))
       } else {
-        markLoaded()
+        markLoadedIfMissing()
       }
     })
     .catch(() => {
-      if (!disposed()) markLoaded()
+      if (!disposed()) markLoadedIfMissing()
     })
 }
 
@@ -196,6 +205,47 @@ export default function HomeScreen() {
     null
   )
   const clientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
+
+  // Why: hydrate the home page from a persisted snapshot on cold-start so
+  // Resume + Account-usage cards paint immediately with last-known data
+  // instead of flashing empty for ~1s while the WebSocket reconnects.
+  // Stream/list responses overwrite this seed in place when they arrive.
+  const hydratedRef = useRef(false)
+  useEffect(() => {
+    if (hydratedRef.current) return
+    hydratedRef.current = true
+    let cancelled = false
+    void loadHomeSnapshot().then((snap) => {
+      if (cancelled || !snap) return
+      setWorktreeInfo((prev) => (Object.keys(prev).length > 0 ? prev : snap.worktreeInfo))
+      setAccountsByHost((prev) => (Object.keys(prev).length > 0 ? prev : snap.accountsByHost))
+      for (const [hostId, info] of Object.entries(snap.worktreeInfo)) {
+        const wt = info.lastActiveWorktree
+        if (wt) {
+          // Why: also seed the in-memory worktree cache so resumeWorktree's
+          // lastVisited fast-path can find the cached worktree object.
+          setCachedWorktrees(hostId, [wt])
+        }
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Why: persist the merged snapshot whenever either piece updates so the
+  // next cold-start has fresh seed data. The cache module debounces writes
+  // internally so a flurry of streamed updates doesn't hammer disk.
+  useEffect(() => {
+    if (Object.keys(worktreeInfo).length === 0 && Object.keys(accountsByHost).length === 0) {
+      return
+    }
+    saveHomeSnapshot({
+      worktreeInfo,
+      accountsByHost,
+      savedAt: Date.now()
+    })
+  }, [worktreeInfo, accountsByHost])
 
   useFocusEffect(
     useCallback(() => {
@@ -306,14 +356,30 @@ export default function HomeScreen() {
   // Why: prefer the worktree the user last opened on this device so the
   // "Resume" card reflects their mobile session history, not just the
   // desktop's most-recently-outputting worktree.
+  // Why: rendering used to be gated on hostStates === 'connected', which
+  // caused the Resume card to vanish for ~1s on every cold-start /
+  // resume-from-background while the WebSocket reconnected, even though we
+  // had perfectly good cached worktree data. Now the card stays visible as
+  // long as we have a cached lastActiveWorktree for any known host; the
+  // tap target is still the same and a fresher snapshot from the live RPC
+  // overwrites the card's contents in place when it lands.
   const resumeWorktree = useMemo(() => {
-    if (lastVisited && hostStates[lastVisited.hostId] === 'connected') {
+    if (lastVisited && sortedHosts.some((h) => h.id === lastVisited.hostId)) {
       const cached = getCachedWorktrees(lastVisited.hostId) as WorktreeSummary[] | null
       const match = cached?.find((w) => w.worktreeId === lastVisited.worktreeId)
       if (match) return { hostId: lastVisited.hostId, worktree: match }
     }
+    // Prefer a currently-connected host's data when we have it.
     for (const host of sortedHosts) {
       if (hostStates[host.id] !== 'connected') continue
+      const info = worktreeInfo[host.id]
+      if (info?.lastActiveWorktree) {
+        return { hostId: host.id, worktree: info.lastActiveWorktree }
+      }
+    }
+    // Fall back to whichever known host has cached data, regardless of
+    // current connection state.
+    for (const host of sortedHosts) {
       const info = worktreeInfo[host.id]
       if (info?.lastActiveWorktree) {
         return { hostId: host.id, worktree: info.lastActiveWorktree }
@@ -336,13 +402,14 @@ export default function HomeScreen() {
     [sortedHosts, hostStates, worktreeInfo]
   )
 
-  // Why: only show the Active accounts section for connected hosts that have
-  // at least one Claude or Codex account configured — otherwise the section
-  // would be empty noise on a fresh pairing.
+  // Why: only show the Account usage section for hosts that have at least
+  // one Claude or Codex account configured. Render whenever cached data
+  // exists, regardless of current connection state, so the cards don't
+  // disappear for ~1s on resume while the WebSocket reconnects. Streamed
+  // updates from the live RPC overwrite the snapshot in place when ready.
   const accountsHosts = useMemo(() => {
     const items: Array<{ host: HostProfile; snapshot: AccountsSnapshot }> = []
     for (const host of sortedHosts) {
-      if (hostStates[host.id] !== 'connected') continue
       const snap = accountsByHost[host.id]
       if (!snap) continue
       const hasClaude = snap.claude.accounts.length > 0
@@ -566,11 +633,11 @@ export default function HomeScreen() {
                 </>
               ) : null}
 
-              {/* ─── Active accounts ─── */}
+              {/* ─── Account usage ─── */}
               {accountsHosts.length > 0 ? (
                 <>
                   <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
-                    Active accounts
+                    Account usage
                   </Text>
                   {accountsHosts.map(({ host, snapshot }) => {
                     const claudeActiveId = snapshot.claude.activeAccountId
@@ -618,9 +685,6 @@ export default function HomeScreen() {
                                 )}
                               </View>
                               <View style={styles.accountsInfo}>
-                                <Text style={styles.accountsName}>
-                                  {provider === 'claude' ? 'Claude' : 'Codex'}
-                                </Text>
                                 <Text style={styles.accountsEmail} numberOfLines={1}>
                                   {active?.email ?? 'System default'}
                                 </Text>
@@ -656,7 +720,7 @@ export default function HomeScreen() {
                   onPress={() => router.push('/pair-scan')}
                 >
                   <View style={styles.quickActionIcon}>
-                    <QrCode size={20} color={colors.textSecondary} />
+                    <QrCode size={16} color={colors.textSecondary} />
                   </View>
                   <Text style={styles.quickActionLabel}>Pair Desktop</Text>
                 </Pressable>
@@ -670,7 +734,7 @@ export default function HomeScreen() {
                   }}
                 >
                   <View style={styles.quickActionIcon}>
-                    <Plus size={20} color={colors.textSecondary} />
+                    <Plus size={16} color={colors.textSecondary} />
                   </View>
                   <Text style={styles.quickActionLabel}>New Worktree</Text>
                 </Pressable>
@@ -812,20 +876,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: 10,
-    padding: spacing.md
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md
   },
   statIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 7,
+    width: 26,
+    height: 26,
+    borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10
+    marginBottom: 6
   },
   statValue: {
     color: colors.textPrimary,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     letterSpacing: -0.3
   },
@@ -833,7 +898,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     fontWeight: '500',
-    marginTop: 3
+    marginTop: 2
   },
 
   /* ─── Section heading ─── */
@@ -962,7 +1027,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
 
-  /* ─── Active accounts ─── */
+  /* ─── Account usage ─── */
   accountsCard: {
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
@@ -998,14 +1063,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 2
   },
-  accountsName: {
+  accountsEmail: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.textPrimary
-  },
-  accountsEmail: {
-    fontSize: 11,
-    color: colors.textSecondary
   },
   accountsBars: {
     flexDirection: 'row',
@@ -1032,18 +1093,20 @@ const styles = StyleSheet.create({
   },
   quickAction: {
     flex: 1,
+    flexDirection: 'row',
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.card,
-    padding: spacing.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
     gap: 10
   },
   quickActionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 9,
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center'
@@ -1051,8 +1114,7 @@ const styles = StyleSheet.create({
   quickActionLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.textSecondary,
-    textAlign: 'center'
+    color: colors.textSecondary
   },
 
   /* ─── Empty state ─── */

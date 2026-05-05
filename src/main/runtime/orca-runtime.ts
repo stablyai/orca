@@ -374,6 +374,12 @@ export class OrcaRuntimeService {
     Set<(event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void>
   >()
   private subscriptionCleanups = new Map<string, () => void>()
+  // Why: index of subscriptionIds by per-WebSocket connectionId so the
+  // server can sweep all subscriptions for a closing socket without
+  // touching subscriptions on other live sockets that share the same
+  // deviceToken (multi-screen mobile).
+  private subscriptionsByConnection = new Map<string, Set<string>>()
+  private subscriptionConnectionByEntry = new Map<string, string>()
   // Why: mobile clients subscribe to desktop notifications via
   // notifications.subscribe. This set enables fan-out — each connected
   // mobile client gets its own listener, and dispatchMobileNotification
@@ -1148,7 +1154,11 @@ export class OrcaRuntimeService {
     return { ptyId: leaf.ptyId }
   }
 
-  registerSubscriptionCleanup(subscriptionId: string, cleanup: () => void): void {
+  registerSubscriptionCleanup(
+    subscriptionId: string,
+    cleanup: () => void,
+    connectionId?: string
+  ): void {
     // Why: mobile clients reconnect frequently (phone lock, network switch).
     // The RPC client re-sends terminal.subscribe on reconnect, creating a new
     // handler before the old one is cleaned up. Without this, the old data
@@ -1156,15 +1166,54 @@ export class OrcaRuntimeService {
     const existing = this.subscriptionCleanups.get(subscriptionId)
     if (existing) {
       existing()
+      // Why: existing() already evicts itself from the per-connection index
+      // via cleanupSubscription, so no extra bookkeeping is needed here.
     }
     this.subscriptionCleanups.set(subscriptionId, cleanup)
+    if (connectionId) {
+      let set = this.subscriptionsByConnection.get(connectionId)
+      if (!set) {
+        set = new Set()
+        this.subscriptionsByConnection.set(connectionId, set)
+      }
+      set.add(subscriptionId)
+      this.subscriptionConnectionByEntry.set(subscriptionId, connectionId)
+    }
   }
 
   cleanupSubscription(subscriptionId: string): void {
     const cleanup = this.subscriptionCleanups.get(subscriptionId)
     if (cleanup) {
       this.subscriptionCleanups.delete(subscriptionId)
+      const connectionId = this.subscriptionConnectionByEntry.get(subscriptionId)
+      if (connectionId) {
+        this.subscriptionConnectionByEntry.delete(subscriptionId)
+        const set = this.subscriptionsByConnection.get(connectionId)
+        if (set) {
+          set.delete(subscriptionId)
+          if (set.size === 0) {
+            this.subscriptionsByConnection.delete(connectionId)
+          }
+        }
+      }
       cleanup()
+    }
+  }
+
+  // Why: invoked from the WebSocket transport's on-close hook so streaming
+  // listeners registered for this exact socket get torn down even when other
+  // sockets sharing the same deviceToken are still alive (multi-screen
+  // mobile). Without this sweep, listeners leak across every reconnect.
+  cleanupSubscriptionsForConnection(connectionId: string): void {
+    const set = this.subscriptionsByConnection.get(connectionId)
+    if (!set) {
+      return
+    }
+    // Why: snapshot the ids before iterating because cleanupSubscription
+    // mutates both the set and the index map.
+    const ids = Array.from(set)
+    for (const id of ids) {
+      this.cleanupSubscription(id)
     }
   }
 
