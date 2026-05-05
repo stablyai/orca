@@ -481,7 +481,14 @@ export function useIpcEvents(): void {
             })
             return
           }
-          destroyPersistentWebview(data.browserPageId)
+          const workspacePages = store.browserPagesByWorkspace[owningWorkspace.id] ?? []
+          if (workspacePages.length > 0) {
+            for (const page of workspacePages) {
+              destroyPersistentWebview(page.id)
+            }
+          } else {
+            destroyPersistentWebview(data.browserPageId)
+          }
           store.switchBrowserTabProfile(owningWorkspace.id, data.profileId)
           window.api.ui.replyTabSetProfile({ requestId: data.requestId })
         } catch (err) {

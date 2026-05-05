@@ -5189,7 +5189,9 @@ export class OrcaRuntimeService {
     if (!browserPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
-    const profile = browserSessionRegistry.getProfile(params.profileId)
+    const profile =
+      browserSessionRegistry.getProfile(params.profileId) ??
+      (params.profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
     if (!profile) {
       throw new BrowserError(
         'invalid_argument',
