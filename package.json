@@ -104,7 +104,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "shadcn": "^4.1.0",
-    "simple-git": "^3.33.0",
+    "simple-git": "^3.36.0",
     "sonner": "^2.0.7",
     "ssh2": "^1.17.0",
     "tailwind-merge": "^3.5.0",
