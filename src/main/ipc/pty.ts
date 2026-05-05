@@ -802,6 +802,28 @@ export function registerPtyHandlers(
         runtime?.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
       }
       ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
+      // Why: hydrate the runtime's headless emulator with the adapter's
+      // restore data BEFORE registerPty so any live PTY data that arrives
+      // concurrently lands on top of the seed instead of replacing it. Mobile
+      // subscribers then see the same scrollback the desktop xterm received
+      // via coldRestore/snapshot. Without this, mobile snapshots after a
+      // daemon-restored attach contain only bytes emitted since the relaunch
+      // and the prior agent output silently disappears.
+      if (runtime) {
+        const seedSize =
+          typeof result.snapshotCols === 'number' && typeof result.snapshotRows === 'number'
+            ? { cols: result.snapshotCols, rows: result.snapshotRows }
+            : undefined
+        if (typeof result.snapshot === 'string' && result.snapshot.length > 0) {
+          runtime.seedHeadlessTerminal(result.id, result.snapshot, seedSize)
+        } else if (
+          result.coldRestore &&
+          typeof result.coldRestore.scrollback === 'string' &&
+          result.coldRestore.scrollback.length > 0
+        ) {
+          runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize)
+        }
+      }
       if (
         typeof args.worktreeId === 'string' &&
         args.worktreeId.length > 0 &&

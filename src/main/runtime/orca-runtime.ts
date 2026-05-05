@@ -769,6 +769,38 @@ export class OrcaRuntimeService {
     return this.ptyController?.getSize?.(ptyId) ?? null
   }
 
+  // Why: daemon-backed PTYs that the runtime adopted after an Orca relaunch
+  // start with a fresh headless emulator that has zero scrollback, even though
+  // the daemon's on-disk checkpoint and the desktop xterm both contain the
+  // full prior history. Without this hydration, mobile subscribers see only
+  // the bare current prompt because serializeHeadlessTerminalBuffer always
+  // wins over the renderer-path fallback. Seeding the emulator with the
+  // adapter's snapshot/cold-restore data makes mobile and desktop agree on
+  // what scrollback is available.
+  seedHeadlessTerminal(ptyId: string, data: string, size?: { cols: number; rows: number }): void {
+    if (!data) {
+      return
+    }
+    const existing = this.headlessTerminals.get(ptyId)
+    if (existing) {
+      // Why: emulator already has live data — re-seeding would duplicate
+      // every byte. The seed is only valid when the emulator is fresh.
+      return
+    }
+    const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
+    const state: RuntimeHeadlessTerminal = {
+      emulator: new HeadlessEmulator({ cols: dims.cols, rows: dims.rows }),
+      writeChain: Promise.resolve()
+    }
+    this.headlessTerminals.set(ptyId, state)
+    state.writeChain = state.writeChain
+      .then(() => state.emulator.write(data))
+      .catch(() => {
+        // Seeding is best-effort; live data will continue to populate the
+        // emulator even if the snapshot replay fails.
+      })
+  }
+
   private trackHeadlessTerminalData(ptyId: string, data: string): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     state.writeChain = state.writeChain
