@@ -1137,7 +1137,7 @@ function SourceControlInner(): React.JSX.Element {
               />
             )}
 
-          {(scope === 'all' || scope === 'uncommitted') && (
+          {(scope === 'all' || scope === 'uncommitted') && hasUncommittedEntries && (
             <CommitArea
               stagedCount={grouped.staged.length}
               hasUnresolvedConflicts={unresolvedConflicts.length > 0}
