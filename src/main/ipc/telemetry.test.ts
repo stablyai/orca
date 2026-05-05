@@ -1,28 +1,41 @@
-// IPC boundary behavior. Strict type narrows must drop obviously-malformed
-// calls before they reach the validator (the renderer is in the threat
-// model). Also pins the consent-mutation rate limit: ≤5
-// `telemetry:setOptIn` calls per session.
+// IPC boundary behavior for the telemetry surface. Strict type narrows must
+// drop obviously-malformed calls before they reach the validator (the
+// renderer is in the threat model). Pins the consent-mutation rate limit:
+// ≤5 consent-related IPC calls per session. Pins the main-side `via`
+// derivation: both `OptInVia` branches are reachable from renderer input,
+// and the one path that must NOT emit (`acknowledgeBanner`) has its own
+// channel and handler rather than being a flag on `setOptIn`.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../shared/types'
+import type { Store } from '../persistence'
 
 const handlers = new Map<string, (_event: unknown, ...args: unknown[]) => unknown>()
-const { handleMock, trackMock, setOptInMock, consumeConsentMutationTokenMock } = vi.hoisted(() => ({
+const {
+  handleMock,
+  trackMock,
+  setOptInMock,
+  persistBannerAcknowledgeMock,
+  consumeConsentMutationTokenMock
+} = vi.hoisted(() => ({
   handleMock: vi.fn(),
   trackMock: vi.fn(),
   setOptInMock: vi.fn(),
+  persistBannerAcknowledgeMock: vi.fn(),
   consumeConsentMutationTokenMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 vi.mock('../telemetry/client', () => ({
   track: trackMock,
-  setOptIn: setOptInMock
+  setOptIn: setOptInMock,
+  persistBannerAcknowledgeWithoutEmitting: persistBannerAcknowledgeMock
 }))
 vi.mock('../telemetry/burst-cap', () => ({
   consumeConsentMutationToken: consumeConsentMutationTokenMock
 }))
 
-import { registerTelemetryHandlers } from './telemetry'
+import { _resetStoreForTests, registerTelemetryHandlers } from './telemetry'
 
 function captureHandlers(): void {
   handlers.clear()
@@ -35,28 +48,62 @@ function captureHandlers(): void {
   }
 }
 
+// Build a fake Store with a settable `telemetry` block. Tests reassign
+// `settings.telemetry` between handler invocations to seed the two
+// derivation states.
+type FakeStoreState = { settings: GlobalSettings }
+function makeFakeStore(telemetry: GlobalSettings['telemetry']): {
+  store: Store
+  state: FakeStoreState
+} {
+  const state: FakeStoreState = { settings: { telemetry } as unknown as GlobalSettings }
+  const store = {
+    getSettings: vi.fn(() => state.settings),
+    updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
+      state.settings = { ...state.settings, ...updates } as GlobalSettings
+      return state.settings
+    })
+  } as unknown as Store
+  return { store, state }
+}
+
+function registerWith(telemetry: GlobalSettings['telemetry']): FakeStoreState {
+  const { store, state } = makeFakeStore(telemetry)
+  registerTelemetryHandlers(store)
+  captureHandlers()
+  return state
+}
+
 describe('telemetry IPC handlers', () => {
   beforeEach(() => {
     handleMock.mockReset()
     trackMock.mockReset()
     setOptInMock.mockReset()
+    persistBannerAcknowledgeMock.mockReset()
     consumeConsentMutationTokenMock.mockReset()
     consumeConsentMutationTokenMock.mockReturnValue(true)
-    registerTelemetryHandlers()
-    captureHandlers()
+    _resetStoreForTests()
   })
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('registers both channels', () => {
+  it('registers all four channels', () => {
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: false,
+      optedIn: true
+    })
     expect(handlers.has('telemetry:track')).toBe(true)
     expect(handlers.has('telemetry:setOptIn')).toBe(true)
+    expect(handlers.has('telemetry:acknowledgeBanner')).toBe(true)
+    expect(handlers.has('telemetry:getConsentState')).toBe(true)
   })
 
   // ── telemetry:track ──────────────────────────────────────────────────
 
   it('forwards a well-typed track call to track()', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', {})
     expect(trackMock).toHaveBeenCalledTimes(1)
@@ -64,6 +111,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('drops track calls with a non-string name', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
     handler({}, 42, {})
     handler({}, null, {})
@@ -72,6 +120,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('drops track calls with non-object props', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', 'string-not-object')
     handler({}, 'app_opened', 42)
@@ -79,6 +128,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('treats null/undefined props as an empty object', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', null)
     handler({}, 'app_opened', undefined)
@@ -87,9 +137,10 @@ describe('telemetry IPC handlers', () => {
     expect(trackMock).toHaveBeenNthCalledWith(2, 'app_opened', {})
   })
 
-  // ── telemetry:setOptIn ───────────────────────────────────────────────
+  // ── telemetry:setOptIn — input narrowing ─────────────────────────────
 
   it('drops setOptIn with non-boolean optedIn', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:setOptIn')!
     handler({}, 'true')
     handler({}, 1)
@@ -100,19 +151,177 @@ describe('telemetry IPC handlers', () => {
     expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
   })
 
-  it('forwards a boolean setOptIn to setOptIn(settings, optedIn) when the token is available', () => {
-    const handler = handlers.get('telemetry:setOptIn')!
-    consumeConsentMutationTokenMock.mockReturnValue(true)
-    handler({}, true)
-    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
-    handler({}, false)
-    expect(setOptInMock).toHaveBeenCalledWith('settings', false)
-  })
-
   it('drops setOptIn past the consent-mutation rate limit', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:setOptIn')!
     consumeConsentMutationTokenMock.mockReturnValue(false)
     handler({}, true)
     expect(setOptInMock).not.toHaveBeenCalled()
+  })
+
+  // ── telemetry:setOptIn — `via` derivation ────────────────────────────
+
+  it("derives via='first_launch_banner' for an existing user with optedIn=null clicking Turn off", () => {
+    // Existing-user notice is the only path where an existing user (cohort
+    // marker true) with optedIn=null flips to false. That is the contract
+    // the notice's "Turn off" button routes through.
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: true,
+      optedIn: null
+    })
+    const handler = handlers.get('telemetry:setOptIn')!
+    handler({}, false)
+    expect(setOptInMock).toHaveBeenCalledWith('first_launch_banner', false)
+  })
+
+  it("derives via='settings' (not 'first_launch_banner') for a defensive opt-in call from the pre-notice state", () => {
+    // Defensive: the notice's opt-in path is the ✕ (silent acknowledge),
+    // which does NOT route through setOptIn. A compromised renderer
+    // could try to call telemetrySetOptIn(true) in the pre-notice state
+    // and synthesize a spurious telemetry_opted_in { via:
+    // 'first_launch_banner' }. The derivation must refuse that tag for
+    // the true-incoming case and fall through to 'settings'.
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: true,
+      optedIn: null
+    })
+    const handler = handlers.get('telemetry:setOptIn')!
+    handler({}, true)
+    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
+  })
+
+  it("derives via='settings' for a new user toggling off from Settings (no first-launch surface exists)", () => {
+    // New users (existedBeforeTelemetryRelease=false) are initialized with
+    // optedIn=true at migration and see no first-launch surface. Any
+    // opt-out from this cohort routes through Settings → Privacy and
+    // must tag as `via: 'settings'`.
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: false,
+      optedIn: true
+    })
+    const handler = handlers.get('telemetry:setOptIn')!
+    handler({}, false)
+    expect(setOptInMock).toHaveBeenCalledWith('settings', false)
+  })
+
+  it("derives via='settings' for an opt-in toggle flip after a prior opt-out", () => {
+    // User flipped off in Settings, flipping back on in Settings. Neither
+    // cohort marker nor notice state triggers a first-launch tag.
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: true,
+      optedIn: false
+    })
+    const handler = handlers.get('telemetry:setOptIn')!
+    handler({}, true)
+    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
+  })
+
+  it("derives via='settings' for a new user flipping Settings off→on (not a first-launch interaction)", () => {
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: false,
+      optedIn: false
+    })
+    const handler = handlers.get('telemetry:setOptIn')!
+    handler({}, true)
+    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
+  })
+
+  it("derives via='settings' when the telemetry block is missing (defensive)", () => {
+    // Should never happen post-migration, but if it does the handler must
+    // fall through to 'settings' rather than throwing or mis-tagging.
+    registerWith(undefined)
+    const handler = handlers.get('telemetry:setOptIn')!
+    handler({}, true)
+    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
+  })
+
+  // ── telemetry:acknowledgeBanner — silent-persist path ────────────────
+
+  it('routes banner ✕ through persistBannerAcknowledgeWithoutEmitting without invoking setOptIn', () => {
+    // This is the whole point of the separate channel: the silent-persist
+    // path MUST NOT reach setOptIn, which would derive a `via` and fire
+    // `telemetry_opted_in`. The ✕-as-silent-acknowledge semantics are
+    // explicit: the user did not opt in, they declined to intervene, so
+    // no event transmits.
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: true,
+      optedIn: null
+    })
+    const handler = handlers.get('telemetry:acknowledgeBanner')!
+    handler({})
+    expect(persistBannerAcknowledgeMock).toHaveBeenCalledTimes(1)
+    expect(setOptInMock).not.toHaveBeenCalled()
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  it('acknowledgeBanner consumes a consent-mutation token and drops past the cap', () => {
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: true,
+      optedIn: null
+    })
+    const handler = handlers.get('telemetry:acknowledgeBanner')!
+    consumeConsentMutationTokenMock.mockReturnValue(false)
+    handler({})
+    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
+  })
+
+  // ── telemetry:acknowledgeBanner — state-precondition guard ───────────
+  // These tests pin the guard, which rejects any cohort/optedIn
+  // combination other than (existed=true, optedIn=null). The guard is
+  // the defense against a compromised renderer silently flipping
+  // optedIn=true for a user who already resolved consent — a future
+  // refactor that weakens it must fail here. The guard also runs BEFORE
+  // consumeConsentMutationToken, so a rejected call must not burn a
+  // token either.
+
+  it('acknowledgeBanner rejects an existing user who already opted in', () => {
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: true,
+      optedIn: true
+    })
+    const handler = handlers.get('telemetry:acknowledgeBanner')!
+    handler({})
+    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
+    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('acknowledgeBanner rejects an existing user who already opted out', () => {
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: true,
+      optedIn: false
+    })
+    const handler = handlers.get('telemetry:acknowledgeBanner')!
+    handler({})
+    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
+    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('acknowledgeBanner rejects the new-user cohort regardless of optedIn', () => {
+    registerWith({
+      installId: 'x',
+      existedBeforeTelemetryRelease: false,
+      optedIn: true
+    })
+    const handler = handlers.get('telemetry:acknowledgeBanner')!
+    handler({})
+    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
+    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('acknowledgeBanner rejects a missing telemetry block', () => {
+    registerWith(undefined)
+    const handler = handlers.get('telemetry:acknowledgeBanner')!
+    handler({})
+    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
+    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
   })
 })

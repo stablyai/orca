@@ -119,6 +119,7 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSummary
 } from '../shared/codex-usage-types'
+import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -590,6 +591,19 @@ export type PreloadApi = {
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
+  /** Read-only view of effective consent state, including the reason if
+   *  disabled (env var / user opt-out / CI / pending banner). Used by the
+   *  Privacy pane to render the correct "blocked by X" helper text — env
+   *  vars are main-side state the renderer cannot read directly. */
+  telemetryGetConsentState: () => Promise<TelemetryConsentState>
+  /** Banner ✕ — persist `optedIn = true` silently, emit nothing. Deliberately
+   *  a separate channel from `telemetrySetOptIn` because main's `via`
+   *  derivation on that channel would tag this path as `first_launch_banner`
+   *  and fire `telemetry_opted_in`, which the ✕-as-silent-acknowledge
+   *  semantics forbid (the user did not explicitly opt in, they declined to
+   *  intervene). Subject to the same per-session consent-mutation rate
+   *  limit as `telemetrySetOptIn`. */
+  telemetryAcknowledgeBanner: () => Promise<void>
   settings: {
     get: () => Promise<GlobalSettings>
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>

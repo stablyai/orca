@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // End-to-end behavior of the track() wrapper against a mock PostHog. These
 // tests pin the ordering contracts:
 //
@@ -5,8 +6,8 @@
 //   - burst cap runs BEFORE consent resolve (opted-out flood does not hit
 //     resolveConsent)
 //   - per-session 1000-event ceiling enforced
-//   - opt-out event fires BEFORE posthog.optOut() — the one event that
-//     transmits against the user's new preference
+//   - opt-out event reaches the SDK queue BEFORE posthog.optOut() — the one
+//     event that transmits against the user's new preference
 //   - serialized capture payload is exactly CommonProps ∪ EventProps ∪ the
 //     allowed auto-properties ({ $process_person_profile }); an unexpected
 //     auto-property from a future SDK upgrade fails the drift check
@@ -26,6 +27,7 @@ import {
   _setShuttingDownForTests,
   _setStoreForTests,
   setOptIn,
+  shouldOptOutSdkAtInit,
   shutdownTelemetry,
   track
 } from './client'
@@ -39,14 +41,42 @@ type MockPostHog = {
   optIn: ReturnType<typeof vi.fn>
   optOut: ReturnType<typeof vi.fn>
   shutdown: ReturnType<typeof vi.fn>
+  on: ReturnType<typeof vi.fn>
+  emitForTests: (event: string, payload: unknown) => void
 }
 
 function makeMockPostHog(): MockPostHog {
+  const listeners = new Map<string, Set<(payload: unknown) => void>>()
+  const emitForTests = (event: string, payload: unknown): void => {
+    for (const listener of listeners.get(event) ?? []) {
+      listener(payload)
+    }
+  }
+
   return {
-    capture: vi.fn(),
-    optIn: vi.fn(),
-    optOut: vi.fn(),
-    shutdown: vi.fn(async () => {})
+    capture: vi.fn((message: { event?: string; uuid?: string }) => {
+      queueMicrotask(() => {
+        emitForTests('capture', {
+          event: message.event,
+          uuid: message.uuid
+        })
+      })
+    }),
+    optIn: vi.fn(async () => {}),
+    optOut: vi.fn(async () => {}),
+    shutdown: vi.fn(async () => {}),
+    on: vi.fn((event: string, listener: (payload: unknown) => void) => {
+      let eventListeners = listeners.get(event)
+      if (!eventListeners) {
+        eventListeners = new Set()
+        listeners.set(event, eventListeners)
+      }
+      eventListeners.add(listener)
+      return () => {
+        eventListeners?.delete(listener)
+      }
+    }),
+    emitForTests
   }
 }
 
@@ -282,29 +312,58 @@ describe('setOptIn()', () => {
   })
 
   // Ordering invariant: the opt-out event is the one signal that transmits
-  // against the user's new preference. It MUST reach capture() before we
-  // disable the SDK — otherwise the signal is lost.
-  it('fires telemetry_opted_out BEFORE posthog.optOut()', () => {
+  // against the user's new preference. It MUST reach the SDK queue before
+  // we disable the SDK — otherwise posthog-node drops it at enqueue time.
+  it('waits for telemetry_opted_out to enqueue before posthog.optOut()', async () => {
     const order: string[] = []
-    mock.capture.mockImplementation(() => {
-      order.push('capture')
+    mock.capture.mockImplementation((message: { event?: string; uuid?: string }) => {
+      order.push('capture called')
+      queueMicrotask(() => {
+        order.push('sdk enqueue')
+        mock.emitForTests('capture', {
+          event: message.event,
+          uuid: message.uuid
+        })
+      })
     })
-    mock.optOut.mockImplementation(() => {
+    mock.optOut.mockImplementation(async () => {
       order.push('optOut')
     })
-    setOptIn('settings', false)
-    expect(order).toEqual(['capture', 'optOut'])
+    await setOptIn('settings', false)
+    expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
   })
 
-  it('fires telemetry_opted_in AFTER posthog.optIn()', () => {
+  it('fires telemetry_opted_in AFTER posthog.optIn()', async () => {
     // Flip settings to currently-opted-out so the flip to true exercises
     // the opt-in branch cleanly.
     settings.telemetry!.optedIn = false
     const order: string[] = []
-    mock.optIn.mockImplementation(() => order.push('optIn'))
+    mock.optIn.mockImplementation(async () => order.push('optIn'))
     mock.capture.mockImplementation(() => order.push('capture'))
-    setOptIn('settings', true)
+    await setOptIn('settings', true)
     expect(order).toEqual(['optIn', 'capture'])
+  })
+})
+
+// Pin the init-time SDK opt-out decision. The bug this test prevents: if
+// `initTelemetry` flipped the SDK's `optedOut` flag for `pending_banner`
+// (existing users who have not yet resolved the notice), the direct
+// `posthog.capture(telemetry_opted_out)` on the Turn-off path would be
+// dropped by posthog-core's enqueue — silently losing the one signal that
+// tells us the existing-user opt-out flow works.
+describe('shouldOptOutSdkAtInit()', () => {
+  it('opts out the SDK for every disabled-reason', () => {
+    for (const reason of ['user_opt_out', 'ci', 'do_not_track', 'orca_disabled'] as const) {
+      expect(shouldOptOutSdkAtInit({ effective: 'disabled', reason })).toBe(true)
+    }
+  })
+
+  it('does NOT opt out the SDK for pending_banner', () => {
+    expect(shouldOptOutSdkAtInit({ effective: 'pending_banner' })).toBe(false)
+  })
+
+  it('does NOT opt out the SDK for enabled', () => {
+    expect(shouldOptOutSdkAtInit({ effective: 'enabled' })).toBe(false)
   })
 })
 
