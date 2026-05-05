@@ -70,7 +70,6 @@ import {
   CROSS_REPO_DISPLAY_LIMIT
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
 import type {
@@ -1399,17 +1398,13 @@ export default function TaskPage(): React.JSX.Element {
 
   const handleUseWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
-      // Why: the "Use" CTA is the primary way to start work from this page, so
-      // skip the composer for the common case and create+activate the workspace
-      // immediately, launch the user's default agent, and paste the work item
-      // URL into the agent's input as a reviewable draft. Fall back to the
-      // composer modal only when explicit per-workspace decisions are required
-      // (setupRunPolicy === 'ask') or the repo/agent resolution fails.
-      void launchWorkItemDirect({
-        item,
-        repoId: item.repoId,
-        openModalFallback: () => openComposerForItem(item)
-      })
+      // Why: open the unified New Workspace dialog pre-filled with the work
+      // item as the selected source so the user can confirm name / agent /
+      // setup before the worktree is created. Earlier the "Use" CTA created
+      // and activated the worktree synchronously, which was disorienting —
+      // the worktree appeared in the sidebar before the user had a chance
+      // to review it. The composer already owns the prefill flow.
+      openComposerForItem(item)
     },
     [openComposerForItem]
   )
@@ -1676,30 +1671,13 @@ export default function TaskPage(): React.JSX.Element {
 
   const handleUseLinearItem = useCallback(
     (issue: LinearIssue): void => {
-      const repoId = primaryRepo?.id
-      if (!repoId) {
-        openComposerForLinearItem(issue)
-        return
-      }
-      // Why: unlike GitHub issues (fetchable via `gh`), Linear has no CLI —
-      // paste the full issue context so the agent can act on it without needing
-      // to fetch anything externally.
-      const parts = [
-        `[${issue.identifier}] ${issue.title}`,
-        `Status: ${issue.state.name} · Team: ${issue.team.name}`,
-        issue.assignee ? `Assignee: ${issue.assignee.displayName}` : null,
-        issue.labels.length > 0 ? `Labels: ${issue.labels.join(', ')}` : null,
-        `URL: ${issue.url}`,
-        issue.description ? `\n${issue.description}` : null
-      ]
-      const pasteContent = parts.filter(Boolean).join('\n')
-      void launchWorkItemDirect({
-        item: { title: issue.title, url: issue.url, type: 'issue', number: null, pasteContent },
-        repoId,
-        openModalFallback: () => openComposerForLinearItem(issue)
-      })
+      // Why: same rationale as handleUseWorkItem — open the New Workspace
+      // dialog pre-filled rather than yolo-creating the worktree, so the
+      // user can confirm name / agent / setup before the worktree lands in
+      // the sidebar.
+      openComposerForLinearItem(issue)
     },
-    [openComposerForLinearItem, primaryRepo?.id]
+    [openComposerForLinearItem]
   )
 
   const handleLinearConnect = useCallback(async (): Promise<void> => {
