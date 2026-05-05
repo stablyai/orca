@@ -759,9 +759,10 @@ export class OrcaRuntimeService {
   }
 
   serializeTerminalBuffer(
-    ptyId: string
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
   ): Promise<{ data: string; cols: number; rows: number } | null> {
-    return this.serializeTerminalBufferFromAvailableState(ptyId)
+    return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
 
   getTerminalSize(ptyId: string): { cols: number; rows: number } | null {
@@ -797,9 +798,10 @@ export class OrcaRuntimeService {
   }
 
   private async serializeTerminalBufferFromAvailableState(
-    ptyId: string
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
   ): Promise<{ data: string; cols: number; rows: number } | null> {
-    const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId)
+    const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
     }
@@ -820,17 +822,24 @@ export class OrcaRuntimeService {
   }
 
   private async serializeHeadlessTerminalBuffer(
-    ptyId: string
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
   ): Promise<{ data: string; cols: number; rows: number } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return null
     }
     await state.writeChain
-    // Why: terminal.subscribe needs the current visible screen, not the full
-    // launch history. Full scrollback plus a normal-buffer TUI can replay the
-    // shell prompt and active TUI frame together, which looks duplicated.
-    const snapshot = state.emulator.getSnapshot({ scrollbackRows: 0 })
+    // Why: when an alternate-screen TUI (Claude Code, vim, etc.) is currently
+    // active, the visible content is the alt-screen snapshot — replaying any
+    // normal-buffer scrollback before it can duplicate shell prompts and
+    // flatten SGR attributes when the mobile xterm replays the data. Force
+    // scrollbackRows=0 in that case. When the buffer is in normal mode the
+    // caller can request scrollback so the user can scroll up to see prior
+    // agent output.
+    const requested = opts.scrollbackRows ?? 0
+    const scrollbackRows = state.emulator.isAlternateScreen ? 0 : requested
+    const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 ? { data, cols: snapshot.cols, rows: snapshot.rows } : null
   }

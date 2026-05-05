@@ -3,6 +3,14 @@ import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 
+// Why: when a mobile client subscribes the server resizes the PTY to phone
+// dims and serializes the buffer. Sending only the visible screen meant
+// users coming back to the app or switching terminals could no longer scroll
+// up to see prior agent output. Include enough scrollback to keep typical
+// agent runs (Claude Code chats, command output) reachable. The mobile
+// WebView's xterm has a 5000-row buffer so this fits comfortably.
+const MOBILE_SUBSCRIBE_SCROLLBACK_ROWS = 1000
+
 const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
@@ -302,7 +310,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
 
       const read = await runtime.readTerminal(params.terminal)
-      const serialized = await runtime.serializeTerminalBuffer(ptyId)
+      const serialized = await runtime.serializeTerminalBuffer(ptyId, {
+        scrollbackRows: isMobile ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS : 0
+      })
       const size = runtime.getTerminalSize(ptyId)
       const displayMode = runtime.getMobileDisplayMode(ptyId)
       emit({
@@ -324,7 +334,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         // mobile clients. They include fresh serialized scrollback so the client
         // can reinitialize xterm without resubscribing.
         const unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, async (event) => {
-          const fresh = await runtime.serializeTerminalBuffer(ptyId)
+          // Why: mobile subscriptions need the same scrollback on inline
+          // resize as on initial subscribe — without it, toggling phone/desktop
+          // mode or the keyboard-driven refit would silently wipe history.
+          const fresh = await runtime.serializeTerminalBuffer(ptyId, {
+            scrollbackRows: isMobile ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS : 0
+          })
           emit({
             type: 'resized',
             cols: event.cols,
