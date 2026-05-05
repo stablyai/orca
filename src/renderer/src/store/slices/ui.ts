@@ -158,17 +158,6 @@ export type UISlice = {
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
-  /** Active tab inside the new-workspace composer modal. Mutable while the
-   *  modal is open so Cmd+N / Cmd+Shift+N can toggle tabs without tearing
-   *  down the composer state. */
-  newWorkspaceComposerTab: 'quick' | 'create-from'
-  setNewWorkspaceComposerTab: (tab: 'quick' | 'create-from') => void
-  /** Remembered sub-tab inside the Create-from tab (PRs / Issues / Branches /
-   *  Linear). Persists across composer opens within a session so users who
-   *  always start from Linear (for example) don't have to click back to that
-   *  tab every time. */
-  createFromSubTab: 'prs' | 'issues' | 'branches' | 'linear'
-  setCreateFromSubTab: (tab: 'prs' | 'issues' | 'branches' | 'linear') => void
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
@@ -369,27 +358,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   activeModal: 'none',
   modalData: {},
-  openModal: (modal, data = {}) => {
-    // Why: when the new-workspace composer opens, seed its active tab from
-    // modalData.initialTab so Cmd+Shift+N lands directly on the "Create from…"
-    // tab without the Quick tab flashing first. Default to 'quick' when no
-    // explicit target is provided so existing callers keep their behavior.
-    if (modal === 'new-workspace-composer') {
-      const requestedTab = (data as { initialTab?: 'quick' | 'create-from' }).initialTab
-      set({
-        activeModal: modal,
-        modalData: data,
-        newWorkspaceComposerTab: requestedTab ?? 'quick'
-      })
-      return
-    }
-    set({ activeModal: modal, modalData: data })
-  },
+  openModal: (modal, data = {}) => set({ activeModal: modal, modalData: data }),
   closeModal: () => set({ activeModal: 'none', modalData: {} }),
-  newWorkspaceComposerTab: 'quick',
-  setNewWorkspaceComposerTab: (tab) => set({ newWorkspaceComposerTab: tab }),
-  createFromSubTab: 'prs',
-  setCreateFromSubTab: (tab) => set({ createFromSubTab: tab }),
 
   trustedOrcaHooks: {},
   markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>

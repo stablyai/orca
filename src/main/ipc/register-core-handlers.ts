@@ -29,6 +29,7 @@ import { registerSidekickHandlers } from './sidekick'
 import { registerUIHandlers } from './ui'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
+import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
 import {
@@ -72,6 +73,7 @@ export function registerCoreHandlers(
   registerCodexUsageHandlers(codexUsage)
   registerCodexAccountHandlers(codexAccounts)
   registerAgentHookHandlers()
+  registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)

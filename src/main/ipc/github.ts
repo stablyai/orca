@@ -15,6 +15,7 @@ import {
   listWorkItems,
   countWorkItems,
   getWorkItem,
+  getWorkItemByOwnerRepo,
   createIssue,
   updateIssue,
   addIssueComment,
@@ -142,6 +143,25 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) =>
     dispatchWorkItem(args, assertRegisteredRepo(args.repoPath, store).path, getWorkItem)
+  )
+  ipcMain.handle(
+    'gh:workItemByOwnerRepo',
+    (
+      _event,
+      args: {
+        repoPath: string
+        owner: string
+        repo: string
+        number: number
+        type: 'issue' | 'pr'
+      }
+    ) =>
+      getWorkItemByOwnerRepo(
+        assertRegisteredRepo(args.repoPath, store).path,
+        { owner: args.owner, repo: args.repo },
+        args.number,
+        args.type
+      )
   )
   ipcMain.handle('gh:workItemDetails', (_event, args: WorkItemArgs) =>
     dispatchWorkItem(args, assertRegisteredRepo(args.repoPath, store).path, getWorkItemDetails)

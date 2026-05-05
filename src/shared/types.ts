@@ -900,6 +900,7 @@ export type NotificationSettings = {
   agentTaskComplete: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
+  customSoundPath: string | null
 }
 
 export type CodexManagedAccount = {
@@ -963,6 +964,7 @@ export type ClaudeRateLimitAccountsState = {
 export type TuiAgent =
   | 'claude' // Claude Code
   | 'codex' // OpenAI Codex
+  | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
   | 'pi' // Pi (pi.dev)
   | 'gemini' // Gemini CLI
@@ -1033,6 +1035,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
@@ -1274,6 +1277,34 @@ export type NotificationDispatchResult = {
   /** Present when delivered is false. Tells the caller why delivery was skipped. */
   reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
 }
+
+export type NotificationSoundResult = {
+  played: boolean
+  reason?:
+    | 'missing-path'
+    | 'invalid-path'
+    | 'unsupported-type'
+    | 'too-large'
+    | 'read-failed'
+    | 'playback-failed'
+    | 'deduped'
+}
+
+export type NotificationSoundDataResult =
+  | {
+      ok: true
+      data: Uint8Array
+      mimeType: string
+      path: string
+    }
+  | {
+      ok: false
+      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed'>
+    }
+
+export type NotificationSoundPathResult =
+  | { ok: true; path: string }
+  | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
 
 export type WorktreeCardProperty =
   | 'status'

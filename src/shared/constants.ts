@@ -11,6 +11,7 @@ import type {
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
+export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -106,7 +107,8 @@ export function getDefaultNotificationSettings(): NotificationSettings {
     enabled: true,
     agentTaskComplete: true,
     terminalBell: false,
-    suppressWhenFocused: true
+    suppressWhenFocused: true,
+    customSoundPath: null
   }
 }
 
@@ -119,6 +121,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',
+    appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,

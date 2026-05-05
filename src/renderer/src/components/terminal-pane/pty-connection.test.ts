@@ -255,7 +255,8 @@ describe('connectPanePty', () => {
           clearPendingPaneSerializer: vi.fn().mockResolvedValue(undefined)
         },
         notifications: {
-          dispatch: vi.fn()
+          dispatch: vi.fn().mockResolvedValue({ delivered: true }),
+          playSound: vi.fn().mockResolvedValue({ played: true })
         }
       }
     }

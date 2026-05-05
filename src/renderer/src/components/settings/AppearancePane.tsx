@@ -5,11 +5,14 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { FontAutocomplete } from './SettingsFormControls'
+import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  fontSuggestions: string[]
 }
 
 const STATUS_BAR_TOGGLES: readonly {
@@ -87,6 +90,14 @@ const ZOOM_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+const TYPOGRAPHY_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'IDE Font',
+    description: 'Choose the font used by the Orca interface.',
+    keywords: ['font', 'typeface', 'typography', 'ide', 'orca', 'interface', 'app', 'ui']
+  }
+]
+
 const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Open Right Sidebar by Default',
@@ -117,6 +128,7 @@ const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
 
 export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...THEME_ENTRIES,
+  ...TYPOGRAPHY_ENTRIES,
   ...ZOOM_ENTRIES,
   ...LAYOUT_ENTRIES,
   ...TITLEBAR_ENTRIES,
@@ -127,7 +139,8 @@ export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 export function AppearancePane({
   settings,
   updateSettings,
-  applyTheme
+  applyTheme,
+  fontSuggestions
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isMac = navigator.userAgent.includes('Mac')
@@ -188,6 +201,33 @@ export function AppearancePane({
           keywords={['zoom', 'scale', 'shortcut']}
         >
           <UIZoomControl />
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, TYPOGRAPHY_ENTRIES) ? (
+      <section key="typography" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Typography</h3>
+          <p className="text-xs text-muted-foreground">
+            Choose the font used by the Orca interface.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="IDE Font"
+          description="Choose the font used by the Orca interface."
+          keywords={['font', 'typeface', 'typography', 'ide', 'orca', 'interface', 'app', 'ui']}
+          className="space-y-2"
+        >
+          <Label>IDE Font</Label>
+          <FontAutocomplete
+            value={settings.appFontFamily}
+            suggestions={fontSuggestions}
+            placeholder={DEFAULT_APP_FONT_FAMILY}
+            onChange={(value) =>
+              updateSettings({ appFontFamily: value.trim() || DEFAULT_APP_FONT_FAMILY })
+            }
+          />
         </SearchableSetting>
       </section>
     ) : null,

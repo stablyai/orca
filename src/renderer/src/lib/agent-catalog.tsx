@@ -107,6 +107,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://docs.augmentcode.com/cli/overview'
   },
   {
+    id: 'autohand',
+    label: 'Autohand Code',
+    cmd: 'autohand',
+    faviconDomain: 'autohand.ai',
+    homepageUrl: 'https://github.com/autohandai/code-cli'
+  },
+  {
     id: 'cline',
     label: 'Cline',
     cmd: 'cline',

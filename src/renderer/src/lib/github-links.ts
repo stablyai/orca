@@ -52,6 +52,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
 export function parseGitHubIssueOrPRLink(input: string): {
   slug: RepoSlug
   number: number
+  type: 'issue' | 'pr'
 } | null {
   const trimmed = input.trim()
   if (!trimmed) {
@@ -76,6 +77,7 @@ export function parseGitHubIssueOrPRLink(input: string): {
 
   return {
     slug: { owner: match[1], repo: match[2] },
+    type: url.pathname.toLowerCase().includes('/pull/') ? 'pr' : 'issue',
     number: Number.parseInt(match[3], 10)
   }
 }

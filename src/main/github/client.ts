@@ -829,6 +829,25 @@ export async function getWorkItem(
   }
 }
 
+export async function getWorkItemByOwnerRepo(
+  repoPath: string,
+  ownerRepo: OwnerRepo,
+  number: number,
+  type: 'issue' | 'pr'
+): Promise<MainWorkItem | null> {
+  await acquire()
+  try {
+    if (type === 'issue') {
+      return await fetchIssueWorkItem(repoPath, ownerRepo, number)
+    }
+    return await fetchPullRequestWorkItem(repoPath, ownerRepo, number)
+  } catch {
+    return null
+  } finally {
+    release()
+  }
+}
+
 /**
  * Get PR info for a given branch using gh CLI.
  * Returns null if gh is not installed, or no PR exists for the branch.

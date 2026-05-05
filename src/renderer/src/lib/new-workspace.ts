@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
@@ -195,65 +196,87 @@ export function getWorkspaceSeedName(args: {
   return 'workspace'
 }
 
+// Why: bracketed paste markers and ready-wait grace timing live in
+// agent-paste-draft.ts so the new-workspace and "Use" flows share one
+// definition of "type into the agent's input as a non-submitted draft".
+
 export async function ensureAgentStartupInTerminal(args: {
   worktreeId: string
   startup: AgentStartupPlan
 }): Promise<void> {
   const { worktreeId, startup } = args
-  if (startup.followupPrompt === null) {
+  const draftPrompt = startup.draftPrompt ?? null
+  if (startup.followupPrompt === null && draftPrompt === null) {
     return
   }
 
-  let promptInjected = false
-
+  // Why: poll until a terminal tab + PTY exists for the worktree before we
+  // can interact with it. Activation creates the tab synchronously but the
+  // PTY spawn is async, so a brief wait is normal.
+  let tabId: string | null = null
+  let ptyId: string | null = null
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (attempt > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, 150))
     }
-
     const state = useAppStore.getState()
-    const tabId =
+    tabId =
       state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id ?? null
     if (!tabId) {
       continue
     }
-
-    const ptyId = state.ptyIdsByTabId[tabId]?.[0]
-    if (!ptyId) {
-      continue
+    ptyId = state.ptyIdsByTabId[tabId]?.[0] ?? null
+    if (ptyId) {
+      break
     }
+  }
+  if (!tabId || !ptyId) {
+    return
+  }
 
+  // Why: followupPrompt is the legacy path for stdin-after-start agents
+  // (aider, goose, etc.) that need their initial prompt typed into the live
+  // session and submitted. Wait until the agent owns the PTY before writing.
+  if (startup.followupPrompt) {
+    await waitForAgentForeground(ptyId, startup.expectedProcess)
+    window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
+  }
+
+  // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
+  // agent's input buffer (no per-char echo, no auto-submit). Shared with the
+  // launch-work-item-direct flow so both behave identically.
+  if (draftPrompt) {
+    await pasteDraftWhenAgentReady({
+      tabId,
+      content: draftPrompt,
+      agent: startup.agent
+    })
+  }
+}
+
+// Why: legacy followupPrompt path used `agentOwnsForeground` exclusively (with
+// a hasChildProcesses fallback after several polls). Preserve that behavior so
+// stdin-after-start agents still receive their prompt under the same
+// conditions. Returns when the agent appears ready or the budget expires.
+async function waitForAgentForeground(ptyId: string, expectedProcess: string): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, 150))
+    }
     try {
       const foreground = (await window.api.pty.getForegroundProcess(ptyId))?.toLowerCase() ?? ''
-      const agentOwnsForeground =
-        foreground === startup.expectedProcess ||
-        foreground.startsWith(`${startup.expectedProcess}.`)
-
-      if (agentOwnsForeground && !promptInjected && startup.followupPrompt) {
-        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
-        promptInjected = true
+      const owns =
+        foreground === expectedProcess ||
+        foreground.startsWith(`${expectedProcess}.`) ||
+        foreground.endsWith(`/${expectedProcess}`)
+      if (owns) {
         return
       }
-
-      if (agentOwnsForeground && promptInjected) {
-        return
-      }
-
-      const hasChildProcesses = await window.api.pty.hasChildProcesses(ptyId)
-      if (
-        !promptInjected &&
-        startup.followupPrompt &&
-        hasChildProcesses &&
-        !isShellProcess(foreground) &&
-        attempt >= 4
-      ) {
-        // Why: the initial agent launch is already queued on the first terminal
-        // tab. Only agents without a verified startup-prompt flag need extra
-        // help here: once the TUI owns the PTY, type the draft prompt into the
-        // live session instead of launching the binary a second time.
-        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
-        promptInjected = true
-        return
+      if (attempt >= 4 && !isShellProcess(foreground)) {
+        const hasChildProcesses = await window.api.pty.hasChildProcesses(ptyId)
+        if (hasChildProcesses) {
+          return
+        }
       }
     } catch {
       // Ignore transient PTY inspection failures and keep polling.
