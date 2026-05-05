@@ -74,7 +74,7 @@ export function ExperimentalPane({
     EXPERIMENTAL_PANE_SEARCH_ENTRIES[3]
   ])
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
-    EXPERIMENTAL_PANE_SEARCH_ENTRIES[3]
+    EXPERIMENTAL_PANE_SEARCH_ENTRIES[4]
   ])
 
   const [orchestrationEnabled, setOrchestrationEnabled] = useState<boolean>(() => {
@@ -394,7 +394,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title="Symlinks on worktrees"
           description="Automatically symlink configured files or folders into newly created worktrees."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[3].keywords}
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[4].keywords}
           className="space-y-3 px-1 py-2"
         >
           <div className="flex items-start justify-between gap-4">

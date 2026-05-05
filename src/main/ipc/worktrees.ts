@@ -318,12 +318,7 @@ export function registerWorktreeHandlers(
       // checkout looks untracked to git. Unlink the user-configured symlinks
       // first so the normal delete path keeps working — otherwise every
       // deletion would require the Force Delete toast once the feature is on.
-      const settings = store.getSettings()
-      if (
-        settings.experimentalWorktreeSymlinks &&
-        repo.symlinkPaths &&
-        repo.symlinkPaths.length > 0
-      ) {
+      if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
         await removeWorktreeSymlinks(worktreePath, repo.symlinkPaths)
       }
 

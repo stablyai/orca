@@ -46,8 +46,11 @@ export async function createWorktreeSymlinks(
     try {
       // Why: if a file/dir already exists at the target location (e.g.
       // git-tracked sibling with the same name), leave it alone rather than
-      // clobber something the user didn't mean to replace.
-      await stat(target)
+      // clobber something the user didn't mean to replace. Use `lstat` so a
+      // pre-existing symlink (including a broken one whose source has moved)
+      // is detected and skipped, rather than falling through to `symlink()`
+      // and failing with EEXIST.
+      await lstat(target)
       continue
     } catch {
       // Target does not exist — proceed with symlink creation.
