@@ -159,15 +159,37 @@ describe('mobile presence lock — driver state machine', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
   })
 
-  it('handleMobileUnsubscribe last leaver flips driver to idle (after debounce)', () => {
+  it('handleMobileUnsubscribe last leaver flips driver to idle after soft-leave grace', () => {
     const { runtime, driverEvents } = createRuntime()
     runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
 
     runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
 
-    // Synchronous flip to idle (banner unmounts immediately).
+    // Why: soft-leave grace keeps driver=mobile{phone-A} for ~250ms so a
+    // re-subscribe (e.g. mobile keyboard show/hide on legacy clients)
+    // doesn't cause a desktop banner flash.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    vi.advanceTimersByTime(250)
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
     expect(driverEvents.at(-1)?.driver).toEqual({ kind: 'idle' })
+  })
+
+  it('resubscribe within soft-leave grace cancels idle without driver flap', () => {
+    const { runtime, driverEvents } = createRuntime()
+    runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    // Same client re-subscribes inside the grace window — no idle should
+    // ever be observed by the renderer.
+    vi.advanceTimersByTime(100)
+    runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    vi.advanceTimersByTime(500)
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    expect(driverEvents.find((e) => e.driver.kind === 'idle')).toBeUndefined()
   })
 
   it('onPtyExit clears driver state and emits idle', () => {
@@ -223,6 +245,8 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
 
     runtime.handleMobileUnsubscribe('pty-1', 'phone-B')
+    // Last leaver enters soft-grace; advance past it before asserting idle.
+    vi.advanceTimersByTime(250)
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
   })
 
@@ -245,6 +269,62 @@ describe('mobile presence lock — multi-mobile semantics', () => {
 
     expect(ptySizes.get('pty-1')).toEqual({ cols: 38, rows: 18 })
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
+  })
+
+  it('updateMobileViewport re-fits PTY without flipping the driver', () => {
+    const { runtime, ptySizes, driverEvents } = createRuntime()
+    runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 38 })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 38 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    const before = driverEvents.length
+
+    // Keyboard opens — viewport shrinks.
+    expect(runtime.updateMobileViewport('pty-1', 'phone-A', { cols: 49, rows: 16 })).toBe(true)
+
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 16 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    // Why: a viewport update may re-emit driver to refresh listener
+    // wiring, but it must never go through `idle` (no banner flash).
+    expect(driverEvents.slice(before).every((e) => e.driver.kind === 'mobile')).toBe(true)
+  })
+
+  it('updateMobileViewport then disconnect restores PTY to original baseline', () => {
+    const { runtime, ptySizes } = createRuntime()
+    runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 38 })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 38 })
+
+    // Keyboard cycles a few times.
+    runtime.updateMobileViewport('pty-1', 'phone-A', { cols: 49, rows: 16 })
+    runtime.updateMobileViewport('pty-1', 'phone-A', { cols: 49, rows: 38 })
+    runtime.updateMobileViewport('pty-1', 'phone-A', { cols: 49, rows: 16 })
+
+    // Phone disconnects (router.back → WS close).
+    runtime.onClientDisconnected('phone-A')
+
+    // PTY must restore to the original 150x40 baseline, not the last
+    // phone-fit dim. This was the stuck-dim bug.
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+  })
+
+  it('legacy unsubscribe → resubscribe within grace preserves baseline (regression)', () => {
+    const { runtime, ptySizes } = createRuntime()
+    runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 38 })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 38 })
+
+    // Simulate legacy keyboard re-subscribe cycle within grace.
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+    vi.advanceTimersByTime(100)
+    runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 16 })
+    // Apply mode after re-subscribe so the new viewport drives PTY dims.
+    runtime.applyMobileDisplayMode('pty-1')
+
+    // PTY at new viewport, phone-A still drives.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    // Disconnect — must restore to original 150x40, not 49x16.
+    runtime.onClientDisconnected('phone-A')
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
   it('earliest-subscribe restore target is preserved when peers churn', () => {

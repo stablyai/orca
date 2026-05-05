@@ -411,6 +411,35 @@ export class OrcaRuntimeService {
   // docs/mobile-presence-lock.md.
   private currentDriver = new Map<string, DriverState>()
 
+  // Why: resubscribe-grace window. When the last mobile subscriber for a
+  // PTY unsubscribes, we hold the driver=mobile{clientId} state and the
+  // inner-map record open for ~250ms. If the same (ptyId, clientId)
+  // re-subscribes inside the window — typically because the mobile app
+  // tore down the stream to reconfigure (rare with the new
+  // updateMobileViewport path, but still possible on reconnects, network
+  // hiccups, or older client builds) — we cancel the deferred idle and
+  // restore-timer so the desktop banner doesn't flash and the new
+  // subscriber doesn't capture an already-phone-fitted PTY size as its
+  // restore baseline. Keyed by ptyId; carries the timer plus the snapshot
+  // of the leaving subscriber so we can re-insert it on cancel. See
+  // docs/mobile-presence-lock.md.
+  private pendingSoftLeavers = new Map<
+    string,
+    {
+      clientId: string
+      timer: ReturnType<typeof setTimeout>
+      record: {
+        clientId: string
+        viewport: { cols: number; rows: number } | null
+        wasResizedToPhone: boolean
+        previousCols: number | null
+        previousRows: number | null
+        subscribedAt: number
+        lastActedAt: number
+      }
+    }
+  >()
+
   // Why: tracks the last PTY size set by the desktop renderer (via pty:resize
   // IPC). Unlike ptySizes (which is overwritten by server-side phone-fit
   // resizes), this map preserves the actual pane geometry. Used as the
@@ -1238,6 +1267,47 @@ export class OrcaRuntimeService {
         this.pendingRestoreTimers.delete(ptyId)
       }
     }
+    // Why: if the disconnecting client was in soft-leave grace, the grace
+    // is meaningless now (the client is gone for real). Promote each
+    // matching grace into immediate finalization: restore PTY dims to the
+    // captured baseline, drop driver to idle, and clear fit overrides.
+    // Without this, a phone that exited the screen (router.back → WS
+    // close) would leave the PTY stuck at phone dims forever — the soft
+    // grace held the inner-map empty so the mobileSubscribers loop below
+    // can't see it, and the 300ms restore timer could mis-fire after the
+    // grace if the PTY had already been mutated.
+    for (const [ptyId, soft] of this.pendingSoftLeavers) {
+      if (soft.clientId !== clientId) {
+        continue
+      }
+      clearTimeout(soft.timer)
+      this.pendingSoftLeavers.delete(ptyId)
+
+      // Cancel any in-flight 300ms restore timer too — we'll do it now.
+      const pending = this.pendingRestoreTimers.get(ptyId)
+      if (pending) {
+        clearTimeout(pending.timer)
+        this.pendingRestoreTimers.delete(ptyId)
+      }
+
+      const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+      const { previousCols, previousRows, wasResizedToPhone } = soft.record
+      if (mode === 'auto' && wasResizedToPhone) {
+        const fallback = this.lastRendererSizes.get(ptyId)
+        const cols = previousCols ?? fallback?.cols ?? null
+        const rows = previousRows ?? fallback?.rows ?? null
+        if (cols != null && rows != null) {
+          this.ptyController?.resize?.(ptyId, cols, rows)
+          this.resizeHeadlessTerminal(ptyId, cols, rows)
+        }
+        this.lastRendererSizes.delete(ptyId)
+        this.suppressResizesForMs(500)
+        this.terminalFitOverrides.delete(ptyId)
+        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', cols ?? 0, rows ?? 0)
+        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', cols ?? 0, rows ?? 0)
+      }
+      this.setDriver(ptyId, { kind: 'idle' })
+    }
 
     // Immediately restore PTYs that this client had phone-fitted (no debounce —
     // client is gone, no point waiting for a re-subscribe that won't come).
@@ -1314,6 +1384,11 @@ export class OrcaRuntimeService {
     if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
+    }
+    const pendingSoft = this.pendingSoftLeavers.get(ptyId)
+    if (pendingSoft) {
+      clearTimeout(pendingSoft.timer)
+      this.pendingSoftLeavers.delete(ptyId)
     }
 
     if (this.terminalFitOverrides.has(ptyId)) {
@@ -1403,6 +1478,80 @@ export class OrcaRuntimeService {
       this.applyMobileDisplayMode(ptyId)
     }
     this.setDriver(ptyId, { kind: 'mobile', clientId })
+  }
+
+  // Why: in-place viewport update on the existing mobile subscription —
+  // used when the mobile keyboard opens/closes and shrinks/grows the
+  // visible terminal area. We refresh the subscriber's viewport, re-fit
+  // the PTY to the new dims, and emit a 'resized' event so the mobile
+  // xterm reinits inline at the new dims without re-subscribing. This
+  // avoids the unsubscribe → resubscribe cycle which would (a) flash the
+  // desktop lock banner during the brief idle gap and (b) cause the new
+  // subscribe to capture the already-phone-fitted PTY size as its
+  // restore baseline (stuck-dim bug on later disconnect).
+  // No-op when the client isn't actually subscribed to this PTY.
+  updateMobileViewport(
+    ptyId: string,
+    clientId: string,
+    viewport: { cols: number; rows: number }
+  ): boolean {
+    const inner = this.mobileSubscribers.get(ptyId)
+    const sub = inner?.get(clientId)
+    if (!sub) {
+      return false
+    }
+    sub.viewport = viewport
+    sub.lastActedAt = Date.now()
+
+    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    if (mode === 'desktop') {
+      // Watching at desktop dims — viewport is informational only.
+      return true
+    }
+    // Drive PTY dims by the most-recent-actor (just updated to this client).
+    const winner = this.pickMostRecentActor(inner!)
+    if (!winner) {
+      return false
+    }
+    const winnerSub = inner!.get(winner.clientId)
+    const driveViewport = winnerSub?.viewport ?? viewport
+    const clampedCols = Math.max(20, Math.min(240, Math.round(driveViewport.cols)))
+    const clampedRows = Math.max(8, Math.min(120, Math.round(driveViewport.rows)))
+
+    const currentSize = this.getTerminalSize(ptyId)
+    const alreadyAtTarget = currentSize?.cols === clampedCols && currentSize?.rows === clampedRows
+    if (!alreadyAtTarget) {
+      this.ptyController?.resize?.(ptyId, clampedCols, clampedRows)
+      this.resizeHeadlessTerminal(ptyId, clampedCols, clampedRows)
+    }
+
+    sub.wasResizedToPhone = true
+    this.terminalFitOverrides.set(ptyId, {
+      mode: 'mobile-fit',
+      cols: clampedCols,
+      rows: clampedRows,
+      previousCols: sub.previousCols,
+      previousRows: sub.previousRows,
+      updatedAt: Date.now(),
+      clientId
+    })
+    this.notifier?.terminalFitOverrideChanged(ptyId, 'mobile-fit', clampedCols, clampedRows)
+
+    // Why: emit a 'resized' event on the mobile subscription stream so the
+    // mobile xterm reinits inline at the new dims — same shape as a
+    // setDisplayMode-triggered resize, so the existing client-side handler
+    // path applies without changes.
+    this.notifyTerminalResize(ptyId, {
+      cols: clampedCols,
+      rows: clampedRows,
+      displayMode: mode,
+      reason: 'viewport-update'
+    })
+
+    // The driver is already mobile{this client} when we got here; refresh it
+    // to update lastActedAt-based ordering on later actor selection.
+    this.setDriver(ptyId, { kind: 'mobile', clientId })
+    return true
   }
 
   // Why: invoked from `runtime:restoreTerminalFit` IPC (the desktop "Take
@@ -1511,6 +1660,40 @@ export class OrcaRuntimeService {
     if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
+    }
+
+    // Why: resubscribe-grace honor. If the same client just unsubscribed
+    // within the soft-leave window, restore its prior record (preserving
+    // previousCols/Rows so we don't capture an already-phone-fitted PTY
+    // size as the new baseline). The driver state was kept at
+    // mobile{clientId} during the window, so no banner flash occurred.
+    const softLeaver = this.pendingSoftLeavers.get(ptyId)
+    if (softLeaver && softLeaver.clientId === clientId) {
+      clearTimeout(softLeaver.timer)
+      this.pendingSoftLeavers.delete(ptyId)
+      let inner = this.mobileSubscribers.get(ptyId)
+      if (!inner) {
+        inner = new Map()
+        this.mobileSubscribers.set(ptyId, inner)
+      }
+      inner.set(clientId, {
+        ...softLeaver.record,
+        // Refresh viewport from the new subscribe payload — the keyboard
+        // state may have changed during the window.
+        viewport,
+        lastActedAt: Date.now()
+      })
+      // The driver was already mobile{clientId}; refresh to update
+      // listener wiring (and re-emit, harmless if unchanged).
+      this.setDriver(ptyId, { kind: 'mobile', clientId })
+      // If display-mode is auto/phone, reapply the fit at the new viewport
+      // so a keyboard show/hide that resubscribes (older clients) still
+      // updates dims correctly. updateMobileViewport is the preferred path
+      // and avoids the unsubscribe → subscribe cycle entirely.
+      if (mode !== 'desktop') {
+        this.applyMobileDisplayMode(ptyId)
+      }
+      return true
     }
 
     let inner = this.mobileSubscribers.get(ptyId)
@@ -1677,11 +1860,39 @@ export class OrcaRuntimeService {
     this.mobileSubscribers.delete(ptyId)
     const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
 
-    // Why: emit driver=idle synchronously so the desktop banner unmounts
-    // immediately. The PTY restore runs inside the existing 300ms debounce
-    // (handles rapid tab-switch thrash). Brief visual mismatch (banner gone
-    // but PTY still squished for up to 300ms) is acceptable per design.
-    this.setDriver(ptyId, { kind: 'idle' })
+    // Why: resubscribe-grace. Hold the driver=mobile{clientId} state and
+    // the leaving subscriber's record for ~250ms. If the same client
+    // re-subscribes in that window, handleMobileSubscribe cancels the
+    // pending-soft-leaver and re-inserts the record (preserving
+    // previousCols and avoiding a desktop-banner flash). Otherwise the
+    // grace timer fires, sets driver=idle, and lets the existing 300ms
+    // restore debounce (kept below) run as before.
+    const SOFT_LEAVE_GRACE_MS = 250
+    const existingSoft = this.pendingSoftLeavers.get(ptyId)
+    if (existingSoft) {
+      clearTimeout(existingSoft.timer)
+      this.pendingSoftLeavers.delete(ptyId)
+    }
+    const softTimer = setTimeout(() => {
+      this.pendingSoftLeavers.delete(ptyId)
+      // Why: only flip to idle if no peer has reclaimed in the meantime.
+      if (!this.mobileSubscribers.has(ptyId)) {
+        this.setDriver(ptyId, { kind: 'idle' })
+      }
+    }, SOFT_LEAVE_GRACE_MS)
+    this.pendingSoftLeavers.set(ptyId, {
+      clientId,
+      timer: softTimer,
+      record: {
+        clientId: subscriber.clientId,
+        viewport: subscriber.viewport,
+        wasResizedToPhone: subscriber.wasResizedToPhone,
+        previousCols: subscriber.previousCols,
+        previousRows: subscriber.previousRows,
+        subscribedAt: subscriber.subscribedAt,
+        lastActedAt: subscriber.lastActedAt
+      }
+    })
 
     if (mode === 'auto' && wasResizedToPhone) {
       const existing = this.pendingRestoreTimers.get(ptyId)

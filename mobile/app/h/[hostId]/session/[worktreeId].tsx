@@ -464,6 +464,31 @@ export default function SessionScreen() {
           if (prev && prev.cols === dims.cols && prev.rows === dims.rows) return
           viewportRef.current = dims
           viewportMeasuredRef.current = true
+          // Why: prefer the in-place viewport update RPC over the legacy
+          // unsubscribe → subscribe cycle. This keeps the server-side
+          // mobile subscriber record alive (no driver=idle blip on the
+          // desktop banner; no false phone-fit baseline capture on the
+          // re-subscribe). The 'resized' event from the server reinits
+          // the xterm at the new dims via the existing subscription
+          // stream. Falls back to the unsubscribe/subscribe path if the
+          // RPC isn't available (older host build) or no client is
+          // connected. See docs/mobile-presence-lock.md.
+          const rpc = clientRef.current
+          const deviceToken = deviceTokenRef.current
+          if (rpc && deviceToken) {
+            try {
+              const response = await rpc.sendRequest('terminal.updateViewport', {
+                terminal: handle,
+                client: { id: deviceToken, type: 'mobile' as const },
+                viewport: dims
+              })
+              if (response.ok) {
+                return
+              }
+            } catch {
+              // Fall through to legacy resubscribe.
+            }
+          }
           unsubscribeTerminal(handle)
           initializedHandlesRef.current.delete(handle)
           subscribeToTerminal(handle)

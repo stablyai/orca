@@ -152,6 +152,25 @@ const TerminalUnsubscribe = z.object({
     .optional()
 })
 
+// Why: in-place viewport update for an existing mobile subscription. Used
+// when the keyboard opens/closes on the mobile client and the visible
+// terminal area changes — without this, the mobile app had to
+// unsubscribe → resubscribe, which (a) flashed the desktop lock banner
+// during the brief idle gap and (b) caused the new subscribe to capture
+// the already-phone-fitted PTY size as its restore baseline, leaving the
+// PTY stuck at phone dims after the phone disconnected. See
+// docs/mobile-presence-lock.md.
+const TerminalUpdateViewport = TerminalHandle.extend({
+  client: z.object({
+    id: requiredString('Missing client ID'),
+    type: z.enum(['mobile', 'desktop']).default('mobile').optional()
+  }),
+  viewport: z.object({
+    cols: z.number().int().min(20).max(240),
+    rows: z.number().int().min(8).max(120)
+  })
+})
+
 export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.list',
@@ -311,6 +330,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const mode = leaf?.ptyId ? runtime.getMobileDisplayMode(leaf.ptyId) : 'auto'
       const isPhoneFitted = leaf?.ptyId ? runtime.isMobileSubscriberActive(leaf.ptyId) : false
       return { mode, isPhoneFitted }
+    }
+  }),
+  defineMethod({
+    name: 'terminal.updateViewport',
+    params: TerminalUpdateViewport,
+    handler: async (params, { runtime }) => {
+      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      if (!leaf?.ptyId) {
+        throw new Error('no_connected_pty')
+      }
+      const updated = runtime.updateMobileViewport(leaf.ptyId, params.client.id, params.viewport)
+      return { updated }
     }
   }),
   // Why: terminal.subscribe streams live terminal output over WebSocket.
