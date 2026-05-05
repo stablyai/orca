@@ -533,22 +533,25 @@ jobs:
         env:
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
+          set -euo pipefail
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
-            echo "identity=rc" >>"$GITHUB_OUTPUT"
+            identity=rc
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "identity=stable" >>"$GITHUB_OUTPUT"
+            identity=stable
           else
             echo "::error::Tag $TAG does not match stable or rc pattern; refusing to build official artifact"
             exit 1
           fi
-          echo "Classified $TAG as $(grep ^identity= "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
+          echo "identity=$identity" >>"$GITHUB_OUTPUT"
+          echo "Classified $TAG as $identity"
 
       # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
       # produces a published binary, so this is the only place the secret
-      # needs to be in scope. Per docs/telemetry-implementation.md
-      # §Write-key threat model, the key is not cryptographically secret —
-      # it ships in every official binary's app.asar — but we keep it in
-      # GitHub Actions secrets so the literal stays out of the repo.
+      # needs to be in scope. The key is a PostHog *project* API key, not
+      # a server secret — it ships in every official binary's app.asar
+      # and is therefore extractable from any release. We still keep it
+      # in GitHub Actions secrets so the literal stays out of the repo
+      # (and out of fork CI runs / log scrapers / casual greps).
       # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
       # value comes from the per-tag classification above and electron-vite
       # reads it from `process.env` during `pnpm build:release` only.

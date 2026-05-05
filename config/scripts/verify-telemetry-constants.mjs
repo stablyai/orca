@@ -9,11 +9,11 @@
 // A failure here fails the matrix job; the draft release stays in place
 // until a human resolves it.
 //
-// We grep the packed `app.asar`'s `out/main/index.js` (the same file that
-// the runtime loads) rather than the unpacked `out/`. asar is a tar-like
-// archive that doesn't transform contents, so the two are byte-equivalent
-// today — but verifying the asar protects against any future config change
-// that excludes `out/main/index.js` from the package.
+// We grep the packed `app.asar`'s `out/main/*.js` files (the same files
+// that the runtime loads) rather than the unpacked `out/`. asar is a
+// tar-like archive that doesn't transform contents, so the two are
+// byte-equivalent today — but verifying the asar protects against any
+// future config change that excludes the main bundle from the package.
 //
 // Forward-compat: while `TELEMETRY_ENABLED` is `false` in the source, the
 // bundler dead-code-eliminates the entire transport block, so the
@@ -26,11 +26,26 @@
 // Cross-platform note: written in Node so it runs identically on the Mac,
 // Linux, and Windows release runners. Locating `app.asar` via `fs.readdir`
 // (instead of POSIX `find`) avoids depending on Git Bash on Windows.
+// Reading the asar via the programmatic `@electron/asar` API (instead of
+// shelling out to `npx asar`) avoids both a network fetch on every run
+// and the Windows `.cmd`-shim/`shell: true` workaround.
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+// Why @electron/asar: canonical replacement for the deprecated `asar` package.
+// It's transitively available via electron-builder (and pnpm's
+// `shamefully-hoist=true` in `.npmrc` flattens it into the root
+// `node_modules`). If electron-builder ever drops it, promote this to a
+// direct devDependency in package.json.
+import { extractFile, listPackage } from '@electron/asar'
+
+// Why resolve from import.meta.url instead of cwd: a release runner (or a
+// developer debugging locally) may invoke this script from a non-root cwd.
+// Resolving relative to the script's own location turns a misleading
+// "could not parse TELEMETRY_ENABLED flag" parse error into a clear
+// file-not-found error, and decouples the script from the caller's cwd.
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 function findAsar(rootDir) {
   // Why: electron-builder produces one `app.asar` per platform-arch combo.
@@ -75,10 +90,11 @@ if (!existsSync(distDir) || !statSync(distDir).isDirectory()) {
 // transport block and the substituted constants vanish from the binary.
 // Verifying in that state would always fail. Read the flag from source
 // instead of inferring it from the build, so the gate cannot drift.
-const clientSrc = readFileSync('src/main/telemetry/client.ts', 'utf8')
+const clientSrcPath = join(repoRoot, 'src/main/telemetry/client.ts')
+const clientSrc = readFileSync(clientSrcPath, 'utf8')
 const enabledMatch = /^const\s+TELEMETRY_ENABLED\s*=\s*(true|false)/m.exec(clientSrc)
 if (!enabledMatch) {
-  console.error('::error::could not parse TELEMETRY_ENABLED flag from src/main/telemetry/client.ts')
+  console.error(`::error::could not parse TELEMETRY_ENABLED flag from ${clientSrcPath}`)
   process.exit(1)
 }
 if (enabledMatch[1] === 'false') {
@@ -104,31 +120,52 @@ for (const m of asarMatches) {
 // identifiers `ORCA_BUILD_IDENTITY` and `ORCA_POSTHOG_WRITE_KEY` with their
 // JSON-stringified values at build time. `src/main/telemetry/client.ts`
 // then assigns those into module-local consts named `BUILD_IDENTITY` and
-// `WRITE_KEY`. Rollup's minifier preserves the `const NAME = "literal"`
-// shape after dead-code elimination collapses the `typeof X !== 'undefined'`
-// guard. Match that exact emitted shape so a regression — e.g. the env
-// var unset and the substitution falling back to literal `null` — fails
-// the grep instead of slipping through as a falsy-but-stringy value.
+// `WRITE_KEY`. electron-vite's main config is not minified (Vite default for
+// Electron main builds), so Rollup emits the substituted constants verbatim
+// as `const BUILD_IDENTITY = "stable";`. Match that exact emitted shape so a
+// regression — e.g. the env var unset and the substitution falling back to
+// literal `null` — fails the grep instead of slipping through as a falsy-
+// but-stringy value. NOTE: if `build.minify` is ever enabled on the main
+// bundle, esbuild/terser will rename top-level consts and this regex must
+// be revisited (or replaced with a value-based assertion).
+//
+// WRITE_KEY char class includes `_` and `-` because PostHog project API
+// keys use URL-safe base64 alphabet beyond `phc_`.
 const BUILD_IDENTITY_RE = /const\s+BUILD_IDENTITY\s*=\s*"(rc|stable)"/
-const WRITE_KEY_RE = /const\s+WRITE_KEY\s*=\s*"(phc_[A-Za-z0-9]+)"/
+const WRITE_KEY_RE = /const\s+WRITE_KEY\s*=\s*"(phc_[A-Za-z0-9_-]+)"/
 
 function verifyAsar(asarPath) {
   console.log(`Verifying ${asarPath}`)
-  const extractDir = mkdtempSync(join(tmpdir(), 'orca-asar-verify-'))
-  // Why `shell: true` on Windows: `npx` resolves to a `.cmd` shim there, and
-  // Node's `execFileSync` refuses to launch `.cmd` files without a shell.
-  execFileSync('npx', ['--yes', 'asar', 'extract', asarPath, extractDir], {
-    stdio: 'inherit',
-    shell: process.platform === 'win32'
+
+  // Why list-then-extract (not a hardcoded path): future electron-vite
+  // chunking (e.g. `manualChunks`) could move the constants out of
+  // `out/main/index.js` into `out/main/chunks/telemetry-XYZ.js`. Enumerate
+  // every `.js` under `out/main/` and concatenate before grepping so the
+  // verify is resilient to chunking. listPackage builds entries with the
+  // host `path` module, so on Windows runners separators are backslashes
+  // (`\out\main\index.js`); normalize to forward slashes for the filter
+  // and strip the leading separator (of either kind) before passing the
+  // entry to extractFile.
+  const allEntries = listPackage(asarPath)
+  const mainJsEntries = allEntries.filter((p) => {
+    const normalized = p.replace(/\\/g, '/').replace(/^\/+/, '')
+    return normalized.startsWith('out/main/') && normalized.endsWith('.js')
   })
 
-  const indexPath = join(extractDir, 'out', 'main', 'index.js')
-  if (!existsSync(indexPath)) {
-    console.error(`::error::extracted asar is missing out/main/index.js at ${indexPath}`)
+  if (mainJsEntries.length === 0) {
+    console.error(`::error::no .js files found under out/main/ in ${asarPath}`)
     return null
   }
 
-  const indexJs = readFileSync(indexPath, 'utf8')
+  const indexJs = mainJsEntries
+    .map((entry) => {
+      // extractFile uses the host path module internally; pass the
+      // host-separator path with the leading separator stripped.
+      const internal = entry.replace(/^[\\/]+/, '')
+      return extractFile(asarPath, internal).toString('utf8')
+    })
+    .join('\n')
+
   const buildIdentityMatch = BUILD_IDENTITY_RE.exec(indexJs)
   const writeKeyMatch = WRITE_KEY_RE.exec(indexJs)
 
@@ -136,14 +173,18 @@ function verifyAsar(asarPath) {
     console.error(
       `::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`
     )
-    const sample = indexJs.match(/.*BUILD_IDENTITY.*/g)?.slice(0, 5) ?? []
+    const sample = indexJs.match(/.{0,80}BUILD_IDENTITY.{0,80}/g)?.slice(0, 5) ?? []
     for (const line of sample) {
-      console.error(`  ${line}`)
+      console.error(`  ${line.slice(0, 200)}`)
     }
     return null
   }
   if (!writeKeyMatch) {
     console.error(`::error::PostHog WRITE_KEY missing from ${asarPath}`)
+    const sample = indexJs.match(/.{0,80}WRITE_KEY.{0,80}/g)?.slice(0, 5) ?? []
+    for (const line of sample) {
+      console.error(`  ${line.slice(0, 200)}`)
+    }
     return null
   }
 
@@ -157,8 +198,10 @@ function verifyAsar(asarPath) {
 // the `define` values, only one of the asars would carry the constants and
 // the broken arch would ship transmitting nothing. Looping is cheap insurance
 // against that class of regression. We additionally require every asar to
-// agree on the BUILD_IDENTITY value — a mismatch means the matrix shipped
-// inconsistent build-identity claims, which is itself a release bug.
+// agree on the BUILD_IDENTITY and WRITE_KEY values — a mismatch means the
+// matrix shipped inconsistent build-identity claims, or (worse) per-arch
+// PostHog keys that would split events across projects, both of which are
+// release bugs.
 const results = []
 for (const asarPath of asarMatches) {
   const result = verifyAsar(asarPath)
@@ -175,6 +218,15 @@ if (distinctIdentities.size > 1) {
   )
   for (const r of results) {
     console.error(`  - ${r.asarPath}: ${r.buildIdentity}`)
+  }
+  process.exit(1)
+}
+
+const distinctWriteKeys = new Set(results.map((r) => r.writeKey))
+if (distinctWriteKeys.size > 1) {
+  console.error(`::error::asars disagree on WRITE_KEY across arches`)
+  for (const r of results) {
+    console.error(`  - ${r.asarPath}: ${r.writeKey.slice(0, 8)}... (length=${r.writeKey.length})`)
   }
   process.exit(1)
 }
