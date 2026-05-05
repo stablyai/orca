@@ -88,11 +88,14 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+    // Why: `-z` on `git worktree list --porcelain` requires Git ≥ 2.36 (April
+    // 2022). On older Git the subprocess errors out, the catch below returns
+    // [], and every create flow throws "Worktree created but not found in
+    // listing" (issue #1453). The parser handles both line-block and
+    // NUL-delimited blocks, so omitting `-z` is safe.
+    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
       cwd: repoPath
     })
-    // Why: WSL path translation is line-oriented, but `-z` porcelain output is
-    // NUL-delimited. Parse first so only complete path fields are translated.
     const worktrees = parseWorktreeList(stdout).map((worktree) => {
       const translatedPath = translateWorktreePath(worktree.path, repoPath)
       return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
@@ -106,7 +109,11 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
         return isSparse ? { ...worktree, isSparse } : worktree
       })
     )
-  } catch {
+  } catch (err) {
+    // Why: a silent catch turned issue #1453's underlying
+    // "git: unknown switch -z" into the opaque "not found in listing" toast.
+    // Surface the cause so future regressions show up immediately.
+    console.warn('[git/worktree] listWorktrees failed:', err)
     return []
   }
 }

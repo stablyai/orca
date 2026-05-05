@@ -87,7 +87,7 @@ describe('removeWorktree', () => {
 
   it('removes the worktree, prunes stale refs, and deletes its local branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain -z': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -97,7 +97,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
+      'git worktree list --porcelain#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -121,7 +121,7 @@ branch refs/heads/main
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain -z': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -135,7 +135,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
+      'git worktree list --porcelain#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -154,7 +154,7 @@ branch refs/heads/feature/test
       expect.arrayContaining([
         'git worktree remove /repo-feature',
         'git worktree prune',
-        'git worktree list --porcelain -z'
+        'git worktree list --porcelain'
       ])
     )
     expect(calls).not.toContain('git branch -D feature/test')
@@ -163,7 +163,7 @@ branch refs/heads/feature/test
 
   it('deletes the branch after prune removes stale sibling worktree entries', async () => {
     mockGitCommands({
-      'git worktree list --porcelain -z': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -178,7 +178,7 @@ branch refs/heads/feature/test
 prunable gitdir file points to non-existent location
 `
       },
-      'git worktree list --porcelain -z#2': {
+      'git worktree list --porcelain#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -201,7 +201,7 @@ branch refs/heads/main
 
   it('passes --force before the worktree path when forced removal is requested', async () => {
     mockGitCommands({
-      'git worktree list --porcelain -z': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -211,7 +211,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
+      'git worktree list --porcelain#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -226,7 +226,7 @@ branch refs/heads/main
 
   it('matches Windows worktree paths before deleting the branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain -z': {
+      'git worktree list --porcelain': {
         stdout: `worktree C:/repo
 HEAD abc123
 branch refs/heads/main
@@ -236,7 +236,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
+      'git worktree list --porcelain#2': {
         stdout: `worktree C:/repo
 HEAD abc123
 branch refs/heads/main
@@ -259,7 +259,7 @@ branch refs/heads/main
   it('keeps removal successful when branch cleanup fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockGitCommands({
-      'git worktree list --porcelain -z': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -269,7 +269,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
+      'git worktree list --porcelain#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -337,14 +337,14 @@ describe('listWorktrees', () => {
     // Why: the non-sparse main worktree gets an fs probe of its sparse config
     // file; the linked worktree short-circuits on the parsed `sparse` token and
     // does not. Only one git subprocess runs regardless of worktree count.
-    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
+    expect(getGitCalls()).toEqual(['git worktree list --porcelain'])
     expect(statMock).toHaveBeenCalledTimes(1)
     expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
   })
 
   it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      if (args.join(' ') === 'worktree list --porcelain -z') {
+      if (args.join(' ') === 'worktree list --porcelain') {
         return {
           stdout:
             'worktree /home/me/repo\0HEAD abc123\0branch refs/heads/main\0\0' +
@@ -394,7 +394,7 @@ describe('listWorktrees', () => {
     // Why: the detection path must not spawn a git subprocess per worktree —
     // the perf regression in #1131 came from `git sparse-checkout list` firing
     // on every poll.
-    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
+    expect(getGitCalls()).toEqual(['git worktree list --porcelain'])
   })
 })
 
@@ -428,7 +428,7 @@ describe('addSparseWorktree', () => {
       'git sparse-checkout set -- packages/web': {
         error: new Error('sparse setup failed')
       },
-      'git worktree list --porcelain -z': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -438,7 +438,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
+      'git worktree list --porcelain#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
