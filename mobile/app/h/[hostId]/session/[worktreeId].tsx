@@ -6,11 +6,12 @@ import {
   ScrollView,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  type KeyboardEvent
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ArrowUp, ChevronLeft, Monitor, Plus, Smartphone } from 'lucide-react-native'
@@ -121,6 +122,7 @@ export default function SessionScreen() {
     created?: string
   }>()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [client, setClient] = useState<RpcClient | null>(null)
   const [connState, setConnState] = useState<ConnectionState>('disconnected')
   const [terminals, setTerminals] = useState<Terminal[]>([])
@@ -134,6 +136,11 @@ export default function SessionScreen() {
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
+  // Why: in Expo SDK 55 edge-to-edge mode the OS does NOT resize the window when
+  // the IME opens — the keyboard draws on top of the app. We track the keyboard
+  // height ourselves and apply it as paddingBottom on the input/accessory area
+  // so the input lifts above the IME and the terminal flex container shrinks.
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
   // Why: server-authoritative display mode per terminal. The runtime is the
   // single source of truth — this state is populated from subscribe responses.
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
@@ -428,6 +435,51 @@ export default function SessionScreen() {
   useEffect(() => {
     void loadCustomKeys().then(setCustomKeys)
   }, [])
+
+  // Why: drive the bottom padding from the keyboard height (edge-to-edge mode
+  // doesn't resize the window) and refit xterm once the layout settles so the
+  // terminal grid matches the new visible area. iOS exposes 'will' events that
+  // animate in sync with the IME; Android only fires 'did' events reliably.
+  useEffect(() => {
+    let refitTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefit = () => {
+      if (refitTimer) clearTimeout(refitTimer)
+      refitTimer = setTimeout(() => {
+        const handle = activeHandleRef.current
+        if (!handle) return
+        const ref = terminalRefs.current.get(handle)
+        if (!ref) return
+        void (async () => {
+          const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
+          if (!dims) return
+          const prev = viewportRef.current
+          if (prev && prev.cols === dims.cols && prev.rows === dims.rows) return
+          viewportRef.current = dims
+          viewportMeasuredRef.current = true
+          unsubscribeTerminal(handle)
+          initializedHandlesRef.current.delete(handle)
+          subscribeToTerminal(handle)
+        })()
+      }, 150)
+    }
+    const onShow = (e: KeyboardEvent) => {
+      setKeyboardHeight(e.endCoordinates?.height ?? 0)
+      scheduleRefit()
+    }
+    const onHide = () => {
+      setKeyboardHeight(0)
+      scheduleRefit()
+    }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const showSub = Keyboard.addListener(showEvent, onShow)
+    const hideSub = Keyboard.addListener(hideEvent, onHide)
+    return () => {
+      if (refitTimer) clearTimeout(refitTimer)
+      showSub.remove()
+      hideSub.remove()
+    }
+  }, [subscribeToTerminal, unsubscribeTerminal])
 
   useEffect(() => {
     if (hostId && worktreeId) {
@@ -733,13 +785,21 @@ export default function SessionScreen() {
           : `${terminals.length} terminals`
       : STATUS_LABELS[connState]
 
+  // Why: on Android (Samsung 3-button) the keyboard event reports only the IME
+  // height; the system nav bar sits below the keyboard and adds its own height
+  // on top, so we must add insets.bottom too or the input stays clipped behind
+  // the nav bar. On iOS the keyboard coordinates already include the home
+  // indicator region, so adding insets.bottom would double-count.
+  const bottomPadding =
+    keyboardHeight > 0
+      ? Platform.OS === 'ios'
+        ? keyboardHeight
+        : keyboardHeight + insets.bottom
+      : insets.bottom
+
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.kavInner}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
+      <View style={styles.kavInner}>
         <SafeAreaView style={styles.sessionChrome} edges={['top']}>
           <View style={styles.sessionTopBar}>
             <Pressable
@@ -845,113 +905,120 @@ export default function SessionScreen() {
           </View>
         )}
 
-        {/* Accessory keys */}
-        <View style={styles.accessoryBar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.accessoryContent}
-          >
-            <Pressable
-              style={({ pressed }) => [
-                styles.accessoryKey,
-                pressed && styles.accessoryKeyPressed,
-                !canSend && styles.accessoryKeyDisabled
-              ]}
-              disabled={!canSend}
-              onPress={() => {
-                if (activeHandle) {
-                  void toggleDisplayMode(activeHandle)
-                }
-              }}
-              accessibilityLabel={
-                isPhoneMode(activeHandle) ? 'Switch to desktop mode' : 'Switch to phone mode'
-              }
+        {/* Why: bottomPadding lifts the entire input region above the keyboard
+            (when shown) or above the system nav bar / home indicator (when hidden). */}
+        <View style={{ paddingBottom: bottomPadding }}>
+          {/* Accessory keys */}
+          <View style={styles.accessoryBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.accessoryContent}
             >
-              {isPhoneMode(activeHandle) ? (
-                <Monitor size={14} color={canSend ? colors.textSecondary : colors.textMuted} />
-              ) : (
-                <Smartphone size={14} color={canSend ? colors.textSecondary : colors.textMuted} />
-              )}
-            </Pressable>
-            {ACCESSORY_KEYS.map((key) => (
               <Pressable
-                key={key.label}
                 style={({ pressed }) => [
                   styles.accessoryKey,
                   pressed && styles.accessoryKeyPressed,
                   !canSend && styles.accessoryKeyDisabled
                 ]}
                 disabled={!canSend}
-                onPress={() => void handleAccessoryKey(key.bytes)}
-                accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
-              >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
-                >
-                  {key.label}
-                </Text>
-              </Pressable>
-            ))}
-            {customKeys.map((key) => (
-              <Pressable
-                key={key.id}
-                style={({ pressed }) => [
-                  styles.accessoryKey,
-                  styles.customAccessoryKey,
-                  pressed && styles.accessoryKeyPressed,
-                  !canSend && styles.accessoryKeyDisabled
-                ]}
-                disabled={!canSend}
-                onPress={() => void handleAccessoryKey(key.bytes)}
-                onLongPress={() => {
-                  triggerMediumImpact()
-                  setDeleteKeyTarget(key)
+                onPress={() => {
+                  if (activeHandle) {
+                    void toggleDisplayMode(activeHandle)
+                  }
                 }}
-                delayLongPress={400}
-                accessibilityLabel={`Send ${key.label}`}
+                accessibilityLabel={
+                  isPhoneMode(activeHandle) ? 'Switch to desktop mode' : 'Switch to phone mode'
+                }
               >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
-                >
-                  {key.label}
-                </Text>
+                {isPhoneMode(activeHandle) ? (
+                  <Monitor size={14} color={canSend ? colors.textSecondary : colors.textMuted} />
+                ) : (
+                  <Smartphone size={14} color={canSend ? colors.textSecondary : colors.textMuted} />
+                )}
               </Pressable>
-            ))}
-            <Pressable
-              style={({ pressed }) => [styles.accessoryKey, pressed && styles.accessoryKeyPressed]}
-              onPress={() => setShowCustomKeyModal(true)}
-              accessibilityLabel="Add custom shortcut"
-            >
-              <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            </Pressable>
-          </ScrollView>
-        </View>
+              {ACCESSORY_KEYS.map((key) => (
+                <Pressable
+                  key={key.label}
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={() => void handleAccessoryKey(key.bytes)}
+                  accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
+                >
+                  <Text
+                    style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+                  >
+                    {key.label}
+                  </Text>
+                </Pressable>
+              ))}
+              {customKeys.map((key) => (
+                <Pressable
+                  key={key.id}
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    styles.customAccessoryKey,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={() => void handleAccessoryKey(key.bytes)}
+                  onLongPress={() => {
+                    triggerMediumImpact()
+                    setDeleteKeyTarget(key)
+                  }}
+                  delayLongPress={400}
+                  accessibilityLabel={`Send ${key.label}`}
+                >
+                  <Text
+                    style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+                  >
+                    {key.label}
+                  </Text>
+                </Pressable>
+              ))}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.accessoryKey,
+                  pressed && styles.accessoryKeyPressed
+                ]}
+                onPress={() => setShowCustomKeyModal(true)}
+                accessibilityLabel="Add custom shortcut"
+              >
+                <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
+              </Pressable>
+            </ScrollView>
+          </View>
 
-        {/* Input bar */}
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.textInput}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Type a command…"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="send"
-            editable={canSend}
-            onSubmitEditing={() => void handleSend()}
-          />
-          <Pressable
-            style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-            disabled={!canSend}
-            onPress={() => void handleSend()}
-            accessibilityLabel="Send command"
-          >
-            <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
-          </Pressable>
+          {/* Input bar */}
+          <View style={styles.inputBar}>
+            <TextInput
+              style={styles.textInput}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Type a command…"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="send"
+              editable={canSend}
+              onSubmitEditing={() => void handleSend()}
+            />
+            <Pressable
+              style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+              disabled={!canSend}
+              onPress={() => void handleSend()}
+              accessibilityLabel="Send command"
+            >
+              <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
+            </Pressable>
+          </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       <ActionSheetModal
         visible={actionTarget != null}
