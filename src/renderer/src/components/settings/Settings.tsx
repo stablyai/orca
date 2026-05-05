@@ -8,6 +8,7 @@ import {
   GitBranch,
   Globe,
   Keyboard,
+  Lock,
   ShieldCheck,
   Palette,
   Server,
@@ -21,7 +22,9 @@ import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { applyDocumentTheme } from '@/lib/document-theme'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
+import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { GeneralPane, GENERAL_PANE_SEARCH_ENTRIES } from './GeneralPane'
 import { BrowserPane, BROWSER_PANE_SEARCH_ENTRIES } from './BrowserPane'
 import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane'
@@ -44,6 +47,8 @@ import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
 } from './DeveloperPermissionsPane'
+import { PrivacyPane } from './PrivacyPane'
+import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
@@ -58,11 +63,13 @@ type SettingsNavTarget =
   | 'terminal'
   | 'notifications'
   | 'developer-permissions'
+  | 'privacy'
   | 'shortcuts'
   | 'stats'
   | 'ssh'
   | 'experimental'
   | 'agents'
+  | 'mobile'
   | 'repo'
 
 type SettingsNavSection = {
@@ -175,8 +182,8 @@ function Settings(): React.JSX.Element {
     void window.api.wsl.isAvailable().then(setWslAvailable)
     void window.api.pwsh.isAvailable().then(setPwshAvailable)
   }, [isWindows])
-  const [terminalFontSuggestions, setTerminalFontSuggestions] = useState<string[]>(
-    getFallbackTerminalFonts()
+  const [fontSuggestions, setFontSuggestions] = useState<string[]>(
+    Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
@@ -250,7 +257,9 @@ function Settings(): React.JSX.Element {
           return
         }
         terminalFontsLoadedRef.current = true
-        setTerminalFontSuggestions((prev) => Array.from(new Set([...fonts, ...prev])).slice(0, 320))
+        setFontSuggestions((prev) =>
+          Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...fonts, ...prev])).slice(0, 320)
+        )
       } catch {
         // Fall back to curated cross-platform suggestions.
       }
@@ -317,19 +326,7 @@ function Settings(): React.JSX.Element {
   }, [repos])
 
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    const root = document.documentElement
-    if (theme === 'dark') {
-      root.classList.add('dark')
-    } else if (theme === 'light') {
-      root.classList.remove('dark')
-    } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      if (prefersDark) {
-        root.classList.add('dark')
-      } else {
-        root.classList.remove('dark')
-      }
-    }
+    applyDocumentTheme(theme)
   }, [])
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
@@ -403,6 +400,13 @@ function Settings(): React.JSX.Element {
             }
           ]
         : []),
+      {
+        id: 'privacy',
+        title: 'Privacy & Telemetry',
+        description: 'Anonymous usage data and telemetry controls.',
+        icon: Lock,
+        searchEntries: PRIVACY_PANE_SEARCH_ENTRIES
+      },
       {
         id: 'shortcuts',
         title: 'Shortcuts',
@@ -672,6 +676,7 @@ function Settings(): React.JSX.Element {
                     settings={settings}
                     updateSettings={updateSettings}
                     applyTheme={applyTheme}
+                    fontSuggestions={fontSuggestions}
                   />
                 </SettingsSection>
 
@@ -696,7 +701,7 @@ function Settings(): React.JSX.Element {
                     settings={settings}
                     updateSettings={updateSettings}
                     systemPrefersDark={systemPrefersDark}
-                    terminalFontSuggestions={terminalFontSuggestions}
+                    terminalFontSuggestions={fontSuggestions}
                     scrollbackMode={scrollbackMode}
                     setScrollbackMode={setScrollbackMode}
                     ghostty={ghostty}
@@ -733,6 +738,15 @@ function Settings(): React.JSX.Element {
                     <DeveloperPermissionsPane />
                   </SettingsSection>
                 ) : null}
+
+                <SettingsSection
+                  id="privacy"
+                  title="Privacy & Telemetry"
+                  description="Anonymous usage data and telemetry controls."
+                  searchEntries={PRIVACY_PANE_SEARCH_ENTRIES}
+                >
+                  <PrivacyPane settings={settings} />
+                </SettingsSection>
 
                 <SettingsSection
                   id="shortcuts"

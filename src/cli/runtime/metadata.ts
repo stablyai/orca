@@ -1,14 +1,18 @@
 import { homedir } from 'os'
 import { join } from 'path'
 import { readFileSync } from 'fs'
-import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
+import {
+  findTransport,
+  getRuntimeMetadataPath,
+  type RuntimeMetadata
+} from '../../shared/runtime-bootstrap'
 import { RuntimeClientError } from './types'
 
 export function readMetadata(userDataPath: string): RuntimeMetadata {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   try {
     const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
-    if (!metadata?.transport || !metadata.authToken) {
+    if (!metadata || !findTransport(metadata, 'unix', 'named-pipe') || !metadata.authToken) {
       throw new RuntimeClientError(
         'runtime_unavailable',
         `Orca runtime metadata is incomplete at ${metadataPath}`

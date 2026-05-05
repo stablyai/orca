@@ -15,6 +15,7 @@ import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry } from './telemetry/client'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
@@ -119,7 +120,16 @@ function focusExistingWindow(): void {
 // derives the lock identity from the `userData` path, so this placement lets
 // dev (`orca-dev`) and packaged (`orca`) runs lock in separate namespaces
 // instead of serialising against each other.
-const hasSingleInstanceLock = acquireSingleInstanceLock(app, focusExistingWindow)
+//
+// Why skip in dev: engineers routinely run `pnpm dev` in parallel from
+// multiple worktrees while shipping features, and the lock makes the second
+// `pnpm dev` exit silently. In dev we accept that `orca-runtime.json` and
+// `endpoint.env` may race (the bundled `orca-dev` CLI / agent hooks route
+// to whichever instance wrote last). The dev build is not used for real
+// agent work, so that routing ambiguity is acceptable. Packaged Orca keeps
+// the lock to protect against the corruption documented in PR #1326 /
+// issue #1312.
+const hasSingleInstanceLock = is.dev ? true : acquireSingleInstanceLock(app, focusExistingWindow)
 if (!hasSingleInstanceLock) {
   if (is.dev) {
     // Why: packaged runs have no attached console, but dev runs do. Emit a
@@ -498,10 +508,18 @@ app.whenReady().then(async () => {
       }
     }
   })
+  // Why: E2E tests launch parallel Electron instances that would all race to
+  // bind the default fixed port, crashing on EADDRINUSE. Port 0 lets the OS
+  // assign a random available port per instance while still exercising the
+  // full WebSocket startup path.
+  const isE2E = Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
-    userDataPath: app.getPath('userData')
+    userDataPath: app.getPath('userData'),
+    enableWebSocket: true,
+    ...(isE2E ? { wsPort: 0 } : {})
   })
+  registerMobileHandlers(runtimeRpc)
 
   // Why: the persistent-terminal daemon is always started. If it fails, the
   // LocalPtyProvider (initialized at module load in ipc/pty.ts) remains as the

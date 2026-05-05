@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Notification, ipcMain, shell } from 'electron'
 import type { Store } from '../persistence'
 import type { NotificationDispatchRequest, NotificationDispatchResult } from '../../shared/types'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 
@@ -11,7 +12,7 @@ const NOTIFICATION_COOLDOWN_MS = 5000
 // strong reference until the notification is clicked or closed.
 const activeNotifications = new Set<Notification>()
 
-export function registerNotificationHandlers(store: Store): void {
+export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
 
   ipcMain.removeHandler('notifications:openSystemSettings')
@@ -28,6 +29,21 @@ export function registerNotificationHandlers(store: Store): void {
   ipcMain.handle(
     'notifications:dispatch',
     (_event, args: NotificationDispatchRequest): NotificationDispatchResult => {
+      // Why: mobile push is independent of desktop notification guards.
+      // The user's phone should receive the notification even when the desktop
+      // window is focused (suppressWhenFocused), Electron notifications aren't
+      // supported, or the desktop is in cooldown. The mobile client decides
+      // independently whether to show based on its own app state.
+      if (runtime) {
+        const opts = buildNotificationOptions(args)
+        runtime.dispatchMobileNotification({
+          source: args.source,
+          title: opts.title,
+          body: opts.body,
+          worktreeId: args.worktreeId
+        })
+      }
+
       if (!Notification.isSupported()) {
         return { delivered: false, reason: 'not-supported' }
       }
@@ -119,6 +135,7 @@ export function registerNotificationHandlers(store: Store): void {
       }
 
       notification.show()
+
       return { delivered: true }
     }
   )

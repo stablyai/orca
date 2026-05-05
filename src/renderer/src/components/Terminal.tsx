@@ -39,7 +39,11 @@ import {
   collectBrowserWebviewIds,
   destroyWorkspaceWebviews
 } from '../store/slices/browser-webview-cleanup'
-import { handleSwitchTab, handleSwitchTerminalTab } from '../hooks/ipc-tab-switch'
+import {
+  handleSwitchTab,
+  handleSwitchTabAcrossAllTypes,
+  handleSwitchTerminalTab
+} from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -957,16 +961,21 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs
+      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
+      // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
+      // every tab type as an escape hatch from the type-scoped default, and
+      // mirrors Safari/Chrome's tab-switch chord on macOS.
       // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
-      // as the key value (the shifted character), not '['.
+      // as the key value (the shifted character), not '['. Option+[ also
+      // composes to dead-key / punctuation on many layouts, so matching on
+      // event.key would miss the chord entirely on non-US layouts.
       if (
         mod &&
-        e.shiftKey &&
         (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
-        !e.repeat
+        !e.repeat &&
+        (e.shiftKey || e.altKey)
       ) {
-        // Why: delegate to the shared handleSwitchTab used by the IPC shortcut
+        // Why: delegate to the shared handler used by the IPC shortcut path
         // so both code paths share one implementation. Always consume the
         // chord — even when the switch is a no-op (e.g. single tab), we own
         // this key combo and shouldn't let it reach xterm or the browser
@@ -974,7 +983,11 @@ function Terminal(): React.JSX.Element | null {
         e.preventDefault()
         e.stopPropagation()
         e.stopImmediatePropagation()
-        handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)
+        if (e.altKey) {
+          handleSwitchTabAcrossAllTypes(e.code === 'BracketRight' ? 1 : -1)
+        } else {
+          handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)
+        }
       }
 
       // Ctrl+PageDown/PageUp - switch terminal tabs only

@@ -14,8 +14,230 @@ import type {
   Worktree,
   GitHubWorkItem
 } from '../../../../shared/types'
+import type {
+  GetProjectViewTableArgs,
+  GetProjectViewTableResult,
+  GitHubProjectFieldMutationValue,
+  GitHubProjectMutationResult,
+  GitHubProjectRow,
+  GitHubProjectTable,
+  GitHubProjectViewError
+} from '../../../../shared/github-project-types'
 import { sortWorkItemsByUpdatedAt, PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import { syncPRChecksStatus } from './github-checks'
+
+// ─── ProjectV2 cache types ────────────────────────────────────────────
+// Why: declared separately from CacheEntry<T> (not a generified E parameter)
+// because project-view has a single GraphQL source — no issue/PR-source
+// fallback — and the error union is distinct. Shared structural shape only.
+export type ProjectViewCacheEntry<T> = {
+  data: T | null
+  fetchedAt: number
+  error?: GitHubProjectViewError
+}
+
+export type ProjectRowContentUpdate = {
+  title?: string
+  body?: string
+  addLabels?: string[]
+  removeLabels?: string[]
+  addAssignees?: string[]
+  removeAssignees?: string[]
+}
+
+/** Optimistic, IPC-free patch shape for `projectViewCache` rows.
+ *  Why: the dialog already issues mutations via slug-addressed IPCs and only
+ *  needs to keep the Project table view in sync optimistically. Replacing
+ *  `addLabels`/`removeLabels` deltas with full `labels`/`assignees` arrays
+ *  matches what the dialog's local state already tracks (`localLabels`,
+ *  `localAssignees`) and avoids redundant set-merge logic at the call site. */
+export type ProjectRowContentPatch = {
+  title?: string
+  body?: string
+  /** Why: accept the renderer's lowercase work-item state vocabulary
+   *  ('open' | 'closed' | 'merged' | 'draft') and translate to GitHub's
+   *  UPPERCASE row.content.state when applying. The reducer only writes
+   *  what callers send; merged/draft are passed through for completeness
+   *  even though the dialog edits only flip open↔closed today. */
+  state?: 'open' | 'closed' | 'merged' | 'draft'
+  labels?: string[]
+  assignees?: string[]
+}
+
+// Why: queryOverride participates in the cache key so an overridden search
+// does not clobber the default-view cache entry, and vice versa. `undefined`
+// means "use the view's stored filter" — the unfiltered cache entry. An
+// empty string is a *distinct* override meaning "no filter", which produces
+// different rows when the view's stored filter is non-empty, so it gets its
+// own cache key.
+function queryOverrideKeyPart(queryOverride: string | undefined): string {
+  if (queryOverride === undefined) {return ''}
+  return `:q=${queryOverride}`
+}
+
+export function projectViewCacheKey(
+  ownerType: GetProjectViewTableArgs['ownerType'],
+  owner: string,
+  projectNumber: number,
+  resolvedViewId: string,
+  queryOverride?: string
+): string {
+  return `github-project:${ownerType}:${owner}:${projectNumber}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
+}
+
+function projectViewRequestKey(args: GetProjectViewTableArgs): string {
+  // Why: callers without `viewId` can't compute the resolved cache key up
+  // front. Use the input-arg signature for inflight dedup; the resolved
+  // cache key is only known after the main-process IPC returns.
+  const selector = args.viewId
+    ? `id:${args.viewId}`
+    : args.viewNumber !== undefined
+      ? `num:${args.viewNumber}`
+      : args.viewName
+        ? `name:${args.viewName}`
+        : 'default'
+  return `${args.ownerType}:${args.owner}:${args.projectNumber}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
+}
+
+// Why: module-scope inflight map — must mirror `inflightWorkItemsRequests`
+// (dedup + force-refresh semantics). Reuses the work-item concurrency gate:
+// the gate exists to bound `gh` subprocess pressure at the renderer boundary,
+// and project-view fetches pressure the same subprocess budget. Two separate
+// gates would let concurrent Project + work-item fetches blow past the cap.
+const inflightProjectViewRequests = new Map<
+  string,
+  { promise: Promise<GetProjectViewTableResult>; force: boolean }
+>()
+
+// Why: derive an optimistic GitHubProjectFieldValue from a mutation value so
+// the patched row re-renders immediately. Single-select and iteration lookups
+// consult the field config on the cached table; the result is best-effort and
+// is overwritten by the authoritative payload on next refresh.
+function optimisticFieldValueFromMutation(
+  table: GitHubProjectTable,
+  fieldId: string,
+  value: GitHubProjectFieldMutationValue
+): GitHubProjectTable['rows'][number]['fieldValuesByFieldId'][string] | null {
+  const field = table.selectedView.fields.find((f) => f.id === fieldId)
+  switch (value.kind) {
+    case 'single-select': {
+      if (field?.kind === 'single-select') {
+        const option = field.options.find((o) => o.id === value.optionId)
+        if (option) {
+          return {
+            kind: 'single-select',
+            fieldId,
+            optionId: option.id,
+            name: option.name,
+            color: option.color
+          }
+        }
+      }
+      return {
+        kind: 'single-select',
+        fieldId,
+        optionId: value.optionId,
+        name: '',
+        color: ''
+      }
+    }
+    case 'iteration': {
+      if (field?.kind === 'iteration') {
+        const iteration = field.iterations.find((i) => i.id === value.iterationId)
+        if (iteration) {
+          return {
+            kind: 'iteration',
+            fieldId,
+            iterationId: iteration.id,
+            title: iteration.title,
+            startDate: iteration.startDate,
+            duration: iteration.duration
+          }
+        }
+      }
+      return {
+        kind: 'iteration',
+        fieldId,
+        iterationId: value.iterationId,
+        title: '',
+        startDate: '',
+        duration: 0
+      }
+    }
+    case 'text':
+      return { kind: 'text', fieldId, text: value.text }
+    case 'number':
+      return { kind: 'number', fieldId, number: value.number }
+    case 'date':
+      return { kind: 'date', fieldId, date: value.date }
+    default:
+      return null
+  }
+}
+
+function applyRowPatch(
+  set: (fn: (s: AppState) => Partial<AppState>) => void,
+  cacheKey: string,
+  rowId: string,
+  nextRow: GitHubProjectRow
+): void {
+  set((s) => {
+    const entry = s.projectViewCache[cacheKey]
+    if (!entry?.data) {
+      return {}
+    }
+    const rowIndex = entry.data.rows.findIndex((r) => r.id === rowId)
+    if (rowIndex === -1) {
+      return {}
+    }
+    const rows = [...entry.data.rows]
+    rows[rowIndex] = nextRow
+    return {
+      projectViewCache: {
+        ...s.projectViewCache,
+        [cacheKey]: {
+          ...entry,
+          data: { ...entry.data, rows }
+        }
+      }
+    }
+  })
+}
+
+function rollbackRowIfPresent(
+  set: (fn: (s: AppState) => Partial<AppState>) => void,
+  get: () => AppState,
+  cacheKey: string,
+  rowId: string,
+  previousRow: GitHubProjectRow
+): void {
+  // Why: the cache entry may have moved (rapid project switch) or the row may
+  // no longer exist by the time the mutation response returns. Skip rollback
+  // in that case — resurrecting stale data into a newly selected project would
+  // show the wrong row.
+  const entry = get().projectViewCache[cacheKey]
+  if (!entry?.data) {
+    return
+  }
+  const stillPresent = entry.data.rows.some((r) => r.id === rowId)
+  if (!stillPresent) {
+    return
+  }
+  applyRowPatch(set, cacheKey, rowId, previousRow)
+}
+
+function parseSlugAndNumber(
+  row: GitHubProjectRow
+): { owner: string; repo: string; number: number } | null {
+  if (!row.content.repository || row.content.number == null) {
+    return null
+  }
+  const parts = row.content.repository.split('/')
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return null
+  }
+  return { owner: parts[0], repo: parts[1], number: row.content.number }
+}
 
 export type WorkItemsCacheSources = {
   issues: GitHubOwnerRepo | null
@@ -311,6 +533,44 @@ export type GitHubSlice = {
     repoPath: string,
     preference: IssueSourcePreference
   ) => Promise<void>
+  // ── ProjectV2 view cache ─────────────────────────────────────────────
+  projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
+  fetchProjectViewTable: (
+    args: GetProjectViewTableArgs,
+    options?: FetchOptions
+  ) => Promise<GetProjectViewTableResult>
+  updateProjectFieldValue: (
+    cacheKey: string,
+    rowId: string,
+    fieldId: string,
+    value: GitHubProjectFieldMutationValue
+  ) => Promise<GitHubProjectMutationResult>
+  clearProjectFieldValue: (
+    cacheKey: string,
+    rowId: string,
+    fieldId: string
+  ) => Promise<GitHubProjectMutationResult>
+  patchProjectIssueOrPr: (
+    cacheKey: string,
+    rowId: string,
+    updates: ProjectRowContentUpdate
+  ) => Promise<GitHubProjectMutationResult>
+  patchProjectRowIssueType: (
+    cacheKey: string,
+    rowId: string,
+    issueType: { id: string; name: string; color: string | null; description: string | null } | null
+  ) => Promise<GitHubProjectMutationResult>
+  /** Optimistic, IPC-free patcher for a single `projectViewCache` row's
+   *  `content`. Used by GitHubItemDialog when `projectOrigin` is set so the
+   *  Project table re-renders immediately after dialog edits — `patchWorkItem`
+   *  alone only walks `workItemsCache` and would leave the Project view stale
+   *  until the next refresh. The actual write is dispatched separately via
+   *  the slug-addressed update IPCs. */
+  patchProjectRowContent: (
+    cacheKey: string,
+    rowId: string,
+    patch: ProjectRowContentPatch
+  ) => void
 }
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -320,6 +580,364 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   commentsCache: {},
   workItemsCache: {},
   workItemsInvalidationNonce: 0,
+  projectViewCache: {},
+
+  fetchProjectViewTable: async (args, options) => {
+    const requestKey = projectViewRequestKey(args)
+
+    // Fast path: when the caller supplies `viewId`, we already know the
+    // resolved cache key and can serve a fresh entry directly.
+    const maybeKnownKey = args.viewId
+      ? projectViewCacheKey(
+          args.ownerType,
+          args.owner,
+          args.projectNumber,
+          args.viewId,
+          args.queryOverride
+        )
+      : null
+    if (!options?.force && maybeKnownKey) {
+      const cached = get().projectViewCache[maybeKnownKey]
+      if (cached?.data && Date.now() - cached.fetchedAt < WORK_ITEMS_CACHE_TTL) {
+        return { ok: true, data: cached.data }
+      }
+    }
+
+    const existing = inflightProjectViewRequests.get(requestKey)
+    if (existing) {
+      // Why: mirror fetchWorkItems force-refresh semantics — a forcing caller
+      // must not silently dedupe to a non-forcing in-flight request; wait for
+      // that to settle (result discarded) and then issue a fresh forced call.
+      if (options?.force && !existing.force) {
+        await existing.promise.catch(() => {})
+      } else {
+        return existing.promise
+      }
+    }
+
+    const request = (async (): Promise<GetProjectViewTableResult> => {
+      await acquireWorkItemSlot()
+      try {
+        const envelope = await window.api.gh.getProjectViewTable(args)
+        if (envelope.ok) {
+          const table = envelope.data
+          const key = projectViewCacheKey(
+            table.project.ownerType,
+            table.project.owner,
+            table.project.number,
+            table.selectedView.id,
+            args.queryOverride
+          )
+          set((s) => ({
+            projectViewCache: {
+              ...s.projectViewCache,
+              [key]: { data: table, fetchedAt: Date.now() }
+            }
+          }))
+        } else if (maybeKnownKey) {
+          // Only stamp the error onto the cache when we have a resolved key
+          // (i.e. caller supplied viewId). Otherwise we have nowhere to write
+          // it — the renderer classifies the error directly from the envelope.
+          set((s) => ({
+            projectViewCache: {
+              ...s.projectViewCache,
+              [maybeKnownKey]: {
+                data: s.projectViewCache[maybeKnownKey]?.data ?? null,
+                fetchedAt: Date.now(),
+                error: envelope.error
+              }
+            }
+          }))
+        }
+        return envelope
+      } catch (err) {
+        // Why: IPC boundary must not throw across the promise — wrap any
+        // unexpected error in the classified envelope so the renderer has
+        // a single shape to render.
+        console.error('Failed to fetch GitHub project view:', err)
+        return {
+          ok: false,
+          error: {
+            type: 'unknown',
+            message: err instanceof Error ? err.message : 'Failed to fetch project view'
+          }
+        }
+      } finally {
+        releaseWorkItemSlot()
+        inflightProjectViewRequests.delete(requestKey)
+      }
+    })()
+
+    inflightProjectViewRequests.set(requestKey, {
+      promise: request,
+      force: Boolean(options?.force)
+    })
+    return request
+  },
+
+  updateProjectFieldValue: async (cacheKey, rowId, fieldId, value) => {
+    const state = get()
+    const entry = state.projectViewCache[cacheKey]
+    const table = entry?.data
+    if (!table) {
+      return {
+        ok: false,
+        error: { type: 'unknown', message: 'Project view not loaded' }
+      }
+    }
+    const rowIndex = table.rows.findIndex((r) => r.id === rowId)
+    if (rowIndex === -1) {
+      return {
+        ok: false,
+        error: { type: 'unknown', message: 'Row not found' }
+      }
+    }
+    const previousRow = table.rows[rowIndex]
+    // Optimistic patch: build a field value matching the mutation shape.
+    const nextField = optimisticFieldValueFromMutation(table, fieldId, value)
+    const optimisticFieldValues = { ...previousRow.fieldValuesByFieldId }
+    if (nextField) {
+      optimisticFieldValues[fieldId] = nextField
+    }
+    const optimisticRow: GitHubProjectRow = {
+      ...previousRow,
+      fieldValuesByFieldId: optimisticFieldValues
+    }
+    applyRowPatch(set, cacheKey, rowId, optimisticRow)
+
+    const result = await window.api.gh.updateProjectItemField({
+      projectId: table.project.id,
+      itemId: rowId,
+      fieldId,
+      value
+    })
+    if (!result.ok) {
+      rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
+    }
+    return result
+  },
+
+  clearProjectFieldValue: async (cacheKey, rowId, fieldId) => {
+    const state = get()
+    const entry = state.projectViewCache[cacheKey]
+    const table = entry?.data
+    if (!table) {
+      return {
+        ok: false,
+        error: { type: 'unknown', message: 'Project view not loaded' }
+      }
+    }
+    const rowIndex = table.rows.findIndex((r) => r.id === rowId)
+    if (rowIndex === -1) {
+      return {
+        ok: false,
+        error: { type: 'unknown', message: 'Row not found' }
+      }
+    }
+    const previousRow = table.rows[rowIndex]
+    const optimisticFieldValues = { ...previousRow.fieldValuesByFieldId }
+    delete optimisticFieldValues[fieldId]
+    const optimisticRow: GitHubProjectRow = {
+      ...previousRow,
+      fieldValuesByFieldId: optimisticFieldValues
+    }
+    applyRowPatch(set, cacheKey, rowId, optimisticRow)
+
+    const result = await window.api.gh.clearProjectItemField({
+      projectId: table.project.id,
+      itemId: rowId,
+      fieldId
+    })
+    if (!result.ok) {
+      rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
+    }
+    return result
+  },
+
+  patchProjectIssueOrPr: async (cacheKey, rowId, updates) => {
+    const state = get()
+    const entry = state.projectViewCache[cacheKey]
+    const table = entry?.data
+    if (!table) {
+      return {
+        ok: false,
+        error: { type: 'unknown', message: 'Project view not loaded' }
+      }
+    }
+    const rowIndex = table.rows.findIndex((r) => r.id === rowId)
+    if (rowIndex === -1) {
+      return {
+        ok: false,
+        error: { type: 'unknown', message: 'Row not found' }
+      }
+    }
+    const previousRow = table.rows[rowIndex]
+    const { owner, repo, number } = parseSlugAndNumber(previousRow) ?? {}
+    if (!owner || !repo || !number) {
+      return {
+        ok: false,
+        error: {
+          type: 'validation_error',
+          message: 'Row has no owner/repo/number — cannot patch underlying item'
+        }
+      }
+    }
+    // Optimistic content patch.
+    const nextContent = { ...previousRow.content }
+    if (updates.title !== undefined) {nextContent.title = updates.title}
+    if (updates.body !== undefined) {nextContent.body = updates.body}
+    if (updates.addLabels || updates.removeLabels) {
+      const next = new Map(nextContent.labels.map((l) => [l.name, l]))
+      for (const name of updates.addLabels ?? []) {
+        if (!next.has(name)) {next.set(name, { name, color: '808080' })}
+      }
+      for (const name of updates.removeLabels ?? []) {
+        next.delete(name)
+      }
+      nextContent.labels = Array.from(next.values())
+    }
+    if (updates.addAssignees || updates.removeAssignees) {
+      const next = new Map(nextContent.assignees.map((u) => [u.login, u]))
+      for (const login of updates.addAssignees ?? []) {
+        if (!next.has(login)) {next.set(login, { login, name: null, avatarUrl: null })}
+      }
+      for (const login of updates.removeAssignees ?? []) {
+        next.delete(login)
+      }
+      nextContent.assignees = Array.from(next.values())
+    }
+    const optimisticRow: GitHubProjectRow = { ...previousRow, content: nextContent }
+    applyRowPatch(set, cacheKey, rowId, optimisticRow)
+
+    // Why: PRs and issues both accept label/assignee edits through the issue
+    // endpoint — GitHub PRs are issues for labels/assignees. Title/body for
+    // PRs goes through updatePullRequestBySlug; for issues through
+    // updateIssueBySlug. We dispatch both as needed.
+    let envelope: GitHubProjectMutationResult = { ok: true }
+    if (
+      previousRow.itemType === 'PULL_REQUEST' &&
+      (updates.title !== undefined || updates.body !== undefined)
+    ) {
+      const prRes = await window.api.gh.updatePullRequestBySlug({
+        owner,
+        repo,
+        number,
+        updates: {
+          ...(updates.title !== undefined ? { title: updates.title } : {}),
+          ...(updates.body !== undefined ? { body: updates.body } : {})
+        }
+      })
+      if (!prRes.ok) {envelope = prRes}
+    }
+    if (
+      envelope.ok &&
+      (updates.addLabels?.length ||
+        updates.removeLabels?.length ||
+        updates.addAssignees?.length ||
+        updates.removeAssignees?.length ||
+        (previousRow.itemType === 'ISSUE' &&
+          (updates.title !== undefined || updates.body !== undefined)))
+    ) {
+      const issueRes = await window.api.gh.updateIssueBySlug({
+        owner,
+        repo,
+        number,
+        updates: {
+          ...(updates.title !== undefined ? { title: updates.title } : {}),
+          ...(updates.body !== undefined ? { body: updates.body } : {}),
+          ...(updates.addLabels ? { addLabels: updates.addLabels } : {}),
+          ...(updates.removeLabels ? { removeLabels: updates.removeLabels } : {}),
+          ...(updates.addAssignees ? { addAssignees: updates.addAssignees } : {}),
+          ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
+        }
+      })
+      if (!issueRes.ok) {envelope = issueRes}
+    }
+    if (!envelope.ok) {
+      rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
+    }
+    return envelope
+  },
+
+  patchProjectRowIssueType: async (cacheKey, rowId, issueType) => {
+    const state = get()
+    const entry = state.projectViewCache[cacheKey]
+    const table = entry?.data
+    if (!table) {
+      return { ok: false, error: { type: 'unknown', message: 'Project view not loaded' } }
+    }
+    const row = table.rows.find((r) => r.id === rowId)
+    if (!row) {
+      return { ok: false, error: { type: 'unknown', message: 'Row not found' } }
+    }
+    if (row.itemType !== 'ISSUE') {
+      return {
+        ok: false,
+        error: { type: 'validation_error', message: 'Issue Type can only be set on Issues.' }
+      }
+    }
+    const { owner, repo, number } = parseSlugAndNumber(row) ?? {}
+    if (!owner || !repo || !number) {
+      return {
+        ok: false,
+        error: { type: 'validation_error', message: 'Row has no owner/repo/number.' }
+      }
+    }
+    const previousRow = row
+    const optimistic: GitHubProjectRow = {
+      ...previousRow,
+      content: { ...previousRow.content, issueType }
+    }
+    applyRowPatch(set, cacheKey, rowId, optimistic)
+    const res = await window.api.gh.updateIssueTypeBySlug({
+      owner,
+      repo,
+      number,
+      issueTypeId: issueType?.id ?? null
+    })
+    if (!res.ok) {
+      rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
+    }
+    return res
+  },
+
+  patchProjectRowContent: (cacheKey, rowId, patch) => {
+    const state = get()
+    const entry = state.projectViewCache[cacheKey]
+    const table = entry?.data
+    if (!table) {
+      return
+    }
+    const previousRow = table.rows.find((r) => r.id === rowId)
+    if (!previousRow) {
+      return
+    }
+    const nextContent = { ...previousRow.content }
+    if (patch.title !== undefined) {nextContent.title = patch.title}
+    if (patch.body !== undefined) {nextContent.body = patch.body}
+    if (patch.state !== undefined) {
+      // Why: ProjectV2 row.state mirrors GitHub's UPPERCASE state enum
+      // ('OPEN' | 'CLOSED' | 'MERGED'). The dialog tracks lowercase
+      // ('open' | 'closed') matching `GitHubWorkItem['state']`. Translate
+      // here so the optimistic patch matches the canonical row shape and
+      // the next authoritative fetch overwrites cleanly.
+      nextContent.state = patch.state.toUpperCase()
+    }
+    if (patch.labels !== undefined) {
+      const existingByName = new Map(previousRow.content.labels.map((l) => [l.name, l]))
+      nextContent.labels = patch.labels.map(
+        (name) => existingByName.get(name) ?? { name, color: '808080' }
+      )
+    }
+    if (patch.assignees !== undefined) {
+      const existingByLogin = new Map(previousRow.content.assignees.map((u) => [u.login, u]))
+      nextContent.assignees = patch.assignees.map(
+        (login) => existingByLogin.get(login) ?? { login, name: null, avatarUrl: null }
+      )
+    }
+    const nextRow: GitHubProjectRow = { ...previousRow, content: nextContent }
+    applyRowPatch(set, cacheKey, rowId, nextRow)
+  },
 
   getCachedWorkItems: (repoPath, limit, query) => {
     const key = workItemsCacheKey(repoPath, limit, query)

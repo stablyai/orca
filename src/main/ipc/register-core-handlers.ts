@@ -82,10 +82,10 @@ export function registerCoreHandlers(
   registerExportHandlers()
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)
-  registerNotificationHandlers(store)
+  registerNotificationHandlers(store, runtime)
   registerDeveloperPermissionHandlers()
   registerSettingsHandlers(store)
-  registerTelemetryHandlers()
+  registerTelemetryHandlers(store)
   registerBrowserHandlers()
   // Why: applyPendingCookieImport MUST run before restorePersistedUserAgent
   // because the latter calls session.fromPartition() which initializes

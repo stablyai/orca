@@ -55,6 +55,16 @@ export class SshConnection {
     return { ...this.target }
   }
 
+  // Why: exposes whether a passphrase/password is already cached in-memory for
+  // this connection. Used by ssh:needsPassphrasePrompt so callers can decide
+  // whether a manual-reconnect will prompt or go through silently. Without this,
+  // lastRequiredPassphrase stays true across the session even after the user
+  // has entered the credential once, causing redundant "enter passphrase"
+  // prompts on disconnect→reconnect cycles within a single app session.
+  hasCachedCredential(): boolean {
+    return this.cachedPassphrase != null || this.cachedPassword != null
+  }
+
   async exec(cmd: string): Promise<ClientChannel> {
     if (!this.client) {
       throw new Error('Not connected')
@@ -110,7 +120,9 @@ export class SshConnection {
     this.proxyProcess = null
     const connectGeneration = ++this.connectGeneration
 
-    const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(() => null)
+    const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
+      () => null
+    )
     const config = buildConnectConfig(this.target, resolved)
 
     // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively. Spawn the

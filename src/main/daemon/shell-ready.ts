@@ -134,7 +134,11 @@ if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   __orca_prompt_mark() {
     printf "${SHELL_READY_MARKER}"
   }
-  precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+  # Why: zsh precmd fires before zle switches the PTY into line-editing mode,
+  # so writing startup input there can be echoed once outside the prompt.
+  autoload -Uz add-zle-hook-widget
+  zle -N __orca_prompt_mark
+  add-zle-hook-widget line-init __orca_prompt_mark
 fi
 `
   const bashRc = `# Orca daemon bash shell-ready wrapper

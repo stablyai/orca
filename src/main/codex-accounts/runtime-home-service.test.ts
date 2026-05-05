@@ -30,6 +30,7 @@ vi.mock('node:os', async () => {
 })
 
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
+  const appFontFamily = overrides.appFontFamily ?? 'Geist'
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
@@ -94,11 +95,14 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     experimentalAgentDashboard: false,
+    experimentalMobile: false,
     experimentalSidekick: false,
+    experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
-    ...overrides
+    ...overrides,
+    appFontFamily
   }
 }
 

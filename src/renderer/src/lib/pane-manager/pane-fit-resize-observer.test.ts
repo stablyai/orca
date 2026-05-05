@@ -39,7 +39,7 @@ function createPane(): ManagedPaneInternal {
       cols: 79,
       rows: 24
     } as never,
-    container: {} as never,
+    container: { dataset: {} } as never,
     xtermContainer: {} as never,
     linkTooltip: {} as never,
     terminalGpuAcceleration: 'auto',

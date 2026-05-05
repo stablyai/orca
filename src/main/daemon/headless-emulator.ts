@@ -9,6 +9,10 @@ export type HeadlessEmulatorOptions = {
   scrollback?: number
 }
 
+export type HeadlessSnapshotOptions = {
+  scrollbackRows?: number
+}
+
 const DEFAULT_SCROLLBACK = 5000
 
 function parseFileUriPath(uri: string): string | null {
@@ -87,10 +91,10 @@ export class HeadlessEmulator {
     this.terminal.resize(cols, rows)
   }
 
-  getSnapshot(): TerminalSnapshot {
+  getSnapshot(opts: HeadlessSnapshotOptions = {}): TerminalSnapshot {
     const modes = this.getModes()
     return {
-      snapshotAnsi: this.serializer.serialize(),
+      snapshotAnsi: this.serializer.serialize({ scrollback: opts.scrollbackRows }),
       scrollbackAnsi: '',
       rehydrateSequences: this.buildRehydrateSequences(modes),
       cwd: this.cwd,

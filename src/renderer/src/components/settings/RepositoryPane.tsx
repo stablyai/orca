@@ -10,6 +10,7 @@ import { Trash2 } from 'lucide-react'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
+import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
@@ -69,6 +70,20 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
       ? []
       : [
           {
+            title: 'Worktree Symlinks',
+            description: 'Paths to symlink from the primary checkout into newly created worktrees.',
+            keywords: [
+              repo.displayName,
+              'symlink',
+              'symlinks',
+              'worktree',
+              'link',
+              'shared',
+              'env',
+              'node_modules'
+            ]
+          },
+          {
             title: 'orca.yaml hooks',
             description: 'Shared setup and archive hook commands for this repository.',
             keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
@@ -117,6 +132,7 @@ export function RepositoryPane({
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const symlinksEnabled = useAppStore((state) => state.settings?.experimentalWorktreeSymlinks)
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
 
@@ -190,6 +206,7 @@ export function RepositoryPane({
       'Custom GitHub Issue Command'
     ].includes(entry.title)
   )
+  const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, identityEntries) ? (
@@ -286,6 +303,12 @@ export function RepositoryPane({
           </SearchableSetting>
         ) : null}
       </section>
+    ) : null,
+    !isFolder &&
+    !repo.connectionId &&
+    symlinksEnabled &&
+    matchesSettingsSearch(searchQuery, symlinkEntries) ? (
+      <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateRepo} />
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, sparsePresetEntries) ? (
       <SparsePresetSettingsSection key="sparse-presets" repoId={repo.id} />

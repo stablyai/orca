@@ -7,6 +7,7 @@ import { TERMINAL_HANDLERS } from './handlers/terminal'
 import { BROWSER_NAV_HANDLERS } from './handlers/browser-nav'
 import { BROWSER_INTERACT_HANDLERS } from './handlers/browser-interact'
 import { BROWSER_TAB_HANDLERS } from './handlers/browser-tab'
+import { BROWSER_PROFILE_HANDLERS } from './handlers/browser-profile'
 import { BROWSER_COOKIE_HANDLERS } from './handlers/browser-cookie'
 import { BROWSER_CAPTURE_HANDLERS } from './handlers/browser-capture'
 import { BROWSER_ENV_HANDLERS } from './handlers/browser-env'
@@ -32,6 +33,7 @@ function buildHandlers(): Map<string, CommandHandler> {
     BROWSER_NAV_HANDLERS,
     BROWSER_INTERACT_HANDLERS,
     BROWSER_TAB_HANDLERS,
+    BROWSER_PROFILE_HANDLERS,
     BROWSER_COOKIE_HANDLERS,
     BROWSER_CAPTURE_HANDLERS,
     BROWSER_ENV_HANDLERS,

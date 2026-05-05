@@ -54,6 +54,21 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Autohand Code first and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'autohand',
+        prompt: 'Add tests for the parser',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      launchCommand: 'autohand',
+      expectedProcess: 'autohand',
+      followupPrompt: 'Add tests for the parser'
+    })
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({

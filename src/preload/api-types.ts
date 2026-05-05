@@ -41,6 +41,7 @@ import type {
   LinearTeam,
   MarkdownDocument,
   GitHubIssueUpdate,
+  GetRateLimitResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
   OrcaHooks,
@@ -58,8 +59,36 @@ import type {
   Worktree,
   WorktreeMeta,
   WorktreeSetupLaunch,
+  WorktreeStartupLaunch,
   WorkspaceSessionState
 } from '../shared/types'
+import type {
+  AddIssueCommentBySlugArgs,
+  ClearProjectItemFieldArgs,
+  DeleteIssueCommentBySlugArgs,
+  GetProjectViewTableArgs,
+  GetProjectViewTableResult,
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAccessibleProjectsResult,
+  ListAssignableUsersBySlugArgs,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugArgs,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugArgs,
+  ListLabelsBySlugResult,
+  ListProjectViewsArgs,
+  ListProjectViewsResult,
+  ProjectWorkItemDetailsBySlugArgs,
+  ProjectWorkItemDetailsBySlugResult,
+  ResolveProjectRefArgs,
+  ResolveProjectRefResult,
+  UpdateIssueBySlugArgs,
+  UpdateIssueCommentBySlugArgs,
+  UpdateIssueTypeBySlugArgs,
+  UpdatePullRequestBySlugArgs,
+  UpdateProjectItemFieldArgs
+} from '../shared/github-project-types'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -118,12 +147,14 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSummary
 } from '../shared/codex-usage-types'
+import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string
     worktreeId: string
+    sessionProfileId?: string | null
     webContentsId: number
   }) => Promise<void>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
@@ -440,6 +471,20 @@ export type PreloadApi = {
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
+    onSerializeBufferRequest: (
+      callback: (data: {
+        requestId: string
+        ptyId: string
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      }) => void
+    ) => () => void
+    sendSerializedBuffer: (
+      requestId: string,
+      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
+    ) => void
+    declarePendingPaneSerializer: (paneKey: string) => Promise<number>
+    settlePaneSerializer: (paneKey: string, gen: number) => Promise<void>
+    clearPendingPaneSerializer: (paneKey: string, gen: number) => Promise<void>
     management: PtyManagementApi
   }
   feedback: {
@@ -540,6 +585,47 @@ export type PreloadApi = {
     listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
+    /**
+     * GitHub API rate-limit snapshot. Does NOT consume quota (the
+     * `rate_limit` endpoint is exempt). Cached 30s server-side — pass
+     * `force: true` to bust after a known-expensive op.
+     */
+    rateLimit: (args?: { force?: boolean }) => Promise<GetRateLimitResult>
+    // ── ProjectV2 (GitHub Projects) ─────────────────────────────────
+    listAccessibleProjects: () => Promise<ListAccessibleProjectsResult>
+    resolveProjectRef: (args: ResolveProjectRefArgs) => Promise<ResolveProjectRefResult>
+    listProjectViews: (args: ListProjectViewsArgs) => Promise<ListProjectViewsResult>
+    getProjectViewTable: (args: GetProjectViewTableArgs) => Promise<GetProjectViewTableResult>
+    projectWorkItemDetailsBySlug: (
+      args: ProjectWorkItemDetailsBySlugArgs
+    ) => Promise<ProjectWorkItemDetailsBySlugResult>
+    updateProjectItemField: (
+      args: UpdateProjectItemFieldArgs
+    ) => Promise<GitHubProjectMutationResult>
+    clearProjectItemField: (
+      args: ClearProjectItemFieldArgs
+    ) => Promise<GitHubProjectMutationResult>
+    updateIssueBySlug: (args: UpdateIssueBySlugArgs) => Promise<GitHubProjectMutationResult>
+    updatePullRequestBySlug: (
+      args: UpdatePullRequestBySlugArgs
+    ) => Promise<GitHubProjectMutationResult>
+    addIssueCommentBySlug: (
+      args: AddIssueCommentBySlugArgs
+    ) => Promise<GitHubProjectCommentMutationResult>
+    updateIssueCommentBySlug: (
+      args: UpdateIssueCommentBySlugArgs
+    ) => Promise<GitHubProjectMutationResult>
+    deleteIssueCommentBySlug: (
+      args: DeleteIssueCommentBySlugArgs
+    ) => Promise<GitHubProjectMutationResult>
+    listLabelsBySlug: (args: ListLabelsBySlugArgs) => Promise<ListLabelsBySlugResult>
+    listAssignableUsersBySlug: (
+      args: ListAssignableUsersBySlugArgs
+    ) => Promise<ListAssignableUsersBySlugResult>
+    listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs) => Promise<ListIssueTypesBySlugResult>
+    updateIssueTypeBySlug: (
+      args: UpdateIssueTypeBySlugArgs
+    ) => Promise<GitHubProjectMutationResult>
   }
   linear: {
     connect: (args: {
@@ -589,6 +675,19 @@ export type PreloadApi = {
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
+  /** Read-only view of effective consent state, including the reason if
+   *  disabled (env var / user opt-out / CI / pending banner). Used by the
+   *  Privacy pane to render the correct "blocked by X" helper text — env
+   *  vars are main-side state the renderer cannot read directly. */
+  telemetryGetConsentState: () => Promise<TelemetryConsentState>
+  /** Banner ✕ — persist `optedIn = true` silently, emit nothing. Deliberately
+   *  a separate channel from `telemetrySetOptIn` because main's `via`
+   *  derivation on that channel would tag this path as `first_launch_banner`
+   *  and fire `telemetry_opted_in`, which the ✕-as-silent-acknowledge
+   *  semantics forbid (the user did not explicitly opt in, they declined to
+   *  intervene). Subject to the same per-session consent-mutation rate
+   *  limit as `telemetrySetOptIn`. */
+  telemetryAcknowledgeBanner: () => Promise<void>
   settings: {
     get: () => Promise<GlobalSettings>
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
@@ -854,9 +953,18 @@ export type PreloadApi = {
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
     onRequestTabCreate: (
-      callback: (data: { requestId: string; url: string; worktreeId?: string }) => void
+      callback: (data: {
+        requestId: string
+        url: string
+        worktreeId?: string
+        sessionProfileId?: string
+      }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
+    onRequestTabSetProfile: (
+      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+    ) => () => void
+    replyTabSetProfile: (reply: { requestId: string; error?: string }) => void
     onRequestTabClose: (
       callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
     ) => () => void
@@ -868,11 +976,17 @@ export type PreloadApi = {
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
+    onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
     onActivateWorktree: (
-      callback: (data: { repoId: string; worktreeId: string; setup?: WorktreeSetupLaunch }) => void
+      callback: (data: {
+        repoId: string
+        worktreeId: string
+        setup?: WorktreeSetupLaunch
+        startup?: WorktreeStartupLaunch
+      }) => void
     ) => () => void
     onCreateTerminal: (
       callback: (data: { worktreeId: string; command?: string; title?: string }) => void
@@ -906,6 +1020,7 @@ export type PreloadApi = {
     onCloseTerminal: (
       callback: (data: { tabId: string; paneRuntimeId?: number }) => void
     ) => () => void
+    onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     saveClipboardImageAsTempFile: () => Promise<string | null>
@@ -931,6 +1046,24 @@ export type PreloadApi = {
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeStatus>
     getStatus: () => Promise<RuntimeStatus>
+    getTerminalFitOverrides: () => Promise<
+      { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+    >
+    restoreTerminalFit: (ptyId: string) => Promise<{ restored: boolean }>
+    onTerminalFitOverrideChanged: (
+      callback: (event: {
+        ptyId: string
+        mode: 'mobile-fit' | 'desktop-fit'
+        cols: number
+        rows: number
+      }) => void
+    ) => () => void
+    onTerminalDriverChanged: (
+      callback: (event: {
+        ptyId: string
+        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+      }) => void
+    ) => () => void
   }
   rateLimits: {
     get: () => Promise<RateLimitState>
@@ -952,6 +1085,7 @@ export type PreloadApi = {
     connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
     disconnect: (args: { targetId: string }) => Promise<void>
     getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
+    needsPassphrasePrompt: (args: { targetId: string }) => Promise<boolean>
     testConnection: (args: {
       targetId: string
     }) => Promise<{ success: boolean; error?: string; state?: SshConnectionState }>
@@ -1019,6 +1153,22 @@ export type PreloadApi = {
         interrupted?: boolean
       }) => void
     ) => () => void
+  }
+  mobile: {
+    listNetworkInterfaces: () => Promise<{
+      interfaces: { name: string; address: string }[]
+    }>
+    getPairingQR: (args?: {
+      address?: string
+    }) => Promise<
+      | { available: false }
+      | { available: true; qrDataUrl: string; endpoint: string; deviceId: string }
+    >
+    listDevices: () => Promise<{
+      devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+    }>
+    revokeDevice: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
+    isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
   }
 }
 

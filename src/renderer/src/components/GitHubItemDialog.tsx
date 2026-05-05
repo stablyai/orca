@@ -61,7 +61,15 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
-import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+import {
+  useRepoLabels,
+  useRepoAssignees,
+  useImmediateMutation
+} from '@/hooks/useIssueMetadata'
+import {
+  useRepoLabelsBySlug,
+  useRepoAssigneesBySlug
+} from '@/hooks/useGitHubSlugMetadata'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import type {
   GitHubOwnerRepo,
@@ -131,12 +139,35 @@ const REACTION_EMOJI: Record<GitHubReaction['content'], string> = {
   eyes: '👀'
 }
 
+/** Why: Project-origin rows don't always belong to the active local repo.
+ *  When set, GHEditSection routes label/assignee/state mutations through
+ *  slug-addressed IPCs against `owner`/`repo` instead of through `repoPath`,
+ *  preventing edits from silently landing on the workspace's repo when the
+ *  Project view is showing rows from a different repo. See
+ *  docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
+ */
+export type GitHubItemDialogProjectOrigin = {
+  owner: string
+  repo: string
+  number: number
+  type: 'issue' | 'pr'
+  projectId: string
+  projectItemId: string
+  cacheKey: string
+}
+
 type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onClose: () => void
+  /** Optional Project-origin context. When set, edits in the dialog are
+   *  routed via slug-addressed mutation IPCs against the row's actual repo
+   *  instead of the active workspace's `repoPath`. Both can be set
+   *  simultaneously (Project mode where the row also lives in the active
+   *  workspace) — slug routing wins for writes. */
+  projectOrigin?: GitHubItemDialogProjectOrigin
 }
 
 function formatRelativeTime(input: string): string {
@@ -1332,7 +1363,18 @@ function ConversationTab({
           />
         )}
 
-        {item.type !== 'pr' ? <div className="pt-1">{startWorkspaceButton}</div> : null}
+        {item.type !== 'pr' ? (
+          <div className="flex justify-start pt-1">
+            <Button
+              onClick={() => onUse(item)}
+              className="gap-2"
+              aria-label="Start workspace from issue"
+            >
+              Start workspace from issue
+              <ArrowRight className="size-4" />
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {rightPanel}
@@ -1634,9 +1676,46 @@ function MentionTextarea({
   )
 }
 
+// Why: when the dialog opens for a Project row whose repo differs from the
+// active workspace, mutations must target the row's actual repo via
+// slug-addressed IPCs. Otherwise edits silently apply to the workspace's
+// repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
+// to a thrown rejection so the existing `useImmediateMutation` flow
+// (which expects throws on failure) continues to work unchanged.
+async function runIssueUpdate(
+  args: {
+    repoPath: string | null
+    projectOrigin: GitHubItemDialogProjectOrigin | undefined
+    number: number
+    updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
+  }
+): Promise<void> {
+  if (args.projectOrigin) {
+    const res = await window.api.gh.updateIssueBySlug({
+      owner: args.projectOrigin.owner,
+      repo: args.projectOrigin.repo,
+      number: args.number,
+      updates: args.updates
+    })
+    if (!res.ok) {
+      throw new Error(res.error.message)
+    }
+    return
+  }
+  if (!args.repoPath) {
+    throw new Error('No repo context available for this edit.')
+  }
+  await window.api.gh.updateIssue({
+    repoPath: args.repoPath,
+    number: args.number,
+    updates: args.updates
+  })
+}
+
 function GHEditSection({
   item,
   repoPath,
+  projectOrigin,
   localState,
   localLabels,
   onStateChange,
@@ -1644,7 +1723,8 @@ function GHEditSection({
   assignees
 }: {
   item: GitHubWorkItem
-  repoPath: string
+  repoPath: string | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
@@ -1656,10 +1736,33 @@ function GHEditSection({
   const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
   const hasEditedAssigneesRef = useRef(false)
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const { isPending, run } = useImmediateMutation()
 
-  const repoLabels = useRepoLabels(repoPath)
-  const repoAssignees = useRepoAssignees(repoPath)
+  // Why: when the dialog opens from a Project view, mutations route through
+  // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
+  // `workItemsCache` — `patchWorkItem` only walks the latter, so without this
+  // helper the Project table would render stale data until manual refresh.
+  // See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
+  const patchProjectRowIfNeeded = useCallback(
+    (patch: Parameters<typeof patchProjectRowContent>[2]) => {
+      if (!projectOrigin) {return}
+      patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, patch)
+    },
+    [projectOrigin, patchProjectRowContent]
+  )
+
+  // Why: when projectOrigin is set we MUST read labels/assignees from the
+  // row's repo, not from the workspace path — otherwise the popovers list
+  // values from a different repo than the writes target.
+  const slugOwner = projectOrigin?.owner ?? null
+  const slugRepo = projectOrigin?.repo ?? null
+  const repoLabelsByPath = useRepoLabels(projectOrigin ? null : repoPath)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
+  const repoAssigneesByPath = useRepoAssignees(projectOrigin ? null : repoPath)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees when item changes or when the detail fetch
   // resolves with real data — but skip if the user already made an
@@ -1684,26 +1787,40 @@ function GHEditSection({
       const prevState = localState
       run('state', {
         mutate: () =>
-          window.api.gh.updateIssue({
+          runIssueUpdate({
             repoPath,
+            projectOrigin,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
           patchWorkItem(item.id, { state: newState })
+          patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
           patchWorkItem(item.id, { state: prevState })
+          patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
           patchWorkItem(item.id, { state: newState })
+          patchProjectRowIfNeeded({ state: newState })
         },
         onError: (err) => toast.error(err)
       })
     },
-    [item.id, item.number, localState, repoPath, patchWorkItem, run, onStateChange]
+    [
+      item.id,
+      item.number,
+      localState,
+      repoPath,
+      projectOrigin,
+      patchWorkItem,
+      patchProjectRowIfNeeded,
+      run,
+      onStateChange
+    ]
   )
 
   const handleLabelToggle = useCallback(
@@ -1715,44 +1832,60 @@ function GHEditSection({
       if (isAdding) {
         run('labels', {
           mutate: () =>
-            window.api.gh.updateIssue({
+            runIssueUpdate({
               repoPath,
+              projectOrigin,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
             patchWorkItem(item.id, { labels: newLabels })
+            patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {},
           onRevert: () => {
             onLabelsChange(prevLabels)
             patchWorkItem(item.id, { labels: prevLabels })
+            patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
         })
       } else {
         run('labels', {
           mutate: () =>
-            window.api.gh.updateIssue({
+            runIssueUpdate({
               repoPath,
+              projectOrigin,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
             patchWorkItem(item.id, { labels: newLabels })
+            patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
             patchWorkItem(item.id, { labels: prevLabels })
+            patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {},
           onError: (err) => toast.error(err)
         })
       }
     },
-    [item.id, item.number, localLabels, repoPath, patchWorkItem, run, onLabelsChange]
+    [
+      item.id,
+      item.number,
+      localLabels,
+      repoPath,
+      projectOrigin,
+      patchWorkItem,
+      patchProjectRowIfNeeded,
+      run,
+      onLabelsChange
+    ]
   )
 
   const handleAssigneeToggle = useCallback(
@@ -1767,16 +1900,19 @@ function GHEditSection({
       if (isAssigned) {
         run('assignees', {
           mutate: () =>
-            window.api.gh.updateIssue({
+            runIssueUpdate({
               repoPath,
+              projectOrigin,
               number: item.number,
               updates: { removeAssignees: [login] }
             }),
           onOptimistic: () => {
             setLocalAssignees(newAssignees)
+            patchProjectRowIfNeeded({ assignees: newAssignees })
           },
           onRevert: () => {
             setLocalAssignees(prevAssignees)
+            patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
           onSuccess: () => {},
           onError: (err) => toast.error(err)
@@ -1784,23 +1920,26 @@ function GHEditSection({
       } else {
         run('assignees', {
           mutate: () =>
-            window.api.gh.updateIssue({
+            runIssueUpdate({
               repoPath,
+              projectOrigin,
               number: item.number,
               updates: { addAssignees: [login] }
             }),
           onOptimistic: () => {
             setLocalAssignees(newAssignees)
+            patchProjectRowIfNeeded({ assignees: newAssignees })
           },
           onSuccess: () => {},
           onRevert: () => {
             setLocalAssignees(prevAssignees)
+            patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
           onError: (err) => toast.error(err)
         })
       }
     },
-    [item.number, repoPath, localAssignees, run]
+    [item.number, repoPath, projectOrigin, localAssignees, patchProjectRowIfNeeded, run]
   )
 
   if (item.type === 'pr') {
@@ -2006,7 +2145,7 @@ function GHCommentComposer({
       return
     }
     el.style.height = 'auto'
-    el.style.height = `${Math.max(36, Math.min(el.scrollHeight, 96))}px`
+    el.style.height = `${Math.max(80, Math.min(el.scrollHeight, 240))}px`
   }, [])
 
   const handleSubmit = useCallback(async () => {
@@ -2048,12 +2187,7 @@ function GHCommentComposer({
   )
 
   return (
-    <div
-      className={cn(
-        'flex items-center gap-2 rounded-lg border border-border/50 bg-background/30 p-2',
-        className
-      )}
-    >
+    <div className={cn('flex items-start gap-2', className)}>
       <MentionTextarea
         textareaRef={textareaRef}
         value={body}
@@ -2063,10 +2197,10 @@ function GHCommentComposer({
         }}
         onKeyDown={handleKeyDown}
         placeholder="Add a comment…"
-        rows={1}
+        rows={4}
         mentionOptions={mentionOptions}
-        wrapperClassName="flex min-h-9 items-center"
-        className="scrollbar-sleek block h-9 max-h-[96px] min-h-9 w-full resize-none overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        wrapperClassName="flex min-h-20 items-stretch"
+        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
       <Button
         size="icon"
@@ -2150,6 +2284,7 @@ function WorkItemIssueSourceIndicator({
 export default function GitHubItemDialog({
   workItem,
   repoPath,
+  projectOrigin,
   onUse,
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
@@ -2304,7 +2439,7 @@ export default function GitHubItemDialog({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px] lg:max-w-[1100px] xl:max-w-[1280px]"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px] lg:max-w-[760px] xl:max-w-[900px]"
         onOpenAutoFocus={(event) => {
           // Why: focusing the first actionable element inside the drawer
           // causes the "Start workspace" action to receive focus and
@@ -2329,15 +2464,15 @@ export default function GitHubItemDialog({
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex-none border-b border-border/60 px-4 py-3">
               <div className="flex items-start gap-2">
-                <Icon className="mt-1 size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <span className="font-mono text-[12px] text-muted-foreground">
                     #{workItem.number}
                   </span>
-                  <h2 className="mt-1 text-[15px] font-semibold leading-tight text-foreground">
-                    {workItem.title}
+                  <h2 className="mt-1 flex items-start gap-2 text-[15px] font-semibold leading-tight text-foreground">
+                    <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0">{workItem.title}</span>
                   </h2>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
                     <span>{workItem.author ?? 'unknown'}</span>
                     <span>· {formatRelativeTime(workItem.updatedAt)}</span>
                     {workItem.branchName && (
@@ -2387,10 +2522,11 @@ export default function GitHubItemDialog({
               </div>
             </div>
 
-            {repoPath && (
+            {(repoPath || projectOrigin) && (
               <GHEditSection
                 item={workItem}
                 repoPath={repoPath}
+                projectOrigin={projectOrigin}
                 localState={localState}
                 localLabels={localLabels}
                 onStateChange={setLocalState}

@@ -779,14 +779,28 @@ describe('markWorktreeVisited', () => {
     expect(store.getState().lastVisitedAtByWorktreeId['wt-1']).toBe(existing)
   })
 
-  it('pruneLastVisitedTimestamps drops entries for unknown worktree IDs', () => {
+  it('pruneLastVisitedTimestamps drops entries for unknown worktree IDs within hydrated repos', () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
     store.setState({
       worktreesByRepo: { repo1: [wt] },
-      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'stale-id': 200 }
+      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'repo1::/gone': 200 }
     } as Partial<AppState>)
     store.getState().pruneLastVisitedTimestamps()
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/a': 100 })
+  })
+
+  it('pruneLastVisitedTimestamps preserves entries for not-yet-hydrated repos (e.g. SSH pre-connect)', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'ssh-repo::/b': 200 }
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      'repo1::/a': 100,
+      'ssh-repo::/b': 200
+    })
   })
 })

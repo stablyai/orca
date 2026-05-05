@@ -335,7 +335,7 @@ export class PaneManager {
       getRoot: () => this.root,
       getStyleOptions: () => this.styleOptions,
       isDestroyed: () => this.destroyed,
-      safeFit: (pane: ManagedPaneInternal) => safeFit(pane),
+      safeFit,
       applyPaneOpacity: () =>
         applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions),
       applyDividerStyles: () => applyDividerStyles(this.root, this.styleOptions),

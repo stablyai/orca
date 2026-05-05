@@ -13,6 +13,7 @@ export type RpcSuccess = {
   id: string
   ok: true
   result: unknown
+  streaming?: true
   _meta: RpcEnvelopeMeta
 }
 
@@ -38,6 +39,13 @@ export type RpcRequest = {
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
+  // Why: long-poll handlers (e.g. orchestration.check with wait=true) need to
+  // observe the underlying socket's lifetime so they can release their slot
+  // and resolve their inner waiters immediately when a client disconnects
+  // instead of running down the configured timeoutMs. Undefined outside the
+  // runtime-rpc transport (direct in-process callers don't need it).
+  // See design doc §3.1 counter-lifecycle.
+  signal?: AbortSignal
 }
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown
@@ -69,10 +77,53 @@ export function defineMethod<TSchema extends ZodType | null>(
   }
 }
 
-export type RpcRegistry = ReadonlyMap<string, RpcMethod>
+export type RpcStreamingHandler<TParams> = (
+  params: TParams,
+  ctx: RpcContext,
+  emit: (result: unknown) => void
+) => Promise<void>
 
-export function buildRegistry(methods: readonly RpcMethod[]): RpcRegistry {
-  const registry = new Map<string, RpcMethod>()
+// Why: streaming methods emit multiple responses over a long-lived connection.
+// The `stream` flag lets the dispatcher distinguish them from one-shot methods
+// and route them to the emit-based call path instead of the Promise-based one.
+export type RpcStreamingMethod = {
+  readonly name: string
+  readonly params: ZodType | null
+  readonly stream: true
+  readonly handler: (
+    params: unknown,
+    ctx: RpcContext,
+    emit: (result: unknown) => void
+  ) => Promise<void>
+}
+
+type DefineStreamingMethodSpec<TSchema extends ZodType | null> = {
+  name: string
+  params: TSchema
+  handler: RpcStreamingHandler<TSchema extends ZodType ? TSchema['_output'] : void>
+}
+
+export function defineStreamingMethod<TSchema extends ZodType | null>(
+  spec: DefineStreamingMethodSpec<TSchema>
+): RpcStreamingMethod {
+  return {
+    name: spec.name,
+    params: spec.params,
+    stream: true,
+    handler: spec.handler as RpcStreamingMethod['handler']
+  }
+}
+
+export type RpcAnyMethod = RpcMethod | RpcStreamingMethod
+
+export function isStreamingMethod(method: RpcAnyMethod): method is RpcStreamingMethod {
+  return 'stream' in method && method.stream === true
+}
+
+export type RpcRegistry = ReadonlyMap<string, RpcAnyMethod>
+
+export function buildRegistry(methods: readonly RpcAnyMethod[]): RpcRegistry {
+  const registry = new Map<string, RpcAnyMethod>()
   for (const method of methods) {
     if (registry.has(method.name)) {
       throw new Error(`duplicate_rpc_method:${method.name}`)

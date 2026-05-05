@@ -13,6 +13,7 @@ import type {
   CreateWorktreeArgs,
   CustomSidekick,
   FsChangedPayload,
+  GetRateLimitResult,
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
@@ -25,12 +26,40 @@ import type {
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type {
+  AddIssueCommentBySlugArgs,
+  ClearProjectItemFieldArgs,
+  DeleteIssueCommentBySlugArgs,
+  GetProjectViewTableArgs,
+  GetProjectViewTableResult,
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAccessibleProjectsResult,
+  ListAssignableUsersBySlugArgs,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugArgs,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugArgs,
+  ListLabelsBySlugResult,
+  ListProjectViewsArgs,
+  ListProjectViewsResult,
+  ProjectWorkItemDetailsBySlugArgs,
+  ProjectWorkItemDetailsBySlugResult,
+  ResolveProjectRefArgs,
+  ResolveProjectRefResult,
+  UpdateIssueBySlugArgs,
+  UpdateIssueCommentBySlugArgs,
+  UpdateIssueTypeBySlugArgs,
+  UpdatePullRequestBySlugArgs,
+  UpdateProjectItemFieldArgs
+} from '../shared/github-project-types'
+import type {
   SshConnectionState,
   SshTarget,
   PortForwardEntry,
   DetectedPort
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -395,6 +424,46 @@ const api = {
       return () => ipcRenderer.removeListener('pty:exit', listener)
     },
 
+    onSerializeBufferRequest: (
+      callback: (data: {
+        requestId: string
+        ptyId: string
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          requestId: string
+          ptyId: string
+          opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+        }
+      ) => callback(data)
+      ipcRenderer.on('pty:serializeBuffer:request', listener)
+      return () => ipcRenderer.removeListener('pty:serializeBuffer:request', listener)
+    },
+
+    sendSerializedBuffer: (
+      requestId: string,
+      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
+    ): void => {
+      ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
+    },
+
+    // Why: pre-signal handshake — renderer declares it will own the serializer
+    // for `paneKey` BEFORE issuing pty:spawn so the cooperation gate in main
+    // can suppress the daemon-snapshot seed. Returns a generation token that
+    // the renderer must echo on settle/clear so paneKey-reuse during teardown
+    // cannot defeat the pre-signal. See docs/mobile-prefer-renderer-scrollback.md.
+    declarePendingPaneSerializer: (paneKey: string): Promise<number> =>
+      ipcRenderer.invoke('pty:declarePendingPaneSerializer', { paneKey }),
+
+    settlePaneSerializer: (paneKey: string, gen: number): Promise<void> =>
+      ipcRenderer.invoke('pty:settlePaneSerializer', { paneKey, gen }),
+
+    clearPendingPaneSerializer: (paneKey: string, gen: number): Promise<void> =>
+      ipcRenderer.invoke('pty:clearPendingPaneSerializer', { paneKey, gen }),
+
     management: {
       listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
       killAll: () => ipcRenderer.invoke('pty:management:killAll'),
@@ -556,7 +625,65 @@ const api = {
       ipcRenderer.invoke('gh:listAssignableUsers', args),
 
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca')
+    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca'),
+
+    // Why: rate_limit is exempt from rate-limit accounting, but we still pass
+    // `force` through so callers can bust the 30s in-process cache after a
+    // known-expensive op (e.g. after ProjectPicker discovery).
+    rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
+      ipcRenderer.invoke('gh:rateLimit', args),
+
+    // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
+    listAccessibleProjects: (): Promise<ListAccessibleProjectsResult> =>
+      ipcRenderer.invoke('gh:listAccessibleProjects'),
+    resolveProjectRef: (args: ResolveProjectRefArgs): Promise<ResolveProjectRefResult> =>
+      ipcRenderer.invoke('gh:resolveProjectRef', args),
+    listProjectViews: (args: ListProjectViewsArgs): Promise<ListProjectViewsResult> =>
+      ipcRenderer.invoke('gh:listProjectViews', args),
+    getProjectViewTable: (args: GetProjectViewTableArgs): Promise<GetProjectViewTableResult> =>
+      ipcRenderer.invoke('gh:getProjectViewTable', args),
+    projectWorkItemDetailsBySlug: (
+      args: ProjectWorkItemDetailsBySlugArgs
+    ): Promise<ProjectWorkItemDetailsBySlugResult> =>
+      ipcRenderer.invoke('gh:projectWorkItemDetailsBySlug', args),
+    updateProjectItemField: (
+      args: UpdateProjectItemFieldArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updateProjectItemField', args),
+    clearProjectItemField: (
+      args: ClearProjectItemFieldArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:clearProjectItemField', args),
+    updateIssueBySlug: (args: UpdateIssueBySlugArgs): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updateIssueBySlug', args),
+    updatePullRequestBySlug: (
+      args: UpdatePullRequestBySlugArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updatePullRequestBySlug', args),
+    addIssueCommentBySlug: (
+      args: AddIssueCommentBySlugArgs
+    ): Promise<GitHubProjectCommentMutationResult> =>
+      ipcRenderer.invoke('gh:addIssueCommentBySlug', args),
+    updateIssueCommentBySlug: (
+      args: UpdateIssueCommentBySlugArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updateIssueCommentBySlug', args),
+    deleteIssueCommentBySlug: (
+      args: DeleteIssueCommentBySlugArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:deleteIssueCommentBySlug', args),
+    listLabelsBySlug: (args: ListLabelsBySlugArgs): Promise<ListLabelsBySlugResult> =>
+      ipcRenderer.invoke('gh:listLabelsBySlug', args),
+    listAssignableUsersBySlug: (
+      args: ListAssignableUsersBySlugArgs
+    ): Promise<ListAssignableUsersBySlugResult> =>
+      ipcRenderer.invoke('gh:listAssignableUsersBySlug', args),
+    listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs): Promise<ListIssueTypesBySlugResult> =>
+      ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
+    updateIssueTypeBySlug: (
+      args: UpdateIssueTypeBySlugArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
   },
 
   linear: {
@@ -638,6 +765,10 @@ const api = {
     ipcRenderer.invoke('telemetry:track', name, props),
   telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
     ipcRenderer.invoke('telemetry:setOptIn', optedIn),
+  telemetryAcknowledgeBanner: (): Promise<void> =>
+    ipcRenderer.invoke('telemetry:acknowledgeBanner'),
+  telemetryGetConsentState: (): Promise<TelemetryConsentState> =>
+    ipcRenderer.invoke('telemetry:getConsentState'),
 
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
@@ -771,6 +902,7 @@ const api = {
       browserPageId: string
       workspaceId: string
       worktreeId: string
+      sessionProfileId?: string | null
       webContentsId: number
     }): Promise<void> => ipcRenderer.invoke('browser:registerGuest', args),
 
@@ -1381,11 +1513,16 @@ const api = {
       return () => ipcRenderer.removeListener('ui:newBrowserTab', listener)
     },
     onRequestTabCreate: (
-      callback: (data: { requestId: string; url: string; worktreeId?: string }) => void
+      callback: (data: {
+        requestId: string
+        url: string
+        worktreeId?: string
+        sessionProfileId?: string
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { requestId: string; url: string; worktreeId?: string }
+        data: { requestId: string; url: string; worktreeId?: string; sessionProfileId?: string }
       ) => callback(data)
       ipcRenderer.on('browser:requestTabCreate', listener)
       return () => ipcRenderer.removeListener('browser:requestTabCreate', listener)
@@ -1396,6 +1533,19 @@ const api = {
       error?: string
     }): void => {
       ipcRenderer.send('browser:tabCreateReply', reply)
+    },
+    onRequestTabSetProfile: (
+      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { requestId: string; browserPageId: string; profileId: string }
+      ) => callback(data)
+      ipcRenderer.on('browser:requestTabSetProfile', listener)
+      return () => ipcRenderer.removeListener('browser:requestTabSetProfile', listener)
+    },
+    replyTabSetProfile: (reply: { requestId: string; error?: string }): void => {
+      ipcRenderer.send('browser:tabSetProfileReply', reply)
     },
     onRequestTabClose: (
       callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
@@ -1445,6 +1595,11 @@ const api = {
       ipcRenderer.on('ui:switchTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTab', listener)
     },
+    onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
+      ipcRenderer.on('ui:switchTabAcrossAllTypes', listener)
+      return () => ipcRenderer.removeListener('ui:switchTabAcrossAllTypes', listener)
+    },
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTerminalTab', listener)
@@ -1465,6 +1620,7 @@ const api = {
         repoId: string
         worktreeId: string
         setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+        startup?: { command: string; env?: Record<string, string> }
       }) => void
     ): (() => void) => {
       const listener = (
@@ -1473,6 +1629,7 @@ const api = {
           repoId: string
           worktreeId: string
           setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+          startup?: { command: string; env?: Record<string, string> }
         }
       ) => callback(data)
       ipcRenderer.on('ui:activateWorktree', listener)
@@ -1560,6 +1717,12 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:closeTerminal', listener)
       return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
+    },
+    onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
+        callback(data)
+      ipcRenderer.on('ui:sleepWorktree', listener)
+      return () => ipcRenderer.removeListener('ui:sleepWorktree', listener)
     },
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
@@ -1676,7 +1839,43 @@ const api = {
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph): Promise<RuntimeStatus> =>
       ipcRenderer.invoke('runtime:syncWindowGraph', graph),
-    getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus')
+    getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
+    getTerminalFitOverrides: (): Promise<
+      { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+    > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
+    restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
+      ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
+    onTerminalFitOverrideChanged: (
+      callback: (event: {
+        ptyId: string
+        mode: 'mobile-fit' | 'desktop-fit'
+        cols: number
+        rows: number
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { ptyId: string; mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }
+      ) => callback(data)
+      ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
+    },
+    onTerminalDriverChanged: (
+      callback: (event: {
+        ptyId: string
+        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          ptyId: string
+          driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+        }
+      ) => callback(data)
+      ipcRenderer.on('runtime:terminalDriverChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
+    }
   },
 
   rateLimits: {
@@ -1719,6 +1918,9 @@ const api = {
 
     getState: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:getState', args),
+
+    needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('ssh:needsPassphrasePrompt', args),
 
     testConnection: (args: {
       targetId: string
@@ -1825,6 +2027,29 @@ const api = {
   },
   e2e: {
     getConfig: () => preloadE2EConfig
+  },
+
+  mobile: {
+    listNetworkInterfaces: (): Promise<{
+      interfaces: { name: string; address: string }[]
+    }> => ipcRenderer.invoke('mobile:listNetworkInterfaces'),
+
+    getPairingQR: (args?: {
+      address?: string
+    }): Promise<
+      | { available: false }
+      | { available: true; qrDataUrl: string; endpoint: string; deviceId: string }
+    > => ipcRenderer.invoke('mobile:getPairingQR', args),
+
+    listDevices: (): Promise<{
+      devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+    }> => ipcRenderer.invoke('mobile:listDevices'),
+
+    revokeDevice: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
+      ipcRenderer.invoke('mobile:revokeDevice', args),
+
+    isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
+      ipcRenderer.invoke('mobile:isWebSocketReady')
   },
 
   agentStatus: {

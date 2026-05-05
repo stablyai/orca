@@ -253,13 +253,13 @@ export class Store {
   // One-shot telemetry cohort migration. Runs on every `load()` but is a
   // no-op once `existedBeforeTelemetryRelease` is set, so subsequent launches
   // pay only the property lookup. Populates:
-  //   - `existedBeforeTelemetryRelease` — cohort discriminator (drives the
-  //     first-launch toast vs. banner in PR 3).
+  //   - `existedBeforeTelemetryRelease` — cohort discriminator (drives
+  //     whether the existing-user opt-in banner is shown in PR 3;
+  //     new users get no first-launch surface).
   //   - `optedIn` — new users start opted in; existing users are `null` until
   //     the banner resolves (the consent resolver returns `pending_banner`
   //     until then, so nothing transmits).
-  //   - `installId` — anonymous UUID v4. Stable across launches; regenerable
-  //     from the Privacy pane (PR 3).
+  //   - `installId` — anonymous UUID v4. Stable across launches; not surfaced in the UI.
   private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
     // Why: the one-shot is complete only when all three invariants hold.
@@ -274,16 +274,22 @@ export class Store {
     ) {
       return state
     }
+    // Why: cohort is the authoritative discriminator per invariant #8, so
+    // resolve it once and reuse it below — the `optedIn` fallback must not
+    // re-infer cohort from `fileExistedOnLoad` or field presence, or a
+    // partially-written telemetry block could land a new user in the
+    // existing-user `pending_banner` state.
+    const resolvedExistedBefore =
+      typeof existing?.existedBeforeTelemetryRelease === 'boolean'
+        ? existing.existedBeforeTelemetryRelease
+        : fileExistedOnLoad
     return {
       ...state,
       settings: {
         ...state.settings,
         telemetry: {
           ...existing,
-          existedBeforeTelemetryRelease:
-            typeof existing?.existedBeforeTelemetryRelease === 'boolean'
-              ? existing.existedBeforeTelemetryRelease
-              : fileExistedOnLoad,
+          existedBeforeTelemetryRelease: resolvedExistedBefore,
           // Why: preserve an explicit opt-in/out if the user has ever resolved
           // it. Only fall back to the cohort default (new users: on; existing
           // users: undecided until the first-launch banner resolves) when
@@ -291,7 +297,7 @@ export class Store {
           optedIn:
             existing?.optedIn === true || existing?.optedIn === false || existing?.optedIn === null
               ? existing.optedIn
-              : fileExistedOnLoad
+              : resolvedExistedBefore
                 ? null
                 : true,
           installId:

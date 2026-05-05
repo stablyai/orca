@@ -52,5 +52,10 @@ export const REPO_METHODS: RpcMethod[] = [
     params: RepoSearchRefs,
     handler: async (params, { runtime }) =>
       runtime.searchRepoRefs(params.repo, params.query, params.limit)
+  }),
+  defineMethod({
+    name: 'repo.hooks',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo)
   })
 ]

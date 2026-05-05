@@ -1,11 +1,11 @@
+/* eslint-disable max-lines -- Why: this file is the single security boundary for the bundled CLI — transport setup, auth-token enforcement, admission control, keepalive framing, and orphan-socket sweeping all co-locate deliberately so a reviewer can audit the boundary in one sitting. Splitting this across files would scatter the invariants without reducing complexity. */
 // Why: this is the single security boundary for the bundled CLI. It owns
-// transport setup (unix socket / named pipe), auth-token enforcement, and
-// bootstrap-metadata publication so a running runtime is always discoverable
-// via exactly one on-disk file. Method handling lives in `rpc/` so this file
-// stays easy to audit in one sitting.
+// auth-token enforcement, bootstrap-metadata publication, and transport
+// orchestration so a running runtime is always discoverable via exactly
+// one on-disk file. Method handling lives in `rpc/` and transport specifics
+// live in `rpc/unix-socket-transport.ts` and `rpc/ws-transport.ts`.
 import { randomBytes } from 'crypto'
-import { createServer, type Server, type Socket } from 'net'
-import { chmodSync, existsSync, readdirSync, rmSync } from 'fs'
+import { readdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -13,17 +13,61 @@ import { writeRuntimeMetadata } from './runtime-metadata'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
+import type { RpcMessageContext, RpcTransport } from './rpc/transport'
+import { UnixSocketTransport } from './rpc/unix-socket-transport'
+import { WebSocketTransport } from './rpc/ws-transport'
+import type { WebSocket } from 'ws'
+import { DeviceRegistry } from './device-registry'
+import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
+import { E2EEChannel } from './rpc/e2ee-channel'
+
+const DEFAULT_WS_PORT = 6768
 
 type OrcaRuntimeRpcServerOptions = {
   runtime: OrcaRuntimeService
   userDataPath: string
   pid?: number
   platform?: NodeJS.Platform
+  enableWebSocket?: boolean
+  wsPort?: number
+  // Why: test-only overrides for the two time-bound constants below.
+  // Production callers must not pass these — defaults are set by the design
+  // doc (§3.1) and changing them in production would weaken the admission
+  // fence or flood the socket with keepalive frames.
+  keepaliveIntervalMs?: number
+  longPollCap?: number
 }
 
-const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
-const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
-const MAX_RUNTIME_RPC_CONNECTIONS = 32
+// Why: after 10 s of a pending dispatch we emit a tiny `{"_keepalive":true}`
+// frame every 10 s until the handler resolves. Each write resets both the
+// server's own socket idle timer (30 s) and — once §3.1 ships on the client —
+// the client's idle timer, because any byte counts as socket activity. This
+// is the transport-layer fix for feedback #1: long-poll RPCs (i.e.
+// orchestration.check --wait) can now run past the 30 s/60 s idle caps
+// without either end tearing the socket down. See design doc §3.1.
+const KEEPALIVE_INTERVAL_MS = 10_000
+
+// Why: long-poll slot cap. With keepalives a `check --wait --timeout-ms
+// 600000` can hold a connection for up to 10 minutes; unbounded that would
+// saturate MAX_RUNTIME_RPC_CONNECTIONS (32) with 32 waiting coordinators
+// and lock out normal short RPCs. Capping at half the connection budget
+// leaves the other half for short traffic. On overflow the server responds
+// immediately with `runtime_busy` (CLI exit 75) — fail fast, not silent
+// queuing. See design doc §3.1 + §7 risk #2.
+const LONG_POLL_CAP = 16
+
+// Why: a long-poll request is one whose handler blocks for an unbounded
+// amount of time waiting for an external event (today, only
+// `orchestration.check` with `wait === true`). This function is the single
+// place that classifies it — the long-poll counter, abort wiring, and
+// runtime_busy admission check all share this decision. See §3.1.
+function isLongPollRequest(request: RpcRequest): boolean {
+  if (request.method !== 'orchestration.check') {
+    return false
+  }
+  const params = request.params as { wait?: unknown } | undefined
+  return params?.wait === true
+}
 
 export class OrcaRuntimeRpcServer {
   private readonly runtime: OrcaRuntimeService
@@ -31,25 +75,68 @@ export class OrcaRuntimeRpcServer {
   private readonly userDataPath: string
   private readonly pid: number
   private readonly platform: NodeJS.Platform
+  private readonly enableWebSocket: boolean
+  private readonly wsPort: number
   private readonly authToken = randomBytes(24).toString('hex')
-  private server: Server | null = null
-  private transport: RuntimeTransportMetadata | null = null
+  private readonly keepaliveIntervalMs: number
+  private readonly longPollCap: number
+  private deviceRegistry: DeviceRegistry | null = null
+  private e2eeKeypair: E2EEKeypair | null = null
+  private tlsFingerprint: string | null = null
+  private activeTransports: RpcTransport[] = []
+  private transports: RuntimeTransportMetadata[] = []
+  // Why: each WebSocket connection has its own E2EE channel that manages the
+  // handshake and encrypt/decrypt lifecycle. Keyed by WebSocket instance.
+  private e2eeChannels = new Map<WebSocket, E2EEChannel>()
+  // Why: separate from Node's server.maxConnections because we need to count
+  // only long-running dispatches, not every in-flight short RPC. See §3.1 +
+  // §7 risk #2.
+  private activeLongPolls = 0
 
   constructor({
     runtime,
     userDataPath,
     pid = process.pid,
-    platform = process.platform
+    platform = process.platform,
+    enableWebSocket = false,
+    wsPort = DEFAULT_WS_PORT,
+    keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
+    longPollCap = LONG_POLL_CAP
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime })
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform
+    this.enableWebSocket = enableWebSocket
+    this.wsPort = wsPort
+    this.keepaliveIntervalMs = keepaliveIntervalMs
+    this.longPollCap = longPollCap
+  }
+
+  getDeviceRegistry(): DeviceRegistry | null {
+    return this.deviceRegistry
+  }
+
+  getTlsFingerprint(): string | null {
+    return this.tlsFingerprint
+  }
+
+  getE2EEPublicKey(): string | null {
+    return this.e2eeKeypair?.publicKeyB64 ?? null
+  }
+
+  getE2EEKeypair(): E2EEKeypair | null {
+    return this.e2eeKeypair
+  }
+
+  getWebSocketEndpoint(): string | null {
+    const ws = this.transports.find((t) => t.kind === 'websocket')
+    return ws?.endpoint ?? null
   }
 
   async start(): Promise<void> {
-    if (this.server) {
+    if (this.activeTransports.length > 0) {
       return
     }
 
@@ -63,82 +150,160 @@ export class OrcaRuntimeRpcServer {
       sweepOrphanedRuntimeSockets(this.userDataPath, this.pid)
     }
 
-    const transport = createRuntimeTransportMetadata(
+    const transportMeta = createRuntimeTransportMetadata(
       this.userDataPath,
       this.pid,
       this.platform,
       this.runtime.getRuntimeId()
     )
-    if (transport.kind === 'unix' && existsSync(transport.endpoint)) {
-      rmSync(transport.endpoint, { force: true })
-    }
 
-    const server = createServer((socket) => {
-      this.handleConnection(socket)
+    const socketTransport = new UnixSocketTransport({
+      endpoint: transportMeta.endpoint,
+      kind: transportMeta.kind as 'unix' | 'named-pipe',
+      keepaliveIntervalMs: this.keepaliveIntervalMs
     })
-    server.maxConnections = MAX_RUNTIME_RPC_CONNECTIONS
 
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(transport.endpoint, () => {
-        server.off('error', reject)
-        resolve()
-      })
+    // Why: Unix socket transport uses the shared runtime auth token. This is
+    // the existing security model for CLI connections — the token lives in a
+    // 0o600-permissioned file on disk.
+    // Why: the `.catch` guarantees `reply()` always fires even if
+    // `handleMessage` (or `JSON.stringify` on a pathological response) throws.
+    // Without it, a throw would leave the client waiting for a terminal frame
+    // that never arrives AND leak the dispatch's AbortController in the
+    // transport's in-flight set until the 30 s socket idle timer closes the
+    // connection.
+    socketTransport.onMessage((msg, reply, context) => {
+      void this.handleMessage(msg, context)
+        .then((response) => {
+          reply(JSON.stringify(response))
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          // Why: best-effort id recovery so the client can correlate the
+          // error frame to its pending request. A malformed message would
+          // have been caught by handleMessage and returned an envelope
+          // instead of throwing, so in practice the id is always present.
+          let id = 'unknown'
+          try {
+            const parsed = JSON.parse(msg) as { id?: unknown }
+            if (typeof parsed.id === 'string' && parsed.id.length > 0) {
+              id = parsed.id
+            }
+          } catch {
+            // ignore — fall through with id='unknown'
+          }
+          reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
+        })
     })
-    if (transport.kind === 'unix') {
-      chmodSync(transport.endpoint, 0o600)
+
+    await socketTransport.start()
+
+    const activeTransports: RpcTransport[] = [socketTransport]
+    const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
+
+    // Why: WebSocket transport is opt-in and starts alongside the Unix socket.
+    // It uses per-device tokens and E2EE (application-layer encryption via
+    // tweetnacl) rather than TLS, since React Native can't pin self-signed certs.
+    if (this.enableWebSocket) {
+      try {
+        this.deviceRegistry = new DeviceRegistry(this.userDataPath)
+        this.e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
+
+        const wsTransport = new WebSocketTransport({
+          host: '0.0.0.0',
+          port: this.wsPort
+        })
+
+        // Why: each WebSocket connection gets an E2EE channel that handles the
+        // handshake before any RPC messages are processed. The channel decrypts
+        // inbound messages and encrypts outbound replies transparently.
+        wsTransport.onMessage((msg, _reply, ws) => {
+          let channel = this.e2eeChannels.get(ws)
+          if (!channel) {
+            channel = new E2EEChannel(ws, {
+              serverSecretKey: this.e2eeKeypair!.secretKey,
+              validateToken: (token) => this.deviceRegistry?.validateToken(token) != null,
+              onReady: (ch) => {
+                if (ch.deviceToken) {
+                  wsTransport.setClientId(ws, ch.deviceToken)
+                  // Why: mark the device as actually connected so it appears
+                  // in the "Paired Devices" list. Devices that were only
+                  // generated as QR codes but never scanned stay hidden.
+                  const device = this.deviceRegistry?.validateToken(ch.deviceToken)
+                  if (device) {
+                    this.deviceRegistry?.updateLastSeen(device.deviceId)
+                  }
+                }
+              },
+              onError: (code, reason) => {
+                this.e2eeChannels.get(ws)?.destroy()
+                this.e2eeChannels.delete(ws)
+                ws.close(code, reason)
+              }
+            })
+            channel.onMessage((plaintext, encryptedReply) => {
+              void this.handleWebSocketMessage(plaintext, encryptedReply, wsTransport, ws)
+            })
+            this.e2eeChannels.set(ws, channel)
+          }
+          channel.handleRawMessage(msg)
+        })
+
+        // Why: when a mobile client disconnects, the runtime must clean up
+        // connection-scoped state like mobile-fit overrides and the E2EE
+        // channel to prevent orphaned state.
+        wsTransport.onConnectionClose((clientId) => {
+          for (const [ws, channel] of this.e2eeChannels) {
+            if (channel.deviceToken === clientId) {
+              channel.destroy()
+              this.e2eeChannels.delete(ws)
+              break
+            }
+          }
+          this.runtime.onClientDisconnected(clientId)
+        })
+
+        await wsTransport.start()
+        activeTransports.push(wsTransport)
+        transportsMeta.push({
+          kind: 'websocket',
+          endpoint: `ws://0.0.0.0:${wsTransport.resolvedPort}`
+        })
+      } catch (error) {
+        // Why: WebSocket transport is supplementary — the runtime must still
+        // function if it fails to start (e.g., port in use). Log and continue
+        // with Unix socket only.
+        console.error('[runtime] Failed to start WebSocket transport:', error)
+      }
     }
 
     // Why: publish the transport into in-memory state before writing metadata
     // so the bootstrap file always contains the real endpoint/token pair. The
     // CLI only discovers the runtime through that file.
-    this.server = server
-    this.transport = transport
+    this.activeTransports = activeTransports
+    this.transports = transportsMeta
 
     try {
       this.writeMetadata()
     } catch (error) {
       // Why: a runtime that cannot publish bootstrap metadata is invisible to
-      // the `orca` CLI. Close the socket immediately instead of leaving behind
-      // a live but undiscoverable control plane.
-      this.server = null
-      this.transport = null
-      await new Promise<void>((resolve, reject) => {
-        server.close((closeError) => {
-          if (closeError) {
-            reject(closeError)
-            return
-          }
-          resolve()
-        })
-      }).catch(() => {})
-      if (transport.kind === 'unix' && existsSync(transport.endpoint)) {
-        rmSync(transport.endpoint, { force: true })
-      }
+      // the `orca` CLI. Close all transports immediately instead of leaving
+      // behind a live but undiscoverable control plane.
+      this.activeTransports = []
+      this.transports = []
+      await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
       throw error
     }
   }
 
   async stop(): Promise<void> {
-    const server = this.server
-    const transport = this.transport
-    this.server = null
-    this.transport = null
-    if (!server) {
+    const transports = this.activeTransports
+    this.activeTransports = []
+    this.transports = []
+    if (transports.length === 0) {
       return
     }
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve()
-      })
-    })
-    if (transport?.kind === 'unix' && existsSync(transport.endpoint)) {
-      rmSync(transport.endpoint, { force: true })
-    }
+    await Promise.all(transports.map((t) => t.stop()))
     // Why: we intentionally leave the last metadata file behind instead of
     // deleting it on shutdown. Shared userData paths can briefly host multiple
     // Orca processes during restarts, updates, or development, and stale
@@ -146,65 +311,125 @@ export class OrcaRuntimeRpcServer {
     // bootstrap file.
   }
 
-  private handleConnection(socket: Socket): void {
-    let buffer = ''
+  // Why: Unix socket messages use one-shot dispatch (single response per
+  // request) and the shared runtime auth token from the 0o600 metadata file.
+  // The transport layer owns socket lifecycle, keepalive writes, and the
+  // per-connection abort signal — this method just parses, auths, and
+  // dispatches. See design doc §3.1.
+  private async handleMessage(
+    rawMessage: string,
+    context?: RpcMessageContext
+  ): Promise<RpcResponse> {
+    // Why: empty messages are sent by the Unix socket transport layer when a
+    // client exceeds the max message size. The transport closes the connection
+    // after this response.
+    if (!rawMessage) {
+      return this.buildError('unknown', 'request_too_large', 'RPC request exceeds the maximum size')
+    }
 
-    socket.setEncoding('utf8')
-    socket.setNoDelay(true)
-    socket.setTimeout(RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS, () => {
-      socket.destroy()
-    })
-    socket.on('error', () => {
-      socket.destroy()
-    })
-    socket.on('data', (chunk: string) => {
-      buffer += chunk
-      // Why: the Orca runtime lives in Electron main, so it must reject
-      // oversized local RPC frames instead of letting a local client grow an
-      // unbounded buffer and stall the app.
-      if (Buffer.byteLength(buffer, 'utf8') > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
-        socket.write(
-          `${JSON.stringify(this.buildError('unknown', 'request_too_large', 'RPC request exceeds the maximum size'))}\n`
-        )
-        socket.end()
-        return
+    const parsed = this.parseAndAuth(rawMessage)
+    if ('error' in parsed) {
+      return parsed.error
+    }
+    const request = parsed.request
+
+    // Why: long-poll admission fence. Short RPCs bypass the counter entirely
+    // — it only guards handlers that can block for minutes. See §7 risk #2.
+    const longPoll = isLongPollRequest(request)
+    if (longPoll && this.activeLongPolls >= this.longPollCap) {
+      return this.buildError(
+        request.id,
+        'runtime_busy',
+        'long-poll capacity reached; retry with backoff'
+      )
+    }
+    if (longPoll) {
+      this.activeLongPolls += 1
+      // Why: arm the keepalive timer only for long-polls. Short RPCs never
+      // touch it so the `setInterval` is never created. See §3.1.
+      context?.startKeepalive()
+    }
+
+    try {
+      return await this.dispatcher.dispatch(request, {
+        signal: longPoll ? context?.signal : undefined
+      })
+    } finally {
+      if (longPoll) {
+        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
       }
-      let newlineIndex = buffer.indexOf('\n')
-      while (newlineIndex !== -1) {
-        const rawMessage = buffer.slice(0, newlineIndex).trim()
-        buffer = buffer.slice(newlineIndex + 1)
-        if (rawMessage) {
-          void this.handleMessage(rawMessage).then((response) => {
-            socket.write(`${JSON.stringify(response)}\n`)
-          })
-        }
-        newlineIndex = buffer.indexOf('\n')
-      }
-    })
+    }
   }
 
-  private async handleMessage(rawMessage: string): Promise<RpcResponse> {
+  private parseAndAuth(rawMessage: string): { request: RpcRequest } | { error: RpcResponse } {
     let request: RpcRequest
     try {
       request = JSON.parse(rawMessage) as RpcRequest
     } catch {
-      return this.buildError('unknown', 'bad_request', 'Invalid JSON request')
+      return { error: this.buildError('unknown', 'bad_request', 'Invalid JSON request') }
     }
 
     if (typeof request.id !== 'string' || request.id.length === 0) {
-      return this.buildError('unknown', 'bad_request', 'Missing request id')
+      return { error: this.buildError('unknown', 'bad_request', 'Missing request id') }
     }
     if (typeof request.method !== 'string' || request.method.length === 0) {
-      return this.buildError(request.id, 'bad_request', 'Missing RPC method')
+      return { error: this.buildError(request.id, 'bad_request', 'Missing RPC method') }
     }
     if (typeof request.authToken !== 'string' || request.authToken.length === 0) {
-      return this.buildError(request.id, 'unauthorized', 'Missing auth token')
+      return { error: this.buildError(request.id, 'unauthorized', 'Missing auth token') }
     }
     if (request.authToken !== this.authToken) {
-      return this.buildError(request.id, 'unauthorized', 'Invalid auth token')
+      return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
     }
 
-    return this.dispatcher.dispatch(request)
+    return { request }
+  }
+
+  // Why: WebSocket messages go through streaming dispatch which can emit
+  // multiple responses. Auth uses per-device tokens from the device registry.
+  private async handleWebSocketMessage(
+    rawMessage: string,
+    reply: (response: string) => void,
+    wsTransport?: WebSocketTransport,
+    ws?: WebSocket
+  ): Promise<void> {
+    let request: RpcRequest
+    try {
+      request = JSON.parse(rawMessage) as RpcRequest
+    } catch {
+      reply(JSON.stringify(this.buildError('unknown', 'bad_request', 'Invalid JSON request')))
+      return
+    }
+
+    if (typeof request.id !== 'string' || request.id.length === 0) {
+      reply(JSON.stringify(this.buildError('unknown', 'bad_request', 'Missing request id')))
+      return
+    }
+    if (typeof request.method !== 'string' || request.method.length === 0) {
+      reply(JSON.stringify(this.buildError(request.id, 'bad_request', 'Missing RPC method')))
+      return
+    }
+
+    const token =
+      typeof (request as Record<string, unknown>).deviceToken === 'string'
+        ? ((request as Record<string, unknown>).deviceToken as string)
+        : null
+    if (!token) {
+      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
+      return
+    }
+    if (!this.deviceRegistry?.validateToken(token)) {
+      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
+      return
+    }
+
+    // Why: associate the deviceToken with this WebSocket so ws.on('close')
+    // can notify the runtime which mobile client disconnected.
+    if (wsTransport && ws) {
+      wsTransport.setClientId(ws, token)
+    }
+
+    await this.dispatcher.dispatchStreaming(request, reply)
   }
 
   private buildError(id: string, code: string, message: string): RpcResponse {
@@ -215,7 +440,7 @@ export class OrcaRuntimeRpcServer {
     const metadata: RuntimeMetadata = {
       runtimeId: this.runtime.getRuntimeId(),
       pid: this.pid,
-      transport: this.transport,
+      transports: this.transports,
       authToken: this.authToken,
       startedAt: this.runtime.getStartedAt()
     }

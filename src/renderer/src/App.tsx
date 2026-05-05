@@ -9,6 +9,7 @@ import {
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT
 } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
+import { buildAppFontFamily } from '@/lib/app-font-family'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -23,6 +24,7 @@ import RightSidebar from './components/right-sidebar'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
+import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
@@ -37,6 +39,7 @@ import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import { buildWorkspaceSessionPayload } from './lib/workspace-session'
 import { countWorkingAgents, getWorkingAgentsPerWorktree } from './lib/agent-status'
 import { activateAndRevealWorktree } from './lib/worktree-activation'
+import { applyDocumentTheme } from './lib/document-theme'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { findWorktreeById, getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
@@ -497,25 +500,28 @@ function App(): React.JSX.Element {
       return
     }
 
-    const applyTheme = (dark: boolean): void => {
-      document.documentElement.classList.toggle('dark', dark)
-    }
-
     if (settings.theme === 'dark') {
-      applyTheme(true)
+      applyDocumentTheme('dark')
       return undefined
     } else if (settings.theme === 'light') {
-      applyTheme(false)
+      applyDocumentTheme('light')
       return undefined
     } else {
       // system
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      applyTheme(mq.matches)
-      const handler = (e: MediaQueryListEvent): void => applyTheme(e.matches)
+      applyDocumentTheme('system')
+      const handler = (): void => applyDocumentTheme('system')
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
   }, [settings])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--app-font-family',
+      buildAppFontFamily(settings?.appFontFamily)
+    )
+  }, [settings?.appFontFamily])
 
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {
@@ -1114,6 +1120,14 @@ function App(): React.JSX.Element {
       ) : null}
       <UpdateCard />
       <StarNagCard />
+      {/* Why: the existing-user opt-in banner mounts at App root so it
+          renders once per renderer session, not per view. It gates
+          internally on the cohort markers populated by the migration,
+          so it only shows for users who installed before the telemetry
+          release and have not yet resolved consent. New users get no
+          first-launch surface — see telemetry-plan.md §First-launch
+          experience. */}
+      <TelemetryFirstLaunchSurface />
       <ZoomOverlay />
       <SshPassphraseDialog />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />

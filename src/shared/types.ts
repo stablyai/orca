@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { SshTarget } from './ssh-types'
+import type { GitHubProjectSettings } from './github-project-types'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
@@ -37,6 +38,12 @@ export type Repo = {
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
   issueSourcePreference?: IssueSourcePreference
+  /** Paths (relative to the primary checkout) that should be symlinked into
+   *  newly created worktrees of this repo. Consumed only when the global
+   *  `experimentalWorktreeSymlinks` flag is on — the per-repo list is the
+   *  "what to link", the global flag is the "whether to link at all" switch.
+   *  Undefined/empty means no symlinks are created for this repo. */
+  symlinkPaths?: string[]
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -639,6 +646,11 @@ export type LinearComment = {
 export type GitHubIssueUpdate = {
   state?: 'open' | 'closed'
   title?: string
+  // Why: body writes are driven by the Project-mode slug-addressed path
+  // (`updateIssueBySlug`) because `gh issue edit` does not consistently
+  // cover every body-edit case the dialog needs; the repoPath-based
+  // `updateIssue` flow keeps ignoring `body` for backward compatibility.
+  body?: string
   addLabels?: string[]
   removeLabels?: string[]
   addAssignees?: string[]
@@ -670,6 +682,33 @@ export type ClassifiedError = {
 // Aliased as `OwnerRepo` in `src/main/github/gh-utils.ts` so main call sites
 // can continue using the short local name.
 export type GitHubOwnerRepo = { owner: string; repo: string }
+
+/**
+ * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
+ * see remaining budget before they hit the wall. `core` = REST (5000/hr),
+ * `search` = Search API (30/min — hit by countWorkItems), `graphql` =
+ * GraphQL (5000 points/hr — hit by project-view + discovery). All three are
+ * the buckets this app actually stresses; other buckets (e.g. code_search)
+ * are not surfaced because we don't touch them.
+ */
+export type GitHubRateLimitBucket = {
+  remaining: number
+  limit: number
+  /** Unix epoch seconds when the window resets. */
+  resetAt: number
+}
+
+export type GitHubRateLimitSnapshot = {
+  core: GitHubRateLimitBucket
+  search: GitHubRateLimitBucket
+  graphql: GitHubRateLimitBucket
+  /** Unix epoch ms the snapshot was produced (for "fetched Xs ago" copy). */
+  fetchedAt: number
+}
+
+export type GetRateLimitResult =
+  | { ok: true; snapshot: GitHubRateLimitSnapshot }
+  | { ok: false; error: string }
 
 /**
  * Envelope for `gh:listWorkItems`. Carries resolved issue/PR sources so the
@@ -760,6 +799,11 @@ export type RepoHookSettings = {
 export type WorktreeSetupLaunch = {
   runnerScriptPath: string
   envVars: Record<string, string>
+}
+
+export type WorktreeStartupLaunch = {
+  command: string
+  env?: Record<string, string>
 }
 
 export type CreateSparseCheckoutRequest = {
@@ -905,6 +949,7 @@ export type ClaudeRateLimitAccountsState = {
 export type TuiAgent =
   | 'claude' // Claude Code
   | 'codex' // OpenAI Codex
+  | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
   | 'pi' // Pi (pi.dev)
   | 'gemini' // Gemini CLI
@@ -975,6 +1020,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
@@ -1147,11 +1193,23 @@ export type GlobalSettings = {
    *  takes effect on the next app launch. The in-pane status indicators and
    *  the cursor-agent hook path are unaffected by this toggle. */
   experimentalAgentDashboard: boolean
+  experimentalMobile: boolean
   /** Experimental: floating animated sidekick (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the
    *  current session (no relaunch) because it is purely renderer-side. */
   experimentalSidekick: boolean
+  /** Experimental: when creating a worktree, automatically symlink a
+   *  user-configured set of files/folders from the primary checkout (e.g.
+   *  `.env`, `node_modules`) into the new worktree. Opt-in while the
+   *  configuration surface and edge cases (conflicts with existing paths,
+   *  cleanup on worktree delete) are still being worked out. */
+  experimentalWorktreeSymlinks: boolean
+  /** GitHub Project mode state — pinned/recent/active project, last selected
+   *  view per project. Optional because profiles created before this feature
+   *  landed won't have the key; `getDefaultSettings()` hydrates the empty
+   *  default via the persistence merge. */
+  githubProjects?: GitHubProjectSettings
   /** Anonymous product-telemetry state. Optional because the one-shot
    *  migration in `Store.load()` is what populates it on first boot of the
    *  telemetry release; before migration runs, the field is absent. After
@@ -1171,14 +1229,12 @@ export type GlobalSettings = {
     /** New users: initialized to `true` at install.
      *  Existing users: `null` until they resolve the first-launch banner. */
     optedIn: boolean | null
-    /** Anonymous UUID v4. Generated on first run. Regenerable from Privacy pane. */
+    /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
     installId: string
-    /** Cohort marker set once during migration. Drives toast-vs-banner. */
+    /** Cohort marker set once during migration. True for users with a
+     *  pre-existing profile (gates the existing-user opt-in banner);
+     *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
-    /** New-user toast: true only after active dismissal ("Got it" or "Turn off").
-     *  Re-shows on next launch if false/undefined so the consent disclosure
-     *  is never silently skipped by quitting mid-session. */
-    firstRunNoticeShown?: boolean
   }
 }
 

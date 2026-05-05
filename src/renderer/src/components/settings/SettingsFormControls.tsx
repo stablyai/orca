@@ -42,6 +42,7 @@ type FontAutocompleteProps = {
   value: string
   suggestions: string[]
   onChange: (value: string) => void
+  placeholder?: string
 }
 
 export function ThemePicker({
@@ -214,7 +215,8 @@ export function NumberField({
 export function FontAutocomplete({
   value,
   suggestions,
-  onChange
+  onChange,
+  placeholder = 'SF Mono'
 }: FontAutocompleteProps): React.JSX.Element {
   const [query, setQuery] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
@@ -353,7 +355,7 @@ export function FontAutocomplete({
               }
             }
           }}
-          placeholder="SF Mono"
+          placeholder={placeholder}
           className="pr-18"
           role="combobox"
           aria-autocomplete="list"

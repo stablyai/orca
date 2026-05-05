@@ -11,6 +11,7 @@ import type {
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
+export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -119,6 +120,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',
+    appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,
@@ -199,9 +201,21 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // (Claude/Codex/Gemini) stays dormant for existing users and upgraders
     // (persistence.ts merges defaults first, so upgraders inherit this).
     experimentalAgentDashboard: false,
+    experimentalMobile: false,
     // Why: off by default — opt-in cosmetic joke feature. Leaving the default
     // false keeps the overlay unmounted for users who never enable it.
-    experimentalSidekick: false
+    experimentalSidekick: false,
+    experimentalWorktreeSymlinks: false,
+    // Why: hydrate an empty default so the renderer's optional-chained reads
+    // (`settings?.githubProjects?.activeProject`) land on a stable shape
+    // instead of `undefined`. Upgraded profiles inherit this via the
+    // `{ ...defaults, ...parsed }` merge in persistence.ts.
+    githubProjects: {
+      pinned: [],
+      recent: [],
+      lastViewByProject: {},
+      activeProject: null
+    }
   }
 }
 

@@ -406,6 +406,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'kind'
+            | 'symlinkPaths'
             | 'issueSourcePreference'
           >
         >
@@ -426,6 +427,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.issueSourcePreference !== 'auto'
       ) {
         delete updates.issueSourcePreference
+      }
+      // Why: `symlinkPaths` is consumed by `createWorktreeSymlinks` which
+      // calls `.trim()` on each entry. A renderer bug or preload-version skew
+      // that persists a non-`string[]` value (e.g. `[42, null]`, a bare
+      // string) would throw inside the worktree-create path with no UI
+      // signal. Strip invalid shapes at the boundary the same way
+      // `issueSourcePreference` is validated above.
+      if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {
+        const v = updates.symlinkPaths as unknown
+        if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
+          delete updates.symlinkPaths
+        }
       }
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {

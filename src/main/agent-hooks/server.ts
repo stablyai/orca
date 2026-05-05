@@ -844,11 +844,13 @@ function normalizeCodexEvent(
 
 // Why: OpenCode has no declarative hook surface — it exposes in-process plugin
 // events (session.status busy/idle, session.idle, permission.asked,
-// message.updated, message.part.updated). The bundled plugin (see
-// opencode/hook-service) pre-maps those to our stable hook_event_name
+// question.asked, message.updated, message.part.updated). The bundled plugin
+// (see opencode/hook-service) pre-maps those to our stable hook_event_name
 // vocabulary before POSTing so this normalizer can share the same switch
 // shape as Claude/Codex/Gemini. SessionBusy = turn started, SessionIdle =
-// turn finished, PermissionRequest = blocked on user approval, MessagePart =
+// turn finished, PermissionRequest = blocked on user approval, AskUserQuestion =
+// blocked on user reply to an ask-the-user tool (both map to `waiting` so the
+// sidebar renders the red "needs attention" indicator), MessagePart =
 // incremental text from user prompt or assistant reply (stays in `working`
 // because streaming chunks must not flip the row to done mid-turn).
 function normalizeOpenCodeEvent(
@@ -862,7 +864,7 @@ function normalizeOpenCodeEvent(
       ? 'working'
       : eventName === 'SessionIdle'
         ? 'done'
-        : eventName === 'PermissionRequest'
+        : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
           ? 'waiting'
           : null
 

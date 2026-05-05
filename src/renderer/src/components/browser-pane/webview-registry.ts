@@ -36,7 +36,11 @@ export function setWebviewsDragPassthrough(passthrough: boolean): void {
 
 const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
 
-if (typeof window !== 'undefined') {
+// Why: vitest 'node' env stubs `window` as a plain object via vi.stubGlobal,
+// so `typeof window !== 'undefined'` is true but addEventListener is missing.
+// Gate on the function we actually call so importing this module from a hook
+// test (which transitively pulls us in) does not throw at module load.
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   type DragListenerRegistry = {
     dragstart: () => void
     dragend: () => void

@@ -1,11 +1,17 @@
-import type { BrowserTabListResult, BrowserTabSwitchResult } from '../../shared/runtime-types'
+import type {
+  BrowserTabCurrentResult,
+  BrowserTabListResult,
+  BrowserTabShowResult,
+  BrowserTabSwitchResult
+} from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatTabList, printResult } from '../format'
 import {
-  getOptionalNonNegativeIntegerFlag,
-  getOptionalStringFlag,
-  getRequiredStringFlag
-} from '../flags'
+  formatTabList,
+  formatTabListWithProfiles,
+  formatTabShow,
+  printResult
+} from '../format'
+import { getOptionalNonNegativeIntegerFlag, getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 
@@ -13,7 +19,20 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'tab list': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<BrowserTabListResult>('browser.tabList', { worktree })
-    printResult(result, json, formatTabList)
+    const showProfile = flags.has('show-profile')
+    printResult(result, json, (value) =>
+      showProfile ? formatTabListWithProfiles(value, true) : formatTabList(value)
+    )
+  },
+  'tab show': async ({ flags, client, cwd, json }) => {
+    const target = await getBrowserCommandTarget(flags, cwd, client)
+    const result = await client.call<BrowserTabShowResult>('browser.tabShow', target)
+    printResult(result, json, formatTabShow)
+  },
+  'tab current': async ({ flags, client, cwd, json }) => {
+    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const result = await client.call<BrowserTabCurrentResult>('browser.tabCurrent', { worktree })
+    printResult(result, json, formatTabShow)
   },
   'tab switch': async ({ flags, client, cwd, json }) => {
     const index = getOptionalNonNegativeIntegerFlag(flags, 'index')
@@ -34,10 +53,11 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   },
   'tab create': async ({ flags, client, cwd, json }) => {
     const url = getOptionalStringFlag(flags, 'url')
+    const profileId = getOptionalStringFlag(flags, 'profile')
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<{ browserPageId: string }>(
       'browser.tabCreate',
-      { url, worktree },
+      { url, worktree, profileId },
       { timeoutMs: 60_000 }
     )
     printResult(result, json, (v) => `Created tab ${v.browserPageId}`)

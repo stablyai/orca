@@ -181,7 +181,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     listWorktreesMock.mockResolvedValue([])
 
-    registerWorktreeHandlers(mainWindow as never, store as never, {} as never)
+    // Why: createLocalWorktree routes `git fetch` through
+    // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). Stub it for path tests.
+    const runtimeStub = {
+      fetchRemoteWithCache: async () => {
+        /* noop */
+      }
+    }
+    registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
 
   it('accepts a newly created Windows worktree when git lists the same path with different separators', async () => {
