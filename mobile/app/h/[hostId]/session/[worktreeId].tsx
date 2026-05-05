@@ -161,6 +161,10 @@ export default function SessionScreen() {
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
+  // Why: deferred resetZoom timers fire on every scrollback init and 'resized'
+  // event. Track per-handle so unmount / pane teardown / rapid tab switching
+  // can cancel queued resets and avoid firing against a stale terminal layout.
+  const resetZoomTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const sendingRef = useRef(false)
   // Why: tracks the pixel height of the terminal frame so measureFitDimensions
   // can use the exact container height instead of relying on window.innerHeight,
@@ -173,12 +177,36 @@ export default function SessionScreen() {
     return handle ? terminalRefs.current.get(handle) : undefined
   }, [])
 
-  const unsubscribeTerminal = useCallback((handle: string) => {
-    terminalUnsubsRef.current.get(handle)?.()
-    terminalUnsubsRef.current.delete(handle)
-    subscribingHandlesRef.current.delete(handle)
-    subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
+  const cancelResetZoom = useCallback((handle: string) => {
+    const existing = resetZoomTimersRef.current.get(handle)
+    if (existing) {
+      clearTimeout(existing)
+      resetZoomTimersRef.current.delete(handle)
+    }
   }, [])
+
+  const scheduleResetZoom = useCallback(
+    (handle: string) => {
+      cancelResetZoom(handle)
+      const timer = setTimeout(() => {
+        resetZoomTimersRef.current.delete(handle)
+        getTerminalRef(handle)?.resetZoom()
+      }, 200)
+      resetZoomTimersRef.current.set(handle, timer)
+    },
+    [cancelResetZoom, getTerminalRef]
+  )
+
+  const unsubscribeTerminal = useCallback(
+    (handle: string) => {
+      terminalUnsubsRef.current.get(handle)?.()
+      terminalUnsubsRef.current.delete(handle)
+      subscribingHandlesRef.current.delete(handle)
+      subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
+      cancelResetZoom(handle)
+    },
+    [cancelResetZoom]
+  )
 
   const clearTerminalCache = useCallback(() => {
     for (const unsub of terminalUnsubsRef.current.values()) {
@@ -189,6 +217,10 @@ export default function SessionScreen() {
     initializedHandlesRef.current.clear()
     webReadyHandlesRef.current.clear()
     subscribeSeqRef.current.clear()
+    for (const timer of resetZoomTimersRef.current.values()) {
+      clearTimeout(timer)
+    }
+    resetZoomTimersRef.current.clear()
     for (const term of terminalRefs.current.values()) {
       term.clear()
     }
@@ -267,7 +299,7 @@ export default function SessionScreen() {
             // the terminal un-zoomed until the user toggles the resize
             // button. Re-fire resetZoom after a short delay so it runs
             // against a settled DOM. Mirrors the 'resized' handler below.
-            setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
+            scheduleResetZoom(handle)
             // Why: viewport measurement needs xterm to be initialized (cell
             // dimensions come from the renderer). On the first subscribe the
             // WebView hasn't loaded yet, so viewportRef is null and the server
@@ -308,7 +340,7 @@ export default function SessionScreen() {
                 new Map(prev).set(handle, data.displayMode as MobileDisplayMode)
               )
             }
-            setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
+            scheduleResetZoom(handle)
           }
         }
       )
@@ -320,7 +352,7 @@ export default function SessionScreen() {
       }
       subscribingHandlesRef.current.delete(handle)
     },
-    [client, getTerminalRef]
+    [client, getTerminalRef, scheduleResetZoom]
   )
 
   // Why: toggles between phone and desktop mode via server RPC. The server
