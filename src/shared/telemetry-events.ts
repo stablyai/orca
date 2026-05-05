@@ -14,6 +14,8 @@
 
 import { z } from 'zod'
 
+import type { GlobalSettings } from './types'
+
 // ── Shared property enums ───────────────────────────────────────────────
 
 // Mirrors the shipped `TuiAgent` launch surface, with one deliberate shift:
@@ -122,12 +124,18 @@ export type OptInVia = z.infer<typeof optInViaSchema>
 //
 // Kept as an `as const` tuple so the Zod enum below and any call-site usage
 // share one array — typo-drift is impossible.
+type BooleanGlobalSettingsKey = {
+  [Key in keyof GlobalSettings]-?: GlobalSettings[Key] extends boolean ? Key : never
+}[keyof GlobalSettings]
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
-  'experimentalTerminalDaemon',
-  'experimentalAgentDashboard'
-] as const
+  'experimentalAgentDashboard',
+  'experimentalMobile',
+  'experimentalSidekick',
+  'experimentalWorktreeSymlinks',
+  'geminiCliOAuthEnabled'
+] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
 

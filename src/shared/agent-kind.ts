@@ -40,6 +40,10 @@ const TUI_AGENT_KIND_BY_AGENT = {
   copilot: 'copilot'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 
+// Why: `satisfies Record<TuiAgent, …>` makes the lookup exhaustive at compile
+// time, but stale persisted settings or unsafe IPC casts can carry a string
+// outside the union at runtime — fall back to `'other'` so the event still
+// emits instead of failing validation and dropping silently.
 export function tuiAgentToAgentKind(agent: TuiAgent): AgentKind {
-  return TUI_AGENT_KIND_BY_AGENT[agent]
+  return TUI_AGENT_KIND_BY_AGENT[agent] ?? 'other'
 }
