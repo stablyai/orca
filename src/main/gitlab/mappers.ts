@@ -1,6 +1,7 @@
 import type {
   CheckStatus,
   GitLabIssueInfo,
+  GitLabWorkItem,
   MRCheckDetail,
   MRInfo,
   MRState
@@ -200,6 +201,92 @@ export function derivePipelineStatus(
     return 'pending'
   }
   return 'success'
+}
+
+// ── Raw → GitLabWorkItem mapping ────────────────────────────────────
+// Why: list endpoints return MR / issue records; the picker consumes a
+// unified GitLabWorkItem. Mirrors the GitHub side where MainWorkItem is
+// produced from PR / issue REST + GraphQL responses.
+
+type GitLabMRRawForWorkItem = {
+  id?: number
+  iid?: number
+  title: string
+  state: string
+  draft?: boolean
+  web_url?: string
+  url?: string
+  updated_at?: string
+  source_branch?: string
+  target_branch?: string
+  author?: { username?: string | null } | null
+  labels?: ({ name: string } | string)[]
+  /** Why: source_project_id !== target_project_id signals a fork MR.
+   *  GitLab list endpoints include both — the picker uses this flag the
+   *  same way GitHub's isCrossRepository disables fork-MR start points
+   *  when the workspace flow can't safely resolve the head. */
+  source_project_id?: number
+  target_project_id?: number
+}
+
+export function mapMRToWorkItem(data: GitLabMRRawForWorkItem, repoId: string): GitLabWorkItem {
+  const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
+  const number = data.iid ?? 0
+  return {
+    // Why: id needs to be unique across providers in the picker. Prefix
+    // 'gitlab-mr-' so a GitHub PR #5 and a GitLab MR !5 don't collide.
+    id: `gitlab-mr-${data.id ?? `${repoId}-${number}`}`,
+    type: 'mr',
+    number,
+    title: data.title,
+    state: mapMRState(data.state, data.draft, data.title),
+    url: data.web_url ?? data.url ?? '',
+    labels,
+    updatedAt: data.updated_at ?? '',
+    author: data.author?.username ?? null,
+    branchName: data.source_branch,
+    baseRefName: data.target_branch,
+    isCrossRepository:
+      data.source_project_id !== undefined &&
+      data.target_project_id !== undefined &&
+      data.source_project_id !== data.target_project_id,
+    repoId
+  }
+}
+
+type GitLabIssueRawForWorkItem = {
+  id?: number
+  iid?: number
+  title: string
+  state: string
+  web_url?: string
+  url?: string
+  updated_at?: string
+  author?: { username?: string | null } | null
+  labels?: ({ name: string } | string)[]
+}
+
+export function mapIssueToWorkItem(
+  data: GitLabIssueRawForWorkItem,
+  repoId: string
+): GitLabWorkItem {
+  const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
+  const number = data.iid ?? 0
+  // Issues only ever resolve to 'opened' or 'closed' (issue state space is
+  // narrower than MRs); coerce defensively without inventing values.
+  const state = data.state?.toLowerCase() === 'opened' ? 'opened' : 'closed'
+  return {
+    id: `gitlab-issue-${data.id ?? `${repoId}-${number}`}`,
+    type: 'issue',
+    number,
+    title: data.title,
+    state,
+    url: data.web_url ?? data.url ?? '',
+    labels,
+    updatedAt: data.updated_at ?? '',
+    author: data.author?.username ?? null,
+    repoId
+  }
 }
 
 function classifyPipelineString(status: string): CheckStatus {

@@ -252,6 +252,48 @@ export async function getGlabKnownHosts(): Promise<readonly string[]> {
   }
 }
 
+// ── Paginated `glab api -i` helper ──────────────────────────────────
+// Why: GitLab returns total counts via response headers (X-Total,
+// X-Total-Pages) on paginated REST endpoints. `glab api` discards
+// headers by default; passing `-i` includes the raw HTTP response
+// before the JSON body. Parse out the headers + body so callers can
+// surface "Page X of Y" UIs without hand-rolling a second count call.
+
+export type GlabApiResponse = {
+  body: string
+  headers: Record<string, string>
+}
+
+export async function glabApiWithHeaders(
+  args: string[],
+  options?: { cwd?: string }
+): Promise<GlabApiResponse> {
+  const { stdout } = await glabExecFileAsync(['api', '-i', ...args], options)
+  return parseGlabApiResponse(stdout)
+}
+
+/** @internal — exported for tests. */
+export function parseGlabApiResponse(stdout: string): GlabApiResponse {
+  // Why: response is `HTTP/x.y status\nHeader: val\n…\n\n<body>`.
+  // Match the first blank line (CRLF or LF) as the boundary.
+  const sepMatch = stdout.match(/\r?\n\r?\n/)
+  if (!sepMatch || sepMatch.index === undefined) {
+    return { body: stdout, headers: {} }
+  }
+  const headerBlock = stdout.slice(0, sepMatch.index)
+  const body = stdout.slice(sepMatch.index + sepMatch[0].length)
+  const headers: Record<string, string> = {}
+  // Skip the status line (HTTP/x.y …) and parse the rest as key: value.
+  const lines = headerBlock.split(/\r?\n/)
+  for (const line of lines) {
+    const m = line.match(/^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/)
+    if (m) {
+      headers[m[1].toLowerCase()] = m[2].trim()
+    }
+  }
+  return { body, headers }
+}
+
 // Why: glab auth status output is human-formatted and varies across versions.
 // Two patterns observed in the wild:
 //   1) "✓ Logged in to gitlab.com as <user>"

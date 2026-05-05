@@ -19,6 +19,7 @@ import {
   getGlabKnownHosts,
   getProjectRef,
   parseGitLabProjectRef,
+  parseGlabApiResponse,
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
@@ -255,6 +256,44 @@ gitlab.example.com:
 
   it('returns empty list for output with no hosts', () => {
     expect(parseGlabAuthStatusHosts('Not logged in.')).toEqual([])
+  })
+})
+
+describe('parseGlabApiResponse', () => {
+  it('splits headers and body at the first blank line (LF)', () => {
+    const stdout = 'HTTP/2.0 200 OK\nX-Total: 42\nX-Total-Pages: 3\n\n[{"iid":1}]'
+    const parsed = parseGlabApiResponse(stdout)
+    expect(parsed.headers).toEqual({ 'x-total': '42', 'x-total-pages': '3' })
+    expect(parsed.body).toBe('[{"iid":1}]')
+  })
+
+  it('handles CRLF line endings', () => {
+    const stdout = 'HTTP/2.0 200 OK\r\nX-Total: 7\r\n\r\n[]'
+    const parsed = parseGlabApiResponse(stdout)
+    expect(parsed.headers['x-total']).toBe('7')
+    expect(parsed.body).toBe('[]')
+  })
+
+  it('lowercases header names for stable lookup', () => {
+    const stdout = 'HTTP/2.0 200 OK\nX-Total: 1\nContent-Type: application/json\n\n{}'
+    const parsed = parseGlabApiResponse(stdout)
+    expect(parsed.headers['x-total']).toBe('1')
+    expect(parsed.headers['content-type']).toBe('application/json')
+  })
+
+  it('returns the full input as body when there is no header separator', () => {
+    const stdout = '{"iid":1}'
+    const parsed = parseGlabApiResponse(stdout)
+    expect(parsed.body).toBe(stdout)
+    expect(parsed.headers).toEqual({})
+  })
+
+  it('skips the status line in the header block', () => {
+    const stdout = 'HTTP/2.0 200 OK\nX-Total: 5\n\n[]'
+    const parsed = parseGlabApiResponse(stdout)
+    // The status line should not have leaked into headers under any key.
+    expect(parsed.headers['http/2.0']).toBeUndefined()
+    expect(parsed.headers['x-total']).toBe('5')
   })
 })
 

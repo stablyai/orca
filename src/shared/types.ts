@@ -832,6 +832,25 @@ export type GitLabIssueUpdate = {
   removeAssignees?: string[]
 }
 
+// Why: GitLab-native MR list filter — Open / Merged / Closed / All —
+// replaces GitHub's search-DSL on the GitLab tab per the agreed scope.
+// 'all' maps to no state filter (any state).
+export type MRListState = 'opened' | 'merged' | 'closed' | 'all'
+
+// Why: paginated list result for both MRs and combined work-items.
+// totalCount / totalPages come from X-Total / X-Total-Pages response
+// headers via `glab api -i`, so the renderer can show "Page X of Y".
+export type GitLabPagedResult<T> = {
+  items: T[]
+  page: number
+  perPage: number
+  totalCount: number
+  totalPages: number
+  error?: ClassifiedError
+}
+
+export type ListMergeRequestsResult = GitLabPagedResult<GitLabWorkItem>
+
 /**
  * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
  * see remaining budget before they hit the wall. `core` = REST (5000/hr),
