@@ -297,12 +297,7 @@ export function registerWorktreeHandlers(
         if (!projectRef) {
           return { error: 'No GitLab project found for this repository.' }
         }
-        const item = await getGitLabWorkItemByProjectRef(
-          repo.path,
-          projectRef,
-          args.mrIid,
-          'mr'
-        )
+        const item = await getGitLabWorkItemByProjectRef(repo.path, projectRef, args.mrIid, 'mr')
         if (!item || item.type !== 'mr') {
           return { error: `MR !${args.mrIid} not found.` }
         }

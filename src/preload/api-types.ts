@@ -28,6 +28,16 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
+  GitLabAssignableUser,
+  GitLabCommentResult,
+  GitLabIssueInfo,
+  GitLabIssueUpdate,
+  GitLabProjectRef,
+  GitLabViewer,
+  GitLabWorkItem,
+  ListMergeRequestsResult,
+  MRInfo,
+  MRListState,
   ListWorkItemsResult,
   IssueInfo,
   LinearViewer,
@@ -603,9 +613,7 @@ export type PreloadApi = {
     updateProjectItemField: (
       args: UpdateProjectItemFieldArgs
     ) => Promise<GitHubProjectMutationResult>
-    clearProjectItemField: (
-      args: ClearProjectItemFieldArgs
-    ) => Promise<GitHubProjectMutationResult>
+    clearProjectItemField: (args: ClearProjectItemFieldArgs) => Promise<GitHubProjectMutationResult>
     updateIssueBySlug: (args: UpdateIssueBySlugArgs) => Promise<GitHubProjectMutationResult>
     updatePullRequestBySlug: (
       args: UpdatePullRequestBySlugArgs
@@ -624,9 +632,49 @@ export type PreloadApi = {
       args: ListAssignableUsersBySlugArgs
     ) => Promise<ListAssignableUsersBySlugResult>
     listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs) => Promise<ListIssueTypesBySlugResult>
-    updateIssueTypeBySlug: (
-      args: UpdateIssueTypeBySlugArgs
-    ) => Promise<GitHubProjectMutationResult>
+    updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs) => Promise<GitHubProjectMutationResult>
+  }
+  // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
+  // Shapes mirror gh.* one-to-one where the data matches; diverge
+  // where GitLab's API differs (MR state values, project path with
+  // host, paginated envelope from `glab api -i`).
+  gl: {
+    viewer: () => Promise<GitLabViewer | null>
+    projectSlug: (args: { repoPath: string }) => Promise<GitLabProjectRef | null>
+    mrForBranch: (args: { repoPath: string; branch: string }) => Promise<MRInfo | null>
+    mr: (args: { repoPath: string; iid: number }) => Promise<MRInfo | null>
+    listMRs: (args: {
+      repoPath: string
+      state?: MRListState
+      page?: number
+      perPage?: number
+    }) => Promise<ListMergeRequestsResult>
+    issue: (args: { repoPath: string; number: number }) => Promise<GitLabIssueInfo | null>
+    listIssues: (args: { repoPath: string; limit?: number }) => Promise<GitLabIssueInfo[]>
+    createIssue: (args: {
+      repoPath: string
+      title: string
+      body: string
+    }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    updateIssue: (args: {
+      repoPath: string
+      number: number
+      updates: GitLabIssueUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }) => Promise<GitLabCommentResult>
+    listLabels: (args: { repoPath: string }) => Promise<string[]>
+    listAssignableUsers: (args: { repoPath: string }) => Promise<GitLabAssignableUser[]>
+    workItemByPath: (args: {
+      repoPath: string
+      host: string
+      path: string
+      iid: number
+      type: 'issue' | 'mr'
+    }) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
   }
   linear: {
     connect: (args: {
