@@ -159,7 +159,41 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
+  // Why: on cold start (first WebView load + first scrollback) xterm's DOM
+  // and canvas need several frames to reflow after term.open(). If we
+  // computeFitScale() too eagerly we read scrollWidth=0 or a stale width
+  // from before the new cols took effect, scrollWidth/vpWidth >= 1, and
+  // currentScale snaps to 1 — which is exactly the "didn't zoom to fit"
+  // bug users see on first load. Retry across frames until we get a
+  // positive, stable scrollWidth, then commit. Capped to keep this from
+  // spinning forever if the WebView never lays out (e.g. backgrounded).
+  var FIT_RETRY_MAX_FRAMES = 30;
+  var fitRetryToken = 0;
   function applyFitScale() {
+    if (!term || !term.element) return;
+    var token = ++fitRetryToken;
+    var attempts = 0;
+    var lastWidth = -1;
+    function attempt() {
+      if (token !== fitRetryToken) return;
+      if (!term || !term.element) return;
+      var w = term.element.scrollWidth;
+      attempts++;
+      if (w > 0 && w === lastWidth) {
+        commitFitScale();
+        return;
+      }
+      lastWidth = w;
+      if (attempts >= FIT_RETRY_MAX_FRAMES) {
+        commitFitScale();
+        return;
+      }
+      requestAnimationFrame(attempt);
+    }
+    requestAnimationFrame(attempt);
+  }
+
+  function commitFitScale() {
     if (!term || !term.element) return;
     currentScale = computeFitScale();
     // Why: when the scale is very close to 1 (e.g. 0.97 due to xterm

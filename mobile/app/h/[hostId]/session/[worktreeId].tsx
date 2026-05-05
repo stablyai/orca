@@ -260,6 +260,14 @@ export default function SessionScreen() {
                 new Map(prev).set(handle, data.displayMode as MobileDisplayMode)
               )
             }
+            // Why: cold-start fit-to-screen guard. The first init() runs
+            // before xterm's DOM/canvas has fully laid out, so the
+            // applyFitScale that init queues internally can land while
+            // term.element.scrollWidth is still stale or zero — leaving
+            // the terminal un-zoomed until the user toggles the resize
+            // button. Re-fire resetZoom after a short delay so it runs
+            // against a settled DOM. Mirrors the 'resized' handler below.
+            setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
             // Why: viewport measurement needs xterm to be initialized (cell
             // dimensions come from the renderer). On the first subscribe the
             // WebView hasn't loaded yet, so viewportRef is null and the server
