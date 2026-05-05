@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron'
 import { copyFile, mkdir, readFile, rename, rm, stat, lstat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'

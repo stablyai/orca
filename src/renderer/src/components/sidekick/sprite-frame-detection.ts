@@ -31,8 +31,8 @@ function computeRowEmpty(data: Uint8ClampedArray, width: number, height: number)
   return rowEmpty
 }
 
-function findBands(rowEmpty: Uint8Array): Array<{ y0: number; y1: number }> {
-  const bands: Array<{ y0: number; y1: number }> = []
+function findBands(rowEmpty: Uint8Array): { y0: number; y1: number }[] {
+  const bands: { y0: number; y1: number }[] = []
   let start = -1
   for (let y = 0; y < rowEmpty.length; y++) {
     if (!rowEmpty[y] && start < 0) {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CustomSidekick } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { BUNDLED_SIDEKICK, findBundledSidekick, isBundledSidekickId } from './sidekick-models'
 import {
@@ -17,7 +18,7 @@ export type ResolvedSidekick =
   | {
       url: string
       ready: boolean
-      sprite: NonNullable<import('../../../../shared/types').CustomSidekick['sprite']>
+      sprite: NonNullable<CustomSidekick['sprite']>
       detected: null
     }
   | { url: string; ready: boolean; sprite: null; detected: DetectedSpriteCacheEntry }

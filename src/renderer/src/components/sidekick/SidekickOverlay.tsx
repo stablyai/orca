@@ -84,9 +84,9 @@ function DetectedSpriteFrame({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas) {return}
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {return}
     canvas.width = maxSize
     canvas.height = maxSize
     // Why: reset playback when the underlying sprite changes so the new
@@ -121,7 +121,7 @@ function DetectedSpriteFrame({
       raf = requestAnimationFrame(tick)
     }
     return () => {
-      if (raf) cancelAnimationFrame(raf)
+      if (raf) {cancelAnimationFrame(raf)}
     }
   }, [detected, animate, maxSize])
 
