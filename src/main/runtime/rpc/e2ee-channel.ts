@@ -88,10 +88,17 @@ export class E2EEChannel {
       return
     }
 
+    // Why: streaming RPC handlers (e.g. terminal.subscribe) retain this
+    // closure and may fire emits long after the inbound message handled
+    // here. If destroy() runs in between (mobile disconnect, handshake
+    // failure) sharedKey becomes null and tweetnacl throws "unexpected
+    // type, use Uint8Array" from inside nacl.box.after. Guard both the
+    // socket state AND the key so late emits become silent no-ops.
     const encryptedReply = (response: string) => {
-      if (this.ws.readyState === this.ws.OPEN) {
-        this.ws.send(encrypt(response, this.sharedKey!))
+      if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
+        return
       }
+      this.ws.send(encrypt(response, this.sharedKey))
     }
     this.messageHandler?.(plaintext, encryptedReply)
   }
