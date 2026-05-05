@@ -63,6 +63,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })
     ).toEqual({
+      agent: 'autohand',
       launchCommand: 'autohand',
       expectedProcess: 'autohand',
       followupPrompt: 'Add tests for the parser'
