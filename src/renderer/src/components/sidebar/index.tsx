@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -16,6 +16,9 @@ import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
+const SCRIPT_RUNNER_MIN_HEIGHT = 80
+const SCRIPT_RUNNER_MAX_HEIGHT = 600
+const SCRIPT_RUNNER_DEFAULT_HEIGHT = 240
 
 function Sidebar(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -42,6 +45,37 @@ function Sidebar(): React.JSX.Element {
     setWidth: setSidebarWidth
   })
 
+  const [scriptRunnerHeight, setScriptRunnerHeight] = useState(SCRIPT_RUNNER_DEFAULT_HEIGHT)
+
+  const onScriptRunnerSplitterMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault()
+      const startY = event.clientY
+      const startHeight = scriptRunnerHeight
+
+      const handleMove = (ev: MouseEvent): void => {
+        // Why: dragging the splitter up grows the bottom panel, so subtract
+        // the cursor delta from the starting height instead of adding it.
+        const next = Math.min(
+          SCRIPT_RUNNER_MAX_HEIGHT,
+          Math.max(SCRIPT_RUNNER_MIN_HEIGHT, startHeight + (startY - ev.clientY))
+        )
+        setScriptRunnerHeight(next)
+      }
+      const handleUp = (): void => {
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        window.removeEventListener('mousemove', handleMove)
+        window.removeEventListener('mouseup', handleUp)
+      }
+      document.body.style.cursor = 'row-resize'
+      document.body.style.userSelect = 'none'
+      window.addEventListener('mousemove', handleMove)
+      window.addEventListener('mouseup', handleUp)
+    },
+    [scriptRunnerHeight]
+  )
+
   return (
     <TooltipProvider delayDuration={400}>
       <div
@@ -54,8 +88,23 @@ function Sidebar(): React.JSX.Element {
 
         <WorktreeList />
 
-        {/* Script runner panel */}
-        {scriptRunnerEnabled && <ScriptRunner />}
+        {/* Script runner panel — split below navigation, draggable splitter */}
+        {scriptRunnerEnabled && (
+          <>
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              className="h-1 shrink-0 cursor-row-resize bg-sidebar-border/30 transition-colors hover:bg-ring/30 active:bg-ring/40"
+              onMouseDown={onScriptRunnerSplitterMouseDown}
+            />
+            <div
+              className="flex shrink-0 flex-col"
+              style={{ height: `${scriptRunnerHeight}px` }}
+            >
+              <ScriptRunner />
+            </div>
+          </>
+        )}
 
         {/* Fixed bottom toolbar */}
         <SidebarToolbar />

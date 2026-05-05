@@ -207,7 +207,7 @@ export default function ScriptRunner(): React.JSX.Element | null {
     : false
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col border-t border-sidebar-border">
+    <div className="flex h-full min-h-0 flex-col border-t border-sidebar-border">
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full shrink-0 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
