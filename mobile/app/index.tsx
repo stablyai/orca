@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
   Monitor,
@@ -156,6 +156,7 @@ function repoColor(name: string): string {
 
 export default function HomeScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
@@ -330,7 +331,7 @@ export default function HomeScreen() {
 
       {hosts.length === 0 ? (
         /* ─── Empty state: onboarding ─── */
-        <View style={styles.emptyContainer}>
+        <View style={[styles.emptyContainer, { paddingBottom: insets.bottom }]}>
           <View style={styles.emptyHero}>
             <Text style={styles.emptyTitle}>Connect your desktop</Text>
             <Text style={styles.emptyBody}>
@@ -363,7 +364,10 @@ export default function HomeScreen() {
         <FlatList
           data={sortedHosts}
           keyExtractor={(h) => h.id}
-          contentContainerStyle={styles.list}
+          // Why: edge-to-edge — let the list scroll under the system nav bar
+          // but reserve insets.bottom so the last row stays reachable above
+          // the Samsung 3-button nav / iOS home indicator.
+          contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + insets.bottom }]}
           ListHeaderComponent={
             <View>
               <View style={styles.hero}>

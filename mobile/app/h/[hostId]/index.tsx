@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   TextInput
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Search,
@@ -235,6 +235,7 @@ function buildSections(
 export default function HostScreen() {
   const { hostId, action } = useLocalSearchParams<{ hostId: string; action?: string }>()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
@@ -764,7 +765,10 @@ export default function HostScreen() {
           sections={sections}
           keyExtractor={(w) => w.worktreeId}
           stickySectionHeadersEnabled={false}
-          contentContainerStyle={styles.list}
+          // Why: edge-to-edge — the list scrolls under the system nav bar
+          // while reserving insets.bottom keeps the last worktree row reachable
+          // above the Samsung 3-button nav / iOS home indicator.
+          contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
           renderSectionHeader={({ section }) => {
             if (!section.title) return null
             const isCollapsed = collapsedGroups.has(section.title)
