@@ -1379,14 +1379,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // Why: agents that gate first-launch behind a "Do you trust this
         // folder?" menu (cursor-agent, copilot) consume the bracketed paste
         // as menu input. Pre-write the trust artifact so the menu is
-        // skipped — best-effort, errors swallowed by main.
-        if (agent && worktree.path) {
+        // skipped — best-effort, errors swallowed by main. Guard the IPC
+        // presence so a stale preload bundle doesn't crash the launch with
+        // "Cannot read properties of undefined".
+        if (agent && worktree.path && window.api.agentTrust?.markTrusted) {
           const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
           if (preflight) {
-            await window.api.agentTrust.markTrusted({
-              preset: preflight,
-              workspacePath: worktree.path
-            })
+            try {
+              await window.api.agentTrust.markTrusted({
+                preset: preflight,
+                workspacePath: worktree.path
+              })
+            } catch {
+              // Best-effort: continue with launch.
+            }
           }
         }
 
