@@ -160,6 +160,18 @@ export function useIpcEvents(): void {
         if (store.activeView !== 'terminal') {
           return
         }
+        const activeWorktree = store.activeWorktreeId
+          ? Object.values(store.worktreesByRepo ?? {})
+              .flat()
+              .find((entry) => entry.id === store.activeWorktreeId)
+          : null
+        if (activeWorktree && (activeWorktree.chats?.length ?? 0) > 1) {
+          const chat = activeWorktree.chats?.[index]
+          if (chat) {
+            store.switchChat(activeWorktree.id, chat.id)
+          }
+          return
+        }
         const visibleIds = getVisibleWorktreeIds()
         if (index < visibleIds.length) {
           activateAndRevealWorktree(visibleIds[index])

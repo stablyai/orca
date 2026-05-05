@@ -30,6 +30,7 @@ import { registerUIHandlers } from './ui'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
+import { registerChatHandlers } from './chats'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
 import {
@@ -74,6 +75,7 @@ export function registerCoreHandlers(
   registerCodexAccountHandlers(codexAccounts)
   registerAgentHookHandlers()
   registerAgentTrustHandlers()
+  registerChatHandlers(store)
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)

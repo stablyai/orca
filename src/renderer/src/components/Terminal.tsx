@@ -53,6 +53,7 @@ import {
 } from './terminal/split-group-mount'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import CodexRestartChip from './CodexRestartChip'
+import ChatSwitcher from './chat-switcher'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -1181,6 +1182,7 @@ function Terminal(): React.JSX.Element | null {
       className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${activeWorktreeId ? '' : ' hidden'}`}
     >
       <EditorAutosaveController />
+      {activeWorktreeId ? <ChatSwitcher worktreeId={activeWorktreeId} /> : null}
 
       {/* Why: once split groups are enabled, each group owns its own tab strip
           inline like VS Code. The old titlebar portal stays only as a fallback

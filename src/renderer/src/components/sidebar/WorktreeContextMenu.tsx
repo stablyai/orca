@@ -14,6 +14,7 @@ import {
   BellOff,
   Link,
   MessageSquare,
+  MessageSquarePlus,
   Moon,
   Pencil,
   Pin,
@@ -42,6 +43,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   contentClassName
 }: Props) {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const createChat = useAppStore((s) => s.createChat)
   const openModal = useAppStore((s) => s.openModal)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
@@ -101,6 +103,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       focus: 'comment'
     })
   }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+
+  const handleNewChat = useCallback(() => {
+    void createChat(worktree.id)
+  }, [createChat, worktree.id])
 
   const handleCloseTerminals = useCallback(async () => {
     await runSleepWorktree(worktree.id)
@@ -180,6 +186,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           <DropdownMenuItem onSelect={handleComment} disabled={isDeleting}>
             <MessageSquare className="size-3.5" />
             {worktree.comment ? 'Edit Comment' : 'Add Comment'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={handleNewChat} disabled={isDeleting}>
+            <MessageSquarePlus className="size-3.5" />
+            New chat in this worktree
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <Tooltip>

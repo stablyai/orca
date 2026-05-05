@@ -373,6 +373,20 @@ const api = {
     }
   },
 
+  chats: {
+    list: (args: { worktreeId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('chat:list', args),
+
+    create: (args: { worktreeId: string; title?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('chat:create', args),
+
+    remove: (args: { worktreeId: string; chatId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('chat:remove', args),
+
+    rename: (args: { worktreeId: string; chatId: string; title: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('chat:rename', args)
+  },
+
   pty: {
     spawn: (opts: {
       cols: number
@@ -382,6 +396,7 @@ const api = {
       command?: string
       connectionId?: string | null
       worktreeId?: string
+      chatId?: string
       sessionId?: string
       shellOverride?: string
       // Why: telemetry-plan.md§Agent launch semantics — main fires

@@ -58,6 +58,7 @@ import type {
   MemorySnapshot,
   UpdateStatus,
   Worktree,
+  WorktreeChat,
   WorktreeMeta,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
@@ -436,6 +437,12 @@ export type PreloadApi = {
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
     onChanged: (callback: (data: { repoId: string }) => void) => () => void
   }
+  chats: {
+    list: (args: { worktreeId: string }) => Promise<WorktreeChat[]>
+    create: (args: { worktreeId: string; title?: string }) => Promise<WorktreeChat>
+    remove: (args: { worktreeId: string; chatId: string }) => Promise<WorktreeChat[]>
+    rename: (args: { worktreeId: string; chatId: string; title: string }) => Promise<WorktreeChat[]>
+  }
   pty: {
     spawn: (opts: {
       cols: number
@@ -445,6 +452,7 @@ export type PreloadApi = {
       command?: string
       connectionId?: string | null
       worktreeId?: string
+      chatId?: string
       sessionId?: string
       // Why: lets a single tab open in a different shell than the user's default.
       // Preserved from the deleted index.d.ts PtyApi duplicate during the

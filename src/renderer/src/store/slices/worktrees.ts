@@ -9,6 +9,7 @@ import {
   type WorktreeSlice
 } from './worktree-helpers'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { defaultChatId } from '../../../../shared/chat-id'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
@@ -19,6 +20,21 @@ function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): b
     return !a?.length && !b?.length
   }
   return a.every((v, i) => v === b[i])
+}
+
+function chatsShallowEqual(
+  a: Worktree['chats'] | undefined,
+  b: Worktree['chats'] | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  const left = a ?? []
+  const right = b ?? []
+  return (
+    left.length === right.length &&
+    left.every((chat, index) => chat.id === right[index]?.id && chat.title === right[index]?.title)
+  )
 }
 
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
@@ -47,7 +63,8 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.sortOrder === candidate.sortOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt &&
       worktree.sparseBaseRef === candidate.sparseBaseRef &&
-      arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories)
+      arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories) &&
+      chatsShallowEqual(worktree.chats, candidate.chats)
     )
   })
 }
@@ -59,6 +76,7 @@ function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   worktreesByRepo: {},
   activeWorktreeId: null,
+  activeChatIdByWorktreeId: {},
   deleteStateByWorktreeId: {},
   sortEpoch: 0,
   everActivatedWorktreeIds: new Set<string>(),
@@ -275,6 +293,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
+        const nextActiveChatIdByWorktreeId = { ...s.activeChatIdByWorktreeId }
+        delete nextActiveChatIdByWorktreeId[worktreeId]
         // Clean up editor files belonging to this worktree
         const newOpenFiles = s.openFiles.filter((f) => f.worktreeId !== worktreeId)
         const nextBrowserTabsByWorktree = { ...s.browserTabsByWorktree }
@@ -386,6 +406,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             return nextSearch
           })(),
           activeWorktreeId: removedActiveWorktree ? null : s.activeWorktreeId,
+          activeChatIdByWorktreeId: nextActiveChatIdByWorktreeId,
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: newOpenFiles,
           browserTabsByWorktree: nextBrowserTabsByWorktree,
@@ -467,6 +488,63 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     } catch (err) {
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+    }
+  },
+
+  createChat: async (worktreeId) => {
+    const chat = await window.api.chats.create({ worktreeId })
+    set((s) => {
+      const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
+      const chats = worktree?.chats ?? [
+        { id: defaultChatId(worktreeId), title: 'Chat 1', createdAt: 0, updatedAt: 0 }
+      ]
+      return {
+        worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+          chats: [...chats.filter((entry) => entry.id !== chat.id), chat]
+        }),
+        activeChatIdByWorktreeId: { ...s.activeChatIdByWorktreeId, [worktreeId]: chat.id },
+        sortEpoch: s.sortEpoch + 1
+      }
+    })
+    const tab = get().createTab(worktreeId, undefined, undefined, {
+      chatId: chat.id,
+      title: chat.title
+    })
+    if (get().activeWorktreeId !== worktreeId) {
+      get().setActiveWorktree(worktreeId)
+    }
+    get().setActiveTab(tab.id)
+    get().setActiveTabType('terminal')
+    return chat
+  },
+
+  switchChat: (worktreeId, chatId) => {
+    const state = get()
+    const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+    const chat = (worktree?.chats ?? []).find((entry) => entry.id === chatId)
+    const resolvedChatId = chat?.id ?? defaultChatId(worktreeId)
+    let tab = (state.tabsByWorktree[worktreeId] ?? []).find(
+      (entry) => (entry.chatId ?? defaultChatId(worktreeId)) === resolvedChatId
+    )
+    if (!tab) {
+      tab = state.createTab(worktreeId, undefined, undefined, {
+        chatId: resolvedChatId,
+        title: chat?.title ?? 'Chat 1'
+      })
+    }
+    set((s) => ({
+      activeChatIdByWorktreeId: { ...s.activeChatIdByWorktreeId, [worktreeId]: resolvedChatId }
+    }))
+    get().setActiveTab(tab.id)
+    get().setActiveTabType('terminal')
+  },
+
+  hydrateActiveChats: (activeChatIdByWorktree = {}) => {
+    set({ activeChatIdByWorktreeId: activeChatIdByWorktree })
+    const activeWorktreeId = get().activeWorktreeId
+    const activeChatId = activeWorktreeId ? activeChatIdByWorktree[activeWorktreeId] : null
+    if (activeWorktreeId && activeChatId) {
+      get().switchChat(activeWorktreeId, activeChatId)
     }
   },
 
@@ -761,6 +839,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // user returns to the same tab they left, not always the first one.
       const restoredTabId = s.activeTabIdByWorktree[worktreeId] ?? null
       const worktreeTabs = s.tabsByWorktree[worktreeId] ?? []
+      const activeChatId = s.activeChatIdByWorktreeId[worktreeId] ?? defaultChatId(worktreeId)
+      const activeChatTab = worktreeTabs.find(
+        (tab) => (tab.chatId ?? defaultChatId(worktreeId)) === activeChatId
+      )
       const tabStillExists = restoredTabId
         ? worktreeTabs.some((t) => t.id === restoredTabId)
         : false
@@ -769,7 +851,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ? activeUnifiedTab.entityId
           : tabStillExists
             ? restoredTabId
-            : (worktreeTabs[0]?.id ?? null)
+            : (activeChatTab?.id ?? worktreeTabs[0]?.id ?? null)
 
       // Why: focusing a worktree is not meaningful background activity for the
       // smart sort. Writing lastActivityAt here makes the next unrelated
@@ -825,6 +907,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       return {
         activeWorktreeId: worktreeId,
+        activeChatIdByWorktreeId: {
+          ...s.activeChatIdByWorktreeId,
+          [worktreeId]: activeChatId
+        },
         activeFileId,
         activeBrowserTabId,
         activeTabType,
@@ -962,6 +1048,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeFileIdByWorktree: omitByWorktree(s.activeFileIdByWorktree),
         activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
         activeTabIdByWorktree: omitByWorktree(s.activeTabIdByWorktree),
+        activeChatIdByWorktreeId: omitByWorktree(s.activeChatIdByWorktreeId),
         tabBarOrderByWorktree: omitByWorktree(s.tabBarOrderByWorktree),
         pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
         // Split-tab / unified tab state

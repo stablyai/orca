@@ -1,5 +1,6 @@
 import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import { defaultChatId } from '../../shared/chat-id'
 import { getWslHome, parseWslPath } from '../wsl'
 
 /**
@@ -182,7 +183,10 @@ export function mergeWorktree(
     // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
     // shared/types) and forwarded verbatim so the renderer store mirrors
     // on-disk state. `undefined` here means the worktree has no comments yet.
-    diffComments: meta?.diffComments
+    diffComments: meta?.diffComments,
+    chats: meta?.chats ?? [
+      { id: defaultChatId(`${repoId}::${git.path}`), title: 'Chat 1', createdAt: 0, updatedAt: 0 }
+    ]
   }
 }
 

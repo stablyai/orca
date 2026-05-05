@@ -27,6 +27,7 @@ type WorkspaceSessionSnapshot = Pick<
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
+  | 'activeChatIdByWorktreeId'
   | 'sshConnectionStates'
   | 'repos'
   | 'worktreesByRepo'
@@ -215,6 +216,7 @@ export function buildWorkspaceSessionPayload(
     tabGroups: snapshot.groupsByWorktree,
     tabGroupLayouts: snapshot.layoutByWorktree,
     activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree,
+    activeChatIdByWorktree: snapshot.activeChatIdByWorktreeId,
     activeConnectionIdsAtShutdown: connectedTargetIds.length > 0 ? connectedTargetIds : undefined,
     remoteSessionIdsByTabId:
       Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined,

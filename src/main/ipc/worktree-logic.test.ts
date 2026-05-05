@@ -200,7 +200,15 @@ describe('mergeWorktree', () => {
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
-      lastActivityAt: 1000
+      lastActivityAt: 1000,
+      chats: [
+        {
+          id: 'chat:repo1::/workspaces/feature:default',
+          title: 'Chat 1',
+          createdAt: 0,
+          updatedAt: 0
+        }
+      ]
     })
   })
 

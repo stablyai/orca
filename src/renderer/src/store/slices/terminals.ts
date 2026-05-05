@@ -136,7 +136,7 @@ export type TerminalSlice = {
     worktreeId: string,
     targetGroupId?: string,
     shellOverride?: string,
-    options?: { pendingActivationSpawn?: boolean }
+    options?: { pendingActivationSpawn?: boolean; chatId?: string; title?: string }
   ) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
@@ -326,11 +326,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         (entry) => !orphanTerminalIds.has(entry.id)
       )
       const nextOrdinal = getNextTerminalOrdinal(existing)
-      const defaultTitle = `Terminal ${nextOrdinal}`
+      const defaultTitle = options?.title ?? `Terminal ${nextOrdinal}`
       tab = {
         id,
         ptyId: null,
         worktreeId,
+        ...(options?.chatId ? { chatId: options.chatId } : {}),
         // Why: users expect terminal labels to reflect the currently open set,
         // not a monotonic creation counter. Reusing the lowest free ordinal
         // keeps a lone fresh terminal at "Terminal 1" after older tabs close.

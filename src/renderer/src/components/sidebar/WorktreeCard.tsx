@@ -340,6 +340,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
+  const chatCount = worktree.chats?.length ?? 1
 
   // Why: the 'unread' card property is the user's opt-out. When off, we render
   // as if the workspace is read so bold emphasis never appears. The persisted
@@ -462,6 +463,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
               {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
               {worktree.displayName}
             </div>
+
+            {chatCount > 1 && (
+              <span className="h-[16px] shrink-0 rounded border border-border/70 bg-muted/50 px-1.5 text-[10px] leading-[15px] text-muted-foreground">
+                ({chatCount})
+              </span>
+            )}
 
             {/* Why: the primary worktree (the original clone directory) cannot be
                  deleted via `git worktree remove`. Placing this badge next to the

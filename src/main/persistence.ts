@@ -12,6 +12,7 @@ import type {
   Repo,
   SparsePreset,
   WorktreeMeta,
+  WorktreeChat,
   GlobalSettings
 } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
@@ -25,6 +26,7 @@ import {
   getDefaultWorkspaceSession
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { defaultChatId } from '../shared/chat-id'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -95,6 +97,49 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
 }
 
+function getDefaultWorktreeChat(worktreeId: string): WorktreeChat {
+  return { id: defaultChatId(worktreeId), title: 'Chat 1', createdAt: 0, updatedAt: 0 }
+}
+
+function normalizeWorktreeChats(worktreeId: string, meta: WorktreeMeta): WorktreeChat[] {
+  if (!Array.isArray(meta.chats)) {
+    return [getDefaultWorktreeChat(worktreeId)]
+  }
+  const seen = new Set<string>()
+  const chats = meta.chats.filter((chat): chat is WorktreeChat => {
+    const valid =
+      chat &&
+      typeof chat.id === 'string' &&
+      chat.id.length > 0 &&
+      typeof chat.title === 'string' &&
+      typeof chat.createdAt === 'number' &&
+      typeof chat.updatedAt === 'number' &&
+      !seen.has(chat.id)
+    if (valid) {
+      seen.add(chat.id)
+    }
+    return valid
+  })
+  if (chats.length === 0) {
+    console.warn(`[persistence] Invalid chats for worktree ${worktreeId}; using default chat.`)
+    return [getDefaultWorktreeChat(worktreeId)]
+  }
+  if (!seen.has(defaultChatId(worktreeId))) {
+    return [getDefaultWorktreeChat(worktreeId), ...chats]
+  }
+  return chats
+}
+
+function migrateWorktreeChats(
+  worktreeMeta: Record<string, WorktreeMeta> | undefined
+): Record<string, WorktreeMeta> {
+  const migrated: Record<string, WorktreeMeta> = {}
+  for (const [worktreeId, meta] of Object.entries(worktreeMeta ?? {})) {
+    migrated[worktreeId] = { ...meta, chats: normalizeWorktreeChats(worktreeId, meta) }
+  }
+  return migrated
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -154,6 +199,8 @@ export class Store {
         result = {
           ...defaults,
           ...parsed,
+          schemaVersion: defaults.schemaVersion,
+          worktreeMeta: migrateWorktreeChats(parsed.worktreeMeta),
           settings: {
             ...defaults.settings,
             ...parsed.settings,
@@ -539,6 +586,7 @@ export class Store {
   setWorktreeMeta(worktreeId: string, meta: Partial<WorktreeMeta>): WorktreeMeta {
     const existing = this.state.worktreeMeta[worktreeId] || getDefaultWorktreeMeta()
     const updated = { ...existing, ...meta }
+    updated.chats = normalizeWorktreeChats(worktreeId, updated)
     this.state.worktreeMeta[worktreeId] = updated
     this.scheduleSave()
     return updated

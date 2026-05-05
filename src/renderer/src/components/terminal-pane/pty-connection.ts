@@ -21,6 +21,7 @@ import {
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { detectDeveloperPermissionHint } from './developer-permission-hints'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
+import { defaultChatId } from '../../../../shared/chat-id'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const developerPermissionHintKeys = new Set<string>()
@@ -310,21 +311,23 @@ export function connectPanePty(
   // The key matches the `${tabId}:${paneId}` composite used for cacheTimerByKey.
   // ORCA_TAB_ID / ORCA_WORKTREE_ID are exposed separately so the receiver has
   // routing context without having to split paneKey back into its parts.
+  const state = useAppStore.getState()
+  const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
+  const chatId = tab?.chatId ?? defaultChatId(deps.worktreeId)
   const paneEnv = {
     ...paneStartup?.env,
     ORCA_PANE_KEY: cacheKey,
     ORCA_TAB_ID: deps.tabId,
-    ORCA_WORKTREE_ID: deps.worktreeId
+    ORCA_WORKTREE_ID: deps.worktreeId,
+    ORCA_CHAT_ID: chatId
   }
 
   // Why: remote repos route PTY spawn through the SSH provider. Resolve the
   // repo's connectionId from the store so the transport passes it to pty:spawn.
-  const state = useAppStore.getState()
   const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
   const worktree = allWorktrees.find((w) => w.id === deps.worktreeId)
   const repo = worktree ? state.repos?.find((r) => r.id === worktree.repoId) : null
   const connectionId = repo?.connectionId ?? null
-  const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
 
   const transport = createIpcPtyTransport({
@@ -333,6 +336,7 @@ export function connectPanePty(
     command: paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
+    chatId,
     ...(shellOverride ? { shellOverride } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,

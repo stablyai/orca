@@ -45,6 +45,7 @@ type AgentHookEventPayload = {
   paneKey: string
   tabId?: string
   worktreeId?: string
+  chatId?: string
   payload: ParsedAgentStatusPayload
 }
 
@@ -1034,6 +1035,7 @@ function normalizeHookPayload(
 
   const tabId = readStringField(record, 'tabId')
   const worktreeId = readStringField(record, 'worktreeId')
+  const chatId = readStringField(record, 'chatId')
 
   const eventName = (hookPayload as Record<string, unknown>).hook_event_name
   const promptText = extractPromptText(hookPayload as Record<string, unknown>)
@@ -1049,7 +1051,7 @@ function normalizeHookPayload(
             ? normalizeCursorEvent(eventName, promptText, paneKey, hookPayloadRecord)
             : normalizeOpenCodeEvent(eventName, promptText, paneKey, hookPayloadRecord)
 
-  return payload ? { paneKey, tabId, worktreeId, payload } : null
+  return payload ? { paneKey, tabId, worktreeId, chatId, payload } : null
 }
 
 // Why: the endpoint file lives under userData so each Orca install (dev vs.

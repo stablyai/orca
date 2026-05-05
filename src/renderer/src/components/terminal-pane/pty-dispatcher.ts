@@ -256,6 +256,8 @@ export type IpcPtyTransportOptions = {
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */
   worktreeId?: string
+  /** Chat identity inside the worktree. Agents use this to scope callbacks. */
+  chatId?: string
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim

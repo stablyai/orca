@@ -195,6 +195,7 @@ function getOpenCodePluginSource(): string {
     '    paneKey,',
     '    tabId: process.env.ORCA_TAB_ID || "",',
     '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
+    '    chatId: process.env.ORCA_CHAT_ID || "",',
     '    env: coords.env,',
     '    version: coords.version,',
     '    payload: { hook_event_name: hookEventName, ...(extraProperties || {}) },',

@@ -53,6 +53,7 @@ const terminalTabSchema = z.object({
   id: z.string(),
   ptyId: z.string().nullable(),
   worktreeId: z.string(),
+  chatId: z.string().optional(),
   title: z.string(),
   defaultTitle: z.string().optional(),
   customTitle: z.string().nullable(),
@@ -203,6 +204,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   tabGroups: z.record(z.string(), z.array(tabGroupSchema)).optional(),
   tabGroupLayouts: z.record(z.string(), tabGroupLayoutNodeSchema).optional(),
   activeGroupIdByWorktree: z.record(z.string(), z.string()).optional(),
+  activeChatIdByWorktree: z.record(z.string(), z.string()).optional(),
   activeConnectionIdsAtShutdown: z.array(z.string()).optional(),
   remoteSessionIdsByTabId: z.record(z.string(), z.string()).optional(),
   // Why: the sort comparator in order-empty-query-worktrees.ts would produce

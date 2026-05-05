@@ -4,6 +4,7 @@ import type {
   SetupDecision,
   WorkspaceCreateTelemetrySource,
   Worktree,
+  WorktreeChat,
   WorktreeMeta
 } from '../../../../shared/types'
 
@@ -16,6 +17,7 @@ export type WorktreeDeleteState = {
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   activeWorktreeId: string | null
+  activeChatIdByWorktreeId: Record<string, string>
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   /**
    * Monotonically increasing counter that signals when the sidebar sort order
@@ -72,6 +74,9 @@ export type WorktreeSlice = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
   updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  createChat: (worktreeId: string) => Promise<WorktreeChat>
+  switchChat: (worktreeId: string, chatId: string) => void
+  hydrateActiveChats: (activeChatIdByWorktree?: Record<string, string>) => void
   markWorktreeUnread: (worktreeId: string) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches

@@ -22,6 +22,8 @@ export type PtySpawnOptions = {
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
+  /** Chat identity within the worktree for agent hook attribution. */
+  chatId?: string
   /** Daemon session ID for reattach. When provided, the daemon reconnects
    *  to an existing session instead of creating a new one. */
   sessionId?: string

@@ -107,6 +107,7 @@ export type Worktree = {
    *  when the worktree is no longer sparse on refresh. */
   sparsePresetId?: string
   diffComments?: DiffComment[]
+  chats?: WorktreeChat[]
 } & GitWorktreeInfo
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -125,6 +126,14 @@ export type WorktreeMeta = {
   sparseBaseRef?: string
   sparsePresetId?: string
   diffComments?: DiffComment[]
+  chats?: WorktreeChat[]
+}
+
+export type WorktreeChat = {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
 }
 
 // ─── Diff line comments ──────────────────────────────────────────────
@@ -196,6 +205,7 @@ export type TerminalTab = {
   id: string
   ptyId: string | null
   worktreeId: string
+  chatId?: string
   title: string
   /** Stable fallback label for default-named terminals ("Terminal 1", etc.).
    *  Why: agent CLIs overwrite the live title via OSC updates, but Orca still
@@ -408,6 +418,8 @@ export type WorkspaceSessionState = {
   tabGroupLayouts?: Record<string, TabGroupLayoutNode>
   /** Per-worktree focused group at shutdown. */
   activeGroupIdByWorktree?: Record<string, string>
+  /** Per-worktree active chat. Missing entries fall back to the stable default chat. */
+  activeChatIdByWorktree?: Record<string, string>
   /** SSH target IDs that were connected at shutdown. Used on startup to
    *  auto-reconnect before attempting remote PTY reattach. */
   activeConnectionIdsAtShutdown?: string[]

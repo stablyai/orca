@@ -720,6 +720,7 @@ export function registerPtyHandlers(
         command?: string
         connectionId?: string | null
         worktreeId?: string
+        chatId?: string
         sessionId?: string
         shellOverride?: string
         // Why: telemetry-plan.md§Agent launch semantics. The renderer
@@ -851,6 +852,9 @@ export function registerPtyHandlers(
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
+      }
+      if (args.chatId !== undefined) {
+        spawnOptions.chatId = args.chatId
       }
       if (effectiveSessionId !== undefined) {
         spawnOptions.sessionId = effectiveSessionId

@@ -149,6 +149,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     command,
     connectionId,
     worktreeId,
+    chatId,
     shellOverride,
     telemetry,
     onPtyExit,
@@ -354,6 +355,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,
+          ...(chatId ? { chatId } : {}),
           ...(shellOverride ? { shellOverride } : {}),
           ...(telemetry ? { telemetry } : {})
         })

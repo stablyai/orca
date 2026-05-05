@@ -10,7 +10,7 @@ import type {
 } from './types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
