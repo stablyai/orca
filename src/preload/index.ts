@@ -353,6 +353,14 @@ const api = {
     }): Promise<{ baseBranch: string } | { error: string }> =>
       ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
+    resolveMrBase: (args: {
+      repoId: string
+      mrIid: number
+      sourceBranch?: string
+      isCrossRepository?: boolean
+    }): Promise<{ baseBranch: string } | { error: string }> =>
+      ipcRenderer.invoke('worktrees:resolveMrBase', args),
+
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }): Promise<void> =>
       ipcRenderer.invoke('worktrees:remove', args),
 

@@ -17,7 +17,13 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { GitHubWorkItem, LinearIssue, SparsePreset, TuiAgent } from '../../../shared/types'
+import type {
+  GitHubWorkItem,
+  GitLabWorkItem,
+  LinearIssue,
+  SparsePreset,
+  TuiAgent
+} from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
@@ -39,6 +45,7 @@ type NewWorkspaceComposerCardProps = {
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
+  onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
@@ -184,6 +191,7 @@ export default function NewWorkspaceComposerCard({
   name,
   onNameValueChange,
   onSmartGitHubItemSelect,
+  onSmartGitLabItemSelect,
   onSmartBranchSelect,
   onSmartLinearIssueSelect,
   smartNameSelection,
@@ -309,6 +317,7 @@ export default function NewWorkspaceComposerCard({
             value={name}
             onValueChange={onNameValueChange}
             onGitHubItemSelect={onSmartGitHubItemSelect}
+            onGitLabItemSelect={onSmartGitLabItemSelect}
             onBranchSelect={onSmartBranchSelect}
             onLinearIssueSelect={onSmartLinearIssueSelect}
             selectedSource={smartNameSelection}

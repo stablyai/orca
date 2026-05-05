@@ -440,6 +440,15 @@ export type PreloadApi = {
       headRefName?: string
       isCrossRepository?: boolean
     }) => Promise<{ baseBranch: string } | { error: string }>
+    /** GitLab parallel of resolvePrBase. For same-project MRs returns
+     *  `<remote>/<source_branch>`; for fork MRs fetches
+     *  refs/merge-requests/<iid>/head and returns the SHA. */
+    resolveMrBase: (args: {
+      repoId: string
+      mrIid: number
+      sourceBranch?: string
+      isCrossRepository?: boolean
+    }) => Promise<{ baseBranch: string } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>

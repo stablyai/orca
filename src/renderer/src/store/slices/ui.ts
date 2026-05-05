@@ -107,7 +107,7 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      type: 'issue' | 'pr'
+      type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
       url: string
@@ -115,6 +115,10 @@ export type UISlice = {
     agent: TuiAgent
     linkedIssue: string
     linkedPR: number | null
+    /** GitLab parallels — number for an issue, iid for an MR. Optional so
+     *  drafts saved before GitLab support keep loading without migration. */
+    linkedGitLabIssue?: number | null
+    linkedGitLabMR?: number | null
     // Why: repo-scoped start ref selected via the "Start from" picker.
     // Absent means "use the repo's effective base ref".
     baseBranch?: string
