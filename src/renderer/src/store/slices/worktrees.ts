@@ -521,8 +521,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   switchChat: (worktreeId, chatId) => {
     const state = get()
     const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
-    const chat = (worktree?.chats ?? []).find((entry) => entry.id === chatId)
-    const resolvedChatId = chat?.id ?? defaultChatId(worktreeId)
+    const chats = worktree?.chats
+    const chat = chats?.find((entry) => entry.id === chatId)
+    // Why: if worktree metadata has not loaded yet (SSH repos enumerate async),
+    // preserve the requested chatId. Otherwise hydrateActiveChats can clobber
+    // a persisted secondary-chat selection at startup before the real chat
+    // list arrives, silently demoting the user back to the default chat.
+    const resolvedChatId = chat?.id ?? (chats === undefined ? chatId : defaultChatId(worktreeId))
     let tab = (state.tabsByWorktree[worktreeId] ?? []).find(
       (entry) => (entry.chatId ?? defaultChatId(worktreeId)) === resolvedChatId
     )
