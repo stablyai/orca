@@ -505,7 +505,11 @@ export type PreloadApi = {
   gh: {
     viewer: () => Promise<GitHubViewer | null>
     repoSlug: (args: { repoPath: string }) => Promise<{ owner: string; repo: string } | null>
-    prForBranch: (args: { repoPath: string; branch: string }) => Promise<PRInfo | null>
+    prForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedPRNumber?: number | null
+    }) => Promise<PRInfo | null>
     issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
     workItem: (args: {
       repoPath: string

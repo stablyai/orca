@@ -8,12 +8,14 @@ import type {
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
+  TaskResumeState,
   TaskViewPresetId,
   TuiAgent,
   UpdateStatus,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 
 // Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
 // Keeping a local copy here avoids a store ↔ lib circular import while letting
@@ -38,6 +40,22 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
+
+// Why: persisted UI state pre-dated the consolidation of `memory` + `sessions`
+// into a single `resource-usage` entry. Rewrite legacy ids in place and
+// de-duplicate. We leave unknown ids alone so a downgrade→upgrade cycle
+// doesn't strip a newer build's ids out of the user's settings.
+function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
+  const source = items ?? DEFAULT_STATUS_BAR_ITEMS
+  const out: string[] = []
+  for (const id of source) {
+    const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
+    if (!out.includes(mapped)) {
+      out.push(mapped)
+    }
+  }
+  return out as StatusBarItem[]
+}
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import { DEFAULT_SIDEKICK_ID, isBundledSidekickId } from '../../components/sidekick/sidekick-models'
 import { revokeCustomSidekickBlobUrl } from '../../components/sidekick/sidekick-blob-cache'
@@ -49,6 +67,20 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
+  'all',
+  'issues',
+  'review',
+  'my-issues',
+  'my-prs',
+  'prs'
+])
+const VALID_LINEAR_PRESETS = new Set<NonNullable<TaskResumeState['linearPreset']>>([
+  'assigned',
+  'created',
+  'all',
+  'completed'
+])
 
 function filterTrustedOrcaHooksToValidRepos(
   trust: PersistedTrustedOrcaHooks,
@@ -68,6 +100,39 @@ function sanitizePersistedSidebarWidth(width: unknown, fallback: number, maxWidt
     return fallback
   }
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
+}
+
+function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const input = value as Record<string, unknown>
+  const next: TaskResumeState = {}
+
+  if (input.githubMode === 'items' || input.githubMode === 'project') {
+    next.githubMode = input.githubMode
+  }
+  if (input.githubItemsPreset === null) {
+    next.githubItemsPreset = null
+  } else if (typeof input.githubItemsPreset === 'string') {
+    if (VALID_TASK_PRESETS.has(input.githubItemsPreset as TaskViewPresetId)) {
+      next.githubItemsPreset = input.githubItemsPreset as TaskViewPresetId
+    }
+  }
+  if (typeof input.githubItemsQuery === 'string') {
+    next.githubItemsQuery = input.githubItemsQuery
+  }
+  if (
+    typeof input.linearPreset === 'string' &&
+    VALID_LINEAR_PRESETS.has(input.linearPreset as NonNullable<TaskResumeState['linearPreset']>)
+  ) {
+    next.linearPreset = input.linearPreset as NonNullable<TaskResumeState['linearPreset']>
+  }
+  if (typeof input.linearQuery === 'string') {
+    next.linearQuery = input.linearQuery
+  }
+
+  return Object.keys(next).length > 0 ? next : undefined
 }
 
 export type UISlice = {
@@ -100,6 +165,8 @@ export type UISlice = {
     prefilledName?: string
     taskSource?: 'github' | 'linear'
   }
+  taskResumeState: TaskResumeState | undefined
+  setTaskResumeState: (updates: Partial<TaskResumeState>) => void
   newWorkspaceDraft: {
     repoId: string | null
     name: string
@@ -282,6 +349,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSettings: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
+  taskResumeState: undefined,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}) => {
     // Why: record a Tasks visit in the shared back/forward history so the
@@ -303,14 +371,48 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     // be deduped. This removes ~300–800ms of perceived latency on initial
     // page load.
     const state = get()
-    const targetRepoId =
-      data.preselectedRepoId ?? state.activeRepoId ?? state.repos.find((r) => r.path)?.id ?? null
-    const repo = targetRepoId ? state.repos.find((r) => r.id === targetRepoId) : null
-    if (repo?.path) {
-      const preset = state.settings?.defaultTaskViewPreset ?? 'all'
-      state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, presetToQuery(preset))
+    const resolvedSource = data.taskSource ?? state.settings?.defaultTaskSource ?? 'github'
+    const resolvedMode = state.taskResumeState?.githubMode ?? 'items'
+    if (resolvedSource === 'github' && resolvedMode === 'items') {
+      const eligibleRepos = state.repos.filter((repo) => isGitRepoKind(repo) && repo.path)
+      const selectedRepos = (() => {
+        const preferred = data.preselectedRepoId
+        if (preferred) {
+          const repo = eligibleRepos.find((r) => r.id === preferred)
+          return repo ? [repo] : []
+        }
+        const persisted = state.settings?.defaultRepoSelection
+        if (Array.isArray(persisted)) {
+          const selected = eligibleRepos.filter((repo) => persisted.includes(repo.id))
+          if (selected.length > 0) {
+            return selected
+          }
+        }
+        return eligibleRepos
+      })()
+
+      const resume = state.taskResumeState
+      const defaultPreset = state.settings?.defaultTaskViewPreset ?? 'all'
+      // Why: must match the exact query TaskPage's resume effect mounts with,
+      // otherwise the warm cache key (e.g. 'is:open') misses the page's actual
+      // fetch key (e.g. '') and the prefetch is wasted. When the user has an
+      // explicit cleared custom search (preset === null), preserve the empty
+      // query so both sides agree.
+      const query =
+        resume?.githubItemsPreset === null
+          ? (resume.githubItemsQuery ?? '').trim()
+          : presetToQuery(resume?.githubItemsPreset ?? defaultPreset)
+      for (const repo of selectedRepos) {
+        state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query)
+      }
     }
   },
+  setTaskResumeState: (updates) =>
+    set((s) => {
+      const next = { ...s.taskResumeState, ...updates }
+      window.api.ui.set({ taskResumeState: next }).catch(console.error)
+      return { taskResumeState: next }
+    }),
   closeTaskPage: () =>
     set((state) => {
       // Why: Esc-close from Tasks must rewind the history index if we're
@@ -562,7 +664,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
-        statusBarItems: ui.statusBarItems ?? [...DEFAULT_STATUS_BAR_ITEMS],
+        statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the sidekick the first time
         // they enable the experimental flag. Only an explicit Hide sidekick
@@ -590,6 +692,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
           ui.trustedOrcaHooks ?? {},
           validRepoIds

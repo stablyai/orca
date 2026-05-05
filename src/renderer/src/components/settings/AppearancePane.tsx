@@ -59,18 +59,24 @@ const STATUS_BAR_TOGGLES: readonly {
       'Show the active SSH connection. Only visible once an SSH target is configured.'
   },
   {
-    id: 'sessions',
-    title: 'Terminal Sessions',
-    description: 'Show the terminal session count in the status bar.',
-    keywords: ['status bar', 'terminal', 'sessions', 'count', 'pty'],
-    toggleDescription: 'Show the number of active terminal sessions across all workspaces.'
-  },
-  {
-    id: 'memory',
-    title: 'Memory Monitoring',
-    description: 'Show memory and CPU usage in the status bar.',
-    keywords: ['status bar', 'memory', 'ram', 'cpu', 'monitoring', 'usage', 'performance'],
-    toggleDescription: 'Show total memory and CPU usage. Click it to see a per-workspace breakdown.'
+    id: 'resource-usage',
+    title: 'Resource Usage',
+    description: 'Show CPU, memory, and terminal session indicators in the status bar.',
+    keywords: [
+      'status bar',
+      'resource',
+      'usage',
+      'memory',
+      'ram',
+      'cpu',
+      'terminal',
+      'sessions',
+      'pty',
+      'monitoring',
+      'performance'
+    ],
+    toggleDescription:
+      'Show CPU, memory, and terminal session counts. Click it for a per-workspace breakdown and daemon controls.'
   }
 ]
 

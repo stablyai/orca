@@ -82,8 +82,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'gemini',
   'opencode-go',
   'ssh',
-  'sessions',
-  'memory'
+  'resource-usage'
 ]
 
 /** Synthetic worktree id used by the memory collector to bucket PTYs that

@@ -529,8 +529,11 @@ const api = {
     repoSlug: (args: { repoPath: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:repoSlug', args),
 
-    prForBranch: (args: { repoPath: string; branch: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:prForBranch', args),
+    prForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedPRNumber?: number | null
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:issue', args),

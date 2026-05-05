@@ -407,7 +407,7 @@ export type GitHubSlice = {
   fetchPRForBranch: (
     repoPath: string,
     branch: string,
-    options?: FetchOptions
+    options?: FetchOptions & { linkedPRNumber?: number | null }
   ) => Promise<PRInfo | null>
   fetchIssue: (repoPath: string, number: number) => Promise<IssueInfo | null>
   fetchPRChecks: (
@@ -1181,21 +1181,27 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
     const cacheKey = `${repoPath}::${branch}`
     const cached = get().prCache[cacheKey]
-    if (!options?.force && isFresh(cached)) {
+    // Why: if a prior caller without a linkedPR cached `null` for this branch,
+    // the worktree-card lookup (which has a linked PR fallback) would otherwise
+    // return null forever. Refetch when the cached miss could now resolve via
+    // the linkedPR path.
+    const linkedRefetch = cached?.data === null && (options?.linkedPRNumber ?? null) !== null
+    if (!options?.force && !linkedRefetch && isFresh(cached)) {
       return cached.data
     }
 
     const inflightRequest = inflightPRRequests.get(cacheKey)
-    if (inflightRequest && (!options?.force || inflightRequest.force)) {
+    if (inflightRequest && (!options?.force || inflightRequest.force) && !linkedRefetch) {
       return inflightRequest.promise
     }
 
     const generation = (prRequestGenerations.get(cacheKey) ?? 0) + 1
     prRequestGenerations.set(cacheKey, generation)
 
+    const linkedPRNumber = options?.linkedPRNumber ?? null
     const request = (async () => {
       try {
-        const pr = await window.api.gh.prForBranch({ repoPath, branch })
+        const pr = await window.api.gh.prForBranch({ repoPath, branch, linkedPRNumber })
         if (prRequestGenerations.get(cacheKey) === generation) {
           set((s) => ({
             prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: Date.now() } }

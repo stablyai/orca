@@ -299,11 +299,11 @@ function IssueTypeCell({
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
       {issueType ? (
         (() => {
-          const { bg, fg, border } = singleSelectChipColors(issueType.color ?? '')
+          const colors = singleSelectChipColors(issueType.color ?? '')
           return (
             <span
-              className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none"
-              style={{ backgroundColor: bg, color: fg, boxShadow: `inset 0 0 0 1px ${border}` }}
+              className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+              style={chipStyle(colors)}
             >
               {issueType.name}
             </span>
@@ -402,11 +402,11 @@ function SingleSelectCell({
   const label =
     value?.kind === 'single-select' ? (
       (() => {
-        const { bg, fg, border } = singleSelectChipColors(value.color)
+        const colors = singleSelectChipColors(value.color)
         return (
           <span
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none"
-            style={{ backgroundColor: bg, color: fg, boxShadow: `inset 0 0 0 1px ${border}` }}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+            style={chipStyle(colors)}
           >
             {value.name}
           </span>
@@ -673,11 +673,11 @@ function LabelChip({ label }: { label: GitHubProjectLabel }): React.JSX.Element 
   // Why: match GitHub's dark-mode label rendering — translucent fill of the
   // label color with a brighter foreground derived from the same hue. The
   // outline-only chip we had before was hard to read against the dark UI.
-  const { bg, fg, border } = labelChipColors(label.color)
+  const colors = labelChipColors(label.color)
   return (
     <span
-      className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none"
-      style={{ backgroundColor: bg, color: fg, boxShadow: `inset 0 0 0 1px ${border}` }}
+      className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+      style={chipStyle(colors)}
     >
       {label.name}
     </span>
@@ -985,7 +985,23 @@ const SINGLE_SELECT_HEX: Record<string, string> = {
   PINK: '#db61a2'
 }
 
-function singleSelectChipColors(color: string): { bg: string; fg: string; border: string } {
+type ChipColors = {
+  bg: string
+  fgLight: string
+  fgDark: string
+  border: string
+}
+
+function chipStyle(colors: ChipColors): React.CSSProperties {
+  return {
+    '--github-project-chip-fg-light': colors.fgLight,
+    '--github-project-chip-fg-dark': colors.fgDark,
+    backgroundColor: colors.bg,
+    boxShadow: `inset 0 0 0 1px ${colors.border}`
+  } as React.CSSProperties
+}
+
+function singleSelectChipColors(color: string): ChipColors {
   if (!color) {
     return labelChipColors('')
   }
@@ -1000,8 +1016,13 @@ function singleSelectChipColors(color: string): { bg: string; fg: string; border
 // Why: GitHub renders labels in dark mode as a low-alpha tint of the label
 // color with text re-mapped to a lightness that reads well on the tint. We
 // approximate Primer's algorithm so our chips match the GitHub UI.
-function labelChipColors(color: string): { bg: string; fg: string; border: string } {
-  const fallback = { bg: 'rgba(125,125,125,0.2)', fg: '#e6edf3', border: 'rgba(125,125,125,0.4)' }
+function labelChipColors(color: string): ChipColors {
+  const fallback = {
+    bg: 'rgba(125,125,125,0.18)',
+    fgLight: '#4b5563',
+    fgDark: '#e6edf3',
+    border: 'rgba(125,125,125,0.36)'
+  }
   if (!color) {
     return fallback
   }
@@ -1013,12 +1034,15 @@ function labelChipColors(color: string): { bg: string; fg: string; border: strin
   const g = parseInt(hex.slice(2, 4), 16)
   const b = parseInt(hex.slice(4, 6), 16)
   const [h, s] = rgbToHsl(r, g, b)
-  // Primer dark-theme label: bg ~18% alpha of base, border ~30%, text lifted
-  // to L≈85% so it stays bright but keeps the hue.
   const bg = `rgba(${r}, ${g}, ${b}, 0.18)`
   const border = `rgba(${r}, ${g}, ${b}, 0.3)`
-  const fg = hslToCss(h, Math.max(s, 0.5), 0.85)
-  return { bg, fg, border }
+  // Why: the dark-theme text lift turns chips into near-white-on-pastel in
+  // light mode. Keep the same tint, but anchor text in the darker hue range.
+  const fgLight = hslToCss(h, Math.max(s, 0.45), 0.32)
+  // Primer dark-theme label: bg ~18% alpha of base, border ~30%, text lifted
+  // to L≈85% so it stays bright but keeps the hue.
+  const fgDark = hslToCss(h, Math.max(s, 0.5), 0.85)
+  return { bg, fgLight, fgDark, border }
 }
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {

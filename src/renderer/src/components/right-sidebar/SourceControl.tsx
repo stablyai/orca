@@ -297,6 +297,7 @@ function SourceControlInner(): React.JSX.Element {
   const prCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
   const prInfo: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
 
+  const linkedPR = activeWorktree?.linkedPR ?? null
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
@@ -305,9 +306,10 @@ function SourceControlInner(): React.JSX.Element {
     // Why: the Source Control panel renders the branch's PR badge directly.
     // When a terminal checkout moves this worktree onto a new branch, we need
     // to fetch that branch's PR immediately instead of waiting for the user to
-    // reselect the worktree or open the separate Checks panel.
-    void fetchPRForBranch(activeRepo.path, branchName)
-  }, [activeRepo, branchName, fetchPRForBranch, isBranchVisible, isFolder])
+    // reselect the worktree or open the separate Checks panel. Pass linkedPR
+    // so create-from-PR worktrees resolve via the number-based fallback.
+    void fetchPRForBranch(activeRepo.path, branchName, { linkedPRNumber: linkedPR })
+  }, [activeRepo, branchName, fetchPRForBranch, isBranchVisible, isFolder, linkedPR])
 
   const grouped = useMemo(() => {
     const groups = {

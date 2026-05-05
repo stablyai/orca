@@ -19,14 +19,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '../../store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 
-type ConfirmKind = 'killAll' | 'restart' | 'killOne'
+type ConfirmKind = 'killOne'
 
-type PendingConfirm =
-  | { kind: 'killAll' }
-  | { kind: 'restart' }
-  | { kind: 'killOne'; session: PtyManagementSession }
-  | null
+type PendingConfirm = { kind: 'killOne'; session: PtyManagementSession } | null
 
 // Why: mirror the status-bar SessionsStatusSegment label style — last two
 // path segments joined by the platform separator, no ellipsis prefix. This
@@ -83,46 +80,16 @@ function getConfirmCopy(confirm: PendingConfirm): {
   if (!confirm) {
     return null
   }
-  switch (confirm.kind) {
-    case 'killAll':
-      return {
-        title: 'Kill all terminal sessions?',
-        description: (
-          <>
-            This force-quits every running terminal pane across all workspaces. Any unsaved work in
-            those sessions is lost. The daemon itself keeps running, and new terminals can be opened
-            immediately. This can&apos;t be undone.
-          </>
-        ),
-        confirmLabel: 'Kill all sessions',
-        busyLabel: 'Killing…'
-      }
-    case 'restart':
-      return {
-        title: 'Restart the terminal daemon?',
-        description: (
-          <>
-            Kills every running terminal pane and restarts the daemon process. Panes show
-            &ldquo;Process exited&rdquo; and can be reopened immediately. Legacy-protocol sessions
-            from a previous app version are preserved. This can&apos;t be undone.
-          </>
-        ),
-        confirmLabel: 'Restart daemon',
-        busyLabel: 'Restarting…'
-      }
-    case 'killOne':
-      return {
-        title: 'Kill this session?',
-        description: (
-          <>
-            Force-quits{' '}
-            <span className="font-medium text-foreground">{confirm.session.sessionId}</span>. Any
-            unsaved work in that pane is lost. This can&apos;t be undone.
-          </>
-        ),
-        confirmLabel: 'Kill session',
-        busyLabel: 'Killing…'
-      }
+  return {
+    title: 'Kill this session?',
+    description: (
+      <>
+        Force-quits <span className="font-medium text-foreground">{confirm.session.sessionId}</span>
+        . Any unsaved work in that pane is lost. This can&apos;t be undone.
+      </>
+    ),
+    confirmLabel: 'Kill session',
+    busyLabel: 'Killing…'
   }
 }
 
@@ -235,48 +202,30 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   const sessionCount = sessions.length
 
-  const handleKillAll = useCallback(async () => {
-    setBusyKind('killAll')
-    mutationInFlight.current = true
-    optimisticRollback.current = sessions
-    setSessions([])
-    try {
-      const { killedCount, remainingCount } = await window.api.pty.management.killAll()
-      if (remainingCount > 0 && killedCount > 0) {
-        toast.warning(
-          `Killed ${killedCount} of ${killedCount + remainingCount} sessions. ${remainingCount} refused to exit.`
-        )
-      } else if (killedCount > 0) {
-        toast.success(`Killed ${killedCount} session${killedCount === 1 ? '' : 's'}.`)
-      } else if (remainingCount === 0) {
-        toast.info('No sessions running.')
-      } else {
-        toast.error(`${remainingCount} session${remainingCount === 1 ? '' : 's'} refused to exit.`)
-      }
-      mutationInFlight.current = false
-      await refresh()
-    } catch (err) {
-      // Why: the IPC rejected before the daemon could act — restore the list
-      // so the user isn't left staring at a blank table that doesn't reflect
-      // reality.
+  // Why: shared hook owns the daemon-wide restart + kill-all flows so the
+  // status-bar segment and this settings pane can't drift on copy, IPC calls,
+  // or the anti-dismiss guard. We pass lifecycle callbacks to keep the pane's
+  // optimistic setSessions([]) + rollback pattern local to the component.
+  const daemonActions = useDaemonActions({
+    onKillAllStart: () => {
+      mutationInFlight.current = true
+      optimisticRollback.current = sessions
+      setSessions([])
+    },
+    onKillAllError: () => {
       if (isMounted.current && optimisticRollback.current) {
         setSessions(optimisticRollback.current)
       }
-      toast.error('Couldn’t kill sessions.', {
-        description: err instanceof Error ? err.message : undefined
-      })
-    } finally {
+    },
+    onKillAllSettled: () => {
       optimisticRollback.current = null
       mutationInFlight.current = false
-      if (isMounted.current) {
-        setBusyKind(null)
-        // Why: the dialog stays open during the mutation so the user sees the
-        // spinner + busyLabel and can't dismiss mid-flight (see Dialog guard
-        // below). Close it here when the op actually finishes.
-        setConfirm(null)
-      }
+      void refresh()
+    },
+    onRestartSettled: () => {
+      void refresh()
     }
-  }, [refresh, sessions])
+  })
 
   const handleKillOne = useCallback(
     async (session: PtyManagementSession) => {
@@ -308,54 +257,19 @@ export function ManageSessionsSection(): React.JSX.Element {
     [refresh]
   )
 
-  const handleRestart = useCallback(async () => {
-    setBusyKind('restart')
-    mutationInFlight.current = true
-    try {
-      const { success } = await window.api.pty.management.restart()
-      if (success) {
-        toast.success('Daemon restarted.')
-      } else {
-        toast.error('Restart failed — check logs.')
-      }
-      mutationInFlight.current = false
-      await refresh()
-    } catch (err) {
-      toast.error('Restart failed.', {
-        description: err instanceof Error ? err.message : undefined
-      })
-    } finally {
-      mutationInFlight.current = false
-      if (isMounted.current) {
-        setBusyKind(null)
-        setConfirm(null)
-      }
-    }
-  }, [refresh])
-
   // Why: do NOT clear `confirm` here — the dialog must stay open for the
   // duration of the mutation so the spinner + busyLabel render and the
-  // anti-dismiss guard can actually hold. Each handler's `finally` clears
+  // anti-dismiss guard can actually hold. handleKillOne's `finally` clears
   // `confirm` when the op resolves.
   const runConfirmed = useCallback(() => {
     if (!confirm) {
       return
     }
-    const pending = confirm
-    switch (pending.kind) {
-      case 'killAll':
-        void handleKillAll()
-        return
-      case 'restart':
-        void handleRestart()
-        return
-      case 'killOne':
-        void handleKillOne(pending.session)
-    }
-  }, [confirm, handleKillAll, handleKillOne, handleRestart])
+    void handleKillOne(confirm.session)
+  }, [confirm, handleKillOne])
 
   const copy = useMemo(() => getConfirmCopy(confirm), [confirm])
-  const isBusy = busyKind !== null
+  const isBusy = busyKind !== null || daemonActions.isBusy
 
   return (
     <section className="space-y-4">
@@ -410,11 +324,11 @@ export function ManageSessionsSection(): React.JSX.Element {
                     variant="ghost"
                     size="icon-xs"
                     disabled={isBusy || sessionCount === 0}
-                    onClick={() => setConfirm({ kind: 'killAll' })}
+                    onClick={() => daemonActions.setPending('killAll')}
                     aria-label="Kill all sessions"
                     className="text-muted-foreground hover:text-destructive"
                   >
-                    {busyKind === 'killAll' ? (
+                    {daemonActions.busyKind === 'killAll' ? (
                       <LoaderCircle className="animate-spin" />
                     ) : (
                       <Trash2 />
@@ -431,11 +345,11 @@ export function ManageSessionsSection(): React.JSX.Element {
                     variant="ghost"
                     size="icon-xs"
                     disabled={isBusy}
-                    onClick={() => setConfirm({ kind: 'restart' })}
+                    onClick={() => daemonActions.setPending('restart')}
                     aria-label="Restart daemon"
                     className="text-muted-foreground"
                   >
-                    {busyKind === 'restart' ? (
+                    {daemonActions.busyKind === 'restart' ? (
                       <LoaderCircle className="animate-spin" />
                     ) : (
                       <RotateCw />
@@ -581,6 +495,7 @@ export function ManageSessionsSection(): React.JSX.Element {
           ) : null}
         </DialogContent>
       </Dialog>
+      <DaemonActionDialog api={daemonActions} />
     </section>
   )
 }
