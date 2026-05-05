@@ -33,12 +33,16 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 function findAsar(rootDir) {
-  // Why: electron-builder writes exactly one `app.asar` per platform target
-  // (mac → `dist/mac-*/Orca.app/Contents/Resources/app.asar`, linux →
-  // `dist/linux-unpacked/resources/app.asar`, win → `dist/win-unpacked/
-  // resources/app.asar`). Recurse and return all matches; refuse if multiple
-  // are found, since that means the pack produced more than one app payload
-  // and the verify needs per-pack scoping.
+  // Why: electron-builder produces one `app.asar` per platform-arch combo.
+  // Linux/Windows targets ship one (`dist/linux-unpacked/resources/app.asar`,
+  // `dist/win-unpacked/resources/app.asar`); macOS dual-arch ships two
+  // (`dist/mac/Orca.app/Contents/Resources/app.asar` for x64,
+  // `dist/mac-arm64/Orca.app/Contents/Resources/app.asar` for arm64) because
+  // `electron-builder.config.cjs` declares `arch: ['x64', 'arm64']`. Both
+  // arches share the same JS bundle through electron-vite's single `main`
+  // build, so the constants are identical across them — but verifying every
+  // match catches the regression where one arch's pack drifts (e.g. a future
+  // arch-specific bundle split that forgets to thread the `define` block).
   const matches = []
   const stack = [rootDir]
   while (stack.length > 0) {
@@ -91,31 +95,10 @@ if (asarMatches.length === 0) {
   console.error(`::error::could not locate app.asar under ${distDir}`)
   process.exit(1)
 }
-if (asarMatches.length > 1) {
-  console.error(`::error::expected exactly one app.asar under ${distDir}, found ${asarMatches.length}:`)
-  for (const m of asarMatches) {
-    console.error(`  - ${m}`)
-  }
-  process.exit(1)
+console.log(`Found ${asarMatches.length} app.asar payload(s) under ${distDir}:`)
+for (const m of asarMatches) {
+  console.log(`  - ${m}`)
 }
-const asarPath = asarMatches[0]
-console.log(`Verifying telemetry constants in ${asarPath}`)
-
-const extractDir = mkdtempSync(join(tmpdir(), 'orca-asar-verify-'))
-// Why `shell: true` on Windows: `npx` resolves to a `.cmd` shim there, and
-// Node's `execFileSync` refuses to launch `.cmd` files without a shell.
-execFileSync('npx', ['--yes', 'asar', 'extract', asarPath, extractDir], {
-  stdio: 'inherit',
-  shell: process.platform === 'win32'
-})
-
-const indexPath = join(extractDir, 'out', 'main', 'index.js')
-if (!existsSync(indexPath)) {
-  console.error(`::error::extracted asar is missing out/main/index.js at ${indexPath}`)
-  process.exit(1)
-}
-
-const indexJs = readFileSync(indexPath, 'utf8')
 
 // Why these regexes: electron-vite's `define` block substitutes the bare
 // identifiers `ORCA_BUILD_IDENTITY` and `ORCA_POSTHOG_WRITE_KEY` with their
@@ -126,23 +109,79 @@ const indexJs = readFileSync(indexPath, 'utf8')
 // guard. Match that exact emitted shape so a regression — e.g. the env
 // var unset and the substitution falling back to literal `null` — fails
 // the grep instead of slipping through as a falsy-but-stringy value.
-const buildIdentityMatch = /const\s+BUILD_IDENTITY\s*=\s*"(rc|stable)"/.exec(indexJs)
-const writeKeyMatch = /const\s+WRITE_KEY\s*=\s*"(phc_[A-Za-z0-9]+)"/.exec(indexJs)
+const BUILD_IDENTITY_RE = /const\s+BUILD_IDENTITY\s*=\s*"(rc|stable)"/
+const WRITE_KEY_RE = /const\s+WRITE_KEY\s*=\s*"(phc_[A-Za-z0-9]+)"/
 
-if (!buildIdentityMatch) {
-  console.error('::error::BUILD_IDENTITY constant missing or unexpected value in shipped binary')
-  const sample = indexJs.match(/.*BUILD_IDENTITY.*/g)?.slice(0, 5) ?? []
-  for (const line of sample) {
-    console.error(`  ${line}`)
+function verifyAsar(asarPath) {
+  console.log(`Verifying ${asarPath}`)
+  const extractDir = mkdtempSync(join(tmpdir(), 'orca-asar-verify-'))
+  // Why `shell: true` on Windows: `npx` resolves to a `.cmd` shim there, and
+  // Node's `execFileSync` refuses to launch `.cmd` files without a shell.
+  execFileSync('npx', ['--yes', 'asar', 'extract', asarPath, extractDir], {
+    stdio: 'inherit',
+    shell: process.platform === 'win32'
+  })
+
+  const indexPath = join(extractDir, 'out', 'main', 'index.js')
+  if (!existsSync(indexPath)) {
+    console.error(`::error::extracted asar is missing out/main/index.js at ${indexPath}`)
+    return null
+  }
+
+  const indexJs = readFileSync(indexPath, 'utf8')
+  const buildIdentityMatch = BUILD_IDENTITY_RE.exec(indexJs)
+  const writeKeyMatch = WRITE_KEY_RE.exec(indexJs)
+
+  if (!buildIdentityMatch) {
+    console.error(
+      `::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`
+    )
+    const sample = indexJs.match(/.*BUILD_IDENTITY.*/g)?.slice(0, 5) ?? []
+    for (const line of sample) {
+      console.error(`  ${line}`)
+    }
+    return null
+  }
+  if (!writeKeyMatch) {
+    console.error(`::error::PostHog WRITE_KEY missing from ${asarPath}`)
+    return null
+  }
+
+  return { asarPath, buildIdentity: buildIdentityMatch[1], writeKey: writeKeyMatch[1] }
+}
+
+// Why verify every match (not just the first): macOS dual-arch produces one
+// asar per arch from the same `out/main` bundle, so identical constants are
+// expected — but if a future change introduces an arch-specific bundle split
+// (or a per-arch `electron-vite build` invocation) that forgets to thread
+// the `define` values, only one of the asars would carry the constants and
+// the broken arch would ship transmitting nothing. Looping is cheap insurance
+// against that class of regression. We additionally require every asar to
+// agree on the BUILD_IDENTITY value — a mismatch means the matrix shipped
+// inconsistent build-identity claims, which is itself a release bug.
+const results = []
+for (const asarPath of asarMatches) {
+  const result = verifyAsar(asarPath)
+  if (!result) {
+    process.exit(1)
+  }
+  results.push(result)
+}
+
+const distinctIdentities = new Set(results.map((r) => r.buildIdentity))
+if (distinctIdentities.size > 1) {
+  console.error(
+    `::error::asars disagree on BUILD_IDENTITY: ${[...distinctIdentities].join(', ')}`
+  )
+  for (const r of results) {
+    console.error(`  - ${r.asarPath}: ${r.buildIdentity}`)
   }
   process.exit(1)
 }
-if (!writeKeyMatch) {
-  console.error('::error::PostHog WRITE_KEY missing from shipped binary')
-  process.exit(1)
-}
 
+const [first] = results
 console.log(
-  `Telemetry constants verified: BUILD_IDENTITY="${buildIdentityMatch[1]}", ` +
-    `WRITE_KEY="${writeKeyMatch[1].slice(0, 8)}..." (length=${writeKeyMatch[1].length})`
+  `Telemetry constants verified across ${results.length} asar(s): ` +
+    `BUILD_IDENTITY="${first.buildIdentity}", ` +
+    `WRITE_KEY="${first.writeKey.slice(0, 8)}..." (length=${first.writeKey.length})`
 )
