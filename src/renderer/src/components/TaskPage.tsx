@@ -785,6 +785,17 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [pageData.taskSource])
 
+  // Why: settings.defaultTaskSource can change while Tasks is open (Settings
+  // panel is reachable without unmounting Tasks). The one-shot resume effect
+  // only seeds taskSource on first mount, so without this sync a mid-session
+  // change to the default would not propagate when no explicit page-level
+  // taskSource was passed.
+  useEffect(() => {
+    if (!pageData.taskSource && settings?.defaultTaskSource) {
+      setTaskSource(settings.defaultTaskSource)
+    }
+  }, [settings?.defaultTaskSource, pageData.taskSource])
+
   // Why: Project mode is a sub-tab within the GitHub source. Visible whenever
   // the user is on the GitHub task source — actual entry into Project mode is
   // gated on a non-null `activeProject` once they pick one.
@@ -1246,11 +1257,14 @@ export default function TaskPage(): React.JSX.Element {
       githubSearchPersistReadyRef.current = true
       return
     }
-    if (activeTaskPreset !== null) {
-      return
-    }
+    // Why: persist the debounced applied query regardless of the active
+    // preset. The preset-click handler writes the canonical query for that
+    // preset, so persisting again here is at worst idempotent. When the
+    // user types into the search box `handleTaskSearchChange` clears the
+    // preset, but persisting unconditionally also covers paths that change
+    // appliedTaskSearch without going through that handler.
     setTaskResumeState({
-      githubItemsPreset: null,
+      githubItemsPreset: activeTaskPreset,
       githubItemsQuery: appliedTaskSearch.trim()
     })
   }, [activeTaskPreset, appliedTaskSearch, setTaskResumeState, taskResumeApplied])
