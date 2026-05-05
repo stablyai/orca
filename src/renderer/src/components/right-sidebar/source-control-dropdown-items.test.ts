@@ -7,6 +7,7 @@ import type { PrimaryActionInputs } from './source-control-primary-action'
 function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
     stagedCount: 0,
+    hasUnstagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -51,7 +52,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_sync.disabled).toBe(true)
   })
 
-  it('disables Push/Commit&Push when branch has no upstream', () => {
+  it('disables push actions but keeps Fetch enabled when branch has no upstream', () => {
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -65,7 +66,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.push.disabled).toBe(true)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.publish.disabled).toBe(false)
-    expect(byKind.fetch.disabled).toBe(true)
+    expect(byKind.fetch.disabled).toBe(false)
   })
 
   it('disables Publish Branch when branch already has an upstream', () => {
@@ -120,7 +121,7 @@ describe('resolveDropdownItems', () => {
     }
   })
 
-  it('disables every upstream-dependent row with a loading tooltip when upstreamStatus is undefined', () => {
+  it('disables remote rows with a loading tooltip when upstreamStatus is undefined', () => {
     // Why: mirrors the primary-action guard — while fetchUpstreamStatus is in
     // flight we must not let the user click Publish on an already-tracked
     // branch (which would re-run `git push -u` and clobber the upstream).
@@ -130,7 +131,7 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    const upstreamDependent = [
+    const loadingBlocked = [
       'commit_push',
       'commit_sync',
       'push',
@@ -139,7 +140,7 @@ describe('resolveDropdownItems', () => {
       'fetch',
       'publish'
     ] as const
-    for (const kind of upstreamDependent) {
+    for (const kind of loadingBlocked) {
       expect(byKind[kind].disabled).toBe(true)
       expect(byKind[kind].title).toBe('Checking branch status…')
     }
@@ -148,7 +149,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit.disabled).toBe(false)
   })
 
-  it('surfaces "Publish the branch first…" tooltips when upstream is resolved but absent', () => {
+  it('keeps Fetch enabled and surfaces publish-first tooltips when upstream is absent', () => {
     // Why: sibling to the upstreamStatus=undefined test above. Once the fetch
     // resolves to hasUpstream=false, the dropdown should explain that the
     // user needs to publish first (rather than leaving the loading copy).
@@ -161,7 +162,8 @@ describe('resolveDropdownItems', () => {
     expect(byKind.push.title).toBe('Publish the branch first to push commits')
     expect(byKind.pull.title).toBe('Publish the branch first to pull commits')
     expect(byKind.sync.title).toBe('Publish the branch first to sync commits')
-    expect(byKind.fetch.title).toBe('Publish the branch first to fetch from remote')
+    expect(byKind.fetch.title).toBe('Fetch from remote without merging')
+    expect(byKind.fetch.disabled).toBe(false)
     expect(byKind.publish.title).toBe('Publish this branch to origin')
     expect(byKind.publish.disabled).toBe(false)
   })

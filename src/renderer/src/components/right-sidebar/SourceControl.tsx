@@ -585,10 +585,13 @@ function SourceControlInner(): React.JSX.Element {
     [handleCommit, runRemoteAction]
   )
 
+  const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
+
   const primaryAction: PrimaryAction = useMemo(
     () =>
       resolvePrimaryAction({
         stagedCount: grouped.staged.length,
+        hasUnstagedChanges,
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
@@ -598,6 +601,7 @@ function SourceControlInner(): React.JSX.Element {
     [
       commitMessage,
       grouped.staged.length,
+      hasUnstagedChanges,
       isCommitting,
       isRemoteOperationActive,
       remoteStatus,
@@ -609,6 +613,7 @@ function SourceControlInner(): React.JSX.Element {
     () =>
       resolveDropdownItems({
         stagedCount: grouped.staged.length,
+        hasUnstagedChanges,
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
@@ -618,6 +623,7 @@ function SourceControlInner(): React.JSX.Element {
     [
       commitMessage,
       grouped.staged.length,
+      hasUnstagedChanges,
       isCommitting,
       isRemoteOperationActive,
       remoteStatus,

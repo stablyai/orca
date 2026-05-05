@@ -6,6 +6,7 @@ import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control
 function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
     stagedCount: 0,
+    hasUnstagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -154,6 +155,18 @@ describe('resolvePrimaryAction', () => {
       kind: 'commit',
       label: 'Commit',
       title: 'Nothing to commit. Branch is up to date.',
+      disabled: true
+    })
+  })
+
+  it('asks the user to stage files when unstaged changes exist on an in-sync branch', () => {
+    const result = resolvePrimaryAction(
+      inputs({ hasUnstagedChanges: true, upstreamStatus: upstreamInSync })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Stage at least one file to commit',
       disabled: true
     })
   })

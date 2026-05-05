@@ -25,6 +25,7 @@ export type PrimaryAction = {
 
 export type PrimaryActionInputs = {
   stagedCount: number
+  hasUnstagedChanges: boolean
   hasMessage: boolean
   hasUnresolvedConflicts: boolean
   isCommitting: boolean
@@ -65,6 +66,7 @@ function describeSyncCounts(ahead: number, behind: number): string {
 export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction {
   const {
     stagedCount,
+    hasUnstagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
     isCommitting,
@@ -186,11 +188,14 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
-  // Clean + tracked + in sync — nothing to do on this branch.
+  // Clean + tracked + in sync — distinguish truly clean from work that still
+  // needs staging before commit can proceed.
   return {
     kind: 'commit',
     label: 'Commit',
-    title: 'Nothing to commit. Branch is up to date.',
+    title: hasUnstagedChanges
+      ? 'Stage at least one file to commit'
+      : 'Nothing to commit. Branch is up to date.',
     disabled: true
   }
 }

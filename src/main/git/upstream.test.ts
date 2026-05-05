@@ -10,6 +10,12 @@ vi.mock('./runner', () => ({
 
 import { getUpstreamStatus } from './upstream'
 
+const missingTrackingRefError = new Error(
+  "fatal: ambiguous argument 'HEAD@{u}': unknown revision or path not in the working tree.\n" +
+    "Use '--' to separate paths from revisions, like this:\n" +
+    "'git <command> [<revision>...] -- [<file>...]'"
+)
+
 describe('getUpstreamStatus', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -32,6 +38,18 @@ describe('getUpstreamStatus', () => {
 
   it('returns hasUpstream=false when upstream is missing', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: no upstream configured'))
+
+    const result = await getUpstreamStatus('/repo')
+
+    expect(result).toEqual({
+      hasUpstream: false,
+      ahead: 0,
+      behind: 0
+    })
+  })
+
+  it('returns hasUpstream=false when the configured tracking ref is missing', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(missingTrackingRefError)
 
     const result = await getUpstreamStatus('/repo')
 

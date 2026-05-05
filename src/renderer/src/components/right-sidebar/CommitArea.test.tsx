@@ -96,6 +96,7 @@ function flushPromises(): Promise<void> {
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
     stagedCount: 1,
+    hasUnstagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
     isCommitting: false,

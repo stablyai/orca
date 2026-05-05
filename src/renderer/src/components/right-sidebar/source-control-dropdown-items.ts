@@ -183,12 +183,8 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   const fetchItem: DropdownItem = {
     kind: 'fetch',
     label: 'Fetch',
-    title: upstreamLoading
-      ? 'Checking branch status…'
-      : !hasUpstream
-        ? 'Publish the branch first to fetch from remote'
-        : 'Fetch from remote without merging',
-    disabled: globalBusy || upstreamLoading || !hasUpstream
+    title: upstreamLoading ? 'Checking branch status…' : 'Fetch from remote without merging',
+    disabled: globalBusy || upstreamLoading
   }
 
   const publishItem: DropdownItem = {

@@ -82,9 +82,11 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
 // `HEAD does not point` / `Needed a single revision` from matching unrelated
 // output (e.g. hook stdout, progress lines) and silently hiding real
 // corrupt-repo / unborn-HEAD / ambiguous-ref failures behind a spurious
-// "0 ahead / 0 behind, no upstream" UI state.
+// "0 ahead / 0 behind, no upstream" UI state. The one ambiguous-ref
+// exception is HEAD@{u}: git emits it when branch config points at a
+// tracking ref that is missing locally, which is the same expected UX state.
 const NO_UPSTREAM_PHRASE_PATTERN =
-  /no upstream configured|no tracking information|HEAD does not point|Needed a single revision/i
+  /no upstream configured|no tracking information|HEAD does not point|Needed a single revision|ambiguous argument 'HEAD@\{u\}'/i
 const FATAL_PREFIX_PATTERN = /(^|\n)fatal:/i
 
 export function isNoUpstreamError(error: unknown): boolean {
