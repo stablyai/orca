@@ -23,6 +23,7 @@ import RightSidebar from './components/right-sidebar'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
+import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
@@ -1114,6 +1115,14 @@ function App(): React.JSX.Element {
       ) : null}
       <UpdateCard />
       <StarNagCard />
+      {/* Why: the existing-user opt-in banner mounts at App root so it
+          renders once per renderer session, not per view. It gates
+          internally on the cohort markers populated by the migration,
+          so it only shows for users who installed before the telemetry
+          release and have not yet resolved consent. New users get no
+          first-launch surface — see telemetry-plan.md §First-launch
+          experience. */}
+      <TelemetryFirstLaunchSurface />
       <ZoomOverlay />
       <SshPassphraseDialog />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />

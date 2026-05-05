@@ -790,8 +790,7 @@ describe('Store', () => {
         telemetry: {
           optedIn: true,
           installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          existedBeforeTelemetryRelease: false,
-          firstRunNoticeShown: true
+          existedBeforeTelemetryRelease: false
         }
       },
       ui: {},
@@ -802,8 +801,7 @@ describe('Store', () => {
     expect(store.getSettings().telemetry).toEqual({
       optedIn: true,
       installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      existedBeforeTelemetryRelease: false,
-      firstRunNoticeShown: true
+      existedBeforeTelemetryRelease: false
     })
   })
 })

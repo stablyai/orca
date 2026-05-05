@@ -80,6 +80,21 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('cachedEndpointValues = null;')
   })
 
+  it('forwards question.asked as AskUserQuestion so the pane flips to waiting', () => {
+    // Why: OpenCode exposes two separate plugin events for human-in-the-loop
+    // moments — `permission.asked` (blocks on tool approval) and
+    // `question.asked` (the agent called an ask-the-user tool). The plugin
+    // must forward both so the server-side normalizer can map each to
+    // `waiting` and render the red indicator. Dropping `question.asked`
+    // leaves the pane stuck in `working` while the agent is actually idle,
+    // waiting on a human reply — exactly the bug three other OpenCode
+    // integrations (cmux, t3code, open-vibe-island) all handle.
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('if (event.type === "question.asked")')
+    expect(source).toContain('await post("AskUserQuestion", event.properties || {});')
+  })
+
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {
     // Why: ENOENT is the normal pre-install case and must stay silent, but a
     // malformed/unreadable file (EACCES, EIO, parse error) would otherwise

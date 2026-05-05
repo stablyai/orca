@@ -417,7 +417,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <div className="truncate text-[13px] font-semibold leading-none capitalize">
+                      <div className="truncate text-[13px] font-semibold leading-none">
                         {row.label}
                       </div>
                       <div className="rounded-full bg-black/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90">

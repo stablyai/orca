@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { buildRows, getPRGroupKey } from './worktree-list-groups'
 import type { Repo, Worktree } from '../../../../shared/types'
@@ -90,5 +92,23 @@ describe('buildRows with pinned worktrees', () => {
     const allPinned = { ...unpinned1, isPinned: true }
     const rows = buildRows('none', [pinned, allPinned], repoMap, null, new Set())
     expect(rows.some((r) => r.type === 'header' && r.key === 'all')).toBe(false)
+  })
+
+  it('preserves repo display casing in group labels', () => {
+    const lowercaseRepo = { ...repo, displayName: 'c15t' }
+    const rows = buildRows('repo', [worktree], new Map([[repo.id, lowercaseRepo]]), null, new Set())
+
+    expect(rows[0]).toMatchObject({ type: 'header', label: 'c15t' })
+  })
+})
+
+describe('WorktreeList header styles', () => {
+  it('does not title-case workspace group labels', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
+
+    expect(source).not.toContain('leading-none capitalize')
   })
 })

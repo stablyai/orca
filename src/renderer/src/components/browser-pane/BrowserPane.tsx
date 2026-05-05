@@ -933,7 +933,11 @@ function BrowserPagePane({
       webview.style.width = '100%'
       webview.style.height = '100%'
       webview.style.border = 'none'
-      webview.style.background = 'transparent'
+      // Why: default to white so sites that don't set an html/body background
+      // (e.g. httpbin.org/html) don't show through to Orca's dark chrome. Real
+      // browsers paint the viewport white by default; sites that specify their
+      // own background (including dark ones) still override this.
+      webview.style.background = '#ffffff'
       webviewRegistry.set(browserTab.id, webview)
       container.appendChild(webview)
       needsInitialNavigation = true

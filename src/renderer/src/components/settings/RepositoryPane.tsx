@@ -71,8 +71,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
       : [
           {
             title: 'Worktree Symlinks',
-            description:
-              'Paths to symlink from the primary checkout into newly created worktrees.',
+            description: 'Paths to symlink from the primary checkout into newly created worktrees.',
             keywords: [
               repo.displayName,
               'symlink',

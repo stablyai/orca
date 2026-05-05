@@ -1189,14 +1189,12 @@ export type GlobalSettings = {
     /** New users: initialized to `true` at install.
      *  Existing users: `null` until they resolve the first-launch banner. */
     optedIn: boolean | null
-    /** Anonymous UUID v4. Generated on first run. Regenerable from Privacy pane. */
+    /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
     installId: string
-    /** Cohort marker set once during migration. Drives toast-vs-banner. */
+    /** Cohort marker set once during migration. True for users with a
+     *  pre-existing profile (gates the existing-user opt-in banner);
+     *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
-    /** New-user toast: true only after active dismissal ("Got it" or "Turn off").
-     *  Re-shows on next launch if false/undefined so the consent disclosure
-     *  is never silently skipped by quitting mid-session. */
-    firstRunNoticeShown?: boolean
   }
 }
 

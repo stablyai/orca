@@ -104,7 +104,12 @@ export type RequestKind = z.infer<typeof requestKindSchema>
 // never fire a `telemetry_opted_in/out` event. If a future path explicitly
 // persists an env-var-driven opt-out, add `env_var` back here together with
 // the call site.
-export const optInViaSchema = z.enum(['first_launch_banner', 'first_launch_notice', 'settings'])
+//
+// `first_launch_notice` (new-user disclosure toast) is deliberately absent —
+// the new-user cohort has no first-launch surface (see telemetry-plan.md
+// §First-launch experience). Opt-outs from new users come through
+// `via: 'settings'`.
+export const optInViaSchema = z.enum(['first_launch_banner', 'settings'])
 export type OptInVia = z.infer<typeof optInViaSchema>
 
 // Whitelist of settings whose `setting_key` may be emitted on

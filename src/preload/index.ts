@@ -31,6 +31,7 @@ import type {
   DetectedPort
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -648,6 +649,10 @@ const api = {
     ipcRenderer.invoke('telemetry:track', name, props),
   telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
     ipcRenderer.invoke('telemetry:setOptIn', optedIn),
+  telemetryAcknowledgeBanner: (): Promise<void> =>
+    ipcRenderer.invoke('telemetry:acknowledgeBanner'),
+  telemetryGetConsentState: (): Promise<TelemetryConsentState> =>
+    ipcRenderer.invoke('telemetry:getConsentState'),
 
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
@@ -1762,6 +1767,9 @@ const api = {
 
     getState: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:getState', args),
+
+    needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('ssh:needsPassphrasePrompt', args),
 
     testConnection: (args: {
       targetId: string

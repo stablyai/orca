@@ -683,6 +683,74 @@ export function connectPanePty(
       )
       if (pendingSessionId || isDeferredTarget) {
         void (async () => {
+          // Why: if the target requires a passphrase/password and no credential
+          // is cached yet, auto-firing ssh.connect would surprise the user —
+          // a prompt pops unprompted just because they focused a tab / jumped
+          // via Cmd+J. Wait for the user to initiate the connect (via
+          // SshDisconnectedDialog → passphrase dialog) before proceeding with
+          // the PTY reattach. No-passphrase targets (ssh-agent, unencrypted
+          // key, cached creds) return false here and continue auto-connecting
+          // as before.
+          let needsPrompt = false
+          try {
+            needsPrompt = await window.api.ssh.needsPassphrasePrompt({
+              targetId: connectionId
+            })
+          } catch (err) {
+            console.warn('[pty-connection] needsPassphrasePrompt probe failed:', err)
+            // Why: if the probe fails, fall through to the existing auto-connect
+            // behavior rather than stranding the tab — a stuck tab is worse
+            // than a surprising prompt.
+          }
+          if (disposed) {
+            return
+          }
+          if (needsPrompt) {
+            const alreadyConnected =
+              useAppStore.getState().sshConnectionStates.get(connectionId)?.status === 'connected'
+            if (!alreadyConnected) {
+              // Wait for the user-driven connect (SshDisconnectedDialog →
+              // passphrase dialog → ssh.connect) to complete, then continue.
+              // Why: resolve on terminal-failure statuses too ('auth-failed',
+              // 'error', 'reconnection-failed') so this promise can't hang
+              // forever if the user cancels or the connect fails —
+              // waitForSshConnection below has its own error path that will
+              // surface the failure via reportError.
+              await new Promise<void>((resolve) => {
+                const isTerminalStatus = (status: string | undefined): boolean =>
+                  status === 'connected' ||
+                  status === 'auth-failed' ||
+                  status === 'error' ||
+                  status === 'reconnection-failed'
+                const unsub = useAppStore.subscribe((state) => {
+                  if (disposed) {
+                    unsub()
+                    resolve()
+                    return
+                  }
+                  if (isTerminalStatus(state.sshConnectionStates.get(connectionId)?.status)) {
+                    unsub()
+                    resolve()
+                  }
+                })
+                // Why: re-read state immediately after subscribing to close the
+                // race where status transitioned between the alreadyConnected
+                // check above and the subscribe registration — otherwise we'd
+                // wait forever for a state change that already happened.
+                const currentStatus = useAppStore
+                  .getState()
+                  .sshConnectionStates.get(connectionId)?.status
+                if (isTerminalStatus(currentStatus)) {
+                  unsub()
+                  resolve()
+                }
+              })
+              if (disposed) {
+                return
+              }
+            }
+          }
+
           // Why: ensure the SSH connection is established before attempting
           // PTY reattach. Multiple panes/tabs may need the same connection,
           // so we wait for it rather than returning early when in-flight.

@@ -207,9 +207,29 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   remoteSessionIdsByTabId: z.record(z.string(), z.string()).optional(),
   // Why: the sort comparator in order-empty-query-worktrees.ts would produce
   // NaN (undefined sort order) if a corrupted session file carried NaN or
-  // Infinity here. Constrain to finite non-negative numbers so a bad on-disk
-  // value is rejected at parse time rather than silently breaking Cmd+J.
-  lastVisitedAtByWorktreeId: z.record(z.string(), z.number().finite().nonnegative()).optional()
+  // Infinity here. Parse leniently: drop individual bad entries rather than
+  // failing the entire session. A strict record() rejection here would cause
+  // parseWorkspaceSession to fall back to defaults for the ENTIRE session
+  // (terminals, editors, browsers, layouts) on a single corrupted timestamp
+  // — a blast radius far larger than "Cmd+J falls back to activity recency",
+  // which is all this field gates.
+  lastVisitedAtByWorktreeId: z
+    .preprocess(
+      (raw) => {
+        if (raw == null || typeof raw !== 'object') {
+          return raw
+        }
+        const cleaned: Record<string, number> = {}
+        for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+          if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+            cleaned[k] = v
+          }
+        }
+        return cleaned
+      },
+      z.record(z.string(), z.number().finite().nonnegative())
+    )
+    .optional()
 })
 
 export type ParsedWorkspaceSession =
