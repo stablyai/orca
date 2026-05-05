@@ -6,6 +6,7 @@
  * and the eager-buffer reconnection logic share.
  */
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { EventProps } from '../../../../shared/telemetry-events'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel, routes events to transports by
@@ -213,6 +214,11 @@ export type IpcPtyTransportOptions = {
   worktreeId?: string
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
+  /** Telemetry metadata for the `agent_started` event. Forwarded verbatim
+   *  to `pty:spawn` so main can fire the event after confirmed launch. The
+   *  IPC handler re-validates the schema; this type is the renderer-side
+   *  contract. */
+  telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void

@@ -16,7 +16,14 @@ import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { registerMobileHandlers } from './ipc/mobile'
-import { initTelemetry, shutdownTelemetry } from './telemetry/client'
+import {
+  hasFirstAppOpenedFired,
+  initTelemetry,
+  markFirstAppOpenedFired,
+  shutdownTelemetry,
+  track
+} from './telemetry/client'
+import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
@@ -215,6 +222,35 @@ function openMainWindow(): BrowserWindow {
       isQuitting = false
     }
   })
+
+  // Why: telemetry-plan.md§First-launch experience anchors `app_opened` to
+  // the first `webContents.did-finish-load` of the main window. The event is
+  // gated by `hasFirstAppOpenedFired()` because the existing-user banner
+  // contract is "no events — including `app_opened` — until the user
+  // resolves the banner": for a `pending_banner` cohort, consent already
+  // returns `pending_banner` and `track()` would drop, but the gate is the
+  // belt-and-suspenders guard that survives the brief window between
+  // `setOptIn(_, true)` writing the new consent and the renderer remounting.
+  // For default-on new users we mark the gate ourselves once on the first
+  // load so subsequent windows in the same session do not re-fire.
+  // `did-finish-load` re-fires on every reload (Cmd+R, dev hot reload), so
+  // the gate also dedupes intra-session reloads — a goal that the consent
+  // resolver alone cannot achieve.
+  const onFirstWindowLoad = (): void => {
+    if (!store) {
+      return
+    }
+    if (hasFirstAppOpenedFired()) {
+      return
+    }
+    const consent = resolveConsent(store.getSettings())
+    if (consent.effective !== 'enabled') {
+      return
+    }
+    markFirstAppOpenedFired()
+    track('app_opened', {})
+  }
+  window.webContents.on('did-finish-load', onFirstWindowLoad)
 
   registerCoreHandlers(
     store,

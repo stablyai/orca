@@ -150,6 +150,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     connectionId,
     worktreeId,
     shellOverride,
+    telemetry,
     onPtyExit,
     onTitleChange,
     onPtySpawn,
@@ -353,7 +354,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,
-          ...(shellOverride ? { shellOverride } : {})
+          ...(shellOverride ? { shellOverride } : {}),
+          ...(telemetry ? { telemetry } : {})
         })
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }
 

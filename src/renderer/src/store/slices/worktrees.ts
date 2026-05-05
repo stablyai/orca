@@ -162,7 +162,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set({ hasHydratedWorktreePurge: true })
   },
 
-  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit', sparseCheckout) => {
+  createWorktree: async (
+    repoId,
+    name,
+    baseBranch,
+    setupDecision = 'inherit',
+    sparseCheckout,
+    telemetrySource
+  ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
@@ -180,7 +187,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             name: candidateName,
             baseBranch,
             setupDecision,
-            sparseCheckout
+            sparseCheckout,
+            ...(telemetrySource ? { telemetrySource } : {})
           })
           // Why: a file watcher (worktrees.onChanged) can fire between the
           // backend creating the worktree and this callback running, causing

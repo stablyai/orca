@@ -32,6 +32,7 @@ import type {
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -329,6 +330,12 @@ const api = {
       worktreeId?: string
       sessionId?: string
       shellOverride?: string
+      // Why: telemetry-plan.md§Agent launch semantics — main fires
+      // `agent_started` only after the spawn succeeds. The renderer is the
+      // source of truth for the launch metadata; main is the source of
+      // truth for whether the launch happened. Loose typing here on
+      // purpose: validation lives at the main-side schema validator.
+      telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
       snapshot?: string

@@ -333,6 +333,7 @@ export function connectPanePty(
     connectionId,
     worktreeId: deps.worktreeId,
     ...(shellOverride ? { shellOverride } : {}),
+    ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
     onTitleChange,
     onPtySpawn,

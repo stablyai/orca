@@ -152,7 +152,7 @@ export function useIpcEvents(): void {
           store.setNewWorkspaceComposerTab(tab)
           return
         }
-        store.openModal('new-workspace-composer', { initialTab: tab })
+        store.openModal('new-workspace-composer', { initialTab: tab, telemetrySource: 'shortcut' })
       })
     )
 

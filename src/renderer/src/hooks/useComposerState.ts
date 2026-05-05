@@ -8,8 +8,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { parseGitHubIssueOrPRNumber, normalizeGitHubLinkQuery } from '@/lib/github-links'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
   GitHubWorkItem,
@@ -17,7 +18,8 @@ import type {
   SetupDecision,
   SetupRunPolicy,
   SparsePreset,
-  TuiAgent
+  TuiAgent,
+  WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
 import {
   ADD_ATTACHMENT_SHORTCUT,
@@ -58,6 +60,12 @@ export type UseComposerStateOptions = {
    *  which drives repo selection from the page header, not the card. */
   repoIdOverride?: string
   onRepoIdOverrideChange?: (value: string) => void
+  /** Telemetry surface that opened this composer. Threaded into
+   *  `createWorktree` so `workspace_created.source` reflects the actual
+   *  entry point (Cmd+J palette → `command_palette`, sidebar buttons →
+   *  `sidebar`, keyboard shortcut → `shortcut`). Omitted callers default
+   *  to `unknown` at the IPC boundary. */
+  telemetrySource?: WorkspaceCreateTelemetrySource
 }
 
 export type ComposerCardProps = {
@@ -163,7 +171,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     persistDraft,
     onCreated,
     repoIdOverride,
-    onRepoIdOverrideChange
+    onRepoIdOverrideChange,
+    telemetrySource
   } = options
 
   // Why: each `useAppStore(s => s.someAction)` registers its own equality
@@ -1110,7 +1119,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               directories: normalizedSparseDirectories,
               ...(effectivePresetId ? { presetId: effectivePresetId } : {})
             }
-          : undefined
+          : undefined,
+        telemetrySource
       )
       const worktree = result.worktree
 
@@ -1136,10 +1146,27 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         platform: CLIENT_PLATFORM
       })
 
+      // Why: thread agent_started telemetry through the queued startup so
+      // main fires the event after the spawn succeeds. The composer
+      // "create" path is the new-workspace surface; request_kind is
+      // `'new'` because this is always a fresh session (issue/PR-driven
+      // follow-ups go through launch-work-item-direct.ts).
+      const composerTelemetry: AgentStartedTelemetry = {
+        agent_kind: tuiAgentToAgentKind(tuiAgent),
+        launch_source: 'new_workspace_composer',
+        request_kind: 'new'
+      }
       activateAndRevealWorktree(worktree.id, {
         setup: result.setup,
         issueCommand,
-        ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
+        ...(startupPlan
+          ? {
+              startup: {
+                command: startupPlan.launchCommand,
+                telemetry: composerTelemetry
+              }
+            }
+          : {})
       })
       if (startupPlan) {
         void ensureAgentStartupInTerminal({
@@ -1189,6 +1216,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     sparseEnabled,
     sparseError,
     effectivePresetId,
+    telemetrySource,
     tuiAgent,
     shouldRunIssueAutomation,
     shouldWaitForIssueAutomationCheck,
@@ -1236,7 +1264,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 directories: normalizedSparseDirectories,
                 ...(effectivePresetId ? { presetId: effectivePresetId } : {})
               }
-            : undefined
+            : undefined,
+          telemetrySource
         )
         const worktree = result.worktree
 
@@ -1254,9 +1283,28 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 allowEmptyPromptLaunch: true
               })
 
+        // Why: only attach telemetry when an agent was selected — the
+        // quick path also handles "blank shell" (agent === null) where no
+        // agent_started event should fire. When telemetry is present main
+        // emits the event after pty:spawn succeeds.
+        const quickTelemetry: AgentStartedTelemetry | null =
+          agent === null
+            ? null
+            : {
+                agent_kind: tuiAgentToAgentKind(agent),
+                launch_source: 'new_workspace_composer',
+                request_kind: 'new'
+              }
         activateAndRevealWorktree(worktree.id, {
           setup: result.setup,
-          ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
+          ...(startupPlan
+            ? {
+                startup: {
+                  command: startupPlan.launchCommand,
+                  ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
+                }
+              }
+            : {})
         })
         if (startupPlan) {
           void ensureAgentStartupInTerminal({
@@ -1305,6 +1353,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       sparseEnabled,
       sparseError,
       effectivePresetId,
+      telemetrySource,
       shouldWaitForSetupCheck
     ]
   )

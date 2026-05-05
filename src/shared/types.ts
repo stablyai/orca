@@ -1,5 +1,10 @@
 /* eslint-disable max-lines */
 import type { SshTarget } from './ssh-types'
+import type { WorkspaceSource } from './telemetry-events'
+
+// Re-exported for backward compat with renderer call sites that import
+// `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
+export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './telemetry-events'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
@@ -799,6 +804,15 @@ export type CreateWorktreeArgs = {
   baseBranch?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
+  /** Telemetry-only: which UI surface initiated this create. Threaded from
+   *  the renderer entry point so main can emit `workspace_created` with the
+   *  correct `source`. `unknown` is a valid wire value — an unrecognized
+   *  surface emits `source: 'unknown'` rather than dropping the event, so
+   *  dashboards surface enum-coverage gaps as a slice rather than as
+   *  missing data. Optional on the type so older renderer code paths that
+   *  pre-date this prop default to `unknown` at the IPC boundary instead
+   *  of failing typecheck. */
+  telemetrySource?: WorkspaceSource
 }
 
 export type CreateWorktreeResult = {

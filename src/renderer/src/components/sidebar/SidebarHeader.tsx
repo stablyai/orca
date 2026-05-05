@@ -162,7 +162,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 if (!canCreateWorktree) {
                   return
                 }
-                openModal('new-workspace-composer')
+                openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
               }}
               aria-label="New workspace"
               disabled={!canCreateWorktree}

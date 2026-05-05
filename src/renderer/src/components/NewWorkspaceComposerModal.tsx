@@ -16,7 +16,7 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { cn } from '@/lib/utils'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent, WorkspaceCreateTelemetrySource } from '../../../shared/types'
 
 type ComposerModalData = {
   prefilledName?: string
@@ -24,6 +24,11 @@ type ComposerModalData = {
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialBaseBranch?: string
   initialTab?: 'quick' | 'create-from'
+  /** Telemetry surface that opened the composer. Set by each
+   *  `openModal('new-workspace-composer', ...)` site so
+   *  `workspace_created.source` carries the right value. Falls back to
+   *  `unknown` when omitted. */
+  telemetrySource?: WorkspaceCreateTelemetrySource
 }
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
@@ -104,11 +109,17 @@ function ComposerModalBody({
       prefilledName?: string
       initialBaseBranch?: string
     }) => {
-      setPrefillOverride({ ...data })
+      // Why: preserve the originating telemetry source through the fallback
+      // so workspace_created.source reflects the real entry surface, not
+      // 'unknown'.
+      setPrefillOverride({
+        ...data,
+        ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {})
+      })
       setQuickKey((k) => k + 1)
       setActiveTab('quick')
     },
-    [setActiveTab]
+    [setActiveTab, modalData.telemetrySource]
   )
 
   const handleCreateFromLaunched = useCallback(() => {
@@ -198,6 +209,9 @@ function ComposerModalBody({
                   onLaunched={handleCreateFromLaunched}
                   onFallbackToQuick={handleFallbackToQuick}
                   active={activeTab === 'create-from'}
+                  {...(modalData.telemetrySource
+                    ? { telemetrySource: modalData.telemetrySource }
+                    : {})}
                 />
               )
             }}
@@ -227,7 +241,8 @@ function QuickTabBody({
     initialRepoId: modalData.initialRepoId,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
-    onCreated: onClose
+    onCreated: onClose,
+    ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {})
   })
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
   // the settings page and closes the modal. For the quick-create flow we want

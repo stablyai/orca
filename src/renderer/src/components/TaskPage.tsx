@@ -1391,7 +1391,8 @@ export default function TaskPage(): React.JSX.Element {
       openModal('new-workspace-composer', {
         linkedWorkItem,
         prefilledName: getLinkedWorkItemSuggestedName(item),
-        initialRepoId: item.repoId
+        initialRepoId: item.repoId,
+        telemetrySource: 'sidebar'
       })
     },
     [openModal]
@@ -1408,6 +1409,8 @@ export default function TaskPage(): React.JSX.Element {
       void launchWorkItemDirect({
         item,
         repoId: item.repoId,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
         openModalFallback: () => openComposerForItem(item)
       })
     },
@@ -1668,7 +1671,8 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        prefilledName: getLinkedWorkItemSuggestedName(issue)
+        prefilledName: getLinkedWorkItemSuggestedName(issue),
+        telemetrySource: 'sidebar'
       })
     },
     [openModal]
@@ -1696,6 +1700,8 @@ export default function TaskPage(): React.JSX.Element {
       void launchWorkItemDirect({
         item: { title: issue.title, url: issue.url, type: 'issue', number: null, pasteContent },
         repoId,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
         openModalFallback: () => openComposerForLinearItem(issue)
       })
     },

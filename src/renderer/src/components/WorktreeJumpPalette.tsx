@@ -601,7 +601,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       closeModal()
       // Why: defer opening so Radix fully unmounts the palette's dialog before
       // the composer modal mounts, avoiding focus churn between the two.
-      queueMicrotask(() => openModal('new-workspace-composer', data))
+      queueMicrotask(() =>
+        openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
+      )
     }
 
     // Case 1: user pasted a GH issue/PR URL.
@@ -654,11 +656,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             // Fallback: we couldn't resolve the URL, just seed the name.
             data.prefilledName = `${slug.owner}-${slug.repo}-${number}`
           }
-          queueMicrotask(() => openModal('new-workspace-composer', data))
+          queueMicrotask(() =>
+            openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
+          )
         })
         .catch(() => {
           queueMicrotask(() =>
-            openModal('new-workspace-composer', { initialRepoId: repoForLookup.id })
+            openModal('new-workspace-composer', {
+              initialRepoId: repoForLookup.id,
+              telemetrySource: 'command_palette'
+            })
           )
         })
       return
@@ -702,13 +709,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           } else {
             data.prefilledName = trimmed
           }
-          queueMicrotask(() => openModal('new-workspace-composer', data))
+          queueMicrotask(() =>
+            openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
+          )
         })
         .catch(() => {
           queueMicrotask(() =>
             openModal('new-workspace-composer', {
               initialRepoId: repoForLookup.id,
-              prefilledName: trimmed
+              prefilledName: trimmed,
+              telemetrySource: 'command_palette'
             })
           )
         })

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { waitForAgentReady } from '@/lib/agent-ready-wait'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import {
   CLIENT_PLATFORM,
   getLinkedWorkItemSuggestedName,
@@ -12,7 +12,15 @@ import {
 } from '@/lib/new-workspace'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
-import type { OrcaHooks, RepoHookSettings, SetupDecision, TuiAgent } from '../../../shared/types'
+import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
+import type {
+  OrcaHooks,
+  RepoHookSettings,
+  SetupDecision,
+  TuiAgent,
+  WorkspaceCreateTelemetrySource
+} from '../../../shared/types'
+import type { LaunchSource } from '../../../shared/telemetry-events'
 
 export type LaunchableWorkItem = {
   title: string
@@ -50,6 +58,15 @@ export type LaunchWorkItemDirectArgs = {
    *  "Create from…" PR row to branch from the PR's head so the first
    *  commit lands on the correct base without the user touching the UI. */
   baseBranch?: string
+  /** Telemetry surface that initiated this agent launch. Threaded into
+   *  the queued startup payload so `agent_started.launch_source` reflects
+   *  the actual entry point. */
+  launchSource: LaunchSource
+  /** Telemetry surface that initiated this launch. Threaded into
+   *  `createWorktree` so `workspace_created.source` reflects the actual
+   *  entry point (Tasks page row → `sidebar`, Create-from modal →
+   *  `command_palette`). Omitted callers default to `unknown`. */
+  telemetrySource?: WorkspaceCreateTelemetrySource
 }
 
 function pickAgent(
@@ -99,12 +116,34 @@ async function resolveSetupDecision(
   }
 }
 
+// Why: telemetry rides the queued startup so main fires `agent_started`
+// only after pty:spawn confirms the launch. No agent / no plan → no event.
+function buildStartupOpts(
+  agent: TuiAgent | null,
+  plan: ReturnType<typeof buildAgentStartupPlan>,
+  launchSource: LaunchSource
+): { startup?: { command: string; telemetry?: AgentStartedTelemetry } } {
+  if (!plan) {
+    return {}
+  }
+  const telemetry: AgentStartedTelemetry | null =
+    agent === null
+      ? null
+      : { agent_kind: tuiAgentToAgentKind(agent), launch_source: launchSource, request_kind: 'new' }
+  return {
+    startup: { command: plan.launchCommand, ...(telemetry ? { telemetry } : {}) }
+  }
+}
+
 async function pasteWorkItemDraftWhenAgentReady(args: {
   primaryTabId: string
   startupPlan: NonNullable<ReturnType<typeof buildAgentStartupPlan>>
   content: string
+  /** Telemetry-only: which agent the renderer thinks it launched, so an
+   *  `agent_error` on timeout can carry the right `agent_kind`. */
+  agentKind?: ReturnType<typeof tuiAgentToAgentKind>
 }): Promise<void> {
-  const { primaryTabId, startupPlan, content } = args
+  const { primaryTabId, startupPlan, content, agentKind } = args
   const readyResult = await waitForAgentReady(primaryTabId, startupPlan.expectedProcess, {
     timeoutMs: 5000
   })
@@ -112,6 +151,11 @@ async function pasteWorkItemDraftWhenAgentReady(args: {
     toast.message(
       'Agent took too long to start. The workspace is ready — paste the issue URL when the agent is idle.'
     )
+    // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
+    // on the dashboard is the trigger to add one.
+    if (agentKind) {
+      track('agent_error', { error_class: 'unknown', agent_kind: agentKind })
+    }
     return
   }
 
@@ -146,7 +190,7 @@ async function pasteWorkItemDraftWhenAgentReady(args: {
  * has a usable workspace and can paste the URL themselves.
  */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<void> {
-  const { item, repoId, openModalFallback, baseBranch } = args
+  const { item, repoId, openModalFallback, baseBranch, telemetrySource, launchSource } = args
   const store = useAppStore.getState()
   const repo = store.repos.find((r) => r.id === repoId)
   if (!repo) {
@@ -179,12 +223,20 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let worktreeId: string
   let primaryTabId: string | null
   let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
+  let effectiveAgent: TuiAgent | null = null
   try {
-    const result = await store.createWorktree(repoId, workspaceName, baseBranch, finalSetupDecision)
+    const result = await store.createWorktree(
+      repoId,
+      workspaceName,
+      baseBranch,
+      finalSetupDecision,
+      undefined,
+      telemetrySource
+    )
     worktreeId = result.worktree.id
 
     const detectedIds = new Set(await detectedAgentsPromise)
-    const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
     // Why: launch the agent with no prompt so the first frame it draws is the
     // empty input box. The URL paste below populates that input buffer, which
     // gives the user a reviewable draft instead of a submitted request.
@@ -201,7 +253,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
 
     const activation = activateAndRevealWorktree(worktreeId, {
       setup: result.setup,
-      ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
+      ...buildStartupOpts(effectiveAgent, startupPlan, launchSource)
     })
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but
@@ -253,7 +305,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   // agent readiness here kept the Create-from modal in "Creating workspace…".
   // Continue the draft paste in the background so selection latency ends when
   // the worktree is ready, not when the TUI input buffer is ready.
-  void pasteWorkItemDraftWhenAgentReady({ primaryTabId, startupPlan, content })
+  void pasteWorkItemDraftWhenAgentReady({
+    primaryTabId,
+    startupPlan,
+    content,
+    ...(effectiveAgent ? { agentKind: tuiAgentToAgentKind(effectiveAgent) } : {})
+  })
 }
 
 export type LaunchFromBranchArgs = {
@@ -262,6 +319,13 @@ export type LaunchFromBranchArgs = {
   /** Called when the flow cannot proceed without user input (setup policy is
    *  `ask`, or the selected repo cannot resolve). */
   openModalFallback: () => void
+  /** Telemetry surface that initiated this branch launch. */
+  launchSource: LaunchSource
+  /** Telemetry surface that initiated this branch launch. Currently only
+   *  the Create-from tab calls this helper, which is reached via the
+   *  composer modal — `command_palette` when opened from Cmd+J,
+   *  `sidebar` from the sidebar buttons. */
+  telemetrySource?: WorkspaceCreateTelemetrySource
 }
 
 /**
@@ -270,7 +334,7 @@ export type LaunchFromBranchArgs = {
  * just land the user in a fresh workspace rooted at the requested branch.
  */
 export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void> {
-  const { repoId, baseBranch, openModalFallback } = args
+  const { repoId, baseBranch, openModalFallback, telemetrySource, launchSource } = args
   const store = useAppStore.getState()
   const repo = store.repos.find((r) => r.id === repoId)
   if (!repo) {
@@ -310,7 +374,14 @@ export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void
   })
 
   try {
-    const result = await store.createWorktree(repoId, workspaceName, baseBranch, finalSetupDecision)
+    const result = await store.createWorktree(
+      repoId,
+      workspaceName,
+      baseBranch,
+      finalSetupDecision,
+      undefined,
+      telemetrySource
+    )
     const detectedIds = new Set(await detectedAgentsPromise)
     const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
     const startupPlan =
@@ -325,7 +396,7 @@ export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void
           })
     const activation = activateAndRevealWorktree(result.worktree.id, {
       setup: result.setup,
-      ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
+      ...buildStartupOpts(effectiveAgent, startupPlan, launchSource)
     })
     if (!activation) {
       toast.error('Workspace created but could not be activated.')

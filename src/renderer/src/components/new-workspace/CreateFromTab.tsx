@@ -24,7 +24,11 @@ import { cn } from '@/lib/utils'
 import { normalizeGitHubLinkQuery } from '@/lib/github-links'
 import { launchWorkItemDirect, launchFromBranch } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
+import type {
+  GitHubWorkItem,
+  LinearIssue,
+  WorkspaceCreateTelemetrySource
+} from '../../../../shared/types'
 
 export type CreateFromSubTab = 'prs' | 'issues' | 'branches' | 'linear'
 
@@ -50,6 +54,10 @@ type CreateFromTabProps = {
   /** Whether this tab is currently visible. Used by effects that should only
    *  run while the user can actually see the results (fetching, autoFocus). */
   active?: boolean
+  /** Telemetry surface inherited from the host composer modal. Threaded
+   *  into the launch helpers so `workspace_created.source` reflects the
+   *  surface that opened the modal, not the sub-tab. */
+  telemetrySource?: WorkspaceCreateTelemetrySource
 }
 
 const SUB_TABS: {
@@ -90,7 +98,8 @@ const SEARCH_DEBOUNCE_MS = 200
 export default function CreateFromTab({
   onLaunched,
   onFallbackToQuick,
-  active = true
+  active = true,
+  telemetrySource
 }: CreateFromTabProps): React.JSX.Element {
   const {
     activeRepoId,
@@ -586,6 +595,8 @@ export default function CreateFromTab({
           },
           repoId: selectedRepo.id,
           baseBranch: result.baseBranch,
+          launchSource: 'new_workspace_composer',
+          ...(telemetrySource ? { telemetrySource } : {}),
           openModalFallback: () =>
             onFallbackToQuick({
               initialRepoId: selectedRepo.id,
@@ -609,7 +620,7 @@ export default function CreateFromTab({
         }
       }
     },
-    [beginLaunch, onFallbackToQuick, onLaunched, selectedRepo]
+    [beginLaunch, onFallbackToQuick, onLaunched, selectedRepo, telemetrySource]
   )
 
   const handleIssueSelect = useCallback(
@@ -629,6 +640,8 @@ export default function CreateFromTab({
             number: item.number
           },
           repoId: selectedRepo.id,
+          launchSource: 'new_workspace_composer',
+          ...(telemetrySource ? { telemetrySource } : {}),
           openModalFallback: () =>
             onFallbackToQuick({
               initialRepoId: selectedRepo.id,
@@ -651,7 +664,7 @@ export default function CreateFromTab({
         }
       }
     },
-    [beginLaunch, onFallbackToQuick, onLaunched, selectedRepo]
+    [beginLaunch, onFallbackToQuick, onLaunched, selectedRepo, telemetrySource]
   )
 
   const handleBranchSelect = useCallback(
@@ -666,6 +679,8 @@ export default function CreateFromTab({
         await launchFromBranch({
           repoId: selectedRepo.id,
           baseBranch: refName,
+          launchSource: 'new_workspace_composer',
+          ...(telemetrySource ? { telemetrySource } : {}),
           openModalFallback: () => onFallbackToQuick({ initialRepoId: selectedRepo.id })
         })
         if (token === inflightRef.current) {
@@ -678,7 +693,7 @@ export default function CreateFromTab({
         }
       }
     },
-    [beginLaunch, onFallbackToQuick, onLaunched, selectedRepo]
+    [beginLaunch, onFallbackToQuick, onLaunched, selectedRepo, telemetrySource]
   )
 
   const handleLinearSelect = useCallback(
@@ -715,6 +730,8 @@ export default function CreateFromTab({
             linearIdentifier: issue.identifier
           },
           repoId: repoForLaunch.id,
+          launchSource: 'new_workspace_composer',
+          ...(telemetrySource ? { telemetrySource } : {}),
           openModalFallback: () =>
             onFallbackToQuick({
               initialRepoId: repoForLaunch.id,
@@ -739,7 +756,7 @@ export default function CreateFromTab({
         }
       }
     },
-    [beginLaunch, eligibleRepos, onFallbackToQuick, onLaunched, selectedRepoId]
+    [beginLaunch, eligibleRepos, onFallbackToQuick, onLaunched, selectedRepoId, telemetrySource]
   )
 
   // ---------------------------------------------------------------------
