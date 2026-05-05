@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -279,14 +279,11 @@ export function NewWorktreeModal({
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
-  // Why: surface the marine-creature default in the input placeholder so the
-  // user can see exactly what name will be created if they leave the field
-  // blank. Recomputed only when the modal is shown so it stays stable while
-  // the user is typing.
-  const suggestedName = useMemo(
-    () => (visible ? getSuggestedCreatureName(existingWorktreeNames ?? []) : ''),
-    [visible, existingWorktreeNames]
-  )
+  // Why: matches the desktop UI — the input shows a generic "Workspace name"
+  // placeholder, not the suggested creature. The creature name is only used
+  // as a server-bound fallback when the user submits with a blank field, so
+  // it's recomputed lazily inside handleCreate() to stay fresh against
+  // existingWorktreeNames at submission time.
 
   useEffect(() => {
     if (!visible) {
@@ -378,13 +375,14 @@ export function NewWorktreeModal({
       const command =
         selectedAgent.id !== '__blank__' ? AGENT_COMMANDS[selectedAgent.id] : undefined
 
-      // Why: blank name field — fall back to the same marine-creature default
-      // shown in the placeholder so the created worktree matches what the user
-      // saw, matching the desktop UI. The server's worktree.create rejects
-      // empty/invalid names, so we must generate one client-side rather than
-      // letting the server invent one.
+      // Why: blank name field — match desktop behavior by computing the
+      // next available marine-creature name at submit time and passing it
+      // to the server. The server's worktree.create rejects empty/invalid
+      // names, so we must generate one client-side rather than letting the
+      // server invent one. We don't pre-fill or expose this in the UI;
+      // see useComposerState in the desktop renderer.
       const trimmedName = name.trim()
-      const finalName = trimmedName || suggestedName
+      const finalName = trimmedName || getSuggestedCreatureName(existingWorktreeNames ?? [])
 
       const params: Record<string, unknown> = {
         repo: `id:${selectedRepo.id}`,
@@ -458,7 +456,7 @@ export function NewWorktreeModal({
                   setName(t)
                   setError('')
                 }}
-                placeholder={suggestedName || 'Workspace name'}
+                placeholder="Workspace name"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
