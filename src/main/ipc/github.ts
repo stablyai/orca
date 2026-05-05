@@ -32,8 +32,44 @@ import {
   starOrca
 } from '../github/client'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
+import { getRateLimit } from '../github/rate-limit'
 import type { GitHubPRFile } from '../../shared/types'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
+import {
+  getProjectViewTable,
+  listAccessibleProjects,
+  resolveProjectRef,
+  listProjectViews,
+  getWorkItemDetailsBySlug,
+  updateProjectItemFieldValue,
+  clearProjectItemFieldValue,
+  updateIssueBySlug,
+  updatePullRequestBySlug,
+  addIssueCommentBySlug,
+  updateIssueCommentBySlug,
+  deleteIssueCommentBySlug,
+  listLabelsBySlug,
+  listAssignableUsersBySlug,
+  listIssueTypesBySlug,
+  updateIssueTypeBySlug
+} from '../github/project-view'
+import type {
+  AddIssueCommentBySlugArgs,
+  ClearProjectItemFieldArgs,
+  DeleteIssueCommentBySlugArgs,
+  GetProjectViewTableArgs,
+  ListAssignableUsersBySlugArgs,
+  ListIssueTypesBySlugArgs,
+  ListLabelsBySlugArgs,
+  ListProjectViewsArgs,
+  ProjectWorkItemDetailsBySlugArgs,
+  ResolveProjectRefArgs,
+  UpdateIssueBySlugArgs,
+  UpdateIssueCommentBySlugArgs,
+  UpdateIssueTypeBySlugArgs,
+  UpdateProjectItemFieldArgs,
+  UpdatePullRequestBySlugArgs
+} from '../../shared/github-project-types'
 
 // Why: returns the full Repo object instead of just the path string so that
 // callers have access to repo.id for stat tracking and other context.
@@ -337,6 +373,84 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', () => starOrca())
+
+  // Why: `rate_limit` is exempt from GitHub's rate-limit accounting, so
+  // polling is cheap. A 30s in-process cache still avoids the gh subprocess
+  // cost on every render — see getRateLimit for the ttl rationale. Force
+  // parameter lets the renderer bust the cache after a known-expensive op
+  // (e.g. post-ProjectPicker discovery) without waiting out the ttl.
+  ipcMain.handle('gh:rateLimit', (_event, args?: { force?: boolean }) =>
+    getRateLimit(args?.force ? { force: true } : undefined)
+  )
+
+  // ── GitHub ProjectV2 view handlers ─────────────────────────────────
+  // Why: registered unconditionally so enabling the experimental flag at
+  // runtime takes effect without a restart. The renderer gates entry points.
+  // Handlers never throw across IPC — every failure mode resolves through the
+  // GitHubProjectViewError envelope.
+
+  ipcMain.handle('gh:listAccessibleProjects', () => listAccessibleProjects())
+
+  ipcMain.handle('gh:resolveProjectRef', (_event, args: ResolveProjectRefArgs) =>
+    resolveProjectRef(args)
+  )
+
+  ipcMain.handle('gh:listProjectViews', (_event, args: ListProjectViewsArgs) =>
+    listProjectViews(args)
+  )
+
+  ipcMain.handle('gh:getProjectViewTable', (_event, args: GetProjectViewTableArgs) =>
+    getProjectViewTable(args)
+  )
+
+  ipcMain.handle(
+    'gh:projectWorkItemDetailsBySlug',
+    (_event, args: ProjectWorkItemDetailsBySlugArgs) => getWorkItemDetailsBySlug(args)
+  )
+
+  ipcMain.handle('gh:updateProjectItemField', (_event, args: UpdateProjectItemFieldArgs) =>
+    updateProjectItemFieldValue(args)
+  )
+
+  ipcMain.handle('gh:clearProjectItemField', (_event, args: ClearProjectItemFieldArgs) =>
+    clearProjectItemFieldValue(args)
+  )
+
+  ipcMain.handle('gh:updateIssueBySlug', (_event, args: UpdateIssueBySlugArgs) =>
+    updateIssueBySlug(args)
+  )
+
+  ipcMain.handle('gh:updatePullRequestBySlug', (_event, args: UpdatePullRequestBySlugArgs) =>
+    updatePullRequestBySlug(args)
+  )
+
+  ipcMain.handle('gh:addIssueCommentBySlug', (_event, args: AddIssueCommentBySlugArgs) =>
+    addIssueCommentBySlug(args)
+  )
+
+  ipcMain.handle('gh:updateIssueCommentBySlug', (_event, args: UpdateIssueCommentBySlugArgs) =>
+    updateIssueCommentBySlug(args)
+  )
+
+  ipcMain.handle('gh:deleteIssueCommentBySlug', (_event, args: DeleteIssueCommentBySlugArgs) =>
+    deleteIssueCommentBySlug(args)
+  )
+
+  ipcMain.handle('gh:listLabelsBySlug', (_event, args: ListLabelsBySlugArgs) =>
+    listLabelsBySlug(args)
+  )
+
+  ipcMain.handle('gh:listAssignableUsersBySlug', (_event, args: ListAssignableUsersBySlugArgs) =>
+    listAssignableUsersBySlug(args)
+  )
+
+  ipcMain.handle('gh:listIssueTypesBySlug', (_event, args: ListIssueTypesBySlugArgs) =>
+    listIssueTypesBySlug(args)
+  )
+
+  ipcMain.handle('gh:updateIssueTypeBySlug', (_event, args: UpdateIssueTypeBySlugArgs) =>
+    updateIssueTypeBySlug(args)
+  )
 
   // Why: issue-source preference writes go through the generic `repos:update`
   // IPC (extended in this PR to accept `issueSourcePreference`). Routing

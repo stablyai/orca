@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import type { SshTarget } from './ssh-types'
 import type { WorkspaceSource } from './telemetry-events'
+import type { GitHubProjectSettings } from './github-project-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -650,6 +651,11 @@ export type LinearComment = {
 export type GitHubIssueUpdate = {
   state?: 'open' | 'closed'
   title?: string
+  // Why: body writes are driven by the Project-mode slug-addressed path
+  // (`updateIssueBySlug`) because `gh issue edit` does not consistently
+  // cover every body-edit case the dialog needs; the repoPath-based
+  // `updateIssue` flow keeps ignoring `body` for backward compatibility.
+  body?: string
   addLabels?: string[]
   removeLabels?: string[]
   addAssignees?: string[]
@@ -681,6 +687,33 @@ export type ClassifiedError = {
 // Aliased as `OwnerRepo` in `src/main/github/gh-utils.ts` so main call sites
 // can continue using the short local name.
 export type GitHubOwnerRepo = { owner: string; repo: string }
+
+/**
+ * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
+ * see remaining budget before they hit the wall. `core` = REST (5000/hr),
+ * `search` = Search API (30/min — hit by countWorkItems), `graphql` =
+ * GraphQL (5000 points/hr — hit by project-view + discovery). All three are
+ * the buckets this app actually stresses; other buckets (e.g. code_search)
+ * are not surfaced because we don't touch them.
+ */
+export type GitHubRateLimitBucket = {
+  remaining: number
+  limit: number
+  /** Unix epoch seconds when the window resets. */
+  resetAt: number
+}
+
+export type GitHubRateLimitSnapshot = {
+  core: GitHubRateLimitBucket
+  search: GitHubRateLimitBucket
+  graphql: GitHubRateLimitBucket
+  /** Unix epoch ms the snapshot was produced (for "fetched Xs ago" copy). */
+  fetchedAt: number
+}
+
+export type GetRateLimitResult =
+  | { ok: true; snapshot: GitHubRateLimitSnapshot }
+  | { ok: false; error: string }
 
 /**
  * Envelope for `gh:listWorkItems`. Carries resolved issue/PR sources so the
@@ -1184,6 +1217,11 @@ export type GlobalSettings = {
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
+  /** GitHub Project mode state — pinned/recent/active project, last selected
+   *  view per project. Optional because profiles created before this feature
+   *  landed won't have the key; `getDefaultSettings()` hydrates the empty
+   *  default via the persistence merge. */
+  githubProjects?: GitHubProjectSettings
   /** Anonymous product-telemetry state. Optional because the one-shot
    *  migration in `Store.load()` is what populates it on first boot of the
    *  telemetry release; before migration runs, the field is absent. After

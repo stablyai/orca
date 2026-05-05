@@ -518,8 +518,48 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
+      # requires the build identity to be the literal string `stable` or `rc`,
+      # substituted by electron-vite's `define` block at build time. Derive
+      # that identity from the release tag here — `stable` for plain semver
+      # (`vX.Y.Z`), `rc` for prerelease (`vX.Y.Z-rc.N`). The strict regex is
+      # a safety net: this workflow only fires on cut-tags that already match
+      # one of those shapes, but if a future change ever loosens that, we
+      # refuse to ship rather than let an unclassified build go out with
+      # `BUILD_IDENTITY = null`.
+      - name: Classify release tag for telemetry build identity
+        id: tag-classify
+        shell: bash
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            identity=rc
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            identity=stable
+          else
+            echo "::error::Tag $TAG does not match stable or rc pattern; refusing to build official artifact"
+            exit 1
+          fi
+          echo "identity=$identity" >>"$GITHUB_OUTPUT"
+          echo "Classified $TAG as $identity"
+
+      # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
+      # produces a published binary, so this is the only place the secret
+      # needs to be in scope. The key is a PostHog *project* API key, not
+      # a server secret — it ships in every official binary's app.asar
+      # and is therefore extractable from any release. We still keep it
+      # in GitHub Actions secrets so the literal stays out of the repo
+      # (and out of fork CI runs / log scrapers / casual greps).
+      # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
+      # value comes from the per-tag classification above and electron-vite
+      # reads it from `process.env` during `pnpm build:release` only.
       - name: Build app
         run: pnpm build:release
+        env:
+          ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be
       # passed to non-macOS builds. electron-builder uses CSC_LINK as the
@@ -560,6 +600,24 @@ jobs:
           command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Why post-publish (not pre-publish): electron-builder packs and
+      # uploads in a single `--publish always` invocation, so there is no
+      # cheap insertion point between pack and upload without splitting
+      # that step. Running verify last still blocks the bad release: the
+      # binary is uploaded to the draft, but a failed matrix job blocks
+      # the `publish-release` job (which depends on `build`) from flipping
+      # the release from draft → published, so users never see it. A human
+      # then deletes the draft and re-cuts.
+      #
+      # Why this guards against: a misconfigured CI run where
+      # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify
+      # would otherwise produce a binary with `BUILD_IDENTITY = null` and
+      # `WRITE_KEY = null`, which silently disables transport
+      # (`IS_OFFICIAL_BUILD === false`) — the exact failure mode flagged
+      # in PR #1385's deferred follow-up.
+      - name: Verify telemetry constants present in app.asar
+        run: node config/scripts/verify-telemetry-constants.mjs
 
   publish-release:
     needs:

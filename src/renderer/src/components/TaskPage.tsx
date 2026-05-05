@@ -59,8 +59,10 @@ import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
+import GitHubRateLimitPill from '@/components/github/GitHubRateLimitPill'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
+import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
 import {
@@ -785,6 +787,19 @@ export default function TaskPage(): React.JSX.Element {
       setTaskSource(settings.defaultTaskSource)
     }
   }, [settings?.defaultTaskSource, pageData.taskSource])
+
+  // Why: Project mode is a sub-tab within the GitHub source. Visible whenever
+  // the user is on the GitHub task source — actual entry into Project mode is
+  // gated on a non-null `activeProject` once they pick one.
+  const projectModeVisible = taskSource === 'github'
+  const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
+  useEffect(() => {
+    // Snap back to items if the user leaves the GitHub task source while
+    // sitting in Project mode.
+    if (!projectModeVisible && githubMode === 'project') {
+      setGithubMode('items')
+    }
+  }, [projectModeVisible, githubMode])
 
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
@@ -1844,27 +1859,8 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })}
                   </div>
-                  <div className="w-[200px]">
-                    {taskSource === 'github' ? (
-                      <RepoMultiCombobox
-                        repos={eligibleRepos}
-                        selected={repoSelection}
-                        onChange={(next) => {
-                          setRepoSelection(next)
-                          void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                            toast.error('Failed to save repo selection.')
-                          })
-                        }}
-                        onSelectAll={() => {
-                          const allIds = new Set(eligibleRepos.map((r) => r.id))
-                          setRepoSelection(allIds)
-                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                            toast.error('Failed to save repo selection.')
-                          })
-                        }}
-                        triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                      />
-                    ) : availableTeams.length > 0 ? (
+                  {taskSource === 'linear' && availableTeams.length > 0 ? (
+                    <div className="w-[200px]">
                       <TeamMultiCombobox
                         teams={availableTeams}
                         selected={linearTeamSelection}
@@ -1884,11 +1880,65 @@ export default function TaskPage(): React.JSX.Element {
                         }}
                         triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
                       />
-                    ) : null}
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 {taskSource === 'github' ? (
+                  <div className="flex items-center gap-2">
+                    {projectModeVisible ? (
+                      <div className="flex items-center gap-1 text-xs">
+                        {(['items', 'project'] as const).map((mode) => {
+                          const active = githubMode === mode
+                          return (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setGithubMode(mode)}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {mode === 'items' ? 'Issues/PRs' : 'Project'}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                    {/* Why: the repo combobox filters Items mode by repo. In
+                        Project mode the row set comes from the project's
+                        view filter (server-side), so this control would be
+                        inert — hide it to avoid suggesting it does
+                        something. */}
+                    {githubMode !== 'project' && (
+                      <div className="w-[200px]">
+                        <RepoMultiCombobox
+                          repos={eligibleRepos}
+                          selected={repoSelection}
+                          onChange={(next) => {
+                            setRepoSelection(next)
+                            void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
+                              toast.error('Failed to save repo selection.')
+                            })
+                          }}
+                          onSelectAll={() => {
+                            const allIds = new Set(eligibleRepos.map((r) => r.id))
+                            setRepoSelection(allIds)
+                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                              toast.error('Failed to save repo selection.')
+                            })
+                          }}
+                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {taskSource === 'github' && githubMode === 'items' ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
@@ -1923,6 +1973,13 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
+                        {/* Why: GitHub API budget pill is anchored next to the
+                            Refresh button so the "maybe I shouldn't click
+                            refresh again" decision is one glance away. Only
+                            rendered in the GitHub section because Linear has
+                            its own SDK-based quota and doesn't consume gh
+                            budget. */}
+                        <GitHubRateLimitPill />
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
@@ -2069,7 +2126,7 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })()}
                   </div>
-                ) : linearStatus.connected ? (
+                ) : taskSource === 'linear' && linearStatus.connected ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
@@ -2189,7 +2246,11 @@ export default function TaskPage(): React.JSX.Element {
             </section>
           </div>
 
-          {taskSource === 'github' ? (
+          {taskSource === 'github' && githubMode === 'project' ? (
+            <div className="mt-3 flex min-h-0 max-h-full flex-col rounded-md border border-border/50 bg-muted/50 overflow-hidden shadow-sm">
+              <ProjectViewWrapper />
+            </div>
+          ) : taskSource === 'github' ? (
             <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
               <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 <span>ID</span>

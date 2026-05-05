@@ -3,6 +3,14 @@ import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 
+// Why: when a mobile client subscribes the server resizes the PTY to phone
+// dims and serializes the buffer. Sending only the visible screen meant
+// users coming back to the app or switching terminals could no longer scroll
+// up to see prior agent output. Include enough scrollback to keep typical
+// agent runs (Claude Code chats, command output) reachable. The mobile
+// WebView's xterm has a 5000-row buffer so this fits comfortably.
+const MOBILE_SUBSCRIBE_SCROLLBACK_ROWS = 1000
+
 const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
@@ -50,7 +58,18 @@ const TerminalRename = TerminalHandle.extend({
 const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
-  interrupt: z.unknown().optional()
+  interrupt: z.unknown().optional(),
+  // Why: identifies the caller for the driver state machine. Optional for
+  // backward compatibility with older mobile clients (server falls back to
+  // the most recent mobile actor when absent). New mobile builds populate
+  // this so multi-mobile semantics resolve correctly. See
+  // docs/mobile-presence-lock.md.
+  client: z
+    .object({
+      id: requiredString('Missing client ID'),
+      type: z.enum(['mobile', 'desktop']).default('desktop').optional()
+    })
+    .optional()
 })
 
 const TerminalWait = TerminalHandle.extend({
@@ -109,11 +128,47 @@ const TerminalSubscribe = TerminalHandle.extend({
 })
 
 const TerminalSetDisplayMode = TerminalHandle.extend({
-  mode: z.enum(['auto', 'phone', 'desktop'])
+  mode: z.enum(['auto', 'phone', 'desktop']),
+  // Why: identifies the caller for the driver state machine. Optional for
+  // backward compatibility with older mobile clients.
+  client: z
+    .object({
+      id: requiredString('Missing client ID'),
+      type: z.enum(['mobile', 'desktop']).default('desktop').optional()
+    })
+    .optional()
 })
 
 const TerminalUnsubscribe = z.object({
-  subscriptionId: requiredString('Missing subscription ID')
+  subscriptionId: requiredString('Missing subscription ID'),
+  // Why: required when subscribe registered the cleanup under the composite
+  // key `${terminal}:${clientId}`. If the caller passes a bare-handle
+  // subscriptionId (older clients), the server reconstructs the composite
+  // key from `client.id`. See docs/mobile-presence-lock.md.
+  client: z
+    .object({
+      id: requiredString('Missing client ID')
+    })
+    .optional()
+})
+
+// Why: in-place viewport update for an existing mobile subscription. Used
+// when the keyboard opens/closes on the mobile client and the visible
+// terminal area changes — without this, the mobile app had to
+// unsubscribe → resubscribe, which (a) flashed the desktop lock banner
+// during the brief idle gap and (b) caused the new subscribe to capture
+// the already-phone-fitted PTY size as its restore baseline, leaving the
+// PTY stuck at phone dims after the phone disconnected. See
+// docs/mobile-presence-lock.md.
+const TerminalUpdateViewport = TerminalHandle.extend({
+  client: z.object({
+    id: requiredString('Missing client ID'),
+    type: z.enum(['mobile', 'desktop']).default('mobile').optional()
+  }),
+  viewport: z.object({
+    cols: z.number().int().min(20).max(240),
+    rows: z.number().int().min(8).max(120)
+  })
 })
 
 export const TERMINAL_METHODS: RpcAnyMethod[] = [
@@ -153,13 +208,27 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime }) => ({
-      send: await runtime.sendTerminal(params.terminal, {
+    handler: async (params, { runtime }) => {
+      const result = await runtime.sendTerminal(params.terminal, {
         text: params.text,
         enter: params.enter === true,
         interrupt: params.interrupt === true
       })
-    })
+      // Why: deliberate mobile input is a take-floor action. Drives the
+      // `* → mobile{clientId}` driver transition so the desktop banner
+      // remounts (if previously reclaimed) and active phone-fit dims follow
+      // the most recent actor. Only mobile-typed callers take the floor;
+      // desktop callers (CLI / agents) do not. Older mobile builds without
+      // a `client` field continue to work — the runtime then keeps the
+      // current driver state.
+      if (params.client && params.client.type === 'mobile') {
+        const leaf = runtime.resolveLeafForHandle(params.terminal)
+        if (leaf?.ptyId) {
+          runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+        }
+      }
+      return { send: result }
+    }
   }),
   defineMethod({
     name: 'terminal.wait',
@@ -243,6 +312,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       runtime.setMobileDisplayMode(leaf.ptyId, params.mode)
       runtime.applyMobileDisplayMode(leaf.ptyId)
+      // Why: a deliberate mobile mode change is a take-floor action when
+      // moving to auto/phone (the user explicitly chose to drive at phone
+      // dims). Setting mode to desktop is intentionally NOT a take-floor
+      // action — that's a "watch from desktop dims" gesture.
+      if (params.client && params.client.type === 'mobile' && params.mode !== 'desktop') {
+        runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+      }
       return { mode: params.mode }
     }
   }),
@@ -254,6 +330,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const mode = leaf?.ptyId ? runtime.getMobileDisplayMode(leaf.ptyId) : 'auto'
       const isPhoneFitted = leaf?.ptyId ? runtime.isMobileSubscriberActive(leaf.ptyId) : false
       return { mode, isPhoneFitted }
+    }
+  }),
+  defineMethod({
+    name: 'terminal.updateViewport',
+    params: TerminalUpdateViewport,
+    handler: async (params, { runtime }) => {
+      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      if (!leaf?.ptyId) {
+        throw new Error('no_connected_pty')
+      }
+      const updated = runtime.updateMobileViewport(leaf.ptyId, params.client.id, params.viewport)
+      return { updated }
     }
   }),
   // Why: terminal.subscribe streams live terminal output over WebSocket.
@@ -302,7 +390,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
 
       const read = await runtime.readTerminal(params.terminal)
-      const serialized = await runtime.serializeTerminalBuffer(ptyId)
+      const serialized = await runtime.serializeTerminalBuffer(ptyId, {
+        scrollbackRows: isMobile ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS : 0
+      })
       const size = runtime.getTerminalSize(ptyId)
       const displayMode = runtime.getMobileDisplayMode(ptyId)
       emit({
@@ -324,7 +414,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         // mobile clients. They include fresh serialized scrollback so the client
         // can reinitialize xterm without resubscribing.
         const unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, async (event) => {
-          const fresh = await runtime.serializeTerminalBuffer(ptyId)
+          // Why: mobile subscriptions need the same scrollback on inline
+          // resize as on initial subscribe — without it, toggling phone/desktop
+          // mode or the keyboard-driven refit would silently wipe history.
+          const fresh = await runtime.serializeTerminalBuffer(ptyId, {
+            scrollbackRows: isMobile ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS : 0
+          })
           emit({
             type: 'resized',
             cols: event.cols,
@@ -347,7 +442,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             })
           : () => {}
 
-        const subscriptionId = params.terminal
+        // Why: composite subscriptionId per (terminal, clientId) so two
+        // mobile clients subscribing to the same terminal handle do not
+        // evict each other via registerSubscriptionCleanup's
+        // duplicate-key cleanup. See docs/mobile-presence-lock.md.
+        const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
         runtime.registerSubscriptionCleanup(subscriptionId, () => {
           unsubscribeData()
           unsubscribeResize()
@@ -365,7 +464,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
     handler: async (params, { runtime }) => {
+      // Why: the subscribe handler now registers cleanup under a composite
+      // key `${terminal}:${clientId}`. New mobile builds emit the composite
+      // key directly. Older builds emit a bare-handle subscriptionId; if
+      // they additionally provide `client.id`, reconstruct the composite
+      // key server-side. We always try the as-sent value first, then fall
+      // back to the reconstructed composite, so both wire formats work.
       runtime.cleanupSubscription(params.subscriptionId)
+      if (params.client && !params.subscriptionId.includes(':')) {
+        runtime.cleanupSubscription(`${params.subscriptionId}:${params.client.id}`)
+      }
       return { unsubscribed: true }
     }
   })

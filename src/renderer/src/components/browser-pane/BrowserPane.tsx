@@ -953,6 +953,7 @@ function BrowserPagePane({
           browserPageId: browserTab.id,
           workspaceId,
           worktreeId,
+          sessionProfileId,
           webContentsId
         })
       }

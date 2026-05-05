@@ -41,6 +41,7 @@ import type {
   LinearTeam,
   MarkdownDocument,
   GitHubIssueUpdate,
+  GetRateLimitResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
   OrcaHooks,
@@ -61,6 +62,33 @@ import type {
   WorktreeStartupLaunch,
   WorkspaceSessionState
 } from '../shared/types'
+import type {
+  AddIssueCommentBySlugArgs,
+  ClearProjectItemFieldArgs,
+  DeleteIssueCommentBySlugArgs,
+  GetProjectViewTableArgs,
+  GetProjectViewTableResult,
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAccessibleProjectsResult,
+  ListAssignableUsersBySlugArgs,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugArgs,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugArgs,
+  ListLabelsBySlugResult,
+  ListProjectViewsArgs,
+  ListProjectViewsResult,
+  ProjectWorkItemDetailsBySlugArgs,
+  ProjectWorkItemDetailsBySlugResult,
+  ResolveProjectRefArgs,
+  ResolveProjectRefResult,
+  UpdateIssueBySlugArgs,
+  UpdateIssueCommentBySlugArgs,
+  UpdateIssueTypeBySlugArgs,
+  UpdatePullRequestBySlugArgs,
+  UpdateProjectItemFieldArgs
+} from '../shared/github-project-types'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -127,6 +155,7 @@ export type BrowserApi = {
     browserPageId: string
     workspaceId: string
     worktreeId: string
+    sessionProfileId?: string | null
     webContentsId: number
   }) => Promise<void>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
@@ -449,12 +478,19 @@ export type PreloadApi = {
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onSerializeBufferRequest: (
-      callback: (data: { requestId: string; ptyId: string }) => void
+      callback: (data: {
+        requestId: string
+        ptyId: string
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      }) => void
     ) => () => void
     sendSerializedBuffer: (
       requestId: string,
-      snapshot: { data: string; cols: number; rows: number } | null
+      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
     ) => void
+    declarePendingPaneSerializer: (paneKey: string) => Promise<number>
+    settlePaneSerializer: (paneKey: string, gen: number) => Promise<void>
+    clearPendingPaneSerializer: (paneKey: string, gen: number) => Promise<void>
     management: PtyManagementApi
   }
   feedback: {
@@ -548,6 +584,43 @@ export type PreloadApi = {
     listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
+    /**
+     * GitHub API rate-limit snapshot. Does NOT consume quota (the
+     * `rate_limit` endpoint is exempt). Cached 30s server-side — pass
+     * `force: true` to bust after a known-expensive op.
+     */
+    rateLimit: (args?: { force?: boolean }) => Promise<GetRateLimitResult>
+    // ── ProjectV2 (GitHub Projects) ─────────────────────────────────
+    listAccessibleProjects: () => Promise<ListAccessibleProjectsResult>
+    resolveProjectRef: (args: ResolveProjectRefArgs) => Promise<ResolveProjectRefResult>
+    listProjectViews: (args: ListProjectViewsArgs) => Promise<ListProjectViewsResult>
+    getProjectViewTable: (args: GetProjectViewTableArgs) => Promise<GetProjectViewTableResult>
+    projectWorkItemDetailsBySlug: (
+      args: ProjectWorkItemDetailsBySlugArgs
+    ) => Promise<ProjectWorkItemDetailsBySlugResult>
+    updateProjectItemField: (
+      args: UpdateProjectItemFieldArgs
+    ) => Promise<GitHubProjectMutationResult>
+    clearProjectItemField: (args: ClearProjectItemFieldArgs) => Promise<GitHubProjectMutationResult>
+    updateIssueBySlug: (args: UpdateIssueBySlugArgs) => Promise<GitHubProjectMutationResult>
+    updatePullRequestBySlug: (
+      args: UpdatePullRequestBySlugArgs
+    ) => Promise<GitHubProjectMutationResult>
+    addIssueCommentBySlug: (
+      args: AddIssueCommentBySlugArgs
+    ) => Promise<GitHubProjectCommentMutationResult>
+    updateIssueCommentBySlug: (
+      args: UpdateIssueCommentBySlugArgs
+    ) => Promise<GitHubProjectMutationResult>
+    deleteIssueCommentBySlug: (
+      args: DeleteIssueCommentBySlugArgs
+    ) => Promise<GitHubProjectMutationResult>
+    listLabelsBySlug: (args: ListLabelsBySlugArgs) => Promise<ListLabelsBySlugResult>
+    listAssignableUsersBySlug: (
+      args: ListAssignableUsersBySlugArgs
+    ) => Promise<ListAssignableUsersBySlugResult>
+    listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs) => Promise<ListIssueTypesBySlugResult>
+    updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs) => Promise<GitHubProjectMutationResult>
   }
   linear: {
     connect: (args: {
@@ -872,9 +945,18 @@ export type PreloadApi = {
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
     onRequestTabCreate: (
-      callback: (data: { requestId: string; url: string; worktreeId?: string }) => void
+      callback: (data: {
+        requestId: string
+        url: string
+        worktreeId?: string
+        sessionProfileId?: string
+      }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
+    onRequestTabSetProfile: (
+      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+    ) => () => void
+    replyTabSetProfile: (reply: { requestId: string; error?: string }) => void
     onRequestTabClose: (
       callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
     ) => () => void
@@ -966,6 +1048,12 @@ export type PreloadApi = {
         mode: 'mobile-fit' | 'desktop-fit'
         cols: number
         rows: number
+      }) => void
+    ) => () => void
+    onTerminalDriverChanged: (
+      callback: (event: {
+        ptyId: string
+        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
       }) => void
     ) => () => void
   }

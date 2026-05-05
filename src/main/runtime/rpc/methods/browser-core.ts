@@ -16,13 +16,19 @@ import {
   KeyboardInsert,
   Keypress,
   LimitParam,
+  ProfileCreate,
+  ProfileDelete,
   Screenshot,
   Scroll,
   Select,
   SelectorPath,
+  TabCurrent,
+  TabSetProfile,
   TabClose,
   TabCreate,
   TabList,
+  TabProfileClone,
+  TabShow,
   TabSwitch,
   Type,
   Upload,
@@ -91,6 +97,16 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.browserTabList(params)
   }),
   defineMethod({
+    name: 'browser.tabShow',
+    params: TabShow,
+    handler: async (params, { runtime }) => runtime.browserTabShow(params)
+  }),
+  defineMethod({
+    name: 'browser.tabCurrent',
+    params: TabCurrent,
+    handler: async (params, { runtime }) => runtime.browserTabCurrent(params)
+  }),
+  defineMethod({
     name: 'browser.tabSwitch',
     params: TabSwitch,
     handler: async (params, { runtime }) => runtime.browserTabSwitch(params)
@@ -101,9 +117,39 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.browserTabCreate(params)
   }),
   defineMethod({
+    name: 'browser.tabSetProfile',
+    params: TabSetProfile,
+    handler: async (params, { runtime }) => runtime.browserTabSetProfile(params)
+  }),
+  defineMethod({
+    name: 'browser.tabProfileShow',
+    params: TabShow,
+    handler: async (params, { runtime }) => runtime.browserTabProfileShow(params)
+  }),
+  defineMethod({
+    name: 'browser.tabProfileClone',
+    params: TabProfileClone,
+    handler: async (params, { runtime }) => runtime.browserTabProfileClone(params)
+  }),
+  defineMethod({
     name: 'browser.tabClose',
     params: TabClose,
     handler: async (params, { runtime }) => runtime.browserTabClose(params)
+  }),
+  defineMethod({
+    name: 'browser.profileList',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.browserProfileList()
+  }),
+  defineMethod({
+    name: 'browser.profileCreate',
+    params: ProfileCreate,
+    handler: async (params, { runtime }) => runtime.browserProfileCreate(params)
+  }),
+  defineMethod({
+    name: 'browser.profileDelete',
+    params: ProfileDelete,
+    handler: async (params, { runtime }) => runtime.browserProfileDelete(params)
   }),
   defineMethod({
     name: 'browser.hover',

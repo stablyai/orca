@@ -103,6 +103,7 @@ export function registerBrowserHandlers(): void {
         browserPageId: string
         workspaceId: string
         worktreeId: string
+        sessionProfileId?: string | null
         webContentsId: number
       }
     ) => {

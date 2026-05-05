@@ -304,7 +304,10 @@ export function RepositoryPane({
         ) : null}
       </section>
     ) : null,
-    !isFolder && symlinksEnabled && matchesSettingsSearch(searchQuery, symlinkEntries) ? (
+    !isFolder &&
+    !repo.connectionId &&
+    symlinksEnabled &&
+    matchesSettingsSearch(searchQuery, symlinkEntries) ? (
       <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateRepo} />
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, sparsePresetEntries) ? (

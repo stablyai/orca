@@ -29,11 +29,8 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
-import {
-  getFitOverrideForPty,
-  getPaneIdsForPty,
-  onOverrideChange
-} from '@/lib/pane-manager/mobile-fit-overrides'
+import { getPaneIdsForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
 /** Global set of buffer-capture callbacks, one per mounted TerminalPane.
@@ -163,6 +160,18 @@ export default function TerminalPane({
             }
           }, 100)
         }
+      }),
+    []
+  )
+
+  // Why: presence-lock banner re-render. Driver state lives in a plain Map
+  // for perf; this counter forces a re-render when the driver flips so the
+  // lock banner appears/disappears. See docs/mobile-presence-lock.md.
+  const [, setDriverTick] = useState(0)
+  useEffect(
+    () =>
+      onDriverChange(() => {
+        setDriverTick((n) => n + 1)
       }),
     []
   )
@@ -1123,14 +1132,23 @@ export default function TerminalPane({
         // pane 1). Using the transport's actual ptyId avoids showing banners
         // on the wrong pane when IDs overlap.
         const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-        const override = ptyId ? getFitOverrideForPty(ptyId) : null
-        if (!override) {
+        if (!ptyId) {
+          return null
+        }
+        // Why: presence-lock — banner is gated on driver state, not on
+        // fit-override. The banner now communicates "input is paused"
+        // (the load-bearing fact) instead of dimensional state. The
+        // dimensional override may still be active and is reflected in
+        // the PTY but not in the banner copy. See
+        // docs/mobile-presence-lock.md.
+        const driver = getDriverForPty(ptyId)
+        if (driver.kind !== 'mobile') {
           return null
         }
         return createPortal(
           <div
-            key={`mobile-fit-${pane.id}`}
-            className="mobile-fit-banner"
+            key={`mobile-driver-${pane.id}`}
+            className="mobile-driver-banner"
             style={{
               position: 'absolute',
               top: 0,
@@ -1147,7 +1165,7 @@ export default function TerminalPane({
             }}
           >
             <span>
-              Terminal resized for phone ({override.cols}×{override.rows})
+              Mobile is driving this terminal — your input is paused. Click Take back to resume.
             </span>
             <button
               style={{
@@ -1162,15 +1180,19 @@ export default function TerminalPane({
               onClick={() => {
                 const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
                 if (ptyId) {
+                  // Why: same IPC route — handler now also reclaims the
+                  // input floor for the desktop via the driver state
+                  // machine, so the banner unmounts and input is unblocked
+                  // until the next mobile interaction.
                   void window.api.runtime.restoreTerminalFit(ptyId)
                 }
               }}
             >
-              Restore
+              Take back
             </button>
           </div>,
           pane.container,
-          `mobile-fit-banner-${pane.id}`
+          `mobile-driver-banner-${pane.id}`
         )
       })}
       <CloseTerminalDialog

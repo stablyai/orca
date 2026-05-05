@@ -262,5 +262,31 @@ describe('E2EEChannel', () => {
 
       expect(received).toEqual([])
     })
+
+    // Why: streaming RPC handlers (terminal.subscribe) retain the
+    // encryptedReply closure created inside handleRawMessage. If destroy()
+    // runs (mobile disconnect) before a late streaming emit, the closure's
+    // captured this.sharedKey is null. Without a guard, encrypt() would
+    // call nacl.box.after with a null key and throw an unhandled
+    // "unexpected type, use Uint8Array" rejection.
+    it('does not throw when streaming emit fires after destroy', () => {
+      const ctx = setup()
+      const sharedKey = doHandshake(ctx)
+      const sentBefore = ctx.ws.sent.length
+
+      let capturedReply: ((response: string) => void) | null = null
+      ctx.channel.onMessage((_plaintext, encryptedReply) => {
+        capturedReply = encryptedReply
+      })
+
+      ctx.channel.handleRawMessage(encrypt('subscribe-trigger', sharedKey))
+      expect(capturedReply).not.toBeNull()
+
+      ctx.channel.destroy()
+
+      const callLateEmit = () => capturedReply?.('late streaming frame')
+      expect(callLateEmit).not.toThrow()
+      expect(ctx.ws.sent.length).toBe(sentBefore)
+    })
   })
 })

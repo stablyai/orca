@@ -40,6 +40,11 @@ import { commonPropsSchema, validate } from './validator'
 // wired but no event transmitted. PR 3 flips it to `true`. Independent of
 // the build-identity gate below: both must be satisfied to transmit, so
 // flipping the flag alone still leaves contributor builds silent.
+//
+// NOTE: config/scripts/verify-telemetry-constants.mjs greps this declaration
+// shape (`const TELEMETRY_ENABLED = true|false`) to gate release verification.
+// If you refactor this (e.g. let, export, computed-from-env, moved into a
+// config object), update the regex in that script too.
 const TELEMETRY_ENABLED = true
 
 // Eligible-to-transmit only if the CI release pipeline injected BOTH the
