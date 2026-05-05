@@ -46,6 +46,9 @@ export function useSidekickUrl(): ResolvedSidekick {
   const customFileName = customMeta?.fileName ?? null
   const customMime = customMeta?.mimeType ?? 'image/png'
   const customKind = customMeta?.kind ?? 'image'
+  // Why: prefer manifest fps captured at import time; sprite-with-frame entries
+  // store fps on `sprite`, frame-less bundles carry it on `spriteFps`.
+  const customSpriteFps = customMeta?.sprite?.fps ?? customMeta?.spriteFps
   useEffect(() => {
     if (!customId || !customFileName) {
       setCustomUrl(null)
@@ -61,23 +64,32 @@ export function useSidekickUrl(): ResolvedSidekick {
     setCustomUrl(null)
     pendingRef.current = customId
     let cancelled = false
-    void loadCustomBlobUrl(customId, customFileName, customMime, customKind).then((url) => {
-      if (cancelled || pendingRef.current !== customId) {
-        return
+    void loadCustomBlobUrl(customId, customFileName, customMime, customKind, customSpriteFps).then(
+      (url) => {
+        if (cancelled || pendingRef.current !== customId) {
+          return
+        }
+        setCustomUrl(url)
       }
-      setCustomUrl(url)
-    })
+    )
     return () => {
       cancelled = true
     }
-  }, [customId, customFileName, customMime, customKind])
+  }, [customId, customFileName, customMime, customKind, customSpriteFps])
 
   if (bundled) {
     const sidekick = findBundledSidekick(sidekickId) ?? BUNDLED_SIDEKICK
     return { url: sidekick.url, ready: true, sprite: null, detected: null }
   }
   if (customMeta && customUrl) {
-    if (customMeta.sprite) {
+    // Why: guard against manifest entries with zero/negative dims or fps —
+    // those would break the overlay's frame math, so fall through to detection.
+    if (
+      customMeta.sprite &&
+      customMeta.sprite.frameWidth > 0 &&
+      customMeta.sprite.frameHeight > 0 &&
+      customMeta.sprite.fps > 0
+    ) {
       return { url: customUrl, ready: true, sprite: customMeta.sprite, detected: null }
     }
     const detected = detectedSpriteCache.get(customMeta.id)

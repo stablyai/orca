@@ -124,6 +124,7 @@ function SidekickStatusSegmentInner(): React.JSX.Element {
           className="px-2 py-1.5"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
             <span>Size</span>

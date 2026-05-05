@@ -17,6 +17,9 @@ export type DetectedSpriteCacheEntry = {
    *  these onto its own canvas one at a time, so we can crop irregular sheets
    *  without forcing the manifest to declare a uniform grid. */
   bitmaps: ImageBitmap[]
+  /** Manifest-declared playback speed; the overlay falls back to 8 fps when
+   *  the bundle didn't declare one. */
+  fps: number
 }
 export const detectedSpriteCache = new Map<string, DetectedSpriteCacheEntry>()
 
@@ -24,12 +27,16 @@ export async function loadCustomBlobUrl(
   id: string,
   fileName: string,
   mimeType: string,
-  kind?: 'image' | 'bundle'
+  kind?: 'image' | 'bundle',
+  spriteFps?: number
 ): Promise<string | null> {
   const cached = blobUrlCache.get(id)
   if (cached) {
     return cached
   }
+  // Why: defensively clear any stale entry so we don't leak a prior blob URL
+  // or ImageBitmap[] when re-populating after a cache miss.
+  revokeCustomSidekickBlobUrl(id)
   const buffer = await window.api.sidekick.read(id, fileName, kind)
   if (!buffer) {
     return null
@@ -44,7 +51,7 @@ export async function loadCustomBlobUrl(
   // Strip it once at load and replace the cached URL with a transparent PNG
   // so the overlay just sees a normal blob URL.
   if (kind === 'bundle' && mimeType !== 'image/svg+xml') {
-    const processed = await processBundleSheet(url)
+    const processed = await processBundleSheet(url, spriteFps)
     if (processed) {
       URL.revokeObjectURL(url)
       url = processed.url
@@ -58,7 +65,8 @@ export async function loadCustomBlobUrl(
 }
 
 async function processBundleSheet(
-  srcUrl: string
+  srcUrl: string,
+  spriteFps?: number
 ): Promise<{ url: string; detected: DetectedSpriteCacheEntry | null } | null> {
   try {
     const img = await loadImage(srcUrl)
@@ -79,10 +87,20 @@ async function processBundleSheet(
     let detected: DetectedSpriteCacheEntry | null = null
     const sprite = detectFramesFromImageData(data)
     if (sprite && sprite.frames.length >= 1) {
-      const bitmaps = await Promise.all(
+      // Why: allSettled so a single failed crop doesn't leak the bitmaps that
+      // did succeed — close fulfilled ones before bailing out.
+      const results = await Promise.allSettled(
         sprite.frames.map((f) => createImageBitmap(canvas, f.x, f.y, f.w, f.h))
       )
-      detected = { frames: sprite.frames, bitmaps }
+      const rejected = results.some((r) => r.status === 'rejected')
+      if (rejected) {
+        for (const r of results) {
+          if (r.status === 'fulfilled') r.value.close()
+        }
+        return null
+      }
+      const bitmaps = results.map((r) => (r as PromiseFulfilledResult<ImageBitmap>).value)
+      detected = { frames: sprite.frames, bitmaps, fps: spriteFps ?? 8 }
     }
     const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
     if (!out) {

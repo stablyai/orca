@@ -1412,6 +1412,10 @@ export type CustomSidekick = {
     defaultAnimation?: string
     animations?: Record<string, SpriteAnimation>
   }
+  /** Manifest-declared fps captured even when the manifest omits `frame` and
+   *  the renderer falls back to auto-detected frames. Lets DetectedSpriteFrame
+   *  honor the bundle's intended playback speed instead of a hardcoded 8 fps. */
+  spriteFps?: number
 }
 
 /** One animation strip within a sprite sheet: `row` is the y-index (0-based)

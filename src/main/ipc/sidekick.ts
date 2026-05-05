@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron'
-import { copyFile, mkdir, readFile, rm, stat, lstat } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rename, rm, stat, lstat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -80,7 +80,16 @@ const PetManifestSchema = z
     id: z.string().min(1).max(128).optional(),
     displayName: z.string().min(1).max(120).optional(),
     description: z.string().max(2000).optional(),
-    spritesheetPath: z.string().min(1).max(255),
+    spritesheetPath: z
+      .string()
+      .min(1)
+      .max(255)
+      // Why: belt-and-suspenders against malicious manifests — downstream
+      // resolve+prefix check still runs as defense in depth.
+      .refine(
+        (p) => !p.includes('\0') && !p.startsWith('/') && !p.startsWith('\\') && !p.includes('..'),
+        'invalid spritesheetPath'
+      ),
     frame: z
       .object({
         width: z.number().int().positive().max(1024),
@@ -106,6 +115,14 @@ const PetManifestSchema = z
   .loose()
 
 type PetManifest = z.infer<typeof PetManifestSchema>
+
+// Why: renderer-supplied IPC inputs are untrusted — validate shape before any
+// path resolution. resolveSidekickFile still gates the actual filesystem path.
+const SidekickFileRequestSchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  kind: z.enum(['image', 'bundle']).optional()
+})
 
 async function readSheetDimensions(
   buffer: Buffer
@@ -245,6 +262,11 @@ export function registerSidekickHandlers(): void {
     let manifest: PetManifest
     try {
       const raw = await readFile(manifestPath, 'utf8')
+      // Why: defend against TOCTOU between stat and read — the file could have
+      // grown after the stat check.
+      if (Buffer.byteLength(raw, 'utf8') > MAX_MANIFEST_BYTES) {
+        throw new Error('pet.json exceeded the manifest size limit.')
+      }
       manifest = PetManifestSchema.parse(JSON.parse(raw))
     } catch (error) {
       throw new Error(`Invalid pet.json: ${error instanceof Error ? error.message : 'parse error'}`)
@@ -257,8 +279,17 @@ export function registerSidekickHandlers(): void {
       throw new Error('spritesheetPath must be relative to the bundle.')
     }
     const sheetSrc = resolve(bundleDir, manifest.spritesheetPath)
-    const bundleRoot = resolve(bundleDir) + sep
-    if (!(sheetSrc + sep).startsWith(bundleRoot)) {
+    const bundleResolved = resolve(bundleDir)
+    if (sheetSrc === bundleResolved) {
+      throw new Error('spritesheetPath must point to a file, not the bundle root.')
+    }
+    const bundleRoot = bundleResolved + sep
+    // Why: NTFS/macOS HFS+ default volumes are case-insensitive — a path like
+    // `BUNDLE\sheet.png` is still inside `bundle\`. Compare lowercased on
+    // Windows so the prefix check isn't bypassed by case differences.
+    const cmp =
+      process.platform === 'win32' ? (s: string) => s.toLowerCase() : (s: string) => s
+    if (!cmp(sheetSrc + sep).startsWith(cmp(bundleRoot))) {
       throw new Error('spritesheetPath escapes the bundle.')
     }
     if (await isSymlink(sheetSrc)) {
@@ -291,6 +322,10 @@ export function registerSidekickHandlers(): void {
       // bundles without `frame` render as a static image where dimensions
       // don't matter.
       const sheetBuf = await readFile(sheetSrc)
+      // Why: defend against TOCTOU — file may have grown between stat and read.
+      if (sheetBuf.byteLength > MAX_BYTES) {
+        throw new Error('Spritesheet exceeded the size limit.')
+      }
       const dims = await readSheetDimensions(sheetBuf)
       if (!dims) {
         throw new Error('Could not decode the spritesheet image.')
@@ -337,17 +372,22 @@ export function registerSidekickHandlers(): void {
     // earlier copy of the same bundle.
     const id = randomUUID()
     const root = getSidekicksDir()
+    await mkdir(root, { recursive: true })
     const destDir = join(root, id)
-    await mkdir(destDir, { recursive: true })
     const sheetExt = sheetClass.ext
     const sheetFileName = `spritesheet${sheetExt}`
-    const destSheet = join(destDir, sheetFileName)
-    const destManifest = join(destDir, 'pet.json')
+    // Why: stage the bundle into a sibling .tmp directory and atomically rename
+    // into place so destDir only appears once both files are written. Avoids
+    // half-imported bundles if a copy fails midway.
+    const tmpDir = `${destDir}.tmp`
     try {
-      await copyFile(sheetSrc, destSheet)
-      await copyFile(manifestPath, destManifest)
+      await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
+      await mkdir(tmpDir, { recursive: true })
+      await copyFile(sheetSrc, join(tmpDir, sheetFileName))
+      await copyFile(manifestPath, join(tmpDir, 'pet.json'))
+      await rename(tmpDir, destDir)
     } catch {
-      await rm(destDir, { recursive: true, force: true }).catch(() => {})
+      await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
       throw new Error('Could not save the pet bundle.')
     }
 
@@ -360,6 +400,9 @@ export function registerSidekickHandlers(): void {
       mimeType: sheetClass.mimeType,
       kind: 'bundle',
       sprite
+      // TODO: persist manifest.fps for detected-frame bundles (no `frame` in
+      // manifest) — would need a CustomSidekick type change to add either an
+      // optional top-level `fps` or a partial `sprite` carrying just fps.
     }
   })
 
@@ -371,9 +414,17 @@ export function registerSidekickHandlers(): void {
       fileName: string,
       kind?: 'image' | 'bundle'
     ): Promise<ArrayBuffer | null> => {
+      // Why: validate IPC inputs before any path logic — renderer is not
+      // trusted to send strings of the right shape.
+      let parsed: z.infer<typeof SidekickFileRequestSchema>
+      try {
+        parsed = SidekickFileRequestSchema.parse({ id, fileName, kind })
+      } catch {
+        throw new Error('Invalid sidekick:read arguments')
+      }
       // Why: missing kind defaults to 'image' for backwards compatibility with
       // pre-bundle persisted state.
-      const filePath = resolveSidekickFile(id, fileName, kind ?? 'image')
+      const filePath = resolveSidekickFile(parsed.id, parsed.fileName, parsed.kind ?? 'image')
       if (!filePath) {
         return null
       }
@@ -395,15 +446,22 @@ export function registerSidekickHandlers(): void {
       fileName: string,
       kind?: 'image' | 'bundle'
     ): Promise<void> => {
-      if (!isSafeId(id)) {
+      // Why: validate IPC inputs before any path logic.
+      let parsed: z.infer<typeof SidekickFileRequestSchema>
+      try {
+        parsed = SidekickFileRequestSchema.parse({ id, fileName, kind })
+      } catch {
+        throw new Error('Invalid sidekick:delete arguments')
+      }
+      if (!isSafeId(parsed.id)) {
         return
       }
-      if ((kind ?? 'image') === 'bundle') {
+      if ((parsed.kind ?? 'image') === 'bundle') {
         // Why: bundle imports own a whole directory. isSafeId already gates id;
         // we still build the path under the sidekicks root and verify the
         // prefix before recursive removal as defense in depth.
         const root = normalize(getSidekicksDir())
-        const target = normalize(join(root, id))
+        const target = normalize(join(root, parsed.id))
         if (!target.startsWith(root + sep)) {
           return
         }
@@ -414,7 +472,7 @@ export function registerSidekickHandlers(): void {
         }
         return
       }
-      const filePath = resolveSidekickFile(id, fileName, 'image')
+      const filePath = resolveSidekickFile(parsed.id, parsed.fileName, 'image')
       if (!filePath) {
         return
       }

@@ -9,7 +9,8 @@ type Sprite = NonNullable<CustomSidekick['sprite']>
 // Why: pet bundles ship a sprite sheet — animate by stepping a CSS background
 // across the cells of one row. We pick which row + how many frames from the
 // manifest's defaultAnimation, falling back to the first row if the manifest
-// only declared frame size. Pixel-art scale is integer to keep edges crisp.
+// only declared frame size. imageRendering: 'pixelated' keeps edges crisp even
+// when scale is fractional (needed when frames exceed maxSize).
 function SpriteFrame({
   url,
   sprite,
@@ -26,11 +27,12 @@ function SpriteFrame({
     (sprite.defaultAnimation && sprite.animations?.[sprite.defaultAnimation]) ||
     (sprite.animations ? Object.values(sprite.animations)[0] : undefined)
   const row = anim?.row ?? 0
-  const frames = anim?.frames ?? sprite.columns
-  const scale = Math.max(
-    1,
-    Math.floor(maxSize / Math.max(sprite.frameWidth, sprite.frameHeight))
-  )
+  // Why: clamp to >=1 so an empty/invalid manifest can't produce steps(0),
+  // which is rejected as invalid CSS and freezes the animation.
+  const frames = Math.max(1, anim?.frames ?? sprite.columns ?? 1)
+  // Why: allow fractional downscaling so frames larger than maxSize shrink to
+  // fit instead of overflowing the overlay; mirrors DetectedSpriteFrame's math.
+  const scale = Math.min(maxSize / sprite.frameWidth, maxSize / sprite.frameHeight)
   const renderedW = sprite.frameWidth * scale
   const renderedH = sprite.frameHeight * scale
   const bgW = sprite.sheetWidth * scale
@@ -76,7 +78,9 @@ function DetectedSpriteFrame({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const frameIndexRef = useRef(0)
   const lastTimeRef = useRef(0)
-  const fps = 8
+  // Why: honor manifest fps captured at import time so bundles play at their
+  // intended speed; default to 8 only when the manifest didn't declare one.
+  const fps = detected.fps > 0 ? detected.fps : 8
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -85,6 +89,10 @@ function DetectedSpriteFrame({
     if (!ctx) return
     canvas.width = maxSize
     canvas.height = maxSize
+    // Why: reset playback when the underlying sprite changes so the new
+    // animation starts from frame 0 rather than wherever the prior one stopped.
+    frameIndexRef.current = 0
+    lastTimeRef.current = 0
     let raf = 0
     const draw = (): void => {
       const f = detected.frames[frameIndexRef.current % detected.frames.length]
@@ -177,7 +185,7 @@ function clampToViewport(pos: Position, size: number = SIZE): Position {
   }
 }
 
-function loadStoredPosition(): Position | null {
+function loadStoredPosition(size: number = SIZE): Position | null {
   if (typeof window === 'undefined') {
     return null
   }
@@ -190,7 +198,9 @@ function loadStoredPosition(): Position | null {
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') {
       return null
     }
-    return clampToViewport({ x: parsed.x, y: parsed.y })
+    // Why: clamp using the live overlay size so a persisted position from a
+    // larger overlay doesn't slip off the bottom/right edge after a shrink.
+    return clampToViewport({ x: parsed.x, y: parsed.y }, size)
   } catch {
     return null
   }
@@ -216,9 +226,14 @@ export function SidekickOverlay(): React.JSX.Element {
   const { url, sprite, detected } = useSidekickUrl()
   const size = useAppStore((s) => s.sidekickSize)
 
-  const [position, setPosition] = useState<Position>(
-    () => loadStoredPosition() ?? defaultPosition(size)
-  )
+  const [position, setPosition] = useState<Position>(() => {
+    // Why: read the persisted size eagerly via getState so the initial clamp
+    // uses the user's last sidekick size — useState's lazy initializer runs
+    // before the `size` prop binding settles, and `loadStoredPosition` would
+    // otherwise default to SIZE and clip a previously-saved position.
+    const currentSize = useAppStore.getState().sidekickSize ?? SIZE
+    return loadStoredPosition(currentSize) ?? defaultPosition(currentSize)
+  })
   const [dragging, setDragging] = useState(false)
   const dragOffsetRef = useRef<Position>({ x: 0, y: 0 })
 
