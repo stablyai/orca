@@ -35,12 +35,10 @@ function looksLikeWindowsPath(pathValue: string): boolean {
  */
 export function parseWorktreeList(output: string): GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = []
-  const blocks = output.includes('\0')
-    ? parseNullDelimitedWorktreeBlocks(output)
-    : output
-        .trim()
-        .split(/\r?\n\r?\n/)
-        .map((block) => block.trim().split(/\r?\n/))
+  const blocks = output
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
 
   for (const lines of blocks) {
     if (lines.length === 0) {
@@ -88,11 +86,9 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    // Why: `-z` on `git worktree list --porcelain` requires Git ≥ 2.36 (April
-    // 2022). On older Git the subprocess errors out, the catch below returns
-    // [], and every create flow throws "Worktree created but not found in
-    // listing" (issue #1453). The parser handles both line-block and
-    // NUL-delimited blocks, so omitting `-z` is safe.
+    // Why: do not pass `-z` here. `-z` requires Git ≥ 2.36; older Git rejects
+    // it, listWorktrees returns [], and every create flow throws "Worktree
+    // created but not found in listing" (issue #1453).
     const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
       cwd: repoPath
     })
@@ -278,28 +274,6 @@ export async function removeWorktree(
       error
     )
   }
-}
-
-function parseNullDelimitedWorktreeBlocks(output: string): string[][] {
-  const blocks: string[][] = []
-  let current: string[] = []
-
-  for (const token of output.split('\0')) {
-    if (!token) {
-      if (current.length > 0) {
-        blocks.push(current)
-        current = []
-      }
-      continue
-    }
-    current.push(token)
-  }
-
-  if (current.length > 0) {
-    blocks.push(current)
-  }
-
-  return blocks
 }
 
 function translateWorktreePath(worktreePath: string, repoPath: string): string {

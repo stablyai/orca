@@ -306,16 +306,15 @@ describe('listWorktrees', () => {
     resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
 
-  it('translates parsed path fields from NUL-delimited porcelain output', async () => {
+  it('translates parsed path fields from line-block porcelain output', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'worktree /home/me/repo\0HEAD abc123\0branch refs/heads/main\0\0' +
-        'worktree /home/me/repo-feature\0HEAD def456\0branch refs/heads/feature/test\0sparse\0\0'
+        'worktree /home/me/repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
+        'worktree /home/me/repo-feature\nHEAD def456\nbranch refs/heads/feature/test\nsparse\n\n'
     })
-    translateWslOutputPathsMock.mockImplementation((output: string) => {
-      expect(output).not.toContain('\0')
-      return output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
-    })
+    translateWslOutputPathsMock.mockImplementation((output: string) =>
+      output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
+    )
 
     await expect(listWorktrees('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')).resolves.toEqual([
       {
@@ -347,17 +346,16 @@ describe('listWorktrees', () => {
       if (args.join(' ') === 'worktree list --porcelain') {
         return {
           stdout:
-            'worktree /home/me/repo\0HEAD abc123\0branch refs/heads/main\0\0' +
-            'worktree /home/me/repo-feature\0HEAD def456\0branch refs/heads/feature/test\0\0',
+            'worktree /home/me/repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
+            'worktree /home/me/repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n\n',
           stderr: ''
         }
       }
       throw new Error(`Unexpected git call: ${args.join(' ')}`)
     })
-    translateWslOutputPathsMock.mockImplementation((output: string) => {
-      expect(output).not.toContain('\0')
-      return output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
-    })
+    translateWslOutputPathsMock.mockImplementation((output: string) =>
+      output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
+    )
     const featureWorktreePath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
     resolveGitDirMock.mockImplementation(async (worktreePath: string) =>
       worktreePath === featureWorktreePath
