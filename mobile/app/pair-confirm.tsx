@@ -100,17 +100,12 @@ export default function PairConfirmScreen() {
       </Pressable>
 
       <View style={styles.content}>
-        <Text style={styles.title}>Pair with this desktop?</Text>
-
         {offer && status === 'awaiting-confirm' && (
           <>
+            <Text style={styles.title}>Pair with this desktop?</Text>
             <Text style={styles.subtitle}>
               You opened a pairing link from your desktop. Confirm to add it to your hosts.
             </Text>
-            <View style={styles.detailsCard}>
-              <Text style={styles.detailsLabel}>Endpoint</Text>
-              <Text style={styles.detailsValue}>{offer.endpoint}</Text>
-            </View>
             <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
               <Text style={styles.primaryButtonText}>Pair</Text>
             </Pressable>
@@ -121,19 +116,19 @@ export default function PairConfirmScreen() {
         )}
 
         {status === 'connecting' && (
-          <View style={styles.centered}>
+          <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
             <Text style={styles.connectingText}>Connecting…</Text>
-          </View>
+          </>
         )}
 
         {status === 'error' && (
-          <View style={styles.centered}>
+          <>
             <Text style={styles.errorText}>{errorMessage}</Text>
             <Pressable style={styles.primaryButton} onPress={cancel}>
               <Text style={styles.primaryButtonText}>Back to home</Text>
             </Pressable>
-          </View>
+          </>
         )}
       </View>
     </View>
@@ -156,36 +151,26 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: spacing.sm
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    // Why: nudges the centered group slightly above the geometric
+    // middle so the eye reads it as visually centered above the home
+    // indicator / nav bar.
+    paddingBottom: spacing.xl * 2
   },
   title: {
     fontSize: typography.titleSize,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: spacing.sm
+    marginBottom: spacing.sm,
+    textAlign: 'center'
   },
   subtitle: {
     fontSize: typography.bodySize,
     color: colors.textSecondary,
     lineHeight: 20,
-    marginBottom: spacing.lg
-  },
-  detailsCard: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    padding: spacing.md,
-    marginBottom: spacing.lg
-  },
-  detailsLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginBottom: 4
-  },
-  detailsValue: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontFamily: 'Menlo',
-    fontWeight: '500'
+    marginBottom: spacing.xl,
+    textAlign: 'center'
   },
   primaryButton: {
     backgroundColor: colors.textPrimary,
@@ -211,15 +196,11 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '500'
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
   connectingText: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
-    marginTop: spacing.lg
+    marginTop: spacing.lg,
+    textAlign: 'center'
   },
   errorText: {
     color: colors.statusRed,
