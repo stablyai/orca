@@ -55,28 +55,21 @@ export default function ProjectCell({
   }
   if (field.dataType === TYPE_FIELD_DATA_TYPE) {
     const editableHere = editable && !isRedacted && row.itemType === 'ISSUE'
-    return (
-      <TypeCell row={row} editable={editableHere} onEditIssueType={onEditIssueType} />
-    )
+    return <TypeCell row={row} editable={editableHere} onEditIssueType={onEditIssueType} />
   }
   if (field.dataType === 'ASSIGNEES') {
     const editableHere = editable && !isRedacted && row.itemType !== 'DRAFT_ISSUE'
-    return (
-      <AssigneesCell
-        row={row}
-        editable={editableHere}
-        onEditAssignees={onEditAssignees}
-      />
-    )
+    return <AssigneesCell row={row} editable={editableHere} onEditAssignees={onEditAssignees} />
   }
   if (field.dataType === 'LABELS') {
     const editableHere = editable && !isRedacted && row.itemType !== 'DRAFT_ISSUE'
     return <LabelsCell row={row} editable={editableHere} onEditLabels={onEditLabels} />
-
   }
   if (field.dataType === 'REPOSITORY') {
     return (
-      <span className="truncate text-xs text-muted-foreground">{row.content.repository ?? '—'}</span>
+      <span className="truncate text-xs text-muted-foreground">
+        {row.content.repository ?? '—'}
+      </span>
     )
   }
   if (field.dataType === 'PARENT_ISSUE') {
@@ -220,7 +213,11 @@ function TitleCell({
     return <div className="flex items-center gap-2">{content}</div>
   }
   return (
-    <button type="button" onClick={onOpenDialog} className="min-w-0 cursor-pointer text-left hover:underline">
+    <button
+      type="button"
+      onClick={onOpenDialog}
+      className="min-w-0 cursor-pointer text-left hover:underline"
+    >
       {content}
     </button>
   )
@@ -239,9 +236,7 @@ function TypeCell({
   // when set — that's the editable taxonomy. PR/Draft/Restricted rows render
   // the static itemType glyph because there's no equivalent editable type.
   if (row.itemType === 'ISSUE') {
-    return (
-      <IssueTypeCell row={row} editable={editable} onEditIssueType={onEditIssueType} />
-    )
+    return <IssueTypeCell row={row} editable={editable} onEditIssueType={onEditIssueType} />
   }
   const meta =
     row.itemType === 'PULL_REQUEST'
@@ -274,17 +269,25 @@ function IssueTypeCell({
   const [owner, repo] = (row.content.repository ?? '').split('/')
 
   React.useEffect(() => {
-    if (!open || !owner || !repo) {return}
+    if (!open || !owner || !repo) {
+      return
+    }
     let cancelled = false
     setLoading(true)
     window.api.gh
       .listIssueTypesBySlug({ owner, repo })
       .then((res) => {
-        if (cancelled) {return}
-        if (res.ok) {setOptions(res.types)}
+        if (cancelled) {
+          return
+        }
+        if (res.ok) {
+          setOptions(res.types)
+        }
       })
       .finally(() => {
-        if (!cancelled) {setLoading(false)}
+        if (!cancelled) {
+          setLoading(false)
+        }
       })
     return () => {
       cancelled = true
@@ -296,11 +299,11 @@ function IssueTypeCell({
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
       {issueType ? (
         (() => {
-          const { bg, fg, border } = singleSelectChipColors(issueType.color ?? '')
+          const colors = singleSelectChipColors(issueType.color ?? '')
           return (
             <span
-              className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none"
-              style={{ backgroundColor: bg, color: fg, boxShadow: `inset 0 0 0 1px ${border}` }}
+              className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+              style={chipStyle(colors)}
             >
               {issueType.name}
             </span>
@@ -328,9 +331,7 @@ function IssueTypeCell({
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1" align="start">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">
-            Row has no repo slug.
-          </div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
         ) : loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
         ) : options.length === 0 ? (
@@ -401,11 +402,11 @@ function SingleSelectCell({
   const label =
     value?.kind === 'single-select' ? (
       (() => {
-        const { bg, fg, border } = singleSelectChipColors(value.color)
+        const colors = singleSelectChipColors(value.color)
         return (
           <span
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none"
-            style={{ backgroundColor: bg, color: fg, boxShadow: `inset 0 0 0 1px ${border}` }}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+            style={chipStyle(colors)}
           >
             {value.name}
           </span>
@@ -420,7 +421,10 @@ function SingleSelectCell({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="cursor-pointer text-left rounded hover:bg-muted/40 px-0.5 -mx-0.5">
+        <button
+          type="button"
+          className="cursor-pointer text-left rounded hover:bg-muted/40 px-0.5 -mx-0.5"
+        >
           {label}
         </button>
       </PopoverTrigger>
@@ -487,7 +491,10 @@ function IterationCell({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="cursor-pointer text-left rounded hover:bg-muted/40 px-0.5 -mx-0.5">
+        <button
+          type="button"
+          className="cursor-pointer text-left rounded hover:bg-muted/40 px-0.5 -mx-0.5"
+        >
           {label}
         </button>
       </PopoverTrigger>
@@ -596,13 +603,17 @@ function TextCell({
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
         setEditing(false)
-        if (draft !== value) {onCommit(draft)}
+        if (draft !== value) {
+          onCommit(draft)
+        }
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault()
           setEditing(false)
-          if (draft !== value) {onCommit(draft)}
+          if (draft !== value) {
+            onCommit(draft)
+          }
         } else if (e.key === 'Escape') {
           e.preventDefault()
           setEditing(false)
@@ -639,7 +650,9 @@ function DateCell({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
-        if (draft !== (value ?? '')) {onCommit(draft)}
+        if (draft !== (value ?? '')) {
+          onCommit(draft)
+        }
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -660,11 +673,11 @@ function LabelChip({ label }: { label: GitHubProjectLabel }): React.JSX.Element 
   // Why: match GitHub's dark-mode label rendering — translucent fill of the
   // label color with a brighter foreground derived from the same hue. The
   // outline-only chip we had before was hard to read against the dark UI.
-  const { bg, fg, border } = labelChipColors(label.color)
+  const colors = labelChipColors(label.color)
   return (
     <span
-      className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none"
-      style={{ backgroundColor: bg, color: fg, boxShadow: `inset 0 0 0 1px ${border}` }}
+      className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+      style={chipStyle(colors)}
     >
       {label.name}
     </span>
@@ -714,14 +727,20 @@ function AssigneesCell({
   // (the same call the rate-limit pill is meant to discourage). Joining the
   // sorted logins gives us a stable string identity.
   const seedKey = React.useMemo(
-    () => assignees.map((a) => a.login).sort().join(','),
+    () =>
+      assignees
+        .map((a) => a.login)
+        .sort()
+        .join(','),
     [assignees]
   )
 
   // Why: only hit the slug-addressed user list when the popover actually
   // opens — the assignable-users query can be expensive for large repos.
   React.useEffect(() => {
-    if (!open || !owner || !repo) {return}
+    if (!open || !owner || !repo) {
+      return
+    }
     let cancelled = false
     setLoading(true)
     window.api.gh
@@ -731,11 +750,17 @@ function AssigneesCell({
         seedLogins: seedKey ? seedKey.split(',') : []
       })
       .then((res) => {
-        if (cancelled) {return}
-        if (res.ok) {setOptions(res.users)}
+        if (cancelled) {
+          return
+        }
+        if (res.ok) {
+          setOptions(res.users)
+        }
       })
       .finally(() => {
-        if (!cancelled) {setLoading(false)}
+        if (!cancelled) {
+          setLoading(false)
+        }
       })
     return () => {
       cancelled = true
@@ -771,9 +796,7 @@ function AssigneesCell({
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">
-            Row has no repo slug.
-          </div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
         ) : loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
         ) : (
@@ -785,8 +808,11 @@ function AssigneesCell({
                 type="button"
                 className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted/50"
                 onClick={() => {
-                  if (isOn) {onEditAssignees?.([], [u.login])}
-                  else {onEditAssignees?.([u.login], [])}
+                  if (isOn) {
+                    onEditAssignees?.([], [u.login])
+                  } else {
+                    onEditAssignees?.([u.login], [])
+                  }
                 }}
               >
                 <span
@@ -827,17 +853,25 @@ function LabelsCell({
   // Why: only fetch the slug-addressed labels list when the popover actually
   // opens — listing labels is cheap but still a network round-trip per row.
   React.useEffect(() => {
-    if (!open || !owner || !repo) {return}
+    if (!open || !owner || !repo) {
+      return
+    }
     let cancelled = false
     setLoading(true)
     window.api.gh
       .listLabelsBySlug({ owner, repo })
       .then((res) => {
-        if (cancelled) {return}
-        if (res.ok) {setOptions(res.labels)}
+        if (cancelled) {
+          return
+        }
+        if (res.ok) {
+          setOptions(res.labels)
+        }
       })
       .finally(() => {
-        if (!cancelled) {setLoading(false)}
+        if (!cancelled) {
+          setLoading(false)
+        }
       })
     return () => {
       cancelled = true
@@ -852,9 +886,7 @@ function LabelsCell({
     )
 
   if (!editable) {
-    return (
-      <div className="flex flex-wrap items-center gap-1">{labelContent}</div>
-    )
+    return <div className="flex flex-wrap items-center gap-1">{labelContent}</div>
   }
 
   return (
@@ -871,15 +903,11 @@ function LabelsCell({
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">
-            Row has no repo slug.
-          </div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
         ) : loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
         ) : options.length === 0 ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">
-            No labels in this repo.
-          </div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">No labels in this repo.</div>
         ) : (
           options.map((name) => {
             const isOn = labels.some((l) => l.name === name)
@@ -889,8 +917,11 @@ function LabelsCell({
                 type="button"
                 className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted/50"
                 onClick={() => {
-                  if (isOn) {onEditLabels?.([], [name])}
-                  else {onEditLabels?.([name], [])}
+                  if (isOn) {
+                    onEditLabels?.([], [name])
+                  } else {
+                    onEditLabels?.([name], [])
+                  }
                 }}
               >
                 <span
@@ -927,10 +958,16 @@ function EmptyCellPlaceholder({ editable }: { editable: boolean }): React.JSX.El
 }
 
 function colorHex(color: string): string {
-  if (!color) {return 'inherit'}
-  if (color.startsWith('#')) {return color}
+  if (!color) {
+    return 'inherit'
+  }
+  if (color.startsWith('#')) {
+    return color
+  }
   // GitHub returns 6-hex without `#`.
-  if (/^[0-9a-fA-F]{6}$/.test(color)) {return `#${color}`}
+  if (/^[0-9a-fA-F]{6}$/.test(color)) {
+    return `#${color}`
+  }
   return color
 }
 
@@ -948,32 +985,64 @@ const SINGLE_SELECT_HEX: Record<string, string> = {
   PINK: '#db61a2'
 }
 
-function singleSelectChipColors(color: string): { bg: string; fg: string; border: string } {
-  if (!color) {return labelChipColors('')}
+type ChipColors = {
+  bg: string
+  fgLight: string
+  fgDark: string
+  border: string
+}
+
+function chipStyle(colors: ChipColors): React.CSSProperties {
+  return {
+    '--github-project-chip-fg-light': colors.fgLight,
+    '--github-project-chip-fg-dark': colors.fgDark,
+    backgroundColor: colors.bg,
+    boxShadow: `inset 0 0 0 1px ${colors.border}`
+  } as React.CSSProperties
+}
+
+function singleSelectChipColors(color: string): ChipColors {
+  if (!color) {
+    return labelChipColors('')
+  }
   const upper = color.toUpperCase()
   const hex = SINGLE_SELECT_HEX[upper]
-  if (hex) {return labelChipColors(hex)}
+  if (hex) {
+    return labelChipColors(hex)
+  }
   return labelChipColors(color)
 }
 
 // Why: GitHub renders labels in dark mode as a low-alpha tint of the label
 // color with text re-mapped to a lightness that reads well on the tint. We
 // approximate Primer's algorithm so our chips match the GitHub UI.
-function labelChipColors(color: string): { bg: string; fg: string; border: string } {
-  const fallback = { bg: 'rgba(125,125,125,0.2)', fg: '#e6edf3', border: 'rgba(125,125,125,0.4)' }
-  if (!color) {return fallback}
+function labelChipColors(color: string): ChipColors {
+  const fallback = {
+    bg: 'rgba(125,125,125,0.18)',
+    fgLight: '#4b5563',
+    fgDark: '#e6edf3',
+    border: 'rgba(125,125,125,0.36)'
+  }
+  if (!color) {
+    return fallback
+  }
   const hex = color.startsWith('#') ? color.slice(1) : color
-  if (!/^[0-9a-fA-F]{6}$/.test(hex)) {return fallback}
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return fallback
+  }
   const r = parseInt(hex.slice(0, 2), 16)
   const g = parseInt(hex.slice(2, 4), 16)
   const b = parseInt(hex.slice(4, 6), 16)
   const [h, s] = rgbToHsl(r, g, b)
-  // Primer dark-theme label: bg ~18% alpha of base, border ~30%, text lifted
-  // to L≈85% so it stays bright but keeps the hue.
   const bg = `rgba(${r}, ${g}, ${b}, 0.18)`
   const border = `rgba(${r}, ${g}, ${b}, 0.3)`
-  const fg = hslToCss(h, Math.max(s, 0.5), 0.85)
-  return { bg, fg, border }
+  // Why: the dark-theme text lift turns chips into near-white-on-pastel in
+  // light mode. Keep the same tint, but anchor text in the darker hue range.
+  const fgLight = hslToCss(h, Math.max(s, 0.45), 0.32)
+  // Primer dark-theme label: bg ~18% alpha of base, border ~30%, text lifted
+  // to L≈85% so it stays bright but keeps the hue.
+  const fgDark = hslToCss(h, Math.max(s, 0.5), 0.85)
+  return { bg, fgLight, fgDark, border }
 }
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
@@ -984,7 +1053,9 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   const min = Math.min(rn, gn, bn)
   const l = (max + min) / 2
   const d = max - min
-  if (d === 0) {return [0, 0, l]}
+  if (d === 0) {
+    return [0, 0, l]
+  }
   const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
   let h = 0
   switch (max) {
