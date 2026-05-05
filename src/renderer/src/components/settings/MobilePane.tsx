@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Maximize2, RefreshCw, Trash2, Wifi } from 'lucide-react'
+import { Check, Copy, Maximize2, RefreshCw, Trash2, Wifi } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -38,12 +38,14 @@ type NetworkInterface = {
 
 export function MobilePane(): React.JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [qrEnlarged, setQrEnlarged] = useState(false)
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterface[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
+  const [codeCopied, setCodeCopied] = useState(false)
 
   const loadDevices = useCallback(async () => {
     try {
@@ -74,7 +76,9 @@ export function MobilePane(): React.JSX.Element {
       )
       if (result.available) {
         setQrDataUrl(result.qrDataUrl)
+        setPairingUrl(result.pairingUrl)
         setEndpoint(result.endpoint)
+        setCodeCopied(false)
         void loadDevices()
       } else {
         toast.error('WebSocket transport is not running')
@@ -109,6 +113,19 @@ export function MobilePane(): React.JSX.Element {
     const interval = setInterval(() => void loadDevices(), 3000)
     return () => clearInterval(interval)
   }, [deviceCountAtQr, devices.length, loadDevices])
+
+  async function copyPairingCode() {
+    if (!pairingUrl) {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(pairingUrl)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    } catch {
+      toast.error('Failed to copy pairing code')
+    }
+  }
 
   async function revokeDevice(deviceId: string) {
     try {
@@ -177,6 +194,26 @@ export function MobilePane(): React.JSX.Element {
           <p className="text-muted-foreground max-w-xs text-center text-xs">
             Scan this code with the Orca mobile app. Each code creates a unique device token.
           </p>
+          {pairingUrl && (
+            <div className="flex w-full max-w-sm flex-col gap-1.5 px-4">
+              <div className="text-muted-foreground text-center text-xs">
+                Or paste this code in the mobile app:
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void copyPairingCode()}
+                className="font-mono text-[10px] leading-tight whitespace-normal break-all h-auto py-2"
+              >
+                <span className="flex-1 text-left">{pairingUrl}</span>
+                {codeCopied ? (
+                  <Check className="ml-2 size-3.5 shrink-0 text-emerald-500" />
+                ) : (
+                  <Copy className="ml-2 size-3.5 shrink-0" />
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

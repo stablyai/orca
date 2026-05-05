@@ -82,6 +82,7 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     return {
       available: true as const,
       qrDataUrl,
+      pairingUrl: url,
       endpoint,
       deviceId: device.deviceId
     }

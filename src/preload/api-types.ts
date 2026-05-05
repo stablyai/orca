@@ -1167,11 +1167,15 @@ export type PreloadApi = {
     listNetworkInterfaces: () => Promise<{
       interfaces: { name: string; address: string }[]
     }>
-    getPairingQR: (args?: {
-      address?: string
-    }) => Promise<
+    getPairingQR: (args?: { address?: string }) => Promise<
       | { available: false }
-      | { available: true; qrDataUrl: string; endpoint: string; deviceId: string }
+      | {
+          available: true
+          qrDataUrl: string
+          pairingUrl: string
+          endpoint: string
+          deviceId: string
+        }
     >
     listDevices: () => Promise<{
       devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]

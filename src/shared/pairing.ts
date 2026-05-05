@@ -28,7 +28,28 @@ export function decodePairingOffer(url: string): PairingOffer {
   if (!url.startsWith('orca://pair') || hashIndex === -1) {
     throw new Error('Invalid pairing URL: must start with orca://pair#')
   }
-  const base64url = url.slice(hashIndex + 1)
+  return decodePairingBase64(url.slice(hashIndex + 1))
+}
+
+// Why: accept either an `orca://pair#<base64>` URL or the bare base64
+// string so the mobile paste-pair flow can take whichever the user
+// actually copied from desktop.
+export function parsePairingCode(input: string): PairingOffer | null {
+  const trimmed = input.trim()
+  if (!trimmed) {
+    return null
+  }
+  try {
+    if (trimmed.startsWith('orca://pair')) {
+      return decodePairingOffer(trimmed)
+    }
+    return decodePairingBase64(trimmed)
+  } catch {
+    return null
+  }
+}
+
+function decodePairingBase64(base64url: string): PairingOffer {
   const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
   const json = Buffer.from(base64, 'base64').toString('utf-8')
   return PairingOfferSchema.parse(JSON.parse(json))
