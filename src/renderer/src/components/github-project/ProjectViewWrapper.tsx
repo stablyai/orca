@@ -429,6 +429,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         item: workItem,
         repoId: matched.id,
         launchSource: 'task_page',
+        telemetrySource: 'sidebar',
         openModalFallback: () => {
           // Why: Project mode does not own the new-workspace composer modal.
           // When `launchWorkItemDirect` wants user input (setupRunPolicy:'ask'
@@ -694,6 +695,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             item,
             repoId: current.workItem.repoId,
             launchSource: 'task_page',
+            telemetrySource: 'sidebar',
             openModalFallback: () => {
               if (item.url) {
                 void window.api.shell.openUrl(item.url)

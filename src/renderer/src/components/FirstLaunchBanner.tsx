@@ -11,7 +11,7 @@
 //
 // Three actions, two semantics:
 //   - "Got it" and the ✕ in the corner → silent acknowledge. Both persist
-//     `optedIn: true`, fire nothing, route through
+//     `optedIn: true`, fire no opt-in event, route through
 //     `window.api.telemetryAcknowledgeBanner()` to a dedicated main-side
 //     channel so no `via` derivation can tag this path. Two surfaces for
 //     the same action because the ✕ alone is easy to miss; "Got it" is
@@ -64,7 +64,7 @@ export function FirstLaunchBanner({
     }
     setInFlight(true)
     // Main's `telemetry:acknowledgeBanner` handler persists `optedIn: true`
-    // silently (no event) and intentionally does NOT broadcast
+    // without an opt-in event and intentionally does NOT broadcast
     // `settings:changed` (see src/main/ipc/telemetry.ts). Without an
     // explicit `fetchSettings()` refresh, the renderer store would retain
     // `optedIn: null` and PrivacyPane would keep rendering its pending-
