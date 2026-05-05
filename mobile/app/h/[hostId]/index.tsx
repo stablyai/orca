@@ -1020,6 +1020,7 @@ export default function HostScreen() {
       <NewWorktreeModal
         visible={showNewWorktree}
         client={client}
+        existingWorktreeNames={worktrees.map((w) => w.displayName)}
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees()
           const params = new URLSearchParams({ name: worktreeName, created: '1' })

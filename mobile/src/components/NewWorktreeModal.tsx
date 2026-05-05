@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { getSuggestedCreatureName } from './worktree-name-suggestion'
 
 type Repo = {
   id: string
@@ -248,11 +249,21 @@ function PickerListModal<T extends { id: string; label: string }>({
 type Props = {
   visible: boolean
   client: RpcClient | null
+  // Why: existing worktree display names from the host so we can pick a
+  // unique marine-creature default when the user leaves the name blank,
+  // matching the desktop UI's behavior.
+  existingWorktreeNames?: readonly string[]
   onCreated: (worktreeId: string, name: string) => void
   onClose: () => void
 }
 
-export function NewWorktreeModal({ visible, client, onCreated, onClose }: Props) {
+export function NewWorktreeModal({
+  visible,
+  client,
+  existingWorktreeNames,
+  onCreated,
+  onClose
+}: Props) {
   const [repos, setRepos] = useState<Repo[]>([])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
@@ -267,6 +278,15 @@ export function NewWorktreeModal({ visible, client, onCreated, onClose }: Props)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+
+  // Why: surface the marine-creature default in the input placeholder so the
+  // user can see exactly what name will be created if they leave the field
+  // blank. Recomputed only when the modal is shown so it stays stable while
+  // the user is typing.
+  const suggestedName = useMemo(
+    () => (visible ? getSuggestedCreatureName(existingWorktreeNames ?? []) : ''),
+    [visible, existingWorktreeNames]
+  )
 
   useEffect(() => {
     if (!visible) {
@@ -358,12 +378,20 @@ export function NewWorktreeModal({ visible, client, onCreated, onClose }: Props)
       const command =
         selectedAgent.id !== '__blank__' ? AGENT_COMMANDS[selectedAgent.id] : undefined
 
+      // Why: blank name field — fall back to the same marine-creature default
+      // shown in the placeholder so the created worktree matches what the user
+      // saw, matching the desktop UI. The server's worktree.create rejects
+      // empty/invalid names, so we must generate one client-side rather than
+      // letting the server invent one.
+      const trimmedName = name.trim()
+      const finalName = trimmedName || suggestedName
+
       const params: Record<string, unknown> = {
         repo: `id:${selectedRepo.id}`,
         startupCommand: command,
-        setupDecision: runSetup ? 'inherit' : 'skip'
+        setupDecision: runSetup ? 'inherit' : 'skip',
+        name: finalName
       }
-      if (name.trim()) params.name = name.trim()
       if (note.trim()) params.comment = note.trim()
 
       const response = await client.sendRequest('worktree.create', params)
@@ -373,7 +401,7 @@ export function NewWorktreeModal({ visible, client, onCreated, onClose }: Props)
         const worktreeId = result.worktree.id
 
         onClose()
-        onCreated(worktreeId, name.trim() || 'New workspace')
+        onCreated(worktreeId, finalName)
       } else {
         setError(response.error.message)
       }
@@ -430,7 +458,7 @@ export function NewWorktreeModal({ visible, client, onCreated, onClose }: Props)
                   setName(t)
                   setError('')
                 }}
-                placeholder="Workspace name"
+                placeholder={suggestedName || 'Workspace name'}
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
