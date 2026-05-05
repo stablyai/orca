@@ -700,12 +700,8 @@ export function ResourceUsageStatusSegment({
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
-    const sessTimer = window.setInterval(() => {
-      void refreshSessions()
-    }, SESSIONS_POLL_MS)
     return () => {
       window.clearInterval(memTimer)
-      window.clearInterval(sessTimer)
     }
   }, [open, fetchSnapshot, refreshSessions])
 
@@ -791,7 +787,13 @@ export function ResourceUsageStatusSegment({
     }
   }, [snapshot])
 
-  const daemonUnreachable = sessionsError && memorySnapshotError !== null
+  // Why: memorySnapshotError is null both for "last fetch succeeded" and
+  // "never fetched". When the segment is mounted but the popover hasn't
+  // been opened, fetchMemorySnapshot has never run, so a sessions IPC
+  // failure on the always-on poll would otherwise be silent. Treat the
+  // absence of any snapshot plus a sessions error as unreachable too.
+  const daemonUnreachable =
+    sessionsError && (memorySnapshotError !== null || snapshot === null)
   // Why: a partial failure where the sessions IPC fails but the snapshot
   // IPC still works was silently invisible after the merge — the old
   // SessionsTabPanel surfaced it as "Terminal sessions unavailable". Show
@@ -868,10 +870,14 @@ export function ResourceUsageStatusSegment({
       // bulk "Kill orphan terminals" button. Bound sessions still confirm.
       if (!session.bound) {
         setSessions((prev) => prev.filter((s) => s.id !== session.sessionId))
-        void window.api.pty.kill(session.sessionId).catch(() => {
-          /* already dead */
-        })
-        void refreshSessions()
+        void (async () => {
+          try {
+            await window.api.pty.kill(session.sessionId)
+          } catch {
+            /* already dead */
+          }
+          await refreshSessions()
+        })()
         return
       }
       setKillConfirm(session)
@@ -1226,61 +1232,61 @@ export function ResourceUsageStatusSegment({
           </div>
         )}
 
-        <Dialog
-          open={killConfirm !== null}
-          onOpenChange={(next) => {
-            if (next) {
-              return
-            }
+      </PopoverContent>
+      <Dialog
+        open={killConfirm !== null}
+        onOpenChange={(next) => {
+          if (next) {
+            return
+          }
+          if (killing) {
+            return
+          }
+          setKillConfirm(null)
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={!killing}
+          onPointerDownOutside={(e) => {
             if (killing) {
-              return
+              e.preventDefault()
             }
-            setKillConfirm(null)
+          }}
+          onEscapeKeyDown={(e) => {
+            if (killing) {
+              e.preventDefault()
+            }
           }}
         >
-          <DialogContent
-            className="max-w-md"
-            showCloseButton={!killing}
-            onPointerDownOutside={(e) => {
-              if (killing) {
-                e.preventDefault()
-              }
-            }}
-            onEscapeKeyDown={(e) => {
-              if (killing) {
-                e.preventDefault()
-              }
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle className="text-sm">
-                Kill{' '}
-                <span className="font-medium text-foreground">
-                  {killConfirm?.label ?? 'this session'}
-                </span>
-                ?
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                Force-quits this terminal. Any unsaved work in the pane is lost. This can&apos;t be
-                undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setKillConfirm(null)} disabled={killing}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => void runKillConfirmed()}
-                disabled={killing}
-              >
-                {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                {killing ? 'Killing…' : 'Kill session'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </PopoverContent>
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Kill{' '}
+              <span className="font-medium text-foreground">
+                {killConfirm?.label ?? 'this session'}
+              </span>
+              ?
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Force-quits this terminal. Any unsaved work in the pane is lost. This can&apos;t be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setKillConfirm(null)} disabled={killing}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void runKillConfirmed()}
+              disabled={killing}
+            >
+              {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              {killing ? 'Killing…' : 'Kill session'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <DaemonActionDialog api={daemonActions} />
     </Popover>
   )
