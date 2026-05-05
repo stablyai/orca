@@ -51,6 +51,79 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  // Why: when the user picks an action from the dropdown that doesn't match
+  // the primary's natural label, the primary must mirror the user-triggered
+  // action (label + kind) so the spinner narrates the right thing. Without
+  // this, picking "Sync" from the dropdown while the primary reads "Push"
+  // would spin a "Push" button that is not actually pushing.
+  it('mirrors the in-flight remote op kind on the primary while a remote op runs', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        isRemoteOperationActive: true,
+        // Pre-click natural state would resolve to Push (ahead-only).
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        inFlightRemoteOpKind: 'sync'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'sync',
+      label: 'Sync',
+      title: 'Sync in progress…',
+      disabled: true
+    })
+  })
+
+  it('mirrors an in-flight Pull on the primary even when natural label is Push', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        inFlightRemoteOpKind: 'pull'
+      })
+    )
+    expect(result.kind).toBe('pull')
+    expect(result.label).toBe('Pull')
+    expect(result.title).toBe('Pull in progress…')
+    expect(result.disabled).toBe(true)
+  })
+
+  it('keeps the natural Publish label and tooltip when an in-flight Publish matches', () => {
+    // Why: when the in-flight kind matches the natural primary kind we
+    // preserve the candidate's full label (the natural state-machine row
+    // owns the wording) rather than overriding to a stripped-down version.
+    const result = resolvePrimaryAction(
+      inputs({
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        inFlightRemoteOpKind: 'publish'
+      })
+    )
+    expect(result.kind).toBe('publish')
+    expect(result.label).toBe('Publish Branch')
+    expect(result.title).toBe('Remote operation in progress…')
+    expect(result.disabled).toBe(true)
+  })
+
+  // Why: Fetch is dropdown-only and never appears as the primary's label.
+  // When fetch is in flight, the primary must keep its natural label and
+  // tooltip so the button doesn't claim "Fetch" is a primary action — and
+  // the CommitArea spinner suppression hangs off the kind mismatch.
+  it('keeps the natural primary label when an in-flight Fetch is dropdown-only', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        inFlightRemoteOpKind: 'fetch'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Push',
+      title: 'Remote operation in progress…',
+      disabled: true
+    })
+  })
+
   it('blocks commits while unresolved conflicts exist', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnresolvedConflicts: true, stagedCount: 2, hasMessage: true })

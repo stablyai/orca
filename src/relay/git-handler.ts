@@ -263,7 +263,15 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
     const publish = params.publish === true
-    const args = publish ? ['push', '--set-upstream', 'origin', 'HEAD'] : ['push']
+    // Why: explicit `origin HEAD` refspec works regardless of push.default
+    // (which is `simple` by default in modern git). Worktree branches that
+    // Orca creates with `git worktree add --track -b <name> <dir> <baseRef>`
+    // track the *base* (e.g. origin/main) so ahead/behind compares against
+    // the base. Bare `git push` then fails with "upstream branch... does
+    // not match the name of your current branch". Pushing to `origin HEAD`
+    // publishes the current branch to a same-named remote ref and bypasses
+    // that check. Mirrors src/main/git/remote.ts so SSH and local paths agree.
+    const args = publish ? ['push', '--set-upstream', 'origin', 'HEAD'] : ['push', 'origin', 'HEAD']
     try {
       await this.git(args, worktreePath)
     } catch (error) {

@@ -39,7 +39,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { resolvePrimaryAction, type PrimaryAction } from './source-control-primary-action'
+import {
+  resolvePrimaryAction,
+  type PrimaryAction,
+  type RemoteOpKind
+} from './source-control-primary-action'
 import {
   resolveDropdownItems,
   type DropdownActionKind,
@@ -156,6 +160,7 @@ function SourceControlInner(): React.JSX.Element {
   const gitBranchCompareSummaryByWorktree = useAppStore((s) => s.gitBranchCompareSummaryByWorktree)
   const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
+  const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
@@ -596,7 +601,8 @@ function SourceControlInner(): React.JSX.Element {
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
         isRemoteOperationActive,
-        upstreamStatus: remoteStatus
+        upstreamStatus: remoteStatus,
+        inFlightRemoteOpKind
       }),
     [
       commitMessage,
@@ -604,6 +610,7 @@ function SourceControlInner(): React.JSX.Element {
       hasUnstagedChanges,
       isCommitting,
       isRemoteOperationActive,
+      inFlightRemoteOpKind,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -618,7 +625,8 @@ function SourceControlInner(): React.JSX.Element {
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
         isRemoteOperationActive,
-        upstreamStatus: remoteStatus
+        upstreamStatus: remoteStatus,
+        inFlightRemoteOpKind
       }),
     [
       commitMessage,
@@ -626,6 +634,7 @@ function SourceControlInner(): React.JSX.Element {
       hasUnstagedChanges,
       isCommitting,
       isRemoteOperationActive,
+      inFlightRemoteOpKind,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -1221,6 +1230,7 @@ function SourceControlInner(): React.JSX.Element {
               commitError={commitError}
               isCommitting={isCommitting}
               isRemoteOperationActive={isRemoteOperationActive}
+              inFlightRemoteOpKind={inFlightRemoteOpKind}
               primaryAction={primaryAction}
               dropdownItems={dropdownItems}
               onCommitMessageChange={(value) => {
@@ -1416,6 +1426,7 @@ type CommitAreaProps = {
   commitError: string | null
   isCommitting: boolean
   isRemoteOperationActive: boolean
+  inFlightRemoteOpKind: RemoteOpKind | null
   primaryAction: PrimaryAction
   dropdownItems: DropdownEntry[]
   onCommitMessageChange: (message: string) => void
@@ -1428,6 +1439,7 @@ export function CommitArea({
   commitError,
   isCommitting,
   isRemoteOperationActive,
+  inFlightRemoteOpKind,
   primaryAction,
   dropdownItems,
   onCommitMessageChange,
@@ -1438,14 +1450,19 @@ export function CommitArea({
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
   // the existing style) — the browser scrolls internally past 12 rows.
   const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
-  // Why: the spinner must track the primary action itself, not every
-  // background remote op. Fetching from the dropdown sets
-  // isRemoteOperationActive — if we spun the primary on that flag while the
-  // primary was "Commit", we'd be telling the user their commit was running
-  // when it isn't. The primary is always either the 'commit' kind or a
-  // pure remote kind (push / pull / sync / publish); compound commit_*
-  // kinds are dropdown-only and never reach this component.
-  const showSpinner = primaryAction.kind === 'commit' ? isCommitting : isRemoteOperationActive
+  // Why: only spin the primary when its label matches what's actually
+  // running. resolvePrimaryAction overrides the primary kind to mirror the
+  // in-flight op (e.g. user picks Sync from the dropdown → primary becomes
+  // "Sync"), so the equality check spins the button for any primary-
+  // eligible remote op the user triggered. Background ops the primary
+  // doesn't show (Fetch) leave primaryAction.kind unchanged and the
+  // mismatch keeps the spinner off — the disabled state alone is enough
+  // signal there. Commit still spins on isCommitting because that path
+  // doesn't go through inFlightRemoteOpKind.
+  const showSpinner =
+    primaryAction.kind === 'commit'
+      ? isCommitting
+      : isRemoteOperationActive && primaryAction.kind === inFlightRemoteOpKind
 
   return (
     <div className="px-3 pb-2">

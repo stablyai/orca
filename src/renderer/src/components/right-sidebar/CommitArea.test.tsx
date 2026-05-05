@@ -113,6 +113,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitError: null as string | null,
     isCommitting: inputs.isCommitting,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
+    inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,
     primaryAction: resolvePrimaryAction(inputs),
     dropdownItems: resolveDropdownItems(inputs),
     onCommitMessageChange: vi.fn(),
@@ -307,14 +308,53 @@ describe('CommitArea', () => {
     expect(primaryHasSpinner(element)).toBe(true)
   })
 
-  it('shows a spinner on a remote primary (Push) while the remote op is active', () => {
+  it('shows a spinner on a remote primary (Push) while the matching remote op is active', () => {
     const props = baseProps({
       stagedCount: 0,
       hasMessage: false,
       upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
-      isRemoteOperationActive: true
+      isRemoteOperationActive: true,
+      inFlightRemoteOpKind: 'push'
     })
-    const element = CommitArea({ ...props, isRemoteOperationActive: true })
+    const element = CommitArea(props)
     expect(primaryHasSpinner(element)).toBe(true)
+  })
+
+  // Why: regression — when the user picks Sync from the dropdown, the
+  // primary button must mirror the action they triggered (label "Sync",
+  // spinner on Sync) instead of leaving a stale "Push" with a spinner that
+  // claims a different operation is running.
+  it('mirrors a dropdown-triggered Sync on the primary button while it runs', () => {
+    const props = baseProps({
+      stagedCount: 0,
+      hasMessage: false,
+      // Pre-click state: ahead=3, behind=0 → primary's natural label is Push.
+      upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+      isRemoteOperationActive: true,
+      inFlightRemoteOpKind: 'sync'
+    })
+    const element = CommitArea(props)
+    const primary = findPrimaryButton(element)
+    expect(hasText(primary, 'Sync')).toBe(true)
+    expect(hasText(primary, 'Push')).toBe(false)
+    expect(primaryHasSpinner(element)).toBe(true)
+  })
+
+  // Why: Fetch is dropdown-only (never the primary's label). Spinning the
+  // primary on a fetch would mis-narrate "Push is running" while the actual
+  // work is fetching. Primary keeps its natural label, disabled, no spinner.
+  it('does not spin or relabel the primary when a dropdown Fetch is in flight', () => {
+    const props = baseProps({
+      stagedCount: 0,
+      hasMessage: false,
+      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
+      isRemoteOperationActive: true,
+      inFlightRemoteOpKind: 'fetch'
+    })
+    const element = CommitArea(props)
+    const primary = findPrimaryButton(element)
+    expect(hasText(primary, 'Push')).toBe(true)
+    expect(primary.props.disabled).toBe(true)
+    expect(primaryHasSpinner(element)).toBe(false)
   })
 })

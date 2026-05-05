@@ -16,6 +16,14 @@ import type { GitUpstreamStatus } from '../../../../shared/types'
 // the isRemoteOperationActive tooltip below at compile time.
 export type PrimaryActionKind = 'commit' | 'push' | 'pull' | 'sync' | 'publish'
 
+// Why: the in-flight remote op tracker stores which action the user actually
+// triggered, so the primary button can mirror that label/spinner instead of
+// claiming a stale or unrelated operation is running. 'fetch' is included
+// because Fetch participates in the busy flag, but it is intentionally NOT
+// in PrimaryActionKind — Fetch is dropdown-only, so when fetch is in flight
+// the primary keeps its natural label and CommitArea suppresses the spinner.
+export type RemoteOpKind = 'push' | 'pull' | 'sync' | 'fetch' | 'publish'
+
 export type PrimaryAction = {
   kind: PrimaryActionKind
   label: string
@@ -31,6 +39,18 @@ export type PrimaryActionInputs = {
   isCommitting: boolean
   isRemoteOperationActive: boolean
   upstreamStatus: GitUpstreamStatus | undefined
+  // Why: which remote op is currently running, when one is. null when no
+  // remote op is in flight. Used by the in-flight branch below to mirror
+  // the user-triggered action on the primary button instead of leaving a
+  // stale label that no longer matches what the slice is doing.
+  inFlightRemoteOpKind?: RemoteOpKind | null
+}
+
+const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
+  push: 'Push',
+  pull: 'Pull',
+  sync: 'Sync',
+  publish: 'Publish Branch'
 }
 
 function describePushCount(ahead: number): string {
@@ -71,7 +91,8 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     hasUnresolvedConflicts,
     isCommitting,
     isRemoteOperationActive,
-    upstreamStatus
+    upstreamStatus,
+    inFlightRemoteOpKind
   } = inputs
 
   // 1. Commit in flight — lock the primary no matter what else is true.
@@ -84,12 +105,35 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
-  // 2. Remote op in flight — keep the label that matches the current state
-  //    but disable the button so the user can't stack a second operation on
-  //    top of the running one. We compute the candidate label by recursing
-  //    with isRemoteOperationActive cleared, then force-disable it.
+  // 2. Remote op in flight — disable the primary. When the in-flight op
+  //    is a primary-eligible kind that doesn't match the primary's natural
+  //    label, mirror the in-flight kind so the user sees the action they
+  //    actually triggered (e.g. "Sync" when they picked Sync from the
+  //    dropdown while the primary's natural state was "Push"). When the
+  //    in-flight op matches the primary's natural kind we keep the natural
+  //    label so its richer detail (counts like "Push 3 commits") survives.
+  //    Fetch and unknown in-flight kinds leave the primary's natural label
+  //    intact; CommitArea's spinner suppresses itself via the kind-mismatch
+  //    check so a non-matching in-flight op doesn't visually claim the
+  //    primary as its host.
   if (isRemoteOperationActive) {
     const candidate = resolvePrimaryAction({ ...inputs, isRemoteOperationActive: false })
+    const inFlightIsPrimaryKind =
+      inFlightRemoteOpKind === 'push' ||
+      inFlightRemoteOpKind === 'pull' ||
+      inFlightRemoteOpKind === 'sync' ||
+      inFlightRemoteOpKind === 'publish'
+
+    if (inFlightIsPrimaryKind && candidate.kind !== inFlightRemoteOpKind) {
+      const label = PRIMARY_LABEL_BY_KIND[inFlightRemoteOpKind]
+      return {
+        kind: inFlightRemoteOpKind,
+        label,
+        title: `${label} in progress…`,
+        disabled: true
+      }
+    }
+
     // Why: when the candidate label is "Commit", the generic "remote
     // operation in progress…" tooltip mismatches the visible label. Point
     // the user at the fact that the commit will wait, keeping the label and

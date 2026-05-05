@@ -28,6 +28,20 @@ describe('git remote operations', () => {
     )
   })
 
+  it('pushes via explicit origin HEAD refspec in non-publish mode', async () => {
+    // Why: bare `git push` is rejected by push.default=simple when the local
+    // branch name doesn't match its upstream branch name — exactly the case
+    // Orca creates by tracking a base ref like origin/main. Asserting the
+    // explicit refspec guards against a regression to the old `['push']` form.
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await gitPush('/repo', false)
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['push', 'origin', 'HEAD'], {
+      cwd: '/repo'
+    })
+  })
+
   it('maps non-fast-forward push failures to an actionable message', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('remote rejected: non-fast-forward'))
 

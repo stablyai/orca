@@ -1002,11 +1002,11 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
-  it('surfaces the push-formatted toast when syncBranch inner push fails with auth error', async () => {
-    // Why: sync's inner push shares pushBranch's failure modes (auth,
-    // protected branch). The toast must match pushBranch's formatting
-    // ("Push failed. {detail}...") so the user sees a single consistent
-    // actionable message, not a bare raw error.
+  it('surfaces a sync-labeled toast when syncBranch inner push fails with auth error', async () => {
+    // Why: the user invoked Sync — the toast must read "Sync failed..." even
+    // though the underlying step is push. Detail extraction still surfaces
+    // the actionable fatal/remote line so auth/protected-branch reasons stay
+    // visible.
     const store = createEditorStore()
     const authError = new Error(
       'git push failed: Command failed: git push origin feature\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
@@ -1017,12 +1017,15 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'Push failed. Authentication failed for https://github.com/acme/private-repo.git. Check your remote access and try again.'
+      'Sync failed. Authentication failed for https://github.com/acme/private-repo.git. Check your remote access and try again.'
     )
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
-  it('surfaces a single "Push rejected" toast when syncBranch inner push is non-fast-forward', async () => {
+  it('surfaces a single sync-labeled toast when syncBranch inner push is non-fast-forward', async () => {
+    // Why: under sync, NFF means the remote raced ahead between fetch and
+    // push — sync just pulled, so the bare "Pull first" guidance is wrong.
+    // Surface a sync-shaped retry hint instead.
     const store = createEditorStore()
     const pushError = new Error(
       'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
@@ -1034,7 +1037,7 @@ describe('createEditorSlice remote branch actions', () => {
     // No double-toast from the outer catch.
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'Push rejected — remote has changes. Pull first, then try again.'
+      'Sync failed — remote moved while syncing. Try again.'
     )
   })
 
