@@ -399,10 +399,10 @@ export function registerSidekickHandlers(): void {
       fileName: sheetFileName,
       mimeType: sheetClass.mimeType,
       kind: 'bundle',
-      sprite
-      // TODO: persist manifest.fps for detected-frame bundles (no `frame` in
-      // manifest) — would need a CustomSidekick type change to add either an
-      // optional top-level `fps` or a partial `sprite` carrying just fps.
+      sprite,
+      // Why: carries manifest.fps for detected-frame bundles where `sprite`
+      // is undefined — renderer falls back to this when sprite is absent.
+      ...(manifest.fps !== undefined ? { spriteFps: manifest.fps } : {})
     }
   })
 
