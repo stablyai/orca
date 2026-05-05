@@ -122,6 +122,7 @@ import {
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IPtyProvider } from '../providers/types'
 
 type RuntimeStore = {
@@ -181,7 +182,14 @@ type RuntimePtyController = {
   getForegroundProcess(ptyId: string): Promise<string | null>
   resize?(ptyId: string, cols: number, rows: number): boolean
   listProcesses?(): Promise<{ id: string; cwd: string; title: string }[]>
-  serializeBuffer?(ptyId: string): Promise<{ data: string; cols: number; rows: number } | null>
+  serializeBuffer?(
+    ptyId: string,
+    opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+  ): Promise<{ data: string; cols: number; rows: number; lastTitle?: string } | null>
+  // Why: synchronous probe used by maybeHydrateHeadlessFromRenderer to skip
+  // hydration when no renderer is authoritative for this PTY. See
+  // docs/mobile-prefer-renderer-scrollback.md.
+  hasRendererSerializer?(ptyId: string): boolean
   getSize?(ptyId: string): { cols: number; rows: number } | null
 }
 
@@ -319,6 +327,12 @@ export class OrcaRuntimeService {
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
+  // Why: per-PTY hydration state guards against double-hydration. Keys:
+  //   'pending'  → maybeHydrateHeadlessFromRenderer is in flight
+  //   'done'     → hydration completed (success or skip); never run again
+  // Absent  → hydration has not been considered yet for this PTY.
+  // See docs/mobile-prefer-renderer-scrollback.md.
+  private headlessHydrationState = new Map<string, 'pending' | 'done'>()
   // Why: mobile-fit overrides are keyed by ptyId (not terminal handle) because
   // handles can be reissued while the PTY identity is stable. In-memory only —
   // a stale phone override should not survive an app restart.
@@ -646,6 +660,14 @@ export class OrcaRuntimeService {
     // Agent detection runs on raw data before leaf processing, since the
     // tail buffer logic normalizes away the OSC sequences we need.
     this.agentDetector?.onData(ptyId, data, at)
+    // Ordering invariant (DO NOT REORDER): maybeHydrateHeadlessFromRenderer
+    // MUST run before trackHeadlessTerminalData so the eager-state pattern
+    // (set headlessTerminals + writeChain head = seedPromise) is in place
+    // before the live byte's chain link is queued. Without this ordering,
+    // trackHeadlessTerminalData would lazy-create a fresh state at PTY dims
+    // that the later seed-resolve would overwrite, dropping the live byte.
+    // See docs/mobile-prefer-renderer-scrollback.md.
+    this.maybeHydrateHeadlessFromRenderer(ptyId)
     this.trackHeadlessTerminalData(ptyId, data)
 
     // Why: extract OSC title from raw PTY data before tail-buffer processing
@@ -801,6 +823,97 @@ export class OrcaRuntimeService {
       })
   }
 
+  // Why: hydrate the runtime headless emulator from the desktop renderer's
+  // xterm buffer on the first onPtyData byte after a PTY is taken over by a
+  // pane. Eager-state pattern matches seedHeadlessTerminal: headlessTerminals
+  // is populated synchronously so concurrent live writes from
+  // trackHeadlessTerminalData chain after the seed via the same writeChain.
+  // See docs/mobile-prefer-renderer-scrollback.md.
+  private maybeHydrateHeadlessFromRenderer(ptyId: string): void {
+    if (this.headlessHydrationState.has(ptyId)) {
+      return
+    }
+    if (this.headlessTerminals.has(ptyId)) {
+      // Daemon-snapshot seed already populated the emulator — skip hydration.
+      this.headlessHydrationState.set(ptyId, 'done')
+      return
+    }
+    const controller = this.ptyController
+    if (!controller?.serializeBuffer || !controller.hasRendererSerializer) {
+      return
+    }
+    if (!controller.hasRendererSerializer(ptyId)) {
+      // Renderer hasn't registered yet (or never will). Live writes lazy-
+      // create the state via trackHeadlessTerminalData on this same tick.
+      return
+    }
+
+    this.headlessHydrationState.set(ptyId, 'pending')
+    const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
+    const state: RuntimeHeadlessTerminal = {
+      emulator: new HeadlessEmulator({ cols: dims.cols, rows: dims.rows }),
+      writeChain: Promise.resolve()
+    }
+    this.headlessTerminals.set(ptyId, state)
+
+    // Why: append the seed work to writeChain so live writes queued by
+    // trackHeadlessTerminalData (after this method returns synchronously)
+    // execute AFTER the seed-write resolves. If we awaited inline before
+    // setting headlessTerminals, the live byte would lazy-create a separate
+    // state and the seed-resolve would overwrite it, dropping live bytes.
+    state.writeChain = state.writeChain.then(async () => {
+      try {
+        const rendered = await controller.serializeBuffer!(ptyId, {
+          scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
+          altScreenForcesZeroRows: true
+        })
+        if (!rendered || rendered.data.length === 0) {
+          return
+        }
+        // Resize to renderer's dims so the seed reflows correctly into the
+        // emulator's grid, then resize back to PTY dims (if known) so live
+        // writes use the correct cell layout.
+        if (rendered.cols !== dims.cols || rendered.rows !== dims.rows) {
+          state.emulator.resize(rendered.cols, rendered.rows)
+        }
+        await state.emulator.write(rendered.data)
+        const ptyDims = this.getTerminalSize(ptyId)
+        if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
+          state.emulator.resize(ptyDims.cols, ptyDims.rows)
+        }
+        if (rendered.lastTitle) {
+          this.applySeededAgentStatus(ptyId, rendered.lastTitle)
+        }
+      } catch {
+        // Hydration is best-effort. Live writes continue via the same
+        // writeChain that this catch-arm leaves intact.
+      } finally {
+        this.headlessHydrationState.set(ptyId, 'done')
+      }
+    })
+  }
+
+  // Why: seed-derived agent status reflects historical state. Orchestration
+  // waiters (resolveTuiIdleWaiters, deliverPendingMessages) must only react
+  // to LIVE transitions, so this helper writes leaf.lastAgentStatus only and
+  // never resolves waiters. detectAgentStatusFromTitle wrap mirrors the live
+  // path so seeded and live values are the same union member, keeping
+  // downstream `=== 'idle'` checks correct.
+  private applySeededAgentStatus(ptyId: string, title: string): void {
+    if (!title) {
+      return
+    }
+    const status = detectAgentStatusFromTitle(title)
+    if (status === null) {
+      return
+    }
+    for (const leaf of this.leaves.values()) {
+      if (leaf.ptyId === ptyId) {
+        leaf.lastAgentStatus = status
+      }
+    }
+  }
+
   private trackHeadlessTerminalData(ptyId: string, data: string): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     state.writeChain = state.writeChain
@@ -838,10 +951,21 @@ export class OrcaRuntimeService {
       return headlessSnapshot
     }
 
-    let rendererSnapshot: { data: string; cols: number; rows: number } | null = null
+    let rendererSnapshot: {
+      data: string
+      cols: number
+      rows: number
+      lastTitle?: string
+    } | null = null
     try {
-      rendererSnapshot = await (this.ptyController?.serializeBuffer?.(ptyId) ??
-        Promise.resolve(null))
+      // Why: read-fallback wants visible alt-screen content (e.g. an active
+      // TUI like vim) so altScreenForcesZeroRows is FALSE here. Hydration is
+      // the only path that suppresses alt-screen scrollback. See
+      // docs/mobile-prefer-renderer-scrollback.md.
+      rendererSnapshot = await (this.ptyController?.serializeBuffer?.(ptyId, {
+        scrollbackRows: opts.scrollbackRows,
+        altScreenForcesZeroRows: false
+      }) ?? Promise.resolve(null))
     } catch {
       // Why: mobile scrollback should not depend on a mounted renderer pane.
       // If renderer serialization races reload/unmount, the runtime snapshot
@@ -877,6 +1001,7 @@ export class OrcaRuntimeService {
   }
 
   private disposeHeadlessTerminal(ptyId: string): void {
+    this.headlessHydrationState.delete(ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return

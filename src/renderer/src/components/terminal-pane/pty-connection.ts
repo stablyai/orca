@@ -19,7 +19,7 @@ import {
 } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { detectDeveloperPermissionHint } from './developer-permission-hints'
-import { registerPtySerializer } from './pty-buffer-serializer'
+import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const developerPermissionHintKeys = new Set<string>()
@@ -438,6 +438,60 @@ export function connectPanePty(
     // constant used for serialized scrollback capture.
     const MAX_PENDING_BYTES = 512 * 1024
 
+    // Why: shared registration so both fresh-spawn and reattach paths install
+    // the same SerializeAddon-backed serializer plus the onTitleChange wrapper
+    // that drives lastTitle parity for mobile subscribers. Wires the resulting
+    // unregister into onDataDisposable.dispose so disposal stays a single
+    // teardown point. See docs/mobile-prefer-renderer-scrollback.md.
+    const registerPaneSerializerFor = (ptyId: string): void => {
+      // Why: StrictMode mounts panes twice; the first mount is disposed
+      // before the second runs, but its pty:spawn IPC may have resolved by
+      // the time `disposed` flips. Without this guard, the disposed first
+      // mount would register against a torn-down xterm and replace the live
+      // second-mount registration via owner-token shadowing.
+      if (disposed) {
+        return
+      }
+      const unregisterSerializer = registerPtySerializer(ptyId, async (opts) => {
+        try {
+          const pending = deps.pendingWritesRef.current.get(pane.id)
+          if (pending) {
+            deps.pendingWritesRef.current.set(pane.id, '')
+            // Why: hidden/background panes buffer PTY output instead of writing
+            // to xterm. Mobile snapshots must include that pending output, and
+            // replay guard prevents xterm query auto-replies from hitting stdin.
+            await replayIntoTerminalAsync(pane, deps.replayingPanesRef, pending)
+          }
+          // Why: alt-screen TUIs (vim, claude-code) hold transient state in
+          // the alternate screen. The hydration path requests
+          // altScreenForcesZeroRows so normal-buffer scrollback isn't bled
+          // into the seed when the user is mid-TUI; the read-fallback path
+          // omits it because it wants the user's currently-visible content.
+          const alt = pane.terminal.buffer.active.type === 'alternate'
+          const data =
+            opts?.altScreenForcesZeroRows && alt
+              ? pane.serializeAddon.serialize({ scrollback: 0 })
+              : pane.serializeAddon.serialize({ scrollback: opts?.scrollbackRows })
+          return {
+            data,
+            cols: pane.terminal.cols,
+            rows: pane.terminal.rows
+          }
+        } catch {
+          return null
+        }
+      })
+      const unregisterTitleSource = registerPtyTitleSource(ptyId, (handler) =>
+        pane.terminal.onTitleChange(handler)
+      )
+      const origOnDataDisposableDispose = onDataDisposable.dispose.bind(onDataDisposable)
+      onDataDisposable.dispose = () => {
+        unregisterTitleSource()
+        unregisterSerializer()
+        origOnDataDisposableDispose()
+      }
+    }
+
     // Why: for local connections (connectionId === null) the local PTY provider
     // already writes the startup command via writeStartupCommandWhenShellReady,
     // which is shell-ready-aware and reliable. Re-sending it here would cause
@@ -446,30 +500,56 @@ export function connectPanePty(
     let pendingStartupCommand = connectionId ? (paneStartup?.command ?? null) : null
 
     const startFreshSpawn = (): void => {
-      const spawnPromise = Promise.resolve(
-        transport.connect({
-          url: '',
-          cols,
-          rows,
-          callbacks: {
-            onData: dataCallback,
-            onReplayData: replayDataCallback,
-            onError: reportError
-          }
-        })
-      )
-        .then((spawnedPtyId) =>
-          typeof spawnedPtyId === 'string' ? spawnedPtyId : transport.getPtyId()
-        )
+      // Why: pre-signal the main process so its cooperation gate suppresses
+      // the daemon-snapshot seed for this paneKey. We issue declare and the
+      // spawn back-to-back without awaiting, because Electron's
+      // ipcRenderer→ipcMain channel preserves order across consecutive invoke
+      // calls from the same renderer. The cooperation gate at pty:spawn time
+      // sees pendingByPaneKey populated. Settle/clear later echoes the gen
+      // token captured here. See docs/mobile-prefer-renderer-scrollback.md.
+      const preSignalPromise = window.api.pty
+        .declarePendingPaneSerializer(cacheKey)
         .catch(() => null)
+
+      const spawnedRaw = transport.connect({
+        url: '',
+        cols,
+        rows,
+        callbacks: {
+          onData: dataCallback,
+          onReplayData: replayDataCallback,
+          onError: reportError
+        }
+      })
+
+      const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
+        .then(async (spawnedPtyId) => {
+          const resolvedPtyId =
+            typeof spawnedPtyId === 'string' ? spawnedPtyId : transport.getPtyId()
+          const gen = await preSignalPromise
+          if (typeof gen === 'number' && resolvedPtyId) {
+            registerPaneSerializerFor(resolvedPtyId)
+            void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+          } else if (typeof gen === 'number') {
+            void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+          }
+          return resolvedPtyId
+        })
+        .catch(async () => {
+          const gen = await preSignalPromise
+          if (typeof gen === 'number') {
+            void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+          }
+          return null
+        })
         .finally(() => {
-          if (pendingSpawnByPaneKey.get(pendingSpawnKey) === spawnPromise) {
+          if (pendingSpawnByPaneKey.get(pendingSpawnKey) === trackedPromise) {
             pendingSpawnByPaneKey.delete(pendingSpawnKey)
           }
         })
       // Why: split panes in the same tab can spawn concurrently. Key by pane
       // as well as tab so a remount cannot attach to a sibling setup pane's PTY.
-      pendingSpawnByPaneKey.set(pendingSpawnKey, spawnPromise)
+      pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
     }
 
     // Why: replay bytes (eager-buffer flush, attach-time screen clear) must
@@ -566,32 +646,10 @@ export function connectPanePty(
       deps.updateTabPtyId(deps.tabId, ptyId)
 
       // Why: mobile terminal streaming needs the exact screen state from
-      // xterm.js. Register a serializer for this ptyId so the main process
-      // can request a buffer snapshot when a mobile client subscribes.
-      const unregisterSerializer = registerPtySerializer(ptyId, async () => {
-        try {
-          const pending = deps.pendingWritesRef.current.get(pane.id)
-          if (pending) {
-            deps.pendingWritesRef.current.set(pane.id, '')
-            // Why: hidden/background panes buffer PTY output instead of writing
-            // to xterm. Mobile snapshots must include that pending output, and
-            // replay guard prevents xterm query auto-replies from hitting stdin.
-            await replayIntoTerminalAsync(pane, deps.replayingPanesRef, pending)
-          }
-          return {
-            data: pane.serializeAddon.serialize(),
-            cols: pane.terminal.cols,
-            rows: pane.terminal.rows
-          }
-        } catch {
-          return null
-        }
-      })
-      const origOnDataDisposableDispose = onDataDisposable.dispose.bind(onDataDisposable)
-      onDataDisposable.dispose = () => {
-        unregisterSerializer()
-        origOnDataDisposableDispose()
-      }
+      // xterm.js. The shared helper installs both the SerializeAddon-backed
+      // serializer and the onTitleChange-driven lastTitle source so the
+      // main-process hydration path has full status parity.
+      registerPaneSerializerFor(ptyId)
 
       if (connectResult?.coldRestore) {
         // Why: restoreScrollbackBuffers() already wrote the saved xterm
@@ -774,6 +832,13 @@ export function connectPanePty(
             // Clear it before attach/fallback so remounts don't keep retrying
             // an expired session after a fresh shell has been created.
             useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+            // Why: pre-signal also for SSH-deferred reattach so the
+            // cooperation gate uniformly applies to remote sessions. Issue
+            // declare and connect back-to-back; Electron preserves order. See
+            // docs/mobile-prefer-renderer-scrollback.md.
+            const preSignalPromise = window.api.pty
+              .declarePendingPaneSerializer(cacheKey)
+              .catch(() => null)
             const reattachPromise = transport.connect({
               url: '',
               cols,
@@ -786,7 +851,7 @@ export function connectPanePty(
               }
             })
             void Promise.resolve(reattachPromise)
-              .then((result) => {
+              .then(async (result) => {
                 console.warn(
                   `[pty-connection] Reattach result for tab=${deps.tabId}:`,
                   result
@@ -797,8 +862,16 @@ export function connectPanePty(
                     : 'undefined'
                 )
                 handleReattachResult(result, pendingSessionId)
+                const gen = await preSignalPromise
+                if (typeof gen === 'number') {
+                  void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+                }
               })
-              .catch((err) => {
+              .catch(async (err) => {
+                const gen = await preSignalPromise
+                if (typeof gen === 'number') {
+                  void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+                }
                 console.warn(`[pty-connection] Reattach FAILED for tab=${deps.tabId}:`, err)
                 if (disposed) {
                   return
@@ -860,6 +933,18 @@ export function connectPanePty(
         `pane=${pane.id} → REATTACH`
       )
 
+      // Why: reattach also pre-signals so the cooperation gate suppresses
+      // the daemon seed for this paneKey. Reattach paths register their
+      // serializer in handleReattachResult (via registerPaneSerializerFor),
+      // mirroring the fresh-spawn path. We issue declare and the reattach
+      // connect back-to-back without awaiting; Electron's ipcRenderer→ipcMain
+      // channel preserves order. See
+      // docs/mobile-prefer-renderer-scrollback.md (Renderer-side prerequisite
+      // requirement #4).
+      const preSignalPromise = window.api.pty
+        .declarePendingPaneSerializer(cacheKey)
+        .catch(() => null)
+
       const reattachPromise = transport.connect({
         url: '',
         cols,
@@ -873,10 +958,18 @@ export function connectPanePty(
       })
 
       void Promise.resolve(reattachPromise)
-        .then((result) => {
+        .then(async (result) => {
           handleReattachResult(result, deferredReattachSessionId)
+          const gen = await preSignalPromise
+          if (typeof gen === 'number') {
+            void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+          }
         })
-        .catch((err) => {
+        .catch(async (err) => {
+          const gen = await preSignalPromise
+          if (typeof gen === 'number') {
+            void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+          }
           const message = err instanceof Error ? err.message : String(err)
           warnTerminalLifecycleAnomaly('restored PTY reattach threw', {
             tabId: deps.tabId,

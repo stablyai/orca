@@ -4,6 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 
+// Why: the fresh-spawn and reattach paths now chain pre-signal → spawn →
+// register/settle through multiple microtasks. Tests that previously flushed
+// once with `await Promise.resolve()` must drain a few extra ticks before
+// asserting against IPC mocks. See docs/mobile-prefer-renderer-scrollback.md.
+async function flushAsyncTicks(count = 6): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    await Promise.resolve()
+  }
+}
+
 const toastInfo = vi.fn()
 
 type StoreState = {
@@ -139,7 +149,8 @@ function createPane(paneId: number) {
       rows: 40,
       write: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
-      onResize: vi.fn(() => ({ dispose: vi.fn() }))
+      onResize: vi.fn(() => ({ dispose: vi.fn() })),
+      onTitleChange: vi.fn(() => ({ dispose: vi.fn() }))
     },
     container: { dataset: {} },
     fitAddon: {
@@ -238,7 +249,10 @@ describe('connectPanePty', () => {
         pty: {
           signal: vi.fn(),
           ackColdRestore: vi.fn(),
-          onSerializeBufferRequest: vi.fn(() => vi.fn())
+          onSerializeBufferRequest: vi.fn(() => vi.fn()),
+          declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),
+          settlePaneSerializer: vi.fn().mockResolvedValue(undefined),
+          clearPendingPaneSerializer: vi.fn().mockResolvedValue(undefined)
         },
         notifications: {
           dispatch: vi.fn()
@@ -627,7 +641,7 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
-    await Promise.resolve()
+    await flushAsyncTicks(20)
 
     expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -669,7 +683,7 @@ describe('connectPanePty', () => {
       expect.objectContaining({ sessionId: 'pty-local-detached' })
     )
     expect(transport.attach).not.toHaveBeenCalled()
-    await Promise.resolve()
+    await flushAsyncTicks()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-local-detached')
   })
 
@@ -693,7 +707,7 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(restartPane as never, restartManager as never, restartDeps as never)
-    await Promise.resolve()
+    await flushAsyncTicks()
 
     expect(spawnedPtyId).toBe('pty-restarted')
     expect(restartDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-restarted')
@@ -888,9 +902,7 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
-    for (let i = 0; i < 5; i++) {
-      await Promise.resolve()
-    }
+    await flushAsyncTicks(20)
 
     const api = (
       globalThis as unknown as {
@@ -945,9 +957,7 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
-    for (let i = 0; i < 5; i++) {
-      await Promise.resolve()
-    }
+    await flushAsyncTicks(20)
 
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalledWith(
       expect.any(Number),

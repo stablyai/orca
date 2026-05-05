@@ -442,12 +442,19 @@ export type PreloadApi = {
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onSerializeBufferRequest: (
-      callback: (data: { requestId: string; ptyId: string }) => void
+      callback: (data: {
+        requestId: string
+        ptyId: string
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      }) => void
     ) => () => void
     sendSerializedBuffer: (
       requestId: string,
-      snapshot: { data: string; cols: number; rows: number } | null
+      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
     ) => void
+    declarePendingPaneSerializer: (paneKey: string) => Promise<number>
+    settlePaneSerializer: (paneKey: string, gen: number) => Promise<void>
+    clearPendingPaneSerializer: (paneKey: string, gen: number) => Promise<void>
     management: PtyManagementApi
   }
   feedback: {

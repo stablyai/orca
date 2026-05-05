@@ -70,6 +70,45 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
   return () => paneKeyTeardownListeners.delete(listener)
 }
 
+// Why: pre-signal handshake — the renderer declares it will own the serializer
+// for a paneKey BEFORE issuing pty:spawn. The cooperation gate at provider.spawn
+// return consults this map to suppress the daemon-snapshot seed when a renderer
+// is taking over. Generation tokens prevent paneKey-reuse races during teardown:
+// a paneKeyTeardownListener cleanup only fires settle when the captured gen
+// still matches, so a remount that pre-signals before the old PTY's teardown
+// runs is preserved. See docs/mobile-prefer-renderer-scrollback.md.
+let pendingSerializerGenSeq = 0
+const pendingByPaneKey = new Map<string, number>()
+// Why: at PTY spawn time we capture the gen that was pending for the spawn's
+// paneKey, so teardown can settle ONLY that gen. Without this, a paneKey
+// remount that replaces the pending entry with a new gen would still get
+// stomped by the old PTY's teardown firing settle on the wrong gen.
+const ptyPendingGenByPtyId = new Map<string, number>()
+// Why: the runtime's hasRendererSerializer probe needs a ptyId-keyed signal.
+// Populated on settlePaneSerializer (renderer has registered for this ptyId)
+// and cleared on PTY teardown.
+const rendererSerializerByPtyId = new Set<string>()
+
+function isValidPaneKey(paneKey: unknown): paneKey is string {
+  return typeof paneKey === 'string' && paneKey.length > 0 && paneKey.length <= 256
+}
+
+function declarePendingPaneSerializer(paneKey: string): number {
+  const gen = ++pendingSerializerGenSeq
+  pendingByPaneKey.set(paneKey, gen)
+  return gen
+}
+
+function settlePendingPaneSerializer(paneKey: string, gen: number): void {
+  if (pendingByPaneKey.get(paneKey) === gen) {
+    pendingByPaneKey.delete(paneKey)
+  }
+}
+
+export function hasPendingRendererSerializerForPaneKey(paneKey: string): boolean {
+  return isValidPaneKey(paneKey) && pendingByPaneKey.has(paneKey)
+}
+
 function getProvider(connectionId: string | null | undefined): IPtyProvider {
   if (!connectionId) {
     return localProvider
@@ -293,6 +332,7 @@ export function clearProviderPtyState(id: string): void {
   // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
   // PTYs that were never registered (SSH-owned).
   unregisterPty(id)
+  rendererSerializerByPtyId.delete(id)
   // Why: the hook server's per-paneKey caches (lastPrompt / lastTool) would
   // otherwise accumulate entries for dead panes over the process lifetime.
   // Use the spawn-time paneKey mapping since the server has no other way to
@@ -302,6 +342,17 @@ export function clearProviderPtyState(id: string): void {
     agentHookServer.clearPaneState(paneKey)
     ptyPaneKey.delete(id)
     paneKeyPtyId.delete(paneKey)
+    // Why: drop the pre-signal pending entry only if it still belongs to THIS
+    // PTY's spawn generation. If a remount for the same paneKey has already
+    // pre-signaled a new gen, this teardown must NOT touch it — otherwise
+    // the second mount's hydration loses to the daemon-snapshot seed. See
+    // the generation-token rationale in
+    // docs/mobile-prefer-renderer-scrollback.md.
+    const ownedGen = ptyPendingGenByPtyId.get(id)
+    if (ownedGen !== undefined) {
+      settlePendingPaneSerializer(paneKey, ownedGen)
+    }
+    ptyPendingGenByPtyId.delete(id)
     // Why: notify registered consumers AFTER we've dropped the paneKey↔ptyId
     // entries so a listener that re-reads the map sees the post-teardown
     // state. Wrap each call so one throwing listener cannot block the rest.
@@ -368,6 +419,9 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
+  ipcMain.removeHandler('pty:declarePendingPaneSerializer')
+  ipcMain.removeHandler('pty:settlePaneSerializer')
+  ipcMain.removeHandler('pty:clearPendingPaneSerializer')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
 
@@ -492,8 +546,9 @@ export function registerPtyHandlers(
   rebindProviderListeners = bindProviderListeners
 
   function requestSerializedBuffer(
-    ptyId: string
-  ): Promise<{ data: string; cols: number; rows: number } | null> {
+    ptyId: string,
+    opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+  ): Promise<{ data: string; cols: number; rows: number; lastTitle?: string } | null> {
     if (mainWindow.isDestroyed()) {
       return Promise.resolve(null)
     }
@@ -514,7 +569,12 @@ export function registerPtyHandlers(
         _event: Electron.IpcMainEvent,
         args: {
           requestId?: string
-          snapshot?: { data?: unknown; cols?: unknown; rows?: unknown } | null
+          snapshot?: {
+            data?: unknown
+            cols?: unknown
+            rows?: unknown
+            lastTitle?: unknown
+          } | null
         }
       ): void => {
         if (args.requestId !== requestId) {
@@ -528,14 +588,30 @@ export function registerPtyHandlers(
           typeof snapshot.cols === 'number' &&
           typeof snapshot.rows === 'number'
         ) {
-          resolve({ data: snapshot.data, cols: snapshot.cols, rows: snapshot.rows })
+          const result: { data: string; cols: number; rows: number; lastTitle?: string } = {
+            data: snapshot.data,
+            cols: snapshot.cols,
+            rows: snapshot.rows
+          }
+          if (typeof snapshot.lastTitle === 'string' && snapshot.lastTitle.length > 0) {
+            result.lastTitle = snapshot.lastTitle
+          }
+          resolve(result)
         } else {
           resolve(null)
         }
       }
 
       ipcMain.on('pty:serializeBuffer:response', onResponse)
-      mainWindow.webContents.send('pty:serializeBuffer:request', { requestId, ptyId })
+      const payload: {
+        requestId: string
+        ptyId: string
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      } = { requestId, ptyId }
+      if (opts) {
+        payload.opts = opts
+      }
+      mainWindow.webContents.send('pty:serializeBuffer:request', payload)
     })
   }
 
@@ -598,10 +674,18 @@ export function registerPtyHandlers(
       ])
       return providerSessions.flat()
     },
-    serializeBuffer: (ptyId) => {
+    serializeBuffer: (ptyId, opts) => {
       // Why: mobile xterm must start from the desktop xterm's exact screen
       // state and dimensions before live TUI chunks can render correctly.
-      return requestSerializedBuffer(ptyId)
+      return requestSerializedBuffer(ptyId, opts)
+    },
+    hasRendererSerializer: (ptyId) => {
+      // Why: the runtime needs a synchronous probe so it can decide whether to
+      // skip the daemon-snapshot seed (the renderer will hydrate it) or run the
+      // seed (no renderer authoritative for this PTY). A registry write happens
+      // when the renderer calls registerPtySerializer; we check via the same
+      // pendingByPaneKey + ptyId pairing that the cooperation gate uses.
+      return rendererSerializerByPtyId.has(ptyId)
     },
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null,
     resize: (ptyId, cols, rows) => {
@@ -802,6 +886,27 @@ export function registerPtyHandlers(
         runtime?.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
       }
       ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
+      // Why: pre-signal cooperation gate — when the renderer has declared it
+      // will own the serializer for this paneKey, suppress the daemon-snapshot
+      // seed so the renderer's hydration path (maybeHydrateHeadlessFromRenderer)
+      // is the sole authority. The pre-signal is keyed on paneKey because at
+      // spawn time the renderer doesn't yet know the new ptyId. See
+      // docs/mobile-prefer-renderer-scrollback.md.
+      const spawnPaneKey = args.env?.ORCA_PANE_KEY
+      const rendererPreSignaled = isValidPaneKey(spawnPaneKey)
+        ? pendingByPaneKey.has(spawnPaneKey)
+        : false
+      const rendererAlreadyRegistered = rendererSerializerByPtyId.has(result.id)
+      // Why: capture the pending gen at spawn time so teardown for THIS PTY
+      // only settles its own generation. A remount that replaces the entry
+      // with a new gen must not be stomped by the old PTY's teardown.
+      if (isValidPaneKey(spawnPaneKey) && rendererPreSignaled) {
+        const gen = pendingByPaneKey.get(spawnPaneKey)
+        if (gen !== undefined) {
+          ptyPendingGenByPtyId.set(result.id, gen)
+        }
+      }
+
       // Why: hydrate the runtime's headless emulator with the adapter's
       // restore data BEFORE registerPty so any live PTY data that arrives
       // concurrently lands on top of the seed instead of replacing it. Mobile
@@ -809,7 +914,11 @@ export function registerPtyHandlers(
       // via coldRestore/snapshot. Without this, mobile snapshots after a
       // daemon-restored attach contain only bytes emitted since the relaunch
       // and the prior agent output silently disappears.
-      if (runtime) {
+      //
+      // Skip when the renderer is or will be authoritative for this PTY:
+      // its hydration path will seed the emulator from xterm's live buffer,
+      // which is richer than the daemon snapshot.
+      if (runtime && !rendererPreSignaled && !rendererAlreadyRegistered) {
         const seedSize =
           typeof result.snapshotCols === 'number' && typeof result.snapshotRows === 'number'
             ? { cols: result.snapshotCols, rows: result.snapshotRows }
@@ -1002,6 +1111,51 @@ export function registerPtyHandlers(
       return ''
     }
   })
+
+  // Why: pre-signal handshake handlers. See
+  // docs/mobile-prefer-renderer-scrollback.md and the rationale on
+  // `pendingByPaneKey` above. The IPC contract is: renderer awaits declare
+  // (capturing the returned gen), awaits pty:spawn, then registers its
+  // serializer locally and calls settle (echoing the gen). On spawn rejection
+  // or pane unmount before settle, renderer calls clear with the same gen.
+  ipcMain.handle(
+    'pty:declarePendingPaneSerializer',
+    async (_event, args: { paneKey?: unknown }): Promise<number> => {
+      if (!isValidPaneKey(args.paneKey)) {
+        throw new Error('Invalid paneKey')
+      }
+      return declarePendingPaneSerializer(args.paneKey)
+    }
+  )
+
+  ipcMain.handle(
+    'pty:settlePaneSerializer',
+    async (_event, args: { paneKey?: unknown; gen?: unknown }): Promise<void> => {
+      if (!isValidPaneKey(args.paneKey) || typeof args.gen !== 'number') {
+        return
+      }
+      settlePendingPaneSerializer(args.paneKey, args.gen)
+      // Why: settle means the renderer has registered its serializer locally
+      // for whatever ptyId came back from spawn. The renderer doesn't carry
+      // the ptyId back through this IPC because the cooperation gate ran
+      // pre-spawn; instead we mark the pane as authoritative by paneKey →
+      // ptyId via the existing paneKeyPtyId mapping populated at spawn.
+      const ptyId = paneKeyPtyId.get(args.paneKey)
+      if (ptyId) {
+        rendererSerializerByPtyId.add(ptyId)
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'pty:clearPendingPaneSerializer',
+    async (_event, args: { paneKey?: unknown; gen?: unknown }): Promise<void> => {
+      if (!isValidPaneKey(args.paneKey) || typeof args.gen !== 'number') {
+        return
+      }
+      settlePendingPaneSerializer(args.paneKey, args.gen)
+    }
+  )
 }
 
 /**
