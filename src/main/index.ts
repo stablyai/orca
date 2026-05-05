@@ -120,7 +120,16 @@ function focusExistingWindow(): void {
 // derives the lock identity from the `userData` path, so this placement lets
 // dev (`orca-dev`) and packaged (`orca`) runs lock in separate namespaces
 // instead of serialising against each other.
-const hasSingleInstanceLock = acquireSingleInstanceLock(app, focusExistingWindow)
+//
+// Why skip in dev: engineers routinely run `pnpm dev` in parallel from
+// multiple worktrees while shipping features, and the lock makes the second
+// `pnpm dev` exit silently. In dev we accept that `orca-runtime.json` and
+// `endpoint.env` may race (the bundled `orca-dev` CLI / agent hooks route
+// to whichever instance wrote last). The dev build is not used for real
+// agent work, so that routing ambiguity is acceptable. Packaged Orca keeps
+// the lock to protect against the corruption documented in PR #1326 /
+// issue #1312.
+const hasSingleInstanceLock = is.dev ? true : acquireSingleInstanceLock(app, focusExistingWindow)
 if (!hasSingleInstanceLock) {
   if (is.dev) {
     // Why: packaged runs have no attached console, but dev runs do. Emit a
