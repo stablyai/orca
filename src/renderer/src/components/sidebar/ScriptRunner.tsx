@@ -53,7 +53,11 @@ export default function ScriptRunner(): React.JSX.Element | null {
   }, [worktreePath])
 
   useEffect(() => {
-    const scriptNames = scripts ? Object.keys(scripts) : []
+    if (!scripts) {
+      setSelectedScript(null)
+      return
+    }
+    const scriptNames = Object.keys(scripts)
     if (scriptNames.length === 0) {
       setSelectedScript(null)
       return
@@ -227,7 +231,6 @@ export default function ScriptRunner(): React.JSX.Element | null {
             currentCommand={currentCommand}
             isRunning={isRunning}
             runningScripts={runningScripts}
-            packageManager={packageManager}
             onRun={handleRun}
             onStop={handleStop}
             onCommandOverride={handleCommandOverride}
