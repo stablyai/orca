@@ -5,11 +5,7 @@ import { cn } from '@/lib/utils'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow, { buildGridTemplate } from './ProjectRow'
 import { groupRows, sortRows } from './group-sort'
-import {
-  getAvailableColumns,
-  loadHiddenColumns,
-  saveHiddenColumns
-} from './columns'
+import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import type {
   GitHubIssueType,
   GitHubProjectField,
@@ -71,17 +67,24 @@ export default function ProjectViewList({
   const toggleColumn = (fieldId: string): void => {
     setHidden((prev) => {
       const next = new Set(prev)
-      if (next.has(fieldId)) {next.delete(fieldId)}
-      else {next.add(fieldId)}
+      if (next.has(fieldId)) {
+        next.delete(fieldId)
+      } else {
+        next.add(fieldId)
+      }
       saveHiddenColumns(scopeKey, next)
       return next
     })
   }
 
   const effectiveTable = useMemo<GitHubProjectTable>(() => {
-    if (!sortOverride) {return table}
+    if (!sortOverride) {
+      return table
+    }
     const field = fields.find((f) => f.id === sortOverride.fieldId)
-    if (!field) {return table}
+    if (!field) {
+      return table
+    }
     return {
       ...table,
       selectedView: {
@@ -101,8 +104,12 @@ export default function ProjectViewList({
 
   const handleSortClick = (fieldId: string): void => {
     setSortOverride((prev) => {
-      if (!prev || prev.fieldId !== fieldId) {return { fieldId, direction: 'ASC' }}
-      if (prev.direction === 'ASC') {return { fieldId, direction: 'DESC' }}
+      if (!prev || prev.fieldId !== fieldId) {
+        return { fieldId, direction: 'ASC' }
+      }
+      if (prev.direction === 'ASC') {
+        return { fieldId, direction: 'DESC' }
+      }
       return null
     })
   }
@@ -148,8 +155,11 @@ export default function ProjectViewList({
                 onToggle={() => {
                   setCollapsed((prev) => {
                     const next = new Set(prev)
-                    if (next.has(g.key)) {next.delete(g.key)}
-                    else {next.add(g.key)}
+                    if (next.has(g.key)) {
+                      next.delete(g.key)
+                    } else {
+                      next.add(g.key)
+                    }
                     return next
                   })
                 }}

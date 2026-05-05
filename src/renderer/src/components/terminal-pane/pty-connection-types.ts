@@ -1,11 +1,18 @@
 import type { PtyTransport } from './pty-transport'
 import type { ReplayingPanesRef } from './replay-guard'
+import type { EventProps } from '../../../../shared/telemetry-events'
 
 export type PtyConnectionDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
-  startup?: { command: string; env?: Record<string, string> } | null
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
+     *  so main fires the event only after the spawn succeeds. */
+    telemetry?: EventProps<'agent_started'>
+  } | null
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>

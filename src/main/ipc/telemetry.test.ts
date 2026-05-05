@@ -245,9 +245,8 @@ describe('telemetry IPC handlers', () => {
   it('routes banner ✕ through persistBannerAcknowledgeWithoutEmitting without invoking setOptIn', () => {
     // This is the whole point of the separate channel: the silent-persist
     // path MUST NOT reach setOptIn, which would derive a `via` and fire
-    // `telemetry_opted_in`. The ✕-as-silent-acknowledge semantics are
-    // explicit: the user did not opt in, they declined to intervene, so
-    // no event transmits.
+    // `telemetry_opted_in`. The client primitive may unlock `app_opened`,
+    // but the acknowledge channel itself must not emit an opt-in event.
     registerWith({
       installId: 'x',
       existedBeforeTelemetryRelease: true,

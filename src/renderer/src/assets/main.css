@@ -16,6 +16,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.theme-transition-disabled *,
+.theme-transition-disabled *::before,
+.theme-transition-disabled *::after {
+  /* Why: theme swaps flip many CSS variables at once; transitions make parts of
+     the UI fade at different speeds. Animations stay enabled for spinners. */
+  transition: none !important;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -61,6 +69,8 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: var(--app-font-family);
   --font-mono:
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
     monospace;
@@ -165,12 +175,14 @@
     padding: 0;
     overflow: hidden;
     height: 100vh;
-    font-family:
+    font-family: var(
+      --app-font-family,
       'Geist',
       -apple-system,
       BlinkMacSystemFont,
       'Segoe UI',
-      sans-serif;
+      sans-serif
+    );
     letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -347,8 +359,8 @@
 }
 
 .titlebar {
-  height: 42px;
-  min-height: 42px;
+  height: 36px;
+  min-height: 36px;
   display: flex;
   flex-direction: row;
   align-items: center;

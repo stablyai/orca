@@ -82,9 +82,13 @@ export function validateSlugArgs(
   repo: unknown
 ): { ok: true } | { ok: false; error: GitHubProjectViewError } {
   const o = assertSlug(owner, 'owner')
-  if (!o.ok) {return { ok: false, error: o.error }}
+  if (!o.ok) {
+    return { ok: false, error: o.error }
+  }
   const r = assertSlug(repo, 'repo')
-  if (!r.ok) {return { ok: false, error: r.error }}
+  if (!r.ok) {
+    return { ok: false, error: r.error }
+  }
   return { ok: true }
 }
 
@@ -103,7 +107,9 @@ export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlE
   // fails, fall back to stderr.
   const sources = [stdout, stderr]
   for (const src of sources) {
-    if (!src) {continue}
+    if (!src) {
+      continue
+    }
     try {
       const parsed = JSON.parse(src) as { errors?: GhGraphqlErrorShape[] }
       if (parsed.errors && parsed.errors.length > 0) {
@@ -116,20 +122,23 @@ export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlE
   return []
 }
 
-export function errorsIndicateParentField(
-  errors: GhGraphqlErrorShape[],
-  stderr: string
-): boolean {
+export function errorsIndicateParentField(errors: GhGraphqlErrorShape[], stderr: string): boolean {
   const lower = stderr.toLowerCase()
   // Preview-header shape: gh returns a 4xx with "preview" in the message.
-  if (lower.includes('preview') && lower.includes('parent')) {return true}
+  if (lower.includes('preview') && lower.includes('parent')) {
+    return true
+  }
   return errors.some((e) => {
     const type = (e.type ?? '').toUpperCase()
     if (type === 'FIELD_NOT_FOUND' || type === 'UNDEFINED_FIELD' || type === 'FIELD_ERRORS') {
       const tail = e.path?.at(-1)
-      if (tail === 'parent') {return true}
+      if (tail === 'parent') {
+        return true
+      }
       // FIELD_ERRORS often omits `path`; match on message for the parent field.
-      if ((e.message ?? '').toLowerCase().includes('parent')) {return true}
+      if ((e.message ?? '').toLowerCase().includes('parent')) {
+        return true
+      }
     }
     return false
   })
@@ -140,7 +149,11 @@ export function classifyProjectError(stderr: string, stdout: string): GitHubProj
   const s = stderr.toLowerCase()
 
   // Auth
-  if (s.includes('authentication required') || s.includes('not logged in') || s.includes('gh auth login')) {
+  if (
+    s.includes('authentication required') ||
+    s.includes('not logged in') ||
+    s.includes('gh auth login')
+  ) {
     return {
       type: 'auth_required',
       message: 'Sign in to GitHub to load project tasks. Run `gh auth login`.'
@@ -149,7 +162,7 @@ export function classifyProjectError(stderr: string, stdout: string): GitHubProj
   // Scope
   if (
     s.includes('missing required scope') ||
-    s.includes("your token has not been granted") ||
+    s.includes('your token has not been granted') ||
     (s.includes('resource not accessible') && (s.includes('project') || s.includes('scope')))
   ) {
     return {
@@ -208,12 +221,16 @@ export function classifyProjectError(stderr: string, stdout: string): GitHubProj
   // Why: don't leak full stderr to the UI — it can include verbose request
   // dumps with header diagnostics. Truncate to the first non-empty line and
   // cap length so unexpected diagnostics stay readable but bounded.
-  const firstLine = stderr
-    .split('\n')
-    .map((l) => l.trim())
-    .find((l) => l.length > 0) ?? ''
+  const firstLine =
+    stderr
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) ?? ''
   const safe = firstLine.length > 200 ? `${firstLine.slice(0, 200)}…` : firstLine
-  return { type: 'unknown', message: safe ? `GitHub request failed: ${safe}` : 'GitHub request failed.' }
+  return {
+    type: 'unknown',
+    message: safe ? `GitHub request failed: ${safe}` : 'GitHub request failed.'
+  }
 }
 
 export function driftError(
@@ -228,9 +245,11 @@ export function driftError(
 // same `rate_limited` error shape as the post-hoc classifier so the UI path
 // is unchanged. We DO NOT fail open here when there's no cached snapshot —
 // rateLimitGuard already handles that case (returns `blocked:false`).
-export function rateLimitedError(
-  blocked: { remaining: number; limit: number; resetAt: number }
-): GitHubProjectViewError {
+export function rateLimitedError(blocked: {
+  remaining: number
+  limit: number
+  resetAt: number
+}): GitHubProjectViewError {
   const resetIn = Math.max(0, blocked.resetAt - Math.floor(Date.now() / 1000))
   const mins = Math.ceil(resetIn / 60)
   return {

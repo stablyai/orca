@@ -255,9 +255,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
     if (repo && !isFolder && !worktree.isBare && prCacheKey && (showPR || showCI)) {
-      fetchPRForBranch(repo.path, branch)
+      // Why: pass linkedPR so worktrees created from a PR (whose new local
+      // branch differs from the PR's head ref) still resolve their PR via
+      // a number-based fallback in the main process.
+      fetchPRForBranch(repo.path, branch, { linkedPRNumber: worktree.linkedPR ?? null })
     }
-  }, [repo, isFolder, worktree.isBare, fetchPRForBranch, branch, prCacheKey, showPR, showCI])
+  }, [
+    repo,
+    isFolder,
+    worktree.isBare,
+    worktree.linkedPR,
+    fetchPRForBranch,
+    branch,
+    prCacheKey,
+    showPR,
+    showCI
+  ])
 
   // Same rationale for issues: once that section is hidden, polling only burns
   // GitHub calls and keeps stale-but-invisible data warm for no user benefit.

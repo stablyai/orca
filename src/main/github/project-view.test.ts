@@ -20,9 +20,9 @@ describe('classifyProjectError', () => {
   })
 
   it('classifies "Could not resolve to a User" as not_found', () => {
-    expect(
-      classifyProjectError('Could not resolve to a User with the login of foo', '').type
-    ).toBe('not_found')
+    expect(classifyProjectError('Could not resolve to a User with the login of foo', '').type).toBe(
+      'not_found'
+    )
   })
 
   it('classifies "could not resolve host" as network_error, NOT not_found', () => {
@@ -117,9 +117,12 @@ describe('parseProjectPaste', () => {
   })
 
   it('parses org URL with view number', () => {
-    expect(
-      parseProjectPaste('https://github.com/orgs/acme/projects/42/views/3')
-    ).toEqual({ kind: 'org', owner: 'acme', number: 42, viewNumber: 3 })
+    expect(parseProjectPaste('https://github.com/orgs/acme/projects/42/views/3')).toEqual({
+      kind: 'org',
+      owner: 'acme',
+      number: 42,
+      viewNumber: 3
+    })
   })
 
   it('parses user URL', () => {

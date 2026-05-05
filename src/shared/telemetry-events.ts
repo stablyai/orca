@@ -14,63 +14,61 @@
 
 import { z } from 'zod'
 
+import type { GlobalSettings } from './types'
+
 // ── Shared property enums ───────────────────────────────────────────────
 
-// Mirrors the detectable agents in `src/shared/agent-detection.ts`
-// (`AGENT_NAMES`), with one deliberate shift: `claude` in AGENT_NAMES ↔
-// `claude-code` here (product, not CLI string) so dashboards read cleanly.
+// Mirrors the shipped `TuiAgent` launch surface, with one deliberate shift:
+// `claude` in settings/launch state ↔ `claude-code` here (product, not CLI
+// string) so dashboards read cleanly.
 //
-// Enum values are limited to agents that have a real emit path today. Adding
-// a new agent is additive-safe — extend this enum when the call site that
-// would emit it lands, not in anticipation.
-export const agentKindSchema = z.enum([
+// `other` remains as a telemetry escape hatch, but project-owned TuiAgents
+// should map to concrete values; see `tuiAgentToAgentKind`.
+export const AGENT_KIND_VALUES = [
   'claude-code',
   'codex',
-  'gemini',
-  'copilot',
-  'cursor',
+  'autohand',
   'opencode',
+  'pi',
+  'gemini',
   'aider',
+  'goose',
+  'amp',
+  'kilo',
+  'kiro',
+  'crush',
+  'aug',
+  'cline',
+  'codebuff',
+  'continue',
+  'cursor',
+  'droid',
+  'kimi',
+  'mistral-vibe',
+  'qwen-code',
+  'rovo',
+  'hermes',
+  'copilot',
   'other'
-])
+] as const
+export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
-export const errorClassSchema = z.enum([
-  'network_timeout',
-  'auth_expired',
-  'rate_limited',
-  'provider_unavailable',
-  'provider_error_generic',
-  'binary_not_found',
-  'binary_version_mismatch',
-  'workspace_gone',
-  'user_cancelled',
-  'unknown'
-])
+// Trimmed to the two values Orca's PTY-typed-command launch architecture can
+// actually emit:
+//   - `binary_not_found` — `provider.spawn` ENOENT (the *shell* binary is
+//     missing). The agent CLI being missing is invisible: Orca spawns a
+//     healthy shell and types the command, and bash/zsh's "command not found"
+//     surfaces only as terminal output.
+//   - `unknown` — every other thrown error (paste-readiness timeout, env-build
+//     failures, unclassifiable shell-spawn errors).
+// Provider-side errors (`auth_expired`, `rate_limited`, `network_timeout`,
+// `provider_*`) happen inside the agent CLI subprocess and are not observable
+// to Orca — see telemetry-plan.md §Decision: Defer per-incident error fields.
+// Adding a new value is additive-safe; do it when the call site lands, not in
+// anticipation.
+export const errorClassSchema = z.enum(['binary_not_found', 'unknown'])
 export type ErrorClass = z.infer<typeof errorClassSchema>
-
-// Closed whitelist of error `name` strings allowed on `agent_error`. This is
-// the one free-ish string that can leave the machine on an agent_error event
-// — the validator drops anything not in this set.
-//
-// A regex-shape check (e.g. `/^[A-Z][A-Za-z]{0,32}$/`) would permit
-// identifier-shaped leaks like `PaymentFailedForUserAlice` or
-// `TimeoutInRepoMyCompanyInternalMonorepo` — context-concatenation bugs
-// under deadline pressure. A closed whitelist forces each new error name
-// through review. Same pattern as `SETTINGS_CHANGED_WHITELIST`.
-export const AGENT_ERROR_NAME_WHITELIST = [
-  'NetworkTimeout',
-  'AuthExpired',
-  'RateLimited',
-  'ProviderUnavailable',
-  'ProviderErrorGeneric',
-  'BinaryNotFound',
-  'BinaryVersionMismatch',
-  'WorkspaceGone',
-  'UserCancelled'
-] as const
-export const agentErrorNameSchema = z.enum(AGENT_ERROR_NAME_WHITELIST)
-export type AgentErrorName = z.infer<typeof agentErrorNameSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
 export type RepoMethod = z.infer<typeof repoMethodSchema>
@@ -126,12 +124,18 @@ export type OptInVia = z.infer<typeof optInViaSchema>
 //
 // Kept as an `as const` tuple so the Zod enum below and any call-site usage
 // share one array — typo-drift is impossible.
+type BooleanGlobalSettingsKey = {
+  [Key in keyof GlobalSettings]-?: GlobalSettings[Key] extends boolean ? Key : never
+}[keyof GlobalSettings]
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
-  'experimentalTerminalDaemon',
-  'experimentalAgentDashboard'
-] as const
+  'experimentalAgentDashboard',
+  'experimentalMobile',
+  'experimentalSidekick',
+  'experimentalWorktreeSymlinks',
+  'geminiCliOAuthEnabled'
+] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
 
@@ -161,22 +165,15 @@ const agentStartedSchema = z
   })
   .strict()
 
-// Enum-only by design for `error_class` + `agent_kind`. `error_name` is the
-// one free-ish string that can leave the machine on this event, and it is
-// drawn from the closed `AGENT_ERROR_NAME_WHITELIST` — adding a new value
-// requires a PR to the whitelist, giving review a chance to catch
-// context-concatenation patterns.
-//
-// `error_message` and `error_stack` are deliberately absent from this schema.
-// `.strict()` rejects either key if a call site ever tries to attach one,
-// which fails the validator and drops the event. Raw error strings carry
-// arbitrary user/workspace/path content; keeping them off the wire is the
-// only way to guarantee we never transmit them by accident.
+// Enum-only by design for both fields. `error_message` and `error_stack` are
+// deliberately absent — `.strict()` rejects either key if a call site ever
+// tries to attach one, which fails the validator and drops the event. Raw
+// error strings carry arbitrary user/workspace/path content; keeping them off
+// the wire is the only way to guarantee we never transmit them by accident.
 const agentErrorSchema = z
   .object({
     error_class: errorClassSchema,
-    agent_kind: agentKindSchema,
-    error_name: agentErrorNameSchema.optional()
+    agent_kind: agentKindSchema
   })
   .strict()
 

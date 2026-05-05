@@ -15,6 +15,7 @@ import type {
   SetupSplitDirection,
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
+import type { EventProps } from '../../../../shared/telemetry-events'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -52,7 +53,13 @@ type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
-  startup?: { command: string; env?: Record<string, string> } | null
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
+     *  so main fires the event only after the spawn succeeds. */
+    telemetry?: EventProps<'agent_started'>
+  } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
    *  keeping the main terminal interactive. */

@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { TuiAgent } from '../../../shared/types'
 
 export type LaunchAgentInNewTabArgs = {
@@ -55,8 +56,20 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // lands after mount the agent binary never starts; the user sees a bare shell.
   // Since both calls happen synchronously in the same React batch, the queue
   // is in place by the time the pane commits.
+  //
+  // The telemetry payload is threaded through the queue → pty-connection →
+  // pty-transport → pty:spawn IPC → main, where main fires `agent_started`
+  // only after the spawn succeeds. `request_kind: 'new'` because
+  // quick-launch always opens a fresh empty-prompt session.
   const tab = store.createTab(worktreeId, groupId)
-  store.queueTabStartupCommand(tab.id, { command: startupPlan.launchCommand })
+  store.queueTabStartupCommand(tab.id, {
+    command: startupPlan.launchCommand,
+    telemetry: {
+      agent_kind: tuiAgentToAgentKind(agent),
+      launch_source: 'tab_bar_quick_launch',
+      request_kind: 'new'
+    }
+  })
 
   // Why: match the `+` button's `createNewTerminalTab` sequence — without
   // `setActiveTabType('terminal')`, a worktree currently showing an editor

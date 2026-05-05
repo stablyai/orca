@@ -35,7 +35,12 @@ function getFieldValueForGrouping(
 ): { key: string; label: string; orderHint: number; iteration: ProjectGroup['iteration'] } {
   const value = row.fieldValuesByFieldId[field.id]
   if (!value) {
-    return { key: EMPTY_GROUP_KEY, label: labelForEmpty(field), orderHint: UNKNOWN_INDEX_SENTINEL, iteration: null }
+    return {
+      key: EMPTY_GROUP_KEY,
+      label: labelForEmpty(field),
+      orderHint: UNKNOWN_INDEX_SENTINEL,
+      iteration: null
+    }
   }
   if (field.kind === 'iteration' && value.kind === 'iteration') {
     const idx = field.iterations.findIndex((it) => it.id === value.iterationId)
@@ -98,7 +103,12 @@ export function groupRows(
   }
   const buckets = new Map<
     string,
-    { label: string; orderHint: number; iteration: ProjectGroup['iteration']; rows: GitHubProjectRow[] }
+    {
+      label: string
+      orderHint: number
+      iteration: ProjectGroup['iteration']
+      rows: GitHubProjectRow[]
+    }
   >()
   for (const row of rowsInOrder) {
     const { key, label, orderHint, iteration } = getFieldValueForGrouping(row, groupField)
@@ -113,8 +123,12 @@ export function groupRows(
   // Ordering rules per design doc §Grouping.
   entries.sort((a, b) => {
     // Empty group always last.
-    if (a[0] === EMPTY_GROUP_KEY) {return 1}
-    if (b[0] === EMPTY_GROUP_KEY) {return -1}
+    if (a[0] === EMPTY_GROUP_KEY) {
+      return 1
+    }
+    if (b[0] === EMPTY_GROUP_KEY) {
+      return -1
+    }
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
     }
@@ -133,15 +147,26 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
   const aValue = a.fieldValuesByFieldId[field.id]
   const bValue = b.fieldValuesByFieldId[field.id]
   // Missing values sort last (regardless of direction).
-  if (!aValue && !bValue) {return 0}
-  if (!aValue) {return 1}
-  if (!bValue) {return -1}
+  if (!aValue && !bValue) {
+    return 0
+  }
+  if (!aValue) {
+    return 1
+  }
+  if (!bValue) {
+    return -1
+  }
 
   let cmp = 0
-  if (field.kind === 'single-select' && aValue.kind === 'single-select' && bValue.kind === 'single-select') {
+  if (
+    field.kind === 'single-select' &&
+    aValue.kind === 'single-select' &&
+    bValue.kind === 'single-select'
+  ) {
     const aIdx = field.options.findIndex((o) => o.id === aValue.optionId)
     const bIdx = field.options.findIndex((o) => o.id === bValue.optionId)
-    cmp = (aIdx === -1 ? UNKNOWN_INDEX_SENTINEL : aIdx) - (bIdx === -1 ? UNKNOWN_INDEX_SENTINEL : bIdx)
+    cmp =
+      (aIdx === -1 ? UNKNOWN_INDEX_SENTINEL : aIdx) - (bIdx === -1 ? UNKNOWN_INDEX_SENTINEL : bIdx)
   } else if (
     field.kind === 'iteration' &&
     aValue.kind === 'iteration' &&
@@ -149,7 +174,8 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
   ) {
     const aIdx = field.iterations.findIndex((it) => it.id === aValue.iterationId)
     const bIdx = field.iterations.findIndex((it) => it.id === bValue.iterationId)
-    cmp = (aIdx === -1 ? UNKNOWN_INDEX_SENTINEL : aIdx) - (bIdx === -1 ? UNKNOWN_INDEX_SENTINEL : bIdx)
+    cmp =
+      (aIdx === -1 ? UNKNOWN_INDEX_SENTINEL : aIdx) - (bIdx === -1 ? UNKNOWN_INDEX_SENTINEL : bIdx)
   } else if (aValue.kind === 'number' && bValue.kind === 'number') {
     cmp = aValue.number - bValue.number
   } else if (aValue.kind === 'date' && bValue.kind === 'date') {
@@ -159,17 +185,27 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
   } else if (aValue.kind === 'users' && bValue.kind === 'users') {
     const aLogin = aValue.users[0]?.login ?? ''
     const bLogin = bValue.users[0]?.login ?? ''
-    if (!aLogin && !bLogin) {cmp = 0}
-    else if (!aLogin) {cmp = 1}
-    else if (!bLogin) {cmp = -1}
-    else {cmp = aLogin.localeCompare(bLogin)}
+    if (!aLogin && !bLogin) {
+      cmp = 0
+    } else if (!aLogin) {
+      cmp = 1
+    } else if (!bLogin) {
+      cmp = -1
+    } else {
+      cmp = aLogin.localeCompare(bLogin)
+    }
   } else if (aValue.kind === 'labels' && bValue.kind === 'labels') {
     const aName = aValue.labels[0]?.name ?? ''
     const bName = bValue.labels[0]?.name ?? ''
-    if (!aName && !bName) {cmp = 0}
-    else if (!aName) {cmp = 1}
-    else if (!bName) {cmp = -1}
-    else {cmp = aName.localeCompare(bName)}
+    if (!aName && !bName) {
+      cmp = 0
+    } else if (!aName) {
+      cmp = 1
+    } else if (!bName) {
+      cmp = -1
+    } else {
+      cmp = aName.localeCompare(bName)
+    }
   } else {
     // Why: unknown sort-field kind — ignore this sort field and fall through
     // to tie-breaks (and eventually row.position). Dev-time warning gated so
@@ -183,16 +219,15 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
   return sort.direction === 'DESC' ? -cmp : cmp
 }
 
-export function sortRows(
-  table: GitHubProjectTable,
-  rows: GitHubProjectRow[]
-): GitHubProjectRow[] {
+export function sortRows(table: GitHubProjectTable, rows: GitHubProjectRow[]): GitHubProjectRow[] {
   const sorts = table.selectedView.sortByFields
   const out = [...rows]
   out.sort((a, b) => {
     for (const sort of sorts) {
       const cmp = compareSort(a, b, sort)
-      if (cmp !== 0) {return cmp}
+      if (cmp !== 0) {
+        return cmp
+      }
     }
     // Final tie-break: row.position preserves GitHub rank order.
     return a.position - b.position
@@ -200,13 +235,12 @@ export function sortRows(
   return out
 }
 
-export function isIterationCurrent(iteration: {
-  startDate: string
-  duration: number
-}): boolean {
+export function isIterationCurrent(iteration: { startDate: string; duration: number }): boolean {
   // Parse as YYYY-MM-DD in UTC to avoid TZ-shift false negatives near midnight.
   const start = new Date(`${iteration.startDate}T00:00:00Z`).getTime()
-  if (Number.isNaN(start)) {return false}
+  if (Number.isNaN(start)) {
+    return false
+  }
   const end = start + iteration.duration * 86_400_000
   const now = Date.now()
   return now >= start && now < end

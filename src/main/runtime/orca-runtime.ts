@@ -167,6 +167,12 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   tailLinesTotal: number
   preview: string
   lastAgentStatus: AgentStatus | null
+  // Why: the most recent OSC title observed on this leaf's PTY data. Used by
+  // worktree.ps so daemon-hosted terminals (no renderer pushing pane titles)
+  // still recompute working/idle from the live title each call instead of
+  // serving a stale `lastAgentStatus` after the agent process exits and the
+  // shell takes over the title — the bug behind issue #1437.
+  lastOscTitle: string | null
 }
 
 type RuntimePtyWorktreeRecord = {
@@ -632,7 +638,8 @@ export class OrcaRuntimeService {
         tailTruncated: existing?.ptyId === ptyId ? existing.tailTruncated : false,
         tailLinesTotal: existing?.ptyId === ptyId ? existing.tailLinesTotal : 0,
         preview: existing?.ptyId === ptyId ? existing.preview : '',
-        lastAgentStatus: existing?.ptyId === ptyId ? existing.lastAgentStatus : null
+        lastAgentStatus: existing?.ptyId === ptyId ? existing.lastAgentStatus : null,
+        lastOscTitle: existing?.ptyId === ptyId ? existing.lastOscTitle : null
       })
 
       if (leaf.ptyId) {
@@ -790,8 +797,21 @@ export class OrcaRuntimeService {
       leaf.tailLinesTotal += nextTail.newCompleteLines
       leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
 
-      if (agentStatus !== null) {
+      if (oscTitle !== null) {
+        // Why: keep the latest OSC title on the leaf so worktree.ps can
+        // recompute status from the live title each call. Without this,
+        // daemon-hosted terminals (no renderer pushing pane titles) had no
+        // way to clear a stale 'working' status after the agent exited and
+        // the shell took over the title — the stuck-spinner bug in #1437.
+        leaf.lastOscTitle = oscTitle
         const prevStatus = leaf.lastAgentStatus
+        // Why: when a new OSC title doesn't classify as an agent state (e.g.
+        // bare shell title after the agent exits), clear lastAgentStatus so
+        // it is no longer sticky. Tui-idle waiters that needed the previous
+        // 'idle' transition were already resolved at the moment of the
+        // transition below; only fresh waiters registered after the agent
+        // exits would observe the cleared value, and they correctly fall
+        // back to title-based detection / polling.
         leaf.lastAgentStatus = agentStatus
         // Why: resolve tui-idle on any transition TO idle (not just working→idle).
         // Claude Code may skip "working" entirely on fast tasks, going null→idle,
@@ -986,12 +1006,15 @@ export class OrcaRuntimeService {
       return
     }
     const status = detectAgentStatusFromTitle(title)
-    if (status === null) {
-      return
-    }
     for (const leaf of this.leaves.values()) {
       if (leaf.ptyId === ptyId) {
-        leaf.lastAgentStatus = status
+        // Why: seed lastOscTitle even when the seeded title doesn't classify
+        // as an agent state, so worktree.ps recomputes status from the live
+        // title rather than treating the leaf as agentless.
+        leaf.lastOscTitle = title
+        if (status !== null) {
+          leaf.lastAgentStatus = status
+        }
       }
     }
   }
@@ -5695,7 +5718,14 @@ function getLeafWorktreeStatus(
   leaf: RuntimeLeafRecord,
   tabTitle: string | null
 ): RuntimeWorktreeStatus {
-  const detected = leaf.lastAgentStatus ?? detectAgentStatusFromTitle(leaf.title ?? tabTitle ?? '')
+  // Why: recompute from the live title each call so worktree.ps mirrors what
+  // the desktop sidebar's getWorktreeStatus does (no sticky state). Prefer
+  // the runtime-tracked OSC title (covers daemon-hosted terminals) over the
+  // renderer-pushed leaf.title and the tab title. Falling back to
+  // lastAgentStatus only when no title is available preserves a sensible
+  // signal for very fresh leaves before any title has been observed.
+  const liveTitle = leaf.lastOscTitle ?? leaf.title ?? tabTitle ?? ''
+  const detected = liveTitle ? detectAgentStatusFromTitle(liveTitle) : leaf.lastAgentStatus
   if (detected === 'permission') {
     return 'permission'
   }

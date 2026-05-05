@@ -61,15 +61,8 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
-import {
-  useRepoLabels,
-  useRepoAssignees,
-  useImmediateMutation
-} from '@/hooks/useIssueMetadata'
-import {
-  useRepoLabelsBySlug,
-  useRepoAssigneesBySlug
-} from '@/hooks/useGitHubSlugMetadata'
+import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import type {
   GitHubOwnerRepo,
@@ -1682,14 +1675,12 @@ function MentionTextarea({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
-async function runIssueUpdate(
-  args: {
-    repoPath: string | null
-    projectOrigin: GitHubItemDialogProjectOrigin | undefined
-    number: number
-    updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
-  }
-): Promise<void> {
+async function runIssueUpdate(args: {
+  repoPath: string | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  number: number
+  updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
+}): Promise<void> {
   if (args.projectOrigin) {
     const res = await window.api.gh.updateIssueBySlug({
       owner: args.projectOrigin.owner,
@@ -1746,7 +1737,9 @@ function GHEditSection({
   // See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
-      if (!projectOrigin) {return}
+      if (!projectOrigin) {
+        return
+      }
       patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, patch)
     },
     [projectOrigin, patchProjectRowContent]

@@ -132,7 +132,9 @@ type RawProjectV2Field = {
   }
 }
 
-export function normalizeField(raw: RawProjectV2Field | null | undefined): GitHubProjectField | null {
+export function normalizeField(
+  raw: RawProjectV2Field | null | undefined
+): GitHubProjectField | null {
   if (!raw || typeof raw.id !== 'string' || typeof raw.name !== 'string') {
     return null
   }
@@ -184,7 +186,9 @@ type RawUser = {
 }
 
 function normalizeUser(raw: RawUser | null | undefined): GitHubProjectUser | null {
-  if (!raw || typeof raw.login !== 'string') {return null}
+  if (!raw || typeof raw.login !== 'string') {
+    return null
+  }
   return {
     login: raw.login,
     name: raw.name ?? null,
@@ -195,7 +199,9 @@ function normalizeUser(raw: RawUser | null | undefined): GitHubProjectUser | nul
 type RawLabel = { name?: string; color?: string }
 
 function normalizeLabel(raw: RawLabel | null | undefined): GitHubProjectLabel | null {
-  if (!raw || typeof raw.name !== 'string') {return null}
+  if (!raw || typeof raw.name !== 'string') {
+    return null
+  }
   return { name: raw.name, color: raw.color ?? '' }
 }
 
@@ -216,12 +222,18 @@ type RawFieldValue = {
   users?: { nodes?: RawUser[] }
 }
 
-export function normalizeFieldValue(raw: RawFieldValue | null | undefined): GitHubProjectFieldValue | null {
-  if (!raw || !raw.field || typeof raw.field.id !== 'string') {return null}
+export function normalizeFieldValue(
+  raw: RawFieldValue | null | undefined
+): GitHubProjectFieldValue | null {
+  if (!raw || !raw.field || typeof raw.field.id !== 'string') {
+    return null
+  }
   const fieldId = raw.field.id
   switch (raw.__typename) {
     case 'ProjectV2ItemFieldSingleSelectValue':
-      if (typeof raw.optionId !== 'string') {return null}
+      if (typeof raw.optionId !== 'string') {
+        return null
+      }
       return {
         kind: 'single-select',
         fieldId,
@@ -230,7 +242,9 @@ export function normalizeFieldValue(raw: RawFieldValue | null | undefined): GitH
         color: raw.color ?? ''
       }
     case 'ProjectV2ItemFieldIterationValue':
-      if (typeof raw.iterationId !== 'string') {return null}
+      if (typeof raw.iterationId !== 'string') {
+        return null
+      }
       return {
         kind: 'iteration',
         fieldId,
@@ -242,7 +256,9 @@ export function normalizeFieldValue(raw: RawFieldValue | null | undefined): GitH
     case 'ProjectV2ItemFieldTextValue':
       return { kind: 'text', fieldId, text: raw.text ?? '' }
     case 'ProjectV2ItemFieldNumberValue':
-      if (typeof raw.number !== 'number') {return null}
+      if (typeof raw.number !== 'number') {
+        return null
+      }
       return { kind: 'number', fieldId, number: raw.number }
     case 'ProjectV2ItemFieldDateValue':
       return { kind: 'date', fieldId, date: raw.date ?? '' }
@@ -279,7 +295,12 @@ type RawContent = {
   assignees?: { nodes?: RawUser[] }
   labels?: { nodes?: RawLabel[] }
   parent?: { number?: number; title?: string; url?: string } | null
-  issueType?: { id?: string; name?: string; color?: string | null; description?: string | null } | null
+  issueType?: {
+    id?: string
+    name?: string
+    color?: string | null
+    description?: string | null
+  } | null
 }
 
 type RawItem = {
@@ -298,10 +319,18 @@ type NormalizedItemOutcome =
   | { ok: false; drift: GitHubProjectViewError }
 
 function mapItemType(raw: string | undefined, hasContent: boolean): GitHubProjectRowItemType {
-  if (raw === 'ISSUE') {return 'ISSUE'}
-  if (raw === 'PULL_REQUEST') {return 'PULL_REQUEST'}
-  if (raw === 'DRAFT_ISSUE') {return 'DRAFT_ISSUE'}
-  if (raw === 'REDACTED' || !hasContent) {return 'REDACTED'}
+  if (raw === 'ISSUE') {
+    return 'ISSUE'
+  }
+  if (raw === 'PULL_REQUEST') {
+    return 'PULL_REQUEST'
+  }
+  if (raw === 'DRAFT_ISSUE') {
+    return 'DRAFT_ISSUE'
+  }
+  if (raw === 'REDACTED' || !hasContent) {
+    return 'REDACTED'
+  }
   // Unknown item type with content — treat as redacted rather than dropping.
   return 'REDACTED'
 }
@@ -535,12 +564,16 @@ async function fetchProjectViewsPage(args: {
     ${FIELD_CONFIG_FRAGMENT}
   `
   const vars: GraphqlVars = { owner: args.owner, num: args.projectNumber }
-  if (args.after) {vars.after = args.after}
+  if (args.after) {
+    vars.after = args.after
+  }
   const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
     query,
     vars
   )
-  if (!res.ok) {return res}
+  if (!res.ok) {
+    return res
+  }
   const top = res.data[root]
   const project = top?.projectV2 ?? null
   if (!project || typeof project.id !== 'string') {
@@ -560,7 +593,9 @@ async function fetchProjectViewsPage(args: {
 async function fetchViewFieldsContinuation(
   viewId: string,
   after: string
-): Promise<{ ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }> {
+): Promise<
+  { ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }
+> {
   // Why: address the view directly via `node(id:)` instead of re-fetching the
   // whole project + walking views every page. Previous shape paid an
   // unnecessary `${VIEWS_PAGE_SIZE}` views fan-out per field-continuation
@@ -594,14 +629,14 @@ async function fetchViewFieldsContinuation(
         }
       } | null
     }>(query, { viewId, after: cursor })
-    if (!res.ok) {return res}
+    if (!res.ok) {
+      return res
+    }
     const view = res.data.node ?? null
     if (!view) {
       return { ok: false, error: driftError('view disappeared during field pagination') }
     }
-    const nodes = (view.fields?.nodes ?? []).filter(
-      (f): f is RawProjectV2Field => f !== null
-    )
+    const nodes = (view.fields?.nodes ?? []).filter((f): f is RawProjectV2Field => f !== null)
     collected.push(...nodes)
     const pi = view.fields?.pageInfo
     cursor = pi?.hasNextPage === true && typeof pi.endCursor === 'string' ? pi.endCursor : null
@@ -621,18 +656,26 @@ function finalizeView(
   const all = [...(raw.fields?.nodes ?? []), ...extraFields.map((f) => f as RawProjectV2Field)]
   for (const f of all) {
     const n = normalizeField(f)
-    if (n) {fields.push(n)}
+    if (n) {
+      fields.push(n)
+    }
   }
   const groupByFields: GitHubProjectField[] = []
   for (const f of raw.groupByFields?.nodes ?? []) {
     const n = normalizeField(f)
-    if (n) {groupByFields.push(n)}
+    if (n) {
+      groupByFields.push(n)
+    }
   }
   const sortByFields: GitHubProjectSort[] = []
   for (const s of raw.sortByFields?.nodes ?? []) {
-    if (!s || (s.direction !== 'ASC' && s.direction !== 'DESC')) {continue}
+    if (!s || (s.direction !== 'ASC' && s.direction !== 'DESC')) {
+      continue
+    }
     const n = normalizeField(s.field)
-    if (n) {sortByFields.push({ direction: s.direction, field: n })}
+    if (n) {
+      sortByFields.push({ direction: s.direction, field: n })
+    }
   }
   return {
     ok: true,
@@ -656,9 +699,15 @@ function matchesSelector(
   raw: RawProjectView,
   sel: { viewId?: string; viewNumber?: number; viewName?: string }
 ): 'none' | 'id' | 'number' | 'name' | 'default' {
-  if (sel.viewId && raw.id === sel.viewId) {return 'id'}
-  if (sel.viewNumber !== undefined && raw.number === sel.viewNumber) {return 'number'}
-  if (sel.viewName && raw.name === sel.viewName) {return 'name'}
+  if (sel.viewId && raw.id === sel.viewId) {
+    return 'id'
+  }
+  if (sel.viewNumber !== undefined && raw.number === sel.viewNumber) {
+    return 'number'
+  }
+  if (sel.viewName && raw.name === sel.viewName) {
+    return 'name'
+  }
   if (
     sel.viewId === undefined &&
     sel.viewNumber === undefined &&
@@ -726,7 +775,9 @@ async function fetchItemsPageWithRaw(args: {
   argsArr.push('-F', `num=${args.projectNumber}`)
   argsArr.push('-f', `q=${args.query}`)
   argsArr.push('-F', `first=${args.first}`)
-  if (args.after) {argsArr.push('-f', `after=${args.after}`)}
+  if (args.after) {
+    argsArr.push('-f', `after=${args.after}`)
+  }
 
   const guard = rateLimitGuard('graphql')
   if (guard.blocked) {
@@ -890,7 +941,9 @@ async function fetchAllItems(args: {
       includeParent: false
     })
   }
-  if (!first.ok) {return { ok: false, error: first.error }}
+  if (!first.ok) {
+    return { ok: false, error: first.error }
+  }
 
   // Drift guards
   if (first.page.totalCount === undefined || first.page.totalCount === null) {
@@ -906,23 +959,33 @@ async function fetchAllItems(args: {
 
   // Size cap
   if (totalCount > MAX_ITEMS) {
-    return { ok: false, error: { type: 'too_large', message: `View has ${totalCount} items.` }, totalCount }
+    return {
+      ok: false,
+      error: { type: 'too_large', message: `View has ${totalCount} items.` },
+      totalCount
+    }
   }
 
   const rows: GitHubProjectRow[] = []
   let position = 0
   const appendNodes = (nodes: (RawItem | null)[]): GitHubProjectViewError | null => {
     for (const n of nodes) {
-      if (!n) {continue}
+      if (!n) {
+        continue
+      }
       const norm = normalizeItem(n, position)
-      if (!norm.ok) {return norm.drift}
+      if (!norm.ok) {
+        return norm.drift
+      }
       rows.push(norm.row)
       position++
     }
     return null
   }
   const e1 = appendNodes(first.page.nodes)
-  if (e1) {return { ok: false, error: e1, totalCount }}
+  if (e1) {
+    return { ok: false, error: e1, totalCount }
+  }
 
   // Paginate
   let hasNext = first.page.pageInfo.hasNextPage === true
@@ -944,7 +1007,9 @@ async function fetchAllItems(args: {
       after: cursor as string,
       includeParent
     })
-    if (!next.ok) {return { ok: false, error: next.error, totalCount }}
+    if (!next.ok) {
+      return { ok: false, error: next.error, totalCount }
+    }
     if (!Array.isArray(next.page.nodes)) {
       return { ok: false, error: driftError('items.nodes missing on follow page'), totalCount }
     }
@@ -956,7 +1021,9 @@ async function fetchAllItems(args: {
       }
     }
     const e2 = appendNodes(next.page.nodes)
-    if (e2) {return { ok: false, error: e2, totalCount }}
+    if (e2) {
+      return { ok: false, error: e2, totalCount }
+    }
     hasNext = next.page.pageInfo.hasNextPage === true
     cursor = next.page.pageInfo.endCursor
     if (hasNext && typeof cursor !== 'string') {
@@ -991,7 +1058,9 @@ async function fetchItemsCountOnly(args: {
   const res = await runGraphql<
     Record<string, { projectV2?: { items?: { totalCount?: number } | null } | null } | null>
   >(query, { owner: args.owner, num: args.projectNumber, q: args.query })
-  if (!res.ok) {return null}
+  if (!res.ok) {
+    return null
+  }
   const count = res.data[root]?.projectV2?.items?.totalCount
   return typeof count === 'number' ? count : null
 }
@@ -1002,9 +1071,13 @@ export async function getProjectViewTable(
   args: GetProjectViewTableArgs
 ): Promise<GetProjectViewTableResult> {
   const ownerCheck = assertSlug(args.owner, 'owner')
-  if (!ownerCheck.ok) {return { ok: false, error: ownerCheck.error }}
+  if (!ownerCheck.ok) {
+    return { ok: false, error: ownerCheck.error }
+  }
   const numCheck = assertPositiveInt(args.projectNumber, 'projectNumber')
-  if (!numCheck.ok) {return { ok: false, error: numCheck.error }}
+  if (!numCheck.ok) {
+    return { ok: false, error: numCheck.error }
+  }
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
     return {
       ok: false,
@@ -1025,7 +1098,9 @@ export async function getProjectViewTable(
       projectNumber: args.projectNumber,
       after: cursor
     })
-    if (!page.ok) {return { ok: false, error: page.error }}
+    if (!page.ok) {
+      return { ok: false, error: page.error }
+    }
     project = page.project
     for (const v of page.views) {
       viewsSeen.push(v)
@@ -1034,7 +1109,9 @@ export async function getProjectViewTable(
         viewNumber: args.viewNumber,
         viewName: args.viewName
       })
-      if (m === 'none') {continue}
+      if (m === 'none') {
+        continue
+      }
       // Precedence: id > number > name > default.
       const rank: Record<typeof m, number> = { id: 4, number: 3, name: 2, default: 1 }
       const currentRank = matchStrength ? rank[matchStrength] : 0
@@ -1053,10 +1130,16 @@ export async function getProjectViewTable(
     // selector promotes a 'default' to a stronger match within the same
     // selector input — those ranks only matter when the caller supplied
     // a selector. Bail early on any non-null selectedRaw.
-    if (selectedRaw) {break}
-    if (!page.hasNextPage) {break}
+    if (selectedRaw) {
+      break
+    }
+    if (!page.hasNextPage) {
+      break
+    }
     cursor = page.endCursor
-    if (typeof cursor !== 'string') {break}
+    if (typeof cursor !== 'string') {
+      break
+    }
   }
   if (!project) {
     return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
@@ -1070,12 +1153,16 @@ export async function getProjectViewTable(
   const fieldsPi = selectedRaw.fields?.pageInfo
   if (fieldsPi?.hasNextPage === true && typeof fieldsPi.endCursor === 'string' && selectedRaw.id) {
     const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor)
-    if (!cont.ok) {return { ok: false, error: cont.error }}
+    if (!cont.ok) {
+      return { ok: false, error: cont.error }
+    }
     extraFields = cont.fields
   }
 
   const finalized = finalizeView(selectedRaw, extraFields)
-  if (!finalized.ok) {return { ok: false, error: finalized.drift }}
+  if (!finalized.ok) {
+    return { ok: false, error: finalized.drift }
+  }
   const selectedView = finalized.view
 
   // Why: an explicit empty-string override means "no filter"; treat undefined
@@ -1196,7 +1283,9 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
       }
     `
     const vars: GraphqlVars = {}
-    if (viewerCursor) {vars.after = viewerCursor}
+    if (viewerCursor) {
+      vars.after = viewerCursor
+    }
     const res = await runGraphql<RawViewerDiscovery>(query, vars)
     if (!res.ok) {
       // Why: a viewer-level failure is structural — if we can't list the
@@ -1208,10 +1297,14 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     if (!res.data.viewer) {
       return { ok: false, error: driftError('viewer missing') }
     }
-    if (viewerLogin === null) {viewerLogin = res.data.viewer.login ?? null}
+    if (viewerLogin === null) {
+      viewerLogin = res.data.viewer.login ?? null
+    }
     const nodes = res.data.viewer.projectsV2?.nodes ?? []
     for (const n of nodes) {
-      if (!n || typeof n.id !== 'string' || typeof n.number !== 'number') {continue}
+      if (!n || typeof n.id !== 'string' || typeof n.number !== 'number') {
+        continue
+      }
       const ownerLogin = n.owner?.login ?? viewerLogin ?? ''
       const ownerType: GitHubProjectOwnerType =
         n.owner?.__typename === 'Organization' ? 'organization' : 'user'
@@ -1225,7 +1318,9 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
         source: 'viewer'
       })
       viewerFetched++
-      if (viewerFetched >= DISCOVERY_PROJECTS_PER_OWNER) {break}
+      if (viewerFetched >= DISCOVERY_PROJECTS_PER_OWNER) {
+        break
+      }
     }
     const pi = res.data.viewer.projectsV2?.pageInfo
     viewerMore = pi?.hasNextPage === true && typeof pi.endCursor === 'string'
@@ -1263,7 +1358,9 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
       }
     `
     const vars: GraphqlVars = {}
-    if (orgCursor) {vars.orgAfter = orgCursor}
+    if (orgCursor) {
+      vars.orgAfter = orgCursor
+    }
     const res = await runGraphql<RawViewerDiscovery>(query, vars)
     if (!res.ok) {
       // Why: the org-listing query itself failed (not a nested projectsV2).
@@ -1276,8 +1373,12 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     }
     const orgs = res.data.viewer?.organizations?.nodes ?? []
     for (const org of orgs) {
-      if (!org || typeof org.login !== 'string') {continue}
-      if (orgsSeen >= DISCOVERY_MAX_ORGS) {break}
+      if (!org || typeof org.login !== 'string') {
+        continue
+      }
+      if (orgsSeen >= DISCOVERY_MAX_ORGS) {
+        break
+      }
       orgsSeen++
       const login = org.login
       // Cache owner → ownerType for downstream paste/resolve even when the
@@ -1287,8 +1388,12 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
       const nodes = org.projectsV2?.nodes ?? []
       let ownerCount = 0
       for (const n of nodes) {
-        if (!n || typeof n.id !== 'string' || typeof n.number !== 'number') {continue}
-        if (ownerCount >= DISCOVERY_PROJECTS_PER_OWNER) {break}
+        if (!n || typeof n.id !== 'string' || typeof n.number !== 'number') {
+          continue
+        }
+        if (ownerCount >= DISCOVERY_PROJECTS_PER_OWNER) {
+          break
+        }
         orgProjects.push({
           id: n.id,
           owner: login,
@@ -1306,7 +1411,9 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     orgCursor = orgMore ? (pi?.endCursor ?? null) : null
   }
 
-  if (viewerLogin) {ownerTypeCache.set(viewerLogin, 'user')}
+  if (viewerLogin) {
+    ownerTypeCache.set(viewerLogin, 'user')
+  }
 
   return {
     ok: true,
@@ -1324,15 +1431,22 @@ type ParsedPaste =
 
 export function parseProjectPaste(input: string): ParsedPaste | null {
   const trimmed = input.trim()
-  if (!trimmed) {return null}
+  if (!trimmed) {
+    return null
+  }
   // URL forms
-  const urlRe = /^https?:\/\/github\.com\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
+  const urlRe =
+    /^https?:\/\/github\.com\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
   const m = trimmed.match(urlRe)
   if (m) {
     const [, kindSeg, owner, nStr, vStr] = m
     const number = parseInt(nStr, 10)
-    if (!Number.isInteger(number) || number < 1) {return null}
-    if (!isValidOwnerSlug(owner)) {return null}
+    if (!Number.isInteger(number) || number < 1) {
+      return null
+    }
+    if (!isValidOwnerSlug(owner)) {
+      return null
+    }
     const viewNumber = vStr ? parseInt(vStr, 10) : undefined
     return {
       kind: kindSeg === 'orgs' ? 'org' : 'user',
@@ -1348,7 +1462,9 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
   const sm = trimmed.match(shortRe)
   if (sm) {
     const number = parseInt(sm[2], 10)
-    if (!Number.isInteger(number) || number < 1) {return null}
+    if (!Number.isInteger(number) || number < 1) {
+      return null
+    }
     return { kind: 'bare', owner: sm[1], number }
   }
   return null
@@ -1358,15 +1474,13 @@ async function resolveOwnerType(
   owner: string,
   preferred: GitHubProjectOwnerType | null
 ): Promise<
-  { ok: true; ownerType: GitHubProjectOwnerType; title: string }
+  | { ok: true; ownerType: GitHubProjectOwnerType; title: string }
   | { ok: false; error: GitHubProjectViewError }
 > {
   const tryOne = async (
     ot: GitHubProjectOwnerType,
     num: number | null
-  ): Promise<
-    { ok: true; title: string } | { ok: false; error: GitHubProjectViewError }
-  > => {
+  ): Promise<{ ok: true; title: string } | { ok: false; error: GitHubProjectViewError }> => {
     const root = ownerQueryRoot(ot)
     // If number is provided, fetch the project title; else just confirm owner exists.
     const query = num
@@ -1381,13 +1495,19 @@ async function resolveOwnerType(
         }
       `
     const vars: GraphqlVars = { owner }
-    if (num) {vars.num = num}
+    if (num) {
+      vars.num = num
+    }
     const res = await runGraphql<
       Record<string, { projectV2?: { id?: string; title?: string } | null; login?: string } | null>
     >(query, vars)
-    if (!res.ok) {return { ok: false, error: res.error }}
+    if (!res.ok) {
+      return { ok: false, error: res.error }
+    }
     const top = res.data[root]
-    if (!top) {return { ok: false, error: { type: 'not_found', message: 'Owner not found.' } }}
+    if (!top) {
+      return { ok: false, error: { type: 'not_found', message: 'Owner not found.' } }
+    }
     if (num) {
       const p = top.projectV2
       if (!p || typeof p.id !== 'string') {
@@ -1407,7 +1527,9 @@ async function resolveOwnerType(
   const fallback: GitHubProjectOwnerType[] = preferred
     ? []
     : cached
-      ? (cached === 'organization' ? ['user'] : ['organization'])
+      ? cached === 'organization'
+        ? ['user']
+        : ['organization']
       : []
   const ordered = [...candidates, ...fallback]
   let lastError: GitHubProjectViewError | null = null
@@ -1453,7 +1575,9 @@ export async function resolveProjectRef(
     parsed.kind === 'org' ? 'organization' : parsed.kind === 'user' ? 'user' : null
   // Verify by fetching project title.
   const ownerRes = await resolveOwnerType(parsed.owner, preferred)
-  if (!ownerRes.ok) {return { ok: false, error: ownerRes.error }}
+  if (!ownerRes.ok) {
+    return { ok: false, error: ownerRes.error }
+  }
   const ownerType = ownerRes.ownerType
   const root = ownerQueryRoot(ownerType)
   const query = `
@@ -1464,7 +1588,9 @@ export async function resolveProjectRef(
   const res = await runGraphql<
     Record<string, { projectV2?: { id?: string; title?: string } | null } | null>
   >(query, { owner: parsed.owner, num: parsed.number })
-  if (!res.ok) {return { ok: false, error: res.error }}
+  if (!res.ok) {
+    return { ok: false, error: res.error }
+  }
   const p = res.data[root]?.projectV2
   if (!p || typeof p.id !== 'string') {
     return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
@@ -1490,9 +1616,13 @@ export async function listProjectViews(
   args: ListProjectViewsArgs
 ): Promise<ListProjectViewsResult> {
   const ownerCheck = assertSlug(args.owner, 'owner')
-  if (!ownerCheck.ok) {return { ok: false, error: ownerCheck.error }}
+  if (!ownerCheck.ok) {
+    return { ok: false, error: ownerCheck.error }
+  }
   const numCheck = assertPositiveInt(args.projectNumber, 'projectNumber')
-  if (!numCheck.ok) {return { ok: false, error: numCheck.error }}
+  if (!numCheck.ok) {
+    return { ok: false, error: numCheck.error }
+  }
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
     return { ok: false, error: { type: 'validation_error', message: 'Invalid ownerType.' } }
   }
@@ -1505,9 +1635,13 @@ export async function listProjectViews(
       projectNumber: args.projectNumber,
       after: cursor
     })
-    if (!page.ok) {return { ok: false, error: page.error }}
+    if (!page.ok) {
+      return { ok: false, error: page.error }
+    }
     for (const v of page.views) {
-      if (typeof v.id !== 'string' || typeof v.layout !== 'string') {continue}
+      if (typeof v.id !== 'string' || typeof v.layout !== 'string') {
+        continue
+      }
       summaries.push({
         id: v.id,
         number: typeof v.number === 'number' ? v.number : 0,
@@ -1515,9 +1649,13 @@ export async function listProjectViews(
         layout: v.layout as GitHubProjectViewLayout
       })
     }
-    if (!page.hasNextPage) {break}
+    if (!page.hasNextPage) {
+      break
+    }
     cursor = page.endCursor
-    if (typeof cursor !== 'string') {break}
+    if (typeof cursor !== 'string') {
+      break
+    }
   }
   return { ok: true, views: summaries }
 }

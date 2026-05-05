@@ -5,13 +5,12 @@ import type {
   BrowserTabSwitchResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
+import { formatTabList, formatTabListWithProfiles, formatTabShow, printResult } from '../format'
 import {
-  formatTabList,
-  formatTabListWithProfiles,
-  formatTabShow,
-  printResult
-} from '../format'
-import { getOptionalNonNegativeIntegerFlag, getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+  getOptionalNonNegativeIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 

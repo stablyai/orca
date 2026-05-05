@@ -165,13 +165,11 @@ export function registerTelemetryHandlers(store: Store): void {
     return resolveConsent(storeRef.getSettings())
   })
 
-  ipcMain.handle('telemetry:acknowledgeBanner', (_event): void => {
-    // Banner ✕ — persist `optedIn = true`, emit nothing. The ✕-as-silent-
-    // acknowledge semantics are explicit: the user did not explicitly opt
-    // in, they declined to intervene, so no event transmits. This outcome
-    // cannot route through `telemetry:setOptIn` because the derivation
-    // above would tag it `first_launch_banner` and fire
-    // `telemetry_opted_in`.
+  ipcMain.handle('telemetry:acknowledgeBanner', (_event): Promise<void> | void => {
+    // Banner ✕ — persist `optedIn = true` without emitting a telemetry opt-in
+    // event. The acknowledge still unlocks `app_opened`, but this outcome
+    // cannot route through `telemetry:setOptIn` because the derivation above
+    // would tag it `first_launch_banner` and fire `telemetry_opted_in`.
     //
     // Check storeRef BEFORE consuming a consent-mutation token, mirroring
     // the setOptIn handler's guard above — see that comment for why
@@ -205,7 +203,7 @@ export function registerTelemetryHandlers(store: Store): void {
     if (!consumeConsentMutationToken()) {
       return
     }
-    persistBannerAcknowledgeWithoutEmitting()
+    return persistBannerAcknowledgeWithoutEmitting()
   })
 }
 

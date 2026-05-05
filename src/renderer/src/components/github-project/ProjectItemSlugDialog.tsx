@@ -38,9 +38,7 @@ export default function ProjectItemSlugDialog({
         <VisuallyHidden.Root asChild>
           <SheetDescription>Project row preview.</SheetDescription>
         </VisuallyHidden.Root>
-        {projectOrigin ? (
-          <SlugDialogBody projectOrigin={projectOrigin} onClose={onClose} />
-        ) : null}
+        {projectOrigin ? <SlugDialogBody projectOrigin={projectOrigin} onClose={onClose} /> : null}
       </SheetContent>
     </Sheet>
   )

@@ -16,7 +16,8 @@ import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { registerMobileHandlers } from './ipc/mobile'
-import { initTelemetry, shutdownTelemetry } from './telemetry/client'
+import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
+import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
@@ -215,6 +216,22 @@ function openMainWindow(): BrowserWindow {
       isQuitting = false
     }
   })
+
+  // Why: telemetry-plan.md§First-launch experience anchors default-on
+  // `app_opened` to the first main-window load. Existing users in the
+  // pending-banner cohort resolve through telemetry/client.ts; this load
+  // path only fires once consent is already enabled.
+  const onFirstWindowLoad = (): void => {
+    if (!store) {
+      return
+    }
+    const consent = resolveConsent(store.getSettings())
+    if (consent.effective !== 'enabled') {
+      return
+    }
+    trackAppOpenedOnce()
+  }
+  window.webContents.on('did-finish-load', onFirstWindowLoad)
 
   registerCoreHandlers(
     store,

@@ -49,7 +49,7 @@ describe('validate', () => {
   // transmits.
   it('rejects error_message on agent_error', () => {
     const result = validate('agent_error', {
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_message: 'at /Users/alice/secret/path/index.ts:42'
     } as never)
@@ -58,7 +58,7 @@ describe('validate', () => {
 
   it('rejects error_stack on agent_error', () => {
     const result = validate('agent_error', {
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_stack: 'Error: boom\n    at /Users/alice/...'
     } as never)
@@ -83,36 +83,21 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('drops overlength strings past the .max() cap', () => {
-    // commonPropsSchema's `.max(64)` caps don't live on per-event schemas —
-    // the per-event schemas use enum-only strings — so we exercise the cap
-    // via a whitelisted `error_name` that is *one specific enum value*
-    // meaning any attempt to smuggle a long string fails the enum check
-    // regardless. For explicit string-length cap coverage we also confirm
-    // the agent_error schema does not accept an overlength error_name
-    // even if it matches the prefix of a whitelisted value.
+  it('accepts a well-formed agent_error payload', () => {
     const result = validate('agent_error', {
-      error_class: 'auth_expired',
-      agent_kind: 'claude-code',
-      error_name: 'AuthExpiredButAlsoWithExtraGarbageThatMakesItTooLong'
-    } as never)
-    expect(result.ok).toBe(false)
-  })
-
-  it('accepts whitelisted error_name on agent_error', () => {
-    const result = validate('agent_error', {
-      error_class: 'auth_expired',
-      agent_kind: 'claude-code',
-      error_name: 'AuthExpired'
+      error_class: 'binary_not_found',
+      agent_kind: 'claude-code'
     })
     expect(result.ok).toBe(true)
   })
 
-  it('rejects error_name outside the whitelist', () => {
+  it('rejects agent_error with a deferred enum value', () => {
+    // `auth_expired` was in an earlier draft; the trimmed enum is
+    // ['binary_not_found', 'unknown']. Pin that contract so re-introducing
+    // a deferred value silently is impossible.
     const result = validate('agent_error', {
       error_class: 'auth_expired',
-      agent_kind: 'claude-code',
-      error_name: 'CustomErrorNotInList'
+      agent_kind: 'claude-code'
     } as never)
     expect(result.ok).toBe(false)
   })

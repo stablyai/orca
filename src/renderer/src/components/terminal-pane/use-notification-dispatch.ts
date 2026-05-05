@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 
 /**
  * Returns a stable dispatch function for terminal notifications.
@@ -36,15 +37,25 @@ export function useNotificationDispatch(
       // itself is the source of truth for its owning repo.
       const worktree = getWorktreeMapFromState(state).get(worktreeId)
       const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
+      const customSoundPath = state.settings?.notifications?.customSoundPath ?? null
 
-      void window.api.notifications.dispatch({
-        source: event.source,
-        worktreeId,
-        repoLabel: repo?.displayName,
-        worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
-        terminalTitle: event.terminalTitle,
-        isActiveWorktree: state.activeWorktreeId === worktreeId
-      })
+      void window.api.notifications
+        .dispatch({
+          source: event.source,
+          worktreeId,
+          repoLabel: repo?.displayName,
+          worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
+          terminalTitle: event.terminalTitle,
+          isActiveWorktree: state.activeWorktreeId === worktreeId
+        })
+        .then((result) => {
+          if (result.delivered) {
+            void playDesktopNotificationSound(customSoundPath)
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to dispatch notification:', err)
+        })
     },
     [worktreeId]
   )

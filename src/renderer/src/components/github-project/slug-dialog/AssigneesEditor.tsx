@@ -24,7 +24,9 @@ export function AssigneesEditor({
   // every unrelated re-render while the popover is open.
   const seedKey = useMemo(() => selected.slice().sort().join(','), [selected])
   useEffect(() => {
-    if (!open) {return}
+    if (!open) {
+      return
+    }
     // Why: guard against late responses overwriting newer state when
     // owner/repo/seedKey change (or the popover toggles) before the IPC
     // resolves. Mirrors the requestIdRef pattern used for the details fetch.
@@ -37,11 +39,17 @@ export function AssigneesEditor({
         seedLogins: seedKey ? seedKey.split(',') : []
       })
       .then((res) => {
-        if (cancelled) {return}
-        if (res.ok) {setUsers(res.users)}
+        if (cancelled) {
+          return
+        }
+        if (res.ok) {
+          setUsers(res.users)
+        }
       })
       .finally(() => {
-        if (cancelled) {return}
+        if (cancelled) {
+          return
+        }
         setLoading(false)
       })
     return () => {
@@ -71,8 +79,11 @@ export function AssigneesEditor({
                 type="button"
                 className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted/50"
                 onClick={() => {
-                  if (isOn) {void onChange([], [u.login])}
-                  else {void onChange([u.login], [])}
+                  if (isOn) {
+                    void onChange([], [u.login])
+                  } else {
+                    void onChange([u.login], [])
+                  }
                 }}
               >
                 <span

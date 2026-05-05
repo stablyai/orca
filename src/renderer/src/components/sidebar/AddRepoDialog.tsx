@@ -205,7 +205,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     // the first focus frame from the composer's prompt textarea.
     closeModal()
     setTimeout(() => {
-      openModal('new-workspace-composer', { initialRepoId: repoId })
+      openModal('new-workspace-composer', { initialRepoId: repoId, telemetrySource: 'sidebar' })
     }, 150)
   }, [closeModal, openModal, repoId])
 

@@ -231,7 +231,7 @@ export function ExperimentalPane({
                   // when cutting a new mobile-v* tag.
                   onClick={() =>
                     void window.api.shell.openUrl(
-                      'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.1'
+                      'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.2'
                     )
                   }
                   className="cursor-pointer underline underline-offset-2 hover:text-foreground"

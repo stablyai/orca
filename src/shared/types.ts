@@ -1,6 +1,11 @@
 /* eslint-disable max-lines */
 import type { SshTarget } from './ssh-types'
+import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
+
+// Re-exported for backward compat with renderer call sites that import
+// `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
+export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './telemetry-events'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
@@ -832,6 +837,15 @@ export type CreateWorktreeArgs = {
   baseBranch?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
+  /** Telemetry-only: which UI surface initiated this create. Threaded from
+   *  the renderer entry point so main can emit `workspace_created` with the
+   *  correct `source`. `unknown` is a valid wire value — an unrecognized
+   *  surface emits `source: 'unknown'` rather than dropping the event, so
+   *  dashboards surface enum-coverage gaps as a slice rather than as
+   *  missing data. Optional on the type so older renderer code paths that
+   *  pre-date this prop default to `unknown` at the IPC boundary instead
+   *  of failing typecheck. */
+  telemetrySource?: WorkspaceSource
 }
 
 export type CreateWorktreeResult = {
@@ -886,6 +900,7 @@ export type NotificationSettings = {
   agentTaskComplete: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
+  customSoundPath: string | null
 }
 
 export type CodexManagedAccount = {
@@ -949,6 +964,7 @@ export type ClaudeRateLimitAccountsState = {
 export type TuiAgent =
   | 'claude' // Claude Code
   | 'codex' // OpenAI Codex
+  | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
   | 'pi' // Pi (pi.dev)
   | 'gemini' // Gemini CLI
@@ -1019,6 +1035,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
@@ -1261,6 +1278,34 @@ export type NotificationDispatchResult = {
   reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
 }
 
+export type NotificationSoundResult = {
+  played: boolean
+  reason?:
+    | 'missing-path'
+    | 'invalid-path'
+    | 'unsupported-type'
+    | 'too-large'
+    | 'read-failed'
+    | 'playback-failed'
+    | 'deduped'
+}
+
+export type NotificationSoundDataResult =
+  | {
+      ok: true
+      data: Uint8Array
+      mimeType: string
+      path: string
+    }
+  | {
+      ok: false
+      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed'>
+    }
+
+export type NotificationSoundPathResult =
+  | { ok: true; path: string }
+  | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
@@ -1276,14 +1321,16 @@ export type WorktreeCardProperty =
   // view options.
   | 'inline-agents'
 
-export type StatusBarItem =
-  | 'claude'
-  | 'codex'
-  | 'gemini'
-  | 'opencode-go'
-  | 'ssh'
-  | 'sessions'
-  | 'memory'
+export type StatusBarItem = 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'ssh' | 'resource-usage'
+
+export type TaskResumeState = {
+  githubMode?: 'items' | 'project'
+  githubItemsPreset?: TaskViewPresetId | null
+  githubItemsQuery?: string
+  linearPreset?: 'assigned' | 'created' | 'all' | 'completed'
+  linearQuery?: string
+}
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
@@ -1375,6 +1422,10 @@ export type PersistedUIState = {
   /** On-screen size of the sidekick overlay in CSS pixels (square box).
    *  Clamped to [SIDEKICK_SIZE_MIN, SIDEKICK_SIZE_MAX] when read. */
   sidekickSize?: number
+  /** Page-position state for Tasks. Source/repo/team/project selections keep
+   *  using their existing settings paths; this only restores transient tabs
+   *  and applied searches. */
+  taskResumeState?: TaskResumeState
 }
 
 export const SIDEKICK_SIZE_MIN = 60

@@ -27,9 +27,12 @@ export type ResolvedProjectSelection = {
 }
 
 type Props = {
-  activeProject:
-    | { owner: string; ownerType: GitHubProjectOwnerType; number: number; title?: string }
-    | null
+  activeProject: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    number: number
+    title?: string
+  } | null
   onSelect: (selection: ResolvedProjectSelection) => void
 }
 
@@ -61,9 +64,9 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   // popover and reopening within the 5min window doesn't flicker the
   // banner back. Populated only when discovery succeeded but a subset of
   // orgs failed (the 504 path the user reported).
-  const [partialFailures, setPartialFailures] = useState<
-    { owner: string; message: string }[]
-  >(() => browseCache?.partialFailures ?? [])
+  const [partialFailures, setPartialFailures] = useState<{ owner: string; message: string }[]>(
+    () => browseCache?.partialFailures ?? []
+  )
   const [pasteInput, setPasteInput] = useState('')
   const [pasteError, setPasteError] = useState<string | null>(null)
   const [pasteBusy, setPasteBusy] = useState(false)
@@ -133,10 +136,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
             number: selection.projectNumber,
             lastOpenedAt: new Date().toISOString()
           },
-          ...prev.recent.filter(
-            (r) =>
-              `${r.ownerType}:${r.owner}:${r.number}` !== key
-          )
+          ...prev.recent.filter((r) => `${r.ownerType}:${r.owner}:${r.number}` !== key)
         ].slice(0, 10)
         const lastViewByProject = { ...prev.lastViewByProject }
         if (selection.viewId) {
@@ -163,18 +163,16 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   )
 
   const handleChooseProject = useCallback(
-    async (
-      selection: {
-        owner: string
-        ownerType: GitHubProjectOwnerType
-        number: number
-        title?: string
-        // Why: when the paste resolver parsed a /views/{n} URL, the caller
-        // passes the view number through so we can skip the view-pick step
-        // and commit directly once listProjectViews returns the matching id.
-        viewNumber?: number
-      }
-    ) => {
+    async (selection: {
+      owner: string
+      ownerType: GitHubProjectOwnerType
+      number: number
+      title?: string
+      // Why: when the paste resolver parsed a /views/{n} URL, the caller
+      // passes the view number through so we can skip the view-pick step
+      // and commit directly once listProjectViews returns the matching id.
+      viewNumber?: number
+    }) => {
       const key = `${selection.ownerType}:${selection.owner}:${selection.number}`
       const lastView = projectSettings.lastViewByProject[key]?.viewId
       // Why: an explicit viewNumber from the URL takes precedence over the
@@ -236,9 +234,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         // step with a perpetual spinner. Treat as an empty result and toast
         // a transport-level message so the user can retry or paste again.
         setViewList([])
-        toast.error(
-          `Failed to load views: ${err instanceof Error ? err.message : String(err)}`
-        )
+        toast.error(`Failed to load views: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setViewLoading(false)
       }
@@ -285,8 +281,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     )
     return browseProjects.filter((p) => {
       const key = `${p.ownerType}:${p.owner}:${p.number}`
-      if (pinnedKeys.has(key) || recentKeys.has(key)) {return false}
-      if (!q) {return true}
+      if (pinnedKeys.has(key) || recentKeys.has(key)) {
+        return false
+      }
+      if (!q) {
+        return true
+      }
       return (
         p.title.toLowerCase().includes(q) ||
         p.owner.toLowerCase().includes(q) ||
@@ -343,8 +343,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 <Section label="Pinned">
                   {projectSettings.pinned.map((p) => {
                     const key = `${p.ownerType}:${p.owner}:${p.number}`
-                    const knownGood =
-                      projectSettings.lastViewByProject[key]?.viewId != null
+                    const knownGood = projectSettings.lastViewByProject[key]?.viewId != null
                     const match = browseProjects.find(
                       (bp) => `${bp.ownerType}:${bp.owner}:${bp.number}` === key
                     )
@@ -453,7 +452,9 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                     setPasteError(null)
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {void handlePaste()}
+                    if (e.key === 'Enter') {
+                      void handlePaste()
+                    }
                   }}
                   placeholder="Add by URL or owner/number"
                   className="h-8 text-xs"
@@ -586,9 +587,7 @@ function ViewPickStep({
                 onClick={() => void onPick(v)}
                 className={cn(
                   'flex w-full flex-col items-start rounded px-2 py-1 text-left',
-                  supported
-                    ? 'hover:bg-muted/50'
-                    : 'cursor-not-allowed opacity-50'
+                  supported ? 'hover:bg-muted/50' : 'cursor-not-allowed opacity-50'
                 )}
               >
                 <span className="text-sm">{v.name}</span>
@@ -621,7 +620,9 @@ function PartialFailuresBanner({
     failures.length === 1 && failures[0].owner !== '*'
       ? `Couldn't load projects from ${failures[0].owner}.`
       : `Some organizations didn't load (${failures.length}).`
-  const detail = failures.map((f) => `${f.owner === '*' ? 'orgs' : f.owner}: ${f.message}`).join('\n')
+  const detail = failures
+    .map((f) => `${f.owner === '*' ? 'orgs' : f.owner}: ${f.message}`)
+    .join('\n')
   return (
     <div
       className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
@@ -673,7 +674,9 @@ function AuthErrorBanner({ error }: { error: GitHubProjectViewError }): React.JS
 function parseProjectInput(
   input: string
 ): { owner: string; number: number; viewNumber?: number } | null {
-  if (!input) {return null}
+  if (!input) {
+    return null
+  }
   // owner/number
   const short = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/.exec(input)
   if (short) {
@@ -681,17 +684,23 @@ function parseProjectInput(
   }
   try {
     const url = new URL(input)
-    if (url.hostname !== 'github.com') {return null}
+    if (url.hostname !== 'github.com') {
+      return null
+    }
     const parts = url.pathname.split('/').filter(Boolean)
     // /orgs/{owner}/projects/{n} or /users/{owner}/projects/{n}[/views/{viewNumber}]
     if ((parts[0] === 'orgs' || parts[0] === 'users') && parts[2] === 'projects' && parts[3]) {
       const owner = parts[1]
       const number = Number(parts[3])
-      if (Number.isNaN(number)) {return null}
+      if (Number.isNaN(number)) {
+        return null
+      }
       let viewNumber: number | undefined
       if (parts[4] === 'views' && parts[5]) {
         const v = Number(parts[5])
-        if (!Number.isNaN(v)) {viewNumber = v}
+        if (!Number.isNaN(v)) {
+          viewNumber = v
+        }
       }
       return { owner, number, viewNumber }
     }

@@ -26,10 +26,13 @@ import {
   _setPostHogClientForTests,
   _setShuttingDownForTests,
   _setStoreForTests,
+  _resetFirstAppOpenedFiredForTests,
+  persistBannerAcknowledgeWithoutEmitting,
   setOptIn,
   shouldOptOutSdkAtInit,
   shutdownTelemetry,
-  track
+  track,
+  trackAppOpenedOnce
 } from './client'
 
 // Minimal mock of the PostHog client surface the wrapper actually calls.
@@ -170,12 +173,14 @@ describe('track()', () => {
     _setStoreForTests(store)
     _setShuttingDownForTests(false)
     _enableTransportForTests(true)
+    _resetFirstAppOpenedFiredForTests()
   })
   afterEach(() => {
     _enableTransportForTests(false)
     _setPostHogClientForTests(null)
     _setCommonPropsForTests(null)
     _setStoreForTests(null)
+    _resetFirstAppOpenedFiredForTests()
     vi.restoreAllMocks()
     restoreConsentEnv(envStash)
   })
@@ -270,11 +275,18 @@ describe('track()', () => {
   it('drops invalid events before calling capture', () => {
     // Raw error strings on agent_error are rejected by `.strict()`.
     track('agent_error', {
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_message: 'leaked message' // rejected by .strict()
     } as never)
     expect(mock.capture).not.toHaveBeenCalled()
+  })
+
+  it('trackAppOpenedOnce emits app_opened at most once per session', () => {
+    trackAppOpenedOnce()
+    trackAppOpenedOnce()
+    expect(mock.capture).toHaveBeenCalledTimes(1)
+    expect(mock.capture.mock.calls[0]![0].event).toBe('app_opened')
   })
 })
 
@@ -301,12 +313,14 @@ describe('setOptIn()', () => {
     _setStoreForTests(store)
     _setShuttingDownForTests(false)
     _enableTransportForTests(true)
+    _resetFirstAppOpenedFiredForTests()
   })
   afterEach(() => {
     _enableTransportForTests(false)
     _setPostHogClientForTests(null)
     _setCommonPropsForTests(null)
     _setStoreForTests(null)
+    _resetFirstAppOpenedFiredForTests()
     vi.restoreAllMocks()
     restoreConsentEnv(envStash)
   })
@@ -333,15 +347,97 @@ describe('setOptIn()', () => {
     expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
   })
 
-  it('fires telemetry_opted_in AFTER posthog.optIn()', async () => {
+  it('fires telemetry_opted_in after posthog.optIn without app_opened for settings opt-in', async () => {
     // Flip settings to currently-opted-out so the flip to true exercises
-    // the opt-in branch cleanly.
+    // the opt-in branch cleanly. This is not the pending-banner path, so
+    // it must not replay the once-per-session app_opened event.
     settings.telemetry!.optedIn = false
     const order: string[] = []
     mock.optIn.mockImplementation(async () => order.push('optIn'))
-    mock.capture.mockImplementation(() => order.push('capture'))
+    mock.capture.mockImplementation((message: { event?: string }) => {
+      order.push(`capture:${message.event}`)
+    })
     await setOptIn('settings', true)
-    expect(order).toEqual(['optIn', 'capture'])
+    expect(order).toEqual(['optIn', 'capture:telemetry_opted_in'])
+  })
+
+  it('console-mirrors telemetry_opted_in when no PostHog client is initialized', async () => {
+    settings.telemetry!.optedIn = false
+    _setPostHogClientForTests(null)
+    _enableTransportForTests(false)
+
+    await setOptIn('settings', true)
+
+    expect(console.debug).toHaveBeenCalledWith('[telemetry]', 'telemetry_opted_in', {
+      via: 'settings'
+    })
+  })
+
+  it('fires app_opened once after pending-banner opt-in enables the SDK', async () => {
+    settings.telemetry = {
+      optedIn: null,
+      installId: BASE_COMMON.install_id,
+      existedBeforeTelemetryRelease: true
+    }
+    const order: string[] = []
+    mock.optIn.mockImplementation(async () => order.push('optIn'))
+    mock.capture.mockImplementation((message: { event?: string }) => {
+      order.push(`capture:${message.event}`)
+    })
+
+    await setOptIn('settings', true)
+
+    expect(order).toEqual(['optIn', 'capture:app_opened', 'capture:telemetry_opted_in'])
+  })
+})
+
+describe('persistBannerAcknowledgeWithoutEmitting()', () => {
+  let mock: MockPostHog
+  let store: Store
+  let settings: GlobalSettings
+  let envStash: Record<string, string | undefined>
+
+  beforeEach(() => {
+    envStash = stashAndClearConsentEnv()
+    vi.spyOn(console, 'debug').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resetBurstCapsForSession()
+    mock = makeMockPostHog()
+    settings = makeFakeSettings({
+      optedIn: null,
+      installId: BASE_COMMON.install_id,
+      existedBeforeTelemetryRelease: true
+    })
+    store = makeFakeStore(settings)
+    _setPostHogClientForTests(mock as unknown as PostHog)
+    _setCommonPropsForTests(BASE_COMMON)
+    _setStoreForTests(store)
+    _setShuttingDownForTests(false)
+    _enableTransportForTests(true)
+    _resetFirstAppOpenedFiredForTests()
+  })
+
+  afterEach(() => {
+    _enableTransportForTests(false)
+    _setPostHogClientForTests(null)
+    _setCommonPropsForTests(null)
+    _setStoreForTests(null)
+    _resetFirstAppOpenedFiredForTests()
+    vi.restoreAllMocks()
+    restoreConsentEnv(envStash)
+  })
+
+  it('fires app_opened after re-enabling the SDK and does not emit telemetry_opted_in', async () => {
+    const order: string[] = []
+    mock.optIn.mockImplementation(async () => order.push('optIn'))
+    mock.capture.mockImplementation((message: { event?: string }) => {
+      order.push(`capture:${message.event}`)
+    })
+
+    await persistBannerAcknowledgeWithoutEmitting()
+
+    expect(order).toEqual(['optIn', 'capture:app_opened'])
+    expect(settings.telemetry?.optedIn).toBe(true)
   })
 })
 

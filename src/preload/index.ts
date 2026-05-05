@@ -21,6 +21,9 @@ import type {
   ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
+  NotificationSoundDataResult,
+  NotificationSoundPathResult,
+  NotificationSoundResult,
   SearchResult
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
@@ -60,6 +63,7 @@ import type {
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -78,6 +82,29 @@ type NativeDropResolution =
   // could be resolved. The caller must suppress the drop entirely instead of
   // falling back to 'editor' — fail-closed behavior per design §7.1.
   | { target: 'rejected' }
+
+// Why: one shared HTMLAudioElement per sound file, restarted from t=0 on each
+// play, with an in-flight guard that drops new plays while the sound is still
+// ringing. This mirrors VS Code's AccessibilitySignalService and GNOME's
+// libcanberra: a burst of triggers self-dedupes by the sound's own duration
+// (no magic time constant), while distinct sounds are still allowed to overlap.
+// We also cache the decoded blob URL by path so we don't re-read 10MB from
+// disk and re-transfer it over IPC on every notification.
+let cachedNotificationSound: {
+  path: string
+  blobUrl: string
+  audio: HTMLAudioElement
+} | null = null
+let isNotificationSoundPlaying = false
+
+function disposeCachedNotificationSound(): void {
+  if (cachedNotificationSound) {
+    cachedNotificationSound.audio.pause()
+    cachedNotificationSound.audio.src = ''
+    URL.revokeObjectURL(cachedNotificationSound.blobUrl)
+    cachedNotificationSound = null
+  }
+}
 
 /**
  * Walk the composed event path to classify which UI surface the native OS drop
@@ -357,6 +384,12 @@ const api = {
       worktreeId?: string
       sessionId?: string
       shellOverride?: string
+      // Why: telemetry-plan.md§Agent launch semantics — main fires
+      // `agent_started` only after the spawn succeeds. The renderer is the
+      // source of truth for the launch metadata; main is the source of
+      // truth for whether the launch happened. Loose typing here on
+      // purpose: validation lives at the main-side schema validator.
+      telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
       snapshot?: string
@@ -496,8 +529,11 @@ const api = {
     repoSlug: (args: { repoPath: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:repoSlug', args),
 
-    prForBranch: (args: { repoPath: string; branch: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:prForBranch', args),
+    prForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedPRNumber?: number | null
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:issue', args),
@@ -507,6 +543,14 @@ const api = {
       number: number
       type?: 'issue' | 'pr'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
+
+    workItemByOwnerRepo: (args: {
+      repoPath: string
+      owner: string
+      repo: string
+      number: number
+      type: 'issue' | 'pr'
+    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
 
     workItemDetails: (args: {
       repoPath: string
@@ -644,8 +688,7 @@ const api = {
       ipcRenderer.invoke('gh:updateProjectItemField', args),
     clearProjectItemField: (
       args: ClearProjectItemFieldArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:clearProjectItemField', args),
+    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:clearProjectItemField', args),
     updateIssueBySlug: (args: UpdateIssueBySlugArgs): Promise<GitHubProjectMutationResult> =>
       ipcRenderer.invoke('gh:updateIssueBySlug', args),
     updatePullRequestBySlug: (
@@ -674,8 +717,7 @@ const api = {
       ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
     updateIssueTypeBySlug: (
       args: UpdateIssueTypeBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
+    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
   },
 
   linear: {
@@ -822,6 +864,11 @@ const api = {
       ipcRenderer.invoke('agentHooks:cursorStatus')
   },
 
+  agentTrust: {
+    markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }): Promise<void> =>
+      ipcRenderer.invoke('agentTrust:markTrusted', args)
+  },
+
   preflight: {
     check: (args?: {
       force?: boolean
@@ -843,7 +890,66 @@ const api = {
   notifications: {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
       ipcRenderer.invoke('notifications:dispatch', args),
-    openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings')
+    openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
+    playSound: async (options?: { force?: boolean }): Promise<NotificationSoundResult> => {
+      try {
+        // Why: drop replays while the sound is still ringing. The "test"
+        // button bypasses with force so the user always hears a confirmation.
+        if (!options?.force && isNotificationSoundPlaying) {
+          return { played: false, reason: 'deduped' }
+        }
+
+        const resolved = (await ipcRenderer.invoke(
+          'notifications:resolveSoundPath'
+        )) as NotificationSoundPathResult
+        if (!resolved.ok) {
+          if (cachedNotificationSound) {
+            disposeCachedNotificationSound()
+          }
+          return { played: false, reason: resolved.reason }
+        }
+
+        let entry = cachedNotificationSound
+        if (!entry || entry.path !== resolved.path) {
+          const sound = (await ipcRenderer.invoke(
+            'notifications:loadSound'
+          )) as NotificationSoundDataResult
+          if (!sound.ok) {
+            disposeCachedNotificationSound()
+            return { played: false, reason: sound.reason }
+          }
+          const arrayBuffer = new ArrayBuffer(sound.data.byteLength)
+          new Uint8Array(arrayBuffer).set(sound.data)
+          const blob = new Blob([arrayBuffer], { type: sound.mimeType })
+          disposeCachedNotificationSound()
+          const blobUrl = URL.createObjectURL(blob)
+          entry = { path: sound.path, blobUrl, audio: new Audio(blobUrl) }
+          cachedNotificationSound = entry
+        }
+
+        const audio = entry.audio
+        // Why: restart-from-zero on every play so a burst of triggers replays
+        // the sound from the start instead of stacking overlapping copies.
+        // Matches GNOME canberra and VS Code AccessibilitySignalService.
+        audio.currentTime = 0
+        isNotificationSoundPlaying = true
+        const release = (): void => {
+          isNotificationSoundPlaying = false
+        }
+        audio.addEventListener('ended', release, { once: true })
+        audio.addEventListener('error', release, { once: true })
+        try {
+          await audio.play()
+        } catch {
+          release()
+          return { played: false, reason: 'playback-failed' }
+        }
+        return { played: true }
+      } catch {
+        isNotificationSoundPlaying = false
+        return { played: false, reason: 'playback-failed' }
+      }
+    }
   },
 
   developerPermissions: {
@@ -868,6 +974,8 @@ const api = {
     pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
 
     pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
+
+    pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
 
     pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
       ipcRenderer.invoke('shell:pickDirectory', args),
@@ -1478,13 +1586,8 @@ const api = {
       ipcRenderer.on('ui:openQuickOpen', listener)
       return () => ipcRenderer.removeListener('ui:openQuickOpen', listener)
     },
-    onOpenNewWorkspace: (callback: (tab: 'quick' | 'create-from') => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, tab: 'quick' | 'create-from') => {
-        // Why: older main-process builds may send this event without a payload
-        // — default to 'quick' so the preload contract stays forward-compatible
-        // during a partial rollout where only one side has shipped the tab arg.
-        callback(tab ?? 'quick')
-      }
+    onOpenNewWorkspace: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openNewWorkspace', listener)
       return () => ipcRenderer.removeListener('ui:openNewWorkspace', listener)
     },

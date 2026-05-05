@@ -793,6 +793,46 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('clears stale working status after the agent exits and the shell takes over the title', async () => {
+    // Why: regression test for issue #1437 — the mobile worktree-list spinner
+    // kept playing forever because lastAgentStatus was sticky on 'working'
+    // once an agent exited without emitting an idle/agent-shaped final OSC
+    // title. worktree.ps must recompute from the live OSC title each call.
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Codex working',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+    const working = await runtime.getWorktreePs()
+    expect(working.worktrees[0].status).toBe('working')
+
+    // Agent exits, shell title takes over — desktop's getWorktreeStatus would
+    // immediately flip back to 'active'. Mobile must do the same.
+    runtime.onPtyData('pty-1', '\x1b]0;bash\x07', 200)
+    const afterExit = await runtime.getWorktreePs()
+    expect(afterExit.worktrees[0].status).toBe('active')
+  })
+
   it('fails terminal stop closed while the renderer graph is reloading', async () => {
     const runtime = new OrcaRuntimeService(store)
     let killed = false

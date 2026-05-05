@@ -125,6 +125,7 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
 const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   claude: true,
   codex: true,
+  autohand: true,
   opencode: true,
   pi: true,
   gemini: true,

@@ -69,14 +69,18 @@ async function buildIndex(repos: Repo[]): Promise<SlugIndex> {
   // negative-cached null) lingers forever.
   const liveIds = new Set(repos.map((r) => r.id))
   for (const id of slugByRepoId.keys()) {
-    if (!liveIds.has(id)) {slugByRepoId.delete(id)}
+    if (!liveIds.has(id)) {
+      slugByRepoId.delete(id)
+    }
   }
   const next: SlugIndex = new Map()
   const results = await Promise.all(
     repos.map(async (r) => ({ repo: r, slug: await resolveRepoSlug(r) }))
   )
   for (const { repo, slug } of results) {
-    if (slug) {next.set(slug, repo)}
+    if (slug) {
+      next.set(slug, repo)
+    }
   }
   return next
 }
@@ -94,16 +98,21 @@ export function useRepoSlugIndex(): (slug: string | null | undefined) => Repo | 
   useEffect(() => {
     const gen = ++generationRef.current
     void buildIndex(repos).then((next) => {
-      if (gen !== generationRef.current) {return}
+      if (gen !== generationRef.current) {
+        return
+      }
       setIndex(next)
     })
   }, [repos])
 
   return useMemo(
-    () => (slug: string | null | undefined): Repo | null => {
-      if (!slug) {return null}
-      return index.get(slug.toLowerCase()) ?? null
-    },
+    () =>
+      (slug: string | null | undefined): Repo | null => {
+        if (!slug) {
+          return null
+        }
+        return index.get(slug.toLowerCase()) ?? null
+      },
     [index]
   )
 }

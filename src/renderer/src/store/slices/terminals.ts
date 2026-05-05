@@ -8,6 +8,7 @@ import type {
   Worktree,
   WorkspaceSessionState
 } from '../../../../shared/types'
+import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
 import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
@@ -80,7 +81,17 @@ export type TerminalSlice = {
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
-  pendingStartupByTabId: Record<string, { command: string; env?: Record<string, string> }>
+  pendingStartupByTabId: Record<
+    string,
+    {
+      command: string
+      env?: Record<string, string>
+      /** Telemetry metadata for the `agent_started` event. Threaded all the
+       *  way to the `pty:spawn` IPC handler in main so the event fires only
+       *  after spawn confirms — never on click-intent. */
+      telemetry?: AgentStartedTelemetry
+    }
+  >
   /** Queued setup-split requests — when present, TerminalPane creates the
    *  initial pane clean, then splits (vertical or horizontal per user setting)
    *  and runs the command in the new pane so the main terminal stays
@@ -163,11 +174,15 @@ export type TerminalSlice = {
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
   queueTabStartupCommand: (
     tabId: string,
-    startup: { command: string; env?: Record<string, string> }
+    startup: {
+      command: string
+      env?: Record<string, string>
+      telemetry?: AgentStartedTelemetry
+    }
   ) => void
   consumeTabStartupCommand: (
     tabId: string
-  ) => { command: string; env?: Record<string, string> } | null
+  ) => { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry } | null
   queueTabSetupSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
