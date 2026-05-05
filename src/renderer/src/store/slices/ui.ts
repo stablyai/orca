@@ -13,6 +13,16 @@ import type {
   UpdateStatus,
   WorktreeCardProperty
 } from '../../../../shared/types'
+import {
+  SIDEKICK_SIZE_DEFAULT,
+  SIDEKICK_SIZE_MAX,
+  SIDEKICK_SIZE_MIN
+} from '../../../../shared/types'
+
+function clampSidekickSize(size: number): number {
+  if (!Number.isFinite(size)) return SIDEKICK_SIZE_DEFAULT
+  return Math.max(SIDEKICK_SIZE_MIN, Math.min(SIDEKICK_SIZE_MAX, Math.round(size)))
+}
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 
 // Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
@@ -209,6 +219,11 @@ export type UISlice = {
   customSidekicks: CustomSidekick[]
   addCustomSidekick: (model: CustomSidekick) => void
   removeCustomSidekick: (id: string) => void
+  /** Sidekick overlay size in CSS pixels (square). User-adjustable from the
+   *  status-bar menu so a too-big imported sprite isn't a stuck-on-screen
+   *  problem. */
+  sidekickSize: number
+  setSidekickSize: (size: number) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
@@ -511,6 +526,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ sidekickId: id })
   },
 
+  sidekickSize: SIDEKICK_SIZE_DEFAULT,
+  setSidekickSize: (size) => {
+    const clamped = clampSidekickSize(size)
+    window.api.ui.set({ sidekickSize: clamped }).catch(console.error)
+    set({ sidekickSize: clamped })
+  },
+
   customSidekicks: [],
   addCustomSidekick: (model) =>
     set((s) => {
@@ -539,7 +561,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // fails, the orphaned image stays in userData; each import uses a fresh
       // UUID so the file won't be hit again, and the renderer's metadata
       // index no longer references it.
-      window.api.sidekick.delete(id, target.fileName).catch(console.error)
+      window.api.sidekick.delete(id, target.fileName, target.kind).catch(console.error)
       return { customSidekicks: next, sidekickId: fallback }
     }),
 
@@ -598,6 +620,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // they enable the experimental flag. Only an explicit Hide sidekick
         // dismissal persists a `false` value.
         sidekickVisible: ui.sidekickVisible ?? true,
+        sidekickSize: clampSidekickSize(ui.sidekickSize ?? SIDEKICK_SIZE_DEFAULT),
         customSidekicks: Array.isArray(ui.customSidekicks) ? ui.customSidekicks : [],
         // Why: accept the persisted id if it matches a bundled sidekick or a
         // known custom one; otherwise fall back so the overlay never renders

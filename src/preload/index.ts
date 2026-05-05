@@ -878,10 +878,12 @@ const api = {
 
   sidekick: {
     import: (): Promise<CustomSidekick | null> => ipcRenderer.invoke('sidekick:import'),
-    read: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('sidekick:read', id, fileName),
-    delete: (id: string, fileName: string): Promise<void> =>
-      ipcRenderer.invoke('sidekick:delete', id, fileName)
+    importPetBundle: (): Promise<CustomSidekick | null> =>
+      ipcRenderer.invoke('sidekick:importPetBundle'),
+    read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('sidekick:read', id, fileName, kind),
+    delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
+      ipcRenderer.invoke('sidekick:delete', id, fileName, kind)
   },
 
   browser: {

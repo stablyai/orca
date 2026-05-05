@@ -739,8 +739,13 @@ export type PreloadApi = {
   }
   sidekick: {
     import: () => Promise<CustomSidekick | null>
-    read: (id: string, fileName: string) => Promise<ArrayBuffer | null>
-    delete: (id: string, fileName: string) => Promise<void>
+    importPetBundle: () => Promise<CustomSidekick | null>
+    read: (
+      id: string,
+      fileName: string,
+      kind?: 'image' | 'bundle'
+    ) => Promise<ArrayBuffer | null>
+    delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
   }
   browser: BrowserApi
   hooks: {

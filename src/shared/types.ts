@@ -1372,7 +1372,14 @@ export type PersistedUIState = {
    *  this field is the metadata index so custom sidekicks ride the existing
    *  PersistedUIState save pipeline. */
   customSidekicks?: CustomSidekick[]
+  /** On-screen size of the sidekick overlay in CSS pixels (square box).
+   *  Clamped to [SIDEKICK_SIZE_MIN, SIDEKICK_SIZE_MAX] when read. */
+  sidekickSize?: number
 }
+
+export const SIDEKICK_SIZE_MIN = 60
+export const SIDEKICK_SIZE_MAX = 360
+export const SIDEKICK_SIZE_DEFAULT = 180
 
 /** Metadata for a user-uploaded sidekick image. `id` is the stable identifier;
  *  the on-disk filename (preserving the original extension) lives in `fileName`.
@@ -1386,6 +1393,32 @@ export type CustomSidekick = {
    *  Content-Type — especially image/svg+xml, which browsers won't render
    *  from a misdeclared blob URL. */
   mimeType: string
+  /** Storage layout. `image` = legacy flat file at `custom/<id>.<ext>`.
+   *  `bundle` = `.codex-pet` import expanded into `custom/<id>/`. Absent =
+   *  legacy `image` for backwards compatibility with persisted state. */
+  kind?: 'image' | 'bundle'
+  /** Sprite-sheet metadata captured at import time. Present iff this entry
+   *  came from a `.codex-pet` bundle and the manifest declared frame layout.
+   *  `columns`/`rows`/`sheetWidth`/`sheetHeight` are derived in main from
+   *  the decoded sheet so the renderer doesn't need to probe the image. */
+  sprite?: {
+    frameWidth: number
+    frameHeight: number
+    columns: number
+    rows: number
+    sheetWidth: number
+    sheetHeight: number
+    fps: number
+    defaultAnimation?: string
+    animations?: Record<string, SpriteAnimation>
+  }
+}
+
+/** One animation strip within a sprite sheet: `row` is the y-index (0-based)
+ *  and `frames` is the number of consecutive cells played left-to-right. */
+export type SpriteAnimation = {
+  row: number
+  frames: number
 }
 
 export type PersistedTrustedOrcaHookEntry = {
