@@ -2135,13 +2135,7 @@ const api = {
       address?: string
     }): Promise<
       | { available: false }
-      | {
-          available: true
-          qrDataUrl: string
-          pairingUrl: string
-          endpoint: string
-          deviceId: string
-        }
+      | { available: true; qrDataUrl: string; endpoint: string; deviceId: string }
     > => ipcRenderer.invoke('mobile:getPairingQR', args),
 
     listDevices: (): Promise<{

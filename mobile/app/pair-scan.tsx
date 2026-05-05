@@ -3,13 +3,12 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Clipboard as ClipboardIcon } from 'lucide-react-native'
-import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
+import { ChevronLeft } from 'lucide-react-native'
+import { decodePairingUrl } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
 import type { PairingOffer } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
-import { TextInputModal } from '../src/components/TextInputModal'
 
 function Step({ number, text }: { number: number; text: string }) {
   return (
@@ -28,7 +27,6 @@ export default function PairScanScreen() {
   const [permission, requestPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
-  const [pasteVisible, setPasteVisible] = useState(false)
   const processingRef = useRef(false)
 
   const handleBarCodeScanned = useCallback(
@@ -48,22 +46,6 @@ export default function PairScanScreen() {
     },
     [router]
   )
-
-  const handlePasteSubmit = useCallback((input: string) => {
-    setPasteVisible(false)
-    if (processingRef.current) return
-    processingRef.current = true
-
-    const offer = parsePairingCode(input)
-    if (!offer) {
-      setStatus('error')
-      setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
-      processingRef.current = false
-      return
-    }
-
-    void testAndSave(offer)
-  }, [])
 
   async function testAndSave(offer: PairingOffer) {
     setStatus('connecting')
@@ -158,29 +140,20 @@ export default function PairScanScreen() {
       </View>
 
       {status === 'scanning' && (
-        <>
-          <View style={styles.cameraWrap}>
-            <CameraView
-              style={styles.camera}
-              facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={handleBarCodeScanned}
-            />
-            <View style={styles.reticle} pointerEvents="none">
-              <View style={[styles.corner, styles.cornerTL]} />
-              <View style={[styles.corner, styles.cornerTR]} />
-              <View style={[styles.corner, styles.cornerBL]} />
-              <View style={[styles.corner, styles.cornerBR]} />
-            </View>
+        <View style={styles.cameraWrap}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            onBarcodeScanned={handleBarCodeScanned}
+          />
+          <View style={styles.reticle} pointerEvents="none">
+            <View style={[styles.corner, styles.cornerTL]} />
+            <View style={[styles.corner, styles.cornerTR]} />
+            <View style={[styles.corner, styles.cornerBL]} />
+            <View style={[styles.corner, styles.cornerBR]} />
           </View>
-          <Pressable
-            style={({ pressed }) => [styles.pasteButton, pressed && styles.pasteButtonPressed]}
-            onPress={() => setPasteVisible(true)}
-          >
-            <ClipboardIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.pasteButtonText}>Or paste pairing code</Text>
-          </Pressable>
-        </>
+        </View>
       )}
 
       {status === 'connecting' && (
@@ -193,34 +166,11 @@ export default function PairScanScreen() {
       {status === 'error' && (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{errorMessage}</Text>
-          <View style={styles.errorActions}>
-            <Pressable style={styles.primaryButton} onPress={retry}>
-              <Text style={styles.primaryButtonText}>Try Again</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                pressed && styles.pasteButtonPressed
-              ]}
-              onPress={() => {
-                retry()
-                setPasteVisible(true)
-              }}
-            >
-              <Text style={styles.secondaryButtonText}>Paste code instead</Text>
-            </Pressable>
-          </View>
+          <Pressable style={styles.primaryButton} onPress={retry}>
+            <Text style={styles.primaryButtonText}>Try Again</Text>
+          </Pressable>
         </View>
       )}
-
-      <TextInputModal
-        visible={pasteVisible}
-        title="Paste pairing code"
-        message="Copy the code shown under the QR on your computer."
-        placeholder="orca://pair#... or paste the code"
-        onSubmit={handlePasteSubmit}
-        onCancel={() => setPasteVisible(false)}
-      />
     </View>
   )
 }
@@ -353,36 +303,5 @@ const styles = StyleSheet.create({
     color: colors.bgBase,
     fontSize: typography.bodySize,
     fontWeight: '600'
-  },
-  pasteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  pasteButtonPressed: {
-    opacity: 0.6
-  },
-  pasteButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  errorActions: {
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  secondaryButton: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
   }
 })
