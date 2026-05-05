@@ -7,7 +7,11 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { parseGitHubIssueOrPRNumber, normalizeGitHubLinkQuery } from '@/lib/github-links'
+import {
+  parseGitHubIssueOrPRNumber,
+  parseGitHubIssueOrPRLink,
+  normalizeGitHubLinkQuery
+} from '@/lib/github-links'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
@@ -398,6 +402,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => (linkedIssue.trim() ? parseGitHubIssueOrPRNumber(linkedIssue) : null),
     [linkedIssue]
   )
+  // Why: when the user pastes a PR URL straight into the workspace name field
+  // (without picking from the source picker), `linkedPR` stays null and the
+  // worktree card has no PR strip. Recover the PR number from the name on
+  // submit so create-from-PR worktrees always link back to their PR.
+  const effectiveLinkedPR = useMemo<number | null>(() => {
+    if (linkedPR !== null) {
+      return linkedPR
+    }
+    const fromName = parseGitHubIssueOrPRLink(name)
+    if (fromName && fromName.type === 'pr') {
+      return fromName.number
+    }
+    return null
+  }, [linkedPR, name])
   const setupConfig = useMemo(
     () => getSetupConfig(selectedRepo, yamlHooks),
     [selectedRepo, yamlHooks]
@@ -1235,7 +1253,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
       await applyWorktreeMeta(worktree.id, {
         ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
-        ...(linkedPR !== null ? { linkedPR } : {}),
+        ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
         ...(note.trim() ? { comment: note.trim() } : {})
       })
 
@@ -1288,7 +1306,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createWorktree,
     applyWorktreeMeta,
     issueCommandTemplate,
-    linkedPR,
+    effectiveLinkedPR,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
     note,
@@ -1362,7 +1380,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const trimmedNote = note.trim()
         await applyWorktreeMeta(worktree.id, {
           ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
-          ...(linkedPR !== null ? { linkedPR } : {}),
+          ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
           ...(trimmedNote ? { comment: trimmedNote } : {})
         })
 
@@ -1464,7 +1482,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       clearNewWorkspaceDraft,
       createWorktree,
       fallbackCreatureName,
-      linkedPR,
+      effectiveLinkedPR,
       linkedWorkItem,
       name,
       normalizedSparseDirectories,

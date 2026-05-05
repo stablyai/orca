@@ -499,7 +499,11 @@ export type PreloadApi = {
   gh: {
     viewer: () => Promise<GitHubViewer | null>
     repoSlug: (args: { repoPath: string }) => Promise<{ owner: string; repo: string } | null>
-    prForBranch: (args: { repoPath: string; branch: string }) => Promise<PRInfo | null>
+    prForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedPRNumber?: number | null
+    }) => Promise<PRInfo | null>
     issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
     workItem: (args: {
       repoPath: string
@@ -603,9 +607,7 @@ export type PreloadApi = {
     updateProjectItemField: (
       args: UpdateProjectItemFieldArgs
     ) => Promise<GitHubProjectMutationResult>
-    clearProjectItemField: (
-      args: ClearProjectItemFieldArgs
-    ) => Promise<GitHubProjectMutationResult>
+    clearProjectItemField: (args: ClearProjectItemFieldArgs) => Promise<GitHubProjectMutationResult>
     updateIssueBySlug: (args: UpdateIssueBySlugArgs) => Promise<GitHubProjectMutationResult>
     updatePullRequestBySlug: (
       args: UpdatePullRequestBySlugArgs
@@ -624,9 +626,7 @@ export type PreloadApi = {
       args: ListAssignableUsersBySlugArgs
     ) => Promise<ListAssignableUsersBySlugResult>
     listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs) => Promise<ListIssueTypesBySlugResult>
-    updateIssueTypeBySlug: (
-      args: UpdateIssueTypeBySlugArgs
-    ) => Promise<GitHubProjectMutationResult>
+    updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs) => Promise<GitHubProjectMutationResult>
   }
   linear: {
     connect: (args: {

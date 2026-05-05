@@ -851,16 +851,20 @@ export async function getWorkItemByOwnerRepo(
 /**
  * Get PR info for a given branch using gh CLI.
  * Returns null if gh is not installed, or no PR exists for the branch.
+ *
+ * When `linkedPRNumber` is provided and the branch lookup yields nothing,
+ * falls back to looking up the PR by number. This handles "create from PR"
+ * worktrees, whose branch is a fresh local branch (not the PR's head ref) —
+ * the branch-keyed lookup misses, but the user still expects the linked PR
+ * to surface on the worktree card.
  */
-export async function getPRForBranch(repoPath: string, branch: string): Promise<PRInfo | null> {
+export async function getPRForBranch(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber?: number | null
+): Promise<PRInfo | null> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
-
-  // During a rebase the worktree is in detached HEAD and branch is empty.
-  // An empty --head filter causes gh to return an arbitrary PR — bail early.
-  if (!branchName) {
-    return null
-  }
 
   await acquire()
   try {
@@ -880,37 +884,64 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
       headRefOid?: string
     } | null = null
 
-    if (ownerRepo) {
-      const { stdout } = await ghExecFileAsync(
-        [
-          'pr',
-          'list',
-          '--repo',
-          `${ownerRepo.owner}/${ownerRepo.repo}`,
-          '--head',
-          branchName,
-          '--state',
-          'all',
-          '--limit',
-          '1',
-          '--json',
-          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
-        ],
-        { cwd: repoPath }
-      )
-      const list = JSON.parse(stdout) as NonNullable<typeof data>[]
-      data = list[0] ?? null
-    } else {
-      const { stdout } = await ghExecFileAsync(
-        [
-          'pr',
-          'view',
-          branchName,
-          '--json',
-          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
-        ],
-        { cwd: repoPath }
-      )
+    // During a rebase the worktree is in detached HEAD and branch is empty.
+    // An empty --head filter causes gh to return an arbitrary PR — skip the
+    // branch lookup and rely on the linkedPR fallback below if available.
+    if (branchName) {
+      if (ownerRepo) {
+        const { stdout } = await ghExecFileAsync(
+          [
+            'pr',
+            'list',
+            '--repo',
+            `${ownerRepo.owner}/${ownerRepo.repo}`,
+            '--head',
+            branchName,
+            '--state',
+            'all',
+            '--limit',
+            '1',
+            '--json',
+            'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+          ],
+          { cwd: repoPath }
+        )
+        const list = JSON.parse(stdout) as NonNullable<typeof data>[]
+        data = list[0] ?? null
+      } else {
+        const { stdout } = await ghExecFileAsync(
+          [
+            'pr',
+            'view',
+            branchName,
+            '--json',
+            'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+          ],
+          { cwd: repoPath }
+        )
+        data = JSON.parse(stdout)
+      }
+    }
+
+    if (!data && typeof linkedPRNumber === 'number') {
+      const args = ownerRepo
+        ? [
+            'pr',
+            'view',
+            String(linkedPRNumber),
+            '--repo',
+            `${ownerRepo.owner}/${ownerRepo.repo}`,
+            '--json',
+            'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+          ]
+        : [
+            'pr',
+            'view',
+            String(linkedPRNumber),
+            '--json',
+            'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+          ]
+      const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
       data = JSON.parse(stdout)
     }
 

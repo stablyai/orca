@@ -522,8 +522,11 @@ const api = {
     repoSlug: (args: { repoPath: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:repoSlug', args),
 
-    prForBranch: (args: { repoPath: string; branch: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:prForBranch', args),
+    prForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedPRNumber?: number | null
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:issue', args),
@@ -678,8 +681,7 @@ const api = {
       ipcRenderer.invoke('gh:updateProjectItemField', args),
     clearProjectItemField: (
       args: ClearProjectItemFieldArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:clearProjectItemField', args),
+    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:clearProjectItemField', args),
     updateIssueBySlug: (args: UpdateIssueBySlugArgs): Promise<GitHubProjectMutationResult> =>
       ipcRenderer.invoke('gh:updateIssueBySlug', args),
     updatePullRequestBySlug: (
@@ -708,8 +710,7 @@ const api = {
       ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
     updateIssueTypeBySlug: (
       args: UpdateIssueTypeBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
+    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
   },
 
   linear: {

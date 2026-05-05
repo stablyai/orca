@@ -79,12 +79,15 @@ export default function ChecksPanel(): React.JSX.Element {
     ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
     : 'unknown'
 
-  // Fetch PR data when the active worktree/branch changes
+  // Fetch PR data when the active worktree/branch changes.
+  // Why: pass linkedPR so worktrees created from a PR (whose new local branch
+  // differs from the PR's head ref) resolve via the number-based fallback.
+  const linkedPR = activeWorktree?.linkedPR ?? null
   useEffect(() => {
     if (repo && !isFolder && branch) {
-      void fetchPRForBranch(repo.path, branch)
+      void fetchPRForBranch(repo.path, branch, { linkedPRNumber: linkedPR })
     }
-  }, [repo, isFolder, branch, fetchPRForBranch])
+  }, [repo, isFolder, branch, linkedPR, fetchPRForBranch])
 
   useEffect(() => {
     if (!repo || isFolder || !branch || !pr || pr.mergeable !== 'CONFLICTING') {
