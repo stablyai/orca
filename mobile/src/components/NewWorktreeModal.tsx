@@ -381,30 +381,53 @@ export function NewWorktreeModal({
       // next available marine-creature name at submit time and passing it
       // to the server. The server's worktree.create rejects empty/invalid
       // names, so we must generate one client-side rather than letting the
-      // server invent one. We don't pre-fill or expose this in the UI;
-      // see useComposerState in the desktop renderer.
+      // server invent one. The pre-flight basename dedupe is only a hint;
+      // the authoritative collision is checked server-side against git
+      // branches/remotes/PRs, so we also retry-with-suffix on conflict.
       const trimmedName = name.trim()
-      const finalName = trimmedName || getSuggestedCreatureName(existingWorktreePaths ?? [])
+      const baseName = trimmedName || getSuggestedCreatureName(existingWorktreePaths ?? [])
 
-      const params: Record<string, unknown> = {
-        repo: `id:${selectedRepo.id}`,
-        startupCommand: command,
-        setupDecision: runSetup ? 'inherit' : 'skip',
-        name: finalName
+      // Why: mirrors src/renderer/src/store/slices/worktrees.ts
+      // (createWorktree retry loop). Server-side checks (Branch X already
+      // exists locally / on a remote / already has PR #N) can fire even
+      // after the pre-flight basename dedupe — branches outlive worktrees
+      // in git, and remote branches/PRs aren't visible from worktree.ps.
+      // Retry up to 25 times by appending -2, -3, ... before surfacing
+      // the error. The desktop applies this to user-typed names too, so
+      // mobile follows suit for parity.
+      const retryablePatterns = [
+        /already exists locally/i,
+        /already exists on a remote/i,
+        /already has pr #\d+/i
+      ]
+      const candidateFor = (attempt: number): string =>
+        attempt === 0 ? baseName : `${baseName}-${attempt + 1}`
+
+      let lastError: string | null = null
+      for (let attempt = 0; attempt < 25; attempt += 1) {
+        const candidateName = candidateFor(attempt)
+        const params: Record<string, unknown> = {
+          repo: `id:${selectedRepo.id}`,
+          startupCommand: command,
+          setupDecision: runSetup ? 'inherit' : 'skip',
+          name: candidateName
+        }
+        if (note.trim()) params.comment = note.trim()
+
+        const response = await client.sendRequest('worktree.create', params)
+        if (response.ok) {
+          const result = (response as RpcSuccess).result as { worktree: { id: string } }
+          onClose()
+          onCreated(result.worktree.id, candidateName)
+          return
+        }
+
+        lastError = response.error.message
+        if (!retryablePatterns.some((p) => p.test(lastError ?? ''))) {
+          break
+        }
       }
-      if (note.trim()) params.comment = note.trim()
-
-      const response = await client.sendRequest('worktree.create', params)
-
-      if (response.ok) {
-        const result = (response as RpcSuccess).result as { worktree: { id: string } }
-        const worktreeId = result.worktree.id
-
-        onClose()
-        onCreated(worktreeId, finalName)
-      } else {
-        setError(response.error.message)
-      }
+      setError(lastError ?? 'Failed to create workspace')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create workspace')
     } finally {
