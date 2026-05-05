@@ -13,6 +13,13 @@ import {
   Terminal,
   Plus
 } from 'lucide-react-native'
+import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
+import {
+  type AccountsSnapshot,
+  type ProviderKey,
+  getActiveProviderRateLimits,
+  UsageBar
+} from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
 import { connect, type RpcClient } from '../src/transport/rpc-client'
@@ -143,6 +150,26 @@ function fetchWorktreeInfo(
     })
 }
 
+function fetchAccountsSnapshot(
+  client: RpcClient,
+  hostId: string,
+  setSnapshots: (
+    updater: (prev: Record<string, AccountsSnapshot>) => Record<string, AccountsSnapshot>
+  ) => void,
+  disposed: () => boolean
+) {
+  client
+    .sendRequest('accounts.list')
+    .then((response) => {
+      if (disposed()) return
+      if (response.ok) {
+        const snapshot = response.result as AccountsSnapshot
+        setSnapshots((prev) => ({ ...prev, [hostId]: snapshot }))
+      }
+    })
+    .catch(() => {})
+}
+
 // Why: repo names get a stable color derived from hashing, matching the
 // host detail page's colored dots for visual consistency.
 const REPO_COLORS = ['#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4']
@@ -164,6 +191,7 @@ export default function HomeScreen() {
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
+  const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
@@ -185,6 +213,7 @@ export default function HomeScreen() {
         if (entry.client.getState() === 'connected') {
           fetchStats(entry.client, setStats, () => stale)
           fetchWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
+          fetchAccountsSnapshot(entry.client, entry.hostId, setAccountsByHost, () => stale)
         }
       }
       return () => {
@@ -222,25 +251,43 @@ export default function HomeScreen() {
       }
 
       let unsubNotif: (() => void) | null = null
+      let unsubAccounts: (() => void) | null = null
       let statsFetched = false
       const unsubState = client.onStateChange((state) => {
         if (state === 'connected') {
           if (!unsubNotif) {
             unsubNotif = subscribeToDesktopNotifications(client)
           }
+          if (!unsubAccounts) {
+            unsubAccounts = client.subscribe('accounts.subscribe', null, (payload) => {
+              if (disposed || !payload || typeof payload !== 'object') return
+              const evt = payload as { type?: string; snapshot?: AccountsSnapshot }
+              if ((evt.type === 'ready' || evt.type === 'snapshot') && evt.snapshot) {
+                const snap = evt.snapshot
+                setAccountsByHost((prev) => ({ ...prev, [host.id]: snap }))
+              }
+            })
+          }
           if (!statsFetched) {
             statsFetched = true
             fetchStats(client, setStats, () => disposed)
             fetchWorktreeInfo(client, host.id, setWorktreeInfo, () => disposed)
           }
-        } else if (unsubNotif) {
-          unsubNotif()
-          unsubNotif = null
+        } else {
+          if (unsubNotif) {
+            unsubNotif()
+            unsubNotif = null
+          }
+          if (unsubAccounts) {
+            unsubAccounts()
+            unsubAccounts = null
+          }
         }
       })
       notifCleanups.push(() => {
         unsubState()
         unsubNotif?.()
+        unsubAccounts?.()
       })
 
       return [{ hostId: host.id, client }]
@@ -288,6 +335,22 @@ export default function HomeScreen() {
       }),
     [sortedHosts, hostStates, worktreeInfo]
   )
+
+  // Why: only show the Active accounts section for connected hosts that have
+  // at least one Claude or Codex account configured — otherwise the section
+  // would be empty noise on a fresh pairing.
+  const accountsHosts = useMemo(() => {
+    const items: Array<{ host: HostProfile; snapshot: AccountsSnapshot }> = []
+    for (const host of sortedHosts) {
+      if (hostStates[host.id] !== 'connected') continue
+      const snap = accountsByHost[host.id]
+      if (!snap) continue
+      const hasClaude = snap.claude.accounts.length > 0
+      const hasCodex = snap.codex.accounts.length > 0
+      if (hasClaude || hasCodex) items.push({ host, snapshot: snap })
+    }
+    return items
+  }, [sortedHosts, hostStates, accountsByHost])
 
   async function handleRename(newName: string) {
     if (!renameTarget) return
@@ -500,6 +563,88 @@ export default function HomeScreen() {
                       <View style={[styles.skeletonLine, { width: '35%', marginTop: 6 }]} />
                     </View>
                   </View>
+                </>
+              ) : null}
+
+              {/* ─── Active accounts ─── */}
+              {accountsHosts.length > 0 ? (
+                <>
+                  <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
+                    Active accounts
+                  </Text>
+                  {accountsHosts.map(({ host, snapshot }) => {
+                    const claudeActiveId = snapshot.claude.activeAccountId
+                    const claudeActive =
+                      snapshot.claude.accounts.find((a) => a.id === claudeActiveId) ?? null
+                    const codexActiveId = snapshot.codex.activeAccountId
+                    const codexActive =
+                      snapshot.codex.accounts.find((a) => a.id === codexActiveId) ?? null
+                    const showHostName = accountsHosts.length > 1
+                    return (
+                      <Pressable
+                        key={host.id}
+                        style={({ pressed }) => [
+                          styles.accountsCard,
+                          pressed && styles.hostCardPressed
+                        ]}
+                        onPress={() => router.push(`/h/${host.id}/accounts`)}
+                      >
+                        {showHostName ? (
+                          <Text style={styles.accountsHostLabel} numberOfLines={1}>
+                            {host.name}
+                          </Text>
+                        ) : null}
+                        {(['claude', 'codex'] as ProviderKey[]).map((provider) => {
+                          const active = provider === 'claude' ? claudeActive : codexActive
+                          const accounts =
+                            provider === 'claude'
+                              ? snapshot.claude.accounts
+                              : snapshot.codex.accounts
+                          if (accounts.length === 0) return null
+                          const limits = getActiveProviderRateLimits(snapshot, provider)
+                          const isFetching =
+                            limits?.status === 'fetching' || limits?.status === 'idle'
+                          const unavailable =
+                            limits == null ||
+                            limits.status === 'unavailable' ||
+                            limits.status === 'error'
+                          return (
+                            <View key={provider} style={styles.accountsRow}>
+                              <View style={styles.accountsIcon}>
+                                {provider === 'claude' ? (
+                                  <ClaudeIcon size={18} />
+                                ) : (
+                                  <OpenAIIcon size={18} color={colors.textPrimary} />
+                                )}
+                              </View>
+                              <View style={styles.accountsInfo}>
+                                <Text style={styles.accountsName}>
+                                  {provider === 'claude' ? 'Claude' : 'Codex'}
+                                </Text>
+                                <Text style={styles.accountsEmail} numberOfLines={1}>
+                                  {active?.email ?? 'System default'}
+                                </Text>
+                                <View style={styles.accountsBars}>
+                                  <UsageBar
+                                    label="5h"
+                                    usedPercent={limits?.session?.usedPercent ?? null}
+                                    unavailable={unavailable}
+                                    loading={isFetching && limits?.session == null}
+                                  />
+                                  <UsageBar
+                                    label="7d"
+                                    usedPercent={limits?.weekly?.usedPercent ?? null}
+                                    unavailable={unavailable}
+                                    loading={isFetching && limits?.weekly == null}
+                                  />
+                                </View>
+                              </View>
+                            </View>
+                          )
+                        })}
+                      </Pressable>
+                    )
+                  })}
                 </>
               ) : null}
 
@@ -815,6 +960,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     flex: 1
+  },
+
+  /* ─── Active accounts ─── */
+  accountsCard: {
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.card,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    gap: spacing.sm,
+    marginBottom: spacing.sm
+  },
+  accountsHostLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4
+  },
+  accountsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2
+  },
+  accountsIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  accountsInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  accountsName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary
+  },
+  accountsEmail: {
+    fontSize: 11,
+    color: colors.textSecondary
+  },
+  accountsBars: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: 4
   },
 
   /* ─── Skeleton ─── */

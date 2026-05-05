@@ -439,6 +439,7 @@ app.whenReady().then(async () => {
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider()
   })
+  runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()

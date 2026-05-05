@@ -24,7 +24,8 @@ import {
   Plus,
   Moon,
   Filter,
-  Check
+  Check,
+  UserCircle
 } from 'lucide-react-native'
 import { connect, type RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
@@ -681,6 +682,17 @@ export default function HostScreen() {
           </Pressable>
 
           <View style={styles.toolbarSpacer} />
+
+          <Pressable
+            style={styles.searchToggle}
+            onPress={() => router.push(`/h/${hostId}/accounts`)}
+            disabled={connState !== 'connected'}
+          >
+            <UserCircle
+              size={16}
+              color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+            />
+          </Pressable>
 
           <Pressable
             style={styles.newButton}

@@ -134,6 +134,23 @@ import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IPtyProvider } from '../providers/types'
+import type { ClaudeAccountService } from '../claude-accounts/service'
+import type { CodexAccountService } from '../codex-accounts/service'
+import type { RateLimitService } from '../rate-limits/service'
+import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import type { RateLimitState } from '../../shared/rate-limit-types'
+
+type RuntimeAccountServices = {
+  claudeAccounts: ClaudeAccountService
+  codexAccounts: CodexAccountService
+  rateLimits: RateLimitService
+}
+
+export type AccountsSnapshot = {
+  claude: ClaudeRateLimitAccountsState
+  codex: CodexRateLimitAccountsState
+  rateLimits: RateLimitState
+}
 
 type RuntimeStore = {
   getRepos: Store['getRepos']
@@ -511,6 +528,7 @@ export class OrcaRuntimeService {
   private fetchInflight = new Map<string, Promise<void>>()
   private fetchLastCompletedAt = new Map<string, number>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
+  private accountServices: RuntimeAccountServices | null = null
 
   constructor(
     store: RuntimeStore | null = null,
@@ -1168,6 +1186,73 @@ export class OrcaRuntimeService {
     for (const listener of this.notificationListeners) {
       listener(event)
     }
+  }
+
+  // ─── Account Services (mobile RPC bridge) ─────────────────────
+
+  setAccountServices(services: RuntimeAccountServices): void {
+    this.accountServices = services
+  }
+
+  private requireAccountServices(): RuntimeAccountServices {
+    if (!this.accountServices) {
+      throw new Error('Account services are not configured on this runtime')
+    }
+    return this.accountServices
+  }
+
+  getAccountsSnapshot(): AccountsSnapshot {
+    const { claudeAccounts, codexAccounts, rateLimits } = this.requireAccountServices()
+    return {
+      claude: claudeAccounts.listAccounts(),
+      codex: codexAccounts.listAccounts(),
+      rateLimits: rateLimits.getState()
+    }
+  }
+
+  // Why: RateLimitService polls only when the Electron window is visible AND
+  // focused, and the inactive-account caches fill lazily when the user opens
+  // the desktop AccountsPane. Mobile has neither trigger, so without this the
+  // phone shows 0% / "—" against a backgrounded desktop. Errors swallowed
+  // because partial usage is still useful for the rest of the snapshot.
+  async refreshAccountsForMobile(): Promise<void> {
+    const { rateLimits } = this.requireAccountServices()
+    await Promise.allSettled([
+      rateLimits.refresh(),
+      rateLimits.fetchInactiveClaudeAccountsOnOpen(),
+      rateLimits.fetchInactiveCodexAccountsOnOpen()
+    ])
+  }
+
+  selectClaudeAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
+    return this.requireAccountServices().claudeAccounts.selectAccount(accountId)
+  }
+
+  selectCodexAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
+    return this.requireAccountServices().codexAccounts.selectAccount(accountId)
+  }
+
+  removeClaudeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+    return this.requireAccountServices().claudeAccounts.removeAccount(accountId)
+  }
+
+  removeCodexAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
+    return this.requireAccountServices().codexAccounts.removeAccount(accountId)
+  }
+
+  // Why: rate-limit polling fires every 5 minutes and on account switch.
+  // Mobile clients subscribe to receive a fresh AccountsSnapshot whenever
+  // RateLimitService pushes new usage data, mirroring the existing
+  // `rateLimits:update` IPC channel desktop already uses.
+  onAccountsChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
+    const services = this.requireAccountServices()
+    return services.rateLimits.onStateChange(() => {
+      listener({
+        claude: services.claudeAccounts.listAccounts(),
+        codex: services.codexAccounts.listAccounts(),
+        rateLimits: services.rateLimits.getState()
+      })
+    })
   }
 
   // ─── Mobile Fit Override Management ─────────────────────────

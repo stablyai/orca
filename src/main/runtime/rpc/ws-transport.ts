@@ -28,7 +28,9 @@ export class WebSocketTransport implements RpcTransport {
   private messageHandler:
     | ((msg: string, reply: (response: string) => void, ws: WebSocket) => void)
     | null = null
-  private connectionCloseHandler: ((clientId: string) => void) | null = null
+  private connectionCloseHandler:
+    | ((clientId: string, ws: WebSocket, hasOtherConnections: boolean) => void)
+    | null = null
   // Why: maps each WebSocket to the clientId (deviceToken) that authenticated it,
   // so ws.on('close') can notify the runtime which mobile client disconnected.
   private wsClientIds = new Map<WebSocket, string>()
@@ -46,7 +48,15 @@ export class WebSocketTransport implements RpcTransport {
     this.messageHandler = handler
   }
 
-  onConnectionClose(handler: (clientId: string) => void): void {
+  // Why: handlers receive the closing `ws` so per-connection state can be
+  // targeted exactly (one paired device may hold multiple concurrent sockets,
+  // e.g. host screen + accounts screen). `hasOtherConnections` tells the
+  // runtime whether other sockets for the same deviceToken are still alive,
+  // so client-scoped teardown (mobile-fit overrides, etc.) only fires on the
+  // last disconnect.
+  onConnectionClose(
+    handler: (clientId: string, ws: WebSocket, hasOtherConnections: boolean) => void
+  ): void {
     this.connectionCloseHandler = handler
   }
 
@@ -178,7 +188,13 @@ export class WebSocketTransport implements RpcTransport {
       const clientId = this.wsClientIds.get(ws)
       this.wsClientIds.delete(ws)
       if (clientId) {
-        this.connectionCloseHandler?.(clientId)
+        // Why: a paired device may have multiple concurrent sockets open
+        // (e.g. one per app screen). Per-client teardown must only fire when
+        // the last socket for this token closes — otherwise closing the
+        // accounts-screen socket would clobber the host-screen socket's
+        // state and strand it in a non-functional state until re-paired.
+        const hasOtherConnections = Array.from(this.wsClientIds.values()).includes(clientId)
+        this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
       }
     })
 
