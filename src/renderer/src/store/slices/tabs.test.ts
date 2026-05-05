@@ -3,14 +3,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Tab, TabGroup } from '../../../../shared/types'
+import type * as AgentStatusModule from '@/lib/agent-status'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 // Mock agent-status (imported by terminal-helpers)
-vi.mock('@/lib/agent-status', () => ({
-  detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
-}))
+vi.mock('@/lib/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
+  }
+})
 
 const mockApi = {
   worktrees: {
@@ -80,36 +85,52 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createRepoSlice } from './repos'
+import { createSparsePresetsSlice } from './sparse-presets'
 import { createWorktreeSlice } from './worktrees'
 import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
 import { createGitHubSlice } from './github'
+import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
+import { createMemorySlice } from './memory'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
+import { createSshSlice } from './ssh'
+import { createAgentStatusSlice } from './agent-status'
+import { createDiffCommentsSlice } from './diffComments'
+import { createDetectedAgentsSlice } from './detected-agents'
+import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 
 const WT = 'repo1::/tmp/feature'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
+    ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),
     ...createTerminalSlice(...a),
     ...createTabsSlice(...a),
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
     ...createGitHubSlice(...a),
+    ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
+    ...createMemorySlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a)
+    ...createRateLimitSlice(...a),
+    ...createSshSlice(...a),
+    ...createAgentStatusSlice(...a),
+    ...createDiffCommentsSlice(...a),
+    ...createDetectedAgentsSlice(...a),
+    ...createWorktreeNavHistorySlice(...a)
   }))
 }
 
@@ -242,6 +263,126 @@ describe('TabsSlice', () => {
       const result = store.getState().closeUnifiedTab('nonexistent')
       expect(result).toBeNull()
     })
+
+    it('activates the previously-active tab (MRU) instead of the visual neighbor', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+
+      // Visit order: ...→t3 (last created)→t1→t3. Closing t3 should jump
+      // back to t1 (previous), not t2 (the visual right-neighbor after t3's
+      // removal fallback or left-neighbor).
+      store.getState().activateTab(t1.id)
+      store.getState().activateTab(t3.id)
+      store.getState().closeUnifiedTab(t3.id)
+
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t1.id)
+      // t2 should still exist and not be active
+      expect(
+        store
+          .getState()
+          .unifiedTabsByWorktree[WT].map((t) => t.id)
+          .sort()
+      ).toEqual([t1.id, t2.id].sort())
+    })
+
+    it('falls back to neighbor selection when the MRU stack has no prior tab', () => {
+      // Build state manually so no prior activations have been recorded. This
+      // mirrors a freshly-hydrated session with only an active tab known.
+      const groupId = 'mru-fallback-group'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'a',
+              entityId: 'a',
+              groupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'a',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'b',
+              entityId: 'b',
+              groupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'b',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 2
+            },
+            {
+              id: 'c',
+              entityId: 'c',
+              groupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'c',
+              customLabel: null,
+              color: null,
+              sortOrder: 2,
+              createdAt: 3
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'b',
+              tabOrder: ['a', 'b', 'c'],
+              recentTabIds: ['b']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId }
+      })
+
+      store.getState().closeUnifiedTab('b')
+
+      // MRU only contains 'b' itself, so fallback picks the right neighbor 'c'.
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe('c')
+    })
+
+    it('tracks an independent MRU history per tab group', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const secondGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(secondGroupId).toBeTruthy()
+
+      // Create two tabs in the second (right) group and visit them in order.
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal', {
+        targetGroupId: secondGroupId!
+      })
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal', {
+        targetGroupId: secondGroupId!
+      })
+      // Second group's MRU tail should be t3.
+
+      // Switch focus to the source group so subsequent activations in the
+      // source group don't pollute the second group's MRU.
+      store.getState().activateTab(t1.id)
+
+      // Re-focus second group by activating t2, then close t2 — we expect the
+      // previous tab within the same group (t3), not a neighbor from the
+      // source group.
+      store.getState().activateTab(t3.id)
+      store.getState().activateTab(t2.id)
+      store.getState().closeUnifiedTab(t2.id)
+
+      const secondGroup = store.getState().groupsByWorktree[WT].find((g) => g.id === secondGroupId)
+      expect(secondGroup?.activeTabId).toBe(t3.id)
+      // Source group's active tab must remain untouched.
+      const sourceGroup = store.getState().groupsByWorktree[WT].find((g) => g.id === sourceGroupId)
+      expect(sourceGroup?.activeTabId).toBe(t1.id)
+    })
   })
 
   // ─── activateTab ──────────────────────────────────────────────────
@@ -269,6 +410,327 @@ describe('TabsSlice', () => {
 
       expect(store.getState().unifiedTabsByWorktree[WT][0].isPreview).toBe(false)
     })
+
+    // Why: regression guard for "click the tab with a bell and it doesn't go
+    // away". The tab-strip bell reads from unreadTerminalTabs, keyed by the
+    // terminal tab's entityId. activateTab receives a *unified* tabId, so the
+    // clear step must resolve entityId from the unified tab or the flag sticks.
+    it('clears unreadTerminalTabs for a terminal tab when its unified tab activates', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      // t2 is active after creation; move focus to t1 so we can mark t2 unread.
+      store.getState().activateTab(t1.id)
+
+      // Mark WT as the active worktree. activateTab's unread-clear is guarded
+      // on activeWorktreeId so the signal isn't swallowed when activating a
+      // tab in a hidden worktree. Real-world callers only hit activateTab
+      // for visible tabs, so this mirrors production conditions.
+      store.setState({ activeWorktreeId: WT })
+
+      // t1.entityId and t2.entityId are the terminal tabIds that
+      // markTerminalTabUnread / TabBar read from.
+      const t2TerminalId = t2.entityId
+      store.setState({
+        unreadTerminalTabs: {
+          ...store.getState().unreadTerminalTabs,
+          [t2TerminalId]: true as const
+        }
+      })
+      expect(store.getState().unreadTerminalTabs[t2TerminalId]).toBe(true)
+
+      store.getState().activateTab(t2.id)
+
+      expect(store.getState().unreadTerminalTabs[t2TerminalId]).toBeUndefined()
+    })
+  })
+
+  // ─── markTerminalTabUnread ───────────────────────────────────────
+  //
+  // Ghostty "show until interact" model: BEL always marks the tab unread,
+  // including the currently-focused tab and the active tab of every visible
+  // split group. The indicator is cleared by user interaction (keystroke,
+  // click, focus-gain) via clearTerminalTabUnread — NOT by the mark path
+  // trying to guess whether the user already "sees" the tab.
+  describe('markTerminalTabUnread', () => {
+    it('marks the tab even when it is active in a visible split group of the active worktree', () => {
+      // Group A: the current worktree's root group, created implicitly by
+      // createUnifiedTab. Populate it with a terminal tab (tabA).
+      const tabA = store.getState().createUnifiedTab(WT, 'terminal')
+      const groupAId = store.getState().groupsByWorktree[WT][0].id
+
+      // Group B: split to the right of Group A, then populate with its own
+      // terminal tab and focus Group B so tabA is visible-but-not-focused.
+      const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+      if (!groupBId) {
+        throw new Error('createEmptySplitGroup returned null')
+      }
+      store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
+      store.getState().focusGroup(WT, groupBId)
+      store.setState({ activeWorktreeId: WT })
+
+      // Seed the backing legacy terminal tab so markTerminalTabUnread's
+      // owner-missing guard doesn't short-circuit.
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: tabA.entityId,
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: Date.now()
+            }
+          ]
+        }
+      })
+
+      // Fire a bell on Group A's terminal tab. Under ghostty semantics the
+      // indicator must appear even though that tab is visible — only
+      // clearTerminalTabUnread (called from onData / pointerdown) dismisses it.
+      store.getState().markTerminalTabUnread(tabA.entityId)
+
+      expect(store.getState().unreadTerminalTabs[tabA.entityId]).toBe(true)
+    })
+
+    it('does mark a tab that is not the active tab of any visible group', () => {
+      // Group A with two terminal tabs. Activate tabA1, leaving tabA2 inactive.
+      const tabA1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const tabA2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const groupAId = store.getState().groupsByWorktree[WT][0].id
+      store.getState().activateTab(tabA1.id)
+
+      // Group B split to the right with its own tab (so there are two visible
+      // groups, matching the split-group condition). Focus Group B.
+      const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+      if (!groupBId) {
+        throw new Error('createEmptySplitGroup returned null')
+      }
+      store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
+      store.getState().focusGroup(WT, groupBId)
+      store.setState({ activeWorktreeId: WT })
+      // Why: markTerminalTabUnread guards against writing unread for a tab
+      // that no longer exists in tabsByWorktree. In production, every
+      // terminal unified tab has a backing legacy terminal tab (createTab
+      // calls createUnifiedTab with matching ids); seed that invariant here.
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: tabA2.entityId,
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal 2',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: Date.now()
+            }
+          ]
+        }
+      })
+
+      // tabA2 is NOT the active tab of any group — a bell on it is legitimate.
+      store.getState().markTerminalTabUnread(tabA2.entityId)
+
+      expect(store.getState().unreadTerminalTabs[tabA2.entityId]).toBe(true)
+    })
+
+    // Why: under the show-until-interact model, BEL fires unconditionally
+    // even when the user is looking at a non-terminal surface or the tab
+    // is globally active. This test pins that behavior for the "editor is
+    // on screen, terminal is offscreen" case — clearly a legitimate unread.
+    it('still marks the tab when the active surface is not terminal', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+      // Point global active* at this tab (matches post-activate state) but
+      // mark a *different* worktree as active so the visible-groups check
+      // does not apply. The only remaining guard is activeTabType, which
+      // we set to 'editor' — the user is NOT looking at this terminal.
+      // Why: seed tabsByWorktree to match the production invariant that
+      // every terminal unified tab has a backing legacy terminal tab —
+      // markTerminalTabUnread now guards against a missing owner tab.
+      store.setState({
+        activeWorktreeId: 'other-wt::/path/x',
+        activeTabId: tab.entityId,
+        activeTabType: 'editor',
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: tab.entityId,
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: Date.now()
+            }
+          ]
+        }
+      })
+
+      store.getState().markTerminalTabUnread(tab.entityId)
+
+      expect(store.getState().unreadTerminalTabs[tab.entityId]).toBe(true)
+    })
+
+    it('is a no-op when the tab is already flagged', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+      // Why: seed tabsByWorktree so markTerminalTabUnread's owner-missing guard
+      // (terminals.ts:641-643) doesn't short-circuit — we need to exercise the
+      // "already flagged" branch further down (terminals.ts:673-676).
+      store.setState({
+        unreadTerminalTabs: { [tab.entityId]: true as const },
+        activeTabId: 'something-else',
+        activeTabType: 'terminal',
+        activeWorktreeId: 'other-wt',
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: tab.entityId,
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: Date.now()
+            }
+          ]
+        }
+      })
+      const before = store.getState().unreadTerminalTabs
+
+      store.getState().markTerminalTabUnread(tab.entityId)
+
+      // Same object reference => no state mutation occurred.
+      expect(store.getState().unreadTerminalTabs).toBe(before)
+    })
+
+    // Why: markTerminalTabUnread is agent-agnostic — the working→idle
+    // transition in onAgentBecameIdle fires once per Claude task and MUST
+    // raise the dot; blocking it at the store layer would swallow the
+    // completion signal.
+    it('marks unread for an agent tab when it is not focused', () => {
+      const agentTabId = 'agent-tab-1'
+      store.setState({
+        activeTabId: 'something-else',
+        activeTabType: 'terminal',
+        activeWorktreeId: 'other-wt',
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: agentTabId,
+              ptyId: null,
+              worktreeId: WT,
+              title: '* Claude done',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: Date.now()
+            }
+          ]
+        }
+      })
+
+      store.getState().markTerminalTabUnread(agentTabId)
+
+      expect(store.getState().unreadTerminalTabs[agentTabId]).toBe(true)
+    })
+  })
+
+  // ─── clearTerminalTabUnread ──────────────────────────────────────────
+  //
+  // Called on actual user interaction with a terminal pane (keystroke via
+  // xterm onData, or pointerdown on the container). Pins the dismissal half
+  // of the show-until-interact contract.
+  describe('clearTerminalTabUnread', () => {
+    it('removes the tab from unreadTerminalTabs', () => {
+      const tabId = 'bell-tab-1'
+      store.setState({
+        unreadTerminalTabs: { [tabId]: true as const, 'other-tab': true as const }
+      })
+
+      store.getState().clearTerminalTabUnread(tabId)
+
+      expect(store.getState().unreadTerminalTabs).toEqual({ 'other-tab': true })
+    })
+
+    it('is a reference-preserving no-op when the tab is not flagged', () => {
+      const initial = { 'other-tab': true as const }
+      store.setState({ unreadTerminalTabs: initial })
+
+      store.getState().clearTerminalTabUnread('bell-tab-1')
+
+      // Same reference => no-op. Downstream selectors must not re-render.
+      expect(store.getState().unreadTerminalTabs).toBe(initial)
+    })
+  })
+
+  // ─── focusGroup clears unread on focused group's terminal tab ─────────
+  //
+  // Regression guard: users clicking a group that already had its tab
+  // "active" (so activateTab doesn't run) must still dismiss the indicator
+  // on that group's active terminal tab. Without this, the bell lingers
+  // until the tab is clicked a second time.
+  describe('focusGroup', () => {
+    // Why: focusGroup is fired on every pointerdown within a split group's
+    // chrome (onPointerDown + onFocusCapture in TabGroupPanel). Clearing the
+    // tab-level bell here is fine — the user is now looking at this group.
+    it("clears the tab-level bell on the focused group's active tab", () => {
+      const tabA = store.getState().createUnifiedTab(WT, 'terminal')
+      const groupAId = store.getState().groupsByWorktree[WT][0].id
+      const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+      if (!groupBId) {
+        throw new Error('createEmptySplitGroup returned null')
+      }
+      store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
+      // Focus Group B first so the active group is not A.
+      store.getState().focusGroup(WT, groupBId)
+
+      // Seed tab-level unread on Group A's terminal tab. Also mark WT as the
+      // active worktree — focusGroup's unread-clear is guarded on
+      // activeWorktreeId to avoid swallowing bells in hidden worktrees.
+      store.setState({
+        unreadTerminalTabs: { [tabA.entityId]: true as const },
+        activeWorktreeId: WT
+      })
+
+      // Clicking Group A's chrome re-focuses the group without necessarily
+      // calling activateTab (its active tab hasn't changed).
+      store.getState().focusGroup(WT, groupAId)
+
+      // Tab-level bell cleared — the user is now viewing this tab.
+      expect(store.getState().unreadTerminalTabs[tabA.entityId]).toBeUndefined()
+    })
+
+    it('clears unread on every visible terminal tab across split groups', () => {
+      const tabA = store.getState().createUnifiedTab(WT, 'terminal')
+      const groupAId = store.getState().groupsByWorktree[WT][0].id
+      const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+      if (!groupBId) {
+        throw new Error('createEmptySplitGroup returned null')
+      }
+      const tabB = store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
+
+      store.setState({
+        unreadTerminalTabs: {
+          [tabA.entityId]: true as const,
+          [tabB.entityId]: true as const
+        },
+        activeWorktreeId: WT
+      })
+
+      // Why: both groups' active tabs are simultaneously visible in a split
+      // layout, so neither should keep a stale unread bell once the user is
+      // looking at the workspace.
+      store.getState().focusGroup(WT, groupAId)
+
+      expect(store.getState().unreadTerminalTabs[tabA.entityId]).toBeUndefined()
+      expect(store.getState().unreadTerminalTabs[tabB.entityId]).toBeUndefined()
+    })
   })
 
   // ─── reorderUnifiedTabs ───────────────────────────────────────────
@@ -288,6 +750,188 @@ describe('TabsSlice', () => {
       const tabs = store.getState().unifiedTabsByWorktree[WT]
       const sorted = [...tabs].sort((a, b) => a.sortOrder - b.sortOrder)
       expect(sorted.map((t) => t.id)).toEqual([t3.id, t1.id, t2.id])
+    })
+  })
+
+  describe('setTabGroupSplitRatio', () => {
+    it('updates the persisted ratio for the targeted split node', () => {
+      store.setState({
+        layoutByWorktree: {
+          [WT]: {
+            type: 'split',
+            direction: 'horizontal',
+            ratio: 0.5,
+            first: { type: 'leaf', groupId: 'g-1' },
+            second: {
+              type: 'split',
+              direction: 'vertical',
+              ratio: 0.5,
+              first: { type: 'leaf', groupId: 'g-2' },
+              second: { type: 'leaf', groupId: 'g-3' }
+            }
+          }
+        }
+      })
+
+      store.getState().setTabGroupSplitRatio(WT, 'second', 0.7)
+
+      const layout = store.getState().layoutByWorktree[WT]
+      expect(layout.type).toBe('split')
+      if (layout.type !== 'split' || layout.second.type !== 'split') {
+        throw new Error('expected nested split layout')
+      }
+      expect(layout.ratio).toBe(0.5)
+      expect(layout.second.ratio).toBe(0.7)
+    })
+  })
+
+  describe('move/copy/merge group operations', () => {
+    it('moves a unified tab into another group', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).toBeTruthy()
+
+      store.getState().moveUnifiedTabToGroup(tab.id, targetGroupId!)
+
+      const state = store.getState()
+      const moved = state.unifiedTabsByWorktree[WT].find((item) => item.id === tab.id)
+      expect(moved?.groupId).toBe(targetGroupId)
+      expect(
+        state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)?.tabOrder
+      ).toEqual([])
+      expect(
+        state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
+      ).toEqual([tab.id])
+    })
+
+    it('copies a unified tab into another group', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).toBeTruthy()
+
+      const copied = store.getState().copyUnifiedTabToGroup(tab.id, targetGroupId!)
+
+      expect(copied).not.toBeNull()
+      const state = store.getState()
+      expect(state.unifiedTabsByWorktree[WT]).toHaveLength(2)
+      expect(
+        state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)?.tabOrder
+      ).toEqual([tab.id])
+      expect(
+        state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
+      ).toEqual([copied!.id])
+      expect(copied?.entityId).toBe(tab.entityId)
+    })
+
+    it('merges a group into its sibling', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).toBeTruthy()
+      store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-b.ts',
+        label: 'file-b.ts',
+        targetGroupId: targetGroupId!
+      })
+
+      const mergedInto = store.getState().mergeGroupIntoSibling(WT, targetGroupId!)
+
+      expect(mergedInto).toBe(sourceGroupId)
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(1)
+      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([t1.id, 'file-b.ts'])
+      expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
+    })
+
+    it('drops a unified tab into another group and collapses an emptied source group', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).toBeTruthy()
+
+      const moved = store.getState().dropUnifiedTab(tab.id, { groupId: targetGroupId! })
+
+      expect(moved).toBe(true)
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(1)
+      expect(state.groupsByWorktree[WT][0].id).toBe(targetGroupId)
+      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([tab.id])
+      expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: targetGroupId })
+      expect(state.activeGroupIdByWorktree[WT]).toBe(targetGroupId)
+    })
+
+    it('drops a unified tab onto a pane edge to create a sibling split', () => {
+      const first = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const second = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-b.ts',
+        label: 'file-b.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+
+      const moved = store.getState().dropUnifiedTab(second.id, {
+        groupId: sourceGroupId,
+        splitDirection: 'right'
+      })
+
+      expect(moved).toBe(true)
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(2)
+
+      const originGroup = state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)
+      expect(originGroup?.tabOrder).toEqual([first.id])
+
+      const movedTab = state.unifiedTabsByWorktree[WT].find((tab) => tab.id === second.id)
+      const newGroupId = movedTab?.groupId
+      expect(newGroupId).toBeTruthy()
+      expect(newGroupId).not.toBe(sourceGroupId)
+      expect(state.groupsByWorktree[WT].find((group) => group.id === newGroupId)?.tabOrder).toEqual(
+        [second.id]
+      )
+
+      const layout = state.layoutByWorktree[WT]
+      expect(layout.type).toBe('split')
+      if (layout.type !== 'split') {
+        throw new Error('expected split layout after edge drop')
+      }
+      expect(layout.direction).toBe('horizontal')
+      expect(layout.first).toEqual({ type: 'leaf', groupId: sourceGroupId })
+      expect(layout.second).toEqual({ type: 'leaf', groupId: newGroupId })
+    })
+
+    it('treats splitting the only tab onto its own pane body as a no-op', () => {
+      const onlyTab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+
+      const moved = store.getState().dropUnifiedTab(onlyTab.id, {
+        groupId: sourceGroupId,
+        splitDirection: 'down'
+      })
+
+      expect(moved).toBe(false)
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(1)
+      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([onlyTab.id])
+      expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
     })
   })
 
@@ -455,8 +1099,10 @@ describe('TabsSlice', () => {
               comment: '',
               linkedIssue: null,
               linkedPR: null,
+              linkedLinearIssue: null,
               isArchived: false,
               isUnread: false,
+              isPinned: false,
               sortOrder: 0,
               lastActivityAt: 0
             }
@@ -546,8 +1192,10 @@ describe('TabsSlice', () => {
               comment: '',
               linkedIssue: null,
               linkedPR: null,
+              linkedLinearIssue: null,
               isArchived: false,
               isUnread: false,
+              isPinned: false,
               sortOrder: 0,
               lastActivityAt: 0
             }
@@ -559,6 +1207,7 @@ describe('TabsSlice', () => {
       const tabs: Tab[] = [
         {
           id: 't-1',
+          entityId: 't-1',
           groupId,
           worktreeId: WT,
           contentType: 'terminal',
@@ -570,6 +1219,7 @@ describe('TabsSlice', () => {
         },
         {
           id: '/file.ts',
+          entityId: '/file.ts',
           groupId,
           worktreeId: WT,
           contentType: 'editor',
@@ -597,6 +1247,82 @@ describe('TabsSlice', () => {
       const state = store.getState()
       expect(state.unifiedTabsByWorktree[WT]).toHaveLength(2)
       expect(state.groupsByWorktree[WT][0].activeTabId).toBe('/file.ts')
+    })
+
+    it('deduplicates persisted tab order during unified hydration', () => {
+      store.setState({
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: WT,
+              repoId: 'repo1',
+              path: '/tmp/feature',
+              head: 'abc',
+              branch: 'feature',
+              isBare: false,
+              isMainWorktree: false,
+              displayName: 'feature',
+              comment: '',
+              linkedIssue: null,
+              linkedPR: null,
+              linkedLinearIssue: null,
+              isArchived: false,
+              isUnread: false,
+              isPinned: false,
+              sortOrder: 0,
+              lastActivityAt: 0
+            }
+          ]
+        }
+      })
+
+      const groupId = 'g-1'
+      const tabs: Tab[] = [
+        {
+          id: 't-1',
+          entityId: 't-1',
+          groupId,
+          worktreeId: WT,
+          contentType: 'terminal',
+          label: 'zsh',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1000
+        },
+        {
+          id: '/file.ts',
+          entityId: '/file.ts',
+          groupId,
+          worktreeId: WT,
+          contentType: 'editor',
+          label: 'file.ts',
+          customLabel: null,
+          color: null,
+          sortOrder: 1,
+          createdAt: 2000
+        }
+      ]
+      const groups: TabGroup[] = [
+        {
+          id: groupId,
+          worktreeId: WT,
+          activeTabId: '/file.ts',
+          tabOrder: ['t-1', 't-1', '/file.ts', '/file.ts']
+        }
+      ]
+
+      store.getState().hydrateTabsSession({
+        activeRepoId: 'repo1',
+        activeWorktreeId: WT,
+        activeTabId: 't-1',
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: { [WT]: tabs },
+        tabGroups: { [WT]: groups }
+      })
+
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual(['t-1', '/file.ts'])
     })
 
     it('filters out invalid worktree IDs during hydration', () => {
@@ -655,6 +1381,115 @@ describe('TabsSlice', () => {
       store.getState().closeUnifiedTab(editor.id)
 
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(term.id)
+    })
+  })
+
+  describe('tabOrder dedupe', () => {
+    it('deduplicates drag reorder payloads before persisting group order', () => {
+      const first = store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'terminal')
+
+      const groupId = store.getState().groupsByWorktree[WT][0].id
+      store.getState().reorderUnifiedTabs(groupId, [second.id, first.id, second.id, first.id])
+
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([second.id, first.id])
+    })
+  })
+
+  describe('reconcileWorktreeTabModel', () => {
+    it('drops unified tabs whose backing content no longer exists', () => {
+      const groupId = 'g-1'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'stale-terminal',
+              entityId: 'stale-terminal',
+              groupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'stale-terminal',
+              tabOrder: ['stale-terminal']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        tabsByWorktree: { [WT]: [] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(result.renderableTabCount).toBe(0)
+      expect(result.activeRenderableTabId).toBeNull()
+      expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([])
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([])
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBeNull()
+    })
+
+    it('restores live runtime terminal tabs into the unified tab model', () => {
+      const runtimeTerminalId = 'runtime-terminal-1'
+
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: runtimeTerminalId,
+              ptyId: 'pty-4',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: {
+          [runtimeTerminalId]: ['pty-4']
+        },
+        unifiedTabsByWorktree: {
+          [WT]: []
+        },
+        groupsByWorktree: {
+          [WT]: []
+        },
+        activeGroupIdByWorktree: {}
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+      const restoredTab = state.unifiedTabsByWorktree[WT]?.[0]
+      const restoredGroup = state.groupsByWorktree[WT]?.[0]
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe(runtimeTerminalId)
+      expect(restoredTab).toMatchObject({
+        id: runtimeTerminalId,
+        entityId: runtimeTerminalId,
+        contentType: 'terminal',
+        label: 'Terminal 1'
+      })
+      expect(restoredGroup).toMatchObject({
+        activeTabId: runtimeTerminalId,
+        tabOrder: [runtimeTerminalId]
+      })
+      expect(state.layoutByWorktree[WT]).toEqual({
+        type: 'leaf',
+        groupId: restoredGroup?.id
+      })
     })
   })
 })

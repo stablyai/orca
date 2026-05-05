@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
+import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -24,10 +27,49 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return editableAncestor !== null
 }
 
+export type SearchState = {
+  query: string
+  caseSensitive: boolean
+  regex: boolean
+}
+
+/**
+ * Pure decision function for Cmd+G / Cmd+Shift+G search navigation.
+ * Returns 'next', 'previous', or null (no match).
+ * Extracted so the key-matching logic is testable without DOM dependencies.
+ */
+export function matchSearchNavigate(
+  e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>,
+  isMac: boolean,
+  searchOpen: boolean,
+  searchState: SearchState
+): 'next' | 'previous' | null {
+  if (e.altKey) {
+    return null
+  }
+  const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+  if (!mod) {
+    return null
+  }
+  if (e.key.toLowerCase() !== 'g') {
+    return null
+  }
+  if (!searchOpen) {
+    return null
+  }
+  if (!searchState.query) {
+    return null
+  }
+  return e.shiftKey ? 'previous' : 'next'
+}
+
 type KeyboardHandlersDeps = {
   isActive: boolean
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  paneCwdRef: React.RefObject<PaneCwdMap>
+  /** Worktree-root cwd used when OSC 7 and pty.getCwd both fail. */
+  fallbackCwd: string
   expandedPaneIdRef: React.RefObject<number | null>
   setExpandedPane: (paneId: number | null) => void
   restoreExpandedLayout: () => void
@@ -36,12 +78,17 @@ type KeyboardHandlersDeps = {
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   onRequestClosePane: (paneId: number) => void
+  searchOpenRef: React.RefObject<boolean>
+  searchStateRef: React.RefObject<SearchState>
+  macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
 }
 
 export function useTerminalKeyboardShortcuts({
   isActive,
   managerRef,
   paneTransportsRef,
+  paneCwdRef,
+  fallbackCwd,
   expandedPaneIdRef,
   setExpandedPane,
   restoreExpandedLayout,
@@ -49,7 +96,10 @@ export function useTerminalKeyboardShortcuts({
   persistLayoutSnapshot,
   toggleExpandPane,
   setSearchOpen,
-  onRequestClosePane
+  onRequestClosePane,
+  searchOpenRef,
+  searchStateRef,
+  macOptionAsAltRef
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -57,26 +107,86 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const isMac = navigator.userAgent.includes('Mac')
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.repeat) {
-        return
-      }
-      if (isEditableTarget(e.target)) {
-        return
-      }
-      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
-      if (!mod || e.altKey) {
-        return
-      }
 
+    // Why: KeyboardEvent.location on a character key (e.g. Period) always
+    // reports that key's own position (0 = standard), not which modifier is
+    // held. To distinguish left vs right Option, we record the Option key's
+    // location from its own keydown event and clear it on keyup.
+    let optionKeyLocation = 0
+    const onModifierDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') {
+        optionKeyLocation = e.location
+      }
+    }
+    const onModifierUp = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') {
+        optionKeyLocation = 0
+      }
+    }
+
+    const onKeyDown = (e: KeyboardEvent): void => {
       const manager = managerRef.current
       if (!manager) {
         return
       }
 
+      // Cmd+G / Cmd+Shift+G navigates terminal search matches even when focus
+      // is inside the search input itself, so this check must run before the
+      // editable-target guard would otherwise bypass all terminal shortcuts.
+      // stopImmediatePropagation prevents App.tsx's Cmd+Shift+G (source-control sidebar) from also firing.
+      const direction = matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
+      if (direction !== null) {
+        if (e.repeat) {
+          return
+        }
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        const { query, caseSensitive, regex } = searchStateRef.current
+        if (direction === 'next') {
+          pane.searchAddon.findNext(query, { caseSensitive, regex })
+        } else {
+          pane.searchAddon.findPrevious(query, { caseSensitive, regex })
+        }
+        pane.terminal.focus()
+        return
+      }
+
+      if (isEditableTarget(e.target)) {
+        return
+      }
+
+      const action = resolveTerminalShortcutAction(
+        e,
+        isMac,
+        macOptionAsAltRef.current,
+        optionKeyLocation
+      )
+      if (!action) {
+        return
+      }
+
+      if (action.type === 'sendInput') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        paneTransportsRef.current.get(pane.id)?.sendInput(action.data)
+        return
+      }
+
+      if (e.repeat) {
+        return
+      }
+
       // Cmd/Ctrl+Shift+C copies terminal selection via Electron clipboard.
       // This ensures Linux terminal copy works consistently.
-      if (e.shiftKey && e.key.toLowerCase() === 'c') {
+      if (action.type === 'copySelection') {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
@@ -86,7 +196,7 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         void window.api.ui.writeClipboardText(selection).catch(() => {
           /* ignore clipboard write failures */
         })
@@ -95,17 +205,17 @@ export function useTerminalKeyboardShortcuts({
 
       // Keep Cmd+F bound to the terminal search until the app has a real
       // top-level find-in-page flow to fall back to.
-      if (!e.shiftKey && e.key.toLowerCase() === 'f') {
+      if (action.type === 'toggleSearch') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         setSearchOpen((prev) => !prev)
         return
       }
 
       // Cmd+K clears active pane screen + scrollback.
-      if (!e.shiftKey && e.key.toLowerCase() === 'k') {
+      if (action.type === 'clearActivePane') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (pane) {
           pane.terminal.clear()
@@ -114,13 +224,13 @@ export function useTerminalKeyboardShortcuts({
       }
 
       // Cmd+[ / Cmd+] cycles active split pane focus.
-      if (!e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+      if (action.type === 'focusPane') {
         const panes = manager.getPanes()
         if (panes.length < 2) {
           return
         }
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
 
         // Collapse expanded pane before switching
         if (expandedPaneIdRef.current !== null) {
@@ -136,20 +246,20 @@ export function useTerminalKeyboardShortcuts({
           return
         }
 
-        const dir = e.code === 'BracketRight' ? 1 : -1
+        const dir = action.direction === 'next' ? 1 : -1
         const nextPane = panes[(currentIdx + dir + panes.length) % panes.length]
         manager.setActivePane(nextPane.id, { focus: true })
         return
       }
 
       // Cmd+Shift+Enter expands/collapses the active pane to full terminal area.
-      if (e.shiftKey && e.key === 'Enter' && (e.code === 'Enter' || e.code === 'NumpadEnter')) {
+      if (action.type === 'toggleExpandActivePane') {
         const panes = manager.getPanes()
         if (panes.length < 2) {
           return
         }
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? panes[0]
         if (!pane) {
           return
@@ -162,9 +272,9 @@ export function useTerminalKeyboardShortcuts({
       // pane remains). Always intercepted here so the tab-level handler in
       // Terminal.tsx never closes the entire tab directly — that would kill
       // every pane instead of just the focused one.
-      if (!e.shiftKey && e.key.toLowerCase() === 'w') {
+      if (action.type === 'closeActivePane') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
@@ -176,9 +286,9 @@ export function useTerminalKeyboardShortcuts({
       // Cmd+D / Cmd+Shift+D split the active pane in the focused tab only.
       // Exit expanded mode first so the new split gets proper dimensions
       // (matches Ghostty behavior).
-      if (e.key.toLowerCase() === 'd') {
+      if (action.type === 'splitActivePane') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         if (expandedPaneIdRef.current !== null) {
           setExpandedPane(null)
           restoreExpandedLayout()
@@ -189,103 +299,44 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        manager.splitPane(pane.id, e.shiftKey ? 'horizontal' : 'vertical')
+        // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
+        // if we have a confirmed live OSC 7 for the source pane, split
+        // synchronously to preserve chaining on rapid Cmd+D. Otherwise fall
+        // back to an async resolve that queries pty.getCwd.
+        const cached = paneCwdRef.current.get(pane.id)
+        if (cached?.confirmed && cached.cwd) {
+          manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
+          return
+        }
+        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+        const paneIdAtDispatch = pane.id
+        const directionAtDispatch = action.direction
+        void (async () => {
+          const cwd = await resolveSplitCwd({
+            paneCwdMap: paneCwdRef.current,
+            sourcePaneId: paneIdAtDispatch,
+            sourcePtyId: ptyId,
+            fallbackCwd
+          })
+          managerRef.current?.splitPane(paneIdAtDispatch, directionAtDispatch, { cwd })
+        })()
       }
     }
 
-    // Shift+Enter → send CSI 13;2 u (Kitty keyboard protocol) to PTY so
-    // CLI apps like Claude Code can distinguish it from plain Enter and
-    // insert a newline.  xterm.js sends bare \r for both by default, and
-    // its attachCustomKeyEventHandler doesn't call preventDefault, so the
-    // browser still fires keypress and xterm processes it.  Intercepting
-    // here in the capture phase with full suppression avoids the double-send.
-    const onShiftEnter = (e: KeyboardEvent): void => {
-      if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) {
-        return
-      }
-      if (e.key !== 'Enter') {
-        return
-      }
-      if (isEditableTarget(e.target)) {
-        return
-      }
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
-      if (!pane) {
-        return
-      }
-      paneTransportsRef.current.get(pane.id)?.sendInput('\x1b[13;2u')
-    }
-
-    // Ctrl+Backspace → send \x17 (backward-kill-word) to PTY.
-    // Skip when focus is in an input/textarea so native word-delete still works.
-    const onCtrlBackspace = (e: KeyboardEvent): void => {
-      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
-        return
-      }
-      if (e.key !== 'Backspace') {
-        return
-      }
-      if (isEditableTarget(e.target)) {
-        return
-      }
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
-      if (!pane) {
-        return
-      }
-      paneTransportsRef.current.get(pane.id)?.sendInput('\x17')
-    }
-
-    // Alt+Backspace → send ESC + DEL (\x1b\x7f, backward-kill-word) to PTY.
-    // Skip when focus is in an input/textarea so native word-delete still works.
-    const onAltBackspace = (e: KeyboardEvent): void => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) {
-        return
-      }
-      if (e.key !== 'Backspace') {
-        return
-      }
-      if (isEditableTarget(e.target)) {
-        return
-      }
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
-      if (!pane) {
-        return
-      }
-      paneTransportsRef.current.get(pane.id)?.sendInput('\x1b\x7f')
-    }
-
+    window.addEventListener('keydown', onModifierDown, { capture: true })
+    window.addEventListener('keyup', onModifierUp, { capture: true })
     window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keydown', onShiftEnter, { capture: true })
-    window.addEventListener('keydown', onCtrlBackspace, { capture: true })
-    window.addEventListener('keydown', onAltBackspace, { capture: true })
     return () => {
+      window.removeEventListener('keydown', onModifierDown, { capture: true })
+      window.removeEventListener('keyup', onModifierUp, { capture: true })
       window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keydown', onShiftEnter, { capture: true })
-      window.removeEventListener('keydown', onCtrlBackspace, { capture: true })
-      window.removeEventListener('keydown', onAltBackspace, { capture: true })
     }
   }, [
     isActive,
     managerRef,
     paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd,
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,
@@ -293,6 +344,9 @@ export function useTerminalKeyboardShortcuts({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
-    onRequestClosePane
+    onRequestClosePane,
+    searchOpenRef,
+    searchStateRef,
+    macOptionAsAltRef
   ])
 }

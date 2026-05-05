@@ -1,3 +1,9 @@
+const SSH_PREFIX = 'SSH connection is not active'
+
+function isSshError(error: string): boolean {
+  return error.startsWith(SSH_PREFIX)
+}
+
 export function TerminalErrorToast({
   error,
   onDismiss
@@ -5,6 +11,8 @@ export function TerminalErrorToast({
   error: string
   onDismiss: () => void
 }): React.JSX.Element {
+  const ssh = isSshError(error)
+
   return (
     <div
       style={{
@@ -15,9 +23,9 @@ export function TerminalErrorToast({
         zIndex: 50,
         padding: '10px 14px',
         borderRadius: 6,
-        background: 'rgba(220, 38, 38, 0.15)',
-        border: '1px solid rgba(220, 38, 38, 0.4)',
-        color: '#fca5a5',
+        background: ssh ? 'rgba(234, 179, 8, 0.12)' : 'rgba(220, 38, 38, 0.15)',
+        border: ssh ? '1px solid rgba(234, 179, 8, 0.35)' : '1px solid rgba(220, 38, 38, 0.4)',
+        color: ssh ? '#fde68a' : '#fca5a5',
         fontSize: 12,
         fontFamily: 'monospace',
         whiteSpace: 'pre-wrap',
@@ -27,22 +35,26 @@ export function TerminalErrorToast({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
         <span>
           {error}
-          {'\n'}
-          If this persists, please{' '}
-          <a
-            href="https://github.com/stablyai/orca/issues"
-            style={{ color: '#fca5a5', textDecoration: 'underline' }}
-          >
-            file an issue
-          </a>
-          .
+          {!ssh && (
+            <>
+              {'\n'}
+              If this persists, please{' '}
+              <a
+                href="https://github.com/stablyai/orca/issues"
+                style={{ color: '#fca5a5', textDecoration: 'underline' }}
+              >
+                file an issue
+              </a>
+              .
+            </>
+          )}
         </span>
         <button
           onClick={onDismiss}
           style={{
             background: 'none',
             border: 'none',
-            color: '#fca5a5',
+            color: ssh ? '#fde68a' : '#fca5a5',
             cursor: 'pointer',
             fontSize: 14,
             padding: '0 0 0 8px',

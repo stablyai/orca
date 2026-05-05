@@ -13,6 +13,12 @@ export function sanitizeWorktreeName(input: string): string {
     .replace(/\s+/g, '-')
     .replace(/[^A-Za-z0-9._-]+/g, '-')
     .replace(/-+/g, '-')
+    // Why: git check-ref-format rejects any ref containing `..`, so a prompt
+    // like "../../foo" that survives slugification as `..-..-foo` would
+    // produce a branch name git refuses to create. Collapse runs of dots
+    // to a single dot before the leading/trailing trim so internal `..`
+    // sequences can't reach git.
+    .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
 
   if (!sanitized || sanitized === '.' || sanitized === '..') {
@@ -154,15 +160,29 @@ export function mergeWorktree(
     head: git.head,
     branch: git.branch,
     isBare: git.isBare,
+    ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
     displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
+    linkedLinearIssue: meta?.linkedLinearIssue ?? null,
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
+    isPinned: meta?.isPinned ?? false,
     sortOrder: meta?.sortOrder ?? 0,
-    lastActivityAt: meta?.lastActivityAt ?? 0
+    lastActivityAt: meta?.lastActivityAt ?? 0,
+    ...(git.isSparse === true
+      ? {
+          sparseDirectories: meta?.sparseDirectories,
+          sparseBaseRef: meta?.sparseBaseRef,
+          sparsePresetId: meta?.sparsePresetId
+        }
+      : {}),
+    // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
+    // shared/types) and forwarded verbatim so the renderer store mirrors
+    // on-disk state. `undefined` here means the worktree has no comments yet.
+    diffComments: meta?.diffComments
   }
 }
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
+import { captureScrollState, restoreScrollState, safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
 type FontZoomDeps = {
   isActive: boolean
@@ -50,7 +51,9 @@ export function useTerminalFontZoom({
 
       pane.terminal.options.fontSize = nextSize
       try {
-        pane.fitAddon.fit()
+        const state = captureScrollState(pane.terminal)
+        safeFit(pane)
+        restoreScrollState(pane.terminal, state)
       } catch {
         /* ignore */
       }

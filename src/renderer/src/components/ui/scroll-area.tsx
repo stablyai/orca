@@ -7,11 +7,14 @@ function ScrollArea({
   className,
   viewportClassName,
   viewportRef,
+  viewportTabIndex,
   children,
   ...props
 }: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
   viewportClassName?: string
   viewportRef?: React.Ref<HTMLDivElement>
+  /** Set e.g. -1 so the viewport can receive programmatic focus (explorer keyboard shortcuts after inline rename). */
+  viewportTabIndex?: number
 }) {
   return (
     <ScrollAreaPrimitive.Root
@@ -21,6 +24,7 @@ function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         ref={viewportRef}
+        tabIndex={viewportTabIndex}
         data-slot="scroll-area-viewport"
         className={cn(
           'size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1',

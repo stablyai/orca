@@ -1,11 +1,15 @@
 import { useEffect, useEffectEvent } from 'react'
 import type { UnifiedTerminalItem } from './useTerminalTabs'
+import { getNextTabAcrossAllTypes, getNextTabWithinActiveType } from './tab-type-cycle'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 
 type UseTerminalShortcutsParams = {
   activeWorktreeId: string | null
   activeTabId: string | null
   activeFileId: string | null
+  // Why: unifiedTabs only contains 'terminal' | 'editor' entries (no browsers),
+  // so this hook's cycling is constrained to those two types. Browser tab
+  // cycling is handled elsewhere where browser tabs are actually in scope.
   activeTabType: 'terminal' | 'editor'
   unifiedTabs: UnifiedTerminalItem[]
   hasDirtyFiles: boolean
@@ -53,25 +57,44 @@ export function useTerminalShortcuts({
       return
     }
 
-    // Why: use event.code instead of event.key because on macOS, Shift+[
-    // reports '{' as the key value (the shifted character), not '['.
+    // Why: accept either Shift (type-scoped chord) or Alt (all-types chord).
+    // Use event.code rather than event.key because on macOS, Shift+[ reports
+    // '{' and Option+[ composes to a dead/accent character, so event.key
+    // wouldn't reliably match across layouts.
     if (
-      !event.shiftKey ||
+      (!event.shiftKey && !event.altKey) ||
       (event.code !== 'BracketRight' && event.code !== 'BracketLeft')
     ) {
       return
     }
 
-    if (unifiedTabs.length <= 1) {
+    const direction = event.code === 'BracketRight' ? 1 : -1
+    // Why: UnifiedTerminalItem has { type: 'terminal' | 'editor', id }, which is
+    // structurally assignable to TypeCyclableTab ({ type, id, tabId? }) with a
+    // narrower `type`. No cast needed — passing null for activeBrowserTabId
+    // since browser tabs can never appear in unifiedTabs.
+    const nextTab = event.altKey
+      ? getNextTabAcrossAllTypes({
+          tabs: unifiedTabs,
+          activeTabType,
+          activeTabId,
+          activeFileId,
+          activeBrowserTabId: null,
+          direction
+        })
+      : getNextTabWithinActiveType({
+          tabs: unifiedTabs,
+          activeTabType,
+          activeTabId,
+          activeFileId,
+          activeBrowserTabId: null,
+          direction
+        })
+    if (!nextTab) {
       return
     }
 
     event.preventDefault()
-    const currentId = activeTabType === 'editor' ? activeFileId : activeTabId
-    const currentIndex = unifiedTabs.findIndex((tab) => tab.id === currentId)
-    const direction = event.code === 'BracketRight' ? 1 : -1
-    const nextTab =
-      unifiedTabs[(currentIndex + direction + unifiedTabs.length) % unifiedTabs.length]
 
     if (nextTab.type === 'terminal') {
       onActivateTerminalTab(nextTab.id)

@@ -4,8 +4,8 @@ import {
   Eraser,
   Maximize2,
   Minimize2,
-  PanelBottomOpen,
-  PanelRightOpen,
+  PanelBottomClose,
+  PanelRightClose,
   Pencil,
   X
 } from 'lucide-react'
@@ -17,6 +17,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -77,7 +78,7 @@ export default function TerminalContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-48"
+        className="w-52"
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(e) => {
@@ -89,6 +90,16 @@ export default function TerminalContextMenu({
           // xterm reclaims focus after the contextmenu event; don't let
           // Radix treat that as a dismiss signal.
           e.preventDefault()
+        }}
+        onPointerDownOutside={(e) => {
+          if (
+            shouldIgnoreTerminalMenuPointerDownOutside({
+              openedAtMs: menuOpenedAtRef.current,
+              nowMs: Date.now()
+            })
+          ) {
+            e.preventDefault()
+          }
         }}
       >
         <DropdownMenuItem onSelect={onCopy}>
@@ -103,14 +114,18 @@ export default function TerminalContextMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
-          <PanelRightOpen />
-          Split Right
-          <DropdownMenuShortcut>{mod}D</DropdownMenuShortcut>
+          <PanelRightClose />
+          Split Terminal Right
+          {/* Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
+              so split-right requires Shift on non-Mac platforms. */}
+          <DropdownMenuShortcut>{isMac ? `${mod}D` : `${mod}${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
-          <PanelBottomOpen />
-          Split Down
-          <DropdownMenuShortcut>{`${mod}${shift}D`}</DropdownMenuShortcut>
+          <PanelBottomClose />
+          Split Terminal Down
+          {/* Why: on Windows/Linux, Alt+Shift+D is used for split-down because
+              Ctrl+Shift+D is taken by split-right (#586). */}
+          <DropdownMenuShortcut>{isMac ? `${mod}${shift}D` : `Alt+${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>

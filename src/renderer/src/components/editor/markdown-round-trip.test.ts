@@ -35,4 +35,31 @@ describe('rich markdown round trip', () => {
   it('preserves markdown tables', () => {
     expect(roundTripMarkdown('| a | b |\n| - | - |\n| 1 | 2 |\n')).toContain('| a')
   })
+
+  it('preserves doc links', () => {
+    expect(roundTripMarkdown('See [[setup-guide]] for details\n')).toBe(
+      'See [[setup-guide]] for details'
+    )
+  })
+
+  it('preserves adjacent doc links', () => {
+    expect(roundTripMarkdown('[[one]][[two]]\n')).toBe('[[one]][[two]]')
+  })
+
+  it('preserves doc links with paths', () => {
+    expect(roundTripMarkdown('Link to [[docs/setup-guide.md]]\n')).toBe(
+      'Link to [[docs/setup-guide.md]]'
+    )
+  })
+
+  it('does not encode invalid doc links', () => {
+    const result = roundTripMarkdown('Empty [[]] and piped [[a|b]]\n')
+    expect(result).toContain('[[]]')
+    expect(result).toContain('[[a|b]]')
+  })
+
+  it('preserves doc links inside fenced code blocks as plain text', () => {
+    const input = '```\n[[not-a-link]]\n```\n'
+    expect(roundTripMarkdown(input)).toBe('```\n[[not-a-link]]\n```')
+  })
 })

@@ -10,6 +10,11 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Nest Workspaces',
     description: 'Create worktrees inside a repo-named subfolder.',
     keywords: ['nested', 'subfolder', 'directory']
+  },
+  {
+    title: 'Skip Delete Worktree Confirmation',
+    description: 'Delete worktrees from the context menu without a confirmation dialog.',
+    keywords: ['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']
   }
 ]
 
@@ -28,6 +33,11 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Default Diff View',
     description: 'Preferred presentation format for showing git diffs by default.',
     keywords: ['diff', 'view', 'inline', 'side-by-side', 'split']
+  },
+  {
+    title: 'Minimap',
+    description: 'Show the minimap overview when editing a file.',
+    keywords: ['minimap', 'overview', 'code', 'scroll']
   }
 ]
 
@@ -60,33 +70,37 @@ export const GENERAL_CACHE_TIMER_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const GENERAL_BROWSER_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Open Links In Orca',
-    description: 'Open terminal http(s) links in Orca browser tabs instead of the system browser.',
-    keywords: ['browser', 'preview', 'links', 'localhost', 'webview']
+    title: 'Default Agent',
+    description: 'Pre-select an AI coding agent in the new-workspace composer.',
+    keywords: [
+      'agent',
+      'default',
+      'claude',
+      'codex',
+      'opencode',
+      'pi',
+      'gemini',
+      'aider',
+      'copilot'
+    ]
   }
 ]
 
-export const GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+export const GENERAL_SUPPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Codex Accounts',
-    description: 'Manage which Codex account Orca uses for live rate limit fetching.',
-    keywords: ['codex', 'account', 'rate limit', 'status bar', 'quota']
-  },
-  {
-    title: 'Active Codex Account',
-    description: 'Choose which saved Codex account powers live quota reads.',
-    keywords: ['codex', 'account', 'switch', 'active', 'status bar']
+    title: 'Star Orca on GitHub',
+    description: 'Support the project with a GitHub star via the gh CLI.',
+    keywords: ['star', 'github', 'support', 'feedback', 'like']
   }
 ]
 
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
-  ...GENERAL_BROWSER_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
-  ...GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
-  ...GENERAL_UPDATE_SEARCH_ENTRIES
+  ...GENERAL_UPDATE_SEARCH_ENTRIES,
+  ...GENERAL_SUPPORT_SEARCH_ENTRIES
 ]

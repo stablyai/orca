@@ -8,8 +8,7 @@ export function setupContextualCopy({
   copyShortcutLabel,
   setCopyToast,
   propsRef,
-  copyToastTimeoutRef,
-  copyHintIntervalRef
+  copyToastTimeoutRef
 }: {
   editorInstance: editor.IStandaloneCodeEditor
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,11 +19,11 @@ export function setupContextualCopy({
   propsRef: React.MutableRefObject<{
     relativePath: string
     language: string
-    onSave: (content: string) => void
+    onSave?: (content: string) => void
   }>
   copyToastTimeoutRef: React.MutableRefObject<number | null>
-  copyHintIntervalRef: React.MutableRefObject<number | null>
 }): void {
+  let copyHintInterval: number | null = null
   let copyHintWidgetPosition: editor.IContentWidgetPosition | null = null
   let lastCopiedSelectionKey: string | null = null
   const copyHintNode = document.createElement('div')
@@ -151,18 +150,18 @@ export function setupContextualCopy({
 
   const startCopyHintPolling = (): void => {
     updateCopyHint()
-    if (copyHintIntervalRef.current !== null) {
+    if (copyHintInterval !== null) {
       return
     }
-    copyHintIntervalRef.current = window.setInterval(() => {
+    copyHintInterval = window.setInterval(() => {
       updateCopyHint()
     }, 150)
   }
 
   const stopCopyHintPolling = (): void => {
-    if (copyHintIntervalRef.current !== null) {
-      window.clearInterval(copyHintIntervalRef.current)
-      copyHintIntervalRef.current = null
+    if (copyHintInterval !== null) {
+      window.clearInterval(copyHintInterval)
+      copyHintInterval = null
     }
   }
 

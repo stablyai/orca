@@ -13,8 +13,28 @@ export type ResolvedTerminalFileLink = {
   column: number | null
 }
 
-const FILE_LINK_CANDIDATE_REGEX =
-  /(?:\/|\.{1,2}\/|[A-Za-z0-9._-]+\/)[A-Za-z0-9._~\-/]*(?::\d+)?(?::\d+)?/g
+// Ported from VSCode's terminal link detectors (MIT).
+//   Local paths:  src/vs/workbench/contrib/terminalContrib/links/browser/terminalLocalLinkDetector.ts
+//   Bare words:   src/vs/workbench/contrib/terminalContrib/links/browser/terminalWordLinkDetector.ts
+//
+// Two passes, matching VSCode's split between `TerminalLocalLinkDetector`
+// (paths with a separator, including line:col suffix) and
+// `TerminalWordLinkDetector` (bare whitespace-delimited tokens that only
+// become links if they resolve against the cwd). The provider runs fs.stat
+// on every candidate, so the word-pass stays conservative to keep fan-out
+// small.
+
+// Matches a path with at least one `/` separator, optionally followed by
+// `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
+const LOCAL_PATH_REGEX = /(?:\/|\.{1,2}\/|[A-Za-z0-9._-]+\/)[A-Za-z0-9._~\-/]*(?::\d+)?(?::\d+)?/g
+
+// Word separators used by the bare-filename pass. Mirrors the default set in
+// VSCode's `terminal.integrated.wordSeparators` with the exception that we
+// include `:` indirectly via the line:col suffix parser rather than as a
+// raw separator. A word is any maximal run of non-separator characters.
+// \s matches NBSP in modern JS; xterm powerline glyphs are in the PUA and
+// never appear in filenames, so we don't list them explicitly.
+const WORD_TOKEN_REGEX = /[^\s()[\]{}'",;<>|`]+/g
 
 const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
 const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
@@ -158,46 +178,141 @@ function normalizeJoinedPath(basePath: NormalizedAbsolutePath, relativePath: str
   return `/${joinedSegments.join('/')}`.replace(/\/+$/, '') || '/'
 }
 
-export function extractTerminalFileLinks(lineText: string): ParsedTerminalFileLink[] {
-  const results: ParsedTerminalFileLink[] = []
-  const matches = lineText.matchAll(FILE_LINK_CANDIDATE_REGEX)
-  for (const match of matches) {
-    const rawText = match[0]
-    const rawStart = match.index ?? 0
+// Project files that look like filenames despite having no extension. The
+// word detector otherwise requires a `.` in the token to keep noise down —
+// without this list, `ls` output containing `Makefile` or `LICENSE` would
+// not be clickable.
+const EXTENSIONLESS_FILENAMES = new Set([
+  'Makefile',
+  'Dockerfile',
+  'Rakefile',
+  'Gemfile',
+  'Procfile',
+  'LICENSE',
+  'README',
+  'CHANGELOG',
+  'AUTHORS',
+  'NOTICE',
+  'CONTRIBUTING'
+])
 
-    const trimmed = trimBoundaryPunctuation(rawText, rawStart)
-    if (!trimmed) {
-      continue
-    }
+const BARE_FILENAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/
 
-    const candidateText = trimmed.text
-    if (candidateText.includes('://')) {
-      continue
-    }
-    const prefix = lineText.slice(0, trimmed.startIndex)
-    if (/[A-Za-z][A-Za-z0-9+.-]*:\/\/$/.test(prefix)) {
-      continue
-    }
-    if (!candidateText.includes('/')) {
-      continue
-    }
-
-    const parsed = parsePathWithOptionalLineColumn(candidateText)
-    if (!parsed) {
-      continue
-    }
-
-    results.push({
-      pathText: parsed.pathText,
-      line: parsed.line,
-      column: parsed.column,
-      startIndex: trimmed.startIndex,
-      endIndex: trimmed.endIndex,
-      displayText: candidateText
-    })
+// Bare words are validated against the filesystem by the provider, so this
+// filter's job is to reject tokens that are obviously not filenames before
+// we pay for a stat. Plain words like `src` or `my-cli` are usually
+// directories or binaries and produce more noise than value — users who
+// really want to open them can prefix with `./`.
+function looksLikeFilename(token: string): boolean {
+  if (token.length < 2 || token.length > 100) {
+    return false
   }
+  if (!BARE_FILENAME_PATTERN.test(token)) {
+    return false
+  }
+  if (/^\d+$/.test(token)) {
+    return false
+  }
+  if (token.includes('.')) {
+    return !/^\.+$/.test(token)
+  }
+  return EXTENSIONLESS_FILENAMES.has(token)
+}
 
-  return results
+type DetectedRange = { startIndex: number; endIndex: number; text: string }
+
+// Shared tokenization: run a regex over the line, trim boundary punctuation,
+// hand each surviving range to the caller. Collapses the three near-copies
+// of this loop the module had grown.
+function* detectRanges(lineText: string, regex: RegExp): Generator<DetectedRange> {
+  for (const match of lineText.matchAll(regex)) {
+    const rawStart = match.index ?? 0
+    const trimmed = trimBoundaryPunctuation(match[0], rawStart)
+    if (trimmed) {
+      yield trimmed
+    }
+  }
+}
+
+function isInsideUriScheme(lineText: string, range: DetectedRange): boolean {
+  if (range.text.includes('://')) {
+    return true
+  }
+  const prefix = lineText.slice(0, range.startIndex)
+  return /[A-Za-z][A-Za-z0-9+.-]*:\/\/$/.test(prefix)
+}
+
+function toParsedLink(range: DetectedRange): ParsedTerminalFileLink | null {
+  const parsed = parsePathWithOptionalLineColumn(range.text)
+  if (!parsed) {
+    return null
+  }
+  return {
+    pathText: parsed.pathText,
+    line: parsed.line,
+    column: parsed.column,
+    startIndex: range.startIndex,
+    endIndex: range.endIndex,
+    displayText: range.text
+  }
+}
+
+// Ported from VSCode's TerminalLocalLinkDetector. Extracts anything that
+// contains a path separator, optionally with a `:line:col` suffix — covers
+// `./src/foo.ts`, `/abs/bar`, `src/foo.ts:12:3`, etc.
+function detectLocalPathLinks(lineText: string): ParsedTerminalFileLink[] {
+  const links: ParsedTerminalFileLink[] = []
+  for (const range of detectRanges(lineText, LOCAL_PATH_REGEX)) {
+    if (isInsideUriScheme(lineText, range)) {
+      continue
+    }
+    if (!range.text.includes('/')) {
+      continue
+    }
+    const link = toParsedLink(range)
+    if (link) {
+      links.push(link)
+    }
+  }
+  return links
+}
+
+// Ported from VSCode's TerminalWordLinkDetector. Tokenizes the line on
+// separators and emits filename-ish words so `ls` output becomes clickable.
+// Skips ranges already claimed by the local-path pass to avoid double links
+// when a bare filename happens to be a substring of a longer path.
+function detectBareFilenameLinks(
+  lineText: string,
+  claimedRanges: readonly [number, number][]
+): ParsedTerminalFileLink[] {
+  const links: ParsedTerminalFileLink[] = []
+  for (const range of detectRanges(lineText, WORD_TOKEN_REGEX)) {
+    const overlaps = claimedRanges.some(
+      ([start, end]) => range.startIndex < end && range.endIndex > start
+    )
+    if (overlaps) {
+      continue
+    }
+    const link = toParsedLink(range)
+    if (!link) {
+      continue
+    }
+    if (!looksLikeFilename(link.pathText)) {
+      continue
+    }
+    links.push(link)
+  }
+  return links
+}
+
+export function extractTerminalFileLinks(lineText: string): ParsedTerminalFileLink[] {
+  const pathLinks = detectLocalPathLinks(lineText)
+  const claimed = pathLinks.map(({ startIndex, endIndex }): [number, number] => [
+    startIndex,
+    endIndex
+  ])
+  const wordLinks = detectBareFilenameLinks(lineText, claimed)
+  return [...pathLinks, ...wordLinks]
 }
 
 export function resolveTerminalFileLink(

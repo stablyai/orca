@@ -12,13 +12,20 @@ import {
   FilePlus,
   FileQuestion,
   ArrowRightLeft,
+  Check,
+  Copy,
   FolderOpen,
   GitMerge,
   GitPullRequestArrow,
+  MessageSquare,
+  Trash,
   TriangleAlert,
-  CircleCheck
+  CircleCheck,
+  Search,
+  X
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -27,6 +34,14 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { Button } from '@/components/ui/button'
 import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
+import {
+  getDiscardAllPaths,
+  getStageAllPaths,
+  getUnstageAllPaths,
+  runDiscardAllForArea,
+  type DiscardAllArea
+} from './discard-all-sequence'
+import { toast } from 'sonner'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -41,12 +56,15 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
+import { getConnectionId } from '@/lib/connection-context'
 import { PullRequestIcon } from './checks-helpers'
 import type {
+  DiffComment,
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitConflictKind,
@@ -83,6 +101,23 @@ const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
 
 const BRANCH_REFRESH_INTERVAL_MS = 5000
 
+type CommitDraftsByWorktree = Record<string, string>
+
+export function readCommitDraftForWorktree(
+  drafts: CommitDraftsByWorktree,
+  worktreeId: string | null | undefined
+): string {
+  return drafts[worktreeId ?? ''] ?? ''
+}
+
+export function writeCommitDraftForWorktree(
+  drafts: CommitDraftsByWorktree,
+  worktreeId: string,
+  value: string
+): CommitDraftsByWorktree {
+  return { ...drafts, [worktreeId]: value }
+}
+
 const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   both_modified: 'Both modified',
   both_added: 'Both added',
@@ -93,12 +128,18 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   both_deleted: 'Both deleted'
 }
 
-export default function SourceControl(): React.JSX.Element {
+function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement>(null)
+  // Why: React setState is async, so a rapid double-click on the Commit
+  // button can both pass the isCommitting state guard before the disabled
+  // state re-renders. A ref flipped synchronously at the start of
+  // handleCommit gives us a true single-flight lock.
+  const commitInFlightRef = useRef<Record<string, boolean>>({})
+  const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
@@ -108,37 +149,86 @@ export default function SourceControl(): React.JSX.Element {
   const updateRepo = useAppStore((s) => s.updateRepo)
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
+  const setGitStatus = useAppStore((s) => s.setGitStatus)
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
   const trackConflictPath = useAppStore((s) => s.trackConflictPath)
   const openDiff = useAppStore((s) => s.openDiff)
+  const openFile = useAppStore((s) => s.openFile)
+  const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
+  const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  // Why: pass activeWorktreeId directly (even when null/undefined) so the
+  // slice's getDiffComments returns its stable EMPTY_COMMENTS sentinel. An
+  // inline `[]` fallback would allocate a new array each store update, break
+  // Zustand's Object.is equality, and cause this component plus the
+  // diffCommentCountByPath memo to churn on every unrelated store change.
+  const diffCommentsForActive = useAppStore((s) => s.getDiffComments(activeWorktreeId))
+  const diffCommentCount = diffCommentsForActive.length
+  // Why: per-file counts are fed into each UncommittedEntryRow so a comment
+  // badge can appear next to the status letter. Compute once per render so
+  // rows don't each re-filter the full list.
+  const diffCommentCountByPath = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of diffCommentsForActive) {
+      map.set(c.filePath, (map.get(c.filePath) ?? 0) + 1)
+    }
+    return map
+  }, [diffCommentsForActive])
+  const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
+  const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
+
+  const handleCopyDiffComments = useCallback(async (): Promise<void> => {
+    if (diffCommentsForActive.length === 0) {
+      return
+    }
+    const text = formatDiffComments(diffCommentsForActive)
+    try {
+      await window.api.ui.writeClipboardText(text)
+      setDiffCommentsCopied(true)
+    } catch {
+      // Why: swallow — clipboard write can fail when the window isn't focused.
+      // No dedicated error surface is warranted for a best-effort copy action.
+    }
+  }, [diffCommentsForActive])
+
+  // Why: auto-dismiss the "copied" indicator so the button returns to its
+  // default icon after a brief confirmation window.
+  useEffect(() => {
+    if (!diffCommentsCopied) {
+      return
+    }
+    const handle = window.setTimeout(() => setDiffCommentsCopied(false), 1500)
+    return () => window.clearTimeout(handle)
+  }, [diffCommentsCopied])
 
   const [scope, setScope] = useState<SourceControlScope>('all')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
-  const [defaultBaseRef, setDefaultBaseRef] = useState('origin/main')
-
-  const activeWorktree = useMemo(() => {
-    if (!activeWorktreeId) {
-      return null
-    }
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      const worktree = worktrees.find((entry) => entry.id === activeWorktreeId)
-      if (worktree) {
-        return worktree
-      }
-    }
-    return null
-  }, [activeWorktreeId, worktreesByRepo])
-
-  const activeRepo = useMemo(
-    () => repos.find((repo) => repo.id === activeWorktree?.repoId) ?? null,
-    [activeWorktree?.repoId, repos]
+  // Why: start null rather than 'origin/main' so branch compare doesn't fire
+  // with a fabricated ref before the IPC resolves. effectiveBaseRef stays
+  // falsy until we have a real answer from the main process.
+  const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
+  const [filterQuery, setFilterQuery] = useState('')
+  // Why: commit drafts/errors are worktree-scoped during the mounted session,
+  // so switching worktrees restores each draft instead of wiping it.
+  const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
+  const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
+  // Why: keep commit-in-flight state per-worktree. A single boolean would be
+  // cleared when the user switched worktrees, letting them double-click Commit
+  // on worktree A after briefly navigating to B and back while A's original
+  // commit is still running.
+  const [commitInFlightByWorktree, setCommitInFlightByWorktree] = useState<Record<string, boolean>>(
+    {}
   )
+  const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const filterInputRef = useRef<HTMLInputElement>(null)
+  const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
+  const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
+
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
   const entries = useMemo(
@@ -155,24 +245,43 @@ export default function SourceControl(): React.JSX.Element {
   const conflictOperation = activeWorktreeId
     ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
     : 'unknown'
-  const isBranchVisible = rightSidebarTab === 'source-control'
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  // Why: gate polling on both the active tab AND the sidebar being open.
+  // The sidebar now stays mounted when closed (for performance), so without
+  // this guard the branchCompare interval and PR fetch would keep running
+  // with no visible consumer, wasting git process spawns and API calls.
+  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
 
   useEffect(() => {
     if (!activeRepo || isFolder) {
       return
     }
 
+    // Why: reset to null so that effectiveBaseRef becomes falsy until the IPC
+    // resolves.  This prevents the branch compare from firing with a stale
+    // defaultBaseRef left over from a *different* repo (e.g. 'origin/master'
+    // when the new repo uses 'origin/main'), which would cause a transient
+    // "invalid-base" error every time the user switches between repos.
+    setDefaultBaseRef(null)
+
     let stale = false
     void window.api.repos
       .getBaseRefDefault({ repoId: activeRepo.id })
       .then((result) => {
         if (!stale) {
-          setDefaultBaseRef(result)
+          // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
+          // this component only needs `defaultBaseRef`. `remoteCount` is used
+          // by BaseRefPicker for the multi-remote hint.
+          setDefaultBaseRef(result.defaultBaseRef)
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[SourceControl] getBaseRefDefault failed', err)
+        // Why: leave defaultBaseRef null on failure instead of fabricating
+        // 'origin/main'. effectiveBaseRef stays falsy, so branch compare and
+        // PR fetch skip running against a ref that may not exist.
         if (!stale) {
-          setDefaultBaseRef('origin/main')
+          setDefaultBaseRef(null)
         }
       })
 
@@ -183,8 +292,7 @@ export default function SourceControl(): React.JSX.Element {
 
   const effectiveBaseRef = activeRepo?.worktreeBaseRef ?? defaultBaseRef
   const hasUncommittedEntries = entries.length > 0
-  const branchCompareAvailable = branchSummary?.status === 'ready'
-  const hasBranchEntries = branchCompareAvailable && branchEntries.length > 0
+
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const prCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
   const prInfo: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
@@ -216,19 +324,182 @@ export default function SourceControl(): React.JSX.Element {
     return groups
   }, [entries])
 
+  const normalizedFilter = filterQuery.toLowerCase()
+
+  const filteredGrouped = useMemo(() => {
+    if (!normalizedFilter) {
+      return grouped
+    }
+    return {
+      staged: grouped.staged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
+      unstaged: grouped.unstaged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
+      untracked: grouped.untracked.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
+    }
+  }, [grouped, normalizedFilter])
+
+  const filteredBranchEntries = useMemo(() => {
+    if (!normalizedFilter) {
+      return branchEntries
+    }
+    return branchEntries.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
+  }, [branchEntries, normalizedFilter])
+
   const flatEntries = useMemo(() => {
     const arr: FlatEntry[] = []
     for (const area of SECTION_ORDER) {
       if (!collapsedSections.has(area)) {
-        for (const entry of grouped[area]) {
+        for (const entry of filteredGrouped[area]) {
           arr.push({ key: `${area}::${entry.path}`, entry, area })
         }
       }
     }
     return arr
-  }, [grouped, collapsedSections])
+  }, [filteredGrouped, collapsedSections])
 
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
+
+  const unresolvedConflicts = useMemo(
+    () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
+    [entries]
+  )
+  const unresolvedConflictReviewEntries = useMemo(
+    () =>
+      unresolvedConflicts.map((entry) => ({
+        path: entry.path,
+        conflictKind: entry.conflictKind!
+      })),
+    [unresolvedConflicts]
+  )
+
+  // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
+  // removed from the store (long sessions with many create/destroy cycles).
+  // Prune them so a deleted-then-reused worktree ID doesn't inherit stale
+  // state — especially commitInFlightRef, which would permanently disable
+  // Commit for that ID if left stuck at `true`.
+  useEffect(() => {
+    const pruneRecord = <T,>(prev: Record<string, T>): Record<string, T> => {
+      let changed = false
+      const next: Record<string, T> = {}
+      for (const key of Object.keys(prev)) {
+        if (worktreeMap.has(key)) {
+          next[key] = prev[key]
+        } else {
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    }
+    setCommitDrafts((prev) => pruneRecord(prev))
+    setCommitErrors((prev) => pruneRecord(prev))
+    setCommitInFlightByWorktree((prev) => pruneRecord(prev))
+    // Refs don't need setState — mutate in place to drop stale keys.
+    for (const key of Object.keys(commitInFlightRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete commitInFlightRef.current[key]
+      }
+    }
+  }, [worktreeMap])
+
+  // Why: the sidebar no longer uses key={activeWorktreeId} to force a full
+  // remount on worktree switch (that caused an IPC storm on Windows).
+  // Instead, reset worktree-specific local state here so the previous
+  // worktree's UI state doesn't leak into the new one.
+  useEffect(() => {
+    setScope('all')
+    setCollapsedSections(new Set())
+    setBaseRefDialogOpen(false)
+    // Why: do NOT reset defaultBaseRef here. It is repo-scoped, not
+    // worktree-scoped, and is resolved by the effect above on activeRepo
+    // change. Resetting it to a hard-coded 'origin/main' on every worktree
+    // switch within the same repo clobbered the correct value (e.g.
+    // 'origin/master' for repos whose default branch isn't main), causing
+    // a persistent "Branch compare unavailable" until the user switched
+    // repos and back to re-trigger the resolver.
+    setFilterQuery('')
+    setIsExecutingBulk(false)
+    // Why: no reset for commit-in-flight state — it now lives in a per-worktree
+    // map, so it cannot leak across worktrees. Resetting here would actually
+    // clear in-flight state for the *incoming* worktree if the user is coming
+    // back to a worktree mid-commit, re-enabling the button while the commit
+    // still runs.
+  }, [activeWorktreeId])
+
+  const handleCommit = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+    const message = commitMessage.trim()
+    if (!message || grouped.staged.length === 0 || unresolvedConflicts.length > 0) {
+      return
+    }
+
+    if (commitInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    commitInFlightRef.current[activeWorktreeId] = true
+
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+    try {
+      const commitResult = await window.api.git.commit({
+        worktreePath,
+        message,
+        connectionId
+      })
+      if (!commitResult.success) {
+        setCommitErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: commitResult.error ?? 'Commit failed'
+        }))
+        return
+      }
+
+      // Why: the textarea stays enabled during the in-flight commit (only the
+      // button is disabled), so the user can keep typing after clicking Commit.
+      // Unconditionally clearing the draft here would silently discard those
+      // in-progress edits — the commit used the OLD `message` captured in this
+      // closure, so the dropped text would never have been committed either.
+      // Only clear when the current draft still matches what we committed.
+      setCommitDrafts((prev) => {
+        const current = prev[activeWorktreeId]
+        if (current !== undefined && current.trim() !== message) {
+          // User typed more after submit — preserve their in-progress edits.
+          return prev
+        }
+        return writeCommitDraftForWorktree(prev, activeWorktreeId, '')
+      })
+      setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+      // Why: the commit already succeeded. If the follow-up status refresh fails
+      // (e.g., transient IPC error), log it but do NOT overwrite the cleared
+      // commitError with a misleading "Commit failed" — the existing status poll
+      // in useGitStatusPolling will refresh the UI shortly anyway.
+      try {
+        const status = await window.api.git.status({
+          worktreePath,
+          connectionId
+        })
+        setGitStatus(activeWorktreeId, status)
+      } catch (refreshError) {
+        console.error('[SourceControl] post-commit status refresh failed', refreshError)
+      }
+    } catch (error) {
+      setCommitErrors((prev) => ({
+        ...prev,
+        [activeWorktreeId]: error instanceof Error ? error.message : 'Commit failed'
+      }))
+    } finally {
+      setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      commitInFlightRef.current[activeWorktreeId] = false
+    }
+  }, [
+    activeWorktreeId,
+    commitMessage,
+    grouped.staged.length,
+    unresolvedConflicts.length,
+    setGitStatus,
+    worktreePath
+  ])
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
@@ -242,15 +513,38 @@ export default function SourceControl(): React.JSX.Element {
         openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path))
         return
       }
-      openDiff(
-        activeWorktreeId,
-        joinPath(worktreePath, entry.path),
-        entry.path,
-        detectLanguage(entry.path),
-        entry.area === 'staged'
-      )
+      const language = detectLanguage(entry.path)
+      const filePath = joinPath(worktreePath, entry.path)
+      // Why: unstaged markdown diffs open as a normal edit tab in Changes
+      // view mode rather than a dedicated diff tab. This unifies sidebar
+      // clicks with the header's Edit|Changes toggle: there is exactly one
+      // tab per markdown file, and the sidebar click flips that tab's view
+      // mode. Staged diffs still open as a separate diff tab because the
+      // staged content is not what the editor would be editing. Non-markdown
+      // files keep the existing diff-tab flow until the diff-tab type is
+      // eventually collapsed (see reviews/changes-view-mode-plan.md §"Follow-up").
+      if (language === 'markdown' && entry.area === 'unstaged') {
+        openFile({
+          filePath,
+          relativePath: entry.path,
+          worktreeId: activeWorktreeId,
+          language,
+          mode: 'edit'
+        })
+        setEditorViewMode(filePath, 'changes')
+        return
+      }
+      openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged')
     },
-    [activeWorktreeId, worktreePath, trackConflictPath, openConflictFile, openDiff]
+    [
+      activeWorktreeId,
+      worktreePath,
+      trackConflictPath,
+      openConflictFile,
+      openDiff,
+      openFile,
+      setEditorViewMode
+    ]
   )
 
   const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =
@@ -309,12 +603,13 @@ export default function SourceControl(): React.JSX.Element {
     }
     setIsExecutingBulk(true)
     try {
-      await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths })
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths, connectionId })
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, bulkStagePaths, clearSelection])
+  }, [worktreePath, bulkStagePaths, clearSelection, activeWorktreeId])
 
   const handleBulkUnstage = useCallback(async () => {
     if (!worktreePath || bulkUnstagePaths.length === 0) {
@@ -322,25 +617,56 @@ export default function SourceControl(): React.JSX.Element {
     }
     setIsExecutingBulk(true)
     try {
-      await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths })
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths, connectionId })
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, bulkUnstagePaths, clearSelection])
+  }, [worktreePath, bulkUnstagePaths, clearSelection, activeWorktreeId])
 
-  const unresolvedConflicts = useMemo(
-    () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
-    [entries]
+  // Why: "Stage all" on the Changes section intentionally skips unresolved
+  // conflict rows. `git add` on a conflicted file silently clears the `u`
+  // record — the only live signal we have — before the user has reviewed it,
+  // which mirrors the per-row Stage suppression above.
+  const handleStageAllInArea = useCallback(
+    async (area: 'unstaged' | 'untracked') => {
+      if (!worktreePath || isExecutingBulk) {
+        return
+      }
+      const paths = getStageAllPaths(grouped[area], area)
+      if (paths.length === 0) {
+        return
+      }
+      setIsExecutingBulk(true)
+      try {
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await window.api.git.bulkStage({ worktreePath, filePaths: paths, connectionId })
+        clearSelection()
+      } finally {
+        setIsExecutingBulk(false)
+      }
+    },
+    [worktreePath, grouped, activeWorktreeId, isExecutingBulk, clearSelection]
   )
-  const unresolvedConflictReviewEntries = useMemo(
-    () =>
-      unresolvedConflicts.map((entry) => ({
-        path: entry.path,
-        conflictKind: entry.conflictKind!
-      })),
-    [unresolvedConflicts]
-  )
+
+  const handleUnstageAll = useCallback(async () => {
+    if (!worktreePath || isExecutingBulk) {
+      return
+    }
+    const paths = getUnstageAllPaths(grouped.staged)
+    if (paths.length === 0) {
+      return
+    }
+    setIsExecutingBulk(true)
+    try {
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+      clearSelection()
+    } finally {
+      setIsExecutingBulk(false)
+    }
+  }, [worktreePath, grouped.staged, activeWorktreeId, isExecutingBulk, clearSelection])
 
   const refreshBranchCompare = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
@@ -350,23 +676,33 @@ export default function SourceControl(): React.JSX.Element {
     const requestKey = `${activeWorktreeId}:${effectiveBaseRef}:${Date.now()}`
     const existingSummary =
       useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId]
-    const isBackgroundRefresh = existingSummary && existingSummary.status === 'ready'
-    if (isBackgroundRefresh) {
-      // Update the request key without resetting to loading state
+
+    // Why: only show the loading spinner for the very first branch compare
+    // request, or when the base ref has changed (user picked a new one, or
+    // getBaseRefDefault corrected a stale cross-repo value).  Polling retries
+    // — whether the previous result was 'ready' *or* an error — keep the
+    // current UI visible until the new IPC result arrives.  Resetting to
+    // 'loading' on every 5-second poll when the compare is in an error state
+    // caused a visible loading→error→loading→error flicker.
+    const baseRefChanged = existingSummary && existingSummary.baseRef !== effectiveBaseRef
+    const shouldResetToLoading = !existingSummary || baseRefChanged
+    if (shouldResetToLoading) {
+      beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef)
+    } else {
       useAppStore.setState((s) => ({
         gitBranchCompareRequestKeyByWorktree: {
           ...s.gitBranchCompareRequestKeyByWorktree,
           [activeWorktreeId]: requestKey
         }
       }))
-    } else {
-      beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef)
     }
 
     try {
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       const result = await window.api.git.branchCompare({
         worktreePath,
-        baseRef: effectiveBaseRef
+        baseRef: effectiveBaseRef,
+        connectionId
       })
       setGitBranchCompareResult(activeWorktreeId, requestKey, result)
     } catch (error) {
@@ -449,12 +785,13 @@ export default function SourceControl(): React.JSX.Element {
         return
       }
       try {
-        await window.api.git.stage({ worktreePath, filePath })
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await window.api.git.stage({ worktreePath, filePath, connectionId })
       } catch {
         // git operation failed silently
       }
     },
-    [worktreePath]
+    [worktreePath, activeWorktreeId]
   )
 
   const handleUnstage = useCallback(
@@ -463,39 +800,116 @@ export default function SourceControl(): React.JSX.Element {
         return
       }
       try {
-        await window.api.git.unstage({ worktreePath, filePath })
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await window.api.git.unstage({ worktreePath, filePath, connectionId })
       } catch {
         // git operation failed silently
       }
     },
-    [worktreePath]
+    [worktreePath, activeWorktreeId]
   )
 
-  const handleDiscard = useCallback(
+  // Why: split into two variants — `discardSingle` throws so bulk callers can
+  // aggregate failures into a single toast via `runDiscardAllForArea`'s
+  // onError, while `handleDiscard` swallows for the per-row fire-and-forget UI
+  // contract (no individual failure toast).
+  const discardSingle = useCallback(
     async (filePath: string) => {
       if (!worktreePath || !activeWorktreeId) {
         return
       }
-      try {
-        // Why: git discard replaces the working tree version of this file. Any
-        // pending editor autosave must be quiesced first so it cannot recreate
-        // the discarded edits after git restores the file.
-        await requestEditorSaveQuiesce({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath: filePath
-        })
-        await window.api.git.discard({ worktreePath, filePath })
-        notifyEditorExternalFileChange({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath: filePath
-        })
-      } catch {
-        // git operation failed silently
-      }
+      // Why: git discard replaces the working tree version of this file. Any
+      // pending editor autosave must be quiesced first so it cannot recreate
+      // the discarded edits after git restores the file.
+      await requestEditorSaveQuiesce({
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        relativePath: filePath
+      })
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.discard({ worktreePath, filePath, connectionId })
+      notifyEditorExternalFileChange({
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        relativePath: filePath
+      })
     },
     [activeWorktreeId, worktreePath]
+  )
+
+  const handleDiscard = useCallback(
+    async (filePath: string) => {
+      try {
+        await discardSingle(filePath)
+      } catch {
+        // Why: per-row discard is fire-and-forget for the UI; failures are not
+        // surfaced individually. Bulk callers use `discardSingle` directly so
+        // they can aggregate failures into a single toast.
+      }
+    },
+    [discardSingle]
+  )
+
+  // Why: "Discard all" mirrors the per-row discard rules — it skips unresolved
+  // and resolved_locally rows because discarding those can silently re-create
+  // the conflict or lose the resolution (no v1 UX to explain this clearly).
+  // There is no bulk discard IPC, so we serialize per-file discard calls that
+  // run the same editor-quiesce + external-change notification as the row action.
+  // The sequencing + filter rules live in discard-all-sequence.ts so they can
+  // be unit-tested independently of the full component (staged area needs a
+  // bulk-unstage first, and a failed unstage must skip the discard loop).
+  const handleRevertAllInArea = useCallback(
+    async (area: DiscardAllArea) => {
+      if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
+        return
+      }
+      const paths = getDiscardAllPaths(grouped[area], area)
+      if (paths.length === 0) {
+        return
+      }
+      setIsExecutingBulk(true)
+      try {
+        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        // Why: `onError` fires once per failure — both for the bulk-unstage
+        // pre-step and for each per-file discard failure. Aggregate into one
+        // toast after the sequence completes so a partial failure across N
+        // files doesn't spam N error toasts.
+        const errors: unknown[] = []
+        const result = await runDiscardAllForArea(area, paths, {
+          bulkUnstage: (filePaths) =>
+            window.api.git.bulkUnstage({ worktreePath, filePaths, connectionId }),
+          discardOne: discardSingle,
+          onError: (error) => {
+            errors.push(error)
+            console.error('[SourceControl] discard-all failure', error)
+          }
+        })
+        if (result.aborted) {
+          toast.error('Discard all failed — unable to unstage files before discard', {
+            description: errors[0] instanceof Error ? errors[0].message : undefined
+          })
+        } else if (result.failed.length > 0) {
+          // Why: only include the first error message to avoid a huge toast
+          // body on bulk failures; a short sample of failed paths gives users
+          // enough context to retry or investigate.
+          const firstMsg = errors[0] instanceof Error ? errors[0].message : undefined
+          const sample = result.failed.slice(0, 3).join(', ')
+          const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
+          toast.error(
+            `Failed to discard ${result.failed.length} file${result.failed.length === 1 ? '' : 's'}`,
+            {
+              description: firstMsg ? `${firstMsg} (e.g. ${sample}${more})` : `${sample}${more}`
+            }
+          )
+        }
+        if (!result.aborted) {
+          clearSelection()
+        }
+      } finally {
+        setIsExecutingBulk(false)
+      }
+    },
+    [worktreePath, activeWorktreeId, grouped, isExecutingBulk, clearSelection, discardSingle]
   )
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
@@ -513,6 +927,11 @@ export default function SourceControl(): React.JSX.Element {
     )
   }
 
+  const hasFilteredUncommittedEntries =
+    filteredGrouped.staged.length > 0 ||
+    filteredGrouped.unstaged.length > 0 ||
+    filteredGrouped.untracked.length > 0
+  const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
   const currentWorktreeId = activeWorktree.id
@@ -570,6 +989,96 @@ export default function SourceControl(): React.JSX.Element {
           </div>
         )}
 
+        {/* Why: Diff-comments live on the worktree and apply across every diff
+            view the user opens. The header row expands inline to show per-file
+            comment previews plus a Copy-all action so the user can hand the
+            set off to whichever tool they want without leaving the sidebar.
+            Hidden when count is 0: notes are created from the diff view, so
+            an empty Notes shelf in the sidebar is pure chrome — it adds a
+            border, a row of space, and an expand control that only reveals
+            a redirect hint. */}
+        {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
+          <div className="border-b border-border">
+            <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setDiffCommentsExpanded((prev) => !prev)}
+                aria-expanded={diffCommentsExpanded}
+                title={diffCommentsExpanded ? 'Collapse notes' : 'Expand notes'}
+              >
+                <ChevronDown
+                  className={cn(
+                    'size-3 shrink-0 transition-transform',
+                    !diffCommentsExpanded && '-rotate-90'
+                  )}
+                />
+                <MessageSquare className="size-3.5 shrink-0" />
+                <span>Notes</span>
+                {diffCommentCount > 0 && (
+                  <span className="text-[11px] leading-none text-muted-foreground tabular-nums">
+                    {diffCommentCount}
+                  </span>
+                )}
+              </button>
+              {diffCommentCount > 0 && (
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        onClick={() => void handleCopyDiffComments()}
+                        aria-label="Copy all notes to clipboard"
+                      >
+                        {diffCommentsCopied ? (
+                          <Check className="size-3.5" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Copy all notes
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+            {diffCommentsExpanded && (
+              <DiffCommentsInlineList
+                comments={diffCommentsForActive}
+                onDelete={(id) => void deleteDiffComment(activeWorktreeId, id)}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Filter input for searching changed files across all sections */}
+        <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5">
+          <Search className="size-3.5 shrink-0 text-muted-foreground" />
+          <input
+            ref={filterInputRef}
+            type="text"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            placeholder="Filter files…"
+            className="flex-1 min-w-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/60 outline-none"
+          />
+          {filterQuery && (
+            <button
+              type="button"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setFilterQuery('')
+                filterInputRef.current?.focus()
+              }}
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+
         <div
           className="relative flex-1 overflow-auto scrollbar-sleek py-1"
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
@@ -603,28 +1112,78 @@ export default function SourceControl(): React.JSX.Element {
             </div>
           )}
 
-          {scope === 'all' && showGenericEmptyState ? (
+          {scope === 'all' && showGenericEmptyState && !normalizedFilter ? (
             <EmptyState
               heading="No changes on this branch"
               supportingText={`This worktree is clean and this branch has no changes ahead of ${branchSummary.baseRef}`}
             />
           ) : null}
 
-          {scope === 'uncommitted' && !hasUncommittedEntries && (
+          {scope === 'uncommitted' && !hasUncommittedEntries && !normalizedFilter && (
             <EmptyState
               heading="No uncommitted changes"
               supportingText="All changes have been committed"
             />
           )}
 
-          {(scope === 'all' || scope === 'uncommitted') && hasUncommittedEntries && (
+          {normalizedFilter &&
+            !hasFilteredUncommittedEntries &&
+            (scope === 'uncommitted' || !hasFilteredBranchEntries) && (
+              <EmptyState
+                heading="No matching files"
+                supportingText={`No changed files match "${filterQuery}"`}
+              />
+            )}
+
+          {(scope === 'all' || scope === 'uncommitted') && (
+            <CommitArea
+              stagedCount={grouped.staged.length}
+              hasUnresolvedConflicts={unresolvedConflicts.length > 0}
+              commitMessage={commitMessage}
+              commitError={commitError}
+              isCommitting={isCommitting}
+              onCommitMessageChange={(value) => {
+                if (!activeWorktreeId) {
+                  return
+                }
+                setCommitDrafts((prev) =>
+                  writeCommitDraftForWorktree(prev, activeWorktreeId, value)
+                )
+              }}
+              onCommitSuccess={() => {
+                void handleCommit()
+              }}
+            />
+          )}
+
+          {(scope === 'all' || scope === 'uncommitted') && hasFilteredUncommittedEntries && (
             <>
               {SECTION_ORDER.map((area) => {
-                const items = grouped[area]
+                const items = filteredGrouped[area]
                 if (items.length === 0) {
                   return null
                 }
                 const isCollapsed = collapsedSections.has(area)
+                // Why: "Stage all"/"Unstage all" operate on the *unfiltered*
+                // group for the area — acting on just the filter-visible subset
+                // would surprise users who don't realize a filter is active.
+                // The +/- is hidden when the filter is active to avoid that
+                // mismatch between what's shown and what would be staged.
+                // Why: visibility and execution both resolve paths through the
+                // same helpers (`getStageAllPaths`/`getUnstageAllPaths`/
+                // `getDiscardAllPaths`) so the button can never show for a set
+                // the handler would then filter to empty.
+                const stageAllPaths =
+                  area === 'unstaged' || area === 'untracked'
+                    ? getStageAllPaths(grouped[area], area)
+                    : []
+                const canStageAll = !normalizedFilter && stageAllPaths.length > 0
+                const canUnstageAll =
+                  !normalizedFilter &&
+                  area === 'staged' &&
+                  getUnstageAllPaths(grouped.staged).length > 0
+                const canRevertAll =
+                  !normalizedFilter && getDiscardAllPaths(grouped[area], area).length > 0
                 return (
                   <div key={area}>
                     <SectionHeader
@@ -636,37 +1195,92 @@ export default function SourceControl(): React.JSX.Element {
                       isCollapsed={isCollapsed}
                       onToggle={() => toggleSection(area)}
                       actions={
-                        items.some((entry) => entry.conflictStatus === 'unresolved') ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (activeWorktreeId && worktreePath) {
-                                openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
-                              }
-                            }}
-                          >
-                            View all
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (activeWorktreeId && worktreePath) {
-                                openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
-                              }
-                            }}
-                          >
-                            View all
-                          </Button>
-                        )
+                        <>
+                          {/* Why: bulk action buttons are hover-only on
+                              pointer devices to avoid cluttering the section
+                              header with persistent icons. On no-hover
+                              pointers (touch, and SSH sessions where hover
+                              state is unreliable — see AGENTS.md "SSH Use
+                              Case"), force them visible so they're reachable
+                              without tabbing. One outer wrapper so that
+                              focusing any action reveals all three siblings —
+                              otherwise keyboard users tab into an invisible
+                              next stop. */}
+                          <div className="flex items-center opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                            {canRevertAll && (
+                              <ActionButton
+                                icon={Undo2}
+                                // Why: for untracked files, discard deletes the file
+                                // outright (rm -rf via git.discard's untracked branch).
+                                // A generic "Discard all" label hides that severity —
+                                // label explicitly for the destructive variant.
+                                title={
+                                  area === 'untracked' ? 'Delete all untracked' : 'Discard all'
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void handleRevertAllInArea(area)
+                                }}
+                                disabled={isExecutingBulk}
+                              />
+                            )}
+                            {canStageAll && (
+                              <ActionButton
+                                icon={Plus}
+                                title="Stage all"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  if (area === 'unstaged' || area === 'untracked') {
+                                    void handleStageAllInArea(area)
+                                  }
+                                }}
+                                disabled={isExecutingBulk}
+                              />
+                            )}
+                            {canUnstageAll && (
+                              <ActionButton
+                                icon={Minus}
+                                title="Unstage all"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void handleUnstageAll()
+                                }}
+                                disabled={isExecutingBulk}
+                              />
+                            )}
+                          </div>
+                          {items.some((entry) => entry.conflictStatus === 'unresolved') ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (activeWorktreeId && worktreePath) {
+                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
+                                }
+                              }}
+                            >
+                              View all
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (activeWorktreeId && worktreePath) {
+                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
+                                }
+                              }}
+                            >
+                              View all
+                            </Button>
+                          )}
+                        </>
                       }
                     />
                     {!isCollapsed &&
@@ -687,6 +1301,7 @@ export default function SourceControl(): React.JSX.Element {
                             onStage={handleStage}
                             onUnstage={handleUnstage}
                             onDiscard={handleDiscard}
+                            commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                           />
                         )
                       })}
@@ -707,11 +1322,11 @@ export default function SourceControl(): React.JSX.Element {
             />
           ) : null}
 
-          {scope === 'all' && branchSummary?.status === 'ready' && hasBranchEntries && (
+          {scope === 'all' && branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
             <div>
               <SectionHeader
                 label="Committed on Branch"
-                count={branchEntries.length}
+                count={filteredBranchEntries.length}
                 isCollapsed={collapsedSections.has('branch')}
                 onToggle={() => toggleSection('branch')}
                 actions={
@@ -732,7 +1347,7 @@ export default function SourceControl(): React.JSX.Element {
                 }
               />
               {!collapsedSections.has('branch') &&
-                branchEntries.map((entry) => (
+                filteredBranchEntries.map((entry) => (
                   <BranchEntryRow
                     key={`branch:${entry.path}`}
                     entry={entry}
@@ -740,6 +1355,7 @@ export default function SourceControl(): React.JSX.Element {
                     worktreePath={worktreePath}
                     onRevealInExplorer={revealInExplorer}
                     onOpen={() => openCommittedDiff(entry)}
+                    commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                   />
                 ))}
             </div>
@@ -784,6 +1400,94 @@ export default function SourceControl(): React.JSX.Element {
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+const SourceControl = React.memo(SourceControlInner)
+export default SourceControl
+
+type CommitAreaProps = {
+  stagedCount: number
+  hasUnresolvedConflicts: boolean
+  commitMessage: string
+  commitError: string | null
+  isCommitting: boolean
+  onCommitMessageChange: (message: string) => void
+  onCommitSuccess: () => void
+}
+
+export function CommitArea({
+  stagedCount,
+  hasUnresolvedConflicts,
+  commitMessage,
+  commitError,
+  isCommitting,
+  onCommitMessageChange,
+  onCommitSuccess
+}: CommitAreaProps): React.JSX.Element {
+  // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
+  // the Commit button off-screen. The textarea keeps `resize-none` (matching
+  // the existing style) — the browser scrolls internally past 12 rows.
+  const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
+  const hasMessage = commitMessage.trim().length > 0
+  const isCommitDisabled =
+    isCommitting || !hasMessage || stagedCount === 0 || hasUnresolvedConflicts
+
+  // Why: when the button is disabled, the title surfaces the reason so the
+  // user doesn't have to guess why Commit is greyed out. Part-2 may extend
+  // this into a split button (primary action + dropdown for Push / Sync /
+  // Commit & Push); the label stays as a plain "Commit" here so the shape
+  // lines up cleanly with the forthcoming "Remote Updates" section beneath it.
+  let disabledReason: string | undefined
+  if (isCommitting) {
+    disabledReason = 'Commit in progress…'
+  } else if (hasUnresolvedConflicts) {
+    disabledReason = 'Resolve conflicts before committing'
+  } else if (stagedCount === 0) {
+    disabledReason = 'Stage at least one file to commit'
+  } else if (!hasMessage) {
+    disabledReason = 'Enter a commit message to commit'
+  }
+
+  return (
+    <div className="px-3 pb-2">
+      <textarea
+        rows={rows}
+        value={commitMessage}
+        onChange={(e) => onCommitMessageChange(e.target.value)}
+        placeholder="Message"
+        aria-label="Commit message"
+        aria-describedby={commitError ? 'commit-area-error' : undefined}
+        className="mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      {/* Why: match the "Squash and merge" button in PRActions
+          (size="xs", px-3 text-[11px]) so the sidebar has a consistent
+          action-button shape across Source Control and Checks. */}
+      <Button
+        type="button"
+        size="xs"
+        disabled={isCommitDisabled}
+        onClick={() => onCommitSuccess()}
+        className="w-full px-3 text-[11px]"
+        title={disabledReason}
+      >
+        {isCommitting && <RefreshCw className="size-3.5 animate-spin" />}
+        Commit
+      </Button>
+      {commitError && (
+        // Why: role="alert" + aria-live="polite" lets screen readers announce
+        // commit failures; the id ties the message to the textarea via
+        // aria-describedby so assistive tech associates the two.
+        <p
+          id="commit-area-error"
+          role="alert"
+          aria-live="polite"
+          className="mt-1 text-[11px] text-destructive"
+        >
+          {commitError}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -917,25 +1621,133 @@ function SectionHeader({
   onToggle: () => void
   actions?: React.ReactNode
 }): React.JSX.Element {
+  // Why: wrap the toggle button and actions in a shared rounded container
+  // so the hover background spans the entire row instead of clipping around
+  // the label. The outer div keeps the vertical spacing that separates
+  // sections; the inner wrapper owns the hover rectangle.
   return (
-    <div className="group/section flex items-center pl-1 pr-3 pt-3 pb-1">
-      <button
-        type="button"
-        className="flex flex-1 items-center gap-1 rounded-md px-0.5 py-0.5 text-left text-xs font-semibold uppercase tracking-wider text-foreground/70 hover:bg-accent hover:text-accent-foreground"
-        onClick={onToggle}
-      >
-        <ChevronDown
-          className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
-        />
-        <span>{label}</span>
-        <span className="text-[11px] font-medium tabular-nums">{count}</span>
-        {conflictCount > 0 && (
-          <span className="text-[11px] font-medium text-destructive/80">
-            · {conflictCount} conflict{conflictCount === 1 ? '' : 's'}
-          </span>
-        )}
-      </button>
-      <div className="shrink-0 flex items-center">{actions}</div>
+    <div className="pl-1 pr-3 pt-3 pb-1">
+      <div className="group/section flex items-center rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
+        <button
+          type="button"
+          className="flex flex-1 items-center gap-1 px-0.5 py-0.5 text-left text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground"
+          onClick={onToggle}
+        >
+          <ChevronDown
+            className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+          />
+          <span>{label}</span>
+          <span className="text-[11px] font-medium tabular-nums">{count}</span>
+          {conflictCount > 0 && (
+            <span className="text-[11px] font-medium text-destructive/80">
+              · {conflictCount} conflict{conflictCount === 1 ? '' : 's'}
+            </span>
+          )}
+        </button>
+        <div className="shrink-0 flex items-center">{actions}</div>
+      </div>
+    </div>
+  )
+}
+
+function DiffCommentsInlineList({
+  comments,
+  onDelete
+}: {
+  comments: DiffComment[]
+  onDelete: (commentId: string) => void
+}): React.JSX.Element {
+  // Why: group by filePath so the inline list mirrors the structure in the
+  // Notes tab — a compact section per file with line-number prefixes.
+  const groups = useMemo(() => {
+    const map = new Map<string, DiffComment[]>()
+    for (const c of comments) {
+      const list = map.get(c.filePath) ?? []
+      list.push(c)
+      map.set(c.filePath, list)
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.lineNumber - b.lineNumber)
+    }
+    return Array.from(map.entries())
+  }, [comments])
+
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Why: auto-dismiss the per-row "copied" indicator so the button returns to
+  // its default icon after a brief confirmation window. Matches the top-level
+  // Copy button's behavior.
+  useEffect(() => {
+    if (!copiedId) {
+      return
+    }
+    const handle = window.setTimeout(() => setCopiedId(null), 1500)
+    return () => window.clearTimeout(handle)
+  }, [copiedId])
+
+  const handleCopyOne = useCallback(async (c: DiffComment): Promise<void> => {
+    try {
+      await window.api.ui.writeClipboardText(formatDiffComment(c))
+      setCopiedId(c.id)
+    } catch {
+      // Why: swallow — clipboard write can fail when the window isn't focused.
+    }
+  }, [])
+
+  if (comments.length === 0) {
+    return (
+      <div className="px-6 py-2 text-[11px] text-muted-foreground">
+        Hover over a line in the diff view and click the + to add a note.
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-muted/20">
+      {groups.map(([filePath, list]) => (
+        <div key={filePath} className="px-3 py-1.5">
+          <div className="truncate text-[10px] font-medium text-muted-foreground">{filePath}</div>
+          <ul className="mt-1 space-y-1">
+            {list.map((c) => (
+              <li
+                key={c.id}
+                className="group flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/40"
+              >
+                <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
+                  L{c.lineNumber}
+                </span>
+                <div className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
+                  {c.body}
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    void handleCopyOne(c)
+                  }}
+                  title="Copy note"
+                  aria-label={`Copy note on line ${c.lineNumber}`}
+                >
+                  {copiedId === c.id ? <Check className="size-3" /> : <Copy className="size-3" />}
+                </button>
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    onDelete(c.id)
+                  }}
+                  title="Delete note"
+                  aria-label={`Delete note on line ${c.lineNumber}`}
+                >
+                  <Trash className="size-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1031,7 +1843,8 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onOpen,
   onStage,
   onUnstage,
-  onDiscard
+  onDiscard,
+  commentCount
 }: {
   entryKey: string
   entry: GitStatusEntry
@@ -1045,6 +1858,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
   onDiscard: (filePath: string) => Promise<void>
+  commentCount: number
 }): React.JSX.Element {
   const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
   const fileName = basename(entry.path)
@@ -1117,6 +1931,18 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
           )}
         </div>
+        {commentCount > 0 && (
+          // Why: show a small note marker on any row that has diff notes
+          // so the user can tell at a glance which files have review notes
+          // attached, without opening the Notes tab.
+          <span
+            className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
+            title={`${commentCount} note${commentCount === 1 ? '' : 's'}`}
+          >
+            <MessageSquare className="size-3" />
+            <span className="tabular-nums">{commentCount}</span>
+          </span>
+        )}
         {entry.conflictStatus ? (
           <ConflictBadge entry={entry} />
         ) : (
@@ -1205,13 +2031,15 @@ function BranchEntryRow({
   currentWorktreeId,
   worktreePath,
   onRevealInExplorer,
-  onOpen
+  onOpen,
+  commentCount
 }: {
   entry: GitBranchChangeEntry
   currentWorktreeId: string
   worktreePath: string
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   onOpen: () => void
+  commentCount: number
 }): React.JSX.Element {
   const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
   const fileName = basename(entry.path)
@@ -1226,6 +2054,12 @@ function BranchEntryRow({
     >
       <div
         className="group flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40"
+        draggable
+        onDragStart={(e) => {
+          const absolutePath = joinPath(worktreePath, entry.path)
+          e.dataTransfer.setData('text/x-orca-file-path', absolutePath)
+          e.dataTransfer.effectAllowed = 'copy'
+        }}
         onClick={onOpen}
       >
         <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
@@ -1233,6 +2067,15 @@ function BranchEntryRow({
           <span className="text-foreground">{fileName}</span>
           {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
         </span>
+        {commentCount > 0 && (
+          <span
+            className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
+            title={`${commentCount} note${commentCount === 1 ? '' : 's'}`}
+          >
+            <MessageSquare className="size-3" />
+            <span className="tabular-nums">{commentCount}</span>
+          </span>
+        )}
         <span
           className="w-4 shrink-0 text-center text-[10px] font-bold"
           style={{ color: STATUS_COLORS[entry.status] }}
@@ -1292,26 +2135,61 @@ function EmptyState({
   )
 }
 
-function ActionButton({
+export function ActionButton({
   icon: Icon,
   title,
-  onClick
+  onClick,
+  disabled
 }: {
   icon: React.ComponentType<{ className?: string }>
   title: string
   onClick: (event: React.MouseEvent) => void
+  disabled?: boolean
 }): React.JSX.Element {
+  // Why: use the Radix Tooltip instead of the native `title` attribute so the
+  // label matches the rest of the sidebar chrome (consistent styling, no OS
+  // delay quirks, dismissible on pointer leave).
+  //
+  // Why (no local TooltipProvider): the app root mounts a single
+  // TooltipProvider (see App.tsx); nesting another one here gives this subtree
+  // its own delay-timing state and breaks Radix's "skip the open delay when
+  // moving between adjacent tooltip triggers" handoff between sibling action
+  // buttons in the section header.
+  //
+  // Why (disabled handling): Radix's TooltipTrigger asChild on a disabled
+  // <button> gets pointer-events blocked in Chromium, which suppresses the
+  // tooltip entirely — a regression vs. the native `title` attribute it
+  // replaced. We keep the button interactive and rely on the caller's
+  // `isExecutingBulk` early-return to no-op the click during bulk ops;
+  // `aria-disabled` + visual dimming preserves the disabled affordance.
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      className="h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground"
-      title={title}
-      onClick={onClick}
-    >
-      <Icon className="size-3.5" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className={cn(
+            'h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground',
+            disabled && 'opacity-50 cursor-not-allowed'
+          )}
+          aria-label={title}
+          aria-disabled={disabled}
+          onClick={(event) => {
+            if (disabled) {
+              event.preventDefault()
+              return
+            }
+            onClick(event)
+          }}
+        >
+          <Icon className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {title}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

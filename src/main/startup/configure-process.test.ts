@@ -10,8 +10,11 @@ vi.mock('electron', () => {
         paths.set(name, value)
       }),
       quit: vi.fn(),
+      exit: vi.fn(),
+      isPackaged: false,
       commandLine: {
-        appendSwitch: vi.fn()
+        appendSwitch: vi.fn(),
+        getSwitchValue: vi.fn(() => '')
       }
     }
   }
@@ -22,11 +25,95 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('patchPackagedProcessPath', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  const originalHome = process.env.HOME
+  const originalPath = process.env.PATH
+
+  function setPlatform(platform: NodeJS.Platform): void {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: platform
+    })
+  }
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (originalHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = originalHome
+    }
+    if (originalPath === undefined) {
+      delete process.env.PATH
+    } else {
+      process.env.PATH = originalPath
+    }
+  })
+
+  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin) for packaged darwin runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('darwin')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/Users/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    // Why: issue #829 — ~/.opencode/bin and ~/.vite-plus/bin are the documented
+    // fallback install locations for the opencode and Pi CLI install scripts.
+    // Without them on PATH, GUI-launched Orca reports both as "Not installed"
+    // even when `which` resolves them in the user's shell.
+    expect(segments).toContain('/Users/tester/.opencode/bin')
+    expect(segments).toContain('/Users/tester/.vite-plus/bin')
+    expect(segments).toContain('/Users/tester/bin')
+  })
+
+  it('leaves PATH untouched when the app is not packaged', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('darwin')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: false })
+    process.env.HOME = '/Users/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    expect(process.env.PATH).toBe('/usr/bin:/bin')
+  })
+})
+
 describe('configureDevUserDataPath', () => {
+  it('uses an explicit dev userData override when provided', async () => {
+    const { app } = await import('electron')
+    const { configureDevUserDataPath } = await import('./configure-process')
+    const originalOverride = process.env.ORCA_DEV_USER_DATA_PATH
+    process.env.ORCA_DEV_USER_DATA_PATH = '/tmp/orca-dev-repro'
+
+    try {
+      configureDevUserDataPath(true)
+    } finally {
+      if (originalOverride === undefined) {
+        delete process.env.ORCA_DEV_USER_DATA_PATH
+      } else {
+        process.env.ORCA_DEV_USER_DATA_PATH = originalOverride
+      }
+    }
+
+    expect(app.setPath).toHaveBeenCalledWith('userData', '/tmp/orca-dev-repro')
+  })
+
   it('moves dev runs onto an orca-dev userData path', async () => {
     const { app } = await import('electron')
     const { configureDevUserDataPath } = await import('./configure-process')
 
+    delete process.env.ORCA_DEV_USER_DATA_PATH
     configureDevUserDataPath(true)
 
     // Why: production code uses path.join(app.getPath('appData'), 'orca-dev')
@@ -50,6 +137,7 @@ describe('installDevParentDisconnectQuit', () => {
     const { app } = await import('electron')
     const { installDevParentDisconnectQuit } = await import('./configure-process')
 
+    vi.useFakeTimers()
     const originalSend = process.send
     const originalOnce = process.once.bind(process)
     const disconnectHandlers: (() => void)[] = []
@@ -74,6 +162,10 @@ describe('installDevParentDisconnectQuit', () => {
     expect(disconnectHandlers).toHaveLength(1)
     disconnectHandlers[0]()
     expect(app.quit).toHaveBeenCalledTimes(1)
+    expect(app.exit).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(app.exit).toHaveBeenCalledWith(0)
   })
 
   it('does not register the disconnect hook outside dev ipc launches', async () => {
@@ -104,6 +196,7 @@ describe('installDevParentWatchdog', () => {
 
     vi.useFakeTimers()
     vi.mocked(app.quit).mockClear()
+    vi.mocked(app.exit).mockClear()
 
     let parentExists = true
     vi.spyOn(process, 'kill').mockImplementation(((
@@ -132,6 +225,10 @@ describe('installDevParentWatchdog', () => {
       parentExists = false
       await vi.advanceTimersByTimeAsync(1000)
       expect(app.quit).toHaveBeenCalledTimes(1)
+      expect(app.exit).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(app.exit).toHaveBeenCalledWith(0)
     } finally {
       if (originalPpid) {
         Object.defineProperty(process, 'ppid', originalPpid)
@@ -146,5 +243,35 @@ describe('installDevParentWatchdog', () => {
     installDevParentWatchdog(false)
 
     expect(setIntervalSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('enableMainProcessGpuFeatures', () => {
+  it('appends VS Code-style GPU channel flags without unsafe WebGPU/Vulkan opt-ins', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
+    )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
+  })
+
+  it('preserves existing enable-features switches', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('ExistingFeature')
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync,ExistingFeature'
+    )
   })
 })

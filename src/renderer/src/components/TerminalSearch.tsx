@@ -2,25 +2,46 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
 import { Button } from '@/components/ui/button'
+import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 
 type TerminalSearchProps = {
   isOpen: boolean
   onClose: () => void
   searchAddon: SearchAddon | null
+  searchStateRef: React.RefObject<SearchState>
 }
 
 export default function TerminalSearch({
   isOpen,
   onClose,
-  searchAddon
+  searchAddon,
+  searchStateRef
 }: TerminalSearchProps): React.JSX.Element | null {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)
 
+  // Why: the default xterm SearchAddon highlights blend into common
+  // terminal backgrounds (see orca#612). Providing explicit decoration
+  // colors gives all matches a visible yellow background and the
+  // current match a brighter orange, matching the contrast VS Code and
+  // iTerm2 use for terminal search. xterm requires #RRGGBB format for
+  // the background colors.
   const searchOptions = useCallback(
-    (incremental = false) => ({ caseSensitive, regex, incremental }),
+    (incremental: boolean = false) => ({
+      caseSensitive,
+      regex,
+      incremental,
+      decorations: {
+        matchBackground: '#5c4a00',
+        matchBorder: '#5c4a00',
+        matchOverviewRuler: '#ffcc00',
+        activeMatchBackground: '#c4580e',
+        activeMatchBorder: '#ffcf6b',
+        activeMatchColorOverviewRuler: '#ff9900'
+      }
+    }),
     [caseSensitive, regex]
   )
 
@@ -45,14 +66,18 @@ export default function TerminalSearch({
   }, [isOpen, searchAddon])
 
   useEffect(() => {
+    // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
+    // can read the current search state without lifting it to parent state.
+    searchStateRef.current = { query, caseSensitive, regex }
+
     if (!query) {
       searchAddon?.clearDecorations()
       return
     }
     if (searchAddon && isOpen) {
-      searchAddon.findNext(query, { caseSensitive, regex, incremental: true })
+      searchAddon.findNext(query, searchOptions(true))
     }
-  }, [query, searchAddon, isOpen, caseSensitive, regex])
+  }, [query, searchAddon, isOpen, caseSensitive, regex, searchStateRef, searchOptions])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

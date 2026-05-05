@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { useAppStore } from '../../store'
+import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
@@ -36,7 +37,7 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
       {
         action: 'Switch worktree',
         searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
-        keys: ({ mod, shift }) => mod === '⌘' ? [mod, 'J'] : [mod, shift, 'J']
+        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'J'] : [mod, shift, 'J'])
       },
       {
         action: 'Create worktree',
@@ -101,12 +102,22 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
     ]
   },
   {
-    title: 'Terminal Tabs',
+    title: 'Tabs',
     items: [
       {
-        action: 'New tab',
-        searchKeywords: ['shortcut', 'tab'],
+        action: 'New terminal tab',
+        searchKeywords: ['shortcut', 'tab', 'terminal', 'new'],
         keys: ({ mod }) => [mod, 'T']
+      },
+      {
+        action: 'New browser tab',
+        searchKeywords: ['shortcut', 'tab', 'browser', 'new'],
+        keys: ({ mod, shift }) => [mod, shift, 'B']
+      },
+      {
+        action: 'New markdown tab',
+        searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'new'],
+        keys: ({ mod, shift }) => [mod, shift, 'M']
       },
       {
         action: 'Close active tab / pane',
@@ -114,14 +125,44 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         keys: ({ mod }) => [mod, 'W']
       },
       {
-        action: 'Next tab',
-        searchKeywords: ['shortcut', 'tab', 'next'],
+        action: 'Reopen closed tab',
+        searchKeywords: ['shortcut', 'tab', 'reopen', 'restore', 'closed'],
+        keys: ({ mod, shift }) => [mod, shift, 'T']
+      }
+    ]
+  },
+  {
+    title: 'Tab Navigation',
+    items: [
+      {
+        action: 'Next tab (same type)',
+        searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle'],
         keys: ({ mod, shift }) => [mod, shift, ']']
       },
       {
-        action: 'Previous tab',
-        searchKeywords: ['shortcut', 'tab', 'previous'],
+        action: 'Previous tab (same type)',
+        searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle'],
         keys: ({ mod, shift }) => [mod, shift, '[']
+      },
+      {
+        action: 'Next tab (all types)',
+        searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle', 'all', 'any'],
+        keys: ({ mod }) => [mod, mod === '⌘' ? '⌥' : 'Alt', ']']
+      },
+      {
+        action: 'Previous tab (all types)',
+        searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle', 'all', 'any'],
+        keys: ({ mod }) => [mod, mod === '⌘' ? '⌥' : 'Alt', '[']
+      },
+      {
+        action: 'Next terminal tab',
+        searchKeywords: ['shortcut', 'tab', 'terminal', 'next', 'switch'],
+        keys: () => ['Ctrl', 'PageDown']
+      },
+      {
+        action: 'Previous terminal tab',
+        searchKeywords: ['shortcut', 'tab', 'terminal', 'previous', 'switch'],
+        keys: () => ['Ctrl', 'PageUp']
       }
     ]
   },
@@ -129,14 +170,18 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
     title: 'Terminal Panes',
     items: [
       {
-        action: 'Split pane right',
+        action: 'Split terminal right',
         searchKeywords: ['shortcut', 'pane', 'split'],
-        keys: ({ mod }) => [mod, 'D']
+        // Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
+        // so split-right requires Shift on non-Mac platforms.
+        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'D'] : [mod, shift, 'D'])
       },
       {
-        action: 'Split pane down',
+        action: 'Split terminal down',
         searchKeywords: ['shortcut', 'pane', 'split'],
-        keys: ({ mod, shift }) => [mod, shift, 'D']
+        // Why: on Windows/Linux, Ctrl+Shift+D is taken by split-right (#586),
+        // so split-down uses Alt+Shift+D following Windows Terminal convention.
+        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, shift, 'D'] : ['Alt', shift, 'D'])
       },
       {
         action: 'Close pane (EOF)',
@@ -162,6 +207,16 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         action: 'Expand / collapse pane',
         searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
         keys: ({ mod, shift, enter }) => [mod, shift, enter]
+      }
+    ]
+  },
+  {
+    title: 'Editors',
+    items: [
+      {
+        action: 'Show Markdown Preview',
+        searchKeywords: ['shortcut', 'editor', 'markdown', 'preview'],
+        keys: ({ mod, shift }) => [mod, shift, 'V']
       }
     ]
   }
@@ -252,18 +307,7 @@ export function ShortcutsPane(): React.JSX.Element {
                         className="flex items-center justify-between py-1"
                       >
                         <span className="text-sm text-foreground">{item.action}</span>
-                        <div className="flex items-center gap-1">
-                          {item.keys.map((key, kIdx) => (
-                            <React.Fragment key={kIdx}>
-                              <span className="inline-flex min-w-6 items-center justify-center rounded border border-border/80 bg-secondary/70 px-1.5 py-0.5 text-xs font-medium text-muted-foreground shadow-sm">
-                                {key}
-                              </span>
-                              {!isMac && kIdx < item.keys.length - 1 ? (
-                                <span className="mx-0.5 text-xs text-muted-foreground">+</span>
-                              ) : null}
-                            </React.Fragment>
-                          ))}
-                        </div>
+                        <ShortcutKeyCombo keys={item.keys} />
                       </SearchableSetting>
                     )
                   })}

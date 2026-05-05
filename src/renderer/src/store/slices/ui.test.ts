@@ -3,15 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import type { PersistedUIState } from '../../../../shared/types'
 import { createUISlice } from './ui'
+import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import type { AppState } from '../types'
 
 function createUIStore(): StoreApi<AppState> {
   // Only the UI slice, repo ids, and right sidebar width fallback are needed
-  // for persisted UI hydration tests.
+  // for persisted UI hydration tests. The worktree-nav-history slice is also
+  // included because openTaskPage records a Tasks visit via recordViewVisit.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return createStore<any>()((...args: any[]) => ({
     repos: [],
     rightSidebarWidth: 280,
+    ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -42,12 +45,28 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(
       makePersistedUI({
         sidebarWidth: 100,
-        rightSidebarWidth: 900
+        rightSidebarWidth: 100
       })
     )
 
     expect(store.getState().sidebarWidth).toBe(220)
-    expect(store.getState().rightSidebarWidth).toBe(500)
+    expect(store.getState().rightSidebarWidth).toBe(220)
+  })
+
+  it('preserves right sidebar widths above the former 500px cap', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        sidebarWidth: 260,
+        rightSidebarWidth: 900
+      })
+    )
+
+    // Left sidebar stays capped; right sidebar now allows wide drag targets
+    // so long file names remain readable.
+    expect(store.getState().sidebarWidth).toBe(260)
+    expect(store.getState().rightSidebarWidth).toBe(900)
   })
 
   it('falls back to existing sidebar widths when persisted values are not finite', () => {
@@ -77,5 +96,47 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().showActiveOnly).toBe(true)
+  })
+
+  it('restores the hide-default-branch filter from persisted UI state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        hideDefaultBranchWorkspace: true
+      })
+    )
+
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
+  })
+})
+
+describe('createUISlice settings navigation', () => {
+  it('returns to the tasks page after visiting settings from an in-progress draft', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage({ preselectedRepoId: 'repo-1' })
+    store.getState().openSettingsPage()
+
+    expect(store.getState().activeView).toBe('settings')
+    expect(store.getState().previousViewBeforeSettings).toBe('tasks')
+
+    store.getState().closeSettingsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('keeps the original return target when settings is reopened while already visible', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openSettingsPage()
+    store.getState().openSettingsPage()
+
+    expect(store.getState().previousViewBeforeSettings).toBe('tasks')
+
+    store.getState().closeSettingsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
   })
 })

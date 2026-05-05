@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an improvement for Orca
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for new features or workflow improvements.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is missing today? Include a short summary here too.
+      placeholder: It is hard to switch between the same few repositories throughout the day.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the change you want to see
+      placeholder: Add a pinned repositories section to the home screen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or additional context
+      description: Workarounds, related tools, mockups, or anything else that helps
+    validations:
+      required: false

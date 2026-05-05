@@ -2,6 +2,7 @@ import type { StoreApi } from 'zustand'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { getConnectionId } from '@/lib/connection-context'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
@@ -17,6 +18,7 @@ import {
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
 import { flushPendingEditorChange } from './editor-pending-flush'
+import { clearSelfWrite, recordSelfWrite } from './editor-self-write-registry'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -72,7 +74,26 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         }
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
-        await window.api.fs.writeFile({ filePath: liveFile.filePath, content: contentToSave })
+        const connectionId = getConnectionId(liveFile.worktreeId) ?? undefined
+        // Why: stamp before the write so the fs:changed event that our own
+        // write produces is ignored by useEditorExternalWatch instead of
+        // round-tripping back into a setContent that jumps the cursor to the
+        // end (and, under round-trip drift, can drop keystrokes typed in the
+        // debounce window). See editor-self-write-registry.
+        recordSelfWrite(liveFile.filePath)
+        try {
+          await window.api.fs.writeFile({
+            filePath: liveFile.filePath,
+            content: contentToSave,
+            connectionId
+          })
+        } catch (error) {
+          // Why: the self-write stamp is only valid if a disk write actually
+          // happened. Clearing it on failure keeps the external watcher from
+          // suppressing a real third-party update that lands during the TTL.
+          clearSelfWrite(liveFile.filePath)
+          throw error
+        }
 
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
           return

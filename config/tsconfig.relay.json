@@ -1,0 +1,10 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": ["../src/relay/**/*"],
+  "exclude": ["../src/relay/integration.test.ts"],
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "../src",
+    "outDir": "../out/relay"
+  }
+}

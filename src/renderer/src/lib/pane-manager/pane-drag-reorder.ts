@@ -1,4 +1,4 @@
-import type { DropZone, ManagedPaneInternal } from './pane-manager-types'
+import type { DropZone, ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import type { PaneStyleOptions } from './pane-manager-types'
 import { detachPaneFromTree, insertPaneNextTo } from './pane-tree-ops'
 
@@ -17,7 +17,7 @@ export type DragReorderCallbacks = {
   getRoot: () => HTMLElement
   getStyleOptions: () => PaneStyleOptions
   isDestroyed: () => boolean
-  safeFit: (pane: ManagedPaneInternal) => void
+  safeFit: (pane: ManagedPane) => void
   applyPaneOpacity: () => void
   applyDividerStyles: () => void
   refitPanesUnder: (el: HTMLElement) => void

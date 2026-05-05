@@ -3,6 +3,7 @@ import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star } from 'lu
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { ShortcutKeyCombo } from './ShortcutKeyCombo'
 import logo from '../../../../resources/logo.svg'
 
 type ShortcutItem = {
@@ -56,14 +57,6 @@ function getPreflightIssues(status: {
   return issues
 }
 
-function KeyCap({ label }: { label: string }): React.JSX.Element {
-  return (
-    <span className="inline-flex min-w-6 items-center justify-center rounded border border-border/80 bg-secondary/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-      {label}
-    </span>
-  )
-}
-
 type StarState = 'loading' | 'starred' | 'not-starred' | 'hidden'
 
 function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Element | null {
@@ -94,7 +87,12 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     const ok = await window.api.gh.starOrca()
     if (!ok) {
       setState('not-starred')
+      return
     }
+    // Why: starring from any entry point mutes the threshold-based nag.
+    // Without this the background notification could still fire on the next
+    // threshold crossing, which would feel like a bug to the user.
+    await window.api.starNag.complete()
   }
 
   // Hide if gh CLI is unavailable, or if the user has already starred and added a repo
@@ -208,14 +206,18 @@ export default function Landing(): React.JSX.Element {
     return () => window.clearInterval(intervalId)
   }, [preflightIssues.length])
 
-  const shortcuts = useMemo<ShortcutItem[]>(
-    () => [
-      { id: 'create', keys: ['⌘', 'N'], action: 'Create worktree' },
-      { id: 'up', keys: ['⌘', '⇧', '↑'], action: 'Move up worktree' },
-      { id: 'down', keys: ['⌘', '⇧', '↓'], action: 'Move down worktree' }
-    ],
-    []
-  )
+  const shortcuts = useMemo<ShortcutItem[]>(() => {
+    // Use platform-appropriate modifier key labels so Windows users see Ctrl/Shift
+    // rather than the Mac-only ⌘/⇧ symbols.
+    const isMac = navigator.userAgent.includes('Mac')
+    const mod = isMac ? '⌘' : 'Ctrl'
+    const shift = isMac ? '⇧' : 'Shift'
+    return [
+      { id: 'create', keys: [mod, 'N'], action: 'Create worktree' },
+      { id: 'up', keys: [mod, shift, '↑'], action: 'Move up worktree' },
+      { id: 'down', keys: [mod, shift, '↓'], action: 'Move down worktree' }
+    ]
+  }, [])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -234,7 +236,7 @@ export default function Landing(): React.JSX.Element {
           <p className="text-sm text-muted-foreground text-center">
             {canCreateWorktree
               ? 'Select a worktree from the sidebar to begin.'
-              : 'Add a repository to get started.'}
+              : 'Add a project to get started.'}
           </p>
 
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
@@ -243,14 +245,14 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('add-repo')}
             >
               <FolderPlus className="size-3.5" />
-              Add Repo
+              Add Project
             </button>
 
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
               disabled={!canCreateWorktree}
-              title={!canCreateWorktree ? 'Add a Git repo first' : undefined}
-              onClick={() => openModal('create-worktree')}
+              title={!canCreateWorktree ? 'Add a Git project first' : undefined}
+              onClick={() => openModal('new-workspace-composer')}
             >
               <GitBranchPlus className="size-3.5" />
               Create Worktree
@@ -261,11 +263,10 @@ export default function Landing(): React.JSX.Element {
             {shortcuts.map((shortcut) => (
               <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
                 <span className="text-sm text-muted-foreground">{shortcut.action}</span>
-                <div className="flex items-center gap-1">
-                  {shortcut.keys.map((key) => (
-                    <KeyCap key={`${shortcut.id}-${key}`} label={key} />
-                  ))}
-                </div>
+                <ShortcutKeyCombo
+                  keys={shortcut.keys}
+                  separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
+                />
               </div>
             ))}
           </div>

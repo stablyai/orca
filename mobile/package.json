@@ -1,0 +1,53 @@
+{
+  "name": "orca-mobile",
+  "version": "0.0.1",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "lint": "oxlint",
+    "format": "oxfmt --write .",
+    "mock-server": "npx tsx scripts/mock-server.ts"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo": "^55.0.17",
+    "expo-build-properties": "^55.0.13",
+    "expo-camera": "^55.0.16",
+    "expo-constants": "^55.0.15",
+    "expo-crypto": "^55.0.14",
+    "expo-haptics": "^55.0.14",
+    "expo-linking": "^55.0.14",
+    "expo-notifications": "^55.0.21",
+    "expo-router": "^55.0.13",
+    "expo-splash-screen": "^55.0.19",
+    "expo-status-bar": "^55.0.5",
+    "lucide-react-native": "^1.11.0",
+    "react": "^19.2.0",
+    "react-native": "^0.83.6",
+    "react-native-gesture-handler": "^2.30.1",
+    "react-native-reanimated": "^4.2.1",
+    "react-native-safe-area-context": "^5.6.2",
+    "react-native-screens": "^4.23.0",
+    "react-native-svg": "^15.15.4",
+    "react-native-web": "^0.21.2",
+    "react-native-webview": "^13.16.1",
+    "react-native-worklets": "^0.7.4",
+    "tweetnacl": "^1.0.3",
+    "ws": "^8.18.0",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-native": "^0.73.0",
+    "@types/ws": "^8.18.1",
+    "expo-module-scripts": "^55.0.2",
+    "oxfmt": "^0.47.0",
+    "oxlint": "^1.62.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3"
+  }
+}

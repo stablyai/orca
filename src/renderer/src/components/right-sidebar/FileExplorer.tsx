@@ -2,29 +2,31 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { dirname, normalizeRelativePath } from '@/lib/path'
+import { useActiveWorktree } from '@/store/selectors'
+import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { FileDeleteDialog } from './FileDeleteDialog'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
-import { FileExplorerRow, InlineInputRow } from './FileExplorerRow'
+import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import { splitPathSegments } from './path-tree'
-import { buildFolderStatusMap, buildStatusMap, STATUS_COLORS } from './status-display'
+import { buildFolderStatusMap, buildStatusMap } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
+import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
-import { useActiveWorktreePath } from './useActiveWorktreePath'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
+import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 
-export default function FileExplorer(): React.JSX.Element {
+function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const activeWorktree = useActiveWorktree()
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const toggleDir = useAppStore((s) => s.toggleDir)
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
@@ -36,7 +38,7 @@ export default function FileExplorer(): React.JSX.Element {
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
 
-  const worktreePath = useActiveWorktreePath(activeWorktreeId, worktreesByRepo)
+  const worktreePath = activeWorktree?.path ?? null
 
   const expanded = useMemo(
     () =>
@@ -55,13 +57,15 @@ export default function FileExplorer(): React.JSX.Element {
     refreshTree,
     refreshDir,
     resetAndLoad
-  } = useFileExplorerTree(worktreePath, expanded)
+  } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
   const scrollRef = useRef<HTMLDivElement>(null)
+  /** Includes Radix scroll viewport + scrollbar (scrollbar is not a child of the viewport). */
+  const explorerShellRef = useRef<HTMLDivElement>(null)
   const flashTimeoutRef = useRef<number | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
@@ -80,16 +84,7 @@ export default function FileExplorer(): React.JSX.Element {
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 
-  const {
-    pendingDelete,
-    isDeleting,
-    deleteShortcutLabel,
-    deleteActionLabel,
-    deleteDescription,
-    requestDelete,
-    closeDeleteDialog,
-    confirmDelete
-  } = useFileDeletion({
+  const { deleteShortcutLabel, requestDelete } = useFileDeletion({
     activeWorktreeId,
     openFiles,
     closeFile,
@@ -108,8 +103,13 @@ export default function FileExplorer(): React.JSX.Element {
     dragSourcePath,
     setDragSourcePath,
     isRootDragOver,
+    isNativeDragOver,
+    nativeDropTargetDir,
+    setNativeDropTargetDir,
+    handleNativeDragExpandDir,
     stopDragEdgeScroll,
-    rootDragHandlers
+    rootDragHandlers,
+    clearNativeDragState
   } = useFileExplorerDragDrop({
     worktreePath,
     activeWorktreeId,
@@ -125,7 +125,23 @@ export default function FileExplorer(): React.JSX.Element {
     }
     setSelectedPath(null)
     resetAndLoad()
+    clearFileExplorerUndoHistory()
   }, [worktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Why: on app startup the file explorer loads before SSH providers are
+  // registered, so readDir fails for remote worktrees. When the SSH
+  // connection is later established, sshConnectedGeneration bumps and this
+  // effect retries the load. Only retries when there was a prior error to
+  // avoid redundant reloads for local worktrees.
+  const sshGenRef = useRef(sshConnectedGeneration)
+  useEffect(() => {
+    if (sshConnectedGeneration > sshGenRef.current) {
+      sshGenRef.current = sshConnectedGeneration
+      if (worktreePath && rootError) {
+        resetAndLoad()
+      }
+    }
+  }, [sshConnectedGeneration]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => clearFlashTimeout, [clearFlashTimeout])
 
@@ -166,7 +182,16 @@ export default function FileExplorer(): React.JSX.Element {
     refreshDir,
     refreshTree,
     inlineInput,
-    dragSourcePath
+    dragSourcePath,
+    isNativeDragOver
+  })
+
+  useFileExplorerImport({
+    worktreePath,
+    activeWorktreeId,
+    refreshDir,
+    clearNativeDragState,
+    setSelectedPath
   })
 
   const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
@@ -225,7 +250,7 @@ export default function FileExplorer(): React.JSX.Element {
 
   const selectedNode = selectedPath ? (rowsByPath.get(selectedPath) ?? null) : null
   useFileExplorerKeys({
-    containerRef: scrollRef,
+    containerRef: explorerShellRef,
     flatRows,
     inlineInput,
     selectedNode,
@@ -252,143 +277,112 @@ export default function FileExplorer(): React.JSX.Element {
     )
   }
 
-  if (flatRows.length === 0 && !inlineInput) {
-    if (rootCache?.loading ?? true) {
-      return (
-        <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-        </div>
-      )
-    }
-    if (rootError) {
-      return (
-        <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-          Could not load files for this worktree: {rootError}
-        </div>
-      )
-    }
-    return (
-      <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        No files in this worktree
-      </div>
-    )
-  }
+  // Why: the root explorer container must stay mounted for loading, error,
+  // and empty states so the data-native-file-drop-target marker is always
+  // present. Without this, external file drops would have no target surface
+  // when the tree is empty, still loading, or showing a read error.
+  const isEmptyState = flatRows.length === 0 && !inlineInput
+  const isLoading = isEmptyState && (rootCache?.loading ?? true)
+  const hasError = isEmptyState && !isLoading && !!rootError
+  const isEmpty = isEmptyState && !isLoading && !hasError
+  const showTree = !isEmptyState
 
   return (
     <>
-      <ScrollArea
-        className={cn(
-          'h-full min-h-0',
-          isRootDragOver &&
-            !(dragSourcePath && dirname(dragSourcePath) === worktreePath) &&
-            'bg-border'
-        )}
-        viewportRef={scrollRef}
-        viewportClassName="h-full min-h-0 py-2"
-        onWheelCapture={handleWheelCapture}
-        onDragOver={rootDragHandlers.onDragOver}
-        onDragEnter={rootDragHandlers.onDragEnter}
-        onDragLeave={rootDragHandlers.onDragLeave}
-        onDrop={rootDragHandlers.onDrop}
-        onDragEnd={() => {
-          stopDragEdgeScroll()
-          setDropTargetDir(null)
-        }}
-        onContextMenu={(e) => {
-          const target = e.target as HTMLElement
-          if (target.closest('[data-slot="context-menu-trigger"]')) {
-            return
-          }
-          e.preventDefault()
-          setBgMenuPoint({ x: e.clientX, y: e.clientY })
-          setBgMenuOpen(true)
-        }}
-      >
-        <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-          {virtualizer.getVirtualItems().map((vItem) => {
-            const isInlineRow = inlineInputIndex >= 0 && vItem.index === inlineInputIndex
-            const rowIndex =
-              !isInlineRow && inlineInputIndex >= 0 && vItem.index > inlineInputIndex
-                ? vItem.index - 1
-                : vItem.index
-            const node = isInlineRow ? null : flatRows[rowIndex]
-            if (!isInlineRow && !node) {
-              return null
+      <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
+        <ScrollArea
+          className={cn(
+            'h-full min-h-0',
+            isRootDragOver &&
+              !(dragSourcePath && dirname(dragSourcePath) === worktreePath) &&
+              'bg-border',
+            isNativeDragOver && !nativeDropTargetDir && 'bg-border'
+          )}
+          viewportRef={scrollRef}
+          viewportTabIndex={-1}
+          viewportClassName="h-full min-h-0 py-2"
+          data-native-file-drop-target="file-explorer"
+          data-native-file-drop-dir={worktreePath}
+          onWheelCapture={handleWheelCapture}
+          onDragOver={rootDragHandlers.onDragOver}
+          onDragEnter={rootDragHandlers.onDragEnter}
+          onDragLeave={rootDragHandlers.onDragLeave}
+          onDrop={rootDragHandlers.onDrop}
+          onDragEnd={() => {
+            stopDragEdgeScroll()
+            setDropTargetDir(null)
+          }}
+          onContextMenu={(e) => {
+            const target = e.target as HTMLElement
+            if (target.closest('[data-slot="context-menu-trigger"]')) {
+              return
             }
-
-            const showInline =
-              isInlineRow ||
-              (inlineInput?.type === 'rename' && node && inlineInput.existingPath === node.path)
-            const inlineDepth = isInlineRow ? inlineInput!.depth : (node?.depth ?? 0)
-
-            if (showInline) {
-              return (
-                <div
-                  key={vItem.key}
-                  data-index={vItem.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute left-0 right-0"
-                  style={{ transform: `translateY(${vItem.start}px)` }}
-                >
-                  <InlineInputRow
-                    depth={inlineDepth}
-                    inlineInput={inlineInput!}
-                    onSubmit={handleInlineSubmit}
-                    onCancel={dismissInlineInput}
-                  />
-                </div>
-              )
+            e.preventDefault()
+            setBgMenuPoint({ x: e.clientX, y: e.clientY })
+            setBgMenuOpen(true)
+          }}
+          onDoubleClick={(e) => {
+            if (!worktreePath || inlineInput) {
+              return
             }
-
-            // Safe: the isInlineRow/showInline guards above ensure node is non-null here
-            const n = node!
-            const normalizedRelativePath = normalizeRelativePath(n.relativePath)
-            const nodeStatus = n.isDirectory
-              ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
-              : (statusByRelativePath.get(normalizedRelativePath) ?? null)
-
-            const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
-            const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null
-            const isInDropTarget =
-              dropTargetDir != null &&
-              dropTargetDir === rowParentDir &&
-              dropTargetDir !== sourceParentDir
-            return (
-              <div
-                key={vItem.key}
-                data-index={vItem.index}
-                ref={virtualizer.measureElement}
-                className={cn('absolute left-0 right-0', isInDropTarget && 'bg-border')}
-                style={{ transform: `translateY(${vItem.start}px)` }}
-              >
-                <FileExplorerRow
-                  node={n}
-                  isExpanded={expanded.has(n.path)}
-                  isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
-                  isSelected={selectedPath === n.path || activeFileId === n.path}
-                  isFlashing={flashingPath === n.path}
-                  nodeStatus={nodeStatus}
-                  statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
-                  deleteShortcutLabel={deleteShortcutLabel}
-                  targetDir={n.isDirectory ? n.path : dirname(n.path)}
-                  targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
-                  onClick={() => handleClick(n)}
-                  onDoubleClick={() => handleDoubleClick(n)}
-                  onSelect={() => setSelectedPath(n.path)}
-                  onStartNew={startNew}
-                  onStartRename={startRename}
-                  onDuplicate={handleDuplicate}
-                  onRequestDelete={() => requestDelete(n)}
-                  onMoveDrop={handleMoveDrop}
-                  onDragTargetChange={setDropTargetDir}
-                  onDragSourceChange={setDragSourcePath}
-                  onDragExpandDir={handleDragExpandDir}
-                />
-              </div>
-            )
-          })}
-        </div>
-      </ScrollArea>
+            const target = e.target as HTMLElement
+            if (target.closest('[data-slot="context-menu-trigger"]')) {
+              return
+            }
+            startNew('file', worktreePath, 0)
+          }}
+        >
+          {isLoading && (
+            <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+            </div>
+          )}
+          {hasError && (
+            <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
+              Could not load files for this worktree: {rootError}
+            </div>
+          )}
+          {isEmpty && (
+            <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
+              No files in this worktree
+            </div>
+          )}
+          {showTree && (
+            <FileExplorerVirtualRows
+              virtualizer={virtualizer}
+              inlineInputIndex={inlineInputIndex}
+              flatRows={flatRows}
+              inlineInput={inlineInput}
+              handleInlineSubmit={handleInlineSubmit}
+              dismissInlineInput={dismissInlineInput}
+              folderStatusByRelativePath={folderStatusByRelativePath}
+              statusByRelativePath={statusByRelativePath}
+              expanded={expanded}
+              dirCache={dirCache}
+              selectedPath={selectedPath}
+              activeFileId={activeFileId}
+              flashingPath={flashingPath}
+              deleteShortcutLabel={deleteShortcutLabel}
+              onClick={handleClick}
+              onDoubleClick={handleDoubleClick}
+              onSelectPath={setSelectedPath}
+              onStartNew={startNew}
+              onStartRename={startRename}
+              onDuplicate={handleDuplicate}
+              onRequestDelete={requestDelete}
+              onMoveDrop={handleMoveDrop}
+              onDragTargetChange={setDropTargetDir}
+              onDragSourceChange={setDragSourcePath}
+              onDragExpandDir={handleDragExpandDir}
+              onNativeDragTargetChange={setNativeDropTargetDir}
+              onNativeDragExpandDir={handleNativeDragExpandDir}
+              dropTargetDir={dropTargetDir}
+              dragSourcePath={dragSourcePath}
+              nativeDropTargetDir={nativeDropTargetDir}
+            />
+          )}
+        </ScrollArea>
+      </div>
 
       <FileExplorerBackgroundMenu
         open={bgMenuOpen}
@@ -397,15 +391,8 @@ export default function FileExplorer(): React.JSX.Element {
         worktreePath={worktreePath}
         onStartNew={startNew}
       />
-
-      <FileDeleteDialog
-        pendingDelete={pendingDelete}
-        isDeleting={isDeleting}
-        deleteDescription={deleteDescription}
-        deleteActionLabel={deleteActionLabel}
-        onClose={closeDeleteDialog}
-        onConfirm={() => void confirmDelete()}
-      />
     </>
   )
 }
+
+export default React.memo(FileExplorerInner)

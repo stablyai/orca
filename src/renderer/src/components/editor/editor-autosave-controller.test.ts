@@ -6,6 +6,7 @@ import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../shared/editor-sa
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { registerPendingEditorFlush } from './editor-pending-flush'
+import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
 
 type WindowStub = {
   addEventListener: Window['addEventListener']
@@ -61,6 +62,7 @@ describe('attachEditorAutosaveController', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    __clearSelfWriteRegistryForTests()
   })
 
   it('saves dirty files even when the visible EditorPanel is not mounted', async () => {
@@ -239,6 +241,42 @@ describe('attachEditorAutosaveController', () => {
     } finally {
       cleanup()
       unregisterFlush()
+    }
+  })
+
+  it('clears the self-write stamp when a save fails before touching disk', async () => {
+    const writeFile = vi.fn().mockRejectedValue(new Error('disk full'))
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.md',
+      relativePath: 'file.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/file.md', 'edited')
+    store.getState().markFileDirty('/repo/file.md', true)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await expect(requestEditorFileSave({ fileId: '/repo/file.md' })).rejects.toThrow('disk full')
+      expect(hasRecentSelfWrite('/repo/file.md')).toBe(false)
+    } finally {
+      cleanup()
     }
   })
 })

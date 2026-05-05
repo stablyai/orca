@@ -131,6 +131,7 @@
 /* Links use a proper blue instead of --primary (which is near-black/white and
    visually indistinguishable from body text). */
 .markdown-body a {
+  cursor: pointer !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 2px;
@@ -141,12 +142,27 @@
   text-decoration-color: currentColor;
 }
 
+.markdown-body .markdown-doc-link {
+  text-decoration-style: solid;
+}
+
+.markdown-body .markdown-doc-link-broken {
+  color: var(--muted-foreground);
+  cursor: default !important;
+  text-decoration-style: dotted;
+}
+
 .markdown-light .markdown-body a {
   color: #0969da;
 }
 
 .markdown-dark .markdown-body a {
   color: #58a6ff;
+}
+
+.markdown-light .markdown-body .markdown-doc-link-broken,
+.markdown-dark .markdown-body .markdown-doc-link-broken {
+  color: var(--muted-foreground);
 }
 
 .markdown-body code {
@@ -240,6 +256,26 @@
   font-size: 0.85em;
   margin-bottom: 0.5em;
 }
+/* Full-file mermaid diagram viewer — used when opening .mmd/.mermaid files
+   in diagram mode. Centers the rendered SVG and adds padding so diagrams
+   don't press against viewport edges. */
+.mermaid-viewer {
+  background: var(--color-background, transparent);
+}
+.mermaid-viewer-canvas {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100%;
+  padding: 32px 24px;
+}
+.mermaid-viewer-canvas .mermaid-block {
+  width: 100%;
+}
+.mermaid-viewer-canvas .mermaid-block svg {
+  width: 100%;
+  height: auto;
+}
 
 .markdown-body ul,
 .markdown-body ol {
@@ -276,8 +312,43 @@
   margin: 0.25em 0;
 }
 
+/* Why: native checkbox rendering has poor contrast against the dark
+   preview background (the default Electron/WebKit look is a faded gray on
+   gray). Render our own checkbox using theme tokens so both the unchecked
+   border and the checked fill remain legible in light and dark themes,
+   matching the rich editor's task list. */
 .markdown-body li > input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
   margin-right: 0.5em;
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  position: relative;
+  /* Why: nudge the box down so it aligns with the text baseline of the
+     adjacent list-item text (remark-gfm renders the checkbox inline, not
+     in a flex container, so we can't rely on align-items here). */
+  vertical-align: -2px;
+}
+
+.markdown-body li > input[type='checkbox']:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.markdown-body li > input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  /* Why: use primary-foreground so the tick contrasts against --primary in
+     both themes (white-on-dark in light mode, dark-on-light in dark mode). */
+  border: solid var(--primary-foreground);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .markdown-body blockquote {

@@ -1,5 +1,24 @@
 import { app } from 'electron'
 import { join } from 'path'
+import { getVersionManagerBinPaths } from '../codex-cli/command'
+import { getMainE2EConfig } from '../e2e-config'
+
+const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
+
+function requestDevParentShutdown(): void {
+  app.quit()
+
+  const forceExitTimer = setTimeout(() => {
+    // Why: in dev, losing the supervising parent means this Electron process is
+    // already orphaned from the terminal session. We try app.quit() first so
+    // normal cleanup still runs, but fall back to app.exit() when macOS quit
+    // handlers or window-close guards stall and would otherwise leave Orca
+    // hanging after Ctrl+C ends `pnpm dev`.
+    app.exit(0)
+  }, DEV_PARENT_SHUTDOWN_GRACE_MS)
+
+  forceExitTimer.unref()
+}
 
 export function installUncaughtPipeErrorGuard(): void {
   process.on('uncaughtException', (error) => {
@@ -33,8 +52,27 @@ export function patchPackagedProcessPath(): void {
   ]
 
   if (home) {
-    extraPaths.push(join(home, '.local/bin'), join(home, '.nix-profile/bin'))
+    extraPaths.push(
+      join(home, 'bin'),
+      join(home, '.local/bin'),
+      join(home, '.nix-profile/bin'),
+      // Why: several agent CLIs ship install scripts that drop binaries into
+      // tool-specific ~/.<name>/bin directories (opencode's documented fallback,
+      // Pi's vite-plus installer). GUI-launched Electron inherits a minimal PATH
+      // without shell rc files, so these stay invisible to `which` probes — and
+      // the Agents settings page reports them as "Not installed" even when the
+      // user can run them from Terminal. See stablyai/orca#829.
+      join(home, '.opencode/bin'),
+      join(home, '.vite-plus/bin')
+    )
   }
+
+  // Why: CLI tools installed via Node version managers (nvm, volta, asdf, fnm,
+  // pnpm, yarn, bun) use #!/usr/bin/env node shebangs that need `node` in PATH.
+  // resolveCodexCommand() can locate the codex binary in these directories, but
+  // spawning it still fails if node itself isn't in PATH. Adding version manager
+  // bin paths here fixes all spawn sites (login, rate limits, usage tracking).
+  extraPaths.push(...getVersionManagerBinPaths())
 
   const currentPath = process.env.PATH ?? ''
   const existing = new Set(currentPath.split(':'))
@@ -46,7 +84,25 @@ export function patchPackagedProcessPath(): void {
 }
 
 export function configureDevUserDataPath(isDev: boolean): void {
+  const e2eConfig = getMainE2EConfig()
+  if (e2eConfig.userDataDir) {
+    // Why: the E2E suite launches a fresh Electron app for each spec. A
+    // dedicated userData path per launch prevents persisted repos, worktrees,
+    // and session state from leaking between tests through the shared dev
+    // profile while still leaving the user's real packaged profile untouched.
+    app.setPath('userData', e2eConfig.userDataDir)
+    return
+  }
+
   if (!isDev) {
+    return
+  }
+  const overrideUserDataPath = process.env.ORCA_DEV_USER_DATA_PATH
+  if (overrideUserDataPath) {
+    // Why: automated Electron repros need an isolated profile so persisted
+    // tabs/worktrees from the developer's normal `orca-dev` session do not
+    // change startup behavior and hide or create window-management bugs.
+    app.setPath('userData', overrideUserDataPath)
     return
   }
   // Why: development runs share the same machine as packaged Orca, and both
@@ -66,7 +122,7 @@ export function installDevParentDisconnectQuit(isDev: boolean): void {
   // without terminating the app window, so in dev we quit explicitly when the
   // supervising IPC channel disconnects instead of leaving a stray Electron app.
   process.once('disconnect', () => {
-    app.quit()
+    requestDevParentShutdown()
   })
 }
 
@@ -106,7 +162,7 @@ export function installDevParentWatchdog(isDev: boolean): void {
       // the dev runner while leaving Orca open. Watching the original parent PID
       // keeps dev shutdown coupled to the terminal session without affecting the
       // packaged app, which is not supervised by electron-vite.
-      app.quit()
+      requestDevParentShutdown()
     }
   }, 1000)
 
@@ -114,6 +170,16 @@ export function installDevParentWatchdog(isDev: boolean): void {
 }
 
 export function enableMainProcessGpuFeatures(): void {
-  app.commandLine.appendSwitch('enable-features', 'Vulkan,UseSkiaGraphite')
-  app.commandLine.appendSwitch('enable-unsafe-webgpu')
+  const existingFeatures = app.commandLine.getSwitchValue('enable-features')
+  const features = [
+    // Why: mirror VS Code's conservative Electron GPU-channel startup flags
+    // instead of opting into Vulkan/SkiaGraphite/unsafe WebGPU globally.
+    // Terminal acceleration is controlled by xterm WebGL in the renderer.
+    'EarlyEstablishGpuChannel',
+    'EstablishGpuChannelAsync',
+    existingFeatures
+  ]
+    .filter(Boolean)
+    .join(',')
+  app.commandLine.appendSwitch('enable-features', features)
 }

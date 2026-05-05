@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Orca Mobile – Homepage Redesign</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg-base: #111111;
+    --bg-panel: #1a1a1a;
+    --bg-raised: #242424;
+    --border-subtle: #2a2a2a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #888888;
+    --text-muted: #555555;
+    --accent-blue: #3b82f6;
+    --status-green: #22c55e;
+    --status-amber: #f59e0b;
+    --status-red: #ef4444;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* ─── Top bar ─── */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px 8px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand svg { width: 20px; height: 20px; }
+  .brand-name { font-size: 17px; font-weight: 700; }
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .icon-btn:hover { background: var(--bg-raised); }
+
+  /* ─── Greeting ─── */
+  .greeting {
+    padding: 8px 20px 4px;
+  }
+  .greeting-time {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .greeting-title {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+
+  /* ─── Stats row — desktop-matching minimal style ─── */
+  .stats-row {
+    display: flex;
+    gap: 10px;
+    padding: 16px 20px 8px;
+  }
+  .stat-card {
+    flex: 1;
+    background: rgba(26, 26, 26, 0.6);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .stat-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: rgba(255,255,255, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    color: var(--text-muted);
+  }
+  .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    line-height: 1.1;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    font-weight: 500;
+  }
+
+  /* ─── Section headings ─── */
+  .section-heading {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 20px 20px 8px;
+  }
+
+  /* ─── Host cards ─── */
+  .host-list {
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .host-card {
+    background: var(--bg-panel);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    border: 1px solid var(--border-subtle);
+  }
+  .host-card:hover { background: var(--bg-raised); }
+  .host-card:active { transform: scale(0.985); }
+  .host-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    background: var(--bg-raised);
+  }
+  .host-icon svg { color: var(--text-primary); }
+  .host-status-ring {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    border: 2px solid var(--bg-panel);
+  }
+  .host-card.connected .host-status-ring { background: var(--status-green); }
+  .host-card.disconnected .host-status-ring { background: var(--text-muted); }
+  .host-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .host-name {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .host-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 3px;
+  }
+  .host-meta-item {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .host-meta-item svg { width: 12px; height: 12px; }
+  .host-meta-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+  .host-chevron {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* ─── Quick actions ─── */
+  .quick-actions {
+    padding: 0 16px;
+    display: flex;
+    gap: 8px;
+  }
+  .quick-action {
+    flex: 1;
+    background: var(--bg-panel);
+    border-radius: 14px;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border: 1px solid var(--border-subtle);
+    text-decoration: none;
+  }
+  .quick-action:hover { background: var(--bg-raised); }
+  .quick-action-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255, 0.04);
+    color: var(--text-secondary);
+  }
+  .quick-action-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  /* ─── Resume session card ─── */
+  .resume-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin: 0 16px;
+  }
+  .resume-card:hover { background: var(--bg-raised); }
+  .resume-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(255,255,255, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+  }
+  .resume-main { flex: 1; min-width: 0; }
+  .resume-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .resume-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .resume-sub .repo-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .resume-arrow {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* ─── Recent activity ─── */
+  .activity-list {
+    padding: 0 16px;
+  }
+  .activity-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .activity-item {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .activity-item + .activity-item {
+    border-top: 1px solid var(--border-subtle);
+  }
+  .activity-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .activity-dot.working { background: var(--status-green); }
+  .activity-dot.pr { background: #38bdf8; }
+  .activity-dot.done { background: var(--text-muted); }
+  .activity-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .activity-text {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .activity-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* Spacer */
+  .bottom-spacer { height: 40px; }
+
+  /* ─── Comparison toggle ─── */
+  .compare-bar {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px 16px;
+    gap: 4px;
+  }
+  .compare-bar button {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .compare-bar button.active {
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+  }
+
+  .version { display: none; }
+  .version.active { display: block; }
+
+  /* ─── Empty state (onboarding) ─── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: calc(100vh - 44px);
+    padding-top: 44px;
+  }
+  .empty-hero {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 32px 40px;
+    text-align: center;
+    max-width: 340px;
+  }
+  .empty-glyph {
+    width: 80px;
+    height: 80px;
+    border-radius: 24px;
+    background: rgba(255,255,255, 0.04);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+  .empty-glyph svg {
+    color: var(--text-secondary);
+  }
+  .empty-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    margin-bottom: 10px;
+  }
+  .empty-body {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 32px;
+  }
+  .empty-cta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--text-primary);
+    color: var(--bg-base);
+    border: none;
+    padding: 14px 28px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .empty-cta:active { transform: scale(0.97); opacity: 0.9; }
+  .empty-cta svg { color: var(--bg-base); }
+
+  .empty-steps {
+    width: 100%;
+    padding: 0 24px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .empty-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 0;
+  }
+  .empty-step + .empty-step {
+    border-top: 1px solid var(--border-subtle);
+  }
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(255,255,255, 0.04);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .step-text {
+    flex: 1;
+  }
+  .step-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+  }
+  .step-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+
+<div class="compare-bar">
+  <button class="active" onclick="toggle('current')">Current</button>
+  <button onclick="toggle('proposed')">Proposed</button>
+  <button onclick="toggle('empty')">Empty State</button>
+</div>
+
+<!-- ═══════════════ CURRENT VERSION ═══════════════ -->
+<div id="version-current" class="version active" style="padding-top: 44px;">
+  <div class="top-bar">
+    <div class="brand">
+      <svg viewBox="0 0 100 60" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><path d="M10 45 Q25 15 40 35 Q55 55 70 25 L90 15" /></svg>
+      <span class="brand-name">Orca</span>
+    </div>
+  </div>
+
+  <div class="greeting">
+    <div class="greeting-title">Welcome back</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card" style="background: var(--bg-panel); border: none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      <div class="stat-value" style="margin-top: 8px;">294</div>
+      <div class="stat-label">Agents</div>
+    </div>
+    <div class="stat-card" style="background: var(--bg-panel); border: none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <div class="stat-value" style="margin-top: 8px;">1d 14h</div>
+      <div class="stat-label">Agent time</div>
+    </div>
+    <div class="stat-card" style="background: var(--bg-panel); border: none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M6 9v12"/></svg>
+      <div class="stat-value" style="margin-top: 8px;">277</div>
+      <div class="stat-label">PRs</div>
+    </div>
+  </div>
+
+  <div class="section-heading">Desktops</div>
+  <div class="host-list">
+    <div class="host-card" style="border: none;">
+      <div class="host-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </div>
+      <div class="host-main">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <div style="width:8px; height:8px; border-radius:4px; background: var(--status-green);"></div>
+          <div class="host-name">Host 1</div>
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Connected</div>
+      </div>
+      <div style="color: var(--text-secondary);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </div>
+    </div>
+
+    <div class="host-card" style="border: none;">
+      <div class="host-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </div>
+      <div class="host-main">
+        <div class="host-name">Pair another desktop</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Scan a QR code from Orca desktop</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 300px;"></div>
+
+  <div style="display: flex; justify-content: center; padding: 16px 0 32px; gap: 6px; align-items: center;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Settings</span>
+  </div>
+</div>
+
+<!-- ═══════════════ PROPOSED VERSION ═══════════════ -->
+<div id="version-proposed" class="version" style="padding-top: 44px;">
+  <div class="top-bar">
+    <div class="brand">
+      <svg viewBox="0 0 100 60" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><path d="M10 45 Q25 15 40 35 Q55 55 70 25 L90 15" /></svg>
+      <span class="brand-name">Orca</span>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="greeting">
+
+    <div class="greeting-title">Welcome back</div>
+  </div>
+
+  <!-- Stat cards — desktop-matching: border-border/50, bg-card/60, muted icon box -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <div class="stat-value">294</div>
+      <div class="stat-label">Agents</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div class="stat-value">1d 14h</div>
+      <div class="stat-label">Agent time</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M6 9v12"/></svg>
+      </div>
+      <div class="stat-value">277</div>
+      <div class="stat-label">PRs</div>
+    </div>
+  </div>
+
+  <!-- Host cards with richer metadata -->
+  <div class="section-heading">Desktops</div>
+  <div class="host-list">
+    <div class="host-card connected">
+      <div class="host-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <div class="host-status-ring"></div>
+      </div>
+      <div class="host-main">
+        <div class="host-name">Host 1</div>
+        <div class="host-meta">
+          <span class="host-meta-item">12 worktrees</span>
+          <div class="host-meta-dot"></div>
+          <span class="host-meta-item" style="color: var(--status-green);">3 active</span>
+        </div>
+      </div>
+      <div class="host-chevron">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+
+    <div class="host-card disconnected">
+      <div class="host-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <div class="host-status-ring"></div>
+      </div>
+      <div class="host-main">
+        <div class="host-name" style="color: var(--text-secondary);">Work Laptop</div>
+        <div class="host-meta">
+          <span class="host-meta-item" style="color: var(--text-muted);">Disconnected</span>
+          <div class="host-meta-dot"></div>
+          <span class="host-meta-item" style="color: var(--text-muted);">Last seen 2h ago</span>
+        </div>
+      </div>
+      <div class="host-chevron">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resume last session -->
+  <div class="section-heading">Resume</div>
+  <div class="resume-card">
+    <div class="resume-icon">
+      <!-- terminal icon -->
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+    </div>
+    <div class="resume-main">
+      <div class="resume-title">fix-auth-middleware</div>
+      <div class="resume-sub">
+        <span class="repo-dot" style="background: #8b5cf6;"></span>
+        orca&nbsp;&nbsp;·&nbsp;&nbsp;feat/auth-v2
+      </div>
+    </div>
+    <div class="resume-arrow">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="section-heading">Quick Actions</div>
+  <div class="quick-actions">
+    <a class="quick-action">
+      <div class="quick-action-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </div>
+      <span class="quick-action-label">Pair Desktop</span>
+    </a>
+    <a class="quick-action">
+      <div class="quick-action-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <span class="quick-action-label">New Worktree</span>
+    </a>
+  </div>
+
+  <!-- Recent activity -->
+  <div class="section-heading">Recent Activity</div>
+  <div class="activity-list">
+    <div class="activity-card">
+      <div class="activity-item">
+        <div class="activity-dot working"></div>
+        <div class="activity-main">
+          <div class="activity-text">Agent completed: fix login validation</div>
+          <div class="activity-time">Host 1 · 12 min ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot pr"></div>
+        <div class="activity-main">
+          <div class="activity-text">PR #284 merged: update auth middleware</div>
+          <div class="activity-time">Host 1 · 1h ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot done"></div>
+        <div class="activity-main">
+          <div class="activity-text">Agent started: refactor payment flow</div>
+          <div class="activity-time">Host 1 · 2h ago</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-spacer"></div>
+</div>
+
+<!-- ═══════════════ EMPTY STATE (no desktops paired) ═══════════════ -->
+<div id="version-empty" class="version" style="padding-top: 44px;">
+  <div class="top-bar">
+    <div class="brand">
+      <svg viewBox="0 0 100 60" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><path d="M10 45 Q25 15 40 35 Q55 55 70 25 L90 15" /></svg>
+      <span class="brand-name">Orca</span>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="greeting" style="padding-bottom: 0;">
+
+    <div class="greeting-title">Welcome to Orca</div>
+  </div>
+
+  <div class="empty-state" style="min-height: auto;">
+    <div class="empty-hero" style="padding-top: 48px;">
+      <div class="empty-glyph">
+        <!-- monitor + link icon -->
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <div class="empty-title">Connect your desktop</div>
+      <div class="empty-body">
+        Pair with Orca on your computer to monitor worktrees, watch agents work, and manage terminals — all from your phone.
+      </div>
+      <button class="empty-cta">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Scan Pairing Code
+      </button>
+    </div>
+
+    <div class="empty-steps">
+      <div class="section-heading" style="padding-left: 0; padding-right: 0;">How it works</div>
+      <div class="empty-step">
+        <div class="step-num">1</div>
+        <div class="step-text">
+          <div class="step-title">Open Orca desktop</div>
+          <div class="step-desc">Go to Settings → Mobile and generate a pairing QR code.</div>
+        </div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">2</div>
+        <div class="step-text">
+          <div class="step-title">Scan the code</div>
+          <div class="step-desc">Tap the button above to open the scanner. Point at the QR code on your screen.</div>
+        </div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">3</div>
+        <div class="step-text">
+          <div class="step-title">You're connected</div>
+          <div class="step-desc">Your desktop will appear here. Everything is encrypted end-to-end.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggle(version) {
+  document.getElementById('version-current').classList.toggle('active', version === 'current');
+  document.getElementById('version-proposed').classList.toggle('active', version === 'proposed');
+  document.getElementById('version-empty').classList.toggle('active', version === 'empty');
+  document.querySelectorAll('.compare-bar button').forEach(btn => {
+    btn.classList.toggle('active',
+      (version === 'current' && btn.textContent === 'Current') ||
+      (version === 'proposed' && btn.textContent === 'Proposed') ||
+      (version === 'empty' && btn.textContent === 'Empty State')
+    );
+  });
+}
+</script>
+</body>
+</html>

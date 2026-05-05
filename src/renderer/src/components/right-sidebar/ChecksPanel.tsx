@@ -1,8 +1,9 @@
 /* eslint-disable max-lines -- Why: the checks panel co-locates PR header, checks, comments,
 merge actions, and conflict state in one component to keep the data flow straightforward. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import PRActions from './PRActions'
@@ -17,12 +18,19 @@ import {
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 
 export default function ChecksPanel(): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const repos = useAppStore((s) => s.repos)
+  const repo = useRepoById(activeWorktree?.repoId ?? null)
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+
+  // Why: the sidebar stays mounted when closed (for performance). Gate
+  // polling on visibility so we don't fetch checks/comments in the background
+  // when the panel isn't visible to the user.
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
 
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const fetchPRComments = useAppStore((s) => s.fetchPRComments)
@@ -43,22 +51,26 @@ export default function ChecksPanel(): React.JSX.Element {
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
 
-  // Find active worktree and repo
-  const { worktree, repo } = useMemo(() => {
-    if (!activeWorktreeId) {
-      return { worktree: null, repo: null }
-    }
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      const wt = worktrees.find((w) => w.id === activeWorktreeId)
-      if (wt) {
-        const r = repos.find((rp) => rp.id === wt.repoId)
-        return { worktree: wt, repo: r ?? null }
-      }
-    }
-    return { worktree: null, repo: null }
-  }, [activeWorktreeId, worktreesByRepo, repos])
+  // Why: the sidebar no longer uses key={activeWorktreeId} to force a full
+  // remount on worktree switch (that caused an IPC storm on Windows).
+  // Reset worktree-specific local state so stale UI from the previous
+  // worktree doesn't leak (e.g. mid-edit title, stale loading indicators).
+  // Done during render (not useEffect) so the reset takes effect on the same
+  // paint as the worktree change — useEffect would leave one render with the
+  // previous worktree's stale title/loading state visible.
+  const [prevActiveWorktreeId, setPrevActiveWorktreeId] = useState(activeWorktreeId)
+  if (activeWorktreeId !== prevActiveWorktreeId) {
+    setPrevActiveWorktreeId(activeWorktreeId)
+    setEditingTitle(false)
+    setTitleDraft('')
+    setTitleSaving(false)
+    setIsRefreshing(false)
+    setEmptyRefreshing(false)
+    conflictSummaryRefreshKeyRef.current = null
+  }
 
-  const branch = worktree ? worktree.branch.replace(/^refs\/heads\//, '') : ''
+  // Find active worktree and repo
+  const branch = activeWorktree ? activeWorktree.branch.replace(/^refs\/heads\//, '') : ''
   const isFolder = repo ? isFolderRepo(repo) : false
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
@@ -130,7 +142,7 @@ export default function ChecksPanel(): React.JSX.Element {
 
   // Fetch checks on mount + poll with exponential backoff
   useEffect(() => {
-    if (!prNumber) {
+    if (!prNumber || !isPanelVisible) {
       setChecks([])
       return
     }
@@ -158,7 +170,7 @@ export default function ChecksPanel(): React.JSX.Element {
         clearTimeout(pollRef.current)
       }
     }
-  }, [fetchChecks, prNumber])
+  }, [fetchChecks, isPanelVisible, prNumber])
 
   // Fetch comments once when PR changes (no polling — comments change infrequently).
   // The manual refresh path calls this directly; the auto-fetch effect below uses
@@ -187,7 +199,7 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!repo || !prNumber) {
+    if (!repo || !prNumber || !isPanelVisible) {
       setComments([])
       return
     }
@@ -212,7 +224,7 @@ export default function ChecksPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [repo, prNumber, fetchPRComments])
+  }, [repo, prNumber, isPanelVisible, fetchPRComments])
 
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
@@ -315,7 +327,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [pr])
 
   // ── Empty state ──
-  if (!worktree) {
+  if (!activeWorktree) {
     return (
       <div className="px-4 py-6">
         <div className="text-sm font-medium text-foreground">No worktree selected</div>
@@ -466,8 +478,8 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
 
         {/* Merge / Delete Worktree actions */}
-        {worktree && repo && (
-          <PRActions pr={pr} repo={repo} worktree={worktree} onRefreshPR={handleRefreshPR} />
+        {activeWorktree && repo && (
+          <PRActions pr={pr} repo={repo} worktree={activeWorktree} onRefreshPR={handleRefreshPR} />
         )}
       </div>
 

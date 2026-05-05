@@ -103,7 +103,7 @@ export type BrowserGrabResult =
 // ---------------------------------------------------------------------------
 
 export type BrowserSetGrabModeArgs = {
-  browserTabId: string
+  browserPageId: string
   enabled: boolean
 }
 
@@ -113,16 +113,16 @@ export type BrowserGrabRejectReason = 'not-ready' | 'not-authorized' | 'already-
 export type BrowserSetGrabModeResult = { ok: true } | { ok: false; reason: BrowserGrabRejectReason }
 
 export type BrowserAwaitGrabSelectionArgs = {
-  browserTabId: string
+  browserPageId: string
   opId: string
 }
 
 export type BrowserCancelGrabArgs = {
-  browserTabId: string
+  browserPageId: string
 }
 
 export type BrowserCaptureSelectionScreenshotArgs = {
-  browserTabId: string
+  browserPageId: string
   rect: BrowserGrabRect
 }
 
@@ -131,7 +131,7 @@ export type BrowserCaptureSelectionScreenshotResult =
   | { ok: false; reason: string }
 
 export type BrowserExtractHoverArgs = {
-  browserTabId: string
+  browserPageId: string
 }
 
 export type BrowserExtractHoverResult =

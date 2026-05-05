@@ -5,6 +5,7 @@ import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-sear
 type SearchableSettingProps = SettingsSearchEntry & {
   children: React.ReactNode
   className?: string
+  id?: string
 }
 
 export function SearchableSetting({
@@ -12,12 +13,17 @@ export function SearchableSetting({
   description,
   keywords,
   children,
-  className
+  className,
+  id
 }: SearchableSettingProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
   if (!matchesSettingsSearch(query, { title, description, keywords })) {
     return null
   }
 
-  return <div className={className}>{children}</div>
+  return (
+    <div className={className} id={id}>
+      {children}
+    </div>
+  )
 }

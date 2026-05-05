@@ -23,13 +23,17 @@ const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
  */
 export async function getStatus(worktreePath: string): Promise<GitStatusResult> {
   const entries: GitStatusEntry[] = []
-  const conflictOperation = await detectConflictOperation(worktreePath)
+
+  // Why: detectConflictOperation (4 existsSync + readFile) and git status are
+  // independent. Running them concurrently saves one round-trip of I/O latency.
+  const conflictPromise = detectConflictOperation(worktreePath)
+  const statusPromise = gitExecFileAsync(['status', '--porcelain=v2', '--untracked-files=all'], {
+    cwd: worktreePath
+  })
+  const conflictOperation = await conflictPromise
 
   try {
-    const { stdout } = await gitExecFileAsync(
-      ['status', '--porcelain=v2', '--untracked-files=all'],
-      { cwd: worktreePath }
-    )
+    const { stdout } = await statusPromise
 
     // [Fix]: Split by /\r?\n/ instead of '\n' to correctly parse git output on Windows,
     // avoiding trailing \r characters in parsed paths.
@@ -264,7 +268,7 @@ export async function detectConflictOperation(worktreePath: string): Promise<Git
   return 'unknown'
 }
 
-async function resolveGitDir(worktreePath: string): Promise<string> {
+export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
 
   try {
@@ -286,7 +290,8 @@ async function resolveGitDir(worktreePath: string): Promise<string> {
 export async function getDiff(
   worktreePath: string,
   filePath: string,
-  staged: boolean
+  staged: boolean,
+  compareAgainstHead = false
 ): Promise<GitDiffResult> {
   let originalContent = ''
   let modifiedContent = ''
@@ -296,7 +301,9 @@ export async function getDiff(
   try {
     const leftBlob = staged
       ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath)
-      : await readUnstagedLeftBlob(worktreePath, filePath)
+      : compareAgainstHead
+        ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath)
+        : await readUnstagedLeftBlob(worktreePath, filePath)
     originalContent = leftBlob.content
     originalIsBinary = leftBlob.isBinary
 
@@ -371,8 +378,10 @@ export async function getBranchCompare(
   }
 
   try {
-    const entries = await loadBranchChanges(worktreePath, mergeBase, headOid)
-    const commitsAhead = await countAheadCommits(worktreePath, baseOid, headOid)
+    const [entries, commitsAhead] = await Promise.all([
+      loadBranchChanges(worktreePath, mergeBase, headOid),
+      countAheadCommits(worktreePath, baseOid, headOid)
+    ])
     summary.changedFiles = entries.length
     summary.commitsAhead = commitsAhead
     summary.status = 'ready'
@@ -648,6 +657,34 @@ export async function stageFile(worktreePath: string, filePath: string): Promise
  */
 export async function unstageFile(worktreePath: string, filePath: string): Promise<void> {
   await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
+}
+
+export async function commitChanges(
+  worktreePath: string,
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await gitExecFileAsync(['commit', '-m', message], { cwd: worktreePath })
+    return { success: true }
+  } catch (error) {
+    // Why: surface whichever channel carries the useful message. Pre-commit/GPG
+    // hook failures write to stderr; "nothing to commit, working tree clean"
+    // writes to stdout. Try stderr first, fall back to stdout, then error.message.
+    const readStringField = (field: string): string | null => {
+      if (typeof error === 'object' && error && field in error) {
+        const v = (error as Record<string, unknown>)[field]
+        if (typeof v === 'string' && v.length > 0) {
+          return v
+        }
+      }
+      return null
+    }
+    const errorMessage =
+      readStringField('stderr') ??
+      readStringField('stdout') ??
+      (error instanceof Error ? error.message : 'Commit failed')
+    return { success: false, error: errorMessage }
+  }
 }
 
 /**

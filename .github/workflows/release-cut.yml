@@ -1,0 +1,661 @@
+name: Cut Release
+
+# Why: single entry point for manually and scheduled cutting releases.
+# Replaces the old local `pnpm release:*` scripts and the standalone scheduled
+# RC workflow so releases are always reproducible from CI and can never be
+# accidentally tagged against an uncommitted or non-main working tree.
+#
+# Flow:
+#   1. Resolve `ref` to a SHA.
+#   2. Read the latest stable release from GitHub.
+#   3. Compute the next version from `kind` (rc | patch | minor | major).
+#   4. For stable kinds, REFUSE if the new version is <= the latest stable.
+#      This is the only guard electron-updater actually needs — it compares
+#      semver within a channel, so a regressing "latest" is the one thing
+#      that breaks auto-update for fresh installs.
+#   5. Write package.json, commit (detached), tag, push tag.
+#   6. If ref was the tip of origin/main, fast-forward main to include the
+#      version-bump commit so developers see the right version locally.
+#   7. Invoke release.yml to build and publish artifacts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: Release kind
+        required: true
+        type: choice
+        default: rc
+        options:
+          - rc
+          - patch
+          - minor
+          - major
+      ref:
+        description: Branch, tag, or SHA to release from (default main)
+        required: false
+        type: string
+        default: main
+      dry_run:
+        description: Validate a scheduled-RC run without creating a tag
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Why: GitHub scheduled workflows are not guaranteed to start exactly on
+    # time and can be delayed or dropped around high-load periods. We retry
+    # across the full target hour and dedupe per PT slot. Cron is UTC, so run
+    # during both PST and PDT equivalents and let the PT-hour gate decide.
+    - cron: '*/5 10,11,22,23 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-cut
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+      should_release: ${{ steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    steps:
+      - name: Checkout ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve ref SHA
+        id: resolve
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+
+          # Why: only push the version-bump commit back to main when the
+          # caller is releasing the exact tip of main. For any older or
+          # off-main ref we leave main alone and only publish the tag.
+          git fetch origin main --quiet
+          main_sha="$(git rev-parse origin/main)"
+          if [[ "$sha" == "$main_sha" ]]; then
+            echo "push_main=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "push_main=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute RC slot
+        id: slot
+        run: |
+          slot=$(TZ=America/Los_Angeles date '+%Y-%m-%d-%H')
+          echo "value=$slot" >>"$GITHUB_OUTPUT"
+
+      - name: Validate PT release window
+        id: window
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" != "schedule" ]]; then
+            echo "allowed=true" >>"$GITHUB_OUTPUT"
+            echo "reason=manual" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          pt_hour=$(TZ=America/Los_Angeles date '+%H')
+          pt_minute=$(TZ=America/Los_Angeles date '+%M')
+
+          # Why: GitHub may deliver a scheduled event long after the intended
+          # time, so delayed 4:16 AM runs must not cut the 3:00 AM release.
+          if [[ "$pt_hour" == "03" || "$pt_hour" == "15" ]]; then
+            echo "allowed=true" >>"$GITHUB_OUTPUT"
+            echo "reason=target_hour:${pt_hour}:${pt_minute}" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "allowed=false" >>"$GITHUB_OUTPUT"
+          echo "reason=outside_target_hour:${pt_hour}:${pt_minute}" >>"$GITHUB_OUTPUT"
+
+      - name: Skip if this PT release window already ran
+        id: existing
+        if: github.event_name == 'schedule' && steps.window.outputs.allowed == 'true'
+        run: |
+          # Why: scheduled runs retry inside each target hour, so make the
+          # schedule idempotent by embedding a slot marker in the release commit.
+          if git log origin/main --grep="\\[rc-slot:${{ steps.slot.outputs.value }}\\]" -n 1 --format=%H | grep -q .; then
+            echo "already_ran=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Why: this preserves dedupe across the older scheduled workflow's
+          # first runs, before all RC cuts shared release-cut's slot marker.
+          latest_rc_tag="$(git for-each-ref --sort=-creatordate --format='%(refname:short) %(creatordate:iso-strict)' 'refs/tags/v*-rc.*' | head -n 1)"
+          if [[ -n "$latest_rc_tag" ]]; then
+            latest_rc_tag_name="${latest_rc_tag%% *}"
+            latest_rc_tag_date="${latest_rc_tag#* }"
+            latest_rc_slot="$(TZ=America/Los_Angeles date -d "$latest_rc_tag_date" '+%Y-%m-%d-%H')"
+
+            if [[ "$latest_rc_slot" == "${{ steps.slot.outputs.value }}" ]]; then
+              echo "already_ran=true" >>"$GITHUB_OUTPUT"
+              echo "reason=latest_rc_tag:$latest_rc_tag_name" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "already_ran=false" >>"$GITHUB_OUTPUT"
+
+      - name: Dry run summary
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: |
+          echo "Dry run only."
+          echo "Current PT slot: ${{ steps.slot.outputs.value }}"
+          echo "Window allowed: ${{ steps.window.outputs.allowed }}"
+          echo "Window reason: ${{ steps.window.outputs.reason }}"
+          echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
+          echo "Reason: ${{ steps.existing.outputs.reason }}"
+
+      - name: Skip summary
+        if: steps.window.outputs.allowed != 'true' || steps.existing.outputs.already_ran == 'true'
+        run: |
+          echo "Skipping release cut."
+          echo "Current PT slot: ${{ steps.slot.outputs.value }}"
+          echo "Window reason: ${{ steps.window.outputs.reason }}"
+          echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
+          echo "Reason: ${{ steps.existing.outputs.reason }}"
+
+      - name: Compute next version
+        id: version
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
+        run: |
+          set -euo pipefail
+
+          # Latest stable release tag, picked by *tag shape*:
+          #   - must start with `v<digit>` (desktop convention, e.g. v1.3.32)
+          #   - must NOT contain `-rc.` (not a prerelease)
+          #
+          # Why not the GitHub `isPrerelease` flag: electron-builder's publish
+          # step has flipped that flag back to `false` on RC releases before
+          # (v1.3.22-rc.2 on 2026-04-27 briefly became "latest" on GitHub and
+          # poisoned the math here). Tag format is authoritative.
+          #
+          # Why the `^v[0-9]` prefix: other products shipped from this repo
+          # use their own prefixes (e.g. `mobile-v0.0.1`). Without the prefix
+          # gate the latest mobile release would be selected as "latest
+          # stable", then `strip_pre()` would reduce `mobile-v0.0.1` to
+          # `mobile`, `Number("mobile")` → NaN → 0, and a patch-bump would
+          # produce `0.0.1` — exactly the wedge on 2026-05-04 (run
+          # 25304336767). Any non-desktop tag shape must be excluded here.
+          latest_stable="$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --exclude-drafts \
+              --limit 50 \
+              --json tagName \
+              --jq '[.[] | .tagName | select(test("^v[0-9]") and (test("-rc\\.") | not))] | .[0] // ""')"
+          latest_stable="${latest_stable#v}"
+          echo "Latest stable: ${latest_stable:-<none>}"
+
+          # Strip any prerelease suffix before numeric math. Without this,
+          # `Number("1-rc")` returns NaN and `(NaN||0)+1` silently collapses
+          # to 1 — exactly the path that produced v1.3.1-rc.4 on 2026-04-27
+          # when latest_stable was misread as a prerelease tag.
+          strip_pre() { echo "${1%%-*}"; }
+
+          semver_gt() {
+            # returns 0 if $1 > $2 by semver rules (ignoring prerelease)
+            node -e '
+              const a = process.argv[1].split(".").map(Number);
+              const b = process.argv[2].split(".").map(Number);
+              for (let i = 0; i < 3; i++) {
+                if ((a[i]||0) > (b[i]||0)) process.exit(0);
+                if ((a[i]||0) < (b[i]||0)) process.exit(1);
+              }
+              process.exit(1);
+            ' "$(strip_pre "$1")" "$(strip_pre "$2")"
+          }
+
+          bump() {
+            # $1=version, $2=level (patch|minor|major)
+            node -e '
+              const v = process.argv[1].split(".").map(Number);
+              const level = process.argv[2];
+              if (level === "major") console.log(`${(v[0]||0)+1}.0.0`);
+              else if (level === "minor") console.log(`${v[0]||0}.${(v[1]||0)+1}.0`);
+              else console.log(`${v[0]||0}.${v[1]||0}.${(v[2]||0)+1}`);
+            ' "$(strip_pre "$1")" "$2"
+          }
+
+          next_rc_in_series() {
+            # Given a base version, find the highest existing -rc.N for it
+            # and return base-rc.(N+1). If none exists, base-rc.0.
+            local base="$1"
+            local highest
+            highest="$(git tag --list "v${base}-rc.*" \
+                | sed -E "s/^v${base//./\\.}-rc\.//" \
+                | sort -n \
+                | tail -n 1 || true)"
+            if [[ -z "$highest" ]]; then
+              echo "${base}-rc.0"
+            else
+              echo "${base}-rc.$((highest + 1))"
+            fi
+          }
+
+          # Fresh repo fallback so the math below never divides by zero.
+          if [[ -z "$latest_stable" ]]; then
+            latest_stable="0.0.0"
+          fi
+
+          case "$KIND" in
+            rc)
+              # Why: RCs always stabilize the *next* patch after whatever
+              # is currently published as stable. Earlier logic tried to
+              # "continue the current series" by reading the highest git
+              # tag, which silently reopened a series that had already
+              # shipped (e.g. cutting v1.3.21-rc.7 after v1.3.21 stable
+              # was out). Anchoring to latest_stable + patch eliminates
+              # that class of bug; minor/major RCs are cut by running
+              # that stable kind first.
+              base="$(bump "$latest_stable" patch)"
+              new="$(next_rc_in_series "$base")"
+              ;;
+            patch|minor|major)
+              new="$(bump "$latest_stable" "$KIND")"
+              # Updater-safety gate: stable must strictly increase.
+              if ! semver_gt "$new" "$latest_stable"; then
+                echo "::error::Refusing to cut $KIND $new: not greater than latest stable $latest_stable." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unknown kind: $KIND" >&2
+              exit 1
+              ;;
+          esac
+
+          # Orphan-tag recovery.
+          #
+          # Why: if a previous cut pushed the tag but was cancelled (or the
+          # dependent release.yml job otherwise failed to start) before the
+          # GitHub Release was published, the tag now exists on the remote
+          # but "latest stable" still points at the prior version. Every
+          # subsequent patch cut then recomputes the same version and dies
+          # on "Tag already exists." This exact sequence wedged the cut
+          # pipeline on 2026-05-01 when v1.3.26 was pushed by a cancelled
+          # run (25237882049) — every patch cut after that rehit the same
+          # tag for hours until the orphan release was dispatched by hand.
+          #
+          # Recovery policy: if the tag exists AND no GitHub release has
+          # been published for it (draft-or-absent both count as "not
+          # shipped"), treat this as a resumable state: emit the existing
+          # tag as the job output so the downstream release.yml job runs
+          # against it and finishes what the earlier attempt started. The
+          # bump/commit/push steps are skipped in that case — there is
+          # nothing to bump; the tag is already on the remote.
+          #
+          # Refuse collisions only when the tag *and* a published release
+          # already exist — that's a real conflict (someone tagged manually
+          # over a shipped version) and needs human attention.
+          if git rev-parse "v$new" >/dev/null 2>&1; then
+            # Use the REST API, not `gh release view`: the latter returns
+            # "release not found" for drafts *and* for absent releases,
+            # which would cause us to "recover" over a draft that a human
+            # is preparing. The API distinguishes them.
+            release_state="$(gh api \
+                "repos/$GITHUB_REPOSITORY/releases/tags/v$new" \
+                --jq '.draft' 2>/dev/null || echo "missing")"
+            case "$release_state" in
+              missing|true)
+                echo "::warning::Tag v$new already exists but no published release is attached — recovering by re-dispatching release.yml against the existing tag."
+                echo "recovered_tag=v$new" >>"$GITHUB_OUTPUT"
+                echo "recovered=true" >>"$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              false)
+                echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
+                exit 1
+                ;;
+              *)
+                echo "::error::Unexpected release state for v$new: $release_state" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          echo "version=$new" >>"$GITHUB_OUTPUT"
+          echo "Next version: $new"
+
+      - name: Bump package.json and tag
+        id: tag
+        if: steps.version.outputs.version != '' && steps.version.outputs.recovered != 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SLOT: ${{ steps.slot.outputs.value }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Why: use npm version --no-git-tag-version so we control the commit
+          # message and tag name explicitly (avoids npm's `v1.2.3` prefix
+          # assumptions and any lifecycle scripts that would run on bump).
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          git add package.json
+          commit_message="release: v$VERSION"
+          if [[ "$EVENT_NAME" == "schedule" ]]; then
+            commit_message="$commit_message [rc-slot:$SLOT]"
+          fi
+          git commit -m "$commit_message"
+          git tag -a "v$VERSION" -m "v$VERSION"
+          echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+
+      - name: Push tag
+        if: steps.tag.outputs.tag != ''
+        env:
+          PUSH_MAIN: ${{ steps.resolve.outputs.push_main }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$PUSH_MAIN" == "true" ]]; then
+            # Fast-forward main to include the version-bump commit.
+            git push origin "HEAD:refs/heads/main"
+            git push origin "$TAG"
+          else
+            # Off-main release — only the tag is published; main is untouched.
+            git push origin "$TAG"
+          fi
+
+  create-release:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - name: Create draft release with auto-generated notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+
+          is_rc=false
+          if [[ "$TAG" == *"-rc."* ]]; then
+            is_rc=true
+          fi
+
+          gh release create "$TAG" \
+            --draft \
+            --generate-notes \
+            --prerelease="$is_rc"
+
+  # Why: E2E runs alongside the release for visibility (failures surface as a
+  # red check on the tag), but is NOT in `publish-release`'s needs list.
+  # Releases already take a while and the suite is already a required check
+  # on PRs, so gating here would mostly delay shipping without adding signal.
+  e2e:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    uses: ./.github/workflows/e2e.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+  build:
+    needs:
+      - cut
+      - create-release
+    if: needs.cut.outputs.should_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: mac
+            release_command: ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+            eb_cache_path: |
+              ~/Library/Caches/electron
+              ~/Library/Caches/electron-builder
+          - os: windows-latest
+            platform: win
+            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+            eb_cache_path: |
+              ~\AppData\Local\electron\Cache
+              ~\AppData\Local\electron-builder\Cache
+          - os: ubuntu-latest
+            platform: linux
+            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
+            eb_cache_path: |
+              ~/.cache/electron
+              ~/.cache/electron-builder
+
+    runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      # Why: release builds hit the same native-module postinstall path as
+      # PR CI, so keep the pinned node-gyp override here too instead of
+      # relying on pnpm's bundled copy. Scoped to Linux via runner.os (not
+      # a specific matrix image) because the failing postinstall has only
+      # been observed on Linux runners — see run 25081763129. The macOS
+      # and Windows release jobs exercise the same pnpm install path and
+      # have not reproduced it, so keep the gate narrow until we know why.
+      # Using runner.os instead of matrix.os == 'ubuntu-latest' means the
+      # gate still works if another Linux matrix entry is added later.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      # Cache the Electron binary + electron-builder tool downloads (notarytool,
+      # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.eb_cache_path }}
+          key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-${{ matrix.platform }}-
+
+      # Why: pnpm install triggers electron's postinstall, which downloads the
+      # Electron binary from GitHub release assets. GitHub's download CDN
+      # occasionally returns 504s that fail the whole release. Retry on
+      # failure so transient network errors don't require a manual re-run.
+      - name: Install dependencies
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      - name: Verify macOS signing environment
+        if: matrix.platform == 'mac'
+        run: node config/scripts/verify-macos-release-env.mjs
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
+      # requires the build identity to be the literal string `stable` or `rc`,
+      # substituted by electron-vite's `define` block at build time. Derive
+      # that identity from the release tag here — `stable` for plain semver
+      # (`vX.Y.Z`), `rc` for prerelease (`vX.Y.Z-rc.N`). The strict regex is
+      # a safety net: this workflow only fires on cut-tags that already match
+      # one of those shapes, but if a future change ever loosens that, we
+      # refuse to ship rather than let an unclassified build go out with
+      # `BUILD_IDENTITY = null`.
+      - name: Classify release tag for telemetry build identity
+        id: tag-classify
+        shell: bash
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            identity=rc
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            identity=stable
+          else
+            echo "::error::Tag $TAG does not match stable or rc pattern; refusing to build official artifact"
+            exit 1
+          fi
+          echo "identity=$identity" >>"$GITHUB_OUTPUT"
+          echo "Classified $TAG as $identity"
+
+      # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
+      # produces a published binary, so this is the only place the secret
+      # needs to be in scope. The key is a PostHog *project* API key, not
+      # a server secret — it ships in every official binary's app.asar
+      # and is therefore extractable from any release. We still keep it
+      # in GitHub Actions secrets so the literal stays out of the repo
+      # (and out of fork CI runs / log scrapers / casual greps).
+      # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
+      # value comes from the per-tag classification above and electron-vite
+      # reads it from `process.env` during `pnpm build:release` only.
+      - name: Build app
+        run: pnpm build:release
+        env:
+          ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be
+      # passed to non-macOS builds. electron-builder uses CSC_LINK as the
+      # code-signing certificate on any platform, so leaking the Apple
+      # Developer ID cert to the Windows build causes the NSIS installer to
+      # be signed with an Apple cert whose chain Windows cannot validate,
+      # breaking the auto-updater with "certificate chain could not be built
+      # to a trusted root authority" (issue #631).
+      #
+      # Why retry: electron-builder downloads NSIS/winCodeSign/squirrel
+      # binaries and the Electron runtime from GitHub release assets during
+      # publish. GitHub's download CDN occasionally returns 504s that fail
+      # the whole release. Retry on failure so transient network errors
+      # don't require a manual re-run.
+      - name: Publish release artifacts (macOS)
+        if: matrix.platform == 'mac'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: ${{ matrix.release_command }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Publish release artifacts
+        if: matrix.platform != 'mac'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: ${{ matrix.release_command }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Why post-publish (not pre-publish): electron-builder packs and
+      # uploads in a single `--publish always` invocation, so there is no
+      # cheap insertion point between pack and upload without splitting
+      # that step. Running verify last still blocks the bad release: the
+      # binary is uploaded to the draft, but a failed matrix job blocks
+      # the `publish-release` job (which depends on `build`) from flipping
+      # the release from draft → published, so users never see it. A human
+      # then deletes the draft and re-cuts.
+      #
+      # Why this guards against: a misconfigured CI run where
+      # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify
+      # would otherwise produce a binary with `BUILD_IDENTITY = null` and
+      # `WRITE_KEY = null`, which silently disables transport
+      # (`IS_OFFICIAL_BUILD === false`) — the exact failure mode flagged
+      # in PR #1385's deferred follow-up.
+      - name: Verify telemetry constants present in app.asar
+        run: node config/scripts/verify-telemetry-constants.mjs
+
+  publish-release:
+    needs:
+      - cut
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        # Why: derive `--prerelease` from the tag shape (not from whatever
+        # electron-builder left the release flagged as). On 2026-04-27,
+        # electron-builder's publish step flipped `prerelease` back to
+        # `false` on -rc.N releases, which caused an RC to be marked as
+        # GitHub's "latest" release and broke release-cut.yml's math.
+        # Re-asserting here means the final release state is determined
+        # by the tag — a ground truth electron-builder can't rewrite.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" == *"-rc."* ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+          gh release edit "$TAG" \
+            --draft=false \
+            --prerelease="$prerelease" \
+            --repo "$GITHUB_REPOSITORY"
+
+  homebrew-bump:
+    needs:
+      - cut
+      - publish-release
+    if: ${{ !contains(needs.cut.outputs.tag, '-rc.') }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      tag: ${{ needs.cut.outputs.tag }}
+    secrets: inherit

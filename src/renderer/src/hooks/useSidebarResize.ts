@@ -62,12 +62,22 @@ export function useSidebarResize<T extends HTMLElement>({
   const startWidthRef = useRef(width)
   const draftWidthRef = useRef(width)
   const frameRef = useRef<number | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
   const [isResizing, setIsResizing] = useState(false)
+
+  const removeDragOverlay = useCallback(() => {
+    const overlay = overlayRef.current
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay)
+    }
+    overlayRef.current = null
+  }, [])
 
   const resetDocumentStyles = useCallback(() => {
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-  }, [])
+    removeDragOverlay()
+  }, [removeDragOverlay])
 
   const applyRenderedWidth = useCallback(
     (nextWidth: number) => {
@@ -177,6 +187,23 @@ export function useSidebarResize<T extends HTMLElement>({
       draftWidthRef.current = width
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
+
+      // Why: native plugins like Chromium's PDF <embed> capture pointer events
+      // internally, so dragging across them swallows the `mouseup` on the
+      // window and the resize never stops — the sidebar ends up following the
+      // cursor indefinitely. A full-viewport transparent overlay above all
+      // content keeps mouse events flowing to the window listeners for the
+      // duration of the drag.
+      if (!overlayRef.current) {
+        const overlay = document.createElement('div')
+        overlay.style.position = 'fixed'
+        overlay.style.inset = '0'
+        overlay.style.zIndex = '2147483647'
+        overlay.style.cursor = 'col-resize'
+        overlay.style.background = 'transparent'
+        document.body.appendChild(overlay)
+        overlayRef.current = overlay
+      }
     },
     [width]
   )

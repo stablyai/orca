@@ -3,6 +3,8 @@ paths together in one file makes it easier to audit the protocol/parsing
 differences and ensure account-scoped env handling stays identical. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
+import { resolveCodexCommand } from '../codex-cli/command'
+import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
 
 const RPC_TIMEOUT_MS = 10_000
 const PTY_TIMEOUT_MS = 15_000
@@ -84,11 +86,27 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let resolved = false
     let rpcId = 0
 
-    const child = spawn('codex', ['-s', 'read-only', '-a', 'untrusted', 'app-server'], {
+    const codexCommand = resolveCodexCommand()
+    // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file.
+    // spawn() cannot execute batch scripts directly without shell:true, but
+    // shell:true with an args array triggers DEP0190 (args are concatenated,
+    // not escaped). Fix: detect batch scripts and route through cmd.exe /c.
+    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, [
+      '-s',
+      'read-only',
+      '-a',
+      'untrusted',
+      'app-server'
+    ])
+    const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       // Why: the selected Codex rate-limit account must only affect this fetch
       // subprocess. Never mutate process.env globally or other Codex features
       // would inherit the managed account unintentionally.
+      // Why windowsHide: this fetch runs periodically in the background;
+      // without the flag, cmd.exe /c would flash a console window for each
+      // poll on Windows.
+      windowsHide: true,
       env: {
         ...process.env,
         ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
@@ -203,14 +221,19 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)
-        const isNotInstalled = (err as NodeJS.ErrnoException).code === 'ENOENT'
+        const isEnoent = (err as NodeJS.ErrnoException).code === 'ENOENT'
+        const isBareCommand = codexCommand === 'codex'
         resolve({
           provider: 'codex',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: isNotInstalled ? 'Codex CLI not found' : err.message,
-          status: isNotInstalled ? 'unavailable' : 'error'
+          error: isEnoent
+            ? isBareCommand
+              ? 'Codex CLI not found'
+              : 'Codex CLI found but could not run — Node.js may not be in your PATH'
+            : err.message,
+          status: isEnoent && isBareCommand ? 'unavailable' : 'error'
         })
       }
     })
@@ -278,13 +301,25 @@ function parsePtyStatus(output: string): {
 
 async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
+  const codexCommand = resolveCodexCommand()
+
+  // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
+  // those need cmd.exe as an interpreter. resolveCodexCommand() may also fall
+  // back to bare 'codex' when it can't locate the binary on disk, yet cmd.exe
+  // can still find codex.cmd via PATHEXT. Always route through cmd.exe on win32.
+  // Why not getSpawnArgsForWindows: the PTY path must route through cmd.exe
+  // even for bare 'codex' (not just .cmd/.bat) to let PATHEXT resolution
+  // succeed under a minimal Electron PATH. /d matches the rest of the codebase.
+  const isWin32 = process.platform === 'win32'
+  const spawnFile = isWin32 ? getCmdExePath() : codexCommand
+  const spawnArgs = isWin32 ? ['/d', '/c', codexCommand] : []
 
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
     let resolved = false
     let sentStatus = false
 
-    const term = pty.spawn('codex', [], {
+    const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
@@ -294,10 +329,20 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
       }
     })
+    const termDisposables: { dispose: () => void }[] = []
+    const disposeTermListeners = (): void => {
+      for (const disposable of termDisposables.splice(0)) {
+        disposable.dispose()
+      }
+    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
+        // Why: killing a hidden PTY without disposing node-pty's NAPI listener
+        // handles leaves ThreadSafeFunction callbacks alive into Electron
+        // shutdown, which can abort the app while Node cleans up its env.
+        disposeTermListeners()
         term.kill()
         resolve({
           provider: 'codex',
@@ -310,7 +355,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
     }, PTY_TIMEOUT_MS)
 
-    term.onData((data) => {
+    const onDataDisposable = term.onData((data) => {
       output += data
 
       // Wait for prompt, then send /status
@@ -328,6 +373,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           }
           resolved = true
           clearTimeout(timeout)
+          disposeTermListeners()
           term.kill()
 
           // eslint-disable-next-line no-control-regex
@@ -345,8 +391,12 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         }, 500)
       }
     })
+    if (onDataDisposable) {
+      termDisposables.push(onDataDisposable)
+    }
 
-    term.onExit(() => {
+    const onExitDisposable = term.onExit(() => {
+      disposeTermListeners()
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)
@@ -363,6 +413,9 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         })
       }
     })
+    if (onExitDisposable) {
+      termDisposables.push(onExitDisposable)
+    }
   })
 }
 

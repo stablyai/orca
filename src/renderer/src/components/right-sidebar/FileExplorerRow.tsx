@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Copy,
   ExternalLink,
+  Eye,
   File,
   FilePlus,
   Files,
@@ -22,9 +23,12 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { detectLanguage } from '@/lib/language-detect'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
+import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 
 const ORCA_PATH_MIME = 'text/x-orca-file-path'
 
@@ -206,9 +210,9 @@ type FileExplorerRowProps = {
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
   onDragExpandDir: (dirPath: string) => void
+  onNativeDragTargetChange: (dir: string | null) => void
+  onNativeDragExpandDir: (dirPath: string) => void
 }
-
-const DRAG_EXPAND_DELAY_MS = 500
 
 export function FileExplorerRow({
   node,
@@ -231,82 +235,24 @@ export function FileExplorerRow({
   onMoveDrop,
   onDragTargetChange,
   onDragSourceChange,
-  onDragExpandDir
+  onDragExpandDir,
+  onNativeDragTargetChange,
+  onNativeDragExpandDir
 }: FileExplorerRowProps): React.JSX.Element {
-  // Drag and drop into directories. Directories expand on timer
+  const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const rowDropDir = node.isDirectory ? node.path : targetDir
-  const expandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const dragCounterRef = useRef(0)
-
-  const clearExpandTimer = useCallback(() => {
-    if (expandTimerRef.current !== null) {
-      clearTimeout(expandTimerRef.current)
-      expandTimerRef.current = null
-    }
-  }, [])
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes(ORCA_PATH_MIME)) {
-      return
-    }
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }, [])
-
-  const handleDragEnter = useCallback(
-    (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(ORCA_PATH_MIME)) {
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-      dragCounterRef.current += 1
-      onDragTargetChange(rowDropDir)
-      if (dragCounterRef.current === 1 && node.isDirectory && !isExpanded) {
-        clearExpandTimer()
-        expandTimerRef.current = setTimeout(() => {
-          expandTimerRef.current = null
-          onDragExpandDir(node.path)
-        }, DRAG_EXPAND_DELAY_MS)
-      }
-    },
-    [
-      rowDropDir,
-      onDragTargetChange,
-      clearExpandTimer,
-      node.isDirectory,
-      node.path,
-      isExpanded,
-      onDragExpandDir
-    ]
-  )
-
-  const handleDragLeave = useCallback(
-    (e: React.DragEvent) => {
-      e.stopPropagation()
-      dragCounterRef.current -= 1
-      if (dragCounterRef.current <= 0) {
-        dragCounterRef.current = 0
-        clearExpandTimer()
-      }
-    },
-    [clearExpandTimer]
-  )
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      dragCounterRef.current = 0
-      clearExpandTimer()
-      onDragTargetChange(null)
-      const sourcePath = e.dataTransfer.getData(ORCA_PATH_MIME)
-      if (sourcePath) {
-        onMoveDrop(sourcePath, rowDropDir)
-      }
-    },
-    [rowDropDir, onMoveDrop, onDragTargetChange, clearExpandTimer]
-  )
+  const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
+    rowDropDir,
+    isDirectory: node.isDirectory,
+    nodePath: node.path,
+    isExpanded,
+    onDragTargetChange,
+    onDragExpandDir,
+    onNativeDragTargetChange,
+    onNativeDragExpandDir,
+    onMoveDrop
+  })
 
   return (
     <ContextMenu>
@@ -318,6 +264,7 @@ export function FileExplorerRow({
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          data-native-file-drop-dir={rowDropDir}
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData(ORCA_PATH_MIME, node.path)
@@ -360,6 +307,14 @@ export function FileExplorerRow({
           <span
             className={cn('truncate', isSelected && !nodeStatus && 'text-accent-foreground')}
             style={nodeStatus ? { color: statusColor ?? undefined } : undefined}
+            onDoubleClick={(e) => {
+              // Why: the row itself swallows double-click for "pin preview" /
+              // directory toggle. Scope rename to the filename text only so
+              // those behaviors stay intact on the icon and empty row area,
+              // matching VS Code's rename hotspot.
+              e.stopPropagation()
+              onStartRename(node)
+            }}
           >
             {node.name}
           </span>
@@ -400,6 +355,21 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
+          <ContextMenuItem
+            onSelect={() =>
+              openMarkdownPreview({
+                filePath: node.path,
+                relativePath: node.relativePath,
+                worktreeId: activeWorktreeId,
+                language: 'markdown'
+              })
+            }
+          >
+            <Eye />
+            Open Markdown Preview
           </ContextMenuItem>
         )}
         <ContextMenuItem onSelect={() => window.api.shell.openPath(node.path)}>

@@ -22,6 +22,7 @@ describe('buildHydratedTabState – unified format', () => {
         w1: [
           {
             id: 't1',
+            entityId: 't1',
             groupId: 'g1',
             worktreeId: 'w1',
             contentType: 'terminal',
@@ -33,6 +34,7 @@ describe('buildHydratedTabState – unified format', () => {
           },
           {
             id: 'f1',
+            entityId: 'f1',
             groupId: 'g1',
             worktreeId: 'w1',
             contentType: 'editor',
@@ -62,6 +64,7 @@ describe('buildHydratedTabState – unified format', () => {
         w1: [
           {
             id: 't1',
+            entityId: 't1',
             groupId: 'g1',
             worktreeId: 'w1',
             contentType: 'terminal',
@@ -75,6 +78,7 @@ describe('buildHydratedTabState – unified format', () => {
         w_gone: [
           {
             id: 't2',
+            entityId: 't2',
             groupId: 'g2',
             worktreeId: 'w_gone',
             contentType: 'terminal',
@@ -104,6 +108,7 @@ describe('buildHydratedTabState – unified format', () => {
         w1: [
           {
             id: 't1',
+            entityId: 't1',
             groupId: 'g1',
             worktreeId: 'w1',
             contentType: 'terminal',
@@ -131,6 +136,83 @@ describe('buildHydratedTabState – unified format', () => {
     const group = result.groupsByWorktree.w1[0]
     expect(group.activeTabId).toBeNull()
     expect(group.tabOrder).toEqual(['t1'])
+  })
+
+  it('collapses groups and layout when transient tabs are dropped during hydration', () => {
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      openFilesByWorktree: {
+        w1: [
+          {
+            filePath: '/editor.ts',
+            relativePath: 'editor.ts',
+            worktreeId: 'w1',
+            language: 'typescript'
+          }
+        ]
+      },
+      unifiedTabs: {
+        w1: [
+          {
+            id: 'diff-1',
+            entityId: '/diff.ts',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'diff',
+            label: 'diff.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: 'editor-1',
+            entityId: '/editor.ts',
+            groupId: 'g2',
+            worktreeId: 'w1',
+            contentType: 'editor',
+            label: 'editor.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      tabGroups: {
+        w1: [
+          { id: 'g1', worktreeId: 'w1', activeTabId: 'diff-1', tabOrder: ['diff-1'] },
+          { id: 'g2', worktreeId: 'w1', activeTabId: 'editor-1', tabOrder: ['editor-1'] }
+        ]
+      },
+      tabGroupLayouts: {
+        w1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'g1' },
+          second: { type: 'leaf', groupId: 'g2' },
+          ratio: 0.5
+        }
+      },
+      activeGroupIdByWorktree: { w1: 'g1' }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1']))
+
+    expect(result.unifiedTabsByWorktree.w1).toEqual([
+      expect.objectContaining({ id: 'editor-1', groupId: 'g2', contentType: 'editor' })
+    ])
+    expect(result.groupsByWorktree.w1).toEqual([
+      {
+        id: 'g2',
+        worktreeId: 'w1',
+        activeTabId: 'editor-1',
+        tabOrder: ['editor-1'],
+        recentTabIds: ['editor-1']
+      }
+    ])
+    expect(result.activeGroupIdByWorktree.w1).toBe('g2')
+    expect(result.layoutByWorktree.w1).toEqual({ type: 'leaf', groupId: 'g2' })
   })
 })
 

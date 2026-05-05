@@ -39,15 +39,28 @@ function base64ToBlobUrl(base64: string, mimeType: string): string {
 }
 
 // Why: when the user switches back to the app after deleting or replacing
-// image files externally, clearing the cache ensures the preview picks up
+// image files externally, clearing the cache forces the preview to pick up
 // the current filesystem state instead of showing stale in-memory blob URLs.
-// Old blob URLs are intentionally NOT revoked so that <img> elements keep
-// displaying until the fresh IPC load completes, avoiding a visible flash.
+// Old blob URLs are revoked after a short delay so that <img> elements still
+// display the old data while the fresh IPC load completes, avoiding a visible
+// flash. The 5-second window is generous enough for even slow IPC reads.
 function invalidateImageCache(): void {
+  const staleUrls = Array.from(blobUrlCache.values())
   blobUrlCache.clear()
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()
+  }
+  // Why: defer revocation so the browser keeps the old blob data readable
+  // until replacement IPC loads complete, then free the underlying memory.
+  // 30 seconds is generous enough to cover slow machines or large images
+  // without risking a visible broken-image flash.
+  if (staleUrls.length > 0) {
+    setTimeout(() => {
+      for (const url of staleUrls) {
+        URL.revokeObjectURL(url)
+      }
+    }, 30_000)
   }
 }
 
@@ -81,7 +94,11 @@ function isExternalUrl(src: string): boolean {
  * returns the URL directly. Re-validates on window re-focus so deleted or
  * replaced images are picked up.
  */
-export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): string | undefined {
+export function useLocalImageSrc(
+  rawSrc: string | undefined,
+  filePath: string,
+  connectionId?: string | null
+): string | undefined {
   const [generation, setGeneration] = useState(cacheGeneration)
 
   useEffect(() => {
@@ -126,7 +143,7 @@ export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): 
 
     let cancelled = false
     window.api.fs
-      .readFile({ filePath: absolutePath })
+      .readFile({ filePath: absolutePath, connectionId: connectionId ?? undefined })
       .then((result) => {
         if (cancelled) {
           return
@@ -151,7 +168,7 @@ export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): 
     return () => {
       cancelled = true
     }
-  }, [rawSrc, filePath, generation])
+  }, [rawSrc, filePath, generation, connectionId])
 
   return displaySrc
 }
@@ -161,7 +178,11 @@ export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): 
  * outside React (e.g. ProseMirror nodeViews). Resolves from cache when
  * available.
  */
-export async function loadLocalImageSrc(rawSrc: string, filePath: string): Promise<string | null> {
+export async function loadLocalImageSrc(
+  rawSrc: string,
+  filePath: string,
+  connectionId?: string | null
+): Promise<string | null> {
   if (
     rawSrc.startsWith('http://') ||
     rawSrc.startsWith('https://') ||
@@ -182,7 +203,10 @@ export async function loadLocalImageSrc(rawSrc: string, filePath: string): Promi
   }
 
   try {
-    const result = await window.api.fs.readFile({ filePath: absolutePath })
+    const result = await window.api.fs.readFile({
+      filePath: absolutePath,
+      connectionId: connectionId ?? undefined
+    })
     if (result.isBinary && result.content) {
       const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
       cacheBlobUrl(absolutePath, url)

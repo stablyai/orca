@@ -11,11 +11,39 @@ import {
   Files,
   Copy,
   Check,
-  MessageSquare
+  MessageSquare,
+  ChevronDown
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
+import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import {
+  filterPRCommentsByAudience,
+  getPRCommentAudienceCounts,
+  getPRCommentAudienceEmptyLabel,
+  isBotPRComment,
+  PR_COMMENT_AUDIENCE_FILTERS,
+  type PRCommentAudienceFilter
+} from '@/lib/pr-comment-audience'
+import {
+  getPRCommentGroupCount,
+  getPRCommentGroupId,
+  getPRCommentGroupRoot,
+  groupPRComments,
+  isResolvedPRCommentGroup,
+  PR_COMMENT_OPEN_AUTHOR_CLASS,
+  PR_COMMENT_RESOLVED_AUTHOR_CLASS,
+  PR_COMMENT_RESOLVED_CONTAINER_CLASS,
+  type PRCommentGroup
+} from '@/lib/pr-comment-groups'
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
+import { useCheckDetailsResize } from './check-details-resize'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -106,6 +134,10 @@ export function ChecksList({
   checks: PRCheckDetail[]
   checksLoading: boolean
 }): React.JSX.Element {
+  const [checksExpanded, setChecksExpanded] = useState(true)
+  const { detailsHeight, handleResizeStart } = useCheckDetailsResize(
+    checksExpanded && checks.length > 0
+  )
   const sorted = [...checks].sort(
     (a, b) =>
       (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
@@ -123,7 +155,15 @@ export function ChecksList({
     <>
       {/* Checks Summary */}
       {checks.length > 0 && (
-        <div className="flex items-center gap-3 px-3 py-2 border-b border-border text-[10px] text-muted-foreground">
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left text-[10px] text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+          onClick={() => setChecksExpanded((expanded) => !expanded)}
+          aria-expanded={checksExpanded}
+        >
+          <ChevronDown
+            className={cn('size-3 shrink-0 transition-transform', !checksExpanded && '-rotate-90')}
+          />
           {passingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleCheck className="size-3 text-emerald-500" />
@@ -142,7 +182,9 @@ export function ChecksList({
               {pendingCount} pending
             </span>
           )}
-        </div>
+          <span className="flex-1" />
+          {checksLoading && <LoaderCircle className="size-3 animate-spin text-muted-foreground" />}
+        </button>
       )}
 
       {/* Checks List */}
@@ -154,38 +196,54 @@ export function ChecksList({
         <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
           No checks configured
         </div>
-      ) : (
-        <div className="py-1">
-          {sorted.map((check) => {
-            const conclusion = check.conclusion ?? 'pending'
-            const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-            const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-            return (
-              <div
-                key={check.name}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40 transition-colors',
-                  check.url && 'cursor-pointer'
-                )}
-                onClick={() => {
-                  if (check.url) {
-                    window.api.shell.openUrl(check.url)
-                  }
-                }}
-              >
-                <Icon
+      ) : !checksExpanded ? null : (
+        <>
+          <div
+            className="overflow-y-auto py-1 scrollbar-sleek"
+            style={{ maxHeight: detailsHeight }}
+          >
+            {sorted.map((check) => {
+              const conclusion = check.conclusion ?? 'pending'
+              const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+              const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
+              return (
+                <div
+                  key={check.name}
                   className={cn(
-                    'size-3.5 shrink-0',
-                    color,
-                    conclusion === 'pending' && 'animate-spin'
+                    'flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40 transition-colors',
+                    check.url && 'cursor-pointer'
                   )}
-                />
-                <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
-                {check.url && <ExternalLink className="size-3 text-muted-foreground/40 shrink-0" />}
-              </div>
-            )
-          })}
-        </div>
+                  onClick={() => {
+                    if (check.url) {
+                      window.api.shell.openUrl(check.url)
+                    }
+                  }}
+                >
+                  <Icon
+                    className={cn(
+                      'size-3.5 shrink-0',
+                      color,
+                      conclusion === 'pending' && 'animate-spin'
+                    )}
+                  />
+                  <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+                  {check.url && (
+                    <ExternalLink className="size-3 shrink-0 text-muted-foreground/40" />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            title="Drag to resize checks"
+            className="group flex h-2 cursor-row-resize items-center border-b border-border"
+            onMouseDown={handleResizeStart}
+          >
+            <div className="h-px w-full bg-transparent transition-colors group-hover:bg-ring/40" />
+          </div>
+        </>
       )}
     </>
   )
@@ -284,12 +342,13 @@ function CommentRow({
   showResolve: boolean
   onResolve?: (threadId: string, resolve: boolean) => void
 }): React.JSX.Element {
+  const automated = isBotPRComment(comment)
   return (
     <div
       className={cn(
         'flex items-start gap-2 py-1.5 hover:bg-accent/40 transition-colors cursor-pointer group/comment',
         isReply ? 'pl-7 pr-3' : 'px-3',
-        comment.isResolved && 'opacity-50'
+        comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
       onClick={() => {
         if (comment.url) {
@@ -314,11 +373,16 @@ function CommentRow({
           <span
             className={cn(
               'text-[11px] font-semibold shrink-0',
-              comment.isResolved ? 'text-muted-foreground' : 'text-foreground'
+              comment.isResolved ? PR_COMMENT_RESOLVED_AUTHOR_CLASS : PR_COMMENT_OPEN_AUTHOR_CLASS
             )}
           >
             {comment.author}
           </span>
+          {automated && (
+            <span className="shrink-0 rounded border border-border bg-accent/40 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+              bot
+            </span>
+          )}
           {!isReply && comment.path && (
             <span className="text-[10px] font-mono text-muted-foreground/60 truncate min-w-0">
               {comment.path.split('/').pop()}
@@ -337,61 +401,78 @@ function CommentRow({
             <CopyButton text={buildCopyText(comment)} />
           </div>
         </div>
-        {/* Comment body */}
-        <p
+        <CommentMarkdown
+          content={comment.body}
           className={cn(
-            'text-[11px] text-muted-foreground leading-snug mt-0.5',
-            isReply ? 'pl-5 line-clamp-1' : 'pl-[22px] line-clamp-2'
+            'mt-1 text-[11px] leading-snug text-muted-foreground',
+            'break-words [&_p]:my-1 [&_pre]:max-h-none [&_table]:min-w-max',
+            isReply ? 'pl-5' : 'pl-[22px]'
           )}
-        >
-          {comment.body}
-        </p>
+        />
       </div>
     </div>
   )
 }
 
-/** Group structure for organizing comments by thread. */
-type CommentGroup =
-  | { kind: 'standalone'; comment: PRComment }
-  | { kind: 'thread'; threadId: string; root: PRComment; replies: PRComment[] }
-
-/** Groups comments by threadId. Comments without a threadId are standalone. */
-function groupComments(comments: PRComment[]): CommentGroup[] {
-  const groups: CommentGroup[] = []
-  const threadMap = new Map<string, { root: PRComment; replies: PRComment[] }>()
-  // Why: preserve insertion order so threads appear in the order their first
-  // comment was created (the comments array is already sorted by createdAt).
-  const threadOrder: string[] = []
-
-  for (const comment of comments) {
-    if (!comment.threadId) {
-      groups.push({ kind: 'standalone', comment })
-      continue
-    }
-    const existing = threadMap.get(comment.threadId)
-    if (existing) {
-      existing.replies.push(comment)
-    } else {
-      threadMap.set(comment.threadId, { root: comment, replies: [] })
-      threadOrder.push(comment.threadId)
-    }
+function renderCommentGroup(
+  group: PRCommentGroup,
+  onResolve?: (threadId: string, resolve: boolean) => void
+): React.JSX.Element {
+  if (group.kind === 'standalone') {
+    return (
+      <CommentRow
+        key={group.comment.id}
+        comment={group.comment}
+        isReply={false}
+        showResolve={false}
+        onResolve={onResolve}
+      />
+    )
   }
+  return (
+    <div key={group.threadId} className="py-0.5">
+      <CommentRow comment={group.root} isReply={false} showResolve={true} onResolve={onResolve} />
+      {group.replies.length > 0 && (
+        <div className="ml-3 border-l-2 border-border/50">
+          {group.replies.map((reply) => (
+            <CommentRow
+              key={reply.id}
+              comment={reply}
+              isReply={true}
+              showResolve={false}
+              onResolve={onResolve}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
-  // Interleave threads at the position of their first comment.
-  // Walk the original comment list and emit each thread/standalone once.
-  const emitted = new Set<string>()
-  const result: CommentGroup[] = []
-  for (const comment of comments) {
-    if (!comment.threadId) {
-      result.push({ kind: 'standalone', comment })
-    } else if (!emitted.has(comment.threadId)) {
-      emitted.add(comment.threadId)
-      const thread = threadMap.get(comment.threadId)!
-      result.push({ kind: 'thread', threadId: comment.threadId, ...thread })
-    }
-  }
-  return result
+function ResolvedCommentGroupAccordion({
+  group,
+  onResolve
+}: {
+  group: PRCommentGroup
+  onResolve?: (threadId: string, resolve: boolean) => void
+}): React.JSX.Element {
+  const root = getPRCommentGroupRoot(group)
+  const count = getPRCommentGroupCount(group)
+  return (
+    <Accordion type="single" collapsible>
+      <AccordionItem value={getPRCommentGroupId(group)} className="border-b-0">
+        <AccordionTrigger className="px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-accent/35">
+          <span className="min-w-0 truncate">
+            Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+            {count > 1 ? ` (${count})` : ''}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="pb-1 pt-0">
+          {renderCommentGroup(group, onResolve)}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  )
 }
 
 /** Renders the PR comments section below checks. */
@@ -404,16 +485,46 @@ export function PRCommentsList({
   commentsLoading: boolean
   onResolve?: (threadId: string, resolve: boolean) => void
 }): React.JSX.Element {
-  const groups = React.useMemo(() => groupComments(comments), [comments])
+  const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const visibleComments = React.useMemo(
+    () => filterPRCommentsByAudience(comments, commentFilter),
+    [commentFilter, comments]
+  )
+  const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
 
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <MessageSquare className="size-3.5 text-muted-foreground" />
-        <span className="text-[11px] font-medium text-foreground">Comments</span>
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="size-3.5 text-muted-foreground" />
+          <span className="text-[11px] font-medium text-foreground">Comments</span>
+          {comments.length > 0 && (
+            <span className="text-[10px] text-muted-foreground">{comments.length}</span>
+          )}
+        </div>
         {comments.length > 0 && (
-          <span className="text-[10px] text-muted-foreground">{comments.length}</span>
+          <div className="mt-2 grid grid-cols-3 rounded-md border border-border bg-background p-0.5">
+            {PR_COMMENT_AUDIENCE_FILTERS.map((filter) => {
+              const isActive = commentFilter === filter.value
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={cn(
+                    'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
+                    isActive && 'bg-muted text-foreground'
+                  )}
+                  aria-pressed={isActive}
+                  onClick={() => setCommentFilter(filter.value)}
+                >
+                  <span>{filter.label}</span>
+                  <span className="tabular-nums">{commentCounts[filter.value]}</span>
+                </button>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -426,43 +537,23 @@ export function PRCommentsList({
         <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
           No comments
         </div>
+      ) : visibleComments.length === 0 ? (
+        <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
+          {getPRCommentAudienceEmptyLabel(commentFilter)}
+        </div>
       ) : (
         <div className="py-1">
           {groups.map((group) => {
-            if (group.kind === 'standalone') {
+            if (isResolvedPRCommentGroup(group)) {
               return (
-                <CommentRow
-                  key={group.comment.id}
-                  comment={group.comment}
-                  isReply={false}
-                  showResolve={false}
+                <ResolvedCommentGroupAccordion
+                  key={getPRCommentGroupId(group)}
+                  group={group}
                   onResolve={onResolve}
                 />
               )
             }
-            return (
-              <div key={group.threadId} className="py-0.5">
-                <CommentRow
-                  comment={group.root}
-                  isReply={false}
-                  showResolve={true}
-                  onResolve={onResolve}
-                />
-                {group.replies.length > 0 && (
-                  <div className="ml-3 border-l-2 border-border/50">
-                    {group.replies.map((reply) => (
-                      <CommentRow
-                        key={reply.id}
-                        comment={reply}
-                        isReply={true}
-                        showResolve={false}
-                        onResolve={onResolve}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
+            return renderCommentGroup(group, onResolve)
           })}
         </div>
       )}

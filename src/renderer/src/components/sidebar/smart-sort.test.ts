@@ -1,7 +1,8 @@
 /* eslint-disable max-lines */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
-import { buildWorktreeComparator, computeSmartScore, type RecentSortOverride } from './smart-sort'
+import { buildWorktreeComparator, computeSmartScore, type SmartSortOverride } from './smart-sort'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
 
@@ -29,9 +30,11 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isMainWorktree: overrides.isMainWorktree ?? false,
     linkedIssue: overrides.linkedIssue ?? null,
     linkedPR: overrides.linkedPR ?? null,
+    linkedLinearIssue: null,
     isArchived: overrides.isArchived ?? false,
     comment: overrides.comment ?? '',
     isUnread: overrides.isUnread ?? false,
+    isPinned: overrides.isPinned ?? false,
     displayName: overrides.displayName ?? overrides.id ?? 'wt-1',
     sortOrder: overrides.sortOrder ?? 0,
     lastActivityAt: overrides.lastActivityAt ?? 0
@@ -48,6 +51,21 @@ function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
     color: overrides.color ?? null,
     sortOrder: overrides.sortOrder ?? 0,
     createdAt: overrides.createdAt ?? 0
+  }
+}
+
+function makeAgentStatusEntry(
+  overrides: Partial<AgentStatusEntry> & { paneKey: string }
+): AgentStatusEntry {
+  return {
+    state: overrides.state ?? 'working',
+    prompt: overrides.prompt ?? '',
+    updatedAt: overrides.updatedAt ?? NOW - 30_000,
+    stateStartedAt: overrides.stateStartedAt ?? overrides.updatedAt ?? NOW - 30_000,
+    agentType: overrides.agentType ?? 'codex',
+    paneKey: overrides.paneKey,
+    terminalTitle: overrides.terminalTitle,
+    stateHistory: overrides.stateHistory ?? []
   }
 }
 
@@ -156,6 +174,39 @@ describe('computeSmartScore', () => {
       computeSmartScore(plain, null, repoMap, {})
     )
   })
+
+  it('does not let stale explicit status mask a live heuristic permission prompt', () => {
+    const worktree = makeWorktree({ id: 'wt-1' })
+    const tabsByWorktree = {
+      [worktree.id]: [makeTab({ worktreeId: worktree.id, title: 'codex permission needed' })]
+    }
+    const score = computeSmartScore(worktree, tabsByWorktree, repoMap, null, NOW, {
+      'tab-1:1': makeAgentStatusEntry({
+        paneKey: 'tab-1:1',
+        state: 'done',
+        updatedAt: NOW - 45 * 60_000
+      })
+    })
+
+    expect(score).toBeGreaterThanOrEqual(35)
+  })
+
+  it('does not stack heuristic working on top of fresh explicit done for the same tab', () => {
+    const worktree = makeWorktree({ id: 'wt-1' })
+    const tabsByWorktree = {
+      [worktree.id]: [makeTab({ worktreeId: worktree.id, title: 'codex working' })]
+    }
+
+    expect(
+      computeSmartScore(worktree, tabsByWorktree, repoMap, null, NOW, {
+        'tab-1:1': makeAgentStatusEntry({
+          paneKey: 'tab-1:1',
+          state: 'done',
+          updatedAt: NOW - 60_000
+        })
+      })
+    ).toBe(12)
+  })
 })
 
 describe('buildWorktreeComparator', () => {
@@ -163,7 +214,7 @@ describe('buildWorktreeComparator', () => {
     vi.restoreAllMocks()
   })
 
-  it('sorts recent mode by ongoing work signals before alphabetical order', () => {
+  it('sorts smart mode by ongoing work signals before alphabetical order', () => {
     const active = makeWorktree({
       id: 'active',
       displayName: 'z-active',
@@ -182,7 +233,7 @@ describe('buildWorktreeComparator', () => {
 
     const worktrees = [recent, stale, active]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, null, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['active', 'recent', 'stale'])
   })
@@ -203,7 +254,7 @@ describe('buildWorktreeComparator', () => {
 
     const worktrees = [second, first]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, null, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['first', 'second'])
   })
@@ -224,7 +275,7 @@ describe('buildWorktreeComparator', () => {
 
     const worktrees = [beta, alpha]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, null, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['alpha', 'beta'])
   })
@@ -253,7 +304,7 @@ describe('buildWorktreeComparator', () => {
       }
     }
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, prCache, NOW))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, prCache, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['live-pr', 'stale-linked'])
   })
@@ -272,7 +323,7 @@ describe('buildWorktreeComparator', () => {
     })
     const worktrees = [plain, coldCache]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, {}, NOW))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, {}, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['cold-cache', 'plain'])
   })
@@ -294,7 +345,7 @@ describe('buildWorktreeComparator', () => {
     const tabsByWorktree = {
       [background.id]: [makeTab({ worktreeId: background.id, title: 'Claude Code - working' })]
     }
-    const recentSortOverrides: Record<string, RecentSortOverride> = {
+    const smartSortOverrides: Record<string, SmartSortOverride> = {
       [activeAfterClick.id]: {
         worktree: activeBeforeClick,
         tabs: [],
@@ -303,7 +354,7 @@ describe('buildWorktreeComparator', () => {
     }
 
     worktrees.sort(
-      buildWorktreeComparator('recent', tabsByWorktree, repoMap, null, NOW, recentSortOverrides)
+      buildWorktreeComparator('smart', tabsByWorktree, repoMap, null, NOW, smartSortOverrides)
     )
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['background', 'active'])
@@ -323,7 +374,7 @@ describe('buildWorktreeComparator', () => {
       lastActivityAt: NOW - 2 * 60_000
     })
     const worktrees = [background, activeAfterClick]
-    const recentSortOverrides: Record<string, RecentSortOverride> = {
+    const smartSortOverrides: Record<string, SmartSortOverride> = {
       [activeAfterClick.id]: {
         worktree: activeBeforeClick,
         tabs: [],
@@ -331,7 +382,7 @@ describe('buildWorktreeComparator', () => {
       }
     }
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW, recentSortOverrides))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, null, NOW, smartSortOverrides))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['active', 'background'])
   })
@@ -350,7 +401,7 @@ describe('buildWorktreeComparator', () => {
     })
     const worktrees = [background, activeAfterClick]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, null, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['active', 'background'])
   })
@@ -377,8 +428,86 @@ describe('buildWorktreeComparator', () => {
     }
     const worktrees = [shutdown, justCreated]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, prCache, NOW))
+    worktrees.sort(buildWorktreeComparator('smart', null, repoMap, prCache, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['new', 'shutdown'])
+  })
+})
+
+describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
+  it('sorts by lastActivityAt descending (most recent first)', () => {
+    const older = makeWorktree({
+      id: 'older',
+      displayName: 'Older',
+      lastActivityAt: 1000
+    })
+    const newer = makeWorktree({
+      id: 'newer',
+      displayName: 'Newer',
+      lastActivityAt: 2000
+    })
+    const worktrees = [older, newer]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['newer', 'older'])
+  })
+
+  it('sorts worktrees with lastActivityAt 0 to the bottom', () => {
+    const touched = makeWorktree({
+      id: 'touched',
+      displayName: 'Touched',
+      lastActivityAt: 1000
+    })
+    const legacy = makeWorktree({
+      id: 'legacy',
+      displayName: 'Legacy',
+      lastActivityAt: 0
+    })
+    const worktrees = [legacy, touched]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['touched', 'legacy'])
+  })
+
+  it('falls back to alphabetical when lastActivityAt is equal', () => {
+    const bravo = makeWorktree({
+      id: 'bravo',
+      displayName: 'Bravo',
+      lastActivityAt: 1000
+    })
+    const alpha = makeWorktree({
+      id: 'alpha',
+      displayName: 'Alpha',
+      lastActivityAt: 1000
+    })
+    const worktrees = [bravo, alpha]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['alpha', 'bravo'])
+  })
+
+  it('ignores sortOrder entirely — activity alone determines the order', () => {
+    // A worktree with a stale high sortOrder (e.g. baked in when meta was
+    // first created) must not outrank a worktree with fresher activity.
+    const staleHighOrder = makeWorktree({
+      id: 'stale-high-order',
+      displayName: 'Orca main',
+      sortOrder: 9_999_999_999_999,
+      lastActivityAt: 1000
+    })
+    const freshActive = makeWorktree({
+      id: 'fresh-active',
+      displayName: 'Other repo',
+      sortOrder: 1,
+      lastActivityAt: 5000
+    })
+    const worktrees = [staleHighOrder, freshActive]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['fresh-active', 'stale-high-order'])
   })
 })

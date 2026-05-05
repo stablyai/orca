@@ -1,3 +1,5 @@
+import React from 'react'
+
 export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
     <svg
@@ -13,6 +15,287 @@ export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element 
   )
 }
 
+// Why: each instance needs unique filter/mask IDs — reusing the same ID across
+// multiple SVGs on the same page causes the browser to resolve to the first one,
+// breaking all subsequent instances.
+let _geminiIconCount = 0
+
+export function GeminiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: use a stable per-instance ID generated once at mount, not on every render.
+  const [uid] = React.useState(() => `gi-${++_geminiIconCount}`)
+  const star =
+    'M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z'
+  return (
+    <svg
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 65 65"
+      height={size}
+      width={size}
+    >
+      <mask
+        id={`${uid}-mask`}
+        style={{ maskType: 'alpha' }}
+        maskUnits="userSpaceOnUse"
+        x="0"
+        y="0"
+        width="65"
+        height="65"
+      >
+        <path d={star} fill="#000" />
+      </mask>
+      <g mask={`url(#${uid}-mask)`}>
+        <g filter={`url(#${uid}-f0)`}>
+          <path
+            d="M-5.859 50.734c7.498 2.663 16.116-2.33 19.249-11.152 3.133-8.821-.406-18.131-7.904-20.794-7.498-2.663-16.116 2.33-19.25 11.151-3.132 8.822.407 18.132 7.905 20.795z"
+            fill="#FFE432"
+          />
+        </g>
+        <g filter={`url(#${uid}-f1)`}>
+          <path
+            d="M27.433 21.649c10.3 0 18.651-8.535 18.651-19.062 0-10.528-8.35-19.062-18.651-19.062S8.78-7.94 8.78 2.587c0 10.527 8.35 19.062 18.652 19.062z"
+            fill="#FC413D"
+          />
+        </g>
+        <g filter={`url(#${uid}-f2)`}>
+          <path
+            d="M20.184 82.608c10.753-.525 18.918-12.244 18.237-26.174-.68-13.93-9.95-24.797-20.703-24.271C6.965 32.689-1.2 44.407-.519 58.337c.681 13.93 9.95 24.797 20.703 24.271z"
+            fill="#00B95C"
+          />
+        </g>
+        <g filter={`url(#${uid}-f3)`}>
+          <path
+            d="M20.184 82.608c10.753-.525 18.918-12.244 18.237-26.174-.68-13.93-9.95-24.797-20.703-24.271C6.965 32.689-1.2 44.407-.519 58.337c.681 13.93 9.95 24.797 20.703 24.271z"
+            fill="#00B95C"
+          />
+        </g>
+        <g filter={`url(#${uid}-f4)`}>
+          <path
+            d="M30.954 74.181c9.014-5.485 11.427-17.976 5.389-27.9-6.038-9.925-18.241-13.524-27.256-8.04-9.015 5.486-11.428 17.977-5.39 27.902 6.04 9.924 18.242 13.523 27.257 8.038z"
+            fill="#00B95C"
+          />
+        </g>
+        <g filter={`url(#${uid}-f5)`}>
+          <path
+            d="M67.391 42.993c10.132 0 18.346-7.91 18.346-17.666 0-9.757-8.214-17.667-18.346-17.667s-18.346 7.91-18.346 17.667c0 9.757 8.214 17.666 18.346 17.666z"
+            fill="#3186FF"
+          />
+        </g>
+        <g filter={`url(#${uid}-f6)`}>
+          <path
+            d="M-13.065 40.944c9.33 7.094 22.959 4.869 30.442-4.972 7.483-9.84 5.987-23.569-3.343-30.663C4.704-1.786-8.924.439-16.408 10.28c-7.483 9.84-5.986 23.57 3.343 30.664z"
+            fill="#FBBC04"
+          />
+        </g>
+        <g filter={`url(#${uid}-f7)`}>
+          <path
+            d="M34.74 51.43c11.135 7.656 25.896 5.524 32.968-4.764 7.073-10.287 3.779-24.832-7.357-32.488C49.215 6.52 34.455 8.654 27.382 18.94c-7.072 10.288-3.779 24.833 7.357 32.49z"
+            fill="#3186FF"
+          />
+        </g>
+        <g filter={`url(#${uid}-f8)`}>
+          <path
+            d="M54.984-2.336c2.833 3.852-.808 11.34-8.131 16.727-7.324 5.387-15.557 6.631-18.39 2.78-2.833-3.853.807-11.342 8.13-16.728 7.324-5.387 15.558-6.631 18.39-2.78z"
+            fill="#749BFF"
+          />
+        </g>
+        <g filter={`url(#${uid}-f9)`}>
+          <path
+            d="M31.727 16.104C43.053 5.598 46.94-8.626 40.41-15.666c-6.53-7.04-21.006-4.232-32.332 6.274s-15.214 24.73-8.683 31.77c6.53 7.04 21.006 4.232 32.332-6.274z"
+            fill="#FC413D"
+          />
+        </g>
+        <g filter={`url(#${uid}-f10)`}>
+          <path
+            d="M8.51 53.838c6.732 4.818 14.46 5.55 17.262 1.636 2.802-3.915-.384-10.994-7.116-15.812-6.731-4.818-14.46-5.55-17.261-1.636-2.802 3.915.383 10.994 7.115 15.812z"
+            fill="#FFEE48"
+          />
+        </g>
+      </g>
+      <defs>
+        <filter
+          id={`${uid}-f0`}
+          x="-19.824"
+          y="13.152"
+          width="39.274"
+          height="43.217"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="2.46" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f1`}
+          x="-15.001"
+          y="-40.257"
+          width="84.868"
+          height="85.688"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="11.891" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f2`}
+          x="-20.776"
+          y="11.927"
+          width="79.454"
+          height="90.916"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="10.109" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f3`}
+          x="-20.776"
+          y="11.927"
+          width="79.454"
+          height="90.916"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="10.109" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f4`}
+          x="-19.845"
+          y="15.459"
+          width="79.731"
+          height="81.505"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="10.109" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f5`}
+          x="29.832"
+          y="-11.552"
+          width="75.117"
+          height="73.758"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="9.606" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f6`}
+          x="-38.583"
+          y="-16.253"
+          width="78.135"
+          height="78.758"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="8.706" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f7`}
+          x="8.107"
+          y="-5.966"
+          width="78.877"
+          height="77.539"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="7.775" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f8`}
+          x="13.587"
+          y="-18.488"
+          width="56.272"
+          height="51.81"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="6.957" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f9`}
+          x="-15.526"
+          y="-31.297"
+          width="70.856"
+          height="69.306"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="5.876" result="effect1_foregroundBlur" />
+        </filter>
+        <filter
+          id={`${uid}-f10`}
+          x="-14.168"
+          y="20.964"
+          width="55.501"
+          height="51.571"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur stdDeviation="7.273" result="effect1_foregroundBlur" />
+        </filter>
+      </defs>
+    </svg>
+  )
+}
+
+export function OpenCodeGoIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={Math.round((size * 300) / 240)}
+      viewBox="0 0 240 300"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g clipPath="url(#oc-clip)">
+        <mask
+          id="oc-mask"
+          style={{ maskType: 'luminance' }}
+          maskUnits="userSpaceOnUse"
+          x="0"
+          y="0"
+          width="240"
+          height="300"
+        >
+          <path d="M240 0H0V300H240V0Z" fill="white" />
+        </mask>
+        <g mask="url(#oc-mask)">
+          <path d="M180 240H60V120H180V240Z" fill="#4B4646" />
+          <path d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" fill="#F1ECEC" />
+        </g>
+      </g>
+      <defs>
+        <clipPath id="oc-clip">
+          <rect width="240" height="300" fill="white" />
+        </clipPath>
+      </defs>
+    </svg>
+  )
+}
+
 export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
     <svg height={size} width={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -21,6 +304,23 @@ export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element 
         fill="#D97757"
         fillRule="nonzero"
       />
+    </svg>
+  )
+}
+
+export function DroidIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: Factory.ai's favicon is a white glyph on transparent bg — unreadable on
+  // light surfaces (README kbd pills, light-mode UI). Bake in a black rounded
+  // square backdrop so the icon is self-contained across themes.
+  return (
+    <svg height={size} width={size} viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+      <rect width="20" height="20" rx="4" fill="#000" />
+      <g transform="translate(0.4 0.75)">
+        <path
+          fill="#fff"
+          d="M13.9062 3.20484C13.8706 3.19623 13.8373 3.18019 13.8086 3.15788C13.7799 3.13552 13.7565 3.10743 13.74 3.07546C13.7234 3.04349 13.7142 3.00841 13.7128 2.97263C13.7115 2.93682 13.7181 2.90121 13.7322 2.86815C14.2188 1.71337 14.4334 0.789376 14.087 0.402562C13.1693 -0.623688 9.48933 1.41705 8.31598 2.10822C8.28457 2.12665 8.24942 2.13825 8.21299 2.14222C8.17656 2.14618 8.13967 2.14242 8.10486 2.13122C8.07004 2.12003 8.03809 2.10163 8.01123 2.0773C7.98437 2.05297 7.96323 2.02326 7.94918 1.99024C7.45597 0.83788 6.93748 0.036362 6.41194 0.00160127C5.01894 -0.0913635 3.89616 3.88951 3.56749 5.18697C3.5587 5.22173 3.54233 5.25423 3.5195 5.2822C3.49662 5.31021 3.46781 5.33305 3.43507 5.34918C3.40233 5.3653 3.36639 5.37432 3.32971 5.37561C3.29307 5.37694 3.25656 5.37052 3.22266 5.35677C2.03854 4.88225 1.09066 4.67288 0.694439 5.01078C-0.35788 5.90567 1.73432 9.49452 2.44305 10.6388C2.462 10.6694 2.47393 10.7037 2.47804 10.7392C2.48214 10.7748 2.47833 10.8108 2.46684 10.8447C2.45536 10.8787 2.43646 10.9099 2.41147 10.9361C2.38648 10.9623 2.35598 10.9828 2.32203 10.9965C1.14081 11.4775 0.318936 11.9831 0.282878 12.4956C0.187966 13.8541 4.26959 14.9491 5.60043 15.2696C5.63599 15.2783 5.66919 15.2943 5.69783 15.3167C5.72642 15.339 5.7498 15.3671 5.76625 15.399C5.78275 15.4309 5.79199 15.4659 5.79332 15.5016C5.79469 15.5373 5.78814 15.5729 5.77409 15.6059C5.28751 16.7607 5.07282 17.6851 5.41931 18.0715C6.33693 19.0977 10.0173 17.0574 11.1907 16.3662C11.2221 16.3477 11.2573 16.3361 11.2937 16.3321C11.3302 16.3281 11.3671 16.3318 11.4019 16.343C11.4368 16.3542 11.4687 16.3727 11.4955 16.397C11.5224 16.4214 11.5435 16.4511 11.5575 16.4842C12.0507 17.6362 12.5688 18.4377 13.0947 18.4729C14.4877 18.5654 15.6105 14.5849 15.9388 13.2871C15.9476 13.2524 15.9641 13.2199 15.987 13.192C16.0099 13.164 16.0388 13.1412 16.0716 13.1251C16.1043 13.1091 16.1403 13.1001 16.177 13.0988C16.2136 13.0975 16.2502 13.1039 16.284 13.1177C17.4681 13.5922 18.4156 13.8012 18.8122 13.4637C19.8646 12.5688 17.7719 8.97953 17.0632 7.83525C17.0444 7.80462 17.0326 7.77034 17.0286 7.73485C17.0245 7.69932 17.0284 7.66335 17.0399 7.62944C17.0514 7.59549 17.0702 7.56436 17.0951 7.53817C17.12 7.51198 17.1504 7.49129 17.1842 7.47758C18.3659 6.99659 19.1877 6.4909 19.2234 5.97838C19.3187 4.61989 15.2367 3.52497 13.9062 3.20484ZM12.3081 1.90249C12.5758 2.37055 11.1961 5.48935 10.1699 7.67079C10.1527 7.70725 10.1245 7.73772 10.0891 7.75809C10.0536 7.77847 10.0126 7.78776 9.97155 7.78473C9.93052 7.7817 9.8914 7.76646 9.85952 7.74112C9.82761 7.71573 9.80444 7.68146 9.79313 7.64286C9.37866 6.22454 8.90493 4.55809 8.39805 3.14341C8.37815 3.08787 8.37915 3.02724 8.40087 2.97239C8.42258 2.9175 8.46361 2.87195 8.51658 2.84386C9.78235 2.16966 11.9483 1.27437 12.3081 1.90249ZM6.24201 2.28849C6.77045 2.43481 8.05612 5.59161 8.91198 7.84176C8.92628 7.87935 8.92839 7.9203 8.91811 7.95914C8.90779 7.99794 8.88558 8.03274 8.85441 8.0589C8.8232 8.08505 8.78457 8.10126 8.74367 8.10534C8.70276 8.10946 8.66156 8.10126 8.62559 8.08185C7.30304 7.36603 5.76082 6.51318 4.37652 5.86242C4.32231 5.83676 4.27921 5.79322 4.25483 5.73947C4.23046 5.68575 4.22644 5.62532 4.24348 5.56898C4.65089 4.22058 5.53204 2.09246 6.24201 2.28849ZM2.23251 6.74474C2.71204 6.48363 5.91044 7.82923 8.14688 8.83002C8.18431 8.84675 8.21556 8.87424 8.23645 8.90884C8.25734 8.94339 8.26687 8.98341 8.26376 9.02343C8.26061 9.06344 8.24503 9.10156 8.219 9.13268C8.19301 9.16376 8.15787 9.1864 8.11828 9.19743C6.66435 9.60162 4.95511 10.0636 3.50449 10.558C3.44763 10.5772 3.38554 10.5762 3.32938 10.555C3.27322 10.5339 3.22655 10.4939 3.19779 10.4423C2.50771 9.2079 1.58802 7.09558 2.23251 6.74474ZM2.62832 12.6606C2.77794 12.1452 6.0153 10.8914 8.32261 10.0567C8.36116 10.0428 8.40319 10.0407 8.44297 10.0508C8.4828 10.0608 8.51849 10.0825 8.5453 10.1129C8.57208 10.1433 8.58874 10.181 8.59293 10.2209C8.59711 10.2607 8.5887 10.3009 8.56881 10.336C7.83438 11.6258 6.95986 13.1298 6.29258 14.4794C6.26651 14.5325 6.22187 14.5747 6.16671 14.5986C6.11158 14.6224 6.04954 14.6263 5.99168 14.6096C4.60903 14.2147 2.42689 13.353 2.62832 12.6606ZM7.19776 16.5707C6.92961 16.1031 8.30977 12.9839 9.33597 10.8029C9.35313 10.7664 9.38136 10.7359 9.41679 10.7155C9.45227 10.6952 9.49326 10.6859 9.53429 10.6889C9.57537 10.6919 9.61445 10.7072 9.64632 10.7325C9.67824 10.7579 9.7014 10.7922 9.71272 10.8308C10.1272 12.2487 10.6009 13.9156 11.1078 15.3303C11.1276 15.3858 11.1265 15.4463 11.1047 15.5011C11.0829 15.5559 11.0418 15.6014 10.9888 15.6294C9.7235 16.3023 7.5571 17.1993 7.19901 16.5707H7.19776ZM13.2638 16.1847C12.735 16.0388 11.4493 12.8817 10.5935 10.6315C10.5791 10.5938 10.5769 10.5528 10.5872 10.5139C10.5975 10.475 10.6198 10.4401 10.6511 10.414C10.6823 10.3878 10.7211 10.3716 10.762 10.3676C10.803 10.3635 10.8443 10.3719 10.8803 10.3914C12.2024 11.1072 13.745 11.9605 15.1289 12.6113C15.1832 12.6368 15.2264 12.6803 15.2508 12.7341C15.2752 12.7878 15.2792 12.8483 15.262 12.9047C14.855 14.2551 13.9738 16.3811 13.2638 16.1847ZM17.2733 11.7285C16.7934 11.99 13.5954 10.644 11.3586 9.64322C11.3211 9.62648 11.2899 9.599 11.269 9.5644C11.2481 9.52984 11.2386 9.48983 11.2417 9.44981C11.2448 9.40979 11.2604 9.37168 11.2864 9.34056C11.3124 9.30947 11.3476 9.28688 11.3871 9.27584C12.8415 8.87165 14.5503 8.40962 16.0009 7.91529C16.0579 7.89601 16.1201 7.89706 16.1763 7.91832C16.2326 7.93958 16.2793 7.97963 16.3081 8.03133C16.9977 9.26534 17.9174 11.378 17.2733 11.7285ZM16.8775 5.81266C16.7275 6.32842 13.4905 7.58227 11.1832 8.41693C11.1446 8.43092 11.1025 8.43302 11.0627 8.42299C11.0228 8.41293 10.987 8.39122 10.9602 8.36075C10.9334 8.33027 10.9168 8.29248 10.9126 8.2525C10.9085 8.21257 10.917 8.17231 10.937 8.13719C11.6711 6.84781 12.5456 5.3434 13.2129 3.99379C13.2391 3.94088 13.2837 3.8988 13.3389 3.87504C13.394 3.85127 13.456 3.84735 13.5138 3.86404C14.8964 4.26096 17.0785 5.12028 16.8775 5.81266Z"
+        />
+      </g>
     </svg>
   )
 }

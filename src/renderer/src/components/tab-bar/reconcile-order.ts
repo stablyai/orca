@@ -10,8 +10,20 @@ export function reconcileTabOrder(
   browserIds: string[] = []
 ): string[] {
   const validIds = new Set([...terminalIds, ...editorIds, ...browserIds])
-  const result: string[] = (storedOrder ?? []).filter((id) => validIds.has(id))
-  const inResult = new Set(result)
+  // Why: storedOrder is persisted group tab order and is mutated by many
+  // codepaths (drop/move/reorder/hydrate). A stale or racey write can leave
+  // the same tab id twice in the list, which surfaces as React's "two
+  // children with the same key" warning when TabBar maps items to
+  // SortableTab/EditorFileTab/BrowserTab. Dedupe at the render boundary so
+  // the UI never produces duplicate keys regardless of store-side bugs.
+  const result: string[] = []
+  const inResult = new Set<string>()
+  for (const id of storedOrder ?? []) {
+    if (validIds.has(id) && !inResult.has(id)) {
+      result.push(id)
+      inResult.add(id)
+    }
+  }
   for (const id of [...terminalIds, ...editorIds, ...browserIds]) {
     if (!inResult.has(id)) {
       result.push(id)

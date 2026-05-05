@@ -6,6 +6,11 @@ import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 
 const STATS_SCHEMA_VERSION = 1
 const MAX_EVENTS = 10_000
+// Why: countedPRs is a deduplication registry that grows with every PR created
+// through Orca. Without a cap, a heavily-used instance accumulates thousands of
+// URL strings across months. 2000 entries is about 6-12 months of active use
+// for a power user, and at ~50 chars per URL the overhead is ~100KB max.
+const MAX_COUNTED_PRS = 2_000
 // Why 5s instead of the main store's 300ms: stat events are infrequent
 // (a few per session) and not latency-sensitive for the UI.
 const DEBOUNCE_MS = 5_000
@@ -50,11 +55,26 @@ export class StatsCollector {
   private aggregates: StatsAggregates
   private liveAgents = new Map<string, number>() // ptyId → startTimestamp
   private writeTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: star-nag lives in its own service but needs to observe the running
+  // agent-spawned counter. A lightweight listener avoids cyclic imports and
+  // keeps StatsCollector unaware of how the counter is consumed.
+  private agentStartListeners: ((totalAgentsSpawned: number) => void)[] = []
 
   constructor() {
     const data = this.load()
     this.events = data.events
     this.aggregates = data.aggregates
+  }
+
+  onAgentStarted(listener: (totalAgentsSpawned: number) => void): () => void {
+    this.agentStartListeners.push(listener)
+    return () => {
+      this.agentStartListeners = this.agentStartListeners.filter((l) => l !== listener)
+    }
+  }
+
+  getTotalAgentsSpawned(): number {
+    return this.aggregates.totalAgentsSpawned
   }
 
   // ── Recording ──────────────────────────────────────────────────────
@@ -168,11 +188,29 @@ export class StatsCollector {
     switch (event.type) {
       case 'agent_start':
         this.aggregates.totalAgentsSpawned++
+        // Why: notify listeners synchronously AFTER increment so observers
+        // see the post-increment count. Listener errors are swallowed to
+        // keep stat recording robust — a buggy listener must not lose the
+        // event from the on-disk log.
+        for (const listener of this.agentStartListeners) {
+          try {
+            listener(this.aggregates.totalAgentsSpawned)
+          } catch (err) {
+            console.error('[stats] agent-start listener threw:', err)
+          }
+        }
         break
       case 'pr_created':
         this.aggregates.totalPRsCreated++
         if (event.meta?.prUrl) {
           this.aggregates.countedPRs.push(String(event.meta.prUrl))
+          // Why: trim oldest entries so the dedup array does not grow without
+          // bound. The aggregate totalPRsCreated counter remains accurate; only
+          // the dedup lookup for very old PRs is lost, which is acceptable
+          // since PRs that old would never be re-counted in practice.
+          if (this.aggregates.countedPRs.length > MAX_COUNTED_PRS) {
+            this.aggregates.countedPRs = this.aggregates.countedPRs.slice(-MAX_COUNTED_PRS)
+          }
         }
         break
       // agent_stop duration is handled directly in onAgentStop() to avoid

@@ -31,40 +31,40 @@ function nextOpId(): string {
 }
 
 /**
- * Hook that drives the browser grab lifecycle for a single browser tab.
+ * Hook that drives the browser grab lifecycle for a single browser page.
  *
  * The state machine: idle → armed → awaiting → confirming → idle/armed
  *                                                        ↘ error → idle
  */
-export function useGrabMode(browserTabId: string): GrabModeHook {
+export function useGrabMode(browserPageId: string): GrabModeHook {
   const [state, setState] = useState<GrabModeState>('idle')
   const [payload, setPayload] = useState<BrowserGrabPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState(false)
   const activeOpIdRef = useRef<string | null>(null)
-  const browserTabIdRef = useRef(browserTabId)
+  const browserTabIdRef = useRef(browserPageId)
 
   useEffect(() => {
-    browserTabIdRef.current = browserTabId
-  }, [browserTabId])
+    browserTabIdRef.current = browserPageId
+  }, [browserPageId])
 
-  // Why: when the browser tab changes while grab is active, cancel the
+  // Why: when the browser page changes while grab is active, cancel the
   // current grab operation so stale overlays don't survive tab switches.
   useEffect(() => {
     return () => {
       if (activeOpIdRef.current) {
-        void window.api.browser.cancelGrab({ browserTabId })
+        void window.api.browser.cancelGrab({ browserPageId })
         activeOpIdRef.current = null
       }
     }
-  }, [browserTabId])
+  }, [browserPageId])
 
   const armAndAwait = useCallback(async () => {
     const tabId = browserTabIdRef.current
 
     // Enable grab mode — injects the overlay
     const setResult = await window.api.browser.setGrabMode({
-      browserTabId: tabId,
+      browserPageId: tabId,
       enabled: true
     })
     if (!setResult.ok) {
@@ -81,7 +81,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
 
     setState('awaiting')
     const result = await window.api.browser.awaitGrabSelection({
-      browserTabId: tabId,
+      browserPageId: tabId,
       opId
     })
 
@@ -97,7 +97,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
       let screenshot: BrowserGrabScreenshot | null = null
       try {
         const ssResult = await window.api.browser.captureSelectionScreenshot({
-          browserTabId: tabId,
+          browserPageId: tabId,
           rect: result.payload.target.rectViewport
         })
         if (ssResult.ok) {
@@ -128,12 +128,12 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
     } else {
       // Disable grab mode
       void window.api.browser.setGrabMode({
-        browserTabId: browserTabIdRef.current,
+        browserPageId: browserTabIdRef.current,
         enabled: false
       })
       if (activeOpIdRef.current) {
         void window.api.browser.cancelGrab({
-          browserTabId: browserTabIdRef.current
+          browserPageId: browserTabIdRef.current
         })
         activeOpIdRef.current = null
       }
@@ -146,12 +146,12 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
 
   const cancel = useCallback(() => {
     void window.api.browser.setGrabMode({
-      browserTabId: browserTabIdRef.current,
+      browserPageId: browserTabIdRef.current,
       enabled: false
     })
     if (activeOpIdRef.current) {
       void window.api.browser.cancelGrab({
-        browserTabId: browserTabIdRef.current
+        browserPageId: browserTabIdRef.current
       })
       activeOpIdRef.current = null
     }
@@ -177,7 +177,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
 
   const exit = useCallback(() => {
     void window.api.browser.setGrabMode({
-      browserTabId: browserTabIdRef.current,
+      browserPageId: browserTabIdRef.current,
       enabled: false
     })
     // Why: clear the active opId so that any in-flight result from the

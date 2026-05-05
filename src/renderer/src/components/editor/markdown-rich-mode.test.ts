@@ -45,4 +45,20 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     expect(getMarkdownRichModeUnsupportedMessage('<Widget />\n')).toBeNull()
     expect(getMarkdownRichModeUnsupportedMessage('<div>block</div>\n')).toBeNull()
   })
+
+  it('allows markdown files with front-matter', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage('---\ntitle: Hello\ntags: [a, b]\n---\n# Body\n')
+    ).toBeNull()
+  })
+
+  it('allows TOML front-matter delimited by +++', () => {
+    expect(getMarkdownRichModeUnsupportedMessage('+++\ntitle = "Hello"\n+++\nBody\n')).toBeNull()
+  })
+
+  it('allows front-matter with clean markdown body', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage('---\ntitle: Docs\n---\n# Heading\n\n- one\n- two\n')
+    ).toBeNull()
+  })
 })

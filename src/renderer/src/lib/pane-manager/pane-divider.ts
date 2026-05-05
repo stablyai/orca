@@ -11,13 +11,15 @@ export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   return thickness + HIT_PADDING * 2
 }
 
+type DividerCallbacks = {
+  refitPanesUnder: (el: HTMLElement) => void
+  onLayoutChanged?: () => void
+}
+
 export function createDivider(
   isVertical: boolean,
   styleOptions: PaneStyleOptions,
-  callbacks: {
-    refitPanesUnder: (el: HTMLElement) => void
-    onLayoutChanged?: () => void
-  }
+  callbacks: DividerCallbacks
 ): HTMLElement {
   const divider = document.createElement('div')
   divider.className = `pane-divider ${isVertical ? 'is-vertical' : 'is-horizontal'}`
@@ -43,10 +45,7 @@ export function createDivider(
 function attachDividerDrag(
   divider: HTMLElement,
   isVertical: boolean,
-  callbacks: {
-    refitPanesUnder: (el: HTMLElement) => void
-    onLayoutChanged?: () => void
-  }
+  callbacks: DividerCallbacks
 ): void {
   const MIN_PANE_SIZE = 50
 
@@ -109,13 +108,11 @@ function attachDividerDrag(
       newPrev = totalSize - MIN_PANE_SIZE
     }
 
+    // Why: keep drag-time work to flex layout only; pane-local ResizeObservers
+    // schedule the terminal fit on the next frame so the divider stays smooth.
     // Use flex-grow proportionally
     prevEl.style.flex = `${newPrev} 1 0%`
     nextEl.style.flex = `${newNext} 1 0%`
-
-    // Refit terminals in affected panes
-    callbacks.refitPanesUnder(prevEl)
-    callbacks.refitPanesUnder(nextEl)
   }
 
   const onPointerUp = (e: PointerEvent): void => {
@@ -125,6 +122,13 @@ function attachDividerDrag(
     dragging = false
     divider.releasePointerCapture(e.pointerId)
     divider.classList.remove('is-dragging')
+    // Final refit at the exact drop position.
+    if (prevEl) {
+      callbacks.refitPanesUnder(prevEl)
+    }
+    if (nextEl) {
+      callbacks.refitPanesUnder(nextEl)
+    }
     prevEl = null
     nextEl = null
 
@@ -196,5 +200,11 @@ export function applyPaneOpacity(
 export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOptions): void {
   if (styleOptions.splitBackground) {
     root.style.background = styleOptions.splitBackground
+  }
+  if (styleOptions.paddingX !== undefined) {
+    root.style.setProperty('--pane-padding-x', `${styleOptions.paddingX}px`)
+  }
+  if (styleOptions.paddingY !== undefined) {
+    root.style.setProperty('--pane-padding-y', `${styleOptions.paddingY}px`)
   }
 }

@@ -1,10 +1,38 @@
 import { useEffect, useRef } from 'react'
 import type React from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
+import {
+  fileExplorerHasRedo,
+  fileExplorerHasUndo,
+  redoFileExplorer,
+  undoFileExplorer
+} from './fileExplorerUndoRedo'
 
 const isMac = navigator.userAgent.includes('Mac')
+
+function isCmdZRedo(e: KeyboardEvent): boolean {
+  const mod = isMac ? e.metaKey : e.ctrlKey
+  if (!mod || e.altKey) {
+    return false
+  }
+  if (isMac) {
+    return e.code === 'KeyZ' && e.shiftKey
+  }
+  // Windows/Linux: Ctrl+Shift+Z or Ctrl+Y
+  return (e.code === 'KeyZ' && e.shiftKey) || (e.code === 'KeyY' && !e.shiftKey)
+}
+
+function isCmdZUndo(e: KeyboardEvent): boolean {
+  const mod = isMac ? e.metaKey : e.ctrlKey
+  if (!mod || e.altKey || e.shiftKey) {
+    return false
+  }
+  // Prefer code (layout-independent); fall back to key for edge IME/layout cases.
+  return e.code === 'KeyZ' || e.key.toLowerCase() === 'z'
+}
 
 /**
  * Keyboard shortcuts for the file explorer.
@@ -52,7 +80,17 @@ export function useFileExplorerKeys(opts: {
 
     const focusInExplorer = (): boolean => {
       const el = document.activeElement
-      return !!el && !!opts.containerRef.current?.contains(el)
+      if (!el || !opts.containerRef.current) {
+        return false
+      }
+      if (opts.containerRef.current.contains(el)) {
+        return true
+      }
+      // Fallback: Radix portaled nodes or timing quirks — shell is marked explicitly.
+      return (
+        el instanceof Element &&
+        el.closest('[data-orca-explorer-shell]') === opts.containerRef.current
+      )
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -63,9 +101,24 @@ export function useFileExplorerKeys(opts: {
         return
       }
 
+      // ── Undo/redo for explorer mutations (only when this panel should own the chord).
+      // Why: require focus inside the explorer shell (includes the scrollbar, not just
+      // the viewport — Radix renders the scrollbar as a sibling of the viewport).
+      const inExplorer = focusInExplorer()
+      const wantUndo = isCmdZUndo(e) && fileExplorerHasUndo()
+      const wantRedo = isCmdZRedo(e) && fileExplorerHasRedo()
+      if (inExplorer && (wantUndo || wantRedo)) {
+        e.preventDefault()
+        const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
+        void run.catch((err: unknown) => {
+          toast.error(err instanceof Error ? err.message : 'Operation failed')
+        })
+        return
+      }
+
       // ── Bare-key shortcuts: only when explorer has focus ──
       if (focusInExplorer()) {
-        const node = findFocusedNode()
+        const node = findFocusedNode() ?? selectedNodeRef.current
         if (node) {
           // Enter — Rename
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
@@ -73,9 +126,10 @@ export function useFileExplorerKeys(opts: {
             startRenameRef.current(node)
             return
           }
-          // ⌘⌫ (Mac) / Delete (Win) — Delete
+          // ⌘⌫ (Mac) / Delete (Win) / Forward Delete (Mac full keyboard) — Delete
           if (
             (isMac && e.key === 'Backspace' && e.metaKey) ||
+            (isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) ||
             (!isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey)
           ) {
             e.preventDefault()
@@ -111,7 +165,7 @@ export function useFileExplorerKeys(opts: {
       }
     }
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [rightSidebarOpen, rightSidebarTab, opts.containerRef])
 }

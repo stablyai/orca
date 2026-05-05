@@ -1,9 +1,16 @@
 /* eslint-disable max-lines */
 
-import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
+import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
+import { toast } from 'sonner'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
+import { useAllWorktrees } from '../store/selectors'
+import { findWorktreeById } from '../store/slices/worktree-helpers'
+import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
+import { getConnectionId } from '../lib/connection-context'
+import { extractIpcErrorMessage } from '../lib/ipc-error'
+import { basename } from '../lib/path'
 import {
   Dialog,
   DialogContent,
@@ -13,24 +20,53 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
 import {
+  ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
+  ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
+  type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
-import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
-import { reconcileTabOrder } from './tab-bar/reconcile-order'
+import type { TabGroupLayoutNode } from '../../../shared/types'
+import BrowserPane from './browser-pane/BrowserPane'
+import { destroyPersistentWebview } from './browser-pane/webview-registry'
+import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import {
+  collectBrowserWebviewIds,
+  destroyWorkspaceWebviews
+} from '../store/slices/browser-webview-cleanup'
+import {
+  handleSwitchTab,
+  handleSwitchTabAcrossAllTypes,
+  handleSwitchTerminalTab
+} from '../hooks/ipc-tab-switch'
+import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
+import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  getEffectiveLayoutForWorktree as getEffectiveLayout,
+  anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
+} from './terminal/split-group-mount'
+import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
+import CodexRestartChip from './CodexRestartChip'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
-export default function Terminal(): React.JSX.Element | null {
+// Why: after a close-dialog handler advances the queue and renders the next
+// dialog, gate new handler runs for this long so a stray carry-over click
+// from the prior dialog can't silently act on the new one. Short enough to
+// feel responsive on a deliberate follow-up click; long enough to absorb the
+// trailing edge of a physical double-click (~150 ms on most hardware).
+const CLOSE_DIALOG_DEBOUNCE_MS = 200
+
+function Terminal(): React.JSX.Element | null {
+  const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeView = useAppStore((s) => s.activeView)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const createTab = useAppStore((s) => s.createTab)
@@ -40,10 +76,6 @@ export default function Terminal(): React.JSX.Element | null {
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
-  const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -52,23 +84,28 @@ export default function Terminal(): React.JSX.Element | null {
   const activeTabType = useAppStore((s) => s.activeTabType)
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
+  const openFile = useAppStore((s) => s.openFile)
   const closeFile = useAppStore((s) => s.closeFile)
-  const closeAllFiles = useAppStore((s) => s.closeAllFiles)
   const pinFile = useAppStore((s) => s.pinFile)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((s) => s.setActiveBrowserTab)
-  const updateBrowserTabPageState = useAppStore((s) => s.updateBrowserTabPageState)
-  const setBrowserTabUrl = useAppStore((s) => s.setBrowserTabUrl)
+  const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
+  const layoutByWorktree = useAppStore((s) => s.layoutByWorktree)
+  const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
+  const ensureWorktreeRootGroup = useAppStore((s) => s.ensureWorktreeRootGroup)
+  const reconcileWorktreeTabModel = useAppStore((s) => s.reconcileWorktreeTabModel)
 
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const setTabBarOrder = useAppStore((s) => s.setTabBarOrder)
   const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
   const tabBarOrder = activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined
 
-  const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
-  const allWorktrees = Object.values(worktreesByRepo).flat()
+  const tabs = useMemo(
+    () => (activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, tabsByWorktree]
+  )
 
   // Why: the TabBar is rendered into the titlebar via a portal so tabs share
   // the same row as the "Orca" title. The target element is created by App.tsx.
@@ -78,6 +115,16 @@ export default function Terminal(): React.JSX.Element | null {
     setTitlebarTabsTarget(document.getElementById('titlebar-tabs'))
   }, [])
 
+  useEffect(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    // Why: split-group ownership is now the real path. Ensure the active
+    // worktree always has a root group so terminal-first fallback can attach
+    // fresh tabs to a concrete owner even before any explicit split exists.
+    ensureWorktreeRootGroup(activeWorktreeId)
+  }, [activeWorktreeId, ensureWorktreeRootGroup])
+
   // Filter editor files to only show those belonging to the active worktree
   const worktreeFiles = activeWorktreeId
     ? openFiles.filter((f) => f.worktreeId === activeWorktreeId)
@@ -85,69 +132,357 @@ export default function Terminal(): React.JSX.Element | null {
   const worktreeBrowserTabs = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? [])
     : []
+  const getEffectiveLayoutForWorktree = useCallback(
+    (worktreeId: string) =>
+      getEffectiveLayout(worktreeId, layoutByWorktree, groupsByWorktree, activeGroupIdByWorktree),
+    [activeGroupIdByWorktree, groupsByWorktree, layoutByWorktree]
+  )
+  const effectiveActiveLayout = activeWorktreeId
+    ? getEffectiveLayoutForWorktree(activeWorktreeId)
+    : undefined
   const activeWorktreeBrowserTabIdsKey = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
 
+  const [wslAvailable, setWslAvailable] = useState(false)
+  useEffect(() => {
+    // Why: wsl:isAvailable is synchronous on the main-process side but we
+    // call it asynchronously so the renderer doesn't block on startup. The
+    // result only gates UI options, so a brief false→true transition is fine.
+    void window.api.wsl.isAvailable().then(setWslAvailable)
+  }, [])
+
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
+  const pendingEditorCloseQueueRef = useRef<string[]>([])
+
+  // Why: while a save-and-close is awaiting the file to disappear from
+  // openFiles, concurrent queueEditorCloseRequests calls (e.g. user clicks X
+  // on another dirty tab, or a split-group dispatch fires
+  // ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT) must not re-open the dialog over
+  // the in-flight save. Track the in-flight file here so
+  // getNextQueuedEditorClose can skip it as an un-advanceable head.
+  const inFlightSaveFileIdRef = useRef<string | null>(null)
+
+  // Why: after a Save/Discard/Cancel handler dismisses its dialog and advances
+  // the queue, a rapid second physical click can land on the freshly-rendered
+  // next dialog's button before the user has read the filename — silently
+  // discarding or saving work they didn't consciously choose to act on. Gate
+  // the three handlers on this ref and release after CLOSE_DIALOG_DEBOUNCE_MS
+  // so the stray click from the previous dialog is absorbed while a genuine
+  // new click on the next dialog still works.
+  const isClosingRef = useRef(false)
 
   // Window close confirmation dialog — shown when the user tries to close the
   // window (X button, Cmd+Q) while terminals with running processes exist.
   const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
 
+  // Why: when the main process requests a close while editor tabs are dirty, we
+  // must not call confirmWindowClose() until the user saves or discards. The
+  // global beforeunload guard still calls preventDefault() while any file is
+  // dirty, so an immediate confirm would leave the window open with no UI.
+  const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
+
+  const proceedToNativeWindowClose = useCallback((isQuitting: boolean) => {
+    // Why: defer this synthetic unload until we are actually ready to close so
+    // a dirty-tab preventDefault() does not fire during the initial quit IPC
+    // (that path can emit will-prevent-unload and clear isQuitting in main).
+    window.dispatchEvent(new Event('beforeunload'))
+
+    if (isQuitting) {
+      window.api.ui.confirmWindowClose()
+      return
+    }
+    const state = useAppStore.getState()
+    const allPtyIds = Object.values(state.ptyIdsByTabId).flat()
+    if (allPtyIds.length === 0) {
+      window.api.ui.confirmWindowClose()
+      return
+    }
+    void Promise.all(allPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
+      (results) => {
+        if (results.some(Boolean)) {
+          setWindowCloseDialogOpen(true)
+        } else {
+          window.api.ui.confirmWindowClose()
+        }
+      }
+    )
+  }, [])
+
+  const waitForFileClosed = useCallback((fileId: string, timeoutMs: number): Promise<boolean> => {
+    if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+      return Promise.resolve(true)
+    }
+    return new Promise((resolve) => {
+      let unsub: (() => void) | null = null
+      const timeoutId = window.setTimeout(() => {
+        unsub?.()
+        resolve(false)
+      }, timeoutMs)
+      unsub = useAppStore.subscribe((state) => {
+        if (!state.openFiles.some((f) => f.id === fileId)) {
+          window.clearTimeout(timeoutId)
+          unsub?.()
+          resolve(true)
+        }
+      })
+      // Why: zustand only fires subscribers on subsequent state changes. If
+      // the file closed between the initial guard and subscribe, the
+      // transition was missed — re-check synchronously after subscribe.
+      if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+        window.clearTimeout(timeoutId)
+        unsub?.()
+        resolve(true)
+      }
+    })
+  }, [])
+
+  const getNextQueuedEditorClose = useCallback((): string | null => {
+    // Why: bulk close actions can enqueue files that become clean or disappear
+    // before they reach the front. Drain those entries eagerly so the dialog
+    // only blocks on tabs that still require an explicit close decision.
+    while (pendingEditorCloseQueueRef.current.length > 0) {
+      const fileId = pendingEditorCloseQueueRef.current[0]
+      // Why: if a save is still in-flight for this fileId, do not re-open the
+      // dialog on top of it. waitForFileClosed will re-advance the queue once
+      // the file finishes closing (or the save times out).
+      if (inFlightSaveFileIdRef.current === fileId) {
+        return null
+      }
+      const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
+      if (!file) {
+        pendingEditorCloseQueueRef.current.shift()
+        continue
+      }
+      if (!file.isDirty) {
+        closeFile(fileId)
+        pendingEditorCloseQueueRef.current.shift()
+        continue
+      }
+      return fileId
+    }
+    return null
+  }, [closeFile])
+
+  const advanceEditorCloseQueue = useCallback(() => {
+    const nextFileId = getNextQueuedEditorClose()
+    if (nextFileId) {
+      // Why: the queue can cross worktree boundaries during window-close
+      // flows. Switch to the target file's worktree before opening the
+      // dialog so the UI behind the dialog matches the filename in it.
+      const state = useAppStore.getState()
+      const file = state.openFiles.find((f) => f.id === nextFileId)
+      if (file && file.worktreeId !== state.activeWorktreeId) {
+        setActiveWorktree(file.worktreeId)
+      }
+      setActiveFile(nextFileId)
+      setActiveTabType('editor')
+      setSaveDialogFileId(nextFileId)
+      return
+    }
+    setSaveDialogFileId(null)
+    const pendingWindowClose = windowCloseAfterDirtyRef.current
+    if (pendingWindowClose) {
+      windowCloseAfterDirtyRef.current = null
+      proceedToNativeWindowClose(pendingWindowClose.isQuitting)
+    }
+  }, [
+    getNextQueuedEditorClose,
+    proceedToNativeWindowClose,
+    setActiveFile,
+    setActiveTabType,
+    setActiveWorktree
+  ])
+
+  const queueEditorCloseRequests = useCallback(
+    (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
+      if (pendingWindowClose) {
+        windowCloseAfterDirtyRef.current = pendingWindowClose
+      }
+      pendingEditorCloseQueueRef.current = appendUniqueOpenFileIds(
+        pendingEditorCloseQueueRef.current,
+        fileIds,
+        new Set(useAppStore.getState().openFiles.map((file) => file.id))
+      )
+      advanceEditorCloseQueue()
+    },
+    [advanceEditorCloseQueue]
+  )
+
   const handleCloseFile = useCallback(
     (fileId: string) => {
       const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
       if (file?.isDirty) {
-        setSaveDialogFileId(fileId)
+        queueEditorCloseRequests([fileId])
         return
       }
       closeFile(fileId)
     },
-    [closeFile]
+    [closeFile, queueEditorCloseRequests]
   )
 
   const handleSaveDialogSave = useCallback(async () => {
+    if (isClosingRef.current) {
+      return
+    }
     if (!saveDialogFileId) {
       return
     }
-    const file = useAppStore.getState().openFiles.find((f) => f.id === saveDialogFileId)
+    isClosingRef.current = true
+    const fileId = saveDialogFileId
+    const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
     if (!file) {
+      pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+        (id) => id !== fileId
+      )
+      advanceEditorCloseQueue()
+      setTimeout(() => {
+        isClosingRef.current = false
+      }, CLOSE_DIALOG_DEBOUNCE_MS)
       return
     }
+
     // Why: save-and-close must flush the latest draft even when the visible
     // editor panel has already unmounted. The headless autosave controller
     // owns that write path now, so the dialog signals it through a custom
     // event instead of poking at editor component refs.
-    window.dispatchEvent(
-      new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId: saveDialogFileId } })
-    )
     setSaveDialogFileId(null)
-  }, [saveDialogFileId])
+    window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
+    inFlightSaveFileIdRef.current = fileId
+    let closed = false
+    try {
+      closed = await waitForFileClosed(fileId, 10_000)
+    } finally {
+      // Why: clear the in-flight ref regardless of success/timeout so the
+      // queue head is no longer treated as un-advanceable by
+      // getNextQueuedEditorClose before we re-advance the queue below.
+      if (inFlightSaveFileIdRef.current === fileId) {
+        inFlightSaveFileIdRef.current = null
+      }
+    }
+    if (!closed) {
+      // Why: the save may have resolved in the tiny gap after the timeout
+      // fired. Re-check synchronously so we don't re-open a stale dialog
+      // for a file that is already gone — drain the queue entry and
+      // advance instead. Toast only for the genuine timeout case.
+      if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+        pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+          (id) => id !== fileId
+        )
+        advanceEditorCloseQueue()
+        setTimeout(() => {
+          isClosingRef.current = false
+        }, CLOSE_DIALOG_DEBOUNCE_MS)
+        return
+      }
+      toast.error('Save timed out or failed. Fix errors before closing.')
+      setSaveDialogFileId(fileId)
+      // Why: a genuine timeout leaves the user back on the same dialog, so
+      // release the guard immediately — a new click here is a deliberate
+      // retry, not a stray carry-over from a prior dialog.
+      isClosingRef.current = false
+      return
+    }
+    pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+      (id) => id !== fileId
+    )
+    advanceEditorCloseQueue()
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
+  }, [advanceEditorCloseQueue, saveDialogFileId, waitForFileClosed])
 
   const handleSaveDialogDiscard = useCallback(async () => {
+    if (isClosingRef.current) {
+      return
+    }
     if (!saveDialogFileId) {
       return
     }
+    isClosingRef.current = true
+    const fileId = saveDialogFileId
+
+    // Why: dismiss the dialog synchronously before awaiting quiesce. A rapid
+    // double-click on "Don't Save" would otherwise fire the handler twice
+    // with the same captured fileId, causing two concurrent queue advances
+    // after the quiesce settles. Mirrors handleSaveDialogSave's early clear.
+    setSaveDialogFileId(null)
+
     // Why: autosave runs on a background timer. Wait for any pending/in-flight
     // write to settle before honoring "Don't Save", otherwise the file can be
     // written after the user explicitly chose to discard their edits.
-    await requestEditorSaveQuiesce({ fileId: saveDialogFileId })
-    markFileDirty(saveDialogFileId, false)
-    closeFile(saveDialogFileId)
-    setSaveDialogFileId(null)
-  }, [saveDialogFileId, closeFile, markFileDirty])
+    try {
+      await requestEditorSaveQuiesce({ fileId })
+    } catch (error) {
+      // Why: quiesce failure must not trap the user in a close dialog loop, but
+      // silently swallowing it also hides broken autosave state. Warn so a
+      // stuck controller is visible in devtools instead of disappearing.
+      console.warn('Autosave quiesce failed before discard', error)
+    }
+    markFileDirty(fileId, false)
+    closeFile(fileId)
+    pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+      (id) => id !== fileId
+    )
+    advanceEditorCloseQueue()
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
+  }, [advanceEditorCloseQueue, closeFile, markFileDirty, saveDialogFileId])
 
   const handleSaveDialogCancel = useCallback(() => {
+    if (isClosingRef.current) {
+      return
+    }
+    isClosingRef.current = true
+    pendingEditorCloseQueueRef.current = []
+    windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
   }, [])
 
-  // Ensure activeTabId is valid (adjusting state during render)
-  if (tabs.length > 0 && (!activeTabId || !tabs.find((t) => t.id === activeTabId))) {
+  useEffect(() => {
+    const onRequestEditorClose = (event: Event): void => {
+      const customEvent = event as CustomEvent<EditorRequestFileCloseDetail>
+      const fileId = customEvent.detail?.fileId
+      if (!fileId) {
+        return
+      }
+      queueEditorCloseRequests([fileId])
+    }
+    window.addEventListener(
+      ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
+      onRequestEditorClose as EventListener
+    )
+    return () =>
+      window.removeEventListener(
+        ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
+        onRequestEditorClose as EventListener
+      )
+  }, [queueEditorCloseRequests])
+
+  useEffect(() => {
+    if (tabs.length === 0) {
+      return
+    }
+    if (activeTabId && tabs.some((tab) => tab.id === activeTabId)) {
+      return
+    }
+    // Why: mutating Zustand during render trips React's "Cannot update a
+    // component while rendering a different component" warning. Keep the
+    // legacy active-tab repair, but run it as an effect after the render that
+    // observed the stale activeTabId.
     setActiveTab(tabs[0].id)
-  }
+    // Why: `tabs` is intentionally the dependency here because the repair must
+    // react to tab-order/content changes, not just scalar IDs. The list comes
+    // from Zustand selectors and is small in practice, so this explicit repair
+    // effect is preferred over duplicating reconciliation state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabId, setActiveTab, tabs])
 
   // Track which worktrees have been activated during this app session.
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY
@@ -168,84 +503,134 @@ export default function Terminal(): React.JSX.Element | null {
       mountedWorktreeIdsRef.current.delete(id)
     }
   }
-  const initialTabCreationGuardRef = useRef<string | null>(null)
-
+  const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
+    allWorktrees.map((wt) => wt.id),
+    mountedWorktreeIdsRef.current,
+    layoutByWorktree,
+    groupsByWorktree,
+    activeGroupIdByWorktree
+  )
   // Auto-create first tab when worktree activates
   useEffect(() => {
     if (!workspaceSessionReady) {
       return
     }
     if (!activeWorktreeId) {
-      initialTabCreationGuardRef.current = null
       return
     }
 
-    // Why: skip auto-creation if terminal tabs already exist, or if editor files
-    // are open for this worktree. The user may have intentionally closed all
-    // terminal tabs while keeping editors open — auto-spawning a terminal would
-    // be disruptive.
-    if (tabs.length > 0 || worktreeFiles.length > 0 || worktreeBrowserTabs.length > 0) {
-      if (initialTabCreationGuardRef.current === activeWorktreeId) {
-        initialTabCreationGuardRef.current = null
+    // Why: this fallback exists to give a newly activated/restored worktree a
+    // focusable surface when the reconciled tab model has nothing renderable.
+    // Re-running it on ordinary tab-count changes would recreate a terminal
+    // immediately after the user intentionally closed the last visible one.
+    const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+      return
+    }
+    // Why: this tab only exists because the user clicked a never-visited
+    // worktree. Tag it so the PTY spawn it triggers does not count as
+    // activity and reshuffle the sidebar. Explicit "New Tab" actions
+    // (handleNewTab below) still bump normally.
+    createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
+  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+
+  const handleNewTab = useCallback(
+    (shellOverride?: string) => {
+      if (!activeWorktreeId) {
+        return
       }
-      return
-    }
-
-    // In React StrictMode (dev), mount effects are intentionally invoked twice.
-    // Track the worktree we already initialized so we only create one first tab.
-    if (initialTabCreationGuardRef.current === activeWorktreeId) {
-      return
-    }
-    initialTabCreationGuardRef.current = activeWorktreeId
-    createTab(activeWorktreeId)
-  }, [
-    workspaceSessionReady,
-    activeWorktreeId,
-    tabs.length,
-    worktreeFiles.length,
-    worktreeBrowserTabs.length,
-    createTab
-  ])
-
-  const handleNewTab = useCallback(() => {
-    if (!activeWorktreeId) {
-      return
-    }
-    const newTab = createTab(activeWorktreeId)
-    setActiveTabType('terminal')
-    // Why: persist the tab bar order with the new terminal at the end of the
-    // current visual order. Without this, reconcileOrder falls back to
-    // terminals-first when tabBarOrderByWorktree is unset, causing a new
-    // terminal to jump to index 0 instead of appending after editor tabs.
-    const state = useAppStore.getState()
-    const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
-    const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-    const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
-    const stored = state.tabBarOrderByWorktree[activeWorktreeId]
-    const termIds = currentTerminals.map((t) => t.id)
-    const editorIds = currentEditors.map((f) => f.id)
-    const browserIds = currentBrowsers.map((tab) => tab.id)
-    const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-    const base = (stored ?? []).filter((id) => validIds.has(id))
-    const inBase = new Set(base)
-    for (const id of [...termIds, ...editorIds, ...browserIds]) {
-      if (!inBase.has(id)) {
-        base.push(id)
-        inBase.add(id)
+      const newTab = createTab(activeWorktreeId, undefined, shellOverride)
+      setActiveTabType('terminal')
+      // Why: persist the tab bar order with the new terminal at the end of the
+      // current visual order. Without this, reconcileOrder falls back to
+      // terminals-first when tabBarOrderByWorktree is unset, causing a new
+      // terminal to jump to index 0 instead of appending after editor tabs.
+      const state = useAppStore.getState()
+      const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
+      const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+      const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
+      const stored = state.tabBarOrderByWorktree[activeWorktreeId]
+      const termIds = currentTerminals.map((t) => t.id)
+      const editorIds = currentEditors.map((f) => f.id)
+      const browserIds = currentBrowsers.map((tab) => tab.id)
+      const validIds = new Set([...termIds, ...editorIds, ...browserIds])
+      const base = (stored ?? []).filter((id) => validIds.has(id))
+      const inBase = new Set(base)
+      for (const id of [...termIds, ...editorIds, ...browserIds]) {
+        if (!inBase.has(id)) {
+          base.push(id)
+          inBase.add(id)
+        }
       }
-    }
-    // The new tab is already in base via termIds; move it to the end
-    const order = base.filter((id) => id !== newTab.id)
-    order.push(newTab.id)
-    setTabBarOrder(activeWorktreeId, order)
-  }, [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder])
+      // The new tab is already in base via termIds; move it to the end
+      const order = base.filter((id) => id !== newTab.id)
+      order.push(newTab.id)
+      setTabBarOrder(activeWorktreeId, order)
+      // Why: keyboard (Cmd/Ctrl+T) creation should leave the user ready to type
+      // in the new shell. Without an explicit focus call, the window-level
+      // keydown handler keeps focus on whatever surface dispatched the shortcut
+      // (often <body>), so the first keystroke is dropped instead of reaching
+      // the new xterm. Matches the "+" menu path in TabBar.tsx.
+      focusTerminalTabSurface(newTab.id)
+    },
+    [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+  )
 
   const handleNewBrowserTab = useCallback(() => {
     if (!activeWorktreeId) {
       return
     }
-    createBrowserTab(activeWorktreeId, 'about:blank', { title: 'New Browser Tab' })
+    const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+    createBrowserTab(activeWorktreeId, defaultUrl, {
+      title: 'New Browser Tab',
+      focusAddressBar: true
+    })
   }, [activeWorktreeId, createBrowserTab])
+
+  const handleDuplicateBrowserTab = useCallback(
+    (browserTabId: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const state = useAppStore.getState()
+      const tabs = state.browserTabsByWorktree[activeWorktreeId] ?? []
+      const source = tabs.find((t) => t.id === browserTabId)
+      if (!source) {
+        return
+      }
+      createBrowserTab(activeWorktreeId, source.url, {
+        title: source.title,
+        sessionProfileId: source.sessionProfileId
+      })
+    },
+    [activeWorktreeId, createBrowserTab]
+  )
+
+  const handleNewFile = useCallback(async () => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, activeWorktreeId)
+    if (!worktree) {
+      return
+    }
+    try {
+      // Why: the global Cmd/Ctrl+Shift+M shortcut is handled here rather than
+      // inside a specific TabGroupPanel, so it must snapshot the store's
+      // current focused group explicitly. Otherwise split layouts fall back to
+      // the ambient/default group and open the file in the wrong pane.
+      const targetGroupId = useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId]
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const fileInfo = await createUntitledMarkdownFile(
+        worktree.path,
+        activeWorktreeId,
+        connectionId
+      )
+      openFile(fileInfo, { preview: false, targetGroupId })
+    } catch (err) {
+      toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
+    }
+  }, [activeWorktreeId, openFile])
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
@@ -315,7 +700,7 @@ export default function Terminal(): React.JSX.Element | null {
       }
       const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
-        destroyPersistentWebview(tabId)
+        destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
         closeBrowserTab(tabId)
         if (state.activeWorktreeId === owningWorktreeId) {
           const worktreeFile = state.openFiles.find((file) => file.worktreeId === owningWorktreeId)
@@ -341,7 +726,7 @@ export default function Terminal(): React.JSX.Element | null {
           setActiveBrowserTab(nextTab.id)
         }
       }
-      destroyPersistentWebview(tabId)
+      destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
       closeBrowserTab(tabId)
     },
     [
@@ -371,6 +756,7 @@ export default function Terminal(): React.JSX.Element | null {
       }
       const state = useAppStore.getState()
       const order = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
+      const dirtyFileIds: string[] = []
       for (const id of order) {
         if (id === tabId) {
           continue
@@ -380,22 +766,24 @@ export default function Terminal(): React.JSX.Element | null {
         } else if (
           state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
         ) {
-          if (
-            state.activeFileId === id &&
-            state.openFiles.find((file) => file.id === id)?.isDirty
-          ) {
+          const file = state.openFiles.find((candidate) => candidate.id === id)
+          if (file?.isDirty) {
+            dirtyFileIds.push(id)
             continue
           }
           closeFile(id)
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
-          destroyPersistentWebview(id)
+          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
         }
       }
+      if (dirtyFileIds.length > 0) {
+        queueEditorCloseRequests(dirtyFileIds)
+      }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab]
+    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -410,23 +798,49 @@ export default function Terminal(): React.JSX.Element | null {
         return
       }
       const rightIds = currentOrder.slice(index + 1)
+      const dirtyFileIds: string[] = []
       for (const id of rightIds) {
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
           state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
         ) {
+          const file = state.openFiles.find((candidate) => candidate.id === id)
+          if (file?.isDirty) {
+            dirtyFileIds.push(id)
+            continue
+          }
           closeFile(id)
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
-          destroyPersistentWebview(id)
+          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
         }
       }
+      if (dirtyFileIds.length > 0) {
+        queueEditorCloseRequests(dirtyFileIds)
+      }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab]
+    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
+
+  const handleCloseAllFiles = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const state = useAppStore.getState()
+    const filesInWorktree = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
+    const dirtyFileIds = filesInWorktree.filter((file) => file.isDirty).map((file) => file.id)
+    for (const file of filesInWorktree) {
+      if (!file.isDirty) {
+        closeFile(file.id)
+      }
+    }
+    if (dirtyFileIds.length > 0) {
+      queueEditorCloseRequests(dirtyFileIds)
+    }
+  }, [activeWorktreeId, closeFile, queueEditorCloseRequests])
 
   const handleActivateTab = useCallback(
     (tabId: string) => {
@@ -458,20 +872,6 @@ export default function Terminal(): React.JSX.Element | null {
     [setActiveBrowserTab, setActiveTabType]
   )
 
-  const handleBrowserTabPageStateUpdate = useCallback(
-    (tabId: string, updates: Parameters<typeof updateBrowserTabPageState>[1]) => {
-      updateBrowserTabPageState(tabId, updates)
-    },
-    [updateBrowserTabPageState]
-  )
-
-  const handleBrowserTabSetUrl = useCallback(
-    (tabId: string, url: string) => {
-      setBrowserTabUrl(tabId, url)
-    },
-    [setBrowserTabUrl]
-  )
-
   // Keyboard shortcuts
   useEffect(() => {
     if (!activeWorktreeId) {
@@ -481,10 +881,34 @@ export default function Terminal(): React.JSX.Element | null {
     const isMac = navigator.userAgent.includes('Mac')
     const onKeyDown = (e: KeyboardEvent): void => {
       const mod = isMac ? e.metaKey : e.ctrlKey
-      // Cmd/Ctrl+T - new terminal tab
+      // Why: when the browser workspace is the active surface, standard
+      // browser tab creation should stay inside that workspace. Reusing the
+      // same shortcut keeps Orca's embedded browser aligned with user
+      // expectations instead of unexpectedly mutating the outer tab strip.
       if (mod && e.key === 't' && !e.shiftKey && !e.repeat) {
         e.preventDefault()
-        handleNewTab()
+        const state = useAppStore.getState()
+        if (state.activeTabType === 'browser') {
+          handleNewBrowserTab()
+        } else {
+          handleNewTab()
+        }
+        return
+      }
+
+      // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
+      // otherwise reopen the most recently closed editor tab (VS Code–style).
+      if (mod && e.shiftKey && e.key.toLowerCase() === 't' && !e.repeat) {
+        e.preventDefault()
+        const state = useAppStore.getState()
+        if (state.activeTabType === 'browser') {
+          const restored = state.reopenClosedBrowserTab(activeWorktreeId)
+          if (restored === null) {
+            state.reopenClosedEditorTab(activeWorktreeId)
+          }
+        } else {
+          state.reopenClosedEditorTab(activeWorktreeId)
+        }
         return
       }
 
@@ -492,6 +916,32 @@ export default function Terminal(): React.JSX.Element | null {
       if (mod && e.shiftKey && e.key.toLowerCase() === 'b' && !e.repeat) {
         e.preventDefault()
         handleNewBrowserTab()
+        return
+      }
+
+      // Cmd/Ctrl+S - save active editor file (fallback for when focus is
+      // outside the editor content area, e.g. on the tab bar or sidebar).
+      // When the editor itself has focus, Monaco/rich-markdown handle Cmd+S
+      // internally, so we skip this when the target is editable.
+      if (mod && e.key === 's' && !e.shiftKey && !e.repeat) {
+        const target = e.target as HTMLElement | null
+        const inEditor =
+          target?.closest('.monaco-editor, [contenteditable]') !== null ||
+          target?.closest('textarea:not(.xterm-helper-textarea), input') !== null
+        if (!inEditor) {
+          const state = useAppStore.getState()
+          if (state.activeTabType === 'editor' && state.activeFileId) {
+            e.preventDefault()
+            window.dispatchEvent(new Event(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT))
+            return
+          }
+        }
+      }
+
+      // Cmd/Ctrl+Shift+M - new markdown file
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'm' && !e.repeat) {
+        e.preventDefault()
+        void handleNewFile()
         return
       }
 
@@ -506,73 +956,70 @@ export default function Terminal(): React.JSX.Element | null {
         if (state.activeTabType === 'editor' && state.activeFileId) {
           handleCloseFile(state.activeFileId)
         } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
-          handleCloseBrowserTab(state.activeBrowserTabId)
+          closeBrowserTab(state.activeBrowserTabId)
         }
         return
       }
 
-      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs
+      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
+      // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
+      // every tab type as an escape hatch from the type-scoped default, and
+      // mirrors Safari/Chrome's tab-switch chord on macOS.
       // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
-      // as the key value (the shifted character), not '['.
+      // as the key value (the shifted character), not '['. Option+[ also
+      // composes to dead-key / punctuation on many layouts, so matching on
+      // event.key would miss the chord entirely on non-US layouts.
       if (
         mod &&
-        e.shiftKey &&
         (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
+        !e.repeat &&
+        (e.shiftKey || e.altKey)
+      ) {
+        // Why: delegate to the shared handler used by the IPC shortcut path
+        // so both code paths share one implementation. Always consume the
+        // chord — even when the switch is a no-op (e.g. single tab), we own
+        // this key combo and shouldn't let it reach xterm or the browser
+        // guest's default handling.
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        if (e.altKey) {
+          handleSwitchTabAcrossAllTypes(e.code === 'BracketRight' ? 1 : -1)
+        } else {
+          handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)
+        }
+      }
+
+      // Ctrl+PageDown/PageUp - switch terminal tabs only
+      // Why: this chord intentionally uses Ctrl on every platform; on macOS,
+      // Cmd+PageUp/PageDown is an OS desktop-switch shortcut we should not steal.
+      // Why: also reject Shift so Ctrl+Shift+PageUp/PageDown stays available
+      // for focused terminal / editor consumers and matches the unshifted
+      // predicate in browser-guest-ui.ts and the chord advertised in
+      // ShortcutsPane.
+      if (
+        e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (e.code === 'PageDown' || e.code === 'PageUp') &&
         !e.repeat
       ) {
-        const state = useAppStore.getState()
-        const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-        const currentEditorFiles = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-        const currentBrowserTabs = state.browserTabsByWorktree[activeWorktreeId] ?? []
-        const terminalIds = currentTerminalTabs.map((t) => t.id)
-        const editorIds = currentEditorFiles.map((f) => f.id)
-        const browserIds = currentBrowserTabs.map((t) => t.id)
-        // Why: use reconcileTabOrder instead of raw tabBarOrderByWorktree so
-        // tab switching works even when the stored order is unset (e.g. for
-        // worktrees restored from session whose initial tabs were created
-        // without populating tabBarOrderByWorktree).
-        const reconciledOrder = reconcileTabOrder(
-          state.tabBarOrderByWorktree[activeWorktreeId],
-          terminalIds,
-          editorIds,
-          browserIds
-        )
-        const terminalIdSet = new Set(terminalIds)
-        const editorIdSet = new Set(editorIds)
-        const browserIdSet = new Set(browserIds)
-        const allTabIds = reconciledOrder.map((id) => ({
-          type: terminalIdSet.has(id)
-            ? ('terminal' as const)
-            : editorIdSet.has(id)
-              ? ('editor' as const)
-              : browserIdSet.has(id)
-                ? ('browser' as const)
-                : (null as never),
-          id
-        }))
-
-        if (allTabIds.length > 1) {
-          e.preventDefault()
-          const currentId =
-            state.activeTabType === 'editor'
-              ? state.activeFileId
-              : state.activeTabType === 'browser'
-                ? state.activeBrowserTabId
-                : state.activeTabId
-          const idx = allTabIds.findIndex((t) => t.id === currentId)
-          const dir = e.code === 'BracketRight' ? 1 : -1
-          const next = allTabIds[(idx + dir + allTabIds.length) % allTabIds.length]
-          if (next.type === 'terminal') {
-            setActiveTab(next.id)
-            state.setActiveTabType('terminal')
-          } else if (next.type === 'browser') {
-            state.setActiveBrowserTab(next.id)
-            state.setActiveTabType('browser')
-          } else {
-            state.setActiveFile(next.id)
-            state.setActiveTabType('editor')
-          }
-        }
+        // Why: always consume the chord before xterm's textarea listener
+        // sees it, regardless of whether we actually switched tabs. xterm
+        // translates plain Ctrl+PageUp/PageDown into \e[5~ / \e[6~ escape
+        // sequences and writes them to the shell; that stray output then
+        // also flips the tab's unread/bell indicator. In the single-terminal
+        // case handleSwitchTerminalTab is a no-op, but we still need to
+        // swallow the event — otherwise pressing the chord on the only
+        // terminal leaves "5~" in the shell and lights up a phantom
+        // notification on the tab that already has focus. preventDefault
+        // alone does not stop xterm's own keydown listener, so we also
+        // stop propagation.
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        handleSwitchTerminalTab(e.code === 'PageDown' ? 1 : -1)
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
@@ -580,11 +1027,12 @@ export default function Terminal(): React.JSX.Element | null {
   }, [
     activeWorktreeId,
     handleNewBrowserTab,
+    handleNewFile,
     handleNewTab,
     handleCloseTab,
     handleCloseBrowserTab,
-    handleCloseFile,
-    setActiveTab
+    closeBrowserTab,
+    handleCloseFile
   ])
 
   // Warn on window close if there are unsaved editor files
@@ -608,18 +1056,41 @@ export default function Terminal(): React.JSX.Element | null {
   // Listen for main-process window close requests. When any terminal has a
   // child process running (not just an idle shell), show a confirmation dialog.
   useEffect(() => {
-    return window.api.ui.onWindowCloseRequested(() => {
+    return window.api.ui.onWindowCloseRequested(({ isQuitting }) => {
       if (isUpdaterQuitAndInstallInProgress()) {
         window.api.ui.confirmWindowClose()
         return
       }
-      // Why: before-quit (main process) kills all PTYs before this handler
-      // runs. The async PTY exit events close tabs and unmount TerminalPane
-      // components, removing their buffer capture callbacks. Dispatching
-      // beforeunload here — while components are still mounted — captures
-      // scrollback buffers before the race can discard them. This mirrors
-      // the auto-updater path (preload/index.ts) which does the same thing.
+
+      // Why: if a previous close request is already being handled (user is
+      // working through dirty-file dialogs), ignore duplicate quit signals
+      // to avoid overwriting the in-flight ref and losing the close sequence.
+      if (windowCloseAfterDirtyRef.current) {
+        return
+      }
+
+      const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
+      if (dirtyFiles.length > 0) {
+        queueEditorCloseRequests(
+          dirtyFiles.map((file) => file.id),
+          { isQuitting }
+        )
+        return
+      }
+
+      // Why: capture terminal scrollback buffers while TerminalPane components
+      // are still mounted. Dispatching beforeunload triggers the App.tsx
+      // captureAndFlush handler which serializes each pane's xterm buffer
+      // and writes the session to disk via synchronous IPC.
       window.dispatchEvent(new Event('beforeunload'))
+      // Why: during a quit (Cmd+Q), PTYs are still alive (cleanup is deferred
+      // to will-quit so buffers can be captured first). Skip the child-process
+      // confirmation dialog and proceed directly — the user's intent to quit
+      // is unambiguous.
+      if (isQuitting) {
+        window.api.ui.confirmWindowClose()
+        return
+      }
       const state = useAppStore.getState()
       const allPtyIds = Object.values(state.ptyIdsByTabId).flat()
       if (allPtyIds.length === 0) {
@@ -636,26 +1107,40 @@ export default function Terminal(): React.JSX.Element | null {
         }
       )
     })
-  }, [])
+  }, [queueEditorCloseRequests])
 
-  // Why: removeWorktree cleans up browser tab state in the store but cannot
-  // call destroyPersistentWebview (renderer-only DOM code). This subscriber
-  // detects when browser tabs disappear from a worktree (e.g. worktree deleted)
-  // and destroys orphaned webview elements to prevent memory leaks.
-  const prevBrowserTabIdsRef = useRef<Set<string>>(new Set())
+  // Why: browser page state can disappear through store-only paths (CLI tab
+  // close, worktree deletion). The store cannot call destroyPersistentWebview
+  // because that function owns renderer DOM nodes, so this subscriber tears down
+  // webviews whose backing page records were removed.
+  const prevBrowserWebviewIdsRef = useRef<Set<string>>(
+    collectBrowserWebviewIds(
+      useAppStore.getState().browserTabsByWorktree,
+      useAppStore.getState().browserPagesByWorkspace
+    )
+  )
   useEffect(() => {
+    let prevBrowserTabs = useAppStore.getState().browserTabsByWorktree
+    let prevBrowserPages = useAppStore.getState().browserPagesByWorkspace
     return useAppStore.subscribe((state) => {
-      const currentIds = new Set(
-        Object.values(state.browserTabsByWorktree)
-          .flat()
-          .map((tab) => tab.id)
+      if (
+        state.browserTabsByWorktree === prevBrowserTabs &&
+        state.browserPagesByWorkspace === prevBrowserPages
+      ) {
+        return
+      }
+      prevBrowserTabs = state.browserTabsByWorktree
+      prevBrowserPages = state.browserPagesByWorkspace
+      const currentIds = collectBrowserWebviewIds(
+        state.browserTabsByWorktree,
+        state.browserPagesByWorkspace
       )
-      for (const prevId of prevBrowserTabIdsRef.current) {
+      for (const prevId of prevBrowserWebviewIdsRef.current) {
         if (!currentIds.has(prevId)) {
           destroyPersistentWebview(prevId)
         }
       }
-      prevBrowserTabIdsRef.current = currentIds
+      prevBrowserWebviewIdsRef.current = currentIds
     })
   }, [])
 
@@ -697,10 +1182,11 @@ export default function Terminal(): React.JSX.Element | null {
     >
       <EditorAutosaveController />
 
-      {/* Why: the tab bar is rendered into the titlebar via a portal so it
-          shares the same visual row as the "Orca" title. The portal target
-          (#titlebar-tabs) lives in App.tsx's titlebar. */}
+      {/* Why: once split groups are enabled, each group owns its own tab strip
+          inline like VS Code. The old titlebar portal stays only as a fallback
+          before the root-group layout has been established. */}
       {activeWorktreeId &&
+        !effectiveActiveLayout &&
         titlebarTabsTarget &&
         createPortal(
           <TabBar
@@ -711,9 +1197,11 @@ export default function Terminal(): React.JSX.Element | null {
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}
             onCloseToRight={handleCloseTabsToRight}
-            onReorder={setTabBarOrder}
-            onNewTerminalTab={handleNewTab}
+            onNewTerminalTab={() => handleNewTab()}
+            onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
+            onNewFileTab={handleNewFile}
+            wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}
@@ -730,146 +1218,175 @@ export default function Terminal(): React.JSX.Element | null {
             onCloseFile={handleCloseFile}
             onActivateBrowserTab={handleActivateBrowserTab}
             onCloseBrowserTab={handleCloseBrowserTab}
-            onCloseAllFiles={closeAllFiles}
+            onDuplicateBrowserTab={handleDuplicateBrowserTab}
+            onCloseAllFiles={handleCloseAllFiles}
             onPinFile={pinFile}
             tabBarOrder={tabBarOrder}
           />,
           titlebarTabsTarget
         )}
 
-      {/* Terminal panes container - hidden when editor tab active */}
-      <div
-        className={`relative flex-1 min-h-0 overflow-hidden ${
-          // Why: only hide the terminal container when another tab type has
-          // content to display. Hiding unconditionally for non-terminal types
-          // causes a blank screen when activeTabType is stale (e.g. 'editor'
-          // with no files after session restore). The terminal stays visible
-          // as a fallback until another surface is ready.
-          (activeTabType === 'editor' && worktreeFiles.length > 0) ||
-          (activeTabType === 'browser' && worktreeBrowserTabs.length > 0)
-            ? 'hidden'
-            : ''
-        }`}
-      >
-        {allWorktrees
-          .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
-          .map((worktree) => {
-            const worktreeTabs = tabsByWorktree[worktree.id] ?? []
-            const isVisible = activeView !== 'settings' && worktree.id === activeWorktreeId
+      {/* Why: the full-width titlebar is no longer rendered in workspace view
+          — tab groups + terminal extend to the top of the window instead.
+          The old summary label (workspace / active surface) is removed. */}
 
-            return (
-              <div
-                key={worktree.id}
-                className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-                aria-hidden={!isVisible}
-              >
-                {(() => {
-                  const staleWorktreePtyIds = worktreeTabs.flatMap((tab) =>
-                    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) =>
-                      Boolean(codexRestartNoticeByPtyId[ptyId])
-                    )
-                  )
-                  if (staleWorktreePtyIds.length === 0) {
-                    return null
-                  }
-                  // Why: account switching is global, but repeating the same
-                  // stale-session prompt in every affected Codex pane quickly
-                  // turns into noise. Keep one worktree-scoped chip in the
-                  // same visual corner so users get the same prompt style
-                  // without having to dismiss it in every pane.
-                  return (
-                    <div className="pointer-events-none absolute right-3 top-3 z-20">
-                      <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border/80 bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
-                        <span className="text-[11px] text-muted-foreground">
-                          Codex is using the previous account
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => queueCodexPaneRestarts(staleWorktreePtyIds)}
-                            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background transition-colors hover:opacity-90"
-                          >
-                            <RefreshCw className="size-3" />
-                            Restart
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              for (const ptyId of staleWorktreePtyIds) {
-                                clearCodexRestartNotice(ptyId)
-                              }
-                            }}
-                            className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })()}
-                {worktreeTabs.map((tab) => (
-                  <TerminalPane
-                    key={`${tab.id}-${tab.generation ?? 0}`}
-                    tabId={tab.id}
-                    worktreeId={worktree.id}
-                    cwd={worktree.path}
-                    isActive={isVisible && tab.id === activeTabId && activeTabType === 'terminal'}
-                    onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
-                    onCloseTab={() => handleCloseTab(tab.id)}
-                  />
-                ))}
-              </div>
-            )
-          })}
-      </div>
-
-      {/* Browser panes container — hidden when active tab is not a browser tab.
-          Only the active browser tab for the active worktree is mounted; others
-          are parked in a hidden off-screen container by BrowserPane to preserve
-          their webview guest process across tab switches. */}
-      <div
-        className={`relative flex-1 min-h-0 overflow-hidden ${activeTabType !== 'browser' ? 'hidden' : ''}`}
-      >
-        {allWorktrees.map((worktree) => {
-          const browserTabs = browserTabsByWorktree[worktree.id] ?? []
-          const isVisibleWorktree = activeView !== 'settings' && worktree.id === activeWorktreeId
-          if (browserTabs.length === 0) {
-            return null
-          }
-          return (
-            <div
-              key={`browser-${worktree.id}`}
-              className={isVisibleWorktree ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-              aria-hidden={!isVisibleWorktree}
-            >
-              {isVisibleWorktree && activeTabType === 'browser'
-                ? browserTabs
-                    .filter((browserTab) => browserTab.id === activeBrowserTabId)
-                    .map((browserTab) => (
-                      <BrowserPane
-                        key={browserTab.id}
-                        browserTab={browserTab}
-                        onUpdatePageState={handleBrowserTabPageStateUpdate}
-                        onSetUrl={handleBrowserTabSetUrl}
-                      />
-                    ))
-                : null}
-            </div>
-          )
-        })}
-      </div>
-
-      {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
-        <Suspense
-          fallback={
-            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-              Loading editor...
-            </div>
-          }
+      {anyMountedWorktreeHasLayout ? (
+        <div
+          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${effectiveActiveLayout ? '' : ' hidden'}`}
         >
-          <EditorPanel />
-        </Suspense>
+          {/* Why: each mounted worktree surface is absolutely positioned so we
+              can preserve hidden trees without reflowing the active one. Keep
+              a relative anchor here so those panes size to the workspace body
+              rather than some outer ancestor when split groups are enabled. */}
+          {allWorktrees
+            .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
+            .map((worktree) => {
+              const layout = getEffectiveLayoutForWorktree(worktree.id)
+              if (!layout) {
+                return null
+              }
+              // Why: use strict equality with 'terminal' instead of !== 'settings'
+              // so the terminal/browser surface hides on the tasks page too.
+              const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+              return (
+                <WorktreeSplitSurface
+                  key={`tab-groups-${worktree.id}`}
+                  worktreeId={worktree.id}
+                  layout={layout}
+                  focusedGroupId={activeGroupIdByWorktree[worktree.id]}
+                  isVisible={isVisible}
+                />
+              )
+            })}
+        </div>
+      ) : null}
+
+      {!effectiveActiveLayout && !anyMountedWorktreeHasLayout && (
+        <>
+          {/* Why: split-group layouts render their own terminal/browser/editor
+              surfaces inside TabGroupPanel. Keeping the legacy workspace-level
+              panes mounted underneath as hidden DOM creates duplicate
+              TerminalPane/BrowserPane instances for the same tab, which lets
+              two React trees race over one PTY or webview. Render only one
+              surface model at a time.
+
+              Also gate on !anyMountedWorktreeHasLayout: when the active
+              worktree goes null (e.g. during shutdown-from-focused, which
+              calls setActiveWorktree(null) before shutdownWorktreeTerminals)
+              effectiveActiveLayout becomes undefined but other mounted
+              worktrees still have layouts. Without this guard, the legacy
+              branch mounts fresh TerminalPanes for every worktree in
+              mountedWorktreeIdsRef, each running connectPanePty →
+              startFreshSpawn → new PTY. That respawn is exactly what flips
+              getWorktreeStatus back to 'active' and re-lights the sidebar
+              dot green moments after the user clicked Shutdown. */}
+          {/* Terminal panes container - hidden when editor tab active */}
+          <div
+            className={`relative flex-1 min-h-0 overflow-hidden ${
+              // Why: only hide the terminal container when another tab type has
+              // content to display. Hiding unconditionally for non-terminal types
+              // causes a blank screen when activeTabType is stale (e.g. 'editor'
+              // with no files after session restore). The terminal stays visible
+              // as a fallback until another surface is ready.
+              (activeTabType === 'editor' && worktreeFiles.length > 0) ||
+              (activeTabType === 'browser' && worktreeBrowserTabs.length > 0)
+                ? 'hidden'
+                : ''
+            }`}
+          >
+            {allWorktrees
+              .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
+              .map((worktree) => {
+                // Why: use strict equality with 'terminal' instead of !== 'settings'
+                // so the terminal/browser surface hides on the tasks page too.
+                const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+                return (
+                  <div
+                    key={worktree.id}
+                    className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
+                    aria-hidden={!isVisible}
+                  >
+                    <CodexRestartChip worktreeId={worktree.id} />
+                    {(tabsByWorktree[worktree.id] ?? []).map((tab) => (
+                      <TerminalPane
+                        key={`${tab.id}-${tab.generation ?? 0}`}
+                        tabId={tab.id}
+                        worktreeId={worktree.id}
+                        cwd={worktree.path}
+                        isActive={
+                          isVisible && tab.id === activeTabId && activeTabType === 'terminal'
+                        }
+                        // Why: the bootstrap fallback still uses the legacy
+                        // workspace-level terminal host, where only the active
+                        // tab should render. Keeping `isVisible` explicit avoids
+                        // multiple panes stacking during the short window before
+                        // the split-group root layout is ready.
+                        isVisible={
+                          isVisible && tab.id === activeTabId && activeTabType === 'terminal'
+                        }
+                        onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
+                        onCloseTab={() => handleCloseTab(tab.id)}
+                      />
+                    ))}
+                  </div>
+                )
+              })}
+          </div>
+
+          {/* Browser panes container — all browser panes for the active worktree
+              stay mounted so webview DOM state (scroll position, form inputs, etc.)
+              survives tab switches. BrowserPagePane uses isActive + CSS to show/hide. */}
+          <div
+            className={`relative flex-1 min-h-0 overflow-hidden ${
+              activeTabType !== 'browser' ? 'hidden' : ''
+            }`}
+          >
+            {allWorktrees.map((worktree) => {
+              const browserTabs = browserTabsByWorktree[worktree.id] ?? []
+              // Why: use strict equality with 'terminal' instead of !== 'settings'
+              // so browser panes also hide on the tasks page.
+              const isVisibleWorktree =
+                activeView === 'terminal' && worktree.id === activeWorktreeId
+              if (browserTabs.length === 0) {
+                return null
+              }
+              return (
+                <div
+                  key={`browser-${worktree.id}`}
+                  className={isVisibleWorktree ? 'absolute inset-0' : 'absolute inset-0 hidden'}
+                  aria-hidden={!isVisibleWorktree}
+                >
+                  {browserTabs.map((browserTab) => {
+                    const isBrowserActive =
+                      isVisibleWorktree &&
+                      activeTabType === 'browser' &&
+                      browserTab.id === activeBrowserTabId
+                    return (
+                      <div
+                        key={browserTab.id}
+                        className={`absolute inset-0${isBrowserActive ? '' : ' pointer-events-none hidden'}`}
+                      >
+                        <BrowserPane browserTab={browserTab} isActive={isBrowserActive} />
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+
+          {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
+            <Suspense
+              fallback={
+                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                  Loading editor...
+                </div>
+              }
+            >
+              <EditorPanel />
+            </Suspense>
+          )}
+        </>
       )}
 
       {/* Save confirmation dialog */}
@@ -886,7 +1403,7 @@ export default function Terminal(): React.JSX.Element | null {
             <DialogTitle className="text-sm">Unsaved Changes</DialogTitle>
             <DialogDescription className="text-xs">
               {saveDialogFile
-                ? `"${saveDialogFile.relativePath.split('/').pop()}" has unsaved changes. Do you want to save before closing?`
+                ? `"${basename(saveDialogFile.relativePath)}" has unsaved changes. Do you want to save before closing?`
                 : 'This file has unsaved changes.'}
             </DialogDescription>
           </DialogHeader>
@@ -949,3 +1466,48 @@ export default function Terminal(): React.JSX.Element | null {
     </div>
   )
 }
+
+// Why: each TabGroupPanel tags its body element with an `anchor-name`, and
+// a single worktree-level BrowserPaneOverlayLayer renders every browser tab
+// for this worktree once — keyed by browserTab.id only — and pins each pane
+// to the owning group's anchor via CSS `position-anchor`. Moving a tab
+// between groups now only changes which anchor-name the overlay references,
+// so the `<webview>` is never reparented (and never reloads). Mirrors
+// VS Code's OverlayWebview claim/release pattern, with the browser doing all
+// layout tracking for free.
+//
+// Why `React.memo`: Terminal.tsx has many store subscriptions and re-renders
+// on unrelated updates (terminal keystrokes, editor edits, focus changes).
+// Without memoization, every Terminal re-render would cascade into
+// BrowserPaneOverlayLayer and its BrowserPane subtrees. Memoizing here means
+// the surface only re-renders when its own props (worktreeId / layout /
+// focusedGroupId / isVisible) actually change.
+const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
+  worktreeId,
+  layout,
+  focusedGroupId,
+  isVisible
+}: {
+  worktreeId: string
+  layout: TabGroupLayoutNode
+  focusedGroupId?: string
+  isVisible: boolean
+}): React.JSX.Element {
+  return (
+    <div
+      className={isVisible ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+      aria-hidden={!isVisible}
+    >
+      <CodexRestartChip worktreeId={worktreeId} />
+      <TabGroupSplitLayout
+        layout={layout}
+        worktreeId={worktreeId}
+        focusedGroupId={focusedGroupId}
+        isWorktreeActive={isVisible}
+      />
+      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+    </div>
+  )
+})
+
+export default React.memo(Terminal)

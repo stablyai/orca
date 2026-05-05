@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -18,13 +20,45 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
 
   const isOpen = activeModal === 'confirm-non-git-folder'
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
+  const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
 
   const handleConfirm = useCallback(() => {
-    if (folderPath) {
+    if (connectionId && folderPath) {
+      void (async () => {
+        try {
+          const result = await window.api.repos.addRemote({
+            connectionId,
+            remotePath: folderPath,
+            kind: 'folder'
+          })
+          if ('error' in result) {
+            throw new Error(result.error)
+          }
+          const repo = result.repo
+          const state = useAppStore.getState()
+          if (!state.repos.some((r) => r.id === repo.id)) {
+            useAppStore.setState({ repos: [...state.repos, repo] })
+          }
+          await state.fetchWorktrees(repo.id)
+          // Why: mirror the local non-git folder flow — without this the
+          // dialog closes and the UI shows no visible change, making the
+          // add feel like a no-op. Activating the synthetic folder
+          // worktree reveals it in the sidebar and opens the workspace.
+          const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
+          if (folderWorktree) {
+            activateAndRevealWorktree(folderWorktree.id)
+          }
+        } catch (err) {
+          // This code path calls addRemote directly (not through the store),
+          // so the store's toast handling does not apply.
+          toast.error(err instanceof Error ? err.message : 'Failed to add remote folder')
+        }
+      })()
+    } else if (folderPath) {
       void addNonGitFolder(folderPath)
     }
     closeModal()
-  }, [addNonGitFolder, closeModal, folderPath])
+  }, [addNonGitFolder, closeModal, folderPath, connectionId])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

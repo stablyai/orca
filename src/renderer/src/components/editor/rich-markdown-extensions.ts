@@ -1,5 +1,4 @@
 import type { AnyExtension } from '@tiptap/core'
-import { ReactNodeViewRenderer } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -15,7 +14,10 @@ import { Markdown } from '@tiptap/markdown'
 import { createLowlight, common } from 'lowlight'
 import { loadLocalImageSrc, onImageCacheInvalidated } from './useLocalImageSrc'
 import { RawMarkdownHtmlBlock, RawMarkdownHtmlInline } from './raw-markdown-html'
+import { MarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
+import { safeReactNodeViewRenderer } from './safe-react-node-view-renderer'
+import { DragSelectionGuard } from './drag-selection-guard'
 
 const lowlight = createLowlight(common)
 
@@ -36,7 +38,7 @@ export function createRichMarkdownExtensions({
     }),
     CodeBlockLowlight.extend({
       addNodeView() {
-        return ReactNodeViewRenderer(RichMarkdownCodeBlock)
+        return safeReactNodeViewRenderer(RichMarkdownCodeBlock)
       }
     }).configure({
       lowlight,
@@ -132,6 +134,8 @@ export function createRichMarkdownExtensions({
     TableCell,
     RawMarkdownHtmlInline,
     RawMarkdownHtmlBlock,
+    MarkdownDocLink,
+    DragSelectionGuard,
     Markdown.configure({
       markedOptions: {
         gfm: true

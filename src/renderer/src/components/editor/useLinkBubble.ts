@@ -2,6 +2,8 @@ import { useCallback } from 'react'
 import type { Editor } from '@tiptap/react'
 import { getLinkBubblePosition } from './RichMarkdownLinkBubble'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
+import { useAppStore } from '@/store'
+import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
 
 /**
  * Extracts link-editing action handlers from the editor component to reduce
@@ -13,7 +15,12 @@ export function useLinkBubble(
   rootRef: React.RefObject<HTMLElement | null>,
   linkBubble: LinkBubbleState | null,
   setLinkBubble: (v: LinkBubbleState | null) => void,
-  setIsEditingLink: (v: boolean) => void
+  setIsEditingLink: (v: boolean) => void,
+  linkContext: {
+    sourceFilePath: string
+    worktreeId: string
+    worktreeRoot: string | null
+  }
 ): {
   handleLinkSave: (href: string) => void
   handleLinkRemove: () => void
@@ -88,11 +95,29 @@ export function useLinkBubble(
     editor?.commands.focus()
   }, [editor, linkBubble?.href, setLinkBubble, setIsEditingLink])
 
+  const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
+
   const handleLinkOpen = useCallback(() => {
-    if (linkBubble?.href) {
-      void window.api.shell.openUrl(linkBubble.href)
+    if (!linkBubble?.href) {
+      return
     }
-  }, [linkBubble?.href])
+    if (linkBubble.href.startsWith('#')) {
+      scrollToAnchorInEditor(rootRef.current, linkBubble.href.slice(1))
+      return
+    }
+    void activateMarkdownLink(linkBubble.href, {
+      sourceFilePath: linkContext.sourceFilePath,
+      worktreeId: linkContext.worktreeId,
+      worktreeRoot: linkContext.worktreeRoot
+    })
+  }, [
+    activateMarkdownLink,
+    linkBubble?.href,
+    linkContext.sourceFilePath,
+    linkContext.worktreeId,
+    linkContext.worktreeRoot,
+    rootRef
+  ])
 
   const toggleLinkFromToolbar = useCallback(() => {
     if (!editor) {

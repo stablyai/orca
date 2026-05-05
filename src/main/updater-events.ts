@@ -10,8 +10,10 @@ import {
   resetMacInstallState
 } from './updater-mac-install'
 import { compareVersions } from './updater-fallback'
+import { fetchChangelog } from './updater-changelog'
 
 type UpdaterHandlerContext = {
+  clearBackgroundCheckLaunchPending: () => void
   clearAvailableUpdateContext: () => void
   getCurrentStatus: () => UpdateStatus
   getKnownReleaseUrl: () => string | undefined
@@ -30,6 +32,7 @@ type UpdaterHandlerContext = {
 }
 
 export function registerAutoUpdaterHandlers({
+  clearBackgroundCheckLaunchPending,
   clearAvailableUpdateContext,
   getCurrentStatus,
   getKnownReleaseUrl,
@@ -87,42 +90,76 @@ export function registerAutoUpdaterHandlers({
   })
 
   autoUpdater.on('checking-for-update', () => {
+    clearBackgroundCheckLaunchPending()
     resetMacInstallState()
     clearAvailableUpdateContext()
     sendStatus({ state: 'checking', userInitiated: getUserInitiatedCheck() || undefined })
   })
 
   autoUpdater.on('update-available', (info) => {
+    clearBackgroundCheckLaunchPending()
+    // --- synchronous preamble (runs before any await) ---
     const wasUserInitiated = getUserInitiatedCheck()
     setUserInitiatedCheck(false)
-    // Guard against showing an update that isn't actually newer than what's running.
+
+    // Guard: don't show an update that isn't actually newer than what's running.
     if (compareVersions(info.version, app.getVersion()) <= 0) {
       clearAvailableUpdateContext()
+      recordCompletedUpdateCheck()
+      if (!wasUserInitiated) {
+        scheduleAutomaticUpdateCheck(24 * 60 * 60 * 1000)
+      }
       sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
       return
     }
-    setAvailableVersion(info.version)
-    setAvailableReleaseUrl(null)
-    recordCompletedUpdateCheck()
-    if (!wasUserInitiated) {
-      scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
-    }
-    sendStatus({ state: 'available', version: info.version })
+
+    // Why: fetching changelog in the main process avoids CORS issues that
+    // would block a renderer-side fetch to onorca.dev, and ensures the
+    // card can render immediately without an async loading gap.
+    void (async () => {
+      const changelog = await fetchChangelog(info.version, app.getVersion()).catch(() => null)
+
+      // Why: the handler is now async, so up to 5 seconds may pass during the
+      // fetch. If another autoUpdater event (e.g., 'error') fired and updated
+      // currentStatus during that window, broadcasting 'available' here would
+      // overwrite a more recent status. Guard against this by checking that the
+      // state hasn't advanced past the point where 'available' makes sense.
+      if (getCurrentStatus().state !== 'checking' && getCurrentStatus().state !== 'idle') {
+        return
+      }
+
+      // --- post-await side effects (only run if the guard passed) ---
+      // Why: these must live AFTER the guard, not before the await. If the
+      // fetch times out and a concurrent 'error' event advanced the status,
+      // bailing out above avoids orphaned side effects — e.g., availableVersion
+      // set without a matching 'available' broadcast, or a completed-check
+      // timestamp persisted for a check that never showed a result.
+      setAvailableVersion(info.version)
+      setAvailableReleaseUrl(null)
+      recordCompletedUpdateCheck()
+      if (!wasUserInitiated) {
+        scheduleAutomaticUpdateCheck(24 * 60 * 60 * 1000)
+      }
+
+      sendStatus({ state: 'available', version: info.version, changelog })
+    })()
   })
 
   autoUpdater.on('update-not-available', () => {
+    clearBackgroundCheckLaunchPending()
     resetMacInstallState()
     const wasUserInitiated = getUserInitiatedCheck()
     setUserInitiatedCheck(false)
     clearAvailableUpdateContext()
     recordCompletedUpdateCheck()
     if (!wasUserInitiated) {
-      scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
+      scheduleAutomaticUpdateCheck(24 * 60 * 60 * 1000)
     }
     sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
   })
 
   autoUpdater.on('download-progress', (progress) => {
+    clearBackgroundCheckLaunchPending()
     sendStatus({
       state: 'downloading',
       percent: Math.round(progress.percent),
@@ -131,6 +168,7 @@ export function registerAutoUpdaterHandlers({
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    clearBackgroundCheckLaunchPending()
     // Don't show the banner if the downloaded version isn't actually newer
     // than what's running. This catches the exact-same-version case as well
     // as stale cached updates from an older release.
@@ -152,6 +190,7 @@ export function registerAutoUpdaterHandlers({
   })
 
   autoUpdater.on('error', (err) => {
+    clearBackgroundCheckLaunchPending()
     resetMacInstallState()
     const wasUserInitiated = getUserInitiatedCheck()
     setUserInitiatedCheck(false)

@@ -48,18 +48,17 @@
 }
 
 .rich-markdown-search {
-  position: sticky;
-  top: 0;
+  /* Why: overlay the editor like Monaco's find widget instead of occupying
+     layout space — otherwise opening cmd+f shifts the document content down. */
+  position: absolute;
+  top: 8px;
+  right: 12px;
   z-index: 20;
   display: flex;
   align-items: center;
   gap: 0;
   width: fit-content;
-  max-width: min(100%, 460px);
-  margin-left: auto;
-  margin-right: 12px;
-  margin-top: 8px;
-  margin-bottom: 6px;
+  max-width: min(calc(100% - 24px), 460px);
   padding: 0 2px 0 4px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -121,7 +120,7 @@
 }
 
 .rich-markdown-search-match[data-active='true'] {
-  background: color-mix(in srgb, #fb923c 60%, transparent);
+  background: color-mix(in srgb, #38bdf8 50%, transparent);
 }
 
 .rich-markdown-editor {
@@ -233,7 +232,9 @@
   appearance: none;
   width: 16px;
   height: 16px;
-  border: 1.5px solid color-mix(in srgb, var(--foreground) 35%, transparent);
+  /* Why: bumped from 35% to 55% so the unchecked border stays legible in
+     dark mode where low-alpha foreground nearly disappears on --background. */
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
@@ -253,7 +254,10 @@
   top: 1px;
   width: 5px;
   height: 9px;
-  border: solid white;
+  /* Why: --primary flips between dark and light per theme, so a hardcoded
+     white tick is invisible in dark mode (light-on-light). Use the paired
+     token so the tick always contrasts against the filled box. */
+  border: solid var(--primary-foreground);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -278,6 +282,34 @@
   border-radius: 0 6px 6px 0;
   color: var(--muted-foreground);
   background: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
+.rich-markdown-editor table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.rich-markdown-editor th,
+.rich-markdown-editor td {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.rich-markdown-editor th {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+/* Why: Tiptap tables render as <tbody> only with the first <tr> containing
+   <th> cells. Striping odd rows (1, 3, 5) skips the header row — which has
+   no <td> — and starts alternation from the second data row, avoiding a
+   shaded band directly adjacent to the header. */
+.rich-markdown-editor tr:nth-child(odd) td {
+  background: color-mix(in srgb, var(--foreground) 1.5%, transparent);
 }
 
 .rich-markdown-editor code {
@@ -484,11 +516,22 @@
   border-top: 1px solid var(--border);
 }
 
-.rich-markdown-editor a {
+.rich-markdown-editor a,
+.rich-markdown-editor .ProseMirror a {
   color: #0969da;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 2px;
+}
+
+/* Why: plain click places the caret inside the contenteditable region, so the
+   link only activates on Cmd/Ctrl-click. Surface the pointer affordance only
+   while that modifier is held so users can discover it without being misled
+   into expecting a plain click to open. Class is toggled by RichMarkdownEditor
+   in response to keydown/keyup of the platform modifier. */
+.rich-markdown-mod-held .rich-markdown-editor a,
+.rich-markdown-mod-held .rich-markdown-editor .ProseMirror a {
+  cursor: pointer;
 }
 
 .dark .rich-markdown-editor a {
@@ -547,6 +590,110 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--muted-foreground);
+}
+
+.rich-markdown-doc-link-menu {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  width: min(360px, calc(100% - 24px));
+  max-height: 320px;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px);
+}
+
+.rich-markdown-doc-link-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.rich-markdown-doc-link-item:hover,
+.rich-markdown-doc-link-item.is-active {
+  background: var(--accent);
+}
+
+.rich-markdown-doc-link-item.is-empty {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-style: italic;
+  cursor: default;
+}
+
+.rich-markdown-doc-link-item.is-empty:hover {
+  background: transparent;
+}
+
+.rich-markdown-doc-link-footer {
+  padding: 6px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.rich-markdown-doc-link-hint {
+  padding: 6px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Doc Links ───────────────────────────────────────── */
+
+.rich-markdown-editor .rich-markdown-doc-link {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor .rich-markdown-doc-link {
+  color: #58a6ff;
+}
+
+.rich-markdown-editor .rich-markdown-doc-link.rich-markdown-doc-link--missing {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
+}
+
+.rich-markdown-mod-held .rich-markdown-editor .rich-markdown-doc-link {
+  cursor: pointer;
+}
+
+.rich-markdown-mod-held
+  .rich-markdown-editor
+  .rich-markdown-doc-link.rich-markdown-doc-link--missing {
+  cursor: default;
+}
+
+/* In-progress [[target]] text while cursor is inside. Matches the committed
+   doc-link styling so the visual doesn't jump when the atom node takes over. */
+.rich-markdown-editor .rich-markdown-doc-link-preview {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor .rich-markdown-doc-link-preview {
+  color: #58a6ff;
+}
+
+.rich-markdown-editor .rich-markdown-doc-link-preview.rich-markdown-doc-link-preview--missing {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
 }
 
 /* ── Link Bubble ──────────────────────────────────────── */

@@ -62,28 +62,39 @@ export function isPathAllowed(targetPath: string, store: Store): boolean {
 }
 
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
-  const nextRoots = new Set<string>()
+  // Why: repos are processed in parallel so the cache rebuild completes in
+  // wall-clock time proportional to the slowest single repo, not the sum of
+  // all repos.  The previous sequential loop was the main bottleneck on
+  // Windows where each `git worktree list` + realpath chain takes 500 ms+
+  // due to slower process creation and antivirus I/O scanning.
+  const repos = store.getRepos()
+  const perRepoResults = await Promise.all(
+    repos.map(async (repo) => {
+      const roots: string[] = []
+      try {
+        roots.push(await normalizeExistingPath(repo.path))
 
-  for (const repo of store.getRepos()) {
-    try {
-      nextRoots.add(await normalizeExistingPath(repo.path))
-
-      const worktrees = await listRepoWorktrees(repo)
-      for (const worktree of worktrees) {
-        nextRoots.add(await normalizeExistingPath(worktree.path))
+        const worktrees = await listRepoWorktrees(repo)
+        const worktreeRoots = await Promise.all(
+          worktrees.map((wt) => normalizeExistingPath(wt.path))
+        )
+        roots.push(...worktreeRoots)
+      } catch (error) {
+        // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
+        // the entire cache rebuild — that would disable File Explorer and
+        // Quick Open for all other repos. We skip the failing repo and let
+        // the rest proceed.
+        console.warn(`[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`, error)
       }
-    } catch (error) {
-      // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
-      // the entire cache rebuild — that would disable File Explorer and
-      // Quick Open for all other repos. We skip the failing repo and let
-      // the rest proceed.
-      console.warn(`[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`, error)
-    }
-  }
+      return roots
+    })
+  )
 
   registeredWorktreeRoots.clear()
-  for (const root of nextRoots) {
-    registeredWorktreeRoots.add(root)
+  for (const roots of perRepoResults) {
+    for (const root of roots) {
+      registeredWorktreeRoots.add(root)
+    }
   }
   registeredWorktreeRootsDirty = false
 }
@@ -109,10 +120,37 @@ export function isENOENT(error: unknown): boolean {
   )
 }
 
-export async function resolveAuthorizedPath(targetPath: string, store: Store): Promise<string> {
+export type ResolveAuthorizedPathOptions = {
+  /**
+   * When true, canonicalize the parent directory but preserve the leaf so
+   * operations target the symlink itself rather than its destination. Required
+   * for delete and rename — following the symlink would trash or rename the
+   * target file (which can live outside allowed roots, or be another tracked
+   * file a symlink inside the worktree happens to point at).
+   */
+  preserveSymlink?: boolean
+}
+
+export async function resolveAuthorizedPath(
+  targetPath: string,
+  store: Store,
+  options: ResolveAuthorizedPathOptions = {}
+): Promise<string> {
   const resolvedTarget = resolve(targetPath)
   if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+
+  if (options.preserveSymlink) {
+    // Canonicalize the parent so symlinks in ancestors cannot redirect us
+    // outside allowed roots, but keep the final segment untouched so callers
+    // (delete/rename) act on the link itself.
+    const realParent = await realpath(dirname(resolvedTarget))
+    const candidateTarget = resolve(realParent, basename(resolvedTarget))
+    if (!(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store))) {
+      throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+    }
+    return candidateTarget
   }
 
   try {

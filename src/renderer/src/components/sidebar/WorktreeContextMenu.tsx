@@ -6,6 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   FolderOpen,
   Copy,
@@ -13,34 +14,40 @@ import {
   BellOff,
   Link,
   MessageSquare,
+  Moon,
   Pencil,
-  XCircle,
+  Pin,
+  PinOff,
   Trash2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useRepoById } from '@/store/selectors'
+import { cn } from '@/lib/utils'
 import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { runWorktreeDelete } from './delete-worktree-flow'
+import { runSleepWorktree } from './sleep-worktree-flow'
 
 type Props = {
   worktree: Worktree
   children: React.ReactNode
+  contentClassName?: string
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
-const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, children }: Props) {
+const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
+  worktree,
+  children,
+  contentClassName
+}: Props) {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const openModal = useAppStore((s) => s.openModal)
-  const repos = useAppStore((s) => s.repos)
-  const shutdownWorktreeTerminals = useAppStore((s) => s.shutdownWorktreeTerminals)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
+  const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const isDeleting = deleteState?.isDeleting ?? false
-  const repo = repos.find((entry) => entry.id === worktree.repoId)
   const isFolder = repo ? isFolderRepo(repo) : false
 
   useEffect(() => {
@@ -60,6 +67,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   const handleToggleRead = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
   }, [worktree.id, worktree.isUnread, updateWorktreeMeta])
+
+  const handleTogglePin = useCallback(() => {
+    updateWorktreeMeta(worktree.id, { isPinned: !worktree.isPinned })
+  }, [worktree.id, worktree.isPinned, updateWorktreeMeta])
 
   const handleRename = useCallback(() => {
     openModal('edit-meta', {
@@ -92,13 +103,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
 
   const handleCloseTerminals = useCallback(async () => {
-    await shutdownWorktreeTerminals(worktree.id)
-    if (activeWorktreeId === worktree.id) {
-      setActiveWorktree(null)
-    }
-  }, [worktree.id, shutdownWorktreeTerminals, activeWorktreeId, setActiveWorktree])
+    await runSleepWorktree(worktree.id)
+  }, [worktree.id])
 
   const handleDelete = useCallback(() => {
+    // Folder mode handled inline because it routes to a different modal;
+    // standard delete delegates to the shared runWorktreeDelete helper.
     setMenuOpen(false)
     if (isFolder) {
       // Why: folder mode reuses the worktree row UI for a synthetic root entry,
@@ -110,16 +120,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
       })
       return
     }
-    clearWorktreeDeleteState(worktree.id)
-    openModal('delete-worktree', { worktreeId: worktree.id })
-  }, [
-    worktree.id,
-    worktree.repoId,
-    worktree.displayName,
-    clearWorktreeDeleteState,
-    isFolder,
-    openModal
-  ])
+    // Why delegate to runWorktreeDelete: keeps the skip-confirm vs. modal
+    // decision tree (and its rationale) in one place shared with the memory
+    // popover's inline Delete action. Folder mode short-circuits above
+    // because the confirm-remove-folder modal is unique to this caller.
+    runWorktreeDelete(worktree.id)
+  }, [worktree.id, worktree.repoId, worktree.displayName, isFolder, openModal])
 
   return (
     <>
@@ -145,7 +151,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
             style={{ left: menuPoint.x, top: menuPoint.y }}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-52" sideOffset={0} align="start">
+        <DropdownMenuContent className={cn('w-52', contentClassName)} sideOffset={0} align="start">
           <DropdownMenuItem onSelect={handleOpenInFinder} disabled={isDeleting}>
             <FolderOpen className="size-3.5" />
             Open in Finder
@@ -155,6 +161,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
             Copy Path
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
+            {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+            {worktree.isPinned ? 'Unpin' : 'Pin'}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
             <Pencil className="size-3.5" />
             Rename
@@ -172,10 +182,17 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
             {worktree.comment ? 'Edit Comment' : 'Add Comment'}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={handleCloseTerminals} disabled={isDeleting}>
-            <XCircle className="size-3.5" />
-            Shutdown
-          </DropdownMenuItem>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuItem onSelect={handleCloseTerminals} disabled={isDeleting}>
+                <Moon className="size-3.5" />
+                Sleep
+              </DropdownMenuItem>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
+              Close all active panels in this workspace to free up memory and CPU.
+            </TooltipContent>
+          </Tooltip>
           {/* Why: `git worktree remove` always rejects the main worktree, so we
              disable the item upfront. Radix forwards unknown props to the DOM
              element, so `title` works directly without a wrapper span — this

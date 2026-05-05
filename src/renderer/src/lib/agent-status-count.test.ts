@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../shared/types'
-import { countWorkingAgents } from './agent-status'
+import type { TerminalTab, Worktree } from '../../../shared/types'
+import { countWorkingAgents, getWorkingAgentsPerWorktree } from './agent-status'
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -16,6 +16,33 @@ function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
+function worktrees(...ids: string[]): Record<string, Worktree[]> {
+  return {
+    repo: ids.map(
+      (id) =>
+        ({
+          id,
+          repoId: 'repo',
+          path: `/path/${id}`,
+          head: '',
+          branch: '',
+          isBare: false,
+          isMainWorktree: false,
+          displayName: id,
+          comment: '',
+          linkedIssue: null,
+          linkedPR: null,
+          linkedLinearIssue: null,
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 0
+        }) satisfies Worktree
+    )
+  }
+}
+
 describe('countWorkingAgents', () => {
   it('counts each live working tab when pane-level titles are unavailable', () => {
     expect(
@@ -27,7 +54,8 @@ describe('countWorkingAgents', () => {
           ],
           'wt-2': [makeTab({ id: 'tab-3', worktreeId: 'wt-2', title: '⠋ Codex is thinking' })]
         },
-        runtimePaneTitlesByTabId: {}
+        runtimePaneTitlesByTabId: {},
+        worktreesByRepo: worktrees('wt-1', 'wt-2')
       })
     ).toBe(3)
   })
@@ -44,7 +72,8 @@ describe('countWorkingAgents', () => {
             2: '✦ Gemini CLI',
             3: '✳ Claude Code'
           }
-        }
+        },
+        worktreesByRepo: worktrees('wt-1')
       })
     ).toBe(2)
   })
@@ -60,7 +89,8 @@ describe('countWorkingAgents', () => {
             makeTab({ id: 'tab-4', title: '⠂ Claude Code', ptyId: null })
           ]
         },
-        runtimePaneTitlesByTabId: {}
+        runtimePaneTitlesByTabId: {},
+        worktreesByRepo: worktrees('wt-1')
       })
     ).toBe(0)
   })
@@ -76,8 +106,66 @@ describe('countWorkingAgents', () => {
             1: '✳ Claude Code',
             2: 'bash'
           }
-        }
+        },
+        worktreesByRepo: worktrees('wt-1')
       })
     ).toBe(0)
+  })
+
+  it('excludes orphaned worktrees not in worktreesByRepo', () => {
+    expect(
+      countWorkingAgents({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', title: '⠂ Claude Code' })],
+          'wt-deleted': [makeTab({ id: 'tab-2', worktreeId: 'wt-deleted', title: '✦ Gemini CLI' })]
+        },
+        runtimePaneTitlesByTabId: {},
+        worktreesByRepo: worktrees('wt-1')
+      })
+    ).toBe(1)
+  })
+})
+
+describe('getWorkingAgentsPerWorktree', () => {
+  it('returns per-pane labels and pane ids for split tabs', () => {
+    expect(
+      getWorkingAgentsPerWorktree({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', title: '⠂ Claude Code' })]
+        },
+        runtimePaneTitlesByTabId: {
+          'tab-1': {
+            1: '⠂ Claude Code',
+            2: '✦ Gemini CLI',
+            3: '✳ Claude Code'
+          }
+        },
+        worktreesByRepo: worktrees('wt-1')
+      })
+    ).toEqual({
+      'wt-1': {
+        agents: [
+          { label: 'Claude Code', status: 'working', tabId: 'tab-1', paneId: 1 },
+          { label: 'Gemini CLI', status: 'working', tabId: 'tab-1', paneId: 2 }
+        ]
+      }
+    })
+  })
+
+  it('excludes orphaned worktrees not in worktreesByRepo', () => {
+    expect(
+      getWorkingAgentsPerWorktree({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', title: '⠂ Claude Code' })],
+          'wt-deleted': [makeTab({ id: 'tab-2', worktreeId: 'wt-deleted', title: '✦ Gemini CLI' })]
+        },
+        runtimePaneTitlesByTabId: {},
+        worktreesByRepo: worktrees('wt-1')
+      })
+    ).toEqual({
+      'wt-1': {
+        agents: [{ label: 'Claude Code', status: 'working', tabId: 'tab-1', paneId: null }]
+      }
+    })
   })
 })

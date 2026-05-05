@@ -82,6 +82,32 @@ export function registerShellHandlers(): void {
     return pathExists(filePath)
   })
 
+  ipcMain.handle(
+    'shell:pickDirectory',
+    async (_event, args: { defaultPath?: string }): Promise<string | null> => {
+      const result = await dialog.showOpenDialog({
+        defaultPath: args.defaultPath,
+        properties: ['openDirectory', 'createDirectory']
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return null
+      }
+      return result.filePaths[0]
+    }
+  )
+
+  // Why: window.prompt() and <input type="file"> are unreliable in Electron,
+  // so we use the native OS dialog to let the user pick any attachment file.
+  ipcMain.handle('shell:pickAttachment', async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile']
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    return result.filePaths[0]
+  })
+
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,
   // so we use the native OS dialog to let the user pick an image file.
   ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
@@ -90,6 +116,17 @@ export function registerShellHandlers(): void {
       filters: [
         { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
       ]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null

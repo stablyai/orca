@@ -12,25 +12,33 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
       return (
         right.state === 'available' &&
         left.version === right.version &&
-        left.releaseUrl === right.releaseUrl
+        left.activeNudgeId === right.activeNudgeId &&
+        left.releaseUrl === right.releaseUrl &&
+        // Why: fetchChangelog creates a fresh object each time, so reference
+        // equality is always false. Compare by presence — since update-available
+        // fires at most once per check cycle, this is sufficient.
+        Boolean(left.changelog) === Boolean(right.changelog)
       )
     case 'downloading':
       return (
         right.state === 'downloading' &&
         left.version === right.version &&
+        left.activeNudgeId === right.activeNudgeId &&
         left.percent === right.percent
       )
     case 'downloaded':
       return (
         right.state === 'downloaded' &&
         left.version === right.version &&
+        left.activeNudgeId === right.activeNudgeId &&
         left.releaseUrl === right.releaseUrl
       )
     case 'error':
       return (
         right.state === 'error' &&
         left.message === right.message &&
-        left.userInitiated === right.userInitiated
+        left.userInitiated === right.userInitiated &&
+        left.activeNudgeId === right.activeNudgeId
       )
   }
 }
@@ -83,6 +91,22 @@ function parseVersion(value: string): ParsedVersion | null {
     core: [Number(match[1]), Number(match[2]), Number(match[3])],
     prerelease: match[4]?.split('.') ?? []
   }
+}
+
+export function isValidVersion(value: string): boolean {
+  return parseVersion(value) !== null
+}
+
+// Why: a user running a prerelease build (e.g. 1.3.17-rc.1) needs both:
+//   (1) the next RC (1.3.17-rc.2), which the default generic feed hides, and
+//   (2) the next stable release, which electron-updater's GitHubProvider
+//       channel filter hides when the running build is an RC.
+// We detect prerelease builds here so the updater can mine GitHub's atom feed
+// itself (any channel) and pin the generic provider at the newest tag. Without
+// this detection, a prerelease user would be trapped on the RC they installed.
+export function isPrereleaseVersion(value: string): boolean {
+  const parsed = parseVersion(value)
+  return parsed !== null && parsed.prerelease.length > 0
 }
 
 function compareIdentifiers(left: string, right: string): number {

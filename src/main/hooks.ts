@@ -261,8 +261,8 @@ function ensureOrcaDirIgnored(repoPath: string): void {
   }
 }
 
-export function getEffectiveHooks(repo: Repo): OrcaHooks | null {
-  const yamlHooks = loadHooks(repo.path)
+export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
+  const yamlHooks = loadHooks(worktreePath ?? repo.path)
   const legacySetup = repo.hookSettings?.scripts.setup?.trim()
   const legacyArchive = repo.hookSettings?.scripts.archive?.trim()
   const setup = yamlHooks?.scripts.setup?.trim() || legacySetup
@@ -304,8 +304,11 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getSetupCommandSource(repo: Repo): { source: 'yaml'; command: string } | null {
-  const yamlSetup = loadHooks(repo.path)?.scripts.setup?.trim()
+export function getSetupCommandSource(
+  repo: Repo,
+  worktreePath?: string
+): { source: 'yaml'; command: string } | null {
+  const yamlSetup = loadHooks(worktreePath ?? repo.path)?.scripts.setup?.trim()
 
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
@@ -358,6 +361,28 @@ export function createSetupRunnerScript(
   worktreePath: string,
   script: string
 ): WorktreeSetupLaunch {
+  return createWorktreeRunnerScript(repo, worktreePath, script, 'setup-runner')
+}
+
+export function createIssueCommandRunnerScript(
+  repo: Repo,
+  worktreePath: string,
+  command: string
+): WorktreeSetupLaunch {
+  // Why: long issue-automation commands are user-visible shell input when
+  // written directly to the PTY, so terminal line editors can wrap or truncate
+  // them before execution. Writing the real command into a runner script keeps
+  // the shell startup path short and mirrors the already-stable setup runner
+  // flow instead of inventing a second launch mechanism.
+  return createWorktreeRunnerScript(repo, worktreePath, command, 'issue-command-runner')
+}
+
+function createWorktreeRunnerScript(
+  repo: Repo,
+  worktreePath: string,
+  script: string,
+  runnerBaseName: 'setup-runner' | 'issue-command-runner'
+): WorktreeSetupLaunch {
   const envVars = getSetupEnvVars(repo, worktreePath)
   // Why: WSL worktrees run on a Linux filesystem even though process.platform
   // is 'win32'. Use bash scripts for WSL, .cmd for native Windows.
@@ -369,7 +394,7 @@ export function createSetupRunnerScript(
   // Why: linked git worktrees use a `.git` file that points at the real gitdir,
   // so writing under `${worktreePath}/.git/...` fails. `git rev-parse --git-path`
   // resolves the actual per-worktree git storage path safely across platforms.
-  const gitRelPath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
+  const gitRelPath = useWindowsFormat ? `orca/${runnerBaseName}.cmd` : `orca/${runnerBaseName}.sh`
   let runnerScriptPath = getGitPath(worktreePath, gitRelPath)
 
   // Why: for WSL worktrees, getGitPath returns a Linux path (e.g. /home/user/...)
@@ -411,9 +436,10 @@ export function createSetupRunnerScript(
 export function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
-  repo: Repo
+  repo: Repo,
+  hooksPath?: string
 ): Promise<{ success: boolean; output: string }> {
-  const hooks = getEffectiveHooks(repo)
+  const hooks = getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
 
   if (!script) {

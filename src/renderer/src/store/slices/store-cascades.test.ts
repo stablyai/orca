@@ -1,13 +1,19 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
+import type * as AgentStatusModule from '@/lib/agent-status'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 // Mock agent-status (imported by terminal-helpers)
-vi.mock('@/lib/agent-status', () => ({
-  detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
-}))
+vi.mock('@/lib/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
+  }
+})
 
 // Mock window.api before anything uses it
 const mockApi = {
@@ -49,6 +55,8 @@ import {
   makeLayout,
   makeOpenFile,
   makeTab,
+  makeTabGroup,
+  makeUnifiedTab,
   makeWorktree,
   seedStore
 } from './store-test-helpers'
@@ -302,19 +310,102 @@ describe('setActiveWorktree', () => {
   it('does not rewrite sortOrder when selecting a worktree', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
+    const lastActivityAt = 123456
 
     seedStore(store, {
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', sortOrder: 123, isUnread: false })]
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            sortOrder: 123,
+            lastActivityAt,
+            isUnread: false
+          })
+        ]
       },
-      refreshGitHubForWorktree: vi.fn()
+      refreshGitHubForWorktree: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn()
     })
 
     store.getState().setActiveWorktree(worktreeId)
 
     const worktree = store.getState().worktreesByRepo.repo1[0]
     expect(worktree.sortOrder).toBe(123)
+    expect(worktree.lastActivityAt).toBe(lastActivityAt)
+    // Why: selecting a worktree should not manufacture smart-sort activity.
+    // Persisted ordering signals come from real background work or edits, not focus.
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('clears unread on selection without manufacturing smart-sort activity', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const lastActivityAt = 123456
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            isUnread: true,
+            lastActivityAt
+          })
+        ]
+      },
+      refreshGitHubForWorktree: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn()
+    })
+
+    store.getState().setActiveWorktree(worktreeId)
+
+    const worktree = store.getState().worktreesByRepo.repo1[0]
+    expect(worktree.isUnread).toBe(false)
+    expect(worktree.lastActivityAt).toBe(lastActivityAt)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId,
+      updates: { isUnread: false }
+    })
+  })
+
+  it('does not change smart-sort rank after selection when a background event bumps sortEpoch', () => {
+    const store = createTestStore()
+    const focusedId = 'repo1::/path/focused'
+    const backgroundId = 'repo1::/path/background'
+    const now = new Date('2026-04-16T12:00:00.000Z').getTime()
+
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: focusedId,
+            repoId: 'repo1',
+            displayName: 'Focused',
+            lastActivityAt: now - 2 * 60_000
+          }),
+          makeWorktree({
+            id: backgroundId,
+            repoId: 'repo1',
+            displayName: 'Background',
+            lastActivityAt: now - 60_000
+          })
+        ]
+      },
+      refreshGitHubForWorktree: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn()
+    })
+
+    store.getState().setActiveWorktree(focusedId)
+    store.getState().bumpWorktreeActivity(backgroundId)
+
+    const worktrees = [...store.getState().worktreesByRepo.repo1]
+    const repoMap = new Map(store.getState().repos.map((repo) => [repo.id, repo]))
+    worktrees.sort(buildWorktreeComparator('smart', {}, repoMap, null, now))
+
+    expect(worktrees.map((worktree) => worktree.id)).toEqual([backgroundId, focusedId])
   })
 
   it('falls back to the worktree browser tab when the restored editor id belongs to a different worktree', () => {
@@ -360,6 +451,689 @@ describe('setActiveWorktree', () => {
     expect(s.activeBrowserTabId).toBe(browserTabId)
     expect(s.activeTabType).toBe('browser')
     expect(s.activeFileId).toBeNull()
+  })
+
+  it('prefers the unified active tab over stale legacy browser restore state', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const groupId = 'group-1'
+    const terminalId = 'terminal-1'
+    const browserTabId = 'browser-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: terminalId, worktreeId: wt })]
+      },
+      browserTabsByWorktree: {
+        [wt]: [
+          {
+            id: browserTabId,
+            worktreeId: wt,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: { [wt]: browserTabId },
+      activeTabTypeByWorktree: { [wt]: 'browser' },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: 'tab-terminal-1',
+            entityId: terminalId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'tab-browser-1',
+            entityId: browserTabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'browser'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: 'tab-terminal-1',
+            tabOrder: ['tab-terminal-1', 'tab-browser-1']
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId }
+    })
+
+    store.getState().setActiveWorktree(wt)
+
+    const s = store.getState()
+    expect(s.activeWorktreeId).toBe(wt)
+    expect(s.activeTabType).toBe('terminal')
+    expect(s.activeTabTypeByWorktree[wt]).toBe('terminal')
+    expect(s.activeTabId).toBe(terminalId)
+    expect(s.activeBrowserTabId).toBe(browserTabId)
+  })
+
+  it('ignores stale unified tabs and falls back to terminal-first activation for empty groups', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const groupId = 'group-1'
+    const browserTabId = 'browser-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      browserTabsByWorktree: {
+        [wt]: [
+          {
+            id: browserTabId,
+            worktreeId: wt,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: { [wt]: browserTabId },
+      activeTabTypeByWorktree: { [wt]: 'browser' },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: 'stale-terminal-tab',
+            entityId: 'missing-terminal',
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: 'stale-terminal-tab',
+            tabOrder: ['stale-terminal-tab']
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId }
+    })
+
+    store.getState().setActiveWorktree(wt)
+
+    const s = store.getState()
+    expect(s.activeWorktreeId).toBe(wt)
+    expect(s.activeTabType).toBe('terminal')
+    expect(s.activeBrowserTabId).toBe(browserTabId)
+    expect(s.activeTabId).toBeNull()
+    expect(s.unifiedTabsByWorktree[wt]).toEqual([])
+    expect(s.groupsByWorktree[wt][0].activeTabId).toBeNull()
+  })
+
+  it('creates a root tab group when the first terminal opens in a worktree', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const terminal = store.getState().createTab(wt)
+    const state = store.getState()
+    const groups = state.groupsByWorktree[wt] ?? []
+    const unifiedTabs = state.unifiedTabsByWorktree[wt] ?? []
+
+    expect(groups).toHaveLength(1)
+    expect(state.activeGroupIdByWorktree[wt]).toBe(groups[0].id)
+    expect(state.layoutByWorktree[wt]).toEqual({ type: 'leaf', groupId: groups[0].id })
+    expect(unifiedTabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: terminal.id,
+          entityId: terminal.id,
+          worktreeId: wt,
+          groupId: groups[0].id,
+          contentType: 'terminal'
+        })
+      ])
+    )
+    expect(groups[0].activeTabId).toBe(terminal.id)
+    expect(groups[0].tabOrder).toEqual([terminal.id])
+  })
+
+  it('publishes the first terminal and root tab group atomically', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const snapshots: { terminalCount: number; unifiedCount: number; groupCount: number }[] = []
+    const unsubscribe = store.subscribe((state) => {
+      snapshots.push({
+        terminalCount: state.tabsByWorktree[wt]?.length ?? 0,
+        unifiedCount: state.unifiedTabsByWorktree[wt]?.length ?? 0,
+        groupCount: state.groupsByWorktree[wt]?.length ?? 0
+      })
+    })
+
+    store.getState().createTab(wt)
+    unsubscribe()
+
+    // Why: task-page launches queue startup/setup commands before React mounts.
+    // A terminal-only intermediate state can mount the legacy host and race
+    // the split-group host, duplicating setup panes and PTYs.
+    expect(snapshots).toEqual([{ terminalCount: 1, unifiedCount: 1, groupCount: 1 }])
+  })
+
+  it('syncs the global active surface when focusing a different split group', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const terminalTabId = 'terminal-1'
+    const editorFileId = '/path/wt1/src/index.ts'
+    const terminalGroupId = 'group-terminal'
+    const editorGroupId = 'group-editor'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'terminal',
+      activeTabId: terminalTabId,
+      activeTabIdByWorktree: { [wt]: terminalTabId },
+      activeFileId: editorFileId,
+      activeFileIdByWorktree: { [wt]: editorFileId },
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: terminalTabId, worktreeId: wt })]
+      },
+      openFiles: [makeOpenFile({ id: editorFileId, worktreeId: wt, filePath: editorFileId })],
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: terminalTabId,
+            entityId: terminalTabId,
+            worktreeId: wt,
+            groupId: terminalGroupId,
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'editor-view-1',
+            entityId: editorFileId,
+            worktreeId: wt,
+            groupId: editorGroupId,
+            contentType: 'editor',
+            label: 'src/index.ts'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: terminalGroupId,
+            worktreeId: wt,
+            activeTabId: terminalTabId,
+            tabOrder: [terminalTabId]
+          }),
+          makeTabGroup({
+            id: editorGroupId,
+            worktreeId: wt,
+            activeTabId: 'editor-view-1',
+            tabOrder: ['editor-view-1']
+          })
+        ]
+      },
+      layoutByWorktree: {
+        [wt]: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: terminalGroupId },
+          second: { type: 'leaf', groupId: editorGroupId }
+        }
+      },
+      activeGroupIdByWorktree: { [wt]: terminalGroupId }
+    })
+
+    store.getState().focusGroup(wt, editorGroupId)
+
+    const s = store.getState()
+    expect(s.activeGroupIdByWorktree[wt]).toBe(editorGroupId)
+    expect(s.activeTabType).toBe('editor')
+    expect(s.activeTabTypeByWorktree[wt]).toBe('editor')
+    expect(s.activeFileId).toBe(editorFileId)
+    expect(s.activeFileIdByWorktree[wt]).toBe(editorFileId)
+    expect(s.activeTabId).toBe(terminalTabId)
+  })
+
+  it('promotes the next tab in the focused split into the global active surface on close', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const terminalTabId = 'terminal-1'
+    const browserTabId = 'browser-1'
+    const groupId = 'group-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'browser',
+      activeBrowserTabId: browserTabId,
+      activeBrowserTabIdByWorktree: { [wt]: browserTabId },
+      activeTabId: terminalTabId,
+      activeTabIdByWorktree: { [wt]: terminalTabId },
+      activeTabTypeByWorktree: { [wt]: 'browser' },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: terminalTabId, worktreeId: wt })]
+      },
+      browserTabsByWorktree: {
+        [wt]: [
+          {
+            id: browserTabId,
+            worktreeId: wt,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: terminalTabId,
+            entityId: terminalTabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'browser-view-1',
+            entityId: browserTabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'browser',
+            label: 'Example'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: 'browser-view-1',
+            tabOrder: [terminalTabId, 'browser-view-1']
+          })
+        ]
+      },
+      layoutByWorktree: {
+        [wt]: { type: 'leaf', groupId }
+      },
+      activeGroupIdByWorktree: { [wt]: groupId }
+    })
+
+    store.getState().closeBrowserTab(browserTabId)
+
+    const s = store.getState()
+    expect(s.groupsByWorktree[wt]?.[0]?.activeTabId).toBe(terminalTabId)
+    expect(s.activeTabType).toBe('terminal')
+    expect(s.activeTabTypeByWorktree[wt]).toBe('terminal')
+    expect(s.activeTabId).toBe(terminalTabId)
+    expect(s.activeBrowserTabId).toBeNull()
+    expect(s.activeBrowserTabIdByWorktree[wt]).toBeNull()
+  })
+
+  it('promotes the sibling group into the global active surface when closing a focused empty split', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const editorFileId = '/path/wt1/src/index.ts'
+    const emptyGroupId = 'group-empty'
+    const editorGroupId = 'group-editor'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      activeFileId: editorFileId,
+      activeFileIdByWorktree: { [wt]: editorFileId },
+      openFiles: [makeOpenFile({ id: editorFileId, worktreeId: wt, filePath: editorFileId })],
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: 'editor-view-1',
+            entityId: editorFileId,
+            worktreeId: wt,
+            groupId: editorGroupId,
+            contentType: 'editor',
+            label: 'src/index.ts'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: emptyGroupId,
+            worktreeId: wt,
+            activeTabId: null,
+            tabOrder: []
+          }),
+          makeTabGroup({
+            id: editorGroupId,
+            worktreeId: wt,
+            activeTabId: 'editor-view-1',
+            tabOrder: ['editor-view-1']
+          })
+        ]
+      },
+      layoutByWorktree: {
+        [wt]: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: emptyGroupId },
+          second: { type: 'leaf', groupId: editorGroupId }
+        }
+      },
+      activeGroupIdByWorktree: { [wt]: emptyGroupId }
+    })
+
+    store.getState().closeEmptyGroup(wt, emptyGroupId)
+
+    const s = store.getState()
+    expect(s.groupsByWorktree[wt]?.map((group) => group.id)).toEqual([editorGroupId])
+    expect(s.activeGroupIdByWorktree[wt]).toBe(editorGroupId)
+    expect(s.activeTabType).toBe('editor')
+    expect(s.activeTabTypeByWorktree[wt]).toBe('editor')
+    expect(s.activeFileId).toBe(editorFileId)
+    expect(s.activeFileIdByWorktree[wt]).toBe(editorFileId)
+  })
+
+  it('reuses the lowest available terminal number after closes', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const first = store.getState().createTab(wt)
+    const second = store.getState().createTab(wt)
+
+    expect(first.title).toBe('Terminal 1')
+    expect(second.title).toBe('Terminal 2')
+
+    store.getState().closeTab(first.id)
+    store.getState().closeTab(second.id)
+
+    const replacement = store.getState().createTab(wt)
+    expect(replacement.title).toBe('Terminal 1')
+  })
+
+  // Why: unread flags are ephemeral UI state — they must not linger past the
+  // lifetime of the tab/pane they point at. A stale flag on a closed tab
+  // would render a bell the user can never dismiss because the tab (and
+  // therefore every focus path that clears it) is gone.
+  it('drops unreadTerminalTabs for a closed tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const closing = store.getState().createTab(wt)
+    const surviving = store.getState().createTab(wt)
+
+    // Seed flags directly — the self-guarded mark actions intentionally
+    // refuse the currently-active tab, but this test's subject is closeTab's
+    // cleanup behavior, not the guards.
+    store.setState({
+      unreadTerminalTabs: {
+        [closing.id]: true as const,
+        [surviving.id]: true as const
+      }
+    })
+
+    store.getState().closeTab(closing.id)
+
+    const s = store.getState()
+    expect(s.unreadTerminalTabs[closing.id]).toBeUndefined()
+    // Siblings untouched.
+    expect(s.unreadTerminalTabs[surviving.id]).toBe(true)
+  })
+
+  // Why: shutdownWorktreeTerminals tears down every PTY in the worktree. The
+  // focus events that would normally clear unread (bell-in-focused-pane,
+  // activate-tab) never arrive for dead PTYs, so the flags have to be
+  // dropped by the shutdown path itself.
+  it('drops unread flags for every tab in a shutdown worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const tabA = store.getState().createTab(wt)
+    const tabB = store.getState().createTab(wt)
+
+    // Seed flags directly (see closeTab test for why).
+    store.setState({
+      unreadTerminalTabs: {
+        [tabA.id]: true as const,
+        [tabB.id]: true as const
+      }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt)
+
+    const s = store.getState()
+    expect(s.unreadTerminalTabs[tabA.id]).toBeUndefined()
+    expect(s.unreadTerminalTabs[tabB.id]).toBeUndefined()
+  })
+
+  // Why: ownership regression (design §1.3). shutdownWorktreeTerminals used to
+  // delete browserTabsByWorktree[worktreeId] and reset
+  // activeBrowserTabId/activeTabType as a side effect — now those mutations
+  // belong exclusively to shutdownWorktreeBrowsers. If a refactor reintroduces
+  // the side effect, both thunks will write the same keys and race.
+  it('leaves browser state untouched when shutting down terminals', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeBrowserTabId: 'workspace-1',
+      activeTabType: 'browser',
+      browserTabsByWorktree: {
+        [wt]: [
+          {
+            id: 'workspace-1',
+            worktreeId: wt,
+            label: 'ws1',
+            sessionProfileId: null,
+            pageIds: [],
+            activePageId: null,
+            url: 'about:blank',
+            title: 'ws1',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      } as never,
+      activeBrowserTabIdByWorktree: { [wt]: 'workspace-1' }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt)
+
+    const s = store.getState()
+    expect(s.browserTabsByWorktree[wt]).toBeDefined()
+    expect(s.activeBrowserTabIdByWorktree[wt]).toBe('workspace-1')
+    expect(s.activeBrowserTabId).toBe('workspace-1')
+    expect(s.activeTabType).toBe('browser')
+  })
+
+  it('returns to the landing state when closing the last terminal tab in the active worktree', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const groupId = 'group-1'
+    const tabId = 'tab-1'
+    const unifiedTabId = 'unified-tab-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabId: tabId,
+      activeTabType: 'terminal',
+      activeTabIdByWorktree: { [wt]: tabId },
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: tabId, worktreeId: wt })]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: unifiedTabId,
+            entityId: tabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal',
+            label: 'Terminal 1'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: unifiedTabId,
+            tabOrder: [unifiedTabId]
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId },
+      layoutByWorktree: {
+        [wt]: { type: 'leaf', groupId }
+      }
+    })
+
+    store.getState().closeTab(tabId)
+
+    const s = store.getState()
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeTabId).toBeNull()
+    expect(s.tabsByWorktree[wt]).toEqual([])
+    expect(s.unifiedTabsByWorktree[wt]).toEqual([])
+  })
+
+  it('keeps terminal numbering stable when a live agent renames an existing tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const first = store.getState().createTab(wt)
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+
+    const second = store.getState().createTab(wt)
+
+    expect(store.getState().tabsByWorktree[wt]?.[0]).toMatchObject({
+      id: first.id,
+      title: 'Claude Code',
+      defaultTitle: 'Terminal 1'
+    })
+    expect(second.title).toBe('Terminal 2')
+    expect(second.defaultTitle).toBe('Terminal 2')
+  })
+
+  it('falls back to the stable terminal label when a live title clears', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const first = store.getState().createTab(wt)
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+    store.getState().updateTabTitle(first.id, '')
+
+    expect(store.getState().tabsByWorktree[wt]?.[0]).toMatchObject({
+      id: first.id,
+      title: 'Terminal 1',
+      defaultTitle: 'Terminal 1'
+    })
+    expect(
+      store
+        .getState()
+        .unifiedTabsByWorktree[wt]?.find(
+          (tab) => tab.contentType === 'terminal' && tab.entityId === first.id
+        )
+    ).toMatchObject({
+      label: 'Terminal 1'
+    })
   })
 
   it('clears stale background browser tab type when closing the last browser tab', () => {
@@ -566,7 +1340,8 @@ describe('setActiveWorktree', () => {
       activeFileIdByWorktree: { [wt]: fileId },
       // User was on the terminal, not the editor
       activeTabTypeByWorktree: { [wt]: 'terminal' },
-      refreshGitHubForWorktree: vi.fn()
+      refreshGitHubForWorktree: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn()
     })
 
     store.getState().setActiveWorktree(wt)

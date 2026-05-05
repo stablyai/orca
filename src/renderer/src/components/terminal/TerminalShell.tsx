@@ -28,9 +28,11 @@ type TerminalShellProps = {
   onCloseTab: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseTabsToRight: (tabId: string) => void
-  onReorderTabs: (worktreeId: string, tabIds: string[]) => void
   onNewTerminalTab: () => void
+  onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onNewFileTab?: () => void
+  wslAvailable?: boolean
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -64,9 +66,11 @@ export function TerminalShell({
   onCloseTab,
   onCloseOthers,
   onCloseTabsToRight,
-  onReorderTabs,
   onNewTerminalTab,
+  onNewTerminalWithShell,
   onNewBrowserTab,
+  onNewFileTab,
+  wslAvailable,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -102,9 +106,11 @@ export function TerminalShell({
               onClose={onCloseTab}
               onCloseOthers={onCloseOthers}
               onCloseToRight={onCloseTabsToRight}
-              onReorder={onReorderTabs}
               onNewTerminalTab={onNewTerminalTab}
+              onNewTerminalWithShell={onNewTerminalWithShell}
               onNewBrowserTab={onNewBrowserTab}
+              onNewFileTab={onNewFileTab}
+              wslAvailable={wslAvailable}
               onSetCustomTitle={onSetCustomTitle}
               onSetTabColor={onSetTabColor}
               expandedPaneByTabId={expandedPaneByTabId}
@@ -127,7 +133,7 @@ export function TerminalShell({
       >
         {mountedWorktrees.map((worktree) => {
           const worktreeTabs = tabsByWorktree[worktree.id] ?? []
-          const isVisible = activeView !== 'settings' && worktree.id === activeWorktreeId
+          const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
 
           return (
             <div

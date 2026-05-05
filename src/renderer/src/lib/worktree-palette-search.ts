@@ -17,7 +17,6 @@ export type PaletteSearchResult = {
   displayNameRange: MatchRange | null
   branchRange: MatchRange | null
   repoRange: MatchRange | null
-  badgeLabel: 'Branch' | 'Repo' | 'Comment' | 'PR' | 'Issue' | null
   supportingText: PaletteSupportingText | null
 }
 
@@ -67,18 +66,6 @@ function makeResult(
     displayNameRange: null,
     branchRange: null,
     repoRange: null,
-    badgeLabel:
-      matchedField === 'branch'
-        ? 'Branch'
-        : matchedField === 'repo'
-          ? 'Repo'
-          : matchedField === 'comment'
-            ? 'Comment'
-            : matchedField === 'pr'
-              ? 'PR'
-              : matchedField === 'issue'
-                ? 'Issue'
-                : null,
     supportingText: null,
     ...overrides
   }
@@ -99,7 +86,37 @@ export function searchWorktrees(
   const numericQuery = q.startsWith('#') ? q.slice(1) : q
   const results: PaletteSearchResult[] = []
 
+  // Support "repo/worktree" composite queries (e.g. "orca/main") so users can
+  // narrow by repo and worktree in a single token. Worktrees are identified by
+  // their branch name here, so the right-hand side is matched against the
+  // branch. We split on the FIRST slash only — branch names themselves contain
+  // slashes (e.g. "feature/foo"), and we still want the right-hand side to
+  // match those in full.
+  const slashIndex = q.indexOf('/')
+  const composite =
+    slashIndex > 0 && slashIndex < q.length - 1
+      ? { repoPart: q.slice(0, slashIndex), branchPart: q.slice(slashIndex + 1) }
+      : null
+
   for (const worktree of worktrees) {
+    if (composite) {
+      const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
+      const branch = branchName(worktree.branch)
+      const repoIdx = repoName.toLowerCase().indexOf(composite.repoPart)
+      const branchIdx = branch.toLowerCase().indexOf(composite.branchPart)
+      if (repoIdx !== -1 && branchIdx !== -1) {
+        results.push(
+          makeResult(worktree.id, 'branch', {
+            repoRange: { start: repoIdx, end: repoIdx + composite.repoPart.length },
+            branchRange: { start: branchIdx, end: branchIdx + composite.branchPart.length }
+          })
+        )
+        continue
+      }
+      // Fall through to single-token matching so users who type a branch name
+      // that happens to contain a slash (e.g. "feature/foo") still get hits.
+    }
+
     const nameIndex = worktree.displayName.toLowerCase().indexOf(q)
     if (nameIndex !== -1) {
       results.push(

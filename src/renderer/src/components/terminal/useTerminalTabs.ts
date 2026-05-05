@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import { useShallow } from 'zustand/react/shallow'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import {
@@ -18,10 +19,10 @@ export type UnifiedTerminalItem = {
 }
 
 export function useTerminalTabs() {
+  const allWorktrees = useAllWorktrees()
   const {
     activeWorktreeId,
     activeView,
-    worktreesByRepo,
     tabsByWorktree,
     activeTabId,
     tabBarOrderByWorktree,
@@ -40,7 +41,6 @@ export function useTerminalTabs() {
     useShallow((s) => ({
       activeWorktreeId: s.activeWorktreeId,
       activeView: s.activeView,
-      worktreesByRepo: s.worktreesByRepo,
       tabsByWorktree: s.tabsByWorktree,
       activeTabId: s.activeTabId,
       tabBarOrderByWorktree: s.tabBarOrderByWorktree,
@@ -62,7 +62,6 @@ export function useTerminalTabs() {
     () => (activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, tabsByWorktree]
   )
-  const allWorktrees = Object.values(worktreesByRepo).flat()
   const worktreeFiles = useMemo(
     () => (activeWorktreeId ? openFiles.filter((f) => f.worktreeId === activeWorktreeId) : []),
     [activeWorktreeId, openFiles]
@@ -157,6 +156,10 @@ export function useTerminalTabs() {
   ])
 
   const handleNewTab = useCallback(() => createNewTerminalTab(activeWorktreeId), [activeWorktreeId])
+  const handleNewTabWithShell = useCallback(
+    (shell: string) => createNewTerminalTab(activeWorktreeId, shell),
+    [activeWorktreeId]
+  )
 
   const handlePtyExit = useCallback(
     (tabId: string, ptyId: string) => {
@@ -197,6 +200,7 @@ export function useTerminalTabs() {
     setTabColor,
     closeAllFiles,
     handleNewTab,
+    handleNewTabWithShell,
     handleCloseTab: closeTerminalTab,
     handlePtyExit,
     handleCloseOthers,

@@ -12,10 +12,13 @@ import {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
-import { fitPanes, shellEscapePath } from './pane-helpers'
+import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
+import { getConnectionId } from '@/lib/connection-context'
 import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
 import { createExpandCollapseActions } from './expand-collapse'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
+import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import { TerminalErrorToast } from './TerminalErrorToast'
@@ -26,6 +29,9 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
+import { getPaneIdsForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
+import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
 /** Global set of buffer-capture callbacks, one per mounted TerminalPane.
  *  The beforeunload handler in App.tsx invokes every callback to populate
@@ -39,6 +45,7 @@ type TerminalPaneProps = {
   worktreeId: string
   cwd?: string
   isActive: boolean
+  isVisible?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -48,6 +55,7 @@ export default function TerminalPane({
   worktreeId,
   cwd,
   isActive,
+  isVisible = true,
   onPtyExit,
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
@@ -59,15 +67,114 @@ export default function TerminalPane({
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
+  // Why: per-pane live cwd tracked via OSC 7 for split-pane cwd inheritance.
+  // See docs/ssh-split-pane-inherit-cwd.md. The OSC 7 handler is installed
+  // in use-terminal-pane-lifecycle; keyboard and context-menu split actions
+  // read this map at dispatch time to pass cwd into splitPane.
+  const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
+  const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
+  const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
   const pendingWritesRef = useRef<Map<number, string>>(new Map())
+  // Why: tracks panes currently replaying recorded PTY bytes into xterm
+  // (cold-restore, daemon snapshot, scrollback restore, eager-buffer flush).
+  // While non-zero, pty-connection.ts drops xterm onData so auto-replies to
+  // embedded query sequences don't leak to the shell. See replay-guard.ts.
+  const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
+  const isVisibleRef = useRef(isVisible)
+  isVisibleRef.current = isVisible
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
+  // Why: tracked in React state (not derived from managerRef.getPanes().length)
+  // so the render containing the portal map (which reads the imperative pane
+  // list via managerRef.current?.getPanes()) re-runs when a pane is split or
+  // closed. managerRef is imperative and doesn't trigger React's dependency
+  // tracking. The lifecycle hook updates this via setPaneCount on
+  // onPaneCreated / onPaneClosed / onLayoutChanged. The value is never
+  // read — the portal map at line ~914 calls `managerRef.current?.getPanes()`
+  // imperatively, so `setPaneCount` is used only as a render-trigger side
+  // effect to force that map to re-run when a pane is split or closed.
+  const [, setPaneCount] = useState<number>(0)
   const [searchOpen, setSearchOpen] = useState(false)
+  const searchOpenRef = useRef(false)
+  searchOpenRef.current = searchOpen
+  const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  // Why: override state lives in a plain Map for perf (safeFit reads it on
+  // every resize). This counter forces a re-render when overrides change so
+  // the mobile-fit banner appears/disappears. When an override is cleared
+  // (desktop-fit), we also trigger safeFit on affected panes so the terminal
+  // resizes back to desktop dimensions.
+  const [, setOverrideTick] = useState(0)
+  useEffect(
+    () =>
+      onOverrideChange((event) => {
+        setOverrideTick((n) => n + 1)
+        if (event.mode === 'desktop-fit') {
+          const paneIds = getPaneIdsForPty(event.ptyId)
+          const manager = managerRef.current
+          if (!manager) {
+            return
+          }
+          // Why: fitAddon.fit() measures DOM dimensions, so it must run after
+          // the browser has settled layout. Running synchronously inside the
+          // IPC callback can produce stale measurements. rAF ensures the DOM
+          // is ready. The follow-up timeout acts as a safety net: if
+          // fitAddon.fit() silently threw (its errors are caught), the timeout
+          // falls back to a direct terminal.resize() using the restored
+          // dimensions from the runtime. This guarantees xterm exits mobile
+          // dims even when the DOM-based fit path fails.
+          const fitAffectedPanes = (): void => {
+            for (const paneId of paneIds) {
+              const pane = manager.getPanes().find((p) => p.id === paneId)
+              if (pane) {
+                safeFit(pane)
+              }
+            }
+          }
+          requestAnimationFrame(fitAffectedPanes)
+          // Why: belt-and-suspenders — if safeFit's fitAddon.fit() threw or
+          // was a no-op due to stale dimensions, this fallback uses the
+          // restored cols/rows from the runtime to force the resize. If
+          // safeFit already succeeded, the terminal is already at the right
+          // dims and this is a harmless no-op.
+          setTimeout(() => {
+            for (const paneId of paneIds) {
+              const pane = manager.getPanes().find((p) => p.id === paneId)
+              if (!pane) {
+                continue
+              }
+              safeFit(pane)
+              // Fallback: if terminal is still at mobile dims, force resize
+              // using the restored dimensions from the runtime notification.
+              if (
+                event.cols > 0 &&
+                event.rows > 0 &&
+                (pane.terminal.cols !== event.cols || pane.terminal.rows !== event.rows)
+              ) {
+                pane.terminal.resize(event.cols, event.rows)
+              }
+            }
+          }, 100)
+        }
+      }),
+    []
+  )
+
+  // Why: presence-lock banner re-render. Driver state lives in a plain Map
+  // for perf; this counter forces a re-render when the driver flips so the
+  // lock banner appears/disappears. See docs/mobile-presence-lock.md.
+  const [, setDriverTick] = useState(0)
+  useEffect(
+    () =>
+      onDriverChange(() => {
+        setDriverTick((n) => n + 1)
+      }),
+    []
+  )
 
   // Pane title state — keyed by ephemeral paneId, persisted via titlesByLeafId
   // in the layout snapshot. Ref keeps persistLayoutSnapshot closures fresh.
@@ -103,7 +210,15 @@ export default function TerminalPane({
   const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
+  const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
+  const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
+  const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const settings = useAppStore((store) => store.settings)
+  // Why: Windows is the only platform where bare right-click is repurposed as
+  // a paste gesture; on macOS/Linux the terminal still owns right-click for the
+  // context menu. The settings default keeps the Windows shortcut feeling native
+  // without changing the other platforms' interaction model.
+  const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
@@ -134,6 +249,15 @@ export default function TerminalPane({
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  // Why: the persisted setting can be 'auto' (default) or one of the four
+  // explicit modes. useEffectiveMacOptionAsAlt resolves 'auto' into
+  // 'true' | 'false' based on the probe's current layout category (US → 'true',
+  // anything else → 'false'), and re-renders when the OS layout changes.
+  // Downstream keyboard handlers read the ref, so the ref also tracks the
+  // effective value, not the raw setting.
+  const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
+  const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
+  macOptionAsAltRef.current = effectiveMacOptionAsAlt
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
 
@@ -163,10 +287,30 @@ export default function TerminalPane({
         Object.entries(existing.buffersByLeafId).filter(([id]) => currentLeafIds.has(id))
       )
     }
+    // Why: between pane creation and the deferred rAF where PTYs actually
+    // attach, all transports have getPtyId() === null. If persistLayoutSnapshot
+    // fires during that window the live-transport block below finds no entries,
+    // so this block preserves the *prior* snapshot's leaf→PTY mappings. Without
+    // it, a rapid successive remount (tab moved again before the first rAF)
+    // would lose the mappings and force fresh PTY spawns.
+    if (existing?.ptyIdsByLeafId) {
+      const currentLeafIds = new Set(manager.getPanes().map((p) => paneLeafId(p.id)))
+      layout.ptyIdsByLeafId = Object.fromEntries(
+        Object.entries(existing.ptyIdsByLeafId).filter(([id]) => currentLeafIds.has(id))
+      )
+    }
     // Preserve pane titles — uses the live React state (via ref) rather than
     // the stale Zustand value because React state reflects in-flight title
     // edits that haven't been persisted yet.
     const currentPanes = manager.getPanes()
+    const ptyEntries = currentPanes
+      .map(
+        (p) => [paneLeafId(p.id), paneTransportsRef.current.get(p.id)?.getPtyId() ?? null] as const
+      )
+      .filter((entry): entry is readonly [string, string] => entry[1] !== null)
+    if (ptyEntries.length > 0) {
+      layout.ptyIdsByLeafId = Object.fromEntries(ptyEntries)
+    }
     const titles = paneTitlesRef.current
     const titleEntries = currentPanes
       .filter((p) => titles[p.id])
@@ -176,6 +320,39 @@ export default function TerminalPane({
     }
     setTabLayout(tabId, layout)
   }, [tabId, setTabLayout])
+
+  const syncPanePtyLayoutBinding = useCallback(
+    (paneId: number, ptyId: string | null): void => {
+      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
+      const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
+        existingLayout
+      const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
+      const leafId = paneLeafId(paneId)
+
+      if (ptyId) {
+        setTabLayout(tabId, {
+          ...layoutWithoutPtyBindings,
+          // Why: PTY ownership changes happen after the synchronous layout
+          // snapshot on mount. Persist the live pane→PTY binding here so
+          // remounts attach each pane to its current shell instead of a stale
+          // or missing PTY id from an earlier snapshot.
+          ptyIdsByLeafId: {
+            ...existingBindings,
+            [leafId]: ptyId
+          }
+        })
+        return
+      }
+
+      const nextBindings = { ...existingBindings }
+      delete nextBindings[leafId]
+      setTabLayout(tabId, {
+        ...layoutWithoutPtyBindings,
+        ...(Object.keys(nextBindings).length > 0 ? { ptyIdsByLeafId: nextBindings } : {})
+      })
+    },
+    [setTabLayout, tabId]
+  )
 
   const {
     setExpandedPane,
@@ -208,16 +385,22 @@ export default function TerminalPane({
         // longer exists. The closeTab path handles bulk cleanup, but closing
         // a single split pane doesn't go through closeTab.
         useAppStore.getState().setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
+        syncPanePtyLayoutBinding(paneId, null)
+        // Why: Cmd+W on a split pane is user-initiated teardown — drop (not
+        // remove) so any retained `done` snapshot for this pane is also cleared
+        // and a same-frame live→gone transition cannot re-snapshot it via the
+        // retention sync.
+        useAppStore.getState().dropAgentStatus(`${tabId}:${paneId}`)
         manager.closePane(paneId)
       }
     },
-    [onCloseTab, tabId]
+    [onCloseTab, syncPanePtyLayoutBinding, tabId]
   )
 
-  // Cmd+W handler — shows a Ghostty-style confirmation dialog when the
-  // pane's shell has a running child process (e.g. npm run dev), so the
-  // user doesn't accidentally kill it. An idle shell prompt closes
-  // immediately. Ctrl+D (explicit EOF) bypasses this by design.
+  // Cmd+W handler — shows a confirmation dialog when the pane's shell has
+  // a running child process (e.g. npm run dev), so the user doesn't
+  // accidentally kill it. An idle shell prompt closes immediately. Ctrl+D
+  // (explicit EOF) bypasses this by design.
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
       const transport = paneTransportsRef.current.get(paneId)
@@ -226,13 +409,20 @@ export default function TerminalPane({
         executeClosePane(paneId)
         return
       }
-      void window.api.pty.hasChildProcesses(ptyId).then((hasChildren) => {
-        if (hasChildren) {
-          setCloseConfirmPaneId(paneId)
-        } else {
-          executeClosePane(paneId)
-        }
-      })
+      void window.api.pty
+        .hasChildProcesses(ptyId)
+        .then((hasChildren) => {
+          if (hasChildren) {
+            setCloseConfirmPaneId(paneId)
+          } else {
+            executeClosePane(paneId)
+          }
+        })
+        // Why: if the child-process probe rejects (IPC wedged, handler
+        // missing on legacy providers), fall back to closing the pane — Cmd+W
+        // silently doing nothing is worse than closing a pane that might have
+        // had a child process. Matches the semantics of the !ptyId branch above.
+        .catch(() => executeClosePane(paneId))
     },
     [executeClosePane]
   )
@@ -256,15 +446,22 @@ export default function TerminalPane({
     systemPrefersDark,
     settings,
     settingsRef,
+    effectiveMacOptionAsAlt,
+    effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
     managerRef,
     containerRef,
     expandedStyleSnapshotRef,
     paneFontSizesRef,
     paneTransportsRef,
+    paneCwdRef,
+    paneMode2031Ref,
+    paneLastThemeModeRef,
     panePtyBindingsRef,
     pendingWritesRef,
+    replayingPanesRef,
     isActiveRef,
+    isVisibleRef,
     onPtyExitRef,
     onPtyErrorRef,
     clearTabPtyId,
@@ -274,8 +471,12 @@ export default function TerminalPane({
     clearRuntimePaneTitle,
     updateTabPtyId,
     markWorktreeUnread,
+    markTerminalTabUnread,
+    clearWorktreeUnread,
+    clearTerminalTabUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
+    syncPanePtyLayoutBinding,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,
@@ -283,7 +484,8 @@ export default function TerminalPane({
     persistLayoutSnapshot,
     setPaneTitles,
     paneTitlesRef,
-    setRenamingPaneId
+    setRenamingPaneId,
+    setPaneCount
   })
 
   const handleRestartCodexPane = useCallback(
@@ -310,9 +512,11 @@ export default function TerminalPane({
 
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
+      syncPanePtyLayoutBinding(paneId, null)
       transport?.destroy?.()
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
+      setTerminalError(null)
 
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
@@ -321,7 +525,9 @@ export default function TerminalPane({
         startup: { command: 'codex' },
         paneTransportsRef,
         pendingWritesRef,
+        replayingPanesRef,
         isActiveRef,
+        isVisibleRef,
         onPtyExitRef,
         onPtyErrorRef,
         clearTabPtyId,
@@ -331,21 +537,31 @@ export default function TerminalPane({
         clearRuntimePaneTitle,
         updateTabPtyId,
         markWorktreeUnread,
+        markTerminalTabUnread,
+        clearWorktreeUnread,
+        clearTerminalTabUnread,
         dispatchNotification,
-        setCacheTimerStartedAt
+        setCacheTimerStartedAt,
+        syncPanePtyLayoutBinding
       })
       panePtyBindingsRef.current.set(paneId, newPaneBinding)
       manager.setActivePane(paneId, { focus: true })
     },
     [
       clearCodexRestartNotice,
+      clearRuntimePaneTitle,
       clearTabPtyId,
       cwd,
       dispatchNotification,
       markWorktreeUnread,
+      markTerminalTabUnread,
+      clearWorktreeUnread,
+      clearTerminalTabUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
+      setRuntimePaneTitle,
       suppressPtyExit,
+      syncPanePtyLayoutBinding,
       tabId,
       updateTabPtyId,
       updateTabTitle,
@@ -379,6 +595,8 @@ export default function TerminalPane({
     isActive,
     managerRef,
     paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,
@@ -386,25 +604,43 @@ export default function TerminalPane({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
-    onRequestClosePane: handleRequestClosePane
+    onRequestClosePane: handleRequestClosePane,
+    searchOpenRef,
+    searchStateRef,
+    macOptionAsAltRef
   })
 
   useTerminalPaneGlobalEffects({
     tabId,
+    // Why: use the pane's own `worktreeId` prop (not global activeWorktreeId)
+    // so the terminal-drop resolver routes to the worktree that actually owns
+    // this PTY. Reading from global state would race during worktree switches
+    // — the drop listener is already gated by `isActive`, and the pane's own
+    // id is the authoritative identity of the terminal being written to.
+    worktreeId,
+    cwd,
     isActive,
+    isVisible,
     managerRef,
     containerRef,
     paneTransportsRef,
     pendingWritesRef,
     isActiveRef,
+    isVisibleRef,
     toggleExpandPane
   })
 
-  // Intercept paste events on the terminal to bypass Chromium's native
-  // clipboard pipeline. Chromium holds NSPasteboard references during format
-  // conversion, which can cause concurrent clipboard reads by CLI tools
-  // (e.g. Codex checking for images) to fail intermittently. Reading via
-  // Electron's clipboard module in the main process avoids this contention.
+  // Intercept paste at the keydown level (Cmd+V / Ctrl+V) AND as a fallback
+  // on the paste event. We must handle keydown because Chromium does not fire
+  // a paste event when the clipboard contains only image data (no text
+  // representation) and the target is a textarea — which is exactly how
+  // xterm.js receives focus. Without the keydown handler, image-only pastes
+  // are silently discarded and tools like Claude Code never receive the image.
+  //
+  // The paste event handler is kept as a fallback for non-keyboard paste
+  // triggers (Edit > Paste menu, programmatic paste, etc.) and also bypasses
+  // Chromium's native clipboard pipeline that can cause concurrent clipboard
+  // reads by CLI tools (e.g. Codex checking for images) to fail intermittently.
   useEffect(() => {
     if (!isActive) {
       return
@@ -413,6 +649,66 @@ export default function TerminalPane({
     if (!container) {
       return
     }
+
+    // Shared helper: try text first (fast path, single IPC call for the
+    // common case), then check for a clipboard image only when text is empty
+    // — which is the image-only clipboard scenario this fix targets.
+    const pasteFromClipboard = (pane: { terminal: { paste: (data: string) => void } }): void => {
+      void window.api.ui
+        .readClipboardText()
+        .then((text) => {
+          if (text) {
+            pane.terminal.paste(text)
+            return
+          }
+          // Why: clipboard has no text — check for an image. This is the
+          // image-only clipboard case (e.g. screenshot) where Chromium's paste
+          // event would never fire on a textarea. We save the image to a temp
+          // file and paste the path so the terminal process can access it.
+          return window.api.ui.saveClipboardImageAsTempFile().then((filePath) => {
+            if (filePath) {
+              pane.terminal.paste(filePath)
+            }
+          })
+        })
+        .catch(() => {
+          /* ignore clipboard failures */
+        })
+    }
+
+    // Why: intercept Cmd+V / Ctrl+V at the keydown level so we can check
+    // for clipboard images via Electron's main-process clipboard API. The
+    // browser's paste event is unreliable for image-only clipboards when the
+    // target is a <textarea> (xterm.js's hidden input), so this handler
+    // ensures image paste works regardless.
+    const isMac = navigator.userAgent.includes('Mac')
+    const onKeyPaste = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() !== 'v') {
+        return
+      }
+      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+      if (!mod || e.altKey || e.shiftKey) {
+        return
+      }
+      const target = e.target
+      if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      pasteFromClipboard(pane)
+    }
+
+    // Fallback: handle paste events triggered by non-keyboard sources
+    // (Edit > Paste menu, programmatic paste, etc.).
     const onPaste = (e: ClipboardEvent): void => {
       const target = e.target
       if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
@@ -428,20 +724,47 @@ export default function TerminalPane({
       if (!pane) {
         return
       }
-      void window.api.ui
-        .readClipboardText()
-        .then((text) => {
-          if (text) {
-            pane.terminal.paste(text)
-          }
-        })
-        .catch(() => {
-          /* ignore clipboard read failures */
-        })
+      pasteFromClipboard(pane)
     }
+
+    container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
-    return () => container.removeEventListener('paste', onPaste, { capture: true })
+    return () => {
+      container.removeEventListener('keydown', onKeyPaste, { capture: true })
+      container.removeEventListener('paste', onPaste, { capture: true })
+    }
   }, [isActive])
+
+  // Why: a click inside the terminal container is a deliberate interaction
+  // with the pane — dismiss the bell indicator for this tab and worktree
+  // (ghostty "show until interact" semantics). onData already covers
+  // keystrokes; pointerdown covers the mouse path, including right-click
+  // and middle-click paste, which also count as engagement with the pane.
+  //
+  // This listener is intentionally NOT gated on `isActive`. In multi-group
+  // split layouts (TabGroupPanel), several TerminalPane instances are
+  // simultaneously visible but only ONE has `isActive=true` (the focused
+  // group's active pane). When the user clicks into a visible-but-inactive
+  // split pane, TabGroupPanel's wrapper `onPointerDown={commands.focusGroup}`
+  // fires first; focusGroup clears tab-level unread but does NOT call
+  // clearWorktreeUnread — so the worktree-level sidebar dot would linger
+  // until another interaction. Attaching this listener unconditionally lets
+  // the first click dismiss both dots BEFORE focusGroup re-renders the pane
+  // as active and the effect deps change.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
+    const onPointerDown = (): void => {
+      clearTerminalTabUnread(tabId)
+      clearWorktreeUnread(worktreeId)
+    }
+    container.addEventListener('pointerdown', onPointerDown, { capture: true })
+    return () => {
+      container.removeEventListener('pointerdown', onPointerDown, { capture: true })
+    }
+  }, [tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.
@@ -458,6 +781,10 @@ export default function TerminalPane({
     for (const pane of manager.getPanes()) {
       // Show the title bar space when the pane has a title OR is being
       // inline-edited (so the input appears even for untitled panes).
+      // Unread activity does NOT reserve title-bar space — the bell is
+      // rendered as an absolutely-positioned overlay in the pane's top-right
+      // corner so it can appear and disappear without shifting terminal
+      // content, avoiding the jarring reflow on bell toggles.
       const shouldShow = !!paneTitles[pane.id] || renamingPaneId === pane.id
       const hadTitle = pane.container.hasAttribute('data-has-title')
       if (shouldShow && !hadTitle) {
@@ -529,6 +856,18 @@ export default function TerminalPane({
       const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
       if (Object.keys(buffers).length > 0) {
         layout.buffersByLeafId = buffers
+      }
+      const ptyEntries = panes
+        .map(
+          (pane) =>
+            [
+              paneLeafId(pane.id),
+              paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+            ] as const
+        )
+        .filter((entry): entry is readonly [string, string] => entry[1] !== null)
+      if (ptyEntries.length > 0) {
+        layout.ptyIdsByLeafId = Object.fromEntries(ptyEntries)
       }
       // Merge pane titles so the shutdown snapshot doesn't silently drop them.
       // Why: the old early-return on empty buffers skipped this entirely, which
@@ -617,9 +956,13 @@ export default function TerminalPane({
 
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,
+    paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
-    onSetTitle: handleStartRename
+    onSetTitle: handleStartRename,
+    rightClickToPaste
   })
 
   const effectiveAppearance = settings
@@ -627,7 +970,10 @@ export default function TerminalPane({
     : null
 
   const terminalContainerStyle: CSSProperties = {
-    display: isActive ? 'flex' : 'none',
+    // Why: split groups can keep one terminal visible in an unfocused group so
+    // users still see its output while typing elsewhere. Hiding on `isActive`
+    // blanked the previously focused pane and exposed the white group body.
+    display: isVisible ? 'flex' : 'none',
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
@@ -643,6 +989,7 @@ export default function TerminalPane({
         ref={containerRef}
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
+        data-terminal-tab-id={tabId}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onDragOver={(e) => {
@@ -670,7 +1017,26 @@ export default function TerminalPane({
           if (!transport) {
             return
           }
-          transport.sendInput(shellEscapePath(filePath))
+          // Why: the explorer passes the worktree-absolute path via a DOM
+          // MIME, so for SSH worktrees this is a remote POSIX path destined
+          // for the remote shell. Quote for the target shell (remote = posix)
+          // rather than the client OS; otherwise a Windows client dropping
+          // onto an SSH-Linux worktree would emit Windows-style quoting.
+          // Why: `typeof === 'string'` (not `!== null`) so an unhydrated
+          // store (`undefined`) is treated as local and falls through to
+          // client-OS quoting, rather than being misclassified as remote.
+          const isRemote = typeof getConnectionId(worktreeId) === 'string'
+          const targetShell: 'posix' | 'windows' = isRemote
+            ? 'posix'
+            : isWindowsUserAgent()
+              ? 'windows'
+              : 'posix'
+          transport.sendInput(shellEscapePath(filePath, targetShell))
+          // Move focus to the terminal so the user can keep typing where the
+          // dropped path just landed. Without this, focus stays on the file
+          // tree row that originated the drag and subsequent keystrokes do
+          // not reach the pty — #978.
+          pane.terminal.focus()
         }}
       />
       {terminalError && isActive && (
@@ -682,6 +1048,7 @@ export default function TerminalPane({
             isOpen={searchOpen}
             onClose={() => setSearchOpen(false)}
             searchAddon={activePane.searchAddon ?? null}
+            searchStateRef={searchStateRef}
           />,
           activePane.container
         )}
@@ -715,7 +1082,7 @@ export default function TerminalPane({
           and structural changes (split, close) update those same signals via
           onPaneClosed / onPaneCreated callbacks — so React always re-renders
           this block when .getPanes() would return a different result. */}
-      {managerRef.current?.getPanes().map((pane) => {
+      {(managerRef.current?.getPanes() ?? []).map((pane) => {
         const title = paneTitles[pane.id]
         const isEditing = renamingPaneId === pane.id
         if (!title && !isEditing) {
@@ -758,6 +1125,74 @@ export default function TerminalPane({
           </div>,
           pane.container,
           `pane-title-${pane.id}`
+        )
+      })}
+      {(managerRef.current?.getPanes() ?? []).map((pane) => {
+        // Why: pane IDs can collide across tabs (e.g. tab 0 pane 1 and tab 1
+        // pane 1). Using the transport's actual ptyId avoids showing banners
+        // on the wrong pane when IDs overlap.
+        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
+        if (!ptyId) {
+          return null
+        }
+        // Why: presence-lock — banner is gated on driver state, not on
+        // fit-override. The banner now communicates "input is paused"
+        // (the load-bearing fact) instead of dimensional state. The
+        // dimensional override may still be active and is reflected in
+        // the PTY but not in the banner copy. See
+        // docs/mobile-presence-lock.md.
+        const driver = getDriverForPty(ptyId)
+        if (driver.kind !== 'mobile') {
+          return null
+        }
+        return createPortal(
+          <div
+            key={`mobile-driver-${pane.id}`}
+            className="mobile-driver-banner"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 10,
+              padding: '4px 12px',
+              background: 'var(--orca-banner-bg, rgba(30, 30, 30, 0.75))',
+              color: 'var(--orca-banner-fg, #a0a0a0)',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <span>
+              Mobile is driving this terminal — your input is paused. Click Take back to resume.
+            </span>
+            <button
+              style={{
+                background: 'transparent',
+                border: '1px solid currentColor',
+                borderRadius: '3px',
+                color: 'inherit',
+                padding: '1px 8px',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+              onClick={() => {
+                const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
+                if (ptyId) {
+                  // Why: same IPC route — handler now also reclaims the
+                  // input floor for the desktop via the driver state
+                  // machine, so the banner unmounts and input is unblocked
+                  // until the next mobile interaction.
+                  void window.api.runtime.restoreTerminalFit(ptyId)
+                }
+              }}
+            >
+              Take back
+            </button>
+          </div>,
+          pane.container,
+          `mobile-driver-banner-${pane.id}`
         )
       })}
       <CloseTerminalDialog

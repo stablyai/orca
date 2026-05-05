@@ -1,13 +1,13 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Search as SearchIcon, CaseSensitive, WholeWord, Regex, X, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { Button } from '@/components/ui/button'
+import { useActiveWorktree } from '@/store/selectors'
+import { getConnectionId } from '@/lib/connection-context'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
-import { SearchFilters } from './SearchFilters'
-import { ToggleButton, FileResultRow, MatchResultRow } from './SearchResultItems'
+import { SearchHeader } from './SearchHeader'
+import { FileResultRow, MatchResultRow } from './SearchResultItems'
 
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_MAX_RESULTS = 2000
@@ -15,8 +15,8 @@ const SEARCH_VIRTUAL_OVERSCAN = 12
 const EMPTY_COLLAPSED_FILES = new Set<string>()
 
 export default function Search(): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const openFile = useAppStore((s) => s.openFile)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
 
@@ -43,6 +43,8 @@ export default function Search(): React.JSX.Element {
   const resultsScrollRef = useRef<HTMLDivElement>(null)
   const revealRafRef = useRef<number | null>(null)
   const revealInnerRafRef = useRef<number | null>(null)
+  const includeInputRef = useRef<HTMLInputElement>(null)
+  const excludeInputRef = useRef<HTMLInputElement>(null)
 
   const updateActiveSearchState = useCallback(
     (updates: Partial<NonNullable<typeof searchState>>) => {
@@ -80,19 +82,7 @@ export default function Search(): React.JSX.Element {
     updateActiveSearchState({ loading: false })
   }, [updateActiveSearchState])
 
-  // Find active worktree path
-  const worktreePath = useMemo(() => {
-    if (!activeWorktreeId) {
-      return null
-    }
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      const wt = worktrees.find((w) => w.id === activeWorktreeId)
-      if (wt) {
-        return wt.path
-      }
-    }
-    return null
-  }, [activeWorktreeId, worktreesByRepo])
+  const worktreePath = activeWorktree?.path ?? null
 
   // Focus input on mount
   useEffect(() => {
@@ -182,9 +172,11 @@ export default function Search(): React.JSX.Element {
         searchTimerRef.current = null
         try {
           const state = useAppStore.getState()
+          const connectionId = getConnectionId(activeWorktreeId!) ?? undefined
           const results = await window.api.fs.search({
             query: query.trim(),
             rootPath: worktreePath,
+            connectionId,
             caseSensitive:
               state.fileSearchStateByWorktree[activeWorktreeId!]?.caseSensitive ?? false,
             wholeWord: state.fileSearchStateByWorktree[activeWorktreeId!]?.wholeWord ?? false,
@@ -279,78 +271,41 @@ export default function Search(): React.JSX.Element {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex flex-col gap-1.5 p-2 border-b border-border">
-        <div className="flex items-center gap-1 bg-input/50 border border-border rounded-sm px-1.5 focus-within:border-ring">
-          <SearchIcon size={14} className="text-muted-foreground flex-shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            className="flex-1 bg-transparent text-xs py-1.5 outline-none text-foreground placeholder:text-muted-foreground/50 min-w-0"
-            placeholder="Search"
-            value={fileSearchQuery}
-            onChange={handleQueryChange}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-          />
-          {fileSearchLoading && (
-            <Loader2 size={12} className="text-muted-foreground animate-spin flex-shrink-0" />
-          )}
-          {fileSearchQuery && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="h-auto w-auto rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-              onClick={handleClearSearch}
-            >
-              <X size={12} />
-            </Button>
-          )}
-          <ToggleButton
-            active={fileSearchCaseSensitive}
-            onClick={() => {
-              updateActiveSearchState({ caseSensitive: !fileSearchCaseSensitive })
-              rerunSearch()
-            }}
-            title="Match Case"
-          >
-            <CaseSensitive size={14} />
-          </ToggleButton>
-          <ToggleButton
-            active={fileSearchWholeWord}
-            onClick={() => {
-              updateActiveSearchState({ wholeWord: !fileSearchWholeWord })
-              rerunSearch()
-            }}
-            title="Match Whole Word"
-          >
-            <WholeWord size={14} />
-          </ToggleButton>
-          <ToggleButton
-            active={fileSearchUseRegex}
-            onClick={() => {
-              updateActiveSearchState({ useRegex: !fileSearchUseRegex })
-              rerunSearch()
-            }}
-            title="Use Regular Expression"
-          >
-            <Regex size={14} />
-          </ToggleButton>
-        </div>
-
-        <SearchFilters
-          includePattern={fileSearchIncludePattern}
-          excludePattern={fileSearchExcludePattern}
-          onIncludeChange={(value) => {
-            updateActiveSearchState({ includePattern: value })
-            rerunSearch()
-          }}
-          onExcludeChange={(value) => {
-            updateActiveSearchState({ excludePattern: value })
-            rerunSearch()
-          }}
-        />
-      </div>
+      <SearchHeader
+        inputRef={inputRef}
+        includeInputRef={includeInputRef}
+        excludeInputRef={excludeInputRef}
+        query={fileSearchQuery}
+        loading={fileSearchLoading}
+        caseSensitive={fileSearchCaseSensitive}
+        wholeWord={fileSearchWholeWord}
+        useRegex={fileSearchUseRegex}
+        includePattern={fileSearchIncludePattern}
+        excludePattern={fileSearchExcludePattern}
+        onQueryChange={handleQueryChange}
+        onKeyDown={handleKeyDown}
+        onClearSearch={handleClearSearch}
+        onToggleCaseSensitive={() => {
+          updateActiveSearchState({ caseSensitive: !fileSearchCaseSensitive })
+          rerunSearch()
+        }}
+        onToggleWholeWord={() => {
+          updateActiveSearchState({ wholeWord: !fileSearchWholeWord })
+          rerunSearch()
+        }}
+        onToggleRegex={() => {
+          updateActiveSearchState({ useRegex: !fileSearchUseRegex })
+          rerunSearch()
+        }}
+        onIncludeChange={(value) => {
+          updateActiveSearchState({ includePattern: value })
+          rerunSearch()
+        }}
+        onExcludeChange={(value) => {
+          updateActiveSearchState({ excludePattern: value })
+          rerunSearch()
+        }}
+      />
 
       {/* Why: the summary is rendered outside the virtualizer so it stays
          pinned at the top while the user scrolls through results. */}

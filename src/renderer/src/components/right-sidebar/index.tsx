@@ -1,11 +1,13 @@
-import React, { useMemo } from 'react'
-import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Files, Search, GitBranch, ListChecks, Cable, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { getRepoMapFromState, useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { RightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -19,9 +21,16 @@ import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
+import PortsPanel from './PortsPanel'
 
 const MIN_WIDTH = 220
-const MAX_WIDTH = 500
+// Why: long file names (e.g. construction drawing sheets, multi-part document
+// names) used to be truncated at a hard 500px cap that no drag could exceed.
+// We now let the user drag up to nearly the full window width and only keep a
+// small reserve so the rest of the app (left sidebar, editor) is not squeezed
+// to zero — the practical ceiling still scales with the user's window size.
+const MIN_NON_SIDEBAR_AREA = 320
+const ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -29,31 +38,15 @@ function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-function findWorktreeById(
-  worktreesByRepo: ReturnType<typeof useAppStore.getState>['worktreesByRepo'],
-  worktreeId: string | null
-) {
-  if (!worktreeId) {
-    return null
-  }
-
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const worktree = worktrees.find((entry) => entry.id === worktreeId)
-    if (worktree) {
-      return worktree
-    }
-  }
-
-  return null
-}
-
 function getActiveChecksStatus(state: ReturnType<typeof useAppStore.getState>): CheckStatus | null {
-  const activeWorktree = findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
+  const activeWorktree = state.activeWorktreeId
+    ? findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
+    : null
   if (!activeWorktree) {
     return null
   }
 
-  const activeRepo = state.repos.find((repo) => repo.id === activeWorktree.repoId)
+  const activeRepo = getRepoMapFromState(state).get(activeWorktree.repoId)
   if (!activeRepo) {
     return null
   }
@@ -74,6 +67,8 @@ type ActivityBarItem = {
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
+  /** When true, only shown when at least one SSH connection is active. */
+  sshOnly?: boolean
 }
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -105,30 +100,112 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     title: 'Checks',
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`,
     gitOnly: true
+  },
+  {
+    id: 'ports',
+    icon: Cable,
+    title: 'Ports',
+    // Why: Ctrl+Shift+I is the DevTools accelerator on Windows/Linux, so this
+    // shortcut is macOS-only. On other platforms the tooltip omits it.
+    shortcut: isMac ? `\u21E7${mod}I` : '',
+    sshOnly: true
   }
 ]
 
-export default function RightSidebar(): React.JSX.Element {
+function RightSidebarInner(): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore(getActiveChecksStatus)
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
-
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
-  const activeRepo = useAppStore((s) => {
-    const wt = findWorktreeById(s.worktreesByRepo, s.activeWorktreeId)
-    return wt ? (s.repos.find((r) => r.id === wt.repoId) ?? null) : null
-  })
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
+
+  // Why: show the Ports tab only when the active worktree belongs to a
+  // remote (SSH) repo, not for any global SSH connection. Switching to a
+  // local worktree should hide the tab even if SSH sessions are alive.
+  const isRemoteWorktree = !!activeRepo?.connectionId
+  const hasActiveSshConnection = useAppStore((s) => {
+    if (!activeRepo?.connectionId) {
+      return false
+    }
+    const state = s.sshConnectionStates.get(activeRepo.connectionId)
+    return state?.status === 'connected'
+  })
+
+  // Why: when the SSH connection drops while the user is viewing the Ports
+  // panel, hiding the tab immediately would be jarring. Keep it visible
+  // during a 30-second grace period, then hide it.
+  const isPortsPanelActive = rightSidebarTab === 'ports'
+  // Why: graceActiveRef is set synchronously during render (not via useEffect)
+  // so that the very first render after disconnect already sees the grace flag,
+  // preventing a one-frame flicker to the Explorer tab.
+  const graceActiveRef = React.useRef(false)
+  const graceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [, forceUpdate] = useState(0)
+
+  if (!hasActiveSshConnection && isPortsPanelActive && !graceActiveRef.current) {
+    graceActiveRef.current = true
+  } else if (graceActiveRef.current && (hasActiveSshConnection || !isPortsPanelActive)) {
+    // Why: clear grace when either (a) the SSH session reconnects, or (b) the
+    // user navigates away from the Ports tab — no reason to keep it visible
+    // once they've moved on.
+    graceActiveRef.current = false
+    if (graceTimerRef.current) {
+      clearTimeout(graceTimerRef.current)
+      graceTimerRef.current = null
+    }
+  }
+
+  const disconnectGraceActive = graceActiveRef.current
+
+  useEffect(() => {
+    if (disconnectGraceActive) {
+      graceTimerRef.current = setTimeout(() => {
+        graceActiveRef.current = false
+        graceTimerRef.current = null
+        // Why: only reset the tab if the user is still on Ports. If they
+        // already navigated to Search/Checks/etc during the grace period,
+        // forcing them back to Explorer would be disruptive.
+        if (useAppStore.getState().rightSidebarTab === 'ports') {
+          setRightSidebarTab('explorer')
+        }
+        forceUpdate((n) => n + 1)
+      }, 30_000)
+      return () => {
+        if (graceTimerRef.current) {
+          clearTimeout(graceTimerRef.current)
+          graceTimerRef.current = null
+        }
+      }
+    }
+    return undefined
+  }, [disconnectGraceActive, setRightSidebarTab])
+
   const visibleItems = useMemo(
-    () => (isFolder ? ACTIVITY_ITEMS.filter((item) => !item.gitOnly) : ACTIVITY_ITEMS),
-    [isFolder]
+    () =>
+      ACTIVITY_ITEMS.filter((item) => {
+        if (item.gitOnly && isFolder) {
+          return false
+        }
+        if (item.sshOnly) {
+          if (!isRemoteWorktree) {
+            return false
+          }
+          if (!hasActiveSshConnection && !disconnectGraceActive) {
+            return false
+          }
+        }
+        return true
+      }),
+    [isFolder, isRemoteWorktree, hasActiveSshConnection, disconnectGraceActive]
   )
 
   // If the active tab is hidden (e.g. switched from a git repo to a folder),
@@ -138,11 +215,12 @@ export default function RightSidebar(): React.JSX.Element {
     : visibleItems[0].id
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
-  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
+  const maxWidth = useWindowAwareMaxWidth()
+  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
     width: rightSidebarWidth,
     minWidth: MIN_WIDTH,
-    maxWidth: MAX_WIDTH,
+    maxWidth,
     deltaSign: -1,
     renderedExtraWidth: activityBarSideWidth,
     setWidth: setRightSidebarWidth
@@ -150,10 +228,24 @@ export default function RightSidebar(): React.JSX.Element {
 
   const panelContent = (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
-      {effectiveTab === 'explorer' && <FileExplorer key={activeWorktreeId ?? 'none'} />}
-      {effectiveTab === 'search' && <SearchPanel key={activeWorktreeId ?? 'none'} />}
-      {effectiveTab === 'source-control' && <SourceControl key={activeWorktreeId ?? 'none'} />}
-      {effectiveTab === 'checks' && <ChecksPanel key={activeWorktreeId ?? 'none'} />}
+      {/* Why: sidebar panels no longer use key={activeWorktreeId} because
+          the full unmount/remount cycle on every worktree switch triggered
+          an IPC storm (watchWorktree + readDir + git:branchCompare + …)
+          that froze the app for seconds on Windows.  Each panel now reacts
+          to activeWorktreeId changes via store subscriptions and reset
+          effects, keeping the component instance alive across switches. */}
+      {/* Why: live agent activity now renders inline inside each workspace
+          card (WorktreeCardAgents, toggled by the 'inline-agents' card
+          property) rather than in a bottom-docked dashboard panel that
+          competed with file Explorer/Search for vertical space. The right
+          sidebar is back to tab-only content. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {effectiveTab === 'explorer' && <FileExplorer />}
+        {effectiveTab === 'search' && <SearchPanel />}
+        {effectiveTab === 'source-control' && <SourceControl />}
+        {effectiveTab === 'checks' && <ChecksPanel />}
+        {effectiveTab === 'ports' && <PortsPanel />}
+      </div>
     </div>
   )
 
@@ -168,12 +260,35 @@ export default function RightSidebar(): React.JSX.Element {
     />
   ))
 
+  const closeButton = rightSidebarOpen ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="sidebar-toggle mr-1"
+          onClick={toggleRightSidebar}
+          aria-label="Toggle right sidebar"
+        >
+          <PanelRight size={16} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {`Toggle right sidebar (${isMac ? '⌘L' : 'Ctrl+L'})`}
+      </TooltipContent>
+    </Tooltip>
+  ) : null
+
   return (
     <div
       ref={containerRef}
       className={cn(
-        'relative flex-shrink-0 flex flex-row overflow-visible',
-        isResizing ? 'transition-none' : 'transition-[width] duration-200'
+        'relative flex-shrink-0 flex flex-row',
+        // Why: overflow-visible is needed when open so the resize handle
+        // on the left edge remains interactive.  When closed (width 0),
+        // switch to overflow-hidden so the activity bar icons and panel
+        // content don't leak past the 0-width boundary (the component
+        // stays mounted for performance — see App.tsx).
+        rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
     >
       {/* Panel content area */}
@@ -187,8 +302,11 @@ export default function RightSidebar(): React.JSX.Element {
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <div className="flex items-center border-b border-border h-[33px] min-h-[33px] px-1">
-                <TooltipProvider delayDuration={400}>{activityBarIcons}</TooltipProvider>
+              <div className="flex items-center justify-between border-b border-border h-[36px] min-h-[36px] pl-2 pr-1">
+                <TooltipProvider delayDuration={400}>
+                  <div className="flex items-center">{activityBarIcons}</div>
+                  {closeButton}
+                </TooltipProvider>
               </div>
             </ContextMenuTrigger>
             <ActivityBarPositionMenu
@@ -198,10 +316,11 @@ export default function RightSidebar(): React.JSX.Element {
           </ContextMenu>
         ) : (
           /* ── Side layout: static title header ── */
-          <div className="flex items-center h-[33px] min-h-[33px] px-3 border-b border-border">
+          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
+            <TooltipProvider delayDuration={400}>{closeButton}</TooltipProvider>
           </div>
         )}
 
@@ -230,6 +349,33 @@ export default function RightSidebar(): React.JSX.Element {
       )}
     </div>
   )
+}
+
+const RightSidebar = React.memo(RightSidebarInner)
+export default RightSidebar
+
+// Why: the drag-resize max is a function of window width, not a constant, so
+// users with wide displays can expand the sidebar far enough to read long file
+// names. Falls back to a large constant in non-DOM environments (tests).
+function useWindowAwareMaxWidth(): number {
+  const [max, setMax] = useState(() => computeMaxRightSidebarWidth())
+
+  useEffect(() => {
+    function update(): void {
+      setMax(computeMaxRightSidebarWidth())
+    }
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+
+  return max
+}
+
+function computeMaxRightSidebarWidth(): number {
+  if (typeof window === 'undefined' || !Number.isFinite(window.innerWidth)) {
+    return ABSOLUTE_FALLBACK_MAX_WIDTH
+  }
+  return Math.max(MIN_WIDTH, window.innerWidth - MIN_NON_SIDEBAR_AREA)
 }
 
 // ─── Status indicator dot color mapping ──────
@@ -263,11 +409,11 @@ function ActivityBarButton({
         <button
           className={cn(
             'relative flex items-center justify-center transition-colors',
-            isTop ? 'h-[33px] w-9' : 'w-10 h-10',
+            isTop ? 'h-[36px] w-9' : 'w-10 h-10',
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
-          aria-label={`${item.title} (${item.shortcut})`}
+          aria-label={item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
         >
           <Icon size={isTop ? 16 : 18} />
 
@@ -276,7 +422,7 @@ function ActivityBarButton({
             <div
               className={cn(
                 'absolute rounded-full size-[7px] ring-1 ring-sidebar',
-                isTop ? 'top-[5px] right-[5px]' : 'top-[7px] right-[7px]',
+                isTop ? 'top-[8px] right-[5px]' : 'top-[7px] right-[7px]',
                 STATUS_DOT_COLOR[statusIndicator] ?? 'bg-muted-foreground'
               )}
             />
@@ -292,7 +438,7 @@ function ActivityBarButton({
         </button>
       </TooltipTrigger>
       <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
-        {item.title} ({item.shortcut})
+        {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
       </TooltipContent>
     </Tooltip>
   )

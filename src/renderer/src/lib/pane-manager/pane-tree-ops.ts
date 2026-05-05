@@ -1,5 +1,14 @@
-import type { DropZone, ManagedPaneInternal, PaneStyleOptions } from './pane-manager-types'
+import type {
+  DropZone,
+  ManagedPane,
+  ManagedPaneInternal,
+  PaneStyleOptions
+} from './pane-manager-types'
 import { createDivider } from './pane-divider'
+import { getFitOverrideForPty } from './mobile-fit-overrides'
+import { disposeWebgl, attachWebgl } from './pane-lifecycle'
+
+export { findLineByContent, captureScrollState, restoreScrollState } from './pane-scroll'
 
 // ---------------------------------------------------------------------------
 // Split-tree manipulation: detach, insert, promote sibling
@@ -8,16 +17,61 @@ import { createDivider } from './pane-divider'
 type TreeOpsCallbacks = {
   getRoot: () => HTMLElement
   getStyleOptions: () => PaneStyleOptions
-  safeFit: (pane: ManagedPaneInternal) => void
+  safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
 }
 
-export function safeFit(pane: ManagedPaneInternal): void {
+function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
   try {
+    return pane.fitAddon.proposeDimensions() ?? null
+  } catch {
+    return null
+  }
+}
+
+// Why: xterm's terminal.resize() (called by fitAddon.fit()) natively preserves
+// viewportY across reflows — see scroll-reflow.test.ts "reference: undisturbed".
+// A plain fit() is all we need during sidebar drags, divider drags, and window
+// resizes. This matches how Superset and VSCode handle the same cases.
+//
+// pendingSplitScrollState is the one case where fit() alone isn't enough:
+// wrapInSplit() reparents the container, which makes the browser reset
+// scrollTop to 0 asynchronously. splitPane captures the pre-split state and
+// scheduleSplitScrollRestore owns the authoritative restore on a timer, so
+// safeFit here just fits and lets the scheduled restore do its job.
+export function safeFit(pane: ManagedPane): void {
+  try {
+    // Why: when a mobile client has resized this PTY to phone dimensions,
+    // the desktop must keep xterm at those dimensions instead of fitting to
+    // the desktop pane geometry. This prevents desktop auto-fit from undoing
+    // the mobile resize. Uses data-pty-id (set by bindPanePtyId) to look up
+    // the override by ptyId directly, avoiding pane ID collisions across tabs.
+    const ptyId = pane.container.dataset.ptyId
+    const override = ptyId ? getFitOverrideForPty(ptyId) : null
+    if (override) {
+      if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
+        pane.terminal.resize(override.cols, override.rows)
+      }
+      return
+    }
+
+    const dims = getProposedDimensions(pane)
+    if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
+      // Why: divider drags fire refits every frame, but most frames do not
+      // cross a cell boundary. Skipping those avoids FitAddon.clear()+refresh()
+      // churn, which was causing visible terminal blinking while resizing.
+      return
+    }
     pane.fitAddon.fit()
   } catch {
     // Container may not have dimensions yet
+  }
+}
+
+export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): void {
+  for (const pane of panes.values()) {
+    safeFit(pane)
   }
 }
 
@@ -127,6 +181,13 @@ export function insertPaneNextTo(
   applyPaneFlexStyle(source.container)
   applyPaneFlexStyle(targetContainer)
 
+  // Why: same pattern as splitPane — dispose WebGL before the DOM reparent
+  // to free GPU context slots, then reattach after layout settles.
+  const sourceHadWebgl = !!source.webglAddon
+  const targetHadWebgl = !!target.webglAddon
+  disposeWebgl(source)
+  disposeWebgl(target)
+
   // Replace target with the split in the DOM
   parent.replaceChild(split, targetContainer)
 
@@ -141,8 +202,13 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  // Refit both
   requestAnimationFrame(() => {
+    if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
+      attachWebgl(source)
+    }
+    if (targetHadWebgl && target.gpuRenderingEnabled && !target.webglDisabledAfterContextLoss) {
+      attachWebgl(target)
+    }
     callbacks.safeFit(source)
     callbacks.safeFit(target)
   })

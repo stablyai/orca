@@ -16,7 +16,16 @@ export type RepoSlice = {
   updateRepo: (
     repoId: string,
     updates: Partial<
-      Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+      Pick<
+        Repo,
+        | 'displayName'
+        | 'badgeColor'
+        | 'hookSettings'
+        | 'worktreeBaseRef'
+        | 'kind'
+        | 'symlinkPaths'
+        | 'issueSourcePreference'
+      >
     >
   ) => Promise<void>
   setActiveRepo: (repoId: string | null) => void
@@ -50,7 +59,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       let repo: Repo
       try {
-        repo = await window.api.repos.add({ path })
+        const result = await window.api.repos.add({ path })
+        if ('error' in result) {
+          throw new Error(result.error)
+        }
+        repo = result.repo
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         if (!message.includes('Not a valid git repository')) {
@@ -65,6 +78,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return null
       }
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
+      if (alreadyAdded) {
+        get().clearOrcaHookTrustForRepo(repo.id)
+      }
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
@@ -72,18 +88,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return { repos: [...s.repos, repo] }
       })
       if (alreadyAdded) {
-        toast.info('Repo already added', { description: repo.displayName })
+        toast.info('Project already added', { description: repo.displayName })
       } else {
-        toast.success(isGitRepoKind(repo) ? 'Repo added' : 'Folder added', {
+        toast.success(isGitRepoKind(repo) ? 'Project added' : 'Folder added', {
           description: repo.displayName
         })
       }
       return repo
     } catch (err) {
-      console.error('Failed to add repo:', err)
+      console.error('Failed to add project:', err)
       const message = err instanceof Error ? err.message : String(err)
       const duration = ERROR_TOAST_DURATION
-      toast.error('Failed to add repo', {
+      toast.error('Failed to add project', {
         description: message,
         duration
       })
@@ -93,8 +109,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   addNonGitFolder: async (path) => {
     try {
-      const repo = await window.api.repos.add({ path, kind: 'folder' })
+      const result = await window.api.repos.add({ path, kind: 'folder' })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      const repo = result.repo
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
+      if (alreadyAdded) {
+        get().clearOrcaHookTrustForRepo(repo.id)
+      }
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
@@ -102,9 +125,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return { repos: [...s.repos, repo] }
       })
       if (alreadyAdded) {
-        toast.info('Repo already added', { description: repo.displayName })
+        toast.info('Project already added', { description: repo.displayName })
       } else {
         toast.success('Folder added', { description: repo.displayName })
+      }
+      // Why: without focusing the new folder, the UI looks unchanged after
+      // the dialog closes and users think nothing happened. Fetch the
+      // synthetic folder worktree and route through the standard activation
+      // sequence so the sidebar reveals and opens the folder the same way
+      // clicking a worktree card does. Lazy-imported to avoid a circular
+      // module load (worktree-activation imports the store root).
+      await get().fetchWorktrees(repo.id)
+      const folderWorktree = get().worktreesByRepo[repo.id]?.[0]
+      if (folderWorktree) {
+        const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
+        activateAndRevealWorktree(folderWorktree.id)
       }
       return repo
     } catch (err) {
@@ -118,6 +153,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   removeRepo: async (repoId) => {
     try {
       await window.api.repos.remove({ repoId })
+
+      get().clearOrcaHookTrustForRepo(repoId)
 
       // Kill PTYs for all worktrees belonging to this repo
       const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)

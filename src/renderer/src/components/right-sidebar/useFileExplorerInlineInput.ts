@@ -4,21 +4,11 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { dirname, joinPath } from '@/lib/path'
+import { getConnectionId } from '@/lib/connection-context'
+import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
-
-/**
- * Electron's ipcRenderer.invoke wraps errors as:
- *   "Error invoking remote method 'channel': Error: actual message"
- * Strip the wrapper so users see only the meaningful part.
- */
-function extractIpcErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) {
-    return fallback
-  }
-  const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
-  return match ? match[1] : err.message
-}
+import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
@@ -119,25 +109,45 @@ export function useFileExplorerInlineInput({
         return
       }
       const run = async (): Promise<void> => {
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
-          const parentDir = dirname(inlineInput.existingPath)
-          try {
-            await window.api.fs.rename({
-              oldPath: inlineInput.existingPath,
-              newPath: joinPath(parentDir, name)
-            })
-          } catch (err) {
-            toast.error(
-              extractIpcErrorMessage(err, `Failed to rename '${inlineInput.existingName}'.`)
-            )
-          }
-          await refreshDir(parentDir)
+          await renameFileOnDisk({
+            oldPath: inlineInput.existingPath,
+            newName: name,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            refreshDir
+          })
         } else {
           const fullPath = joinPath(inlineInput.parentPath, name)
           try {
             await (inlineInput.type === 'folder'
-              ? window.api.fs.createDir({ dirPath: fullPath })
-              : window.api.fs.createFile({ filePath: fullPath }))
+              ? window.api.fs.createDir({ dirPath: fullPath, connectionId })
+              : window.api.fs.createFile({ filePath: fullPath, connectionId }))
+            const parentForRefresh = inlineInput.parentPath
+            if (inlineInput.type === 'folder') {
+              commitFileExplorerOp({
+                undo: async () => {
+                  await window.api.fs.deletePath({ targetPath: fullPath, connectionId })
+                  await refreshDir(parentForRefresh)
+                },
+                redo: async () => {
+                  await window.api.fs.createDir({ dirPath: fullPath, connectionId })
+                  await refreshDir(parentForRefresh)
+                }
+              })
+            } else {
+              commitFileExplorerOp({
+                undo: async () => {
+                  await window.api.fs.deletePath({ targetPath: fullPath, connectionId })
+                  await refreshDir(parentForRefresh)
+                },
+                redo: async () => {
+                  await window.api.fs.createFile({ filePath: fullPath, connectionId })
+                  await refreshDir(parentForRefresh)
+                }
+              })
+            }
             await refreshDir(inlineInput.parentPath)
             if (inlineInput.type === 'file') {
               openFile({

@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a problem with Orca
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for Orca bugs. Include enough detail for someone else to reproduce the issue.
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: orca_version
+    attributes:
+      label: Orca version
+      description: Include the exact Orca version if you can. You can find it in `Orca > About Orca`.
+      placeholder: v0.14.2
+    validations:
+      required: false
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Describe the bug in your own words. Include a short summary, reproduction steps, and anything else that seems relevant.
+      placeholder: |
+        Short summary:
+        Orca crashes when ...
+
+        What happened?
+
+        How can we reproduce it?
+        1. ...
+        2. ...
+        3. ...
+
+        Anything else that might help:
+    validations:
+      required: true

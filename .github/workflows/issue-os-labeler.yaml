@@ -1,0 +1,61 @@
+name: Label Issues by OS
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+
+permissions:
+  issues: write
+
+jobs:
+  apply-os-label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Apply OS label from issue form
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || "";
+            const osMatch = body.match(/^### Operating system\s+(.+)$/m);
+
+            if (!osMatch) {
+              core.info("No operating system field found. Skipping.");
+              return;
+            }
+
+            const selectedOs = osMatch[1].trim().toLowerCase();
+            const osLabelMap = {
+              macos: "os:macos",
+              windows: "os:Windows",
+              linux: "os:linux",
+            };
+
+            const desiredLabel = osLabelMap[selectedOs];
+            if (!desiredLabel) {
+              core.info(`No OS label configured for "${selectedOs}". Skipping.`);
+              return;
+            }
+
+            const managedLabels = Object.values(osLabelMap);
+            const existingLabels = issue.labels.map((label) =>
+              typeof label === "string" ? label : label.name,
+            );
+            const labelsToKeep = existingLabels.filter(
+              (label) => !managedLabels.includes(label),
+            );
+            const nextLabels = [...new Set([...labelsToKeep, desiredLabel])];
+
+            await github.rest.issues.setLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              labels: nextLabels,
+            });
+
+            core.info(`Applied label ${desiredLabel} to issue #${issue.number}.`);

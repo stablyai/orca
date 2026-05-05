@@ -11,6 +11,7 @@ const {
   getBranchConflictKindMock,
   getPRForBranchMock,
   getEffectiveHooksMock,
+  createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   shouldRunSetupForCreateMock,
   runHookMock,
@@ -29,6 +30,7 @@ const {
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
+  createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
   runHookMock: vi.fn(),
@@ -51,6 +53,14 @@ vi.mock('../git/worktree', () => ({
   removeWorktree: removeWorktreeMock
 }))
 
+vi.mock('../git/runner', () => ({
+  // Why: createLocalWorktree now fires `git fetch` via gitExecFileAsync in the
+  // background. Return a resolved promise so the fire-and-forget `.catch()`
+  // chain has a valid Promise to attach to.
+  gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+  gitExecFileSync: vi.fn()
+}))
+
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
@@ -62,6 +72,7 @@ vi.mock('../github/client', () => ({
 }))
 
 vi.mock('../hooks', () => ({
+  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
   loadHooks: loadHooksMock,
@@ -111,6 +122,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
     getEffectiveHooksMock.mockReset()
+    createIssueCommandRunnerScriptMock.mockReset()
     createSetupRunnerScriptMock.mockReset()
     shouldRunSetupForCreateMock.mockReset()
     runHookMock.mockReset()
@@ -169,7 +181,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     listWorktreesMock.mockResolvedValue([])
 
-    registerWorktreeHandlers(mainWindow as never, store as never)
+    // Why: createLocalWorktree routes `git fetch` through
+    // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). Stub it for path tests.
+    const runtimeStub = {
+      fetchRemoteWithCache: async () => {
+        /* noop */
+      }
+    }
+    registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
 
   it('accepts a newly created Windows worktree when git lists the same path with different separators', async () => {
