@@ -7,7 +7,7 @@ import { ChevronLeft, Clipboard as ClipboardIcon } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { PairingOffer } from '../src/transport/types'
+import type { PairingOffer, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
 
@@ -69,28 +69,41 @@ export default function PairScanScreen() {
     setStatus('connecting')
     let client: ReturnType<typeof connect> | null = null
 
+    // Why: split the try/catch around the network call vs the local save
+    // so a Keychain or AsyncStorage failure doesn't masquerade as a
+    // "Cannot connect — same network?" error. Pairing reached the
+    // desktop fine; the failure is local persistence.
+    let response: RpcResponse
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64)
-      const response = await client.sendRequest('status.get')
+      response = await client.sendRequest('status.get')
       client.close()
       client = null
+    } catch (err) {
+      console.warn('[pair] connect failed', err)
+      setStatus('error')
+      setErrorMessage('Cannot connect — check that your computer is on the same network')
+      processingRef.current = false
+      client?.close()
+      return
+    }
 
-      if (!response.ok) {
-        if (response.error.code === 'unauthorized') {
-          setStatus('error')
-          setErrorMessage('Authentication failed — token may be expired')
-          processingRef.current = false
-          return
-        }
+    if (!response.ok) {
+      if (response.error.code === 'unauthorized') {
         setStatus('error')
-        setErrorMessage(`Server error: ${response.error.message}`)
+        setErrorMessage('Authentication failed — token may be expired')
         processingRef.current = false
         return
       }
+      setStatus('error')
+      setErrorMessage(`Server error: ${response.error.message}`)
+      processingRef.current = false
+      return
+    }
 
+    try {
       const hostId = `host-${Date.now()}`
       const hostName = await getNextHostName()
-
       await saveHost({
         id: hostId,
         name: hostName,
@@ -99,14 +112,14 @@ export default function PairScanScreen() {
         publicKeyB64: offer.publicKeyB64,
         lastConnected: Date.now()
       })
-
       router.replace(`/h/${hostId}`)
-    } catch {
+    } catch (err) {
+      console.warn('[pair] save failed', err)
       setStatus('error')
-      setErrorMessage('Cannot connect — check that your computer is on the same network')
+      setErrorMessage(
+        `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
+      )
       processingRef.current = false
-    } finally {
-      client?.close()
     }
   }
 

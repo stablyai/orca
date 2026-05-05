@@ -6,7 +6,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { parsePairingCode } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { PairingOffer } from '../src/transport/types'
+import type { PairingOffer, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
@@ -38,22 +38,35 @@ export default function PairConfirmScreen() {
     if (!offer) return
     setStatus('connecting')
     let client: ReturnType<typeof connect> | null = null
+
+    // Why: split the try/catch around the network call vs the local save
+    // so a Keychain or AsyncStorage failure doesn't masquerade as a
+    // "Cannot connect" error.
+    let response: RpcResponse
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64)
-      const response = await client.sendRequest('status.get')
+      response = await client.sendRequest('status.get')
       client.close()
       client = null
+    } catch (err) {
+      console.warn('[pair-confirm] connect failed', err)
+      setStatus('error')
+      setErrorMessage('Cannot connect — check that your computer is on the same network')
+      client?.close()
+      return
+    }
 
-      if (!response.ok) {
-        setStatus('error')
-        setErrorMessage(
-          response.error.code === 'unauthorized'
-            ? 'Authentication failed — token may be expired'
-            : `Server error: ${response.error.message}`
-        )
-        return
-      }
+    if (!response.ok) {
+      setStatus('error')
+      setErrorMessage(
+        response.error.code === 'unauthorized'
+          ? 'Authentication failed — token may be expired'
+          : `Server error: ${response.error.message}`
+      )
+      return
+    }
 
+    try {
       const hostId = `host-${Date.now()}`
       const hostName = await getNextHostName()
       await saveHost({
@@ -65,11 +78,12 @@ export default function PairConfirmScreen() {
         lastConnected: Date.now()
       })
       router.replace(`/h/${hostId}`)
-    } catch {
+    } catch (err) {
+      console.warn('[pair-confirm] save failed', err)
       setStatus('error')
-      setErrorMessage('Cannot connect — check that your computer is on the same network')
-    } finally {
-      client?.close()
+      setErrorMessage(
+        `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
+      )
     }
   }
 
