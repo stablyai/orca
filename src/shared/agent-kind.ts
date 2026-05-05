@@ -1,8 +1,7 @@
 // Mapping from the renderer's `TuiAgent` union (every agent Orca knows how
-// to launch) to the closed `agentKindSchema` enum on telemetry events. The
-// telemetry enum is a deliberately smaller set — anything not enumerated
-// maps to `'other'` so dashboards can spot interest in an agent before its
-// slot is added rather than dropping the event.
+// to launch) to the closed `agentKindSchema` enum on telemetry events. Every
+// shipped agent maps to a concrete telemetry value so dashboards can
+// distinguish launch interest instead of collapsing the long tail to `other`.
 //
 // Lives in `src/shared/` (not the renderer) because main-side telemetry
 // emission (`agent_started` from the `pty:spawn` IPC handler) needs the
@@ -12,23 +11,35 @@
 import type { AgentKind } from './telemetry-events'
 import type { TuiAgent } from './types'
 
+type ConcreteAgentKind = Exclude<AgentKind, 'other'>
+
+const TUI_AGENT_KIND_BY_AGENT = {
+  claude: 'claude-code',
+  codex: 'codex',
+  autohand: 'autohand',
+  opencode: 'opencode',
+  pi: 'pi',
+  gemini: 'gemini',
+  aider: 'aider',
+  goose: 'goose',
+  amp: 'amp',
+  kilo: 'kilo',
+  kiro: 'kiro',
+  crush: 'crush',
+  aug: 'aug',
+  cline: 'cline',
+  codebuff: 'codebuff',
+  continue: 'continue',
+  cursor: 'cursor',
+  droid: 'droid',
+  kimi: 'kimi',
+  'mistral-vibe': 'mistral-vibe',
+  'qwen-code': 'qwen-code',
+  rovo: 'rovo',
+  hermes: 'hermes',
+  copilot: 'copilot'
+} satisfies Record<TuiAgent, ConcreteAgentKind>
+
 export function tuiAgentToAgentKind(agent: TuiAgent): AgentKind {
-  switch (agent) {
-    case 'claude':
-      return 'claude-code'
-    case 'codex':
-      return 'codex'
-    case 'copilot':
-      return 'copilot'
-    case 'gemini':
-      return 'gemini'
-    case 'cursor':
-      return 'cursor'
-    case 'opencode':
-      return 'opencode'
-    case 'aider':
-      return 'aider'
-    default:
-      return 'other'
-  }
+  return TUI_AGENT_KIND_BY_AGENT[agent]
 }

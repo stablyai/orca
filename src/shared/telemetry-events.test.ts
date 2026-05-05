@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_KIND_VALUES,
   agentKindSchema,
   commonPropsSchema,
   errorClassSchema,
@@ -189,9 +190,9 @@ describe('commonPropsSchema', () => {
 
 describe('exported enum schemas', () => {
   it('agentKindSchema accepts the known product IDs', () => {
-    expect(agentKindSchema.safeParse('claude-code').success).toBe(true)
-    expect(agentKindSchema.safeParse('codex').success).toBe(true)
-    expect(agentKindSchema.safeParse('other').success).toBe(true)
+    for (const kind of AGENT_KIND_VALUES) {
+      expect(agentKindSchema.safeParse(kind).success).toBe(true)
+    }
   })
 
   it('errorClassSchema rejects novel classes', () => {

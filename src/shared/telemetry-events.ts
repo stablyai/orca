@@ -16,23 +16,40 @@ import { z } from 'zod'
 
 // ── Shared property enums ───────────────────────────────────────────────
 
-// Mirrors the detectable agents in `src/shared/agent-detection.ts`
-// (`AGENT_NAMES`), with one deliberate shift: `claude` in AGENT_NAMES ↔
-// `claude-code` here (product, not CLI string) so dashboards read cleanly.
+// Mirrors the shipped `TuiAgent` launch surface, with one deliberate shift:
+// `claude` in settings/launch state ↔ `claude-code` here (product, not CLI
+// string) so dashboards read cleanly.
 //
-// Enum values are limited to agents that have a real emit path today. Adding
-// a new agent is additive-safe — extend this enum when the call site that
-// would emit it lands, not in anticipation.
-export const agentKindSchema = z.enum([
+// `other` remains as a telemetry escape hatch, but project-owned TuiAgents
+// should map to concrete values; see `tuiAgentToAgentKind`.
+export const AGENT_KIND_VALUES = [
   'claude-code',
   'codex',
-  'gemini',
-  'copilot',
-  'cursor',
+  'autohand',
   'opencode',
+  'pi',
+  'gemini',
   'aider',
+  'goose',
+  'amp',
+  'kilo',
+  'kiro',
+  'crush',
+  'aug',
+  'cline',
+  'codebuff',
+  'continue',
+  'cursor',
+  'droid',
+  'kimi',
+  'mistral-vibe',
+  'qwen-code',
+  'rovo',
+  'hermes',
+  'copilot',
   'other'
-])
+] as const
+export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
 // Trimmed to the two values Orca's PTY-typed-command launch architecture can
