@@ -119,7 +119,10 @@ export function MobilePane(): React.JSX.Element {
       return
     }
     try {
-      await navigator.clipboard.writeText(pairingUrl)
+      // Why: Electron renderer's navigator.clipboard fails in some contexts
+      // (no transient activation, non-secure context). Use the main-process
+      // IPC clipboard which the rest of the app uses everywhere.
+      await window.api.ui.writeClipboardText(pairingUrl)
       setCodeCopied(true)
       setTimeout(() => setCodeCopied(false), 2000)
     } catch {
