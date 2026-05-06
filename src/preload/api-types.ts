@@ -56,6 +56,7 @@ import type {
   SearchResult,
   StatsSummary,
   MemorySnapshot,
+  TuiAgent,
   UpdateStatus,
   Worktree,
   WorktreeMeta,
@@ -759,11 +760,7 @@ export type PreloadApi = {
   sidekick: {
     import: () => Promise<CustomSidekick | null>
     importPetBundle: () => Promise<CustomSidekick | null>
-    read: (
-      id: string,
-      fileName: string,
-      kind?: 'image' | 'bundle'
-    ) => Promise<ArrayBuffer | null>
+    read: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<ArrayBuffer | null>
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
   }
   browser: BrowserApi
@@ -922,6 +919,14 @@ export type PreloadApi = {
       message: string
       connectionId?: string
     }) => Promise<{ success: boolean; error?: string }>
+    generateCommitMessage: (args: {
+      worktreePath: string
+      agentId: TuiAgent
+      model: string
+      thinkingLevel?: string
+      customPrompt?: string
+      connectionId?: string
+    }) => Promise<{ success: true; message: string } | { success: false; error: string }>
     stage: (args: {
       worktreePath: string
       filePath: string

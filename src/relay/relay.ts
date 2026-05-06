@@ -22,6 +22,7 @@ import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
+import { AgentExecHandler } from './agent-exec-handler'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
@@ -200,6 +201,9 @@ function main(): void {
 
   const _portScanHandler = new PortScanHandler(dispatcher)
   void _portScanHandler
+
+  const _agentExecHandler = new AgentExecHandler(dispatcher)
+  void _agentExecHandler
 
   // ── Socket server for reconnection ──────────────────────────────────
   // Why: the relay's original stdin/stdout is tied to the SSH exec channel.

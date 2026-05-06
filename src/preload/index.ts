@@ -1525,6 +1525,14 @@ const api = {
       message: string
       connectionId?: string
     }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+    generateCommitMessage: (args: {
+      worktreePath: string
+      agentId: string
+      model: string
+      thinkingLevel?: string
+      customPrompt?: string
+      connectionId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
     stage: (args: {
       worktreePath: string
       filePath: string

@@ -36,6 +36,7 @@ import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
+import { CommitMessageAiPane, COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './CommitMessageAiPane'
 import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
@@ -59,6 +60,7 @@ type SettingsNavTarget =
   | 'accounts'
   | 'browser'
   | 'git'
+  | 'commit-message-ai'
   | 'appearance'
   | 'terminal'
   | 'notifications'
@@ -360,6 +362,13 @@ function Settings(): React.JSX.Element {
         description: 'Branch naming and local ref behavior.',
         icon: GitBranch,
         searchEntries: GIT_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'commit-message-ai',
+        title: 'AI Commit Messages',
+        description: 'Generate commit messages from staged changes using a local agent.',
+        icon: Bot,
+        searchEntries: COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
       },
       {
         id: 'appearance',
@@ -664,6 +673,15 @@ function Settings(): React.JSX.Element {
                     updateSettings={updateSettings}
                     displayedGitUsername={displayedGitUsername}
                   />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="commit-message-ai"
+                  title="AI Commit Messages"
+                  description="Generate commit messages from staged changes using a local agent."
+                  searchEntries={COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES}
+                >
+                  <CommitMessageAiPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection

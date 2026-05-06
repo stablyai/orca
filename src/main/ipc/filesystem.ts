@@ -37,6 +37,13 @@ import {
   getBranchCompare,
   getBranchDiff
 } from '../git/status'
+import {
+  generateCommitMessageLocal,
+  type GenerateCommitMessageParams,
+  type GenerateCommitMessageResult
+} from '../git/commit-message-generator'
+import { COMMIT_MESSAGE_AGENT_SPECS } from '../../shared/commit-message-agent-spec'
+import type { TuiAgent } from '../../shared/types'
 import { getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
@@ -525,6 +532,49 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return commitChanges(worktreePath, args.message)
+    }
+  )
+
+  ipcMain.handle(
+    'git:generateCommitMessage',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        agentId: string
+        model: string
+        thinkingLevel?: string
+        customPrompt?: string
+        connectionId?: string
+      }
+    ): Promise<GenerateCommitMessageResult> => {
+      // Why: validate at the IPC boundary so unknown agents fail fast with a
+      // legible error instead of trying to spawn a missing binary.
+      if (!args.agentId || !(args.agentId in COMMIT_MESSAGE_AGENT_SPECS)) {
+        return {
+          success: false,
+          error: `Agent "${args.agentId}" does not support AI commit messages.`
+        }
+      }
+      const baseRequest: GenerateCommitMessageParams = {
+        worktreePath: args.worktreePath,
+        agentId: args.agentId as TuiAgent,
+        model: args.model,
+        thinkingLevel: args.thinkingLevel,
+        customPrompt: args.customPrompt
+      }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return {
+            success: false,
+            error: `No git provider for connection "${args.connectionId}"`
+          }
+        }
+        return provider.generateCommitMessage(baseRequest)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return generateCommitMessageLocal({ ...baseRequest, worktreePath })
     }
   )
 

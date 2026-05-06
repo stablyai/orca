@@ -69,8 +69,13 @@ const baseProps = {
   commitMessage: 'feat: add commit area',
   commitError: null as string | null,
   isCommitting: false,
+  aiEnabled: false,
+  aiAgentConfigured: false,
+  isGenerating: false,
+  generateError: null as string | null,
   onCommitMessageChange: vi.fn(),
-  onCommitSuccess: vi.fn()
+  onCommitSuccess: vi.fn(),
+  onGenerate: vi.fn()
 }
 
 describe('CommitArea', () => {

@@ -7,7 +7,8 @@ import type {
   GitConflictOperation,
   GitWorktreeInfo,
   SearchOptions,
-  SearchResult
+  SearchResult,
+  TuiAgent
 } from '../../shared/types'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
@@ -130,9 +131,24 @@ export type IFilesystemProvider = {
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
+export type GenerateCommitMessageRequest = {
+  worktreePath: string
+  agentId: TuiAgent
+  model: string
+  thinkingLevel?: string
+  customPrompt?: string
+}
+
+export type GenerateCommitMessageResponse =
+  | { success: true; message: string }
+  | { success: false; error: string }
+
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  generateCommitMessage(
+    request: GenerateCommitMessageRequest
+  ): Promise<GenerateCommitMessageResponse>
   getDiff(
     worktreePath: string,
     filePath: string,

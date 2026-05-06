@@ -1232,6 +1232,10 @@ export type GlobalSettings = {
    *  landed won't have the key; `getDefaultSettings()` hydrates the empty
    *  default via the persistence merge. */
   githubProjects?: GitHubProjectSettings
+  /** AI-generated commit messages: agent + model + per-model thinking +
+   *  user-customizable prompt suffix. Optional so existing profiles do not
+   *  require a migration step before this feature lands. */
+  commitMessageAi?: CommitMessageAiSettings
   /** Anonymous product-telemetry state. Optional because the one-shot
    *  migration in `Store.load()` is what populates it on first boot of the
    *  telemetry release; before migration runs, the field is absent. After
@@ -1258,6 +1262,17 @@ export type GlobalSettings = {
      *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
   }
+}
+
+export type CommitMessageAiSettings = {
+  enabled: boolean
+  agentId: TuiAgent | null
+  /** Per-agent: switching agents preserves the previously-picked model. */
+  selectedModelByAgent: Partial<Record<TuiAgent, string>>
+  /** Per-model: thinking effort depends on the model, not the agent. Keyed by model id. */
+  selectedThinkingByModel: Record<string, string>
+  /** Optional user-provided suffix appended to the base prompt (style overrides, etc.). */
+  customPrompt: string
 }
 
 export type GhosttyImportPreview = {

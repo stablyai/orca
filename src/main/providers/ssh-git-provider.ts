@@ -1,5 +1,9 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IGitProvider } from './types'
+import type {
+  GenerateCommitMessageRequest,
+  GenerateCommitMessageResponse,
+  IGitProvider
+} from './types'
 import hostedGitInfo from 'hosted-git-info'
 import type {
   GitStatusResult,
@@ -8,6 +12,25 @@ import type {
   GitConflictOperation,
   GitWorktreeInfo
 } from '../../shared/types'
+import {
+  getCommitMessageAgentSpec,
+  getCommitMessageModel
+} from '../../shared/commit-message-agent-spec'
+import {
+  buildCommitPrompt,
+  cleanGeneratedCommitMessage,
+  truncateDiffForPrompt
+} from '../../shared/commit-message-prompt'
+
+const SSH_GENERATION_TIMEOUT_MS = 60_000
+
+type RemoteExecResult = {
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  timedOut: boolean
+  spawnError?: string
+}
 
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
@@ -34,6 +57,97 @@ export class SshGitProvider implements IGitProvider {
       worktreePath,
       message
     })) as { success: boolean; error?: string }
+  }
+
+  async generateCommitMessage(
+    request: GenerateCommitMessageRequest
+  ): Promise<GenerateCommitMessageResponse> {
+    const spec = getCommitMessageAgentSpec(request.agentId)
+    if (!spec) {
+      return {
+        success: false,
+        error: `Agent "${request.agentId}" does not support AI commit messages.`
+      }
+    }
+    const model = getCommitMessageModel(request.agentId, request.model)
+    if (!model) {
+      return {
+        success: false,
+        error: `Model "${request.model}" is not available for ${spec.label}.`
+      }
+    }
+    if (request.thinkingLevel) {
+      if (!model.thinkingLevels) {
+        return {
+          success: false,
+          error: `Model "${model.label}" does not support a thinking effort level.`
+        }
+      }
+      if (!model.thinkingLevels.some((l) => l.id === request.thinkingLevel)) {
+        return {
+          success: false,
+          error: `Thinking level "${request.thinkingLevel}" is not valid for ${model.label}.`
+        }
+      }
+    }
+
+    let diff: string
+    try {
+      const diffResult = await this.exec(['diff', '--cached', '--no-color'], request.worktreePath)
+      diff = diffResult.stdout
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to read staged diff: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+    if (!diff.trim()) {
+      return { success: false, error: 'No staged changes to summarize.' }
+    }
+
+    const prompt = buildCommitPrompt(truncateDiffForPrompt(diff), request.customPrompt ?? '')
+    const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
+    const args = spec.buildArgs({
+      prompt: argvPrompt,
+      model: request.model,
+      thinkingLevel: request.thinkingLevel
+    })
+    const stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
+
+    const result = (await this.mux.request('agent.execNonInteractive', {
+      binary: spec.binary,
+      args,
+      cwd: request.worktreePath,
+      stdin: stdinPayload,
+      timeoutMs: SSH_GENERATION_TIMEOUT_MS
+    })) as RemoteExecResult
+
+    if (result.spawnError) {
+      // Why: ENOENT on the remote PATH is the most common failure here, so
+      // surface a concrete install hint rather than the bare "ENOENT" line.
+      if (/ENOENT/i.test(result.spawnError)) {
+        return {
+          success: false,
+          error: `${spec.binary} not found on the remote PATH. Install ${spec.label} on the SSH host.`
+        }
+      }
+      return { success: false, error: result.spawnError }
+    }
+    if (result.timedOut) {
+      return {
+        success: false,
+        error: `Generation timed out after ${SSH_GENERATION_TIMEOUT_MS / 1000}s.`
+      }
+    }
+    if (result.exitCode !== 0) {
+      const detail = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode}`
+      return { success: false, error: `${spec.label} failed: ${detail}` }
+    }
+    const cleaned = cleanGeneratedCommitMessage(result.stdout)
+    if (!cleaned) {
+      return { success: false, error: `${spec.label} returned an empty message.` }
+    }
+    return { success: true, message: cleaned }
   }
 
   async getDiff(

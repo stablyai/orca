@@ -6,6 +6,7 @@ import {
   Plus,
   RefreshCw,
   Settings2,
+  Sparkles,
   Undo2,
   FileEdit,
   FileMinus,
@@ -70,8 +71,13 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
-  PRInfo
+  PRInfo,
+  TuiAgent
 } from '../../../../shared/types'
+import {
+  getCommitMessageAgentSpec,
+  getCommitMessageModel
+} from '../../../../shared/commit-message-agent-spec'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 
 type SourceControlScope = 'all' | 'uncommitted'
@@ -225,6 +231,16 @@ function SourceControlInner(): React.JSX.Element {
     {}
   )
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  // Why: parallel state to commit. Same per-worktree shape so navigating between
+  // worktrees mid-generation never silently cancels the in-flight request.
+  const generateInFlightRef = useRef<Record<string, boolean>>({})
+  const [generateInFlightByWorktree, setGenerateInFlightByWorktree] = useState<
+    Record<string, boolean>
+  >({})
+  const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
+  const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
+  const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
@@ -394,10 +410,17 @@ function SourceControlInner(): React.JSX.Element {
     setCommitDrafts((prev) => pruneRecord(prev))
     setCommitErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
+    setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
+    setGenerateErrors((prev) => pruneRecord(prev))
     // Refs don't need setState — mutate in place to drop stale keys.
     for (const key of Object.keys(commitInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
         delete commitInFlightRef.current[key]
+      }
+    }
+    for (const key of Object.keys(generateInFlightRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete generateInFlightRef.current[key]
       }
     }
   }, [worktreeMap])
@@ -502,6 +525,83 @@ function SourceControlInner(): React.JSX.Element {
     setGitStatus,
     worktreePath
   ])
+
+  const handleGenerate = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+    if (generateInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    if (!commitMessageAi?.enabled || !commitMessageAi.agentId) {
+      return
+    }
+    const spec = getCommitMessageAgentSpec(commitMessageAi.agentId)
+    if (!spec) {
+      setGenerateErrors((prev) => ({
+        ...prev,
+        [activeWorktreeId]: `Agent "${commitMessageAi.agentId}" is no longer supported.`
+      }))
+      return
+    }
+    const modelId =
+      commitMessageAi.selectedModelByAgent[commitMessageAi.agentId] ?? spec.defaultModelId
+    const model = getCommitMessageModel(commitMessageAi.agentId, modelId)
+    if (!model) {
+      setGenerateErrors((prev) => ({
+        ...prev,
+        [activeWorktreeId]: `Model "${modelId}" is no longer available for ${spec.label}.`
+      }))
+      return
+    }
+    const thinkingLevel = model.thinkingLevels
+      ? (commitMessageAi.selectedThinkingByModel[model.id] ?? model.defaultThinkingLevel)
+      : undefined
+
+    generateInFlightRef.current[activeWorktreeId] = true
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+    try {
+      const result = (await window.api.git.generateCommitMessage({
+        worktreePath,
+        agentId: commitMessageAi.agentId as TuiAgent,
+        model: model.id,
+        thinkingLevel,
+        customPrompt: commitMessageAi.customPrompt,
+        connectionId
+      })) as { success: true; message: string } | { success: false; error: string }
+
+      if (!result.success) {
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: result.error
+        }))
+        return
+      }
+
+      // Why: race protection — the user may have started typing into the
+      // textarea while the agent was running. In that case we silently drop
+      // the generated message rather than overwrite their in-progress edits.
+      setCommitDrafts((prev) => {
+        const current = prev[activeWorktreeId]
+        if (current && current.length > 0) {
+          return prev
+        }
+        return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
+      })
+      setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+    } catch (error) {
+      setGenerateErrors((prev) => ({
+        ...prev,
+        [activeWorktreeId]:
+          error instanceof Error ? error.message : 'Failed to generate commit message'
+      }))
+    } finally {
+      setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      generateInFlightRef.current[activeWorktreeId] = false
+    }
+  }, [activeWorktreeId, commitMessageAi, worktreePath])
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
@@ -1144,6 +1244,12 @@ function SourceControlInner(): React.JSX.Element {
               commitMessage={commitMessage}
               commitError={commitError}
               isCommitting={isCommitting}
+              aiEnabled={commitMessageAi?.enabled === true}
+              aiAgentConfigured={
+                commitMessageAi?.enabled === true && commitMessageAi.agentId !== null
+              }
+              isGenerating={isGenerating}
+              generateError={generateError}
               onCommitMessageChange={(value) => {
                 if (!activeWorktreeId) {
                   return
@@ -1154,6 +1260,9 @@ function SourceControlInner(): React.JSX.Element {
               }}
               onCommitSuccess={() => {
                 void handleCommit()
+              }}
+              onGenerate={() => {
+                void handleGenerate()
               }}
             />
           )}
@@ -1414,8 +1523,13 @@ type CommitAreaProps = {
   commitMessage: string
   commitError: string | null
   isCommitting: boolean
+  aiEnabled: boolean
+  aiAgentConfigured: boolean
+  isGenerating: boolean
+  generateError: string | null
   onCommitMessageChange: (message: string) => void
   onCommitSuccess: () => void
+  onGenerate: () => void
 }
 
 export function CommitArea({
@@ -1424,8 +1538,13 @@ export function CommitArea({
   commitMessage,
   commitError,
   isCommitting,
+  aiEnabled,
+  aiAgentConfigured,
+  isGenerating,
+  generateError,
   onCommitMessageChange,
-  onCommitSuccess
+  onCommitSuccess,
+  onGenerate
 }: CommitAreaProps): React.JSX.Element {
   // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
@@ -1451,6 +1570,30 @@ export function CommitArea({
     disabledReason = 'Enter a commit message to commit'
   }
 
+  // Why: only render the Generate button when the user has opted into the
+  // feature. Mounting a perma-disabled button would leak space and add noise
+  // for users who never plan to use AI commit messages.
+  const showGenerate = aiEnabled
+  let generateDisabledReason: string | undefined
+  if (isGenerating) {
+    generateDisabledReason = 'Generating commit message…'
+  } else if (isCommitting) {
+    generateDisabledReason = 'Commit in progress…'
+  } else if (!aiAgentConfigured) {
+    generateDisabledReason = 'Pick an agent in Settings → AI Commit Messages.'
+  } else if (stagedCount === 0) {
+    generateDisabledReason = 'Stage at least one file to generate a message.'
+  } else if (hasMessage) {
+    generateDisabledReason = 'Clear the message to regenerate.'
+  }
+  const isGenerateDisabled =
+    !aiAgentConfigured ||
+    isGenerating ||
+    isCommitting ||
+    stagedCount === 0 ||
+    hasMessage ||
+    hasUnresolvedConflicts
+
   return (
     <div className="px-3 pb-2">
       <textarea
@@ -1459,9 +1602,33 @@ export function CommitArea({
         onChange={(e) => onCommitMessageChange(e.target.value)}
         placeholder="Message"
         aria-label="Commit message"
-        aria-describedby={commitError ? 'commit-area-error' : undefined}
+        aria-describedby={
+          commitError
+            ? 'commit-area-error'
+            : generateError
+              ? 'commit-area-generate-error'
+              : undefined
+        }
         className="mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
       />
+      {showGenerate && (
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          disabled={isGenerateDisabled}
+          onClick={() => onGenerate()}
+          className="mt-1 w-full gap-1 px-3 text-[11px]"
+          title={generateDisabledReason}
+        >
+          {isGenerating ? (
+            <RefreshCw className="size-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="size-3.5" />
+          )}
+          {isGenerating ? 'Generating…' : 'Generate with AI'}
+        </Button>
+      )}
       {/* Why: match the "Squash and merge" button in PRActions
           (size="xs", px-3 text-[11px]) so the sidebar has a consistent
           action-button shape across Source Control and Checks. */}
@@ -1470,7 +1637,7 @@ export function CommitArea({
         size="xs"
         disabled={isCommitDisabled}
         onClick={() => onCommitSuccess()}
-        className="w-full px-3 text-[11px]"
+        className="mt-1 w-full px-3 text-[11px]"
         title={disabledReason}
       >
         {isCommitting && <RefreshCw className="size-3.5 animate-spin" />}
@@ -1487,6 +1654,16 @@ export function CommitArea({
           className="mt-1 text-[11px] text-destructive"
         >
           {commitError}
+        </p>
+      )}
+      {generateError && (
+        <p
+          id="commit-area-generate-error"
+          role="alert"
+          aria-live="polite"
+          className="mt-1 text-[11px] text-destructive"
+        >
+          {generateError}
         </p>
       )}
     </div>

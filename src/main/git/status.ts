@@ -659,6 +659,18 @@ export async function unstageFile(worktreePath: string, filePath: string): Promi
   await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
 }
 
+/**
+ * Returns the full staged diff for the worktree (`git diff --cached --no-color`).
+ * Used by AI commit-message generation to feed the agent the changes about to be
+ * committed. `--no-color` strips ANSI so the prompt stays clean.
+ */
+export async function getStagedDiff(worktreePath: string): Promise<string> {
+  const { stdout } = await gitExecFileAsync(['diff', '--cached', '--no-color'], {
+    cwd: worktreePath
+  })
+  return stdout
+}
+
 export async function commitChanges(
   worktreePath: string,
   message: string

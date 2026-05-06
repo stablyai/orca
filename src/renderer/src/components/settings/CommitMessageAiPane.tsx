@@ -1,0 +1,395 @@
+import { useMemo } from 'react'
+import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
+import {
+  COMMIT_MESSAGE_AGENT_SPECS,
+  DEFAULT_COMMIT_MESSAGE_AGENT_ID,
+  getCommitMessageAgentSpec,
+  getCommitMessageModel,
+  listCommitMessageAgentIds,
+  type CommitMessageAgentSpec,
+  type CommitMessageModel
+} from '../../../../shared/commit-message-agent-spec'
+import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { Label } from '../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { useAppStore } from '../../store'
+import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
+import { SearchableSetting } from './SearchableSetting'
+import { matchesSettingsSearch } from './settings-search'
+
+export { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES }
+
+type CommitMessageAiPaneProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}
+
+const EMPTY_SETTINGS: CommitMessageAiSettings = {
+  enabled: false,
+  agentId: null,
+  selectedModelByAgent: {},
+  selectedThinkingByModel: {},
+  customPrompt: ''
+}
+
+function readSettings(settings: GlobalSettings): CommitMessageAiSettings {
+  return settings.commitMessageAi ?? EMPTY_SETTINGS
+}
+
+function agentLabel(agentId: TuiAgent, spec: CommitMessageAgentSpec): string {
+  return AGENT_CATALOG.find((a) => a.id === agentId)?.label ?? spec.label
+}
+
+function resolveSelectedModel(
+  config: CommitMessageAiSettings,
+  spec: CommitMessageAgentSpec
+): CommitMessageModel {
+  const persisted = config.selectedModelByAgent[spec.id]
+  if (persisted) {
+    const found = spec.models.find((m) => m.id === persisted)
+    if (found) {
+      return found
+    }
+  }
+  // Why: defaultModelId is guaranteed to exist in spec.models by construction.
+  return spec.models.find((m) => m.id === spec.defaultModelId) ?? spec.models[0]
+}
+
+function resolveSelectedThinking(
+  config: CommitMessageAiSettings,
+  model: CommitMessageModel
+): string | undefined {
+  if (!model.thinkingLevels) {
+    return undefined
+  }
+  const persisted = config.selectedThinkingByModel[model.id]
+  if (persisted && model.thinkingLevels.some((l) => l.id === persisted)) {
+    return persisted
+  }
+  return model.defaultThinkingLevel
+}
+
+export function CommitMessageAiPane({
+  settings,
+  updateSettings
+}: CommitMessageAiPaneProps): React.JSX.Element {
+  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const config = readSettings(settings)
+
+  const agentIds = useMemo(listCommitMessageAgentIds, [])
+  const activeAgentId = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+  const activeSpec = getCommitMessageAgentSpec(activeAgentId)
+  const activeModel = activeSpec ? resolveSelectedModel(config, activeSpec) : null
+  const activeThinking = activeModel ? resolveSelectedThinking(config, activeModel) : undefined
+
+  const writeConfig = (patch: Partial<CommitMessageAiSettings>): void => {
+    updateSettings({ commitMessageAi: { ...config, ...patch } })
+  }
+
+  const onToggleEnabled = (): void => {
+    const next = !config.enabled
+    if (!next) {
+      writeConfig({ enabled: false })
+      return
+    }
+    // Why: when the user enables the feature for the first time, hydrate the
+    // agent / model / thinking choices from the spec defaults so the Generate
+    // button works immediately without forcing them to pick first.
+    const seedAgentId = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+    const seedSpec = getCommitMessageAgentSpec(seedAgentId)
+    const seedModel = seedSpec ? resolveSelectedModel(config, seedSpec) : null
+    const seedThinking = seedModel ? resolveSelectedThinking(config, seedModel) : undefined
+
+    const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
+    if (seedSpec && !nextSelectedModelByAgent[seedAgentId]) {
+      nextSelectedModelByAgent[seedAgentId] = seedSpec.defaultModelId
+    }
+    const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
+    if (seedModel && seedThinking && !nextSelectedThinkingByModel[seedModel.id]) {
+      nextSelectedThinkingByModel[seedModel.id] = seedThinking
+    }
+    writeConfig({
+      enabled: true,
+      agentId: seedAgentId,
+      selectedModelByAgent: nextSelectedModelByAgent,
+      selectedThinkingByModel: nextSelectedThinkingByModel
+    })
+  }
+
+  const onAgentChange = (newAgentId: string): void => {
+    const spec = getCommitMessageAgentSpec(newAgentId as TuiAgent)
+    if (!spec) {
+      return
+    }
+    const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
+    if (!nextSelectedModelByAgent[spec.id]) {
+      nextSelectedModelByAgent[spec.id] = spec.defaultModelId
+    }
+    const newModel = resolveSelectedModel({ ...config, agentId: spec.id }, spec)
+    const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
+    if (
+      newModel.thinkingLevels &&
+      newModel.defaultThinkingLevel &&
+      !nextSelectedThinkingByModel[newModel.id]
+    ) {
+      nextSelectedThinkingByModel[newModel.id] = newModel.defaultThinkingLevel
+    }
+    writeConfig({
+      agentId: spec.id,
+      selectedModelByAgent: nextSelectedModelByAgent,
+      selectedThinkingByModel: nextSelectedThinkingByModel
+    })
+  }
+
+  const onModelChange = (newModelId: string): void => {
+    if (!activeSpec) {
+      return
+    }
+    const model = getCommitMessageModel(activeSpec.id, newModelId)
+    if (!model) {
+      return
+    }
+    const nextSelectedModelByAgent = {
+      ...config.selectedModelByAgent,
+      [activeSpec.id]: model.id
+    }
+    const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
+    if (
+      model.thinkingLevels &&
+      model.defaultThinkingLevel &&
+      !nextSelectedThinkingByModel[model.id]
+    ) {
+      nextSelectedThinkingByModel[model.id] = model.defaultThinkingLevel
+    }
+    writeConfig({
+      selectedModelByAgent: nextSelectedModelByAgent,
+      selectedThinkingByModel: nextSelectedThinkingByModel
+    })
+  }
+
+  const onThinkingChange = (newLevelId: string): void => {
+    if (!activeModel) {
+      return
+    }
+    writeConfig({
+      selectedThinkingByModel: {
+        ...config.selectedThinkingByModel,
+        [activeModel.id]: newLevelId
+      }
+    })
+  }
+
+  const onCustomPromptChange = (value: string): void => {
+    writeConfig({ customPrompt: value })
+  }
+
+  const sections: React.ReactNode[] = []
+
+  if (
+    matchesSettingsSearch(searchQuery, {
+      title: 'AI Commit Messages',
+      description: 'Generate commit messages from staged changes using a local agent.',
+      keywords: ['ai', 'commit', 'message', 'generate', 'agent']
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="enabled"
+        title="AI Commit Messages"
+        description="Generate commit messages from staged changes using a local agent."
+        keywords={['ai', 'commit', 'message', 'generate', 'agent']}
+        className="flex items-center justify-between gap-4 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Enable AI commit messages</Label>
+          <p className="text-xs text-muted-foreground">
+            Adds a Generate button to the Source Control panel that drafts a commit message from
+            your staged changes. Runs the agent CLI locally (or on the SSH host when working
+            remotely) and waits for the response.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={config.enabled}
+          onClick={onToggleEnabled}
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            config.enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              config.enabled ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </SearchableSetting>
+    )
+  }
+
+  if (
+    config.enabled &&
+    matchesSettingsSearch(searchQuery, {
+      title: 'Agent',
+      description: 'Which agent to invoke when generating a commit message.',
+      keywords: ['agent', 'claude', 'codex']
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="agent"
+        title="Agent"
+        description="Which agent to invoke when generating a commit message."
+        keywords={['agent', 'claude', 'codex']}
+        className="flex items-center justify-between gap-4 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Agent</Label>
+          <p className="text-xs text-muted-foreground">
+            The CLI Orca runs in non-interactive mode. The binary must be installed on whichever
+            host you commit from.
+          </p>
+        </div>
+        <Select value={activeAgentId} onValueChange={onAgentChange}>
+          <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {agentIds.map((id) => {
+              const spec = COMMIT_MESSAGE_AGENT_SPECS[id]
+              if (!spec) {
+                return null
+              }
+              return (
+                <SelectItem key={id} value={id}>
+                  <span className="flex items-center gap-2">
+                    <AgentIcon agent={id} size={14} />
+                    <span>{agentLabel(id, spec)}</span>
+                  </span>
+                </SelectItem>
+              )
+            })}
+          </SelectContent>
+        </Select>
+      </SearchableSetting>
+    )
+  }
+
+  if (
+    config.enabled &&
+    activeSpec &&
+    activeModel &&
+    matchesSettingsSearch(searchQuery, {
+      title: 'Model',
+      description: 'Which model the selected agent uses to generate the message.',
+      keywords: ['model', 'haiku', 'sonnet', 'opus', 'gpt']
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="model"
+        title="Model"
+        description="Which model the selected agent uses to generate the message."
+        keywords={['model', 'haiku', 'sonnet', 'opus', 'gpt']}
+        className="flex items-center justify-between gap-4 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Model</Label>
+          <p className="text-xs text-muted-foreground">
+            Smaller models default to lower latency and cost. Pick a larger one if the diffs you
+            review tend to need more reasoning.
+          </p>
+        </div>
+        <Select value={activeModel.id} onValueChange={onModelChange}>
+          <SelectTrigger size="sm" className="h-8 text-xs w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {activeSpec.models.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SearchableSetting>
+    )
+  }
+
+  if (
+    config.enabled &&
+    activeModel?.thinkingLevels &&
+    activeThinking &&
+    matchesSettingsSearch(searchQuery, {
+      title: 'Thinking effort',
+      description: 'Reasoning effort level for the selected model. Higher levels are slower.',
+      keywords: ['thinking', 'effort', 'reasoning']
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="thinking"
+        title="Thinking effort"
+        description="Reasoning effort level for the selected model. Higher levels are slower."
+        keywords={['thinking', 'effort', 'reasoning']}
+        className="flex items-center justify-between gap-4 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Thinking effort</Label>
+          <p className="text-xs text-muted-foreground">
+            Higher effort produces more careful messages but takes longer and costs more tokens.
+          </p>
+        </div>
+        <Select value={activeThinking} onValueChange={onThinkingChange}>
+          <SelectTrigger size="sm" className="h-8 text-xs w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {activeModel.thinkingLevels.map((level) => (
+              <SelectItem key={level.id} value={level.id}>
+                {level.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SearchableSetting>
+    )
+  }
+
+  if (
+    config.enabled &&
+    matchesSettingsSearch(searchQuery, {
+      title: 'Custom prompt',
+      description:
+        'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
+      keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="custom-prompt"
+        title="Custom prompt"
+        description="Optional instructions appended to the base prompt (e.g. Conventional Commits style)."
+        keywords={['prompt', 'conventional commits', 'gitmoji', 'style']}
+        className="space-y-2 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label htmlFor="commit-message-ai-custom-prompt">Custom prompt</Label>
+          <p className="text-xs text-muted-foreground">
+            Appended verbatim to the base prompt. Use it to enforce Conventional Commits, gitmoji,
+            ticket prefixes, or any other style your team prefers.
+          </p>
+        </div>
+        <textarea
+          id="commit-message-ai-custom-prompt"
+          rows={4}
+          value={config.customPrompt}
+          onChange={(e) => onCustomPromptChange(e.target.value)}
+          placeholder="Use Conventional Commits format (feat:, fix:, ...). Reference the ticket key when present."
+          className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </SearchableSetting>
+    )
+  }
+
+  return <div className="space-y-4">{sections}</div>
+}
