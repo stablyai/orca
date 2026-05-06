@@ -269,7 +269,7 @@ export function CommitMessageAiPane({
           <Label>Agent</Label>
           <p className="text-xs text-muted-foreground">
             Which agent drafts your commit messages. Orca invokes its CLI in the background, so the
-            agent must be installed on the machine that hosts the worktree — your computer for local
+            agent must be installed on the machine that hosts the worktree - your computer for local
             worktrees, or the SSH host for remote ones.
           </p>
         </div>
@@ -329,7 +329,7 @@ export function CommitMessageAiPane({
               {CUSTOM_PROMPT_PLACEHOLDER}
             </code>{' '}
             where the prompt should be substituted (passed as a single argument). Omit it and the
-            prompt is piped via stdin instead — useful for CLIs like{' '}
+            prompt is piped via stdin instead - useful for CLIs like{' '}
             <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">claude -p</code>. Quoting
             is for grouping arguments only; we never invoke a shell, so{' '}
             <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">$VAR</code> and backticks
