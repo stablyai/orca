@@ -129,7 +129,13 @@ export default function PairScanScreen() {
     processingRef.current = false
   }
 
-  const containerPadding = { paddingTop: insets.top + spacing.sm }
+  // Why: bottom inset accounts for Android 3-button nav bars and iOS
+  // home-indicator areas that would otherwise overlap the 'Or paste
+  // pairing code' button at the bottom of the scan screen.
+  const containerPadding = {
+    paddingTop: insets.top + spacing.sm,
+    paddingBottom: insets.bottom + spacing.sm
+  }
 
   if (!permission) {
     return (
