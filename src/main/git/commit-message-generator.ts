@@ -56,16 +56,19 @@ export type GenerateCommitMessageParams = {
 /** Appends the Orca trailer if the message does not already include it. */
 export function applyOrcaAttribution(message: string, enabled: boolean): string {
   if (!enabled) {
-    return message
+    // Why: trim trailing whitespace even on the no-attribution path so a
+    // stray "\n" from the agent's output never reaches the textarea as a
+    // visible blank line.
+    return message.replace(/\s+$/, '')
   }
-  if (message.includes(ORCA_GIT_COMMIT_TRAILER)) {
-    return message
+  const stripped = message.replace(/\s+$/, '')
+  if (stripped.includes(ORCA_GIT_COMMIT_TRAILER)) {
+    return stripped
   }
   // Why: a blank line separates the trailer block from the body so `git
   // interpret-trailers` and most parsers treat it as a real trailer instead
-  // of a paragraph continuation. No trailing newline — that would surface
-  // as a blank line at the bottom of the commit textarea in the renderer.
-  return `${message.replace(/\s+$/, '')}\n\n${ORCA_GIT_COMMIT_TRAILER}`
+  // of a paragraph continuation.
+  return `${stripped}\n\n${ORCA_GIT_COMMIT_TRAILER}`
 }
 
 export type GenerateCommitMessageResult =
