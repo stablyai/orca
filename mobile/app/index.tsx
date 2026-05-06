@@ -23,11 +23,12 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
 import type { RpcClient } from '../src/transport/rpc-client'
-import { useAllHostClients, useCloseHost } from '../src/transport/client-context'
+import { useAllHostClients, useCloseHost, useForceReconnect } from '../src/transport/client-context'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
+import { StatusDot } from '../src/components/StatusDot'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ActionSheetModal } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
@@ -51,6 +52,24 @@ const STATUS_LABELS: Record<ConnectionState, string> = {
   reconnecting: 'Reconnecting…',
   handshaking: 'Connecting…',
   'auth-failed': 'Auth failed'
+}
+
+// Why: a few quick reconnects are normal (laptop wake, brief network blip).
+// After this many failed attempts in a row, the user almost certainly has
+// a real problem (wrong port, server down, network change), so escalate
+// the label and color so it's obvious something's wrong.
+const RECONNECT_FAILURE_THRESHOLD = 3
+
+function getStatusDisplay(
+  state: ConnectionState,
+  attempts: number
+): { label: string; isError: boolean } {
+  if (state === 'auth-failed') return { label: 'Auth failed', isError: true }
+  if (state === 'disconnected') return { label: 'Disconnected', isError: true }
+  if (state === 'reconnecting' && attempts >= RECONNECT_FAILURE_THRESHOLD) {
+    return { label: "Can't connect", isError: true }
+  }
+  return { label: STATUS_LABELS[state], isError: false }
 }
 
 type StatsSummary = {
@@ -199,6 +218,7 @@ export default function HomeScreen() {
   const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
+  const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
@@ -212,6 +232,7 @@ export default function HomeScreen() {
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const allClients = useAllHostClients(hostIds)
   const closeHostClient = useCloseHost()
+  const forceReconnectHost = useForceReconnect()
   const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
   useEffect(() => {
     allClientsRef.current = allClients.map((entry) => ({
@@ -294,6 +315,18 @@ export default function HomeScreen() {
   // Why: mirror per-host connection state into hostStates so existing
   // render code (status dots, connecting indicators) keeps working.
   useEffect(() => {
+    setHostAttempts((prev) => {
+      const next: Record<string, number> = { ...prev }
+      let changed = false
+      for (const entry of allClients) {
+        const a = entry.client.getReconnectAttempt()
+        if (next[entry.hostId] !== a) {
+          next[entry.hostId] = a
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
     setHostStates((prev) => {
       const next: Record<string, ConnectionState> = { ...prev }
       let changed = false
@@ -577,8 +610,10 @@ export default function HomeScreen() {
           ItemSeparatorComponent={CardGap}
           renderItem={({ item }) => {
             const state = hostStates[item.id] ?? 'connecting'
+            const attempts = hostAttempts[item.id] ?? 0
             const connected = state === 'connected'
             const info = worktreeInfo[item.id]
+            const status = getStatusDisplay(state, attempts)
             return (
               <Pressable
                 style={({ pressed }) => [styles.hostCard, pressed && styles.hostCardPressed]}
@@ -603,14 +638,11 @@ export default function HomeScreen() {
                     {item.name}
                   </Text>
                   <View style={styles.hostMeta}>
-                    <View
-                      style={[
-                        styles.statusDot,
-                        { backgroundColor: connected ? colors.statusGreen : colors.textMuted }
-                      ]}
-                    />
-                    <Text style={styles.hostMetaItem}>
-                      {STATUS_LABELS[state]}
+                    <StatusDot state={state} />
+                    <Text
+                      style={[styles.hostMetaItem, status.isError && { color: colors.statusRed }]}
+                    >
+                      {status.label}
                       {connected && info
                         ? ` · ${info.totalWorktrees} worktree${info.totalWorktrees !== 1 ? 's' : ''}${info.activeCount > 0 ? ` · ${info.activeCount} active` : ''}`
                         : ''}
@@ -788,25 +820,53 @@ export default function HomeScreen() {
         visible={actionTarget != null}
         title={actionTarget?.name}
         message={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
-        actions={[
-          {
+        actions={(() => {
+          const host = actionTarget
+          if (!host) return []
+          const state = hostStates[host.id] ?? 'connecting'
+          const isLive =
+            state === 'connected' ||
+            state === 'connecting' ||
+            state === 'handshaking' ||
+            state === 'reconnecting'
+          const items: Array<{
+            label: string
+            destructive?: boolean
+            onPress: () => void
+          }> = []
+          items.push({
+            label: 'Reconnect',
+            onPress: () => {
+              setActionTarget(null)
+              void forceReconnectHost(host.id)
+            }
+          })
+          if (isLive) {
+            items.push({
+              label: 'Disconnect',
+              onPress: () => {
+                setActionTarget(null)
+                closeHostClient(host.id)
+              }
+            })
+          }
+          items.push({
             label: 'Rename',
             onPress: () => {
-              const host = actionTarget
               setActionTarget(null)
-              if (host) setRenameTarget(host)
+              setRenameTarget(host)
             }
-          },
-          {
+          })
+          items.push({
             label: 'Remove',
             destructive: true,
             onPress: () => {
-              const host = actionTarget
               setActionTarget(null)
-              if (host) setConfirmRemove(host)
+              setConfirmRemove(host)
             }
-          }
-        ]}
+          })
+          return items
+        })()}
         onClose={() => setActionTarget(null)}
       />
 

@@ -39,6 +39,7 @@ type ContextValue = {
   forceReconnect: (hostId: string) => Promise<void>
   closeHost: (hostId: string) => void
   getState: (hostId: string) => ConnectionState
+  getReconnectAttempt: (hostId: string) => number
   subscribeHostState: (hostId: string, listener: (state: ConnectionState) => void) => () => void
   getAllClients: () => Array<{ hostId: string; client: RpcClient }>
   subscribeAllHosts: (listener: () => void) => () => void
@@ -190,6 +191,10 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     return storeRef.current.get(hostId)?.state ?? 'disconnected'
   }, [])
 
+  const getReconnectAttempt = useCallback((hostId: string): number => {
+    return storeRef.current.get(hostId)?.client.getReconnectAttempt() ?? 0
+  }, [])
+
   const subscribeHostState = useCallback(
     (hostId: string, listener: (state: ConnectionState) => void) => {
       let set = stateListenersRef.current.get(hostId)
@@ -238,6 +243,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       forceReconnect,
       closeHost: closeEntry,
       getState,
+      getReconnectAttempt,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts
@@ -248,6 +254,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       forceReconnect,
       closeEntry,
       getState,
+      getReconnectAttempt,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts
@@ -369,4 +376,20 @@ export function useCloseHost(): (hostId: string) => void {
 export function useForceReconnect(): (hostId: string) => Promise<void> {
   const ctx = useCtx()
   return ctx.forceReconnect
+}
+
+// Why: lets the home/host-detail UI escalate "Reconnecting…" to a more
+// alarming "Can't connect" once the rpc-client has cycled enough times to
+// indicate something's actually wrong (wrong port, server down, network
+// loss). Reads through the context so it stays in sync with the live
+// rpc-client instance even after forceReconnect swaps the underlying
+// client.
+export function useReconnectAttempt(hostId: string | undefined): number {
+  const ctx = useCtx()
+  const [, force] = useState(0)
+  useEffect(() => {
+    if (!hostId) return
+    return ctx.subscribeHostState(hostId, () => force((n) => n + 1))
+  }, [ctx, hostId])
+  return hostId ? ctx.getReconnectAttempt(hostId) : 0
 }

@@ -25,6 +25,9 @@ export type RpcClient = {
   sendRequest: (method: string, params?: unknown) => Promise<RpcResponse>
   subscribe: (method: string, params: unknown, onData: StreamingListener) => () => void
   getState: () => ConnectionState
+  // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
+  // a threshold. 0 means never failed; counter is reset on successful open.
+  getReconnectAttempt: () => number
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   close: () => void
 }
@@ -358,6 +361,10 @@ export function connect(
 
     getState(): ConnectionState {
       return state
+    },
+
+    getReconnectAttempt(): number {
+      return reconnectAttempt
     },
 
     onStateChange(listener: (state: ConnectionState) => void): () => void {

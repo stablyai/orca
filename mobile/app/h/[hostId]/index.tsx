@@ -29,7 +29,12 @@ import {
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
-import { useHostClient, useCloseHost } from '../../../src/transport/client-context'
+import {
+  useHostClient,
+  useCloseHost,
+  useForceReconnect,
+  useReconnectAttempt
+} from '../../../src/transport/client-context'
 import type { ConnectionState, RpcSuccess } from '../../../src/transport/types'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import { StatusDot } from '../../../src/components/StatusDot'
@@ -40,7 +45,7 @@ import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
-import { colors, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import {
   loadPinnedIds,
   savePinnedIds,
@@ -84,6 +89,23 @@ const STATUS_LABELS: Record<ConnectionState, string> = {
   disconnected: 'Disconnected',
   reconnecting: 'Reconnecting…',
   'auth-failed': 'Auth failed'
+}
+
+// Why: same threshold as the home screen — kicks the label from
+// "Reconnecting…" to "Can't connect" once the rpc-client has cycled enough
+// times to indicate a real problem (wrong port, server down, network change).
+const RECONNECT_FAILURE_THRESHOLD = 3
+
+function getStatusDisplay(
+  state: ConnectionState,
+  attempts: number
+): { label: string; isError: boolean } {
+  if (state === 'auth-failed') return { label: 'Auth failed', isError: true }
+  if (state === 'disconnected') return { label: 'Disconnected', isError: true }
+  if (state === 'reconnecting' && attempts >= RECONNECT_FAILURE_THRESHOLD) {
+    return { label: "Can't connect", isError: true }
+  }
+  return { label: STATUS_LABELS[state], isError: false }
 }
 
 const SORT_OPTIONS: PickerOption<SortMode>[] = [
@@ -249,8 +271,10 @@ export default function HostScreen() {
   // Why: shared client per host owned by RpcClientProvider. See
   // docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
+  const reconnectAttempts = useReconnectAttempt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const closeHostClient = useCloseHost()
+  const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
   const [hostName, setHostName] = useState('')
@@ -627,9 +651,27 @@ export default function HostScreen() {
               {hostName || 'Host'}
             </Text>
           </View>
-          {connState !== 'connected' && (
-            <Text style={styles.statusText}>{STATUS_LABELS[connState]}</Text>
-          )}
+          {connState !== 'connected' &&
+            (() => {
+              const status = getStatusDisplay(connState, reconnectAttempts)
+              const showReconnectButton = status.isError && hostId && connState !== 'auth-failed'
+              return (
+                <View style={styles.statusRow}>
+                  <Text style={[styles.statusText, status.isError && { color: colors.statusRed }]}>
+                    {status.label}
+                  </Text>
+                  {showReconnectButton && (
+                    <Pressable
+                      style={styles.reconnectButton}
+                      onPress={() => void forceReconnectHost(hostId!)}
+                      hitSlop={8}
+                    >
+                      <Text style={styles.reconnectButtonText}>Reconnect</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )
+            })()}
         </View>
 
         {/* Filter/sort/group toolbar */}
@@ -1083,6 +1125,24 @@ const styles = StyleSheet.create({
   statusText: {
     color: colors.textSecondary,
     fontSize: typography.metaSize
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  reconnectButton: {
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle
+  },
+  reconnectButtonText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   authBanner: {
     backgroundColor: colors.bgPanel,
