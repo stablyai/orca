@@ -20,6 +20,43 @@ type AuthErrorKind = 'auth_required' | 'scope_missing'
 const REFRESH_CMD = 'gh auth refresh -s project -s read:org -s repo'
 const LOGIN_CMD = 'gh auth login'
 
+// AGENTS.md requires platform-specific shell guidance. The env-shadow
+// remediation needs different commands per host shell — bash/zsh on
+// macOS/Linux vs PowerShell on Windows.
+const IS_WINDOWS = typeof navigator !== 'undefined' && /Win(dows|32|64)/i.test(navigator.userAgent)
+
+function findEnvVarCommand(varName: string): { label: string; command: string } {
+  if (IS_WINDOWS) {
+    return {
+      label: 'Check if it’s set (PowerShell)',
+      command: `Get-ChildItem Env:${varName}`
+    }
+  }
+  return {
+    label: 'Find where it’s set',
+    command: `grep -RIn '${varName}' ~/.zshrc ~/.zshenv ~/.bashrc ~/.bash_profile ~/.profile ~/.config 2>/dev/null`
+  }
+}
+
+function unsetEnvVarCommand(varName: string): { label: string; command: string } {
+  if (IS_WINDOWS) {
+    // Persistent removal at the user scope; the user still needs a fresh
+    // shell/Orca relaunch for the change to take effect.
+    return {
+      label: 'Unset (PowerShell, persistent)',
+      command: `Remove-Item Env:${varName}; [Environment]::SetEnvironmentVariable('${varName}', $null, 'User')`
+    }
+  }
+  return { label: 'Unset for this shell', command: `unset ${varName}` }
+}
+
+function openExternal(url: string): void {
+  // In Electron renderers, raw `window.open` doesn't reliably route to the
+  // user's default browser. Use the same shell IPC the rest of the app
+  // uses (see SidebarToolbar.openExternalUrl).
+  void window.api.shell.openUrl(url)
+}
+
 async function copyToClipboard(text: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
@@ -77,14 +114,10 @@ function buildRemediation(
       : ' After unsetting it, run `gh auth login` to sign in normally, then retry.'
     return {
       summary: `\`${varName}\` is set in your environment, so \`gh\` is using that token instead of your keyring login. \`gh auth refresh\` cannot modify env-supplied tokens — that's why running it didn't help.`,
-      detail: `Find where \`${varName}\` is exported (commonly \`~/.zshrc\`, \`~/.zshenv\`, \`~/.bashrc\`, \`~/.profile\`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.${fallback}`,
-      commands: [
-        {
-          label: 'Find where it\u2019s set',
-          command: `grep -RIn '${varName}' ~/.zshrc ~/.zshenv ~/.bashrc ~/.bash_profile ~/.profile ~/.config 2>/dev/null`
-        },
-        { label: 'Unset for this shell', command: `unset ${varName}` }
-      ],
+      detail: IS_WINDOWS
+        ? `Find where \`${varName}\` is set (System or User environment variables, or your PowerShell profile), remove it, then restart Orca so the new environment is picked up.${fallback}`
+        : `Find where \`${varName}\` is exported (commonly \`~/.zshrc\`, \`~/.zshenv\`, \`~/.bashrc\`, \`~/.profile\`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.${fallback}`,
+      commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
   }
@@ -96,21 +129,17 @@ function buildRemediation(
     const varName = diag.envTokenInProcess
     return {
       summary: `Orca inherited \`${varName}\` from your shell, and \`gh\` is using that token. \`gh auth refresh\` doesn't apply to env-supplied tokens.`,
-      detail: `Unset \`${varName}\` in the shell that launches Orca (or in your shell rc file), then restart Orca.`,
-      commands: [
-        {
-          label: 'Find where it\u2019s set',
-          command: `grep -RIn '${varName}' ~/.zshrc ~/.zshenv ~/.bashrc ~/.bash_profile ~/.profile ~/.config 2>/dev/null`
-        },
-        { label: 'Unset for this shell', command: `unset ${varName}` }
-      ],
+      detail: `Unset \`${varName}\` in the shell that launches Orca${
+        IS_WINDOWS ? ' (or in your user environment variables)' : ' (or in your shell rc file)'
+      }, then restart Orca.`,
+      commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
   }
 
   if (kind === 'auth_required' || !active) {
     return {
-      summary: 'You\u2019re not signed in to GitHub via `gh`.',
+      summary: 'You’re not signed in to GitHub via `gh`.',
       commands: [{ label: 'Copy login command', command: LOGIN_CMD }]
     }
   }
@@ -135,7 +164,7 @@ function buildRemediation(
   return {
     summary: errorMessage,
     detail:
-      'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings \u2192 Developer settings \u2192 Personal access tokens \u2192 Configure SSO.',
+      'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.',
     commands: [{ label: 'Copy refresh command', command: REFRESH_CMD }],
     docsUrl:
       'https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-saml-single-sign-on/authorizing-a-personal-access-token-for-use-with-saml-single-sign-on'
@@ -167,6 +196,7 @@ export function GhAuthErrorHelp({
   }, [])
 
   const remedy = buildRemediation(error.message, error.type, diag)
+  const docsUrl = remedy.docsUrl
 
   if (variant === 'banner') {
     return (
@@ -185,9 +215,9 @@ export function GhAuthErrorHelp({
               <Copy className="size-3" /> {c.label}
             </button>
           ))}
-          {remedy.docsUrl ? (
+          {docsUrl ? (
             <a
-              href={remedy.docsUrl}
+              href={docsUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
@@ -216,12 +246,8 @@ export function GhAuthErrorHelp({
             <Copy className="mr-1 size-3.5" /> {c.label}
           </Button>
         ))}
-        {remedy.docsUrl ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => window.open(remedy.docsUrl, '_blank', 'noreferrer')}
-          >
+        {docsUrl ? (
+          <Button size="sm" variant="outline" onClick={() => openExternal(docsUrl)}>
             <ExternalLink className="mr-1 size-3.5" /> Docs
           </Button>
         ) : null}

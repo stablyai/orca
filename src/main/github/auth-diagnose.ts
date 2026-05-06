@@ -34,25 +34,33 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
   let current: GhAuthAccount | null = null
   for (const rawLine of text.split('\n')) {
     const line = rawLine.replace(/\r$/, '')
-    // Host header: a non-indented line that looks like a hostname.
-    const hostMatch = line.match(/^([a-z0-9.-]+\.[a-z]{2,})\s*$/i)
-    if (hostMatch) {
+    // Host header: a non-indented hostname token, with an optional
+    // trailing colon some gh versions emit. Permits single-label hostnames
+    // (internal GHES like `github` or `ghe-internal`); we also recover the
+    // host from the `Logged in to <host>` line below if this header was
+    // missed, so a parser miss never silently drops every account.
+    const hostMatch = line.match(/^([a-z0-9][a-z0-9.-]*)\s*:?\s*$/i)
+    if (hostMatch && !/^logged\b/i.test(line)) {
       currentHost = hostMatch[1]
       continue
     }
-    const loggedIn = line.match(/Logged in to \S+ account (\S+)(?:\s+\(([^)]+)\))?/i)
-    if (loggedIn && currentHost) {
+    const loggedIn = line.match(/Logged in to (\S+) account (\S+)(?:\s+\(([^)]+)\))?/i)
+    if (loggedIn) {
       if (current) {
         accounts.push(current)
       }
-      const sourceLabel = (loggedIn[2] ?? '').trim()
+      // Prefer the host from the `Logged in to <host>` line itself — it's
+      // always present, whereas the section header above can be skipped
+      // by the regex on unfamiliar gh output.
+      const host = loggedIn[1] || currentHost || 'github.com'
+      const sourceLabel = (loggedIn[3] ?? '').trim()
       // gh emits "(keyring)" for stored creds and "(GITHUB_TOKEN)" /
       // "(GH_TOKEN)" when an env var is shadowing the keyring.
       const envToken =
         sourceLabel === 'GITHUB_TOKEN' || sourceLabel === 'GH_TOKEN' ? sourceLabel : null
       current = {
-        host: currentHost,
-        user: loggedIn[1],
+        host,
+        user: loggedIn[2],
         active: false,
         envToken,
         source: envToken ? 'env' : 'keyring',

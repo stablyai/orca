@@ -64,4 +64,34 @@ describe('parseAuthStatus', () => {
   it('returns empty array when nothing is logged in', () => {
     expect(parseAuthStatus('You are not logged into any GitHub hosts.')).toEqual([])
   })
+
+  it('parses multiple hosts in one output (github.com + GHES)', () => {
+    const text = `github.com
+  ✓ Logged in to github.com account alice (keyring)
+  - Active account: true
+  - Token scopes: 'read:org', 'repo'
+
+ghe.acme.io
+  ✓ Logged in to ghe.acme.io account bob (keyring)
+  - Active account: true
+  - Token scopes: 'project', 'repo'
+`
+    const accounts = parseAuthStatus(text)
+    expect(accounts.map((a) => a.host)).toEqual(['github.com', 'ghe.acme.io'])
+    expect(accounts.map((a) => a.user)).toEqual(['alice', 'bob'])
+    expect(accounts[1].scopes).toContain('project')
+  })
+
+  it('recovers host from the Logged-in line when the section header is missing', () => {
+    // gh prints a colon after the host on some versions; we tolerate it,
+    // but if the regex ever fails to match the header we still want
+    // accounts attributed to the host from the inline message.
+    const text = `  ✓ Logged in to github.acme.io account carol (keyring)
+  - Active account: true
+  - Token scopes: 'project'
+`
+    const accounts = parseAuthStatus(text)
+    expect(accounts).toHaveLength(1)
+    expect(accounts[0].host).toBe('github.acme.io')
+  })
 })
