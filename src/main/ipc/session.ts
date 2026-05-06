@@ -20,4 +20,12 @@ export function registerSessionHandlers(store: Store): void {
     store.flush()
     event.returnValue = true
   })
+
+  // Why: called by the renderer after a successful session hydration to ungate
+  // the debounced session writer. Without this, the error-handler path (empty
+  // tabs) could be picked up by the writer and permanently overwrite the user's
+  // session data on disk.
+  ipcMain.handle('session:mark-hydration-succeeded', () => {
+    store.markHydrationSucceeded()
+  })
 }

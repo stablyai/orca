@@ -234,6 +234,12 @@ function App(): React.JSX.Element {
           actions.hydrateTabsSession(session)
           actions.hydrateEditorSession(session)
           actions.hydrateBrowserSession(session)
+          // Why: ungate the debounced session writer after successful
+          // hydration. Without this, the error-handler path (empty tabs) could
+          // be picked up by the writer and permanently overwrite the user's
+          // session data on disk.
+          await window.api.session.markHydrationSucceeded()
+
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
           // async repo loads may not have populated worktreesByRepo yet and

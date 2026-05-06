@@ -1403,7 +1403,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // so subsequent legitimate events (codex restart, new pane) still bump.
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         Object.entries(session.tabsByWorktree)
-          .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
+          .filter(([worktreeId]) => validWorktreeIds.has(worktreeId) || worktreeId === undefined)
           .map(([worktreeId, tabs]) => [
             worktreeId,
             [...tabs]

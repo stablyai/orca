@@ -101,6 +101,12 @@ export class Store {
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
   private gitUsernameCache = new Map<string, string>()
+  // Why: gate workspace session writes until after a successful hydration.
+  // Without this, a failed hydration (error handler in App.tsx) calls
+  // hydrateWorkspaceSession with empty tabs, and the debounced session writer
+  // picks up that empty state and overwrites orca-data.json, permanently
+  // deleting the user's tab state.
+  private hydrationSucceeded = false
 
   constructor() {
     this.state = this.load()
@@ -341,6 +347,22 @@ export class Store {
     await mkdir(dir, { recursive: true }).catch(() => {})
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
+    // Why: rolling backup before overwriting — preserves the previous session
+    // as .bak and .bak.1 so a crash or bad write can be recovered. Wrapped in
+    // try/catch so backup failures never block the actual write.
+    try {
+      const bak = `${dataFile}.bak`
+      const bak1 = `${dataFile}.bak.1`
+      if (existsSync(dataFile)) {
+        if (existsSync(bak)) {
+          renameSync(bak, bak1)
+        }
+        renameSync(dataFile, bak)
+      }
+    } catch {
+      // Backup is best-effort; don't block the write
+    }
+
     // Why: opencodeSessionCookie must be encrypted on disk. Clone state so
     // the in-memory this.state stays plaintext for the rest of the app.
     const stateToSave = {
@@ -381,6 +403,22 @@ export class Store {
       mkdirSync(dir, { recursive: true })
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+
+    // Why: rolling backup before overwriting — preserves the previous session
+    // as .bak and .bak.1 so a crash or bad write can be recovered. Wrapped in
+    // try/catch so backup failures never block the actual write.
+    try {
+      const bak = `${dataFile}.bak`
+      const bak1 = `${dataFile}.bak.1`
+      if (existsSync(dataFile)) {
+        if (existsSync(bak)) {
+          renameSync(bak, bak1)
+        }
+        renameSync(dataFile, bak)
+      }
+    } catch {
+      // Backup is best-effort; don't block the write
+    }
 
     // Why: opencodeSessionCookie must be encrypted on disk. Clone state so
     // the in-memory this.state stays plaintext for the rest of the app.
@@ -705,6 +743,10 @@ export class Store {
   }
 
   // ── Flush (for shutdown) ───────────────────────────────────────────
+
+  markHydrationSucceeded(): void {
+    this.hydrationSucceeded = true
+  }
 
   flush(): void {
     if (this.writeTimer) {

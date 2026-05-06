@@ -1325,7 +1325,11 @@ const api = {
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
     setSync: (args: unknown): void => {
       ipcRenderer.sendSync('session:set-sync', args)
-    }
+    },
+    // Why: signal to the main process that hydration succeeded, ungateing the
+    // debounced session writer so it can safely persist state.
+    markHydrationSucceeded: (): Promise<void> =>
+      ipcRenderer.invoke('session:mark-hydration-succeeded')
   },
 
   updater: {
