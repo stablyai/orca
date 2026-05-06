@@ -1,7 +1,15 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet, Pressable, Linking } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Info, Bell, Wrench } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Bell,
+  Wrench,
+  Shield,
+  LifeBuoy
+} from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 
 export default function SettingsScreen() {
@@ -45,6 +53,24 @@ export default function SettingsScreen() {
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
       </View>
+
+      <View style={[styles.section, styles.sectionSpacer]}>
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={() => void Linking.openURL('https://www.onorca.dev/privacy')}
+        >
+          <Shield size={16} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Privacy Policy</Text>
+        </Pressable>
+        <View style={styles.separator} />
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={() => void Linking.openURL('https://github.com/stablyai/orca/issues')}
+        >
+          <LifeBuoy size={16} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Support</Text>
+        </Pressable>
+      </View>
     </View>
   )
 }
@@ -77,6 +103,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
     borderRadius: 12,
     overflow: 'hidden'
+  },
+  sectionSpacer: {
+    marginTop: spacing.md
   },
   row: {
     flexDirection: 'row',

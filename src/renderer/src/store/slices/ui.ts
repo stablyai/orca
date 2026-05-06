@@ -30,7 +30,9 @@ import { revokeCustomSidekickBlobUrl } from '../../components/sidekick/sidekick-
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 
 function clampSidekickSize(size: number): number {
-  if (!Number.isFinite(size)) {return SIDEKICK_SIZE_DEFAULT}
+  if (!Number.isFinite(size)) {
+    return SIDEKICK_SIZE_DEFAULT
+  }
   return Math.max(SIDEKICK_SIZE_MIN, Math.min(SIDEKICK_SIZE_MAX, Math.round(size)))
 }
 
@@ -639,7 +641,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // index no longer references it.
       window.api.sidekick.delete(id, target.fileName, target.kind).catch(console.error)
       const partial: Partial<UISlice> = { customSidekicks: next }
-      if (fallback !== s.sidekickId) {partial.sidekickId = fallback}
+      if (fallback !== s.sidekickId) {
+        partial.sidekickId = fallback
+      }
       return partial
     }),
 

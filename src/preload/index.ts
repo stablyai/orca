@@ -28,6 +28,7 @@ import type {
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -384,6 +385,12 @@ const api = {
       worktreeId?: string
       sessionId?: string
       shellOverride?: string
+      // Why: closes the SIGKILL race documented in INVESTIGATION.md by
+      // letting main patch + sync-flush the (worktreeId, tabId, leafId →
+      // ptyId) binding before pty:spawn returns. Only the renderer's
+      // user-typing-Ctrl+T daemon-host path threads these.
+      tabId?: string
+      leafId?: string
       // Why: telemetry-plan.md§Agent launch semantics — main fires
       // `agent_started` only after the spawn succeeds. The renderer is the
       // source of truth for the launch metadata; main is the source of
@@ -418,7 +425,8 @@ const api = {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
 
-    kill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', { id }),
+    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
+      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
@@ -668,6 +676,8 @@ const api = {
     // known-expensive op (e.g. after ProjectPicker discovery).
     rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
       ipcRenderer.invoke('gh:rateLimit', args),
+
+    diagnoseAuth: (): Promise<GhAuthDiagnostic> => ipcRenderer.invoke('gh:diagnoseAuth'),
 
     // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
     listAccessibleProjects: (): Promise<ListAccessibleProjectsResult> =>
@@ -2148,7 +2158,13 @@ const api = {
       address?: string
     }): Promise<
       | { available: false }
-      | { available: true; qrDataUrl: string; endpoint: string; deviceId: string }
+      | {
+          available: true
+          qrDataUrl: string
+          pairingUrl: string
+          endpoint: string
+          deviceId: string
+        }
     > => ipcRenderer.invoke('mobile:getPairingQR', args),
 
     listDevices: (): Promise<{

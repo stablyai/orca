@@ -71,7 +71,7 @@ describe('PiTitlebarExtensionService', () => {
     expect(env.PI_CODING_AGENT_DIR).toBe(join(userDataDir, 'pi-agent-overlays', 'pty-1'))
     // Orca's titlebar extension is added alongside user extensions, not replacing them.
     const overlayExtensions = readdirSync(join(env.PI_CODING_AGENT_DIR!, 'extensions')).sort()
-    expect(overlayExtensions).toEqual(['orca-titlebar-spinner.ts', 'user-ext'])
+    expect(overlayExtensions).toEqual(['orca-prefill.ts', 'orca-titlebar-spinner.ts', 'user-ext'])
     // User's top-level resources are reachable via the overlay.
     expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'skills', 'my-skill', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'auth.json'))).toBe(true)

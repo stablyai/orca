@@ -46,7 +46,11 @@ function isSafeId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
 
-function resolveSidekickFile(id: string, fileName: string, kind: 'image' | 'bundle'): string | null {
+function resolveSidekickFile(
+  id: string,
+  fileName: string,
+  kind: 'image' | 'bundle'
+): string | null {
   if (!isSafeId(id)) {
     return null
   }
@@ -288,8 +292,7 @@ export function registerSidekickHandlers(): void {
     // Why: NTFS/macOS HFS+ default volumes are case-insensitive — a path like
     // `BUNDLE\sheet.png` is still inside `bundle\`. Compare lowercased on
     // Windows so the prefix check isn't bypassed by case differences.
-    const cmp =
-      process.platform === 'win32' ? (s: string) => s.toLowerCase() : (s: string) => s
+    const cmp = process.platform === 'win32' ? (s: string) => s.toLowerCase() : (s: string) => s
     if (!cmp(sheetSrc + sep).startsWith(cmp(bundleRoot))) {
       throw new Error('spritesheetPath escapes the bundle.')
     }
@@ -441,12 +444,7 @@ export function registerSidekickHandlers(): void {
 
   ipcMain.handle(
     'sidekick:delete',
-    async (
-      _event,
-      id: string,
-      fileName: string,
-      kind?: 'image' | 'bundle'
-    ): Promise<void> => {
+    async (_event, id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> => {
       // Why: validate IPC inputs before any path logic.
       let parsed: z.infer<typeof SidekickFileRequestSchema>
       try {

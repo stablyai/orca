@@ -11,7 +11,10 @@ import {
   GitPullRequest,
   ChevronRight,
   Terminal,
-  Plus
+  Plus,
+  RefreshCw,
+  PowerOff,
+  Edit3
 } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
@@ -22,13 +25,20 @@ import {
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
-import { connect, type RpcClient } from '../src/transport/rpc-client'
+import type { RpcClient } from '../src/transport/rpc-client'
+import {
+  useAllHostClients,
+  useCloseHost,
+  useForceReconnect,
+  usePrimeHosts
+} from '../src/transport/client-context'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
+import { StatusDot } from '../src/components/StatusDot'
 import { TextInputModal } from '../src/components/TextInputModal'
-import { ActionSheetModal } from '../src/components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
@@ -50,6 +60,23 @@ const STATUS_LABELS: Record<ConnectionState, string> = {
   reconnecting: 'Reconnecting…',
   handshaking: 'Connecting…',
   'auth-failed': 'Auth failed'
+}
+
+// Why: a few quick reconnects are normal (laptop wake, brief network blip).
+// After this many failed attempts in a row, the user almost certainly has
+// a real problem (wrong port, server down, network change), so escalate
+// the label and color so it's obvious something's wrong.
+const RECONNECT_FAILURE_THRESHOLD = 3
+
+function getStatusDisplay(
+  state: ConnectionState,
+  attempts: number
+): { label: string; isError: boolean } {
+  if (state === 'auth-failed') return { label: 'Auth failed', isError: true }
+  if (state === 'reconnecting' && attempts >= RECONNECT_FAILURE_THRESHOLD) {
+    return { label: "Can't connect", isError: true }
+  }
+  return { label: STATUS_LABELS[state], isError: false }
 }
 
 type StatsSummary = {
@@ -198,13 +225,36 @@ export default function HomeScreen() {
   const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
+  const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
-  const clientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
+
+  // Why: read shared clients from the per-host store. Replaces the prior
+  // pattern of opening N independent WebSockets here. See
+  // docs/mobile-shared-client-per-host.md.
+  const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
+  const allClients = useAllHostClients(hostIds)
+  const closeHostClient = useCloseHost()
+  const forceReconnectHost = useForceReconnect()
+  const primeHosts = usePrimeHosts()
+  // Why: feed the loaded HostProfiles into the provider's prime cache as
+  // soon as we have them. This avoids a second Keychain pass inside
+  // openEntry on cold start (which serialised behind the first one and
+  // showed up as multi-second connect latency).
+  useEffect(() => {
+    if (hosts.length > 0) primeHosts(hosts)
+  }, [hosts, primeHosts])
+  const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
+  useEffect(() => {
+    allClientsRef.current = allClients.map((entry) => ({
+      hostId: entry.hostId,
+      client: entry.client
+    }))
+  }, [allClients])
 
   // Why: hydrate the home page from a persisted snapshot on cold-start so
   // Resume + Account-usage cards paint immediately with last-known data
@@ -259,7 +309,7 @@ export default function HomeScreen() {
           setLastVisited(JSON.parse(raw))
         } catch {}
       })
-      for (const entry of clientsRef.current) {
+      for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
           fetchStats(entry.client, setStats, () => stale)
           fetchWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
@@ -277,51 +327,91 @@ export default function HomeScreen() {
     [hosts]
   )
 
+  // Why: mirror per-host connection state into hostStates so existing
+  // render code (status dots, connecting indicators) keeps working.
   useEffect(() => {
-    let disposed = false
-    const notifCleanups: Array<() => void> = []
-    const entries = hosts.flatMap((host) => {
-      if (!host.publicKeyB64 || !host.deviceToken) {
-        setHostStates((prev) => ({ ...prev, [host.id]: 'auth-failed' }))
-        return []
+    setHostAttempts((prev) => {
+      const next: Record<string, number> = { ...prev }
+      let changed = false
+      for (const entry of allClients) {
+        const a = entry.client.getReconnectAttempt()
+        if (next[entry.hostId] !== a) {
+          next[entry.hostId] = a
+          changed = true
+        }
       }
-      setHostStates((prev) => ({
-        ...prev,
-        [host.id]: prev[host.id] ?? 'connecting'
-      }))
-      let client: ReturnType<typeof connect>
-      try {
-        client = connect(host.endpoint, host.deviceToken, host.publicKeyB64, (state) => {
-          if (disposed) return
-          setHostStates((prev) => ({ ...prev, [host.id]: state }))
-        })
-      } catch {
-        setHostStates((prev) => ({ ...prev, [host.id]: 'auth-failed' }))
-        return []
+      return changed ? next : prev
+    })
+    setHostStates((prev) => {
+      const next: Record<string, ConnectionState> = { ...prev }
+      let changed = false
+      const liveIds = new Set(allClients.map((e) => e.hostId))
+      for (const entry of allClients) {
+        if (next[entry.hostId] !== entry.state) {
+          next[entry.hostId] = entry.state
+          changed = true
+        }
       }
+      // Why: when a paired host disappears from allClients (because the
+      // user tapped Disconnect, or the host record was invalid) the card
+      // must reflect that. We only force-update hosts whose state was
+      // already tracked — otherwise the initial-acquire frame (entry not
+      // yet materialised) would briefly flip every host to 'disconnected'.
+      for (const host of hosts) {
+        if (liveIds.has(host.id)) continue
+        if (!host.publicKeyB64 || !host.deviceToken) {
+          if (next[host.id] !== 'auth-failed') {
+            next[host.id] = 'auth-failed'
+            changed = true
+          }
+          continue
+        }
+        const prevState = next[host.id]
+        if (prevState && prevState !== 'disconnected' && prevState !== 'auth-failed') {
+          next[host.id] = 'disconnected'
+          changed = true
+        }
+      }
+      // Drop entries for hosts we no longer track at all.
+      for (const id of Object.keys(next)) {
+        if (!liveIds.has(id) && hosts.some((h) => h.id === id) === false) {
+          delete next[id]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [allClients, hosts])
 
+  // Why: per-host streaming subscriptions (notifications + accounts) and
+  // one-shot stats fetches when each host transitions to 'connected'.
+  // Runs once per (hostId, client) pair and tears down when that pair
+  // changes. The provider keeps the underlying socket open across
+  // resubscription cycles so this is cheap.
+  useEffect(() => {
+    const cleanups: Array<() => void> = []
+    for (const entry of allClients) {
       let unsubNotif: (() => void) | null = null
       let unsubAccounts: (() => void) | null = null
       let statsFetched = false
-      const unsubState = client.onStateChange((state) => {
+      const wireUp = (state: ConnectionState) => {
         if (state === 'connected') {
           if (!unsubNotif) {
-            unsubNotif = subscribeToDesktopNotifications(client)
+            unsubNotif = subscribeToDesktopNotifications(entry.client)
           }
           if (!unsubAccounts) {
-            unsubAccounts = client.subscribe('accounts.subscribe', null, (payload) => {
-              if (disposed || !payload || typeof payload !== 'object') return
+            unsubAccounts = entry.client.subscribe('accounts.subscribe', null, (payload) => {
+              if (!payload || typeof payload !== 'object') return
               const evt = payload as { type?: string; snapshot?: AccountsSnapshot }
               if ((evt.type === 'ready' || evt.type === 'snapshot') && evt.snapshot) {
-                const snap = evt.snapshot
-                setAccountsByHost((prev) => ({ ...prev, [host.id]: snap }))
+                setAccountsByHost((prev) => ({ ...prev, [entry.hostId]: evt.snapshot! }))
               }
             })
           }
           if (!statsFetched) {
             statsFetched = true
-            fetchStats(client, setStats, () => disposed)
-            fetchWorktreeInfo(client, host.id, setWorktreeInfo, () => disposed)
+            fetchStats(entry.client, setStats, () => false)
+            fetchWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => false)
           }
         } else {
           if (unsubNotif) {
@@ -333,25 +423,29 @@ export default function HomeScreen() {
             unsubAccounts = null
           }
         }
-      })
-      notifCleanups.push(() => {
+      }
+      wireUp(entry.state)
+      const unsubState = entry.client.onStateChange(wireUp)
+      cleanups.push(() => {
         unsubState()
         unsubNotif?.()
         unsubAccounts?.()
       })
-
-      return [{ hostId: host.id, client }]
-    })
-
-    clientsRef.current = entries
-
-    return () => {
-      disposed = true
-      clientsRef.current = []
-      for (const cleanup of notifCleanups) cleanup()
-      for (const entry of entries) entry.client.close()
     }
-  }, [hosts])
+    return () => {
+      for (const c of cleanups) c()
+    }
+    // Why: depend on the host-id set, not the whole allClients array, so
+    // resubscriptions don't fire on every render that produces a new
+    // array reference. Client identity is stable per hostId for the
+    // lifetime of the underlying transport.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    allClients
+      .map((e) => e.hostId)
+      .sort()
+      .join(',')
+  ])
 
   // Why: prefer the worktree the user last opened on this device so the
   // "Resume" card reflects their mobile session history, not just the
@@ -433,6 +527,9 @@ export default function HomeScreen() {
   async function handleRemove() {
     if (!confirmRemove) return
     try {
+      // Why: close the shared client first so the WebSocket is gone
+      // before the host record disappears from loadHosts().
+      closeHostClient(confirmRemove.id)
       await removeHost(confirmRemove.id)
       setConfirmRemove(null)
       setHosts(await loadHosts())
@@ -465,8 +562,8 @@ export default function HomeScreen() {
           <View style={styles.emptyHero}>
             <Text style={styles.emptyTitle}>Connect your desktop</Text>
             <Text style={styles.emptyBody}>
-              Pair with Orca on your computer to monitor worktrees, watch agents work, and manage
-              terminals — all from your phone.
+              Pair with Orca on your computer to check on your agents, jump into any terminal, and
+              drive work from your phone.
             </Text>
             <Pressable style={styles.primaryButton} onPress={() => router.push('/pair-scan')}>
               <QrCode size={17} color={colors.bgBase} />
@@ -538,8 +635,10 @@ export default function HomeScreen() {
           ItemSeparatorComponent={CardGap}
           renderItem={({ item }) => {
             const state = hostStates[item.id] ?? 'connecting'
+            const attempts = hostAttempts[item.id] ?? 0
             const connected = state === 'connected'
             const info = worktreeInfo[item.id]
+            const status = getStatusDisplay(state, attempts)
             return (
               <Pressable
                 style={({ pressed }) => [styles.hostCard, pressed && styles.hostCardPressed]}
@@ -564,14 +663,11 @@ export default function HomeScreen() {
                     {item.name}
                   </Text>
                   <View style={styles.hostMeta}>
-                    <View
-                      style={[
-                        styles.statusDot,
-                        { backgroundColor: connected ? colors.statusGreen : colors.textMuted }
-                      ]}
-                    />
-                    <Text style={styles.hostMetaItem}>
-                      {STATUS_LABELS[state]}
+                    <StatusDot state={state} />
+                    <Text
+                      style={[styles.hostMetaItem, status.isError && { color: colors.statusRed }]}
+                    >
+                      {status.label}
                       {connected && info
                         ? ` · ${info.totalWorktrees} worktree${info.totalWorktrees !== 1 ? 's' : ''}${info.activeCount > 0 ? ` · ${info.activeCount} active` : ''}`
                         : ''}
@@ -749,25 +845,52 @@ export default function HomeScreen() {
         visible={actionTarget != null}
         title={actionTarget?.name}
         message={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
-        actions={[
-          {
-            label: 'Rename',
+        actions={(() => {
+          const host = actionTarget
+          if (!host) return []
+          const state = hostStates[host.id] ?? 'connecting'
+          const isLive =
+            state === 'connected' ||
+            state === 'connecting' ||
+            state === 'handshaking' ||
+            state === 'reconnecting'
+          const items: ActionSheetAction[] = []
+          items.push({
+            label: 'Reconnect',
+            icon: RefreshCw,
             onPress: () => {
-              const host = actionTarget
               setActionTarget(null)
-              if (host) setRenameTarget(host)
+              void forceReconnectHost(host.id)
             }
-          },
-          {
+          })
+          if (isLive) {
+            items.push({
+              label: 'Disconnect',
+              icon: PowerOff,
+              onPress: () => {
+                setActionTarget(null)
+                closeHostClient(host.id)
+              }
+            })
+          }
+          items.push({
+            label: 'Rename',
+            icon: Edit3,
+            onPress: () => {
+              setActionTarget(null)
+              setRenameTarget(host)
+            }
+          })
+          items.push({
             label: 'Remove',
             destructive: true,
             onPress: () => {
-              const host = actionTarget
               setActionTarget(null)
-              if (host) setConfirmRemove(host)
+              setConfirmRemove(host)
             }
-          }
-        ]}
+          })
+          return items
+        })()}
         onClose={() => setActionTarget(null)}
       />
 

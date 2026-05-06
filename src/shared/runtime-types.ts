@@ -11,6 +11,11 @@ export type RuntimeStatus = {
   authoritativeWindowId: number | null
   liveTabCount: number
   liveLeafCount: number
+  // Why: optional so mobile builds can read both new and pre-PR desktops.
+  // Absence is treated as 0 by mobile's compat evaluator. See
+  // src/shared/protocol-version.ts for bump discipline.
+  protocolVersion?: number
+  minCompatibleMobileVersion?: number
 }
 
 export type CliRuntimeState =

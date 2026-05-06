@@ -15,6 +15,12 @@ export type AgentStartupPlan = {
    * `followupPrompt` so the call site can choose: type-and-submit (followup)
    * or type-and-leave-pending (draft). */
   draftPrompt?: string | null
+  /** Why: env vars to apply at PTY spawn time. Currently used to deliver
+   * pi's `ORCA_PI_PREFILL` so the overlay's `orca-prefill` extension
+   * picks it up on session_start. Plumbed into `startup.env` by the
+   * activation site, NOT into the shell command, so the value isn't
+   * visibly prefixed onto the terminal. */
+  env?: Record<string, string>
 }
 
 function quoteStartupArg(value: string, platform: NodeJS.Platform): string {
@@ -103,6 +109,12 @@ export type AgentDraftLaunchPlan = {
   agent: TuiAgent
   launchCommand: string
   expectedProcess: string
+  /** Why: env-var-based prefill (currently pi via the overlay-installed
+   * `orca-prefill` extension) ships the draft text in the PTY-spawn
+   * environment instead of via a CLI flag. Callers MUST plumb this into
+   * the queued `startup.env` so it reaches the shell that launches the
+   * agent. Empty/undefined when the agent uses a CLI flag (Claude). */
+  env?: Record<string, string>
 }
 
 /**
@@ -124,20 +136,31 @@ export function buildAgentDraftLaunchPlan(args: {
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const config = TUI_AGENT_CONFIG[agent]
-  if (!config.draftPromptFlag) {
-    return null
-  }
   const trimmed = draft.trim()
   if (!trimmed) {
     return null
   }
   const baseCommand = cmdOverrides[agent] ?? config.launchCmd
-  const quoted = quoteStartupArg(trimmed, platform)
-  return {
-    agent,
-    launchCommand: `${baseCommand} ${config.draftPromptFlag} ${quoted}`,
-    expectedProcess: config.expectedProcess
+  if (config.draftPromptFlag) {
+    const quoted = quoteStartupArg(trimmed, platform)
+    return {
+      agent,
+      launchCommand: `${baseCommand} ${config.draftPromptFlag} ${quoted}`,
+      expectedProcess: config.expectedProcess
+    }
   }
+  if (config.draftPromptEnvVar) {
+    // Why: the env var is set on the PTY-spawn env (not embedded in the
+    // shell command) so the value never has to be shell-escaped and the
+    // user doesn't see a `FOO='...'` prefix typed into their terminal.
+    return {
+      agent,
+      launchCommand: baseCommand,
+      expectedProcess: config.expectedProcess,
+      env: { [config.draftPromptEnvVar]: trimmed }
+    }
+  }
+  return null
 }
 
 export { isShellProcess } from '../../../shared/agent-detection'

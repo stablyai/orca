@@ -12,9 +12,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
-import { connect, type RpcClient } from '../../../src/transport/rpc-client'
+import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts } from '../../../src/transport/host-store'
-import type { ConnectionState, RpcSuccess } from '../../../src/transport/types'
+import { useHostClient } from '../../../src/transport/client-context'
+import type { RpcSuccess } from '../../../src/transport/types'
 import { colors, spacing, typography, radii } from '../../../src/theme/mobile-theme'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
@@ -30,8 +31,8 @@ export default function AccountsScreen() {
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
 
-  const [client, setClient] = useState<RpcClient | null>(null)
-  const [connState, setConnState] = useState<ConnectionState>('connecting')
+  // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
+  const { client, state: connState } = useHostClient(hostId)
   const [hostName, setHostName] = useState<string>('')
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,34 +40,24 @@ export default function AccountsScreen() {
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
 
-  // Why: connect to the host's WebSocket on mount and tear down on
-  // unmount. Mirrors the connection lifecycle used in
-  // /h/[hostId]/index.tsx so reconnect/auth-failed states are handled
-  // identically.
+  useEffect(() => {
+    clientRef.current = client
+  }, [client])
+
   useEffect(() => {
     if (!hostId) return
-    let cancelled = false
-    let rpcClient: RpcClient | null = null
-
-    void (async () => {
-      const hosts = await loadHosts()
+    let stale = false
+    void loadHosts().then((hosts) => {
+      if (stale) return
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        if (!cancelled) setError('Host not found')
+        setError('Host not found')
         return
       }
-      if (!cancelled) setHostName(host.name)
-      rpcClient = connect(host.endpoint, host.deviceToken, host.publicKeyB64, (state) => {
-        if (!cancelled) setConnState(state)
-      })
-      clientRef.current = rpcClient
-      if (!cancelled) setClient(rpcClient)
-    })()
-
+      setHostName(host.name)
+    })
     return () => {
-      cancelled = true
-      if (rpcClient) rpcClient.close()
-      clientRef.current = null
+      stale = true
     }
   }, [hostId])
 

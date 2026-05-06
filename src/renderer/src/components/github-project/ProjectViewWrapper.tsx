@@ -4,7 +4,6 @@
 // documented in the design doc.
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Copy,
   ExternalLink,
   Loader,
   RefreshCw,
@@ -26,6 +25,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import GitHubItemDialog, { type GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
+import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
@@ -900,12 +900,21 @@ function ErrorState({
   totalCount?: number
   onOpenInGitHub: () => void
 }): React.JSX.Element {
-  const command =
-    error.type === 'auth_required'
-      ? 'gh auth login'
-      : error.type === 'scope_missing'
-        ? 'gh auth refresh -s project -s read:org -s repo'
-        : null
+  // Auth/scope errors get a richer remediation UI driven by `gh auth
+  // status`. Bail early so the generic `command`/`copy` block below is
+  // only computed for non-auth error types.
+  if (error.type === 'auth_required' || error.type === 'scope_missing') {
+    return (
+      <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
+        <GhAuthErrorHelp
+          error={error as GitHubProjectViewError & { type: 'auth_required' | 'scope_missing' }}
+        />
+        <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
+          <ExternalLink className="mr-1 size-3.5" /> Open in GitHub
+        </Button>
+      </div>
+    )
+  }
   const copy =
     error.type === 'too_large'
       ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
@@ -920,22 +929,6 @@ function ErrorState({
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
       <div className="text-muted-foreground">{copy}</div>
       <div className="flex gap-2">
-        {command ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={async () => {
-              try {
-                await window.api.ui.writeClipboardText(command)
-                toast.success('Command copied')
-              } catch {
-                toast.error('Failed to copy')
-              }
-            }}
-          >
-            <Copy className="mr-1 size-3.5" /> Copy command
-          </Button>
-        ) : null}
         <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
           <ExternalLink className="mr-1 size-3.5" /> Open in GitHub
         </Button>

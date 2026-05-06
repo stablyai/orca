@@ -622,6 +622,53 @@ export class Store {
     this.scheduleSave()
   }
 
+  // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217). The
+  // renderer's debounced session writer (~450 ms total) is normally the only
+  // path that writes tab.ptyId / ptyIdsByLeafId; a force-quit inside that
+  // window orphans the daemon's history dir. Patching + sync flushing here
+  // before pty:spawn returns guarantees the renderer cannot observe a
+  // spawn-success without the binding already being durable on disk.
+  persistPtyBinding(args: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+  }): void {
+    const session = this.state.workspaceSession
+    if (!session) {
+      return
+    }
+    const tabs = session.tabsByWorktree?.[args.worktreeId]
+    const tab = tabs?.find((t) => t.id === args.tabId)
+    if (tab) {
+      tab.ptyId = args.ptyId
+    }
+    const layout = session.terminalLayoutsByTabId?.[args.tabId]
+    if (layout) {
+      layout.ptyIdsByLeafId = {
+        ...layout.ptyIdsByLeafId,
+        [args.leafId]: args.ptyId
+      }
+    } else {
+      // Why: first-spawn-ever for a new tab — the renderer's debounced writer
+      // creates the layout entry on PaneManager init, but the binding has to
+      // be on disk before pty:spawn returns or a SIGKILL inside the same
+      // window would lose ptyIdsByLeafId for split-pane cold restore. The
+      // renderer will overwrite this minimal layout once persistLayoutSnapshot
+      // fires.
+      session.terminalLayoutsByTabId = {
+        ...session.terminalLayoutsByTabId,
+        [args.tabId]: {
+          root: { type: 'leaf', leafId: args.leafId },
+          activeLeafId: args.leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+        }
+      }
+    }
+    this.flush()
+  }
+
   // ── SSH Targets ────────────────────────────────────────────────────
 
   getSshTargets(): SshTarget[] {

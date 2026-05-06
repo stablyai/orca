@@ -84,9 +84,13 @@ function DetectedSpriteFrame({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) {return}
+    if (!canvas) {
+      return
+    }
     const ctx = canvas.getContext('2d')
-    if (!ctx) {return}
+    if (!ctx) {
+      return
+    }
     canvas.width = maxSize
     canvas.height = maxSize
     // Why: reset playback when the underlying sprite changes so the new
@@ -121,7 +125,9 @@ function DetectedSpriteFrame({
       raf = requestAnimationFrame(tick)
     }
     return () => {
-      if (raf) {cancelAnimationFrame(raf)}
+      if (raf) {
+        cancelAnimationFrame(raf)
+      }
     }
   }, [detected, animate, maxSize])
 
@@ -337,7 +343,12 @@ export function SidekickOverlay(): React.JSX.Element {
         ) : detected ? (
           <DetectedSpriteFrame detected={detected} animate={animate} maxSize={size} />
         ) : (
-          <img src={url} alt="" className="max-h-full max-w-full object-contain" draggable={false} />
+          <img
+            src={url}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+            draggable={false}
+          />
         )}
       </div>
     </div>

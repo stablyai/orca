@@ -118,7 +118,9 @@ function buildStartupOpts(
   agent: TuiAgent | null,
   plan: ReturnType<typeof buildAgentStartupPlan>,
   launchSource: LaunchSource
-): { startup?: { command: string; telemetry?: AgentStartedTelemetry } } {
+): {
+  startup?: { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry }
+} {
   if (!plan) {
     return {}
   }
@@ -127,7 +129,11 @@ function buildStartupOpts(
       ? null
       : { agent_kind: tuiAgentToAgentKind(agent), launch_source: launchSource, request_kind: 'new' }
   return {
-    startup: { command: plan.launchCommand, ...(telemetry ? { telemetry } : {}) }
+    startup: {
+      command: plan.launchCommand,
+      ...(plan.env ? { env: plan.env } : {}),
+      ...(telemetry ? { telemetry } : {})
+    }
   }
 }
 
@@ -264,7 +270,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
-        followupPrompt: null
+        followupPrompt: null,
+        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
       }
       draftLaunchedNatively = true
     } else if (effectiveAgent !== null) {

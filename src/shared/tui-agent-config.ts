@@ -21,6 +21,16 @@ export type TuiAgentConfig = {
    * Agents without native support fall through to the paste-after-ready
    * code path in agent-paste-draft.ts. */
   draftPromptFlag?: string
+  /** Why: agents that don't expose a `--prefill <text>`-style CLI flag but
+   * CAN read an env var on startup to seed their input box without
+   * submitting. Today only pi uses this (via Orca's overlay-installed
+   * `orca-prefill` extension reading `ORCA_PI_PREFILL`). Equivalent in
+   * effect to `draftPromptFlag`: avoids the bracketed-paste-after-ready
+   * race when the agent's startup output is long (pi prints banner,
+   * skills, and extensions for several seconds, which keeps the
+   * readiness quiet-timer resetting). When set, the draft-launch plan
+   * passes the text via this env var instead of pasting after ready. */
+  draftPromptEnvVar?: string
   /** Why: agents that gate first-launch behind a "Do you trust this
    * folder?" menu (Cursor-Agent, GitHub Copilot CLI) consume the bracketed
    * paste as menu input. Pre-write the same trust artifact the agent writes
@@ -70,7 +80,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'pi',
     launchCmd: 'pi',
     expectedProcess: 'pi',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: pi has no `--prefill` flag, and bracketed-paste-after-ready
+    // races against its multi-second startup output (banner + skills +
+    // extensions list) so the paste frequently never lands. Orca's
+    // overlay installs an `orca-prefill` pi extension (see
+    // src/main/pi/titlebar-extension-service.ts) that reads this env var
+    // on session_start and calls `pi.ui.setEditorText(text)`. Same
+    // user-visible behavior as `claude --prefill <text>`.
+    draftPromptEnvVar: 'ORCA_PI_PREFILL'
   },
   gemini: {
     detectCmd: 'gemini',

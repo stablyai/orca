@@ -95,7 +95,9 @@ async function processBundleSheet(
       const rejected = results.some((r) => r.status === 'rejected')
       if (rejected) {
         for (const r of results) {
-          if (r.status === 'fulfilled') {r.value.close()}
+          if (r.status === 'fulfilled') {
+            r.value.close()
+          }
         }
         return null
       }
@@ -121,9 +123,13 @@ function magentaScore(r: number, g: number, b: number): number {
   // 0 = not magenta, 1 = pure magenta key. Requires both red and blue to
   // dominate green (the signature of any magenta shade), and rejects greys
   // / dark pixels which can otherwise have low-but-equal channels.
-  if (r < 100 || b < 100) {return 0}
+  if (r < 100 || b < 100) {
+    return 0
+  }
   const minRB = Math.min(r, b)
-  if (g >= minRB) {return 0}
+  if (g >= minRB) {
+    return 0
+  }
   const dom = (minRB - g) / 255 // how much R and B dominate green
   return Math.max(0, Math.min(1, dom * 1.4))
 }
@@ -131,7 +137,9 @@ function magentaScore(r: number, g: number, b: number): number {
 function keyMagenta(px: Uint8ClampedArray): void {
   for (let i = 0; i < px.length; i += 4) {
     const score = magentaScore(px[i], px[i + 1], px[i + 2])
-    if (score <= 0) {continue}
+    if (score <= 0) {
+      continue
+    }
     if (score >= 0.5) {
       px[i + 3] = 0
       px[i] = 0
@@ -164,7 +172,9 @@ export function revokeCustomSidekickBlobUrl(id: string): void {
   }
   const detected = detectedSpriteCache.get(id)
   if (detected) {
-    for (const bmp of detected.bitmaps) {bmp.close()}
+    for (const bmp of detected.bitmaps) {
+      bmp.close()
+    }
     detectedSpriteCache.delete(id)
   }
 }

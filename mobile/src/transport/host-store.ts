@@ -1,16 +1,101 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { HostProfileSchema, type HostProfile } from './types'
+import * as SecureStore from 'expo-secure-store'
+import {
+  HostProfileSchema,
+  StoredHostProfileSchema,
+  type HostProfile,
+  type StoredHostProfile
+} from './types'
 
 const STORAGE_KEY = 'orca:hosts'
+// Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
+// Use dots as the separator so the key shape stays readable while
+// satisfying the validator.
+const TOKEN_KEY_PREFIX = 'orca.host-token.'
+
+// Why: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps the pairing token off
+// iCloud Keychain and out of iCloud/iTunes backup restores onto a
+// different physical device. Reads/writes are silent (no biometric
+// prompt) since we don't request access control flags.
+const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
+}
+
+function tokenKey(hostId: string): string {
+  return `${TOKEN_KEY_PREFIX}${hostId}`
+}
+
+// Why: SecureStore reads on Android Keystore can take 50-200ms each, and
+// loadHosts() is called from every screen mount + every useFocusEffect.
+// Stack with N hosts and you get N*200ms blocking every navigation, which
+// triggers connection-churn cycles in the home-screen useEffect. Cache
+// per-hostId in memory; invalidate only on save/remove. The cache lives
+// for the JS-runtime lifetime, which matches AsyncStorage semantics
+// (cleared on app uninstall, persisted across foreground/background).
+const tokenCache = new Map<string, string>()
+let inflightLoad: Promise<HostProfile[]> | null = null
 
 export async function loadHosts(): Promise<HostProfile[]> {
+  // Why: deduplicate concurrent loadHosts() calls so multiple screens
+  // mounting simultaneously share one Keychain read pass.
+  if (inflightLoad) return inflightLoad
+  inflightLoad = doLoadHosts().finally(() => {
+    inflightLoad = null
+  })
+  return inflightLoad
+}
+
+async function doLoadHosts(): Promise<HostProfile[]> {
+  const raw = await AsyncStorage.getItem(STORAGE_KEY)
+  if (!raw) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+
+  const out: HostProfile[] = []
+  for (const item of parsed) {
+    // Why: pre-v0.0.3 records carry the deviceToken in AsyncStorage.
+    // Drop them silently — the three pre-launch users will re-pair on
+    // first run rather than carry a migration shim through the auth
+    // path.
+    if (item && typeof item === 'object' && 'deviceToken' in item) {
+      continue
+    }
+    const stored = StoredHostProfileSchema.safeParse(item)
+    if (!stored.success) continue
+
+    let token = tokenCache.get(stored.data.id)
+    if (!token) {
+      const fetched = await SecureStore.getItemAsync(tokenKey(stored.data.id), KEYCHAIN_OPTIONS)
+      if (!fetched) {
+        // Why: orphaned metadata with no matching keychain entry — most
+        // likely a stale record from a development install. Skip it
+        // rather than surface a half-broken host.
+        continue
+      }
+      token = fetched
+      tokenCache.set(stored.data.id, token)
+    }
+    out.push({ ...stored.data, deviceToken: token })
+  }
+  return out
+}
+
+async function loadStoredHosts(): Promise<StoredHostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
     return parsed.flatMap((item) => {
-      const result = HostProfileSchema.safeParse(item)
+      // Why: same drop-old-records rule as loadHosts; keeps internal
+      // mutators from re-persisting pre-v0.0.3 entries.
+      if (item && typeof item === 'object' && 'deviceToken' in item) return []
+      const result = StoredHostProfileSchema.safeParse(item)
       return result.success ? [result.data] : []
     })
   } catch {
@@ -18,25 +103,41 @@ export async function loadHosts(): Promise<HostProfile[]> {
   }
 }
 
-export async function saveHost(host: HostProfile): Promise<void> {
-  const hosts = await loadHosts()
-  const index = hosts.findIndex((h) => h.id === host.id)
-  if (index >= 0) {
-    hosts[index] = host
-  } else {
-    hosts.push(host)
+function toStored(host: HostProfile): StoredHostProfile {
+  return {
+    id: host.id,
+    name: host.name,
+    endpoint: host.endpoint,
+    publicKeyB64: host.publicKeyB64,
+    lastConnected: host.lastConnected
   }
+}
+
+export async function saveHost(host: HostProfile): Promise<void> {
+  const validated = HostProfileSchema.parse(host)
+  const hosts = await loadStoredHosts()
+  const stored = toStored(validated)
+  const index = hosts.findIndex((h) => h.id === stored.id)
+  if (index >= 0) {
+    hosts[index] = stored
+  } else {
+    hosts.push(stored)
+  }
+  await SecureStore.setItemAsync(tokenKey(stored.id), validated.deviceToken, KEYCHAIN_OPTIONS)
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
+  tokenCache.set(stored.id, validated.deviceToken)
 }
 
 export async function removeHost(hostId: string): Promise<void> {
-  const hosts = await loadHosts()
+  const hosts = await loadStoredHosts()
   const filtered = hosts.filter((h) => h.id !== hostId)
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  await SecureStore.deleteItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+  tokenCache.delete(hostId)
 }
 
 export async function renameHost(hostId: string, newName: string): Promise<void> {
-  const hosts = await loadHosts()
+  const hosts = await loadStoredHosts()
   const host = hosts.find((h) => h.id === hostId)
   if (host) {
     host.name = newName
@@ -45,7 +146,7 @@ export async function renameHost(hostId: string, newName: string): Promise<void>
 }
 
 export async function getNextHostName(): Promise<string> {
-  const hosts = await loadHosts()
+  const hosts = await loadStoredHosts()
   const existingNumbers = hosts
     .map((h) => {
       const match = h.name.match(/^Host (\d+)$/)
@@ -57,7 +158,7 @@ export async function getNextHostName(): Promise<string> {
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {
-  const hosts = await loadHosts()
+  const hosts = await loadStoredHosts()
   const host = hosts.find((h) => h.id === hostId)
   if (host) {
     host.lastConnected = Date.now()

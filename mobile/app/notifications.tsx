@@ -13,7 +13,7 @@ import { ensureNotificationPermissions } from '../src/notifications/mobile-notif
 export default function NotificationsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [pushEnabled, setPushEnabled] = useState(true)
+  const [pushEnabled, setPushEnabled] = useState(false)
 
   useFocusEffect(
     useCallback(() => {

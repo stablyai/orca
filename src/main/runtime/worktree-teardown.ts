@@ -65,7 +65,7 @@ async function sweepProviderByPrefix(worktreeId: string, provider: IPtyProvider)
       continue
     }
     try {
-      await provider.shutdown(s.id, true)
+      await provider.shutdown(s.id, { immediate: true })
       killed += 1
     } catch {
       // Already dead, or the backend dropped the session — treat as success.
@@ -83,7 +83,7 @@ async function sweepRegistryForWorktree(
   let killed = 0
   for (const entry of entries) {
     try {
-      await localProvider.shutdown(entry.ptyId, true)
+      await localProvider.shutdown(entry.ptyId, { immediate: true })
       killed += 1
     } catch {
       /* ignore — best-effort */

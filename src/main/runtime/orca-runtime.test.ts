@@ -209,6 +209,16 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getRuntimeId()).toBeTruthy()
   })
 
+  it('reports protocol version and minimum compatible mobile version on status', () => {
+    const runtime = createRuntime()
+
+    const status = runtime.getStatus()
+    expect(typeof status.protocolVersion).toBe('number')
+    expect(typeof status.minCompatibleMobileVersion).toBe('number')
+    expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
+    expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
+  })
+
   it('claims the first window as authoritative and ignores later windows', () => {
     const runtime = createRuntime()
 
@@ -1574,10 +1584,9 @@ describe('OrcaRuntimeService', () => {
 
       // The post-daemon provider's prefix-matching session must have been
       // shut down, proving the thunk resolved lazily at call time.
-      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
-        `${TEST_WORKTREE_ID}@@aaaaaaaa`,
-        true
-      )
+      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`, {
+        immediate: true
+      })
       // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })

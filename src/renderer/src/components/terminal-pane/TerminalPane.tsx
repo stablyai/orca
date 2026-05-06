@@ -33,10 +33,10 @@ import { getPaneIdsForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fi
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
-/** Global set of buffer-capture callbacks, one per mounted TerminalPane.
- *  The beforeunload handler in App.tsx invokes every callback to populate
- *  Zustand with serialized buffers before flushing the session to disk. */
-export const shutdownBufferCaptures = new Set<() => void>()
+// Why: registry lives in a leaf module so the store slice can import it
+// without re-entering the `slice → TerminalPane → store → slice` cycle
+// that otherwise leaves createTerminalSlice undefined at store-init time.
+import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 
 const MAX_BUFFER_BYTES = 512 * 1024
 
@@ -137,10 +137,17 @@ export default function TerminalPane({
           }
           requestAnimationFrame(fitAffectedPanes)
           // Why: belt-and-suspenders — if safeFit's fitAddon.fit() threw or
-          // was a no-op due to stale dimensions, this fallback uses the
-          // restored cols/rows from the runtime to force the resize. If
-          // safeFit already succeeded, the terminal is already at the right
-          // dims and this is a harmless no-op.
+          // was a no-op due to stale dimensions, fall back to a direct
+          // resize. ONLY fire if xterm is still parked at the prior
+          // mobile-fit dims, meaning safeFit failed to move it. Previously
+          // we also fired when xterm had moved to *any* size other than
+          // the captured baseline, which clobbered safeFit's correct
+          // DOM-measured fit when the desktop pane geometry had changed
+          // since mobile-fit started (e.g. user closed a split or resized
+          // the window while the phone was active). In that scenario the
+          // event.cols/rows is the stale baseline from the moment
+          // mobile-fit started, not the current pane geometry — applying
+          // it would shrink the terminal back to e.g. half-width.
           setTimeout(() => {
             for (const paneId of paneIds) {
               const pane = manager.getPanes().find((p) => p.id === paneId)
@@ -148,13 +155,12 @@ export default function TerminalPane({
                 continue
               }
               safeFit(pane)
-              // Fallback: if terminal is still at mobile dims, force resize
-              // using the restored dimensions from the runtime notification.
-              if (
-                event.cols > 0 &&
-                event.rows > 0 &&
-                (pane.terminal.cols !== event.cols || pane.terminal.rows !== event.rows)
-              ) {
+              const stuckAtMobile =
+                event.priorCols != null &&
+                event.priorRows != null &&
+                pane.terminal.cols === event.priorCols &&
+                pane.terminal.rows === event.priorRows
+              if (stuckAtMobile && event.cols > 0 && event.rows > 0) {
                 pane.terminal.resize(event.cols, event.rows)
               }
             }
@@ -881,9 +887,13 @@ export default function TerminalPane({
       }
       setTabLayout(tabId, layout)
     }
-    shutdownBufferCaptures.add(captureBuffers)
+    shutdownBufferCaptures.set(tabId, captureBuffers)
     return () => {
-      shutdownBufferCaptures.delete(captureBuffers)
+      // Why: only remove if the entry still points at this closure. A
+      // remount could have replaced it before the prior cleanup ran.
+      if (shutdownBufferCaptures.get(tabId) === captureBuffers) {
+        shutdownBufferCaptures.delete(tabId)
+      }
     }
   }, [tabId, setTabLayout])
 

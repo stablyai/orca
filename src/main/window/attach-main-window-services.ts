@@ -40,7 +40,8 @@ export function attachMainWindowServices(
     runtime,
     getSelectedCodexHomePath,
     () => store.getSettings(),
-    prepareClaudeAuth
+    prepareClaudeAuth,
+    store
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live

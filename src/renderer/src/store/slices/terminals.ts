@@ -25,6 +25,7 @@ import {
   ensurePtyDispatcher,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -160,7 +161,10 @@ export type TerminalSlice = {
   setTabColor: (tabId: string, color: string | null) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   clearTabPtyId: (tabId: string, ptyId?: string) => void
-  shutdownWorktreeTerminals: (worktreeId: string) => Promise<void>
+  shutdownWorktreeTerminals: (
+    worktreeId: string,
+    opts?: { keepIdentifiers?: boolean }
+  ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   queueCodexPaneRestarts: (ptyIds: string[]) => void
@@ -966,7 +970,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
-  shutdownWorktreeTerminals: async (worktreeId) => {
+  shutdownWorktreeTerminals: async (worktreeId, opts) => {
+    const keepIdentifiers = opts?.keepIdentifiers ?? false
     const tabs = get().tabsByWorktree[worktreeId] ?? []
     const ptyIds = tabs.flatMap((tab) => get().ptyIdsByTabId[tab.id] ?? [])
 
@@ -979,52 +984,94 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Removing the data handlers first ensures the final flush is a no-op.
     unregisterPtyDataHandlers(ptyIds)
 
-    set((s) => {
-      const nextTabsByWorktree = {
-        ...s.tabsByWorktree,
-        [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((tab, index) =>
-          clearTransientTerminalState(tab, index)
-        )
+    // Why (ordering invariant — DESIGN_DOC §3.3.c): on sleep, capture every
+    // pane's serializer buffer into terminalLayoutsByTabId[tab].buffersByLeafId
+    // BEFORE issuing pty.kill (panes unmount on PTY exit and their
+    // serializeAddons go with them) AND BEFORE the set() block below (the
+    // capture writes through to the store via its own setTabLayout call; any
+    // subsequent set must use a functional updater spreading
+    // s.terminalLayoutsByTabId, not a captured snapshot). For SSH this is
+    // load-bearing — the relay drops the remote PTY on kill so there's no
+    // on-disk history dir to cold-restore from. For local daemon it's
+    // defense-in-depth alongside the on-disk history dir preserved by
+    // keepHistory below.
+    if (keepIdentifiers) {
+      for (const tab of tabs) {
+        const capture = shutdownBufferCaptures.get(tab.id)
+        if (capture) {
+          try {
+            capture()
+          } catch {
+            // Don't let one tab's capture failure block the rest.
+          }
+        }
       }
+    }
+
+    set((s) => {
+      const nextTabsByWorktree = keepIdentifiers
+        ? s.tabsByWorktree
+        : {
+            ...s.tabsByWorktree,
+            [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((tab, index) =>
+              clearTransientTerminalState(tab, index)
+            )
+          }
       const nextPtyIdsByTabId = {
         ...s.ptyIdsByTabId,
         ...Object.fromEntries(tabs.map((tab) => [tab.id, [] as string[]] as const))
       }
-      const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
+      const nextRuntimePaneTitlesByTabId = keepIdentifiers
+        ? s.runtimePaneTitlesByTabId
+        : { ...s.runtimePaneTitlesByTabId }
       const nextSuppressedPtyExitIds = {
         ...s.suppressedPtyExitIds,
         ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
       }
-      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+      // Why: pendingCodexPaneRestartIds is keyed by ptyId — under sleep we
+      // preserve it so a mid-restart marker survives wake against the same
+      // identifier. codexRestartNoticeByPtyId is also keyed by the now-stale
+      // ptyId; on wake the post-spawn ptyId may differ, so the notice can't
+      // be carried forward and is cleared in both cases.
+      const nextPendingCodexPaneRestartIds = keepIdentifiers
+        ? s.pendingCodexPaneRestartIds
+        : { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
       for (const ptyId of ptyIds) {
-        delete nextPendingCodexPaneRestartIds[ptyId]
+        if (!keepIdentifiers) {
+          delete nextPendingCodexPaneRestartIds[ptyId]
+        }
         delete nextCodexRestartNoticeByPtyId[ptyId]
       }
-      // Why: clear any queued setup and issue-command splits for the affected
-      // tabs so stale commands do not fire unintended splits when the worktree
-      // is later remounted.
+      // Why: setup-split and issue-command-split are transient one-shots that
+      // drive new-tab UX. They are not sleep-recovery state; clear in both
+      // cases.
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
       const nextPendingIssueCommandSplitByTabId = { ...s.pendingIssueCommandSplitByTabId }
-      // Why: layout snapshots carry `ptyIdsByLeafId` so in-session remounts
-      // (e.g. tab-group moves) can reattach to live PTYs. After shutdown these
-      // bindings point at killed PTY IDs; if we leave them, the next remount
-      // takes the reattach branch in connectPanePty and produces a visible
-      // but non-interactive "zombie" pane. Clearing the per-leaf binding
-      // forces a fresh spawn when the user returns to the worktree.
+      // Why: under remove-worktree (default), layout snapshots carry
+      // `ptyIdsByLeafId` referencing now-dead PTY IDs; if we leave them, the
+      // next remount takes the reattach branch in connectPanePty and produces
+      // a visible but non-interactive "zombie" pane. Under sleep
+      // (keepIdentifiers), we preserve `ptyIdsByLeafId` precisely so wake can
+      // pass them as args.sessionId to pty.spawn and reattach to the daemon
+      // history dir (or, on SSH, restore scrollback from buffersByLeafId
+      // captured above).
       const nextTerminalLayoutsByTabId = { ...s.terminalLayoutsByTabId }
-      // Why: unread dots survive across worktree switches by design, but a full
-      // shutdown tears down the PTYs behind them — the dot would point at a
-      // tab that is no longer running and cannot be cleared by focus because
-      // focus events for a killed pane never arrive. Drop them here so a later
-      // remount starts clean.
-      // Why: preserve the unreadTerminalTabs reference when none of the shutting-
-      // down tabs had an unread flag — avoids a no-op top-level state allocation
-      // that would force re-evaluation of full-state selectors on unrelated
-      // shutdown calls. Mirrors the sibling pattern in tabs.ts.
+      // Why: unread dots survive across worktree switches by design, but a
+      // full shutdown tears down the PTYs behind them. Even under sleep, the
+      // PTYs are killed, so unread state pointing at dead ptyIds is stale —
+      // clear in both cases. (Carrying the dot across sleep would also be
+      // surprising and inconsistent with how it behaves on tab close.)
+      // Why: preserve the unreadTerminalTabs reference when none of the
+      // shutting-down tabs had an unread flag — avoids a no-op top-level
+      // state allocation that would force re-evaluation of full-state
+      // selectors on unrelated shutdown calls. Mirrors the sibling pattern
+      // in tabs.ts.
       let nextUnreadTerminalTabs = s.unreadTerminalTabs
       for (const tab of tabs) {
-        delete nextRuntimePaneTitlesByTabId[tab.id]
+        if (!keepIdentifiers) {
+          delete nextRuntimePaneTitlesByTabId[tab.id]
+        }
         delete nextPendingSetupSplitByTabId[tab.id]
         delete nextPendingIssueCommandSplitByTabId[tab.id]
         if (nextUnreadTerminalTabs[tab.id]) {
@@ -1033,22 +1080,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           }
           delete nextUnreadTerminalTabs[tab.id]
         }
-        const existingLayout = nextTerminalLayoutsByTabId[tab.id]
-        if (existingLayout?.ptyIdsByLeafId) {
-          nextTerminalLayoutsByTabId[tab.id] = {
-            ...existingLayout,
-            ptyIdsByLeafId: {}
+        if (!keepIdentifiers) {
+          const existingLayout = nextTerminalLayoutsByTabId[tab.id]
+          if (existingLayout?.ptyIdsByLeafId) {
+            nextTerminalLayoutsByTabId[tab.id] = {
+              ...existingLayout,
+              ptyIdsByLeafId: {}
+            }
           }
         }
       }
 
-      // Why: intentional shutdown kills the relay PTY. Remove the tab's
-      // lastKnown entry so session-save does not persist a dead session ID
-      // into remoteSessionIdsByTabId, which would cause the next restart
-      // to attempt reattaching to a PTY that no longer exists.
-      const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
-      for (const tab of tabs) {
-        delete nextLastKnownRelay[tab.id]
+      // Why: under remove-worktree, intentional shutdown kills the relay PTY
+      // and persisting a dead session ID would cause next-restart reattach to
+      // fail. Under sleep, wake re-spawns over the relay against this exact
+      // session ID — preserving it is what lets the wake-side wiring stay
+      // consistent.
+      const nextLastKnownRelay = keepIdentifiers
+        ? s.lastKnownRelayPtyIdByTabId
+        : { ...s.lastKnownRelayPtyIdByTabId }
+      if (!keepIdentifiers) {
+        for (const tab of tabs) {
+          delete nextLastKnownRelay[tab.id]
+        }
       }
 
       return {
@@ -1071,20 +1125,25 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
 
-    // Why: sleep keeps the tab records (so wake restores them) but kills the
-    // PTYs, and there is no implicit "PTY death drops agent-status rows" path
-    // — closeTab and pane-close drop their own rows explicitly. Without the
-    // same explicit sweep here, a worktree slept in the 'done' state leaves
-    // live/retained entries behind and WorktreeCard's dot stays blue.
-    for (const tab of tabs) {
-      get().dropAgentStatusByTabPrefix(tab.id)
+    // Why: under remove-worktree, sweep agent-status rows so a tab killed in
+    // the 'done' state doesn't leave the WorktreeCard dot blue. Under sleep,
+    // the agent-status describes the live agent process which the user
+    // expects to survive sleep — skip the drop so wake renders the prior
+    // status until the next event arrives. (Mirror of the pattern in
+    // closeTab / pane-close, which drop their own rows explicitly.)
+    if (!keepIdentifiers) {
+      for (const tab of tabs) {
+        get().dropAgentStatusByTabPrefix(tab.id)
+      }
     }
 
     if (ptyIds.length === 0) {
       return
     }
 
-    await Promise.allSettled(ptyIds.map((ptyId) => window.api.pty.kill(ptyId)))
+    await Promise.allSettled(
+      ptyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
+    )
   },
 
   consumeSuppressedPtyExit: (ptyId) => {

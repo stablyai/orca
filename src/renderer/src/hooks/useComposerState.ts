@@ -383,10 +383,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       return
     }
     let cancelled = false
-    void (window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
-      owner: string
-      repo: string
-    } | null>)
+    void (
+      window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
+        owner: string
+        repo: string
+      } | null>
+    )
       .then((result) => {
         if (cancelled) {
           return
@@ -1509,7 +1511,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent: draftLaunchPlan.agent,
             launchCommand: draftLaunchPlan.launchCommand,
             expectedProcess: draftLaunchPlan.expectedProcess,
-            followupPrompt: null
+            followupPrompt: null,
+            ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
           }
         } else if (agent !== null) {
           startupPlan = buildAgentStartupPlan({
@@ -1542,6 +1545,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? {
                 startup: {
                   command: startupPlan.launchCommand,
+                  ...(startupPlan.env ? { env: startupPlan.env } : {}),
                   ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
                 }
               }

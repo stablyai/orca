@@ -3,12 +3,13 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
-import { decodePairingUrl } from '../src/transport/pairing'
+import { ChevronLeft, Clipboard as ClipboardIcon } from 'lucide-react-native'
+import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { PairingOffer } from '../src/transport/types'
+import type { PairingOffer, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { TextInputModal } from '../src/components/TextInputModal'
 
 function Step({ number, text }: { number: number; text: string }) {
   return (
@@ -27,6 +28,7 @@ export default function PairScanScreen() {
   const [permission, requestPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
+  const [pasteVisible, setPasteVisible] = useState(false)
   const processingRef = useRef(false)
 
   const handleBarCodeScanned = useCallback(
@@ -47,32 +49,61 @@ export default function PairScanScreen() {
     [router]
   )
 
+  const handlePasteSubmit = useCallback((input: string) => {
+    setPasteVisible(false)
+    if (processingRef.current) return
+    processingRef.current = true
+
+    const offer = parsePairingCode(input)
+    if (!offer) {
+      setStatus('error')
+      setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
+      processingRef.current = false
+      return
+    }
+
+    void testAndSave(offer)
+  }, [])
+
   async function testAndSave(offer: PairingOffer) {
     setStatus('connecting')
     let client: ReturnType<typeof connect> | null = null
 
+    // Why: split the try/catch around the network call vs the local save
+    // so a Keychain or AsyncStorage failure doesn't masquerade as a
+    // "Cannot connect — same network?" error. Pairing reached the
+    // desktop fine; the failure is local persistence.
+    let response: RpcResponse
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64)
-      const response = await client.sendRequest('status.get')
+      response = await client.sendRequest('status.get')
       client.close()
       client = null
+    } catch (err) {
+      console.warn('[pair] connect failed', err)
+      setStatus('error')
+      setErrorMessage('Cannot connect — check that your computer is on the same network')
+      processingRef.current = false
+      client?.close()
+      return
+    }
 
-      if (!response.ok) {
-        if (response.error.code === 'unauthorized') {
-          setStatus('error')
-          setErrorMessage('Authentication failed — token may be expired')
-          processingRef.current = false
-          return
-        }
+    if (!response.ok) {
+      if (response.error.code === 'unauthorized') {
         setStatus('error')
-        setErrorMessage(`Server error: ${response.error.message}`)
+        setErrorMessage('Authentication failed — token may be expired')
         processingRef.current = false
         return
       }
+      setStatus('error')
+      setErrorMessage(`Server error: ${response.error.message}`)
+      processingRef.current = false
+      return
+    }
 
+    try {
       const hostId = `host-${Date.now()}`
       const hostName = await getNextHostName()
-
       await saveHost({
         id: hostId,
         name: hostName,
@@ -81,14 +112,14 @@ export default function PairScanScreen() {
         publicKeyB64: offer.publicKeyB64,
         lastConnected: Date.now()
       })
-
       router.replace(`/h/${hostId}`)
-    } catch {
+    } catch (err) {
+      console.warn('[pair] save failed', err)
       setStatus('error')
-      setErrorMessage('Cannot connect — check that your computer is on the same network')
+      setErrorMessage(
+        `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
+      )
       processingRef.current = false
-    } finally {
-      client?.close()
     }
   }
 
@@ -98,7 +129,13 @@ export default function PairScanScreen() {
     processingRef.current = false
   }
 
-  const containerPadding = { paddingTop: insets.top + spacing.sm }
+  // Why: bottom inset accounts for Android 3-button nav bars and iOS
+  // home-indicator areas that would otherwise overlap the 'Or paste
+  // pairing code' button at the bottom of the scan screen.
+  const containerPadding = {
+    paddingTop: insets.top + spacing.sm,
+    paddingBottom: insets.bottom + spacing.sm
+  }
 
   if (!permission) {
     return (
@@ -140,20 +177,37 @@ export default function PairScanScreen() {
       </View>
 
       {status === 'scanning' && (
-        <View style={styles.cameraWrap}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={handleBarCodeScanned}
-          />
-          <View style={styles.reticle} pointerEvents="none">
-            <View style={[styles.corner, styles.cornerTL]} />
-            <View style={[styles.corner, styles.cornerTR]} />
-            <View style={[styles.corner, styles.cornerBL]} />
-            <View style={[styles.corner, styles.cornerBR]} />
-          </View>
-        </View>
+        <>
+          {/* Why: unmount the camera while the paste sheet is open. The
+              user has clearly chosen the paste path; keeping the camera
+              streaming behind a sheet wastes power and looks weird if
+              they cancel the sheet and the QR was scanned silently in
+              the meantime. */}
+          {!pasteVisible && (
+            <View style={styles.cameraWrap}>
+              <CameraView
+                style={styles.camera}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={handleBarCodeScanned}
+              />
+              <View style={styles.reticle} pointerEvents="none">
+                <View style={[styles.corner, styles.cornerTL]} />
+                <View style={[styles.corner, styles.cornerTR]} />
+                <View style={[styles.corner, styles.cornerBL]} />
+                <View style={[styles.corner, styles.cornerBR]} />
+              </View>
+            </View>
+          )}
+          {pasteVisible && <View style={styles.cameraPlaceholder} />}
+          <Pressable
+            style={({ pressed }) => [styles.pasteButton, pressed && styles.pasteButtonPressed]}
+            onPress={() => setPasteVisible(true)}
+          >
+            <ClipboardIcon size={16} color={colors.textSecondary} />
+            <Text style={styles.pasteButtonText}>Or paste pairing code</Text>
+          </Pressable>
+        </>
       )}
 
       {status === 'connecting' && (
@@ -166,11 +220,34 @@ export default function PairScanScreen() {
       {status === 'error' && (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{errorMessage}</Text>
-          <Pressable style={styles.primaryButton} onPress={retry}>
-            <Text style={styles.primaryButtonText}>Try Again</Text>
-          </Pressable>
+          <View style={styles.errorActions}>
+            <Pressable style={styles.primaryButton} onPress={retry}>
+              <Text style={styles.primaryButtonText}>Try Again</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed && styles.pasteButtonPressed
+              ]}
+              onPress={() => {
+                retry()
+                setPasteVisible(true)
+              }}
+            >
+              <Text style={styles.secondaryButtonText}>Paste code instead</Text>
+            </Pressable>
+          </View>
         </View>
       )}
+
+      <TextInputModal
+        visible={pasteVisible}
+        title="Paste pairing code"
+        message="Copy the code shown under the QR on your computer."
+        placeholder="orca://pair#... or paste the code"
+        onSubmit={handlePasteSubmit}
+        onCancel={() => setPasteVisible(false)}
+      />
     </View>
   )
 }
@@ -220,6 +297,14 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: radii.camera,
     overflow: 'hidden'
+  },
+  // Why: holds the layout slot while the camera is unmounted during
+  // paste, so the bottom action button doesn't snap up to fill the
+  // empty space.
+  cameraPlaceholder: {
+    flex: 1,
+    backgroundColor: colors.bgPanel,
+    borderRadius: radii.camera
   },
   camera: {
     ...StyleSheet.absoluteFillObject
@@ -303,5 +388,36 @@ const styles = StyleSheet.create({
     color: colors.bgBase,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  pasteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button
+  },
+  pasteButtonPressed: {
+    opacity: 0.6
+  },
+  pasteButtonText: {
+    color: colors.textSecondary,
+    fontSize: typography.bodySize,
+    fontWeight: '500'
+  },
+  errorActions: {
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  secondaryButton: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button
+  },
+  secondaryButtonText: {
+    color: colors.textSecondary,
+    fontSize: typography.bodySize,
+    fontWeight: '500'
   }
 })

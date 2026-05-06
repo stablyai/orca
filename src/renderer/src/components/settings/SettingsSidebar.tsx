@@ -1,6 +1,10 @@
+import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+
+const SEARCH_SHORTCUT_HINT = isMacUserAgent() ? '⌘F' : 'Ctrl+F'
 
 type NavSection = {
   id: string
@@ -20,6 +24,7 @@ type SettingsSidebarProps = {
   repoSections: RepoNavSection[]
   hasRepos: boolean
   searchQuery: string
+  searchInputRef?: RefObject<HTMLInputElement | null>
   onBack: () => void
   onSearchChange: (query: string) => void
   onSelectSection: (
@@ -34,6 +39,7 @@ export function SettingsSidebar({
   repoSections,
   hasRepos,
   searchQuery,
+  searchInputRef,
   onBack,
   onSearchChange,
   onSelectSection
@@ -56,11 +62,17 @@ export function SettingsSidebar({
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search settings"
-            className="pl-9"
+            className="pl-9 pr-14"
           />
+          {searchQuery === '' ? (
+            <kbd className="pointer-events-none absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground">
+              {SEARCH_SHORTCUT_HINT}
+            </kbd>
+          ) : null}
         </div>
       </div>
 

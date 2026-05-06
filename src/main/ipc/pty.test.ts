@@ -826,7 +826,10 @@ describe('registerPtyHandlers', () => {
     )
 
     await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
-    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', true)
+    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {
+      immediate: true,
+      keepHistory: false
+    })
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
