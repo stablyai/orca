@@ -26,6 +26,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import GitHubItemDialog, { type GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
+import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
@@ -906,6 +907,7 @@ function ErrorState({
       : error.type === 'scope_missing'
         ? 'gh auth refresh -s project -s read:org -s repo'
         : null
+  const isAuthError = error.type === 'auth_required' || error.type === 'scope_missing'
   const copy =
     error.type === 'too_large'
       ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
@@ -916,6 +918,18 @@ function ErrorState({
           : error.type === 'schema_drift'
             ? 'Could not read this project view.'
             : error.message
+  if (isAuthError) {
+    return (
+      <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
+        <GhAuthErrorHelp
+          error={error as GitHubProjectViewError & { type: 'auth_required' | 'scope_missing' }}
+        />
+        <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
+          <ExternalLink className="mr-1 size-3.5" /> Open in GitHub
+        </Button>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
       <div className="text-muted-foreground">{copy}</div>

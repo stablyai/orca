@@ -28,6 +28,7 @@ import type {
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -668,6 +669,8 @@ const api = {
     // known-expensive op (e.g. after ProjectPicker discovery).
     rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
       ipcRenderer.invoke('gh:rateLimit', args),
+
+    diagnoseAuth: (): Promise<GhAuthDiagnostic> => ipcRenderer.invoke('gh:diagnoseAuth'),
 
     // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
     listAccessibleProjects: (): Promise<ListAccessibleProjectsResult> =>

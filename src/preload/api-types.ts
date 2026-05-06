@@ -132,6 +132,7 @@ import type {
   ClaudeUsageSummary
 } from '../shared/claude-usage-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   SshConnectionState,
   SshTarget,
@@ -602,6 +603,14 @@ export type PreloadApi = {
      * `force: true` to bust after a known-expensive op.
      */
     rateLimit: (args?: { force?: boolean }) => Promise<GetRateLimitResult>
+    /**
+     * Probe `gh auth status` and the Electron process env to explain
+     * why ProjectV2 calls are failing with scope_missing. Surfaces the
+     * common gotcha where `GITHUB_TOKEN` is exported in the user's
+     * shell and silently shadows the keyring credential — in that case
+     * `gh auth refresh` is a no-op and the UI must say so.
+     */
+    diagnoseAuth: () => Promise<GhAuthDiagnostic>
     // ── ProjectV2 (GitHub Projects) ─────────────────────────────────
     listAccessibleProjects: () => Promise<ListAccessibleProjectsResult>
     resolveProjectRef: (args: ResolveProjectRefArgs) => Promise<ResolveProjectRefResult>
@@ -759,11 +768,7 @@ export type PreloadApi = {
   sidekick: {
     import: () => Promise<CustomSidekick | null>
     importPetBundle: () => Promise<CustomSidekick | null>
-    read: (
-      id: string,
-      fileName: string,
-      kind?: 'image' | 'bundle'
-    ) => Promise<ArrayBuffer | null>
+    read: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<ArrayBuffer | null>
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
   }
   browser: BrowserApi

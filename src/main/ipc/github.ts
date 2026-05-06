@@ -34,6 +34,7 @@ import {
 } from '../github/client'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
+import { diagnoseGhAuth } from '../github/auth-diagnose'
 import type { GitHubPRFile } from '../../shared/types'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
 import {
@@ -405,6 +406,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle('gh:rateLimit', (_event, args?: { force?: boolean }) =>
     getRateLimit(args?.force ? { force: true } : undefined)
   )
+
+  ipcMain.handle('gh:diagnoseAuth', () => diagnoseGhAuth())
 
   // ── GitHub ProjectV2 view handlers ─────────────────────────────────
   // Why: registered unconditionally so enabling the experimental flag at
