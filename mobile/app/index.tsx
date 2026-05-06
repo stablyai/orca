@@ -22,7 +22,8 @@ import {
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
-import { connect, type RpcClient } from '../src/transport/rpc-client'
+import type { RpcClient } from '../src/transport/rpc-client'
+import { useAllHostClients, useCloseHost } from '../src/transport/client-context'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
@@ -204,7 +205,20 @@ export default function HomeScreen() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
-  const clientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
+
+  // Why: read shared clients from the per-host store. Replaces the prior
+  // pattern of opening N independent WebSockets here. See
+  // docs/mobile-shared-client-per-host.md.
+  const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
+  const allClients = useAllHostClients(hostIds)
+  const closeHostClient = useCloseHost()
+  const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
+  useEffect(() => {
+    allClientsRef.current = allClients.map((entry) => ({
+      hostId: entry.hostId,
+      client: entry.client
+    }))
+  }, [allClients])
 
   // Why: hydrate the home page from a persisted snapshot on cold-start so
   // Resume + Account-usage cards paint immediately with last-known data
@@ -259,7 +273,7 @@ export default function HomeScreen() {
           setLastVisited(JSON.parse(raw))
         } catch {}
       })
-      for (const entry of clientsRef.current) {
+      for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
           fetchStats(entry.client, setStats, () => stale)
           fetchWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
@@ -277,69 +291,69 @@ export default function HomeScreen() {
     [hosts]
   )
 
-  // Why: depend on a stable identity string instead of the `hosts` array
-  // reference. loadHosts() returns a fresh array on every call (e.g., from
-  // useFocusEffect on every navigate-back), and depending on that reference
-  // would tear down + rebuild every WebSocket on every navigation. That
-  // churn caused stale sockets to pile up on the desktop until it hit the
-  // 32-connection cap and started rejecting new connects with WS code 1013.
-  // Sort + serialize id|endpoint|token so we only rebuild when the actual
-  // connection-shape changes (host added/removed, endpoint changed,
-  // deviceToken rotated).
-  const hostsKey = useMemo(
-    () =>
-      hosts
-        .map((h) => `${h.id}|${h.endpoint}|${h.deviceToken}`)
-        .sort()
-        .join(','),
-    [hosts]
-  )
-
+  // Why: mirror per-host connection state into hostStates so existing
+  // render code (status dots, connecting indicators) keeps working.
   useEffect(() => {
-    let disposed = false
-    const notifCleanups: Array<() => void> = []
-    const entries = hosts.flatMap((host) => {
-      if (!host.publicKeyB64 || !host.deviceToken) {
-        setHostStates((prev) => ({ ...prev, [host.id]: 'auth-failed' }))
-        return []
+    setHostStates((prev) => {
+      const next: Record<string, ConnectionState> = { ...prev }
+      let changed = false
+      const liveIds = new Set(allClients.map((e) => e.hostId))
+      for (const entry of allClients) {
+        if (next[entry.hostId] !== entry.state) {
+          next[entry.hostId] = entry.state
+          changed = true
+        }
       }
-      setHostStates((prev) => ({
-        ...prev,
-        [host.id]: prev[host.id] ?? 'connecting'
-      }))
-      let client: ReturnType<typeof connect>
-      try {
-        client = connect(host.endpoint, host.deviceToken, host.publicKeyB64, (state) => {
-          if (disposed) return
-          setHostStates((prev) => ({ ...prev, [host.id]: state }))
-        })
-      } catch {
-        setHostStates((prev) => ({ ...prev, [host.id]: 'auth-failed' }))
-        return []
+      // Auth-failed for hosts whose record is invalid (no publicKey / no
+      // token) — they'll never appear in allClients.
+      for (const host of hosts) {
+        if (!host.publicKeyB64 || !host.deviceToken) {
+          if (next[host.id] !== 'auth-failed') {
+            next[host.id] = 'auth-failed'
+            changed = true
+          }
+        }
       }
+      // Drop entries for hosts we no longer track at all.
+      for (const id of Object.keys(next)) {
+        if (!liveIds.has(id) && hosts.some((h) => h.id === id) === false) {
+          delete next[id]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [allClients, hosts])
 
+  // Why: per-host streaming subscriptions (notifications + accounts) and
+  // one-shot stats fetches when each host transitions to 'connected'.
+  // Runs once per (hostId, client) pair and tears down when that pair
+  // changes. The provider keeps the underlying socket open across
+  // resubscription cycles so this is cheap.
+  useEffect(() => {
+    const cleanups: Array<() => void> = []
+    for (const entry of allClients) {
       let unsubNotif: (() => void) | null = null
       let unsubAccounts: (() => void) | null = null
       let statsFetched = false
-      const unsubState = client.onStateChange((state) => {
+      const wireUp = (state: ConnectionState) => {
         if (state === 'connected') {
           if (!unsubNotif) {
-            unsubNotif = subscribeToDesktopNotifications(client)
+            unsubNotif = subscribeToDesktopNotifications(entry.client)
           }
           if (!unsubAccounts) {
-            unsubAccounts = client.subscribe('accounts.subscribe', null, (payload) => {
-              if (disposed || !payload || typeof payload !== 'object') return
+            unsubAccounts = entry.client.subscribe('accounts.subscribe', null, (payload) => {
+              if (!payload || typeof payload !== 'object') return
               const evt = payload as { type?: string; snapshot?: AccountsSnapshot }
               if ((evt.type === 'ready' || evt.type === 'snapshot') && evt.snapshot) {
-                const snap = evt.snapshot
-                setAccountsByHost((prev) => ({ ...prev, [host.id]: snap }))
+                setAccountsByHost((prev) => ({ ...prev, [entry.hostId]: evt.snapshot! }))
               }
             })
           }
           if (!statsFetched) {
             statsFetched = true
-            fetchStats(client, setStats, () => disposed)
-            fetchWorktreeInfo(client, host.id, setWorktreeInfo, () => disposed)
+            fetchStats(entry.client, setStats, () => false)
+            fetchWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => false)
           }
         } else {
           if (unsubNotif) {
@@ -351,29 +365,29 @@ export default function HomeScreen() {
             unsubAccounts = null
           }
         }
-      })
-      notifCleanups.push(() => {
+      }
+      wireUp(entry.state)
+      const unsubState = entry.client.onStateChange(wireUp)
+      cleanups.push(() => {
         unsubState()
         unsubNotif?.()
         unsubAccounts?.()
       })
-
-      return [{ hostId: host.id, client }]
-    })
-
-    clientsRef.current = entries
-
-    return () => {
-      disposed = true
-      clientsRef.current = []
-      for (const cleanup of notifCleanups) cleanup()
-      for (const entry of entries) entry.client.close()
     }
-    // Why: hostsKey is the stable identity; we deliberately exclude `hosts`
-    // even though the body reads it. ESLint's exhaustive-deps would flag
-    // this; eslint-disable comment lets the lint pass cleanly.
+    return () => {
+      for (const c of cleanups) c()
+    }
+    // Why: depend on the host-id set, not the whole allClients array, so
+    // resubscriptions don't fire on every render that produces a new
+    // array reference. Client identity is stable per hostId for the
+    // lifetime of the underlying transport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hostsKey])
+  }, [
+    allClients
+      .map((e) => e.hostId)
+      .sort()
+      .join(',')
+  ])
 
   // Why: prefer the worktree the user last opened on this device so the
   // "Resume" card reflects their mobile session history, not just the
@@ -455,6 +469,9 @@ export default function HomeScreen() {
   async function handleRemove() {
     if (!confirmRemove) return
     try {
+      // Why: close the shared client first so the WebSocket is gone
+      // before the host record disappears from loadHosts().
+      closeHostClient(confirmRemove.id)
       await removeHost(confirmRemove.id)
       setConfirmRemove(null)
       setHosts(await loadHosts())

@@ -27,8 +27,9 @@ import {
   Check,
   UserCircle
 } from 'lucide-react-native'
-import { connect, type RpcClient } from '../../../src/transport/rpc-client'
+import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
+import { useHostClient, useCloseHost } from '../../../src/transport/client-context'
 import type { ConnectionState, RpcSuccess } from '../../../src/transport/types'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import { StatusDot } from '../../../src/components/StatusDot'
@@ -245,9 +246,11 @@ export default function HostScreen() {
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
-  const [client, setClient] = useState<RpcClient | null>(null)
+  // Why: shared client per host owned by RpcClientProvider. See
+  // docs/mobile-shared-client-per-host.md.
+  const { client, state: connState } = useHostClient(hostId)
   const clientRef = useRef<RpcClient | null>(null)
-  const [connState, setConnState] = useState<ConnectionState>('disconnected')
+  const closeHostClient = useCloseHost()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
   const [hostName, setHostName] = useState('')
@@ -303,17 +306,16 @@ export default function HostScreen() {
     }
   }, [hostId])
 
+  // Why: keep clientRef in sync so existing imperative call sites work
+  // unchanged. Also re-seed the cached worktree list on hostId change
+  // since the useState initializer only runs on first mount.
   useEffect(() => {
-    let disposed = false
-    let rpcClient: RpcClient | null = null
-    clientRef.current = null
-    setClient(null)
-    setConnState('connecting')
+    clientRef.current = client
+  }, [client])
+
+  useEffect(() => {
     setHostName('')
     setError('')
-    // Why: re-seed from the current host's cache on every hostId change.
-    // The useState initializer only runs on first mount, so if Expo Router
-    // reuses this screen with a different hostId, we must reset here.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
     if (freshCache) {
       setWorktrees(freshCache)
@@ -324,45 +326,20 @@ export default function HostScreen() {
       setWorktrees([])
       setLastKnownWorktrees([])
     }
-
-    // Why: defer the RPC connection until after the navigation animation
-    // completes. Without this, connect() and loadHosts() block the JS
-    // thread during mount, delaying the screen transition by ~200-400ms.
-    // With cached worktrees the user sees content instantly; the live
-    // connection starts once the animation settles.
-    const rafId = requestAnimationFrame(() => {
-      if (disposed) return
-      void (async () => {
-        const hosts = await loadHosts()
-        const host = hosts.find((h) => h.id === hostId)
-        if (!host || disposed) {
-          if (!host && !disposed) setError('Host not found')
-          return
-        }
-
-        rpcClient = connect(host.endpoint, host.deviceToken, host.publicKeyB64, (state) => {
-          if (!disposed) setConnState(state)
-        })
-        if (disposed) {
-          rpcClient.close()
-          rpcClient = null
-          return
-        }
-        setHostName(host.name)
-        clientRef.current = rpcClient
-        setClient(rpcClient)
-
-        await updateLastConnected(host.id)
-      })()
-    })
-
-    return () => {
-      disposed = true
-      cancelAnimationFrame(rafId)
-      rpcClient?.close()
-      if (clientRef.current === rpcClient) {
-        clientRef.current = null
+    if (!hostId) return
+    let stale = false
+    void loadHosts().then((hosts) => {
+      if (stale) return
+      const host = hosts.find((h) => h.id === hostId)
+      if (!host) {
+        setError('Host not found')
+        return
       }
+      setHostName(host.name)
+      void updateLastConnected(host.id)
+    })
+    return () => {
+      stale = true
     }
   }, [hostId])
 
@@ -499,9 +476,14 @@ export default function HostScreen() {
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) return
+    // Why: close the shared client first so its WebSocket is gone before
+    // the host record disappears; otherwise the next loadHosts() the
+    // provider does (e.g. on remount) wouldn't find this host but the
+    // socket would still be open, leaking state.
+    closeHostClient(hostId)
     await removeHost(hostId)
     router.back()
-  }, [hostId, router])
+  }, [hostId, router, closeHostClient])
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {

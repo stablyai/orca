@@ -15,8 +15,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ArrowUp, ChevronLeft, Monitor, Plus, Smartphone } from 'lucide-react-native'
-import { connect, type RpcClient } from '../../../../src/transport/rpc-client'
+import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
+import { useHostClient } from '../../../../src/transport/client-context'
 import type { ConnectionState, RpcSuccess } from '../../../../src/transport/types'
 import { triggerMediumImpact } from '../../../../src/platform/haptics'
 import {
@@ -123,8 +124,9 @@ export default function SessionScreen() {
   }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [client, setClient] = useState<RpcClient | null>(null)
-  const [connState, setConnState] = useState<ConnectionState>('disconnected')
+  // Why: shared client per host owned by RpcClientProvider. See
+  // docs/mobile-shared-client-per-host.md.
+  const { client, state: connState } = useHostClient(hostId)
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
@@ -431,34 +433,32 @@ export default function SessionScreen() {
     [client, worktreeId, subscribeToTerminal, unsubscribeTerminal]
   )
 
+  // Why: keep clientRef in sync with the shared client from
+  // useHostClient() so the existing imperative call sites
+  // (clientRef.current.sendRequest...) keep working without churn.
   useEffect(() => {
-    let disposed = false
-    let rpcClient: RpcClient | null = null
-
-    void (async () => {
-      const hosts = await loadHosts()
-      const host = hosts.find((h) => h.id === hostId)
-      if (!host || disposed) return
-
-      deviceTokenRef.current = host.deviceToken
-      rpcClient = connect(host.endpoint, host.deviceToken, host.publicKeyB64, setConnState)
-      if (disposed) {
-        rpcClient.close()
-        return
-      }
-      setClient(rpcClient)
-      clientRef.current = rpcClient
-    })()
-
+    clientRef.current = client
     return () => {
-      disposed = true
       clearTerminalCache()
-      rpcClient?.close()
-      if (clientRef.current === rpcClient) {
-        clientRef.current = null
-      }
     }
-  }, [clearTerminalCache, hostId])
+  }, [client, clearTerminalCache])
+
+  // Why: deviceToken is read from host record so feature code can pass
+  // `client.id` on subscribe/send for driver-state-machine identity.
+  // The shared client itself stays alive across screens; we just need
+  // the token alongside the client.
+  useEffect(() => {
+    if (!hostId) return
+    let stale = false
+    void loadHosts().then((hosts) => {
+      if (stale) return
+      const host = hosts.find((h) => h.id === hostId)
+      if (host) deviceTokenRef.current = host.deviceToken
+    })
+    return () => {
+      stale = true
+    }
+  }, [hostId])
 
   useEffect(() => {
     void loadCustomKeys().then(setCustomKeys)
