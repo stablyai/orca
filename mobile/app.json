@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.stably.orca.mobile",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your local network.",
         "NSAppTransportSecurity": {
@@ -65,7 +65,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Orca to use the camera for QR code scanning."
+          "cameraPermission": "Allow Orca to use the camera for QR code scanning.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       [
