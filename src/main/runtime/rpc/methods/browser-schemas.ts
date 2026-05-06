@@ -73,11 +73,18 @@ export const TabList = z.object({
 // Why: --index xor --page must be present. The refine guards that invariant
 // so the dispatcher surfaces a single legible error instead of either shape
 // leaking into the runtime.
+//
+// `focus` is opt-in: when true, the runtime sends a `browser:pane-focus` IPC
+// to the renderer after the switch lands. Without it, `tabSwitch` only mutates
+// the bridge's active-WC pointer — the browser pane stays hidden if the user
+// is on terminal/editor. Surface that side-effect explicitly via the flag so
+// existing automation (which doesn't expect pane shifts) stays unchanged.
 export const TabSwitch = BrowserTarget.extend({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional())
+    .pipe(z.number().optional()),
+  focus: z.boolean().optional()
 }).refine(
   (val) => {
     if (val.page !== undefined) {

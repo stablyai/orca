@@ -184,6 +184,9 @@ export type BrowserApi = {
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
   onActivateView: (callback: (data: { worktreeId: string }) => void) => () => void
+  onPaneFocus: (
+    callback: (data: { worktreeId: string | null; browserPageId: string }) => void
+  ) => () => void
   onOpenLinkInOrcaTab: (
     callback: (event: { browserPageId: string; url: string }) => void
   ) => () => void

@@ -1190,6 +1190,17 @@ const api = {
       return () => ipcRenderer.removeListener('browser:activateView', listener)
     },
 
+    onPaneFocus: (
+      callback: (data: { worktreeId: string | null; browserPageId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string | null; browserPageId: string }
+      ) => callback(data)
+      ipcRenderer.on('browser:pane-focus', listener)
+      return () => ipcRenderer.removeListener('browser:pane-focus', listener)
+    },
+
     onOpenLinkInOrcaTab: (
       callback: (event: { browserPageId: string; url: string }) => void
     ): (() => void) => {

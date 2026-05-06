@@ -4489,6 +4489,35 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: `tabSwitch` only flips the bridge's `activeWebContentsId` — it does
+  // not surface the browser pane in the renderer. If the user is currently
+  // looking at terminal/editor, the switch is invisible.
+  //
+  // Why a dedicated IPC instead of reusing `browser:activateView`: the
+  // renderer's `setActiveWorktree` slice restores `activeTabType` from
+  // `activeTabTypeByWorktree[worktreeId]` (default `'terminal'`), so just
+  // dispatching `setActiveTabType('browser')` after a worktree switch races:
+  // the worktree-restore path may overwrite it back to terminal. The
+  // dedicated listener resolves the order atomically — set worktree first,
+  // then flip the tab type — so the browser tab type is the last word.
+  //
+  // Opt-in via `--focus` so existing automation that switches tabs in the
+  // background isn't disrupted.
+  private notifyRendererBrowserPaneFocus(
+    worktreeId: string | undefined,
+    browserPageId: string
+  ): void {
+    try {
+      const win = this.getAuthoritativeWindow()
+      win.webContents.send('browser:pane-focus', {
+        worktreeId: worktreeId ?? null,
+        browserPageId
+      })
+    } catch {
+      // Window may not exist during shutdown
+    }
+  }
+
   async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
@@ -4647,14 +4676,27 @@ export class OrcaRuntimeService {
   async browserTabSwitch(
     params: {
       index?: number
+      focus?: boolean
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSwitchResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().tabSwitch(
+    const bridge = this.requireAgentBrowserBridge()
+    const result = await bridge.tabSwitch(
       params.index,
       target.worktreeId,
       target.browserPageId
     )
+    if (params.focus) {
+      // Why: prefer the explicit --worktree the caller passed; fall back to
+      // the bridge's owning-worktree map for the just-switched tab. The
+      // owning worktree is what the renderer needs to focus to actually
+      // surface this tab — switching to a tab in another worktree's pane
+      // without this falls back to whatever worktree was already active.
+      const worktreeId =
+        target.worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
+      this.notifyRendererBrowserPaneFocus(worktreeId, result.browserPageId)
+    }
+    return result
   }
 
   async browserHover(

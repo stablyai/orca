@@ -43,9 +43,14 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     // targeted tab switches should match the rest of the --page command model:
     // global by default, with --worktree only acting as explicit validation.
     const target = await getBrowserCommandTarget(flags, cwd, client)
+    // Why: --focus is an opt-in side effect (surfaces the browser pane in
+    // the renderer). Spread conditionally so the RPC payload stays shape-
+    // identical to the pre-flag form when --focus is absent — keeps
+    // existing automation contracts and test fixtures intact.
     const result = await client.call<BrowserTabSwitchResult>('browser.tabSwitch', {
       index,
       page,
+      ...(flags.has('focus') ? { focus: true } : {}),
       ...target
     })
     printResult(result, json, (v) => `Switched to tab ${v.switched} (${v.browserPageId})`)
