@@ -122,15 +122,9 @@ export const TabProfileClone = BrowserTarget.extend({
 
 export const ProfileCreate = z.object({
   label: requiredString('Missing required --label'),
-  scope: z
-    .unknown()
-    .transform((value) => {
-      if (value === 'imported') {
-        return 'imported'
-      }
-      return 'isolated'
-    })
-    .pipe(z.enum(['isolated', 'imported']))
+  // Strict enum so unknown scope values surface validation errors instead of being
+  // silently coerced to 'isolated' (pr-bug-scan finding from #1397).
+  scope: z.enum(['isolated', 'imported'])
 })
 
 export const ProfileDelete = z.object({
