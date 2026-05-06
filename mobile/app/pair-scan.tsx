@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Clipboard as ClipboardIcon } from 'lucide-react-native'
+import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
@@ -146,20 +146,46 @@ export default function PairScanScreen() {
   }
 
   if (!permission.granted) {
+    const canAskAgain = permission.canAskAgain !== false
     return (
       <View style={[styles.container, containerPadding]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <View style={styles.centered}>
-          <Text style={styles.title}>Camera Permission</Text>
-          <Text style={styles.subtitle}>
-            Orca needs camera access to scan the pairing QR code from your desktop.
+          <Text style={styles.title}>
+            {canAskAgain ? 'Pair with desktop' : 'Camera Access Disabled'}
           </Text>
-          <Pressable style={styles.primaryButton} onPress={requestPermission}>
-            <Text style={styles.primaryButtonText}>Grant Camera Access</Text>
+          <Text style={styles.subtitle}>
+            {canAskAgain
+              ? 'Scan the QR code from Orca on your desktop, or paste the pairing code instead.'
+              : 'Enable camera access in Settings, or paste the pairing code instead.'}
+          </Text>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={canAskAgain ? requestPermission : () => void Linking.openSettings()}
+          >
+            {canAskAgain && <QrCode size={16} color={colors.bgBase} />}
+            <Text style={styles.primaryButtonText}>
+              {canAskAgain ? 'Continue' : 'Open Settings'}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.pasteButton, pressed && styles.pasteButtonPressed]}
+            onPress={() => setPasteVisible(true)}
+          >
+            <ClipboardIcon size={16} color={colors.textSecondary} />
+            <Text style={styles.pasteButtonText}>Paste code instead</Text>
           </Pressable>
         </View>
+        <TextInputModal
+          visible={pasteVisible}
+          title="Paste pairing code"
+          message="Copy the code shown under the QR on your computer."
+          placeholder="orca://pair#... or paste the code"
+          onSubmit={handlePasteSubmit}
+          onCancel={() => setPasteVisible(false)}
+        />
       </View>
     )
   }
@@ -360,6 +386,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm
   },
   subtitle: {
+    maxWidth: 310,
     fontSize: typography.bodySize,
     color: colors.textSecondary,
     textAlign: 'center',
@@ -379,6 +406,10 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,

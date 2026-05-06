@@ -7,13 +7,15 @@ import { hashOrcaHookScript } from './orca-hook-trust'
 const hooksCheckMock = vi.fn()
 const readIssueCommandMock = vi.fn()
 
-;(globalThis as { window: unknown }).window = {
-  api: {
-    hooks: {
-      check: hooksCheckMock,
-      readIssueCommand: readIssueCommandMock
+function installHooksApiMock(): void {
+  vi.stubGlobal('window', {
+    api: {
+      hooks: {
+        check: hooksCheckMock,
+        readIssueCommand: readIssueCommandMock
+      }
     }
-  }
+  })
 }
 
 type PendingPrompt = {
@@ -48,6 +50,7 @@ describe('ensureHooksConfirmed', () => {
   beforeEach(() => {
     hooksCheckMock.mockReset()
     readIssueCommandMock.mockReset()
+    installHooksApiMock()
     __resetTrustPromptChainForTests()
   })
 
@@ -171,17 +174,13 @@ describe('ensureHooksConfirmed', () => {
     const first = ensureHooksConfirmed(state, 'repo-1', 'setup')
     const second = ensureHooksConfirmed(state, 'repo-1', 'archive')
 
-    await flush()
-
-    expect(pending).toHaveLength(1)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptKind).toBe('setup')
 
     pending[0].resolve('skip')
     await expect(first).resolves.toBe('skip')
 
-    await flush()
-
-    expect(pending).toHaveLength(2)
+    await vi.waitFor(() => expect(pending).toHaveLength(2))
     expect(pending[1].data.scriptKind).toBe('archive')
 
     pending[1].resolve('run')

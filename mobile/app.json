@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.stably.orca.mobile",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your local network.",
         "NSAppTransportSecurity": {
