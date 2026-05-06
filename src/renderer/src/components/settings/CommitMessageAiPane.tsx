@@ -284,7 +284,7 @@ export function CommitMessageAiPane({
                 return null
               }
               return (
-                <SelectItem key={id} value={id}>
+                <SelectItem key={id} value={id} className="cursor-pointer">
                   <span className="flex items-center gap-2">
                     <AgentIcon agent={id} size={14} />
                     <span>{agentLabel(id, spec)}</span>
@@ -292,7 +292,7 @@ export function CommitMessageAiPane({
                 </SelectItem>
               )
             })}
-            <SelectItem value={CUSTOM_AGENT_ID}>
+            <SelectItem value={CUSTOM_AGENT_ID} className="cursor-pointer">
               <span className="flex items-center gap-2">
                 <Terminal className="size-3.5" />
                 <span>Custom</span>
@@ -382,7 +382,7 @@ export function CommitMessageAiPane({
           </SelectTrigger>
           <SelectContent>
             {activeSpec.models.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
+              <SelectItem key={m.id} value={m.id} className="cursor-pointer">
                 {m.label}
               </SelectItem>
             ))}
@@ -422,7 +422,7 @@ export function CommitMessageAiPane({
           </SelectTrigger>
           <SelectContent>
             {activeModel.thinkingLevels.map((level) => (
-              <SelectItem key={level.id} value={level.id}>
+              <SelectItem key={level.id} value={level.id} className="cursor-pointer">
                 {level.label}
               </SelectItem>
             ))}

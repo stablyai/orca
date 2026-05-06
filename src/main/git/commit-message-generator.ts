@@ -63,8 +63,9 @@ export function applyOrcaAttribution(message: string, enabled: boolean): string 
   }
   // Why: a blank line separates the trailer block from the body so `git
   // interpret-trailers` and most parsers treat it as a real trailer instead
-  // of a paragraph continuation.
-  return `${message.replace(/\s+$/, '')}\n\n${ORCA_GIT_COMMIT_TRAILER}\n`
+  // of a paragraph continuation. No trailing newline — that would surface
+  // as a blank line at the bottom of the commit textarea in the renderer.
+  return `${message.replace(/\s+$/, '')}\n\n${ORCA_GIT_COMMIT_TRAILER}`
 }
 
 export type GenerateCommitMessageResult =
