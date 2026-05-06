@@ -1596,39 +1596,45 @@ export function CommitArea({
 
   return (
     <div className="px-3 pb-2">
-      <textarea
-        rows={rows}
-        value={commitMessage}
-        onChange={(e) => onCommitMessageChange(e.target.value)}
-        placeholder="Message"
-        aria-label="Commit message"
-        aria-describedby={
-          commitError
-            ? 'commit-area-error'
-            : generateError
-              ? 'commit-area-generate-error'
-              : undefined
-        }
-        className="mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-      />
-      {showGenerate && (
-        <Button
-          type="button"
-          size="xs"
-          variant="outline"
-          disabled={isGenerateDisabled}
-          onClick={() => onGenerate()}
-          className="mt-1 w-full gap-1 px-3 text-[11px]"
-          title={generateDisabledReason}
-        >
-          {isGenerating ? (
-            <RefreshCw className="size-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="size-3.5" />
-          )}
-          {isGenerating ? 'Generating …' : 'Generate with AI'}
-        </Button>
-      )}
+      <div className="relative">
+        <textarea
+          rows={rows}
+          value={commitMessage}
+          onChange={(e) => onCommitMessageChange(e.target.value)}
+          placeholder="Message"
+          aria-label="Commit message"
+          aria-describedby={
+            commitError
+              ? 'commit-area-error'
+              : generateError
+                ? 'commit-area-generate-error'
+                : undefined
+          }
+          // Why: reserve right padding so typed text does not slide under the
+          // absolute-positioned Generate icon in the top-right corner.
+          className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
+            showGenerate ? 'pr-7' : ''
+          }`}
+        />
+        {showGenerate && (
+          <button
+            type="button"
+            disabled={isGenerateDisabled}
+            onClick={() => onGenerate()}
+            title={generateDisabledReason ?? 'Generate commit message with AI'}
+            aria-label={
+              isGenerating ? 'Generating commit message' : 'Generate commit message with AI'
+            }
+            className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+          >
+            {isGenerating ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+          </button>
+        )}
+      </div>
       {/* Why: match the "Squash and merge" button in PRActions
           (size="xs", px-3 text-[11px]) so the sidebar has a consistent
           action-button shape across Source Control and Checks. */}
