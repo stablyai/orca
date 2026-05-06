@@ -341,6 +341,27 @@ describe('listWorktrees', () => {
     expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
   })
 
+  it('returns no worktrees when the repo path is gone', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('spawn git ENOENT'), {
+        code: 'ENOENT'
+      })
+    )
+    statMock.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    await expect(listWorktrees('/workspace/deleted-repo')).resolves.toEqual([])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain'], {
+      cwd: '/workspace/deleted-repo'
+    })
+    expect(statMock).toHaveBeenCalledWith('/workspace/deleted-repo')
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[git/worktree] repo path missing; skipping worktree list: /workspace/deleted-repo'
+    )
+    warnSpy.mockRestore()
+  })
+
   it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.join(' ') === 'worktree list --porcelain') {
