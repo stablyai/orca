@@ -134,6 +134,31 @@ describe('GitHandler', () => {
       expect(entry).toBeDefined()
       expect(entry!.path).toBe('docs/日本語/sample.md')
     })
+
+    // Why: regression for issue #1503 on the porcelain v2 type-1 entry parser
+    // branch (tracked + modified). The existing UTF-8 test exercises only the
+    // untracked '?' branch; this one exercises the path-reconstruction code in
+    // parseStatusOutput that joins parts.slice(8).
+    it('preserves UTF-8 paths for tracked-modified entries', async () => {
+      gitInit(tmpDir)
+      const utf8Dir = path.join(tmpDir, 'docs', '日本語')
+      mkdirSync(utf8Dir, { recursive: true })
+      const utf8File = path.join(utf8Dir, 'sample.md')
+      writeFileSync(utf8File, 'original')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(utf8File, 'modified')
+
+      const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
+        entries: Record<string, unknown>[]
+      }
+      const entry = result.entries.find((e) =>
+        typeof e.path === 'string' ? e.path.endsWith('sample.md') : false
+      )
+      expect(entry).toBeDefined()
+      expect(entry!.path).toBe('docs/日本語/sample.md')
+      expect(entry!.status).toBe('modified')
+      expect(entry!.area).toBe('unstaged')
+    })
   })
 
   describe('stage and unstage', () => {
@@ -301,6 +326,42 @@ describe('GitHandler', () => {
       )
       expect(entry).toBeDefined()
       expect(entry!.path).toBe('docs/日本語/sample.md')
+    })
+  })
+
+  describe('branchDiff', () => {
+    // Why: regression for issue #1503 on git.branchDiff. The branchCompare test
+    // covers loadBranchChanges in git-handler.ts, but branchDiffEntries in
+    // git-handler-ops.ts is a separate code path that also passes
+    // -c core.quotePath=false and must round-trip UTF-8.
+    it('preserves UTF-8 paths in branch-diff entries', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+
+      const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+
+      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      const utf8Dir = path.join(tmpDir, 'docs', '日本語')
+      mkdirSync(utf8Dir, { recursive: true })
+      writeFileSync(path.join(utf8Dir, 'sample.md'), 'hello')
+      gitCommit(tmpDir, 'feature commit')
+
+      const result = (await dispatcher.callRequest('git.branchDiff', {
+        worktreePath: tmpDir,
+        baseRef,
+        filePath: 'docs/日本語/sample.md'
+      })) as Record<string, unknown>[]
+
+      // Without includePatch, branchDiffEntries returns one stub entry per
+      // changed file. Asserting length===1 confirms the filter matched the
+      // raw UTF-8 path emitted by `git diff --name-status` — if quotePath
+      // were left at default, the entry's path would be the octal-quoted
+      // form and the filter at git-handler-ops.ts:230-237 would not match.
+      expect(result).toHaveLength(1)
     })
   })
 
