@@ -1,7 +1,11 @@
 /* eslint-disable max-lines */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowDown,
+  ArrowDownUp,
+  ArrowUp,
   ChevronDown,
+  CloudUpload,
   Minus,
   Plus,
   RefreshCw,
@@ -98,6 +102,22 @@ const STATUS_ICONS: Record<
   copied: FilePlus
 }
 
+// Why: directional signifiers ahead of each primary action label. Commit
+// (✓) is affirmative; Push (↑) and Pull (↓) point in the direction data
+// flows; Sync (↕) is bidirectional; Publish gets a cloud-up to distinguish
+// the first-time publish from a subsequent push. Keeping the mapping
+// outside the render function avoids reallocating it on every render.
+const PRIMARY_ICONS: Record<
+  PrimaryAction['kind'],
+  React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
+> = {
+  commit: Check,
+  push: ArrowUp,
+  pull: ArrowDown,
+  sync: ArrowDownUp,
+  publish: CloudUpload
+}
+
 // Why: unstaged ("Changes") is listed first so that conflict files — which
 // are assigned area:'unstaged' by the parser — appear above "Staged Changes".
 // This keeps unresolved conflicts visible at the top of the list where the
@@ -166,7 +186,6 @@ function SourceControlInner(): React.JSX.Element {
   const updateRepo = useAppStore((s) => s.updateRepo)
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
-  const setGitStatus = useAppStore((s) => s.setGitStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const pushBranch = useAppStore((s) => s.pushBranch)
   const pullBranch = useAppStore((s) => s.pullBranch)
@@ -501,20 +520,29 @@ function SourceControlInner(): React.JSX.Element {
         return writeCommitDraftForWorktree(prev, activeWorktreeId, '')
       })
       setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
-      // Why: the commit already succeeded. If the follow-up status refresh fails
-      // (e.g., transient IPC error), log it but do NOT overwrite the cleared
-      // commitError with a misleading "Commit failed" — the existing status poll
-      // in useGitStatusPolling will refresh the UI shortly anyway.
-      try {
-        const status = await window.api.git.status({
-          worktreePath,
-          connectionId
-        })
-        setGitStatus(activeWorktreeId, status)
-        await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
-      } catch (refreshError) {
-        console.error('[SourceControl] post-commit status refresh failed', refreshError)
+      // Why: flip branchSummary to 'loading' synchronously so the empty-state
+      // guard
+      //   (!hasUncommittedEntries && branchSummary.status === 'ready' &&
+      //    branchEntries.length === 0)
+      // doesn't briefly read true between setGitStatus clearing the
+      // uncommitted list and the next branchCompare poll landing the new
+      // commit. Without this flip "No changes on this branch" flashes for
+      // the full poll-interval window.
+      //
+      // Then fire-and-forget refreshBranchCompare so the "Committed on
+      // Branch" section repopulates as soon as the IPC returns instead of
+      // waiting up to 5 seconds for the next poll. Unawaited on purpose:
+      // compound flows (runCompoundCommitAction) need handleCommit to
+      // resolve immediately so the push step starts without delay. Errors
+      // here are best-effort — the polling tick will retry.
+      if (effectiveBaseRef) {
+        beginGitBranchCompareRequest(
+          activeWorktreeId,
+          `${activeWorktreeId}:${effectiveBaseRef}:${Date.now()}:post-commit`,
+          effectiveBaseRef
+        )
       }
+      void refreshBranchCompareRef.current()
       return true
     } catch (error) {
       setCommitErrors((prev) => ({
@@ -528,11 +556,11 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [
     activeWorktreeId,
+    beginGitBranchCompareRequest,
     commitMessage,
+    effectiveBaseRef,
     grouped.staged.length,
     unresolvedConflicts.length,
-    fetchUpstreamStatus,
-    setGitStatus,
     worktreePath
   ])
 
@@ -1463,6 +1491,21 @@ export function CommitArea({
     primaryAction.kind === 'commit'
       ? isCommitting
       : isRemoteOperationActive && primaryAction.kind === inFlightRemoteOpKind
+  // Why: when the primary doesn't host the in-flight op (e.g. Fetch, or any
+  // dropdown action that mismatches the primary's natural label) the click
+  // would otherwise be silent — the toast only fires on failure and a
+  // no-op fetch leaves status counts unchanged. Spinning the chevron gives
+  // the user immediate feedback that the action they picked is running,
+  // while still leaving the menu reachable to read the disabled-row
+  // tooltips.
+  const showChevronSpinner = (isCommitting || isRemoteOperationActive) && !showSpinner
+
+  // Why: each primary-kind label is anchored by a directional icon so the
+  // affirmative Commit (✓) reads distinctly from the remote-state labels
+  // sharing this slot — Push (↑), Pull (↓), Sync (↕), Publish (☁︎↑). The
+  // icon is decorative; the label and title attribute carry the meaning
+  // for assistive tech.
+  const PrimaryIcon = PRIMARY_ICONS[primaryAction.kind]
 
   return (
     <div className="px-3 pb-2">
@@ -1495,7 +1538,11 @@ export function CommitArea({
           className="flex-1 rounded-r-none px-3 text-[11px]"
           title={primaryAction.title}
         >
-          {showSpinner && <RefreshCw className="size-3.5 animate-spin" />}
+          {showSpinner ? (
+            <RefreshCw className="size-3.5 animate-spin" />
+          ) : (
+            <PrimaryIcon className="size-3.5" aria-hidden="true" />
+          )}
           {primaryAction.label}
         </Button>
         <DropdownMenu>
@@ -1515,7 +1562,11 @@ export function CommitArea({
               aria-label="More commit and remote actions"
               title="More actions"
             >
-              <ChevronDown className="size-3.5" />
+              {showChevronSpinner ? (
+                <RefreshCw className="size-3.5 animate-spin" />
+              ) : (
+                <ChevronDown className="size-3.5" />
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[14rem]">

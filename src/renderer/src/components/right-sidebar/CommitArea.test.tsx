@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RefreshCw } from 'lucide-react'
+import { Check, RefreshCw } from 'lucide-react'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
@@ -59,6 +59,17 @@ function primaryHasSpinner(node: unknown): boolean {
   let found = false
   visit(primary, (entry) => {
     if (entry.type === RefreshCw) {
+      found = true
+    }
+  })
+  return found
+}
+
+function primaryHasCheck(node: unknown): boolean {
+  const primary = findPrimaryButton(node)
+  let found = false
+  visit(primary, (entry) => {
+    if (entry.type === Check) {
       found = true
     }
   })
@@ -356,5 +367,33 @@ describe('CommitArea', () => {
     expect(hasText(primary, 'Push')).toBe(true)
     expect(primary.props.disabled).toBe(true)
     expect(primaryHasSpinner(element)).toBe(false)
+  })
+
+  // Why: the leading checkmark anchors the affirmative Commit verb so the
+  // button doesn't read like just another remote-state label sharing the
+  // slot (Push / Pull / Sync / Publish). Decorative — verified by
+  // presence/absence rather than label text.
+  it('renders a leading checkmark on a Commit primary', () => {
+    const element = CommitArea(baseProps())
+    expect(primaryHasCheck(element)).toBe(true)
+  })
+
+  it('omits the checkmark when the primary is a remote action', () => {
+    const props = baseProps({
+      stagedCount: 0,
+      hasMessage: false,
+      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+    })
+    const element = CommitArea(props)
+    expect(primaryHasCheck(element)).toBe(false)
+  })
+
+  // Why: while the commit is in flight the spinner replaces any leading
+  // icon so the user gets a single, unambiguous progress signal.
+  it('replaces the checkmark with a spinner while the commit is in flight', () => {
+    const props = baseProps({ isCommitting: true })
+    const element = CommitArea({ ...props, isCommitting: true })
+    expect(primaryHasSpinner(element)).toBe(true)
+    expect(primaryHasCheck(element)).toBe(false)
   })
 })
