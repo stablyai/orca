@@ -340,14 +340,24 @@ export default function HomeScreen() {
           changed = true
         }
       }
-      // Auth-failed for hosts whose record is invalid (no publicKey / no
-      // token) — they'll never appear in allClients.
+      // Why: when a paired host disappears from allClients (because the
+      // user tapped Disconnect, or the host record was invalid) the card
+      // must reflect that. We only force-update hosts whose state was
+      // already tracked — otherwise the initial-acquire frame (entry not
+      // yet materialised) would briefly flip every host to 'disconnected'.
       for (const host of hosts) {
+        if (liveIds.has(host.id)) continue
         if (!host.publicKeyB64 || !host.deviceToken) {
           if (next[host.id] !== 'auth-failed') {
             next[host.id] = 'auth-failed'
             changed = true
           }
+          continue
+        }
+        const prevState = next[host.id]
+        if (prevState && prevState !== 'disconnected' && prevState !== 'auth-failed') {
+          next[host.id] = 'disconnected'
+          changed = true
         }
       }
       // Drop entries for hosts we no longer track at all.

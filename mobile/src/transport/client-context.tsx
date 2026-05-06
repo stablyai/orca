@@ -174,7 +174,13 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const forceReconnect = useCallback(
     async (hostId: string) => {
       const entry = storeRef.current.get(hostId)
-      const savedRefCount = entry?.refCount ?? 0
+      // Why: if the entry was previously closed (e.g. user tapped
+      // Disconnect), refCount is lost. Fall back to the number of active
+      // state listeners as a proxy for "screens currently watching this
+      // host," so the freshly-opened entry doesn't trip the idle-close
+      // timer immediately.
+      const listenerCount = stateListenersRef.current.get(hostId)?.size ?? 0
+      const savedRefCount = entry?.refCount ?? Math.max(1, listenerCount)
       if (entry) {
         if (entry.idleTimer) clearTimeout(entry.idleTimer)
         entry.unsubState()
