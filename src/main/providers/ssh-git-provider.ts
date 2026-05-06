@@ -19,8 +19,10 @@ import {
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
+  extractAgentErrorMessage,
   truncateDiffForPrompt
 } from '../../shared/commit-message-prompt'
+import { applyOrcaAttribution } from '../git/commit-message-generator'
 
 const SSH_GENERATION_TIMEOUT_MS = 60_000
 
@@ -140,14 +142,19 @@ export class SshGitProvider implements IGitProvider {
       }
     }
     if (result.exitCode !== 0) {
-      const detail = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode}`
+      const extracted = extractAgentErrorMessage(result.stdout, result.stderr)
+      const detail =
+        extracted ?? result.stderr.trim() ?? result.stdout.trim() ?? `exit code ${result.exitCode}`
       return { success: false, error: `${spec.label} failed: ${detail}` }
     }
     const cleaned = cleanGeneratedCommitMessage(result.stdout)
     if (!cleaned) {
       return { success: false, error: `${spec.label} returned an empty message.` }
     }
-    return { success: true, message: cleaned }
+    return {
+      success: true,
+      message: applyOrcaAttribution(cleaned, request.attributionEnabled === true)
+    }
   }
 
   async getDiff(

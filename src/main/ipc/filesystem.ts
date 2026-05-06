@@ -556,12 +556,17 @@ export function registerFilesystemHandlers(store: Store): void {
           error: `Agent "${args.agentId}" does not support AI commit messages.`
         }
       }
+      // Why: read the toggle from the persisted store so a single source of
+      // truth (the same one the terminal git/gh shim reads) decides whether
+      // the trailer is appended. The renderer does not need to send it.
+      const attributionEnabled = store.getSettings().enableGitHubAttribution === true
       const baseRequest: GenerateCommitMessageParams = {
         worktreePath: args.worktreePath,
         agentId: args.agentId as TuiAgent,
         model: args.model,
         thinkingLevel: args.thinkingLevel,
-        customPrompt: args.customPrompt
+        customPrompt: args.customPrompt,
+        attributionEnabled
       }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)

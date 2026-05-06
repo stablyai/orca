@@ -60,7 +60,6 @@ type SettingsNavTarget =
   | 'accounts'
   | 'browser'
   | 'git'
-  | 'commit-message-ai'
   | 'appearance'
   | 'terminal'
   | 'notifications'
@@ -359,16 +358,12 @@ function Settings(): React.JSX.Element {
       {
         id: 'git',
         title: 'Git',
-        description: 'Branch naming and local ref behavior.',
+        description: 'Branch naming, local ref behavior, and AI commit messages.',
         icon: GitBranch,
-        searchEntries: GIT_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'commit-message-ai',
-        title: 'AI Commit Messages',
-        description: 'Generate commit messages from staged changes using a local agent.',
-        icon: Bot,
-        searchEntries: COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
+        // Why: the AI commit messages pane is rendered inside the Git section,
+        // so its search entries belong to Git too — that way a query like
+        // "claude" or "thinking" still surfaces the section.
+        searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES]
       },
       {
         id: 'appearance',
@@ -665,22 +660,17 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="git"
                   title="Git"
-                  description="Branch naming and local ref behavior."
-                  searchEntries={GIT_PANE_SEARCH_ENTRIES}
+                  description="Branch naming, local ref behavior, and AI commit messages."
+                  searchEntries={[
+                    ...GIT_PANE_SEARCH_ENTRIES,
+                    ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
+                  ]}
                 >
                   <GitPane
                     settings={settings}
                     updateSettings={updateSettings}
                     displayedGitUsername={displayedGitUsername}
                   />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="commit-message-ai"
-                  title="AI Commit Messages"
-                  description="Generate commit messages from staged changes using a local agent."
-                  searchEntries={COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES}
-                >
                   <CommitMessageAiPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 

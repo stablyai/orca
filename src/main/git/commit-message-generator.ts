@@ -8,8 +8,10 @@ import {
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
+  extractAgentErrorMessage,
   truncateDiffForPrompt
 } from '../../shared/commit-message-prompt'
+import { ORCA_GIT_COMMIT_TRAILER } from '../../shared/orca-attribution'
 import type { TuiAgent } from '../../shared/types'
 import { getStagedDiff } from './status'
 
@@ -21,6 +23,22 @@ export type GenerateCommitMessageParams = {
   model: string
   thinkingLevel?: string
   customPrompt?: string
+  /** When true, append `Co-authored-by: Orca …` after the cleaned message. */
+  attributionEnabled?: boolean
+}
+
+/** Appends the Orca trailer if the message does not already include it. */
+export function applyOrcaAttribution(message: string, enabled: boolean): string {
+  if (!enabled) {
+    return message
+  }
+  if (message.includes(ORCA_GIT_COMMIT_TRAILER)) {
+    return message
+  }
+  // Why: a blank line separates the trailer block from the body so `git
+  // interpret-trailers` and most parsers treat it as a real trailer instead
+  // of a paragraph continuation.
+  return `${message.replace(/\s+$/, '')}\n\n${ORCA_GIT_COMMIT_TRAILER}\n`
 }
 
 export type GenerateCommitMessageResult =
@@ -65,7 +83,8 @@ async function runAgent(
   spec: CommitMessageAgentSpec,
   args: string[],
   promptForStdin: string | null,
-  cwd: string
+  cwd: string,
+  attributionEnabled: boolean
 ): Promise<GenerateCommitMessageResult> {
   return new Promise((resolve) => {
     let child
@@ -126,7 +145,12 @@ async function runAgent(
     child.on('close', (code) => {
       clearTimeout(timer)
       if (code !== 0) {
-        const detail = stderr.trim() || stdout.trim() || `exit code ${code}`
+        // Why: agent CLIs print a runtime preamble + the echoed prompt + hook
+        // lifecycle messages before any error line, so the raw stderr/stdout
+        // is unreadable. Try to surface the actual error first, then fall
+        // back to the trimmed channels.
+        const extracted = extractAgentErrorMessage(stdout, stderr)
+        const detail = extracted ?? stderr.trim() ?? stdout.trim() ?? `exit code ${code}`
         finalize({ success: false, error: `${spec.label} failed: ${detail}` })
         return
       }
@@ -135,7 +159,7 @@ async function runAgent(
         finalize({ success: false, error: `${spec.label} returned an empty message.` })
         return
       }
-      finalize({ success: true, message: cleaned })
+      finalize({ success: true, message: applyOrcaAttribution(cleaned, attributionEnabled) })
     })
 
     if (promptForStdin !== null) {
@@ -176,7 +200,7 @@ export async function generateCommitMessageLocal(
     thinkingLevel: params.thinkingLevel
   })
   const stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
-  return runAgent(spec, args, stdinPayload, params.worktreePath)
+  return runAgent(spec, args, stdinPayload, params.worktreePath, params.attributionEnabled === true)
 }
 
 /** Re-export so the IPC layer can validate agent ids at the boundary. */

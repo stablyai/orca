@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
+  extractAgentErrorMessage,
   STAGED_DIFF_BYTE_BUDGET,
   truncateDiffForPrompt
 } from './commit-message-prompt'
@@ -72,5 +73,48 @@ describe('cleanGeneratedCommitMessage', () => {
 
   it('returns empty string when input is whitespace', () => {
     expect(cleanGeneratedCommitMessage('   \n\t')).toBe('')
+  })
+})
+
+describe('extractAgentErrorMessage', () => {
+  it('returns the inner message from a Codex JSON error payload', () => {
+    const stderr = [
+      '--------',
+      'workdir: C:\\Storage\\Projects\\bagplanner',
+      'model: gpt-5.3-codex-spark',
+      'reasoning effort: medium',
+      '--------',
+      'user',
+      'You are generating a single git commit message...',
+      'hook: SessionStart',
+      'hook: SessionStart Completed',
+      'ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-5.3-codex-spark\' model is not supported when using Codex with a ChatGPT account."}}'
+    ].join('\n')
+    expect(extractAgentErrorMessage('', stderr)).toBe(
+      "The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."
+    )
+  })
+
+  it('falls back to the raw payload when the JSON cannot be parsed', () => {
+    const out = 'preamble line\nERROR: {bad json oops'
+    expect(extractAgentErrorMessage(out, '')).toBe('{bad json oops')
+  })
+
+  it('uses the last ERROR line when several are emitted', () => {
+    const out = ['ERROR: first failure', 'retry message', 'ERROR: second failure'].join('\n')
+    expect(extractAgentErrorMessage(out, '')).toBe('second failure')
+  })
+
+  it('matches an `Error:` line emitted on stdout', () => {
+    expect(extractAgentErrorMessage('Error: model unavailable\n', '')).toBe('model unavailable')
+  })
+
+  it('returns null when no ERROR line is present', () => {
+    expect(extractAgentErrorMessage('plain log\nmore log\n', '')).toBeNull()
+  })
+
+  it('returns the JSON payload `message` field when no nested error is set', () => {
+    const out = 'ERROR: {"message":"top-level only"}'
+    expect(extractAgentErrorMessage(out, '')).toBe('top-level only')
   })
 })

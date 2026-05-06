@@ -187,17 +187,17 @@ export function CommitMessageAiPane({
 
   if (
     matchesSettingsSearch(searchQuery, {
-      title: 'AI Commit Messages',
-      description: 'Generate commit messages from staged changes using a local agent.',
-      keywords: ['ai', 'commit', 'message', 'generate', 'agent']
+      title: 'Enable AI commit messages',
+      description: 'Adds a Generate button to the Source Control panel.',
+      keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
     })
   ) {
     sections.push(
       <SearchableSetting
         key="enabled"
-        title="AI Commit Messages"
-        description="Generate commit messages from staged changes using a local agent."
-        keywords={['ai', 'commit', 'message', 'generate', 'agent']}
+        title="Enable AI commit messages"
+        description="Adds a Generate button to the Source Control panel."
+        keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
         className="flex items-center justify-between gap-4 px-1 py-2"
       >
         <div className="space-y-0.5">
@@ -391,5 +391,21 @@ export function CommitMessageAiPane({
     )
   }
 
-  return <div className="space-y-4">{sections}</div>
+  if (sections.length === 0) {
+    return <div className="space-y-4" />
+  }
+  // Why: this pane lives nested inside the Git section, so we draw an explicit
+  // sub-heading + top border to keep its toggles visually distinct from the
+  // Branch Prefix / Refresh Local Base Ref / Orca Attribution rows above.
+  return (
+    <div className="space-y-4 border-t border-border/40 pt-4">
+      <div className="space-y-0.5">
+        <h3 className="text-sm font-semibold">AI Commit Messages</h3>
+        <p className="text-xs text-muted-foreground">
+          Generate commit messages from staged changes using a local agent CLI.
+        </p>
+      </div>
+      {sections}
+    </div>
+  )
 }

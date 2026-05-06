@@ -1626,7 +1626,7 @@ export function CommitArea({
           ) : (
             <Sparkles className="size-3.5" />
           )}
-          {isGenerating ? 'Generating…' : 'Generate with AI'}
+          {isGenerating ? 'Generating …' : 'Generate with AI'}
         </Button>
       )}
       {/* Why: match the "Squash and merge" button in PRActions

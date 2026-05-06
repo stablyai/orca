@@ -2,9 +2,19 @@ import type { SettingsSearchEntry } from './settings-search'
 
 export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'AI Commit Messages',
-    description: 'Generate commit messages from staged changes using a local agent.',
-    keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'claude', 'codex', 'source control']
+    title: 'Enable AI commit messages',
+    description: 'Adds a Generate button to the Source Control panel.',
+    keywords: [
+      'ai',
+      'commit',
+      'message',
+      'generate',
+      'agent',
+      'claude',
+      'codex',
+      'source control',
+      'enabled'
+    ]
   },
   {
     title: 'Agent',

@@ -49,16 +49,11 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     ],
     models: [
       {
+        // Why: Haiku 4.5 is a non-reasoning model — `claude --effort` rejects
+        // any value for it. Omit thinkingLevels so the UI hides the dropdown
+        // and the buildArgs path skips passing --effort entirely.
         id: 'claude-haiku-4-5',
-        label: 'Haiku 4.5',
-        thinkingLevels: [
-          { id: 'low', label: 'Low' },
-          { id: 'medium', label: 'Medium' },
-          { id: 'high', label: 'High' },
-          { id: 'xhigh', label: 'Extra High' },
-          { id: 'max', label: 'Max' }
-        ],
-        defaultThinkingLevel: 'low'
+        label: 'Haiku 4.5'
       },
       {
         id: 'claude-sonnet-4-6',
@@ -99,10 +94,13 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       ...(thinkingLevel ? ['-c', `model_reasoning_effort=${thinkingLevel}`] : []),
       prompt
     ],
+    // Why: ordered to match the official `codex` model picker — descending
+    // by version so the frontier model lands on top and legacy models trail.
+    // Default still resolves by id (`gpt-5.4-mini`), independent of order.
     models: [
       {
-        id: 'gpt-5.4-mini',
-        label: 'GPT-5.4 Mini',
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
         thinkingLevels: [
           { id: 'low', label: 'Low' },
           { id: 'medium', label: 'Medium' },
@@ -123,8 +121,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
         defaultThinkingLevel: 'low'
       },
       {
-        id: 'gpt-5.5',
-        label: 'GPT-5.5',
+        id: 'gpt-5.4-mini',
+        label: 'GPT-5.4 Mini',
         thinkingLevels: [
           { id: 'low', label: 'Low' },
           { id: 'medium', label: 'Medium' },
@@ -145,10 +143,19 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
         defaultThinkingLevel: 'low'
       },
       {
-        // Why: spark variants are non-reasoning ultra-fast models, so the
-        // effort dropdown is hidden for this entry by omitting thinkingLevels.
+        // Why: Codex's Spark variant accepts `model_reasoning_effort` (the
+        // CLI banner reports "reasoning effort: medium" by default); the
+        // gating that surfaces "model not supported" is on the account
+        // tier, not the effort flag.
         id: 'gpt-5.3-codex-spark',
-        label: 'GPT-5.3 Codex Spark'
+        label: 'GPT-5.3 Codex Spark',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' }
+        ],
+        defaultThinkingLevel: 'low'
       },
       {
         id: 'gpt-5.2',

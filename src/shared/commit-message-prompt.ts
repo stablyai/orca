@@ -9,7 +9,7 @@ Rules:
 - First line: imperative mood, <= 72 chars, no trailing period.
 - Optional body: blank line, then wrapped at 72 chars explaining WHY.
 - Output ONLY the commit message — no preamble, no code fences, no quotes.
-- Do not include "Co-Authored-By" lines (Orca adds those when configured).
+- Do not include "Co-authored-by" trailers — Orca appends them after generation when configured.
 
 Staged diff:
 \`\`\`diff
@@ -68,4 +68,45 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   }
 
   return text
+}
+
+// Why: agent CLIs (Codex, Claude) prefix their stdout/stderr with config
+// preamble, the echoed prompt, and hook lifecycle messages. When something
+// fails, the actionable error is buried far below all of that. This pulls
+// out the real message so the user sees something legible instead of a
+// dump of the agent's runtime state.
+export function extractAgentErrorMessage(stdout: string, stderr: string): string | null {
+  const combined = `${stdout}\n${stderr}`
+  const lines = combined.split(/\r?\n/)
+
+  // Pass 1: look for an `ERROR:`/`Error:` line carrying a JSON payload.
+  // Walk from the end so the most recent (and usually most meaningful)
+  // error wins when an agent prints multiple.
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]
+    const match = /^\s*(?:ERROR|Error)\s*:\s*(.+)$/.exec(line)
+    if (!match) {
+      continue
+    }
+    const payload = match[1].trim()
+    if (payload.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(payload) as {
+          message?: string
+          error?: { message?: string }
+        }
+        const inner = parsed.error?.message ?? parsed.message
+        if (typeof inner === 'string' && inner.trim().length > 0) {
+          return inner.trim()
+        }
+      } catch {
+        // Fall through to using the raw payload below.
+      }
+    }
+    if (payload.length > 0) {
+      return payload
+    }
+  }
+
+  return null
 }

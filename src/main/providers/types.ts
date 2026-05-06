@@ -137,6 +137,8 @@ export type GenerateCommitMessageRequest = {
   model: string
   thinkingLevel?: string
   customPrompt?: string
+  /** When true, the generator appends the Orca attribution trailer (`enableGitHubAttribution`). */
+  attributionEnabled?: boolean
 }
 
 export type GenerateCommitMessageResponse =

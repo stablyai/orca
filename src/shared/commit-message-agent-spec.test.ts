@@ -36,10 +36,30 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     }
   })
 
-  it('keeps the spark variant without thinking levels', () => {
+  it('exposes thinking levels on the Spark variant (it accepts model_reasoning_effort)', () => {
     const spark = getCommitMessageModel('codex', 'gpt-5.3-codex-spark')
     expect(spark).toBeDefined()
-    expect(spark?.thinkingLevels).toBeUndefined()
+    expect(spark?.thinkingLevels?.map((l) => l.id)).toEqual(['low', 'medium', 'high', 'xhigh'])
+    expect(spark?.defaultThinkingLevel).toBe('low')
+  })
+
+  it('omits thinking levels on Claude Haiku 4.5 (non-reasoning model)', () => {
+    const haiku = getCommitMessageModel('claude', 'claude-haiku-4-5')
+    expect(haiku).toBeDefined()
+    expect(haiku?.thinkingLevels).toBeUndefined()
+    expect(haiku?.defaultThinkingLevel).toBeUndefined()
+  })
+
+  it('orders Codex models by version descending to match the official picker', () => {
+    const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
+    expect(ids).toEqual([
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-5.3-codex',
+      'gpt-5.3-codex-spark',
+      'gpt-5.2'
+    ])
   })
 })
 
