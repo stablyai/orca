@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
+import { getDefaultUIState } from '../../shared/constants'
 
 import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
@@ -335,25 +335,7 @@ function App(): React.JSX.Element {
       } catch (error) {
         console.error('Failed to hydrate workspace session:', error)
         if (!cancelled) {
-          actions.hydratePersistedUI({
-            lastActiveRepoId: null,
-            lastActiveWorktreeId: null,
-            sidebarWidth: 280,
-            rightSidebarWidth: 350,
-            groupBy: 'none',
-            sortBy: 'recent',
-            showActiveOnly: false,
-            hideDefaultBranchWorkspace: false,
-            filterRepoIds: [],
-            collapsedGroups: [],
-            uiZoomLevel: 0,
-            editorFontZoomLevel: 0,
-            worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
-            statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
-            statusBarVisible: true,
-            dismissedUpdateVersion: null,
-            lastUpdateCheckAt: null
-          })
+          actions.hydratePersistedUI(getDefaultUIState())
           actions.hydrateWorkspaceSession({
             activeRepoId: null,
             activeWorktreeId: null,
