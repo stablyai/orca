@@ -277,6 +277,24 @@ export default function HomeScreen() {
     [hosts]
   )
 
+  // Why: depend on a stable identity string instead of the `hosts` array
+  // reference. loadHosts() returns a fresh array on every call (e.g., from
+  // useFocusEffect on every navigate-back), and depending on that reference
+  // would tear down + rebuild every WebSocket on every navigation. That
+  // churn caused stale sockets to pile up on the desktop until it hit the
+  // 32-connection cap and started rejecting new connects with WS code 1013.
+  // Sort + serialize id|endpoint|token so we only rebuild when the actual
+  // connection-shape changes (host added/removed, endpoint changed,
+  // deviceToken rotated).
+  const hostsKey = useMemo(
+    () =>
+      hosts
+        .map((h) => `${h.id}|${h.endpoint}|${h.deviceToken}`)
+        .sort()
+        .join(','),
+    [hosts]
+  )
+
   useEffect(() => {
     let disposed = false
     const notifCleanups: Array<() => void> = []
@@ -351,7 +369,11 @@ export default function HomeScreen() {
       for (const cleanup of notifCleanups) cleanup()
       for (const entry of entries) entry.client.close()
     }
-  }, [hosts])
+    // Why: hostsKey is the stable identity; we deliberately exclude `hosts`
+    // even though the body reads it. ESLint's exhaustive-deps would flag
+    // this; eslint-disable comment lets the lint pass cleanly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostsKey])
 
   // Why: prefer the worktree the user last opened on this device so the
   // "Resume" card reflects their mobile session history, not just the

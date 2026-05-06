@@ -25,7 +25,27 @@ function tokenKey(hostId: string): string {
   return `${TOKEN_KEY_PREFIX}${hostId}`
 }
 
+// Why: SecureStore reads on Android Keystore can take 50-200ms each, and
+// loadHosts() is called from every screen mount + every useFocusEffect.
+// Stack with N hosts and you get N*200ms blocking every navigation, which
+// triggers connection-churn cycles in the home-screen useEffect. Cache
+// per-hostId in memory; invalidate only on save/remove. The cache lives
+// for the JS-runtime lifetime, which matches AsyncStorage semantics
+// (cleared on app uninstall, persisted across foreground/background).
+const tokenCache = new Map<string, string>()
+let inflightLoad: Promise<HostProfile[]> | null = null
+
 export async function loadHosts(): Promise<HostProfile[]> {
+  // Why: deduplicate concurrent loadHosts() calls so multiple screens
+  // mounting simultaneously share one Keychain read pass.
+  if (inflightLoad) return inflightLoad
+  inflightLoad = doLoadHosts().finally(() => {
+    inflightLoad = null
+  })
+  return inflightLoad
+}
+
+async function doLoadHosts(): Promise<HostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
   if (!raw) return []
   let parsed: unknown
@@ -48,12 +68,17 @@ export async function loadHosts(): Promise<HostProfile[]> {
     const stored = StoredHostProfileSchema.safeParse(item)
     if (!stored.success) continue
 
-    const token = await SecureStore.getItemAsync(tokenKey(stored.data.id), KEYCHAIN_OPTIONS)
+    let token = tokenCache.get(stored.data.id)
     if (!token) {
-      // Why: orphaned metadata with no matching keychain entry — most
-      // likely a stale record from a development install. Skip it
-      // rather than surface a half-broken host.
-      continue
+      const fetched = await SecureStore.getItemAsync(tokenKey(stored.data.id), KEYCHAIN_OPTIONS)
+      if (!fetched) {
+        // Why: orphaned metadata with no matching keychain entry — most
+        // likely a stale record from a development install. Skip it
+        // rather than surface a half-broken host.
+        continue
+      }
+      token = fetched
+      tokenCache.set(stored.data.id, token)
     }
     out.push({ ...stored.data, deviceToken: token })
   }
@@ -100,6 +125,7 @@ export async function saveHost(host: HostProfile): Promise<void> {
   }
   await SecureStore.setItemAsync(tokenKey(stored.id), validated.deviceToken, KEYCHAIN_OPTIONS)
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
+  tokenCache.set(stored.id, validated.deviceToken)
 }
 
 export async function removeHost(hostId: string): Promise<void> {
@@ -107,6 +133,7 @@ export async function removeHost(hostId: string): Promise<void> {
   const filtered = hosts.filter((h) => h.id !== hostId)
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
   await SecureStore.deleteItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+  tokenCache.delete(hostId)
 }
 
 export async function renameHost(hostId: string, newName: string): Promise<void> {
