@@ -468,71 +468,88 @@ export default function SessionScreen() {
   // doesn't resize the window) and refit xterm once the layout settles so the
   // terminal grid matches the new visible area. iOS exposes 'will' events that
   // animate in sync with the IME; Android only fires 'did' events reliably.
-  useEffect(() => {
-    let refitTimer: ReturnType<typeof setTimeout> | null = null
-    const scheduleRefit = () => {
-      if (refitTimer) clearTimeout(refitTimer)
-      refitTimer = setTimeout(() => {
-        const handle = activeHandleRef.current
-        if (!handle) return
-        const ref = terminalRefs.current.get(handle)
-        if (!ref) return
-        void (async () => {
-          const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
-          if (!dims) return
-          const prev = viewportRef.current
-          if (prev && prev.cols === dims.cols && prev.rows === dims.rows) return
-          viewportRef.current = dims
-          viewportMeasuredRef.current = true
-          // Why: prefer the in-place viewport update RPC over the legacy
-          // unsubscribe → subscribe cycle. This keeps the server-side
-          // mobile subscriber record alive (no driver=idle blip on the
-          // desktop banner; no false phone-fit baseline capture on the
-          // re-subscribe). The 'resized' event from the server reinits
-          // the xterm at the new dims via the existing subscription
-          // stream. Falls back to the unsubscribe/subscribe path if the
-          // RPC isn't available (older host build) or no client is
-          // connected. See docs/mobile-presence-lock.md.
-          const rpc = clientRef.current
-          const deviceToken = deviceTokenRef.current
-          if (rpc && deviceToken) {
-            try {
-              const response = await rpc.sendRequest('terminal.updateViewport', {
-                terminal: handle,
-                client: { id: deviceToken, type: 'mobile' as const },
-                viewport: dims
-              })
-              if (response.ok) {
-                return
-              }
-            } catch {
-              // Fall through to legacy resubscribe.
-            }
+  // Also drives re-measurement when other layout-affecting state changes
+  // (e.g. tab strip toggling visibility when the terminal count crosses
+  // 0↔1 — without this, a freshly-created 2nd tab subscribes with a
+  // stale viewport that doesn't account for the now-visible tab strip,
+  // and the server phone-fits to dims a few rows too tall).
+  const refitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleViewportRefit = useCallback(() => {
+    if (refitTimerRef.current) clearTimeout(refitTimerRef.current)
+    refitTimerRef.current = setTimeout(() => {
+      const handle = activeHandleRef.current
+      if (!handle) return
+      const ref = terminalRefs.current.get(handle)
+      if (!ref) return
+      void (async () => {
+        const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
+        if (!dims) return
+        const prev = viewportRef.current
+        if (prev && prev.cols === dims.cols && prev.rows === dims.rows) return
+        viewportRef.current = dims
+        viewportMeasuredRef.current = true
+        // Why: prefer the in-place viewport update RPC over the legacy
+        // unsubscribe → subscribe cycle. This keeps the server-side
+        // mobile subscriber record alive (no driver=idle blip on the
+        // desktop banner; no false phone-fit baseline capture on the
+        // re-subscribe). See docs/mobile-presence-lock.md.
+        const rpc = clientRef.current
+        const deviceToken = deviceTokenRef.current
+        if (rpc && deviceToken) {
+          try {
+            const response = await rpc.sendRequest('terminal.updateViewport', {
+              terminal: handle,
+              client: { id: deviceToken, type: 'mobile' as const },
+              viewport: dims
+            })
+            if (response.ok) return
+          } catch {
+            // Fall through to legacy resubscribe.
           }
-          unsubscribeTerminal(handle)
-          initializedHandlesRef.current.delete(handle)
-          subscribeToTerminal(handle)
-        })()
-      }, 150)
-    }
+        }
+        unsubscribeTerminal(handle)
+        initializedHandlesRef.current.delete(handle)
+        subscribeToTerminal(handle)
+      })()
+    }, 150)
+  }, [subscribeToTerminal, unsubscribeTerminal])
+
+  useEffect(() => {
     const onShow = (e: KeyboardEvent) => {
       setKeyboardHeight(e.endCoordinates?.height ?? 0)
-      scheduleRefit()
+      scheduleViewportRefit()
     }
     const onHide = () => {
       setKeyboardHeight(0)
-      scheduleRefit()
+      scheduleViewportRefit()
     }
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
     const showSub = Keyboard.addListener(showEvent, onShow)
     const hideSub = Keyboard.addListener(hideEvent, onHide)
     return () => {
-      if (refitTimer) clearTimeout(refitTimer)
+      if (refitTimerRef.current) clearTimeout(refitTimerRef.current)
       showSub.remove()
       hideSub.remove()
     }
-  }, [subscribeToTerminal, unsubscribeTerminal])
+  }, [scheduleViewportRefit])
+
+  // Why: the tab strip is hidden when only one terminal exists and shown
+  // once a second is created. Crossing the 1↔2 boundary changes the
+  // visible terminal area by ~40px, so the cached viewport dims in
+  // viewportRef become stale. Mark the viewport as un-measured so the
+  // next subscribe path's self-correcting loop (init → measure →
+  // resubscribe-with-fresh-viewport, see the !viewportMeasuredRef branch
+  // above) re-runs against the new layout. Also schedule an explicit
+  // refit to cover the case where no new subscribe is happening.
+  const tabStripVisible = terminals.length > 1
+  const prevTabStripVisibleRef = useRef(tabStripVisible)
+  useEffect(() => {
+    if (prevTabStripVisibleRef.current === tabStripVisible) return
+    prevTabStripVisibleRef.current = tabStripVisible
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [tabStripVisible, scheduleViewportRefit])
 
   useEffect(() => {
     if (hostId && worktreeId) {
