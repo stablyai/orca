@@ -26,7 +26,12 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
 import type { RpcClient } from '../src/transport/rpc-client'
-import { useAllHostClients, useCloseHost, useForceReconnect } from '../src/transport/client-context'
+import {
+  useAllHostClients,
+  useCloseHost,
+  useForceReconnect,
+  usePrimeHosts
+} from '../src/transport/client-context'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
@@ -235,6 +240,14 @@ export default function HomeScreen() {
   const allClients = useAllHostClients(hostIds)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
+  const primeHosts = usePrimeHosts()
+  // Why: feed the loaded HostProfiles into the provider's prime cache as
+  // soon as we have them. This avoids a second Keychain pass inside
+  // openEntry on cold start (which serialised behind the first one and
+  // showed up as multi-second connect latency).
+  useEffect(() => {
+    if (hosts.length > 0) primeHosts(hosts)
+  }, [hosts, primeHosts])
   const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
   useEffect(() => {
     allClientsRef.current = allClients.map((entry) => ({

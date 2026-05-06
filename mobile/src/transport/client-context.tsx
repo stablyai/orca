@@ -21,7 +21,7 @@ import {
 } from 'react'
 import { connect, type RpcClient } from './rpc-client'
 import { loadHosts } from './host-store'
-import type { ConnectionState } from './types'
+import type { ConnectionState, HostProfile } from './types'
 
 const IDLE_CLOSE_MS = 30_000
 
@@ -34,7 +34,7 @@ type StoreEntry = {
 }
 
 type ContextValue = {
-  acquire: (hostId: string) => RpcClient | null
+  acquire: (hostId: string, host?: HostProfile) => RpcClient | null
   release: (hostId: string) => void
   forceReconnect: (hostId: string) => Promise<void>
   closeHost: (hostId: string) => void
@@ -43,6 +43,10 @@ type ContextValue = {
   subscribeHostState: (hostId: string, listener: (state: ConnectionState) => void) => () => void
   getAllClients: () => Array<{ hostId: string; client: RpcClient }>
   subscribeAllHosts: (listener: () => void) => () => void
+  // Why: lets the home screen feed already-loaded HostProfiles in so we
+  // don't pay loadHosts() latency twice (once in the focus-effect, again
+  // inside openEntry).
+  primeHosts: (hosts: HostProfile[]) => void
 }
 
 const Ctx = createContext<ContextValue | null>(null)
@@ -59,6 +63,12 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // host lookup). Keyed by hostId, value is a sentinel resolved when the
   // entry materialises.
   const pendingOpensRef = useRef<Map<string, Promise<void>>>(new Map())
+
+  // Why: a fast-path cache of already-loaded HostProfiles. Screens that
+  // have run loadHosts() can call primeHosts() to populate this and skip
+  // the second loadHosts() inside openEntry. Without this we'd serialize
+  // two Keychain passes on cold start.
+  const primedHostsRef = useRef<Map<string, HostProfile>>(new Map())
 
   function notifyHostState(hostId: string, state: ConnectionState) {
     const set = stateListenersRef.current.get(hostId)
@@ -94,15 +104,42 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     pendingOpensRef.current.set(hostId, promise)
 
     try {
-      const hosts = await loadHosts()
-      const host = hosts.find((h) => h.id === hostId)
-      if (!host) return null
+      // Why: prefer the primed cache (populated by primeHosts when the
+      // screen already ran loadHosts) so we don't serialize a second
+      // Keychain pass behind the first one on cold start.
+      let host = primedHostsRef.current.get(hostId)
+      if (!host) {
+        try {
+          const hosts = await loadHosts()
+          host = hosts.find((h) => h.id === hostId)
+        } catch {
+          // Why: a Keychain failure on cold start (rare but observed —
+          // happens when iOS Keychain is mid-unlock or Android Keystore
+          // races the JS bridge). Surface it as 'disconnected' so the
+          // home card flips off the perma-spinner and the user can hit
+          // Reconnect from the action sheet to retry.
+          notifyHostState(hostId, 'disconnected')
+          notifyAllHosts()
+          return null
+        }
+        if (!host) return null
+      }
 
-      // Re-check after the await — another acquire() may have completed.
+      // Re-check after any await — another acquire() may have completed.
       const after = storeRef.current.get(hostId)
       if (after) return after
 
-      const client = connect(host.endpoint, host.deviceToken, host.publicKeyB64)
+      let client: RpcClient
+      try {
+        client = connect(host.endpoint, host.deviceToken, host.publicKeyB64)
+      } catch {
+        // Why: connect() can throw synchronously if the public key is
+        // malformed or the endpoint URL is invalid. Notify so the UI
+        // doesn't sit on a stale 'connecting' label forever.
+        notifyHostState(hostId, 'disconnected')
+        notifyAllHosts()
+        return null
+      }
       const unsubState = client.onStateChange((state) => {
         const cur = storeRef.current.get(hostId)
         if (!cur) return
@@ -129,9 +166,12 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Why: `acquire` is the synchronous get-or-open. If the entry already
   // exists, return its client immediately and bump the refcount. If not,
   // kick off an async open (the consumer will subscribe via
-  // `subscribeHostState` and re-read once 'connecting' fires).
+  // `subscribeHostState` and re-read once 'connecting' fires). Optionally
+  // accepts the HostProfile so the caller can avoid an extra loadHosts()
+  // pass inside openEntry.
   const acquire = useCallback(
-    (hostId: string): RpcClient | null => {
+    (hostId: string, host?: HostProfile): RpcClient | null => {
+      if (host) primedHostsRef.current.set(hostId, host)
       const existing = storeRef.current.get(hostId)
       if (existing) {
         existing.refCount += 1
@@ -152,6 +192,10 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     },
     [openEntry]
   )
+
+  const primeHosts = useCallback((hosts: HostProfile[]) => {
+    for (const host of hosts) primedHostsRef.current.set(host.id, host)
+  }, [])
 
   const release = useCallback(
     (hostId: string) => {
@@ -252,7 +296,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getReconnectAttempt,
       subscribeHostState,
       getAllClients,
-      subscribeAllHosts
+      subscribeAllHosts,
+      primeHosts
     }),
     [
       acquire,
@@ -263,7 +308,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getReconnectAttempt,
       subscribeHostState,
       getAllClients,
-      subscribeAllHosts
+      subscribeAllHosts,
+      primeHosts
     ]
   )
 
@@ -382,6 +428,14 @@ export function useCloseHost(): (hostId: string) => void {
 export function useForceReconnect(): (hostId: string) => Promise<void> {
   const ctx = useCtx()
   return ctx.forceReconnect
+}
+
+// Why: lets the home screen feed already-loaded HostProfiles in so the
+// provider can skip its own loadHosts() pass when it eventually opens
+// each host — collapses two serial Keychain reads on cold-start into one.
+export function usePrimeHosts(): (hosts: HostProfile[]) => void {
+  const ctx = useCtx()
+  return ctx.primeHosts
 }
 
 // Why: lets the home/host-detail UI escalate "Reconnecting…" to a more
