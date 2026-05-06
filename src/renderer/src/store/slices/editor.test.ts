@@ -668,7 +668,12 @@ describe('createEditorSlice remote branch actions', () => {
     )
   })
 
-  it('runs publish branch through push with publish=true and refreshes state', async () => {
+  it('runs publish branch through push with publish=true', async () => {
+    // Why: pushBranch no longer awaits a post-op git status / upstream
+    // refresh. The 3s git-status poll and the upstream-status effect in the
+    // sidebar reconcile state shortly after the IPC returns; keeping the
+    // mutation tight stops compound flows from stalling between commit and
+    // push.
     const store = createEditorStore()
 
     await store.getState().pushBranch('wt-1', '/repo', true)
@@ -678,8 +683,6 @@ describe('createEditorSlice remote branch actions', () => {
       publish: true,
       connectionId: undefined
     })
-    expect(gitStatusMock).toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -814,7 +817,10 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Remote operation failed')
   })
 
-  it('runs fetchBranch and refreshes upstream status on success', async () => {
+  it('runs fetchBranch and clears the busy flag on success', async () => {
+    // Why: fetchBranch no longer awaits a post-op upstream refresh.
+    // useGitStatusPolling and the sidebar's upstream effect handle the
+    // reconcile, keeping the mutation focused on the single IPC.
     const store = createEditorStore()
     await store.getState().fetchBranch('wt-1', '/repo')
 
@@ -822,7 +828,6 @@ describe('createEditorSlice remote branch actions', () => {
       worktreePath: '/repo',
       connectionId: undefined
     })
-    expect(gitUpstreamStatusMock).toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
@@ -904,63 +909,11 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
-  it('does not surface a misleading toast when pushBranch post-op status refresh fails', async () => {
-    // Why: a status-fetch hiccup after a successful push must not fire a
-    // 'Push failed' toast or reject the promise — that would mislead the
-    // user about an op that landed and break runCompoundCommitAction's
-    // success gating for compound commit-then-push flows.
-    const store = createEditorStore()
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    gitStatusMock.mockRejectedValueOnce(new Error('transient IPC failure'))
-
-    await expect(store.getState().pushBranch('wt-1', '/repo', false)).resolves.toBeUndefined()
-
-    expect(gitPushMock).toHaveBeenCalled()
-    expect(toastErrorMock).not.toHaveBeenCalled()
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'post-op git status refresh failed',
-      expect.any(Error)
-    )
-    consoleErrorSpy.mockRestore()
-  })
-
-  it('does not surface a misleading toast when pushBranch post-op upstream refresh fails', async () => {
-    // Why: the upstream fetch in the post-op refresh is also best-effort;
-    // a failure there must likewise not overwrite the successful push signal.
-    const store = createEditorStore()
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    // The upstream fetch inside fetchUpstreamStatus swallows its own errors
-    // (see fetchUpstreamStatus), so rely on the status call for this case.
-    gitStatusMock.mockRejectedValueOnce(new Error('ipc timeout'))
-
-    await expect(store.getState().pushBranch('wt-1', '/repo', false)).resolves.toBeUndefined()
-
-    expect(toastErrorMock).not.toHaveBeenCalled()
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-    consoleErrorSpy.mockRestore()
-  })
-
-  it('does not surface a misleading toast when pullBranch post-op status refresh fails', async () => {
-    // Why: same shape as push — a refresh hiccup after a successful pull
-    // must not produce a 'Pull blocked' toast or reject the promise.
-    const store = createEditorStore()
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    gitStatusMock.mockRejectedValueOnce(new Error('transient IPC failure'))
-
-    await expect(store.getState().pullBranch('wt-1', '/repo')).resolves.toBeUndefined()
-
-    expect(gitPullMock).toHaveBeenCalled()
-    expect(toastErrorMock).not.toHaveBeenCalled()
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'post-op git status refresh failed',
-      expect.any(Error)
-    )
-    consoleErrorSpy.mockRestore()
-  })
-
-  it('runs syncBranch end-to-end (fetch+pull+push+refresh) on success', async () => {
+  it('runs syncBranch end-to-end (fetch+pull+push) on success', async () => {
+    // Why: syncBranch no longer awaits a post-op git status / upstream
+    // refresh. The polling layer reconciles state after the mutation
+    // returns; the in-mutation upstream-status read remains because it
+    // gates whether the inner push stage runs.
     const store = createEditorStore()
 
     await store.getState().syncBranch('wt-1', '/repo')
@@ -978,7 +931,6 @@ describe('createEditorSlice remote branch actions', () => {
       worktreePath: '/repo',
       connectionId: undefined
     })
-    expect(gitStatusMock).toHaveBeenCalled()
     expect(toastErrorMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
@@ -1060,22 +1012,6 @@ describe('createEditorSlice remote branch actions', () => {
     )
     expect(gitPushMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
-  it('does not surface a misleading toast when syncBranch post-op status refresh fails', async () => {
-    const store = createEditorStore()
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    gitStatusMock.mockRejectedValueOnce(new Error('transient IPC failure'))
-
-    await expect(store.getState().syncBranch('wt-1', '/repo')).resolves.toBeUndefined()
-
-    expect(toastErrorMock).not.toHaveBeenCalled()
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'post-op git status refresh failed',
-      expect.any(Error)
-    )
-    consoleErrorSpy.mockRestore()
   })
 })
 

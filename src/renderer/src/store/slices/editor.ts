@@ -1900,68 +1900,43 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
   },
   pushBranch: async (worktreeId, worktreePath, publish = false, connectionId) => {
+    // Why: don't *await* a post-op git status / upstream refresh here.
+    // Chaining awaited refreshes inside the mutation extends the gap before
+    // compound flows (runCompoundCommitAction → runRemoteAction) reach the
+    // next step. But we still need a near-immediate upstream refresh so
+    // the primary button label rotates from "Push" to "Commit" as soon as
+    // ahead=0 — the polling layer is on a 3s interval, which is long
+    // enough to read as a stuck label. Solution: fire the upstream refresh
+    // as fire-and-forget so it doesn't block the mutation but updates the
+    // store as soon as the IPC resolves.
     get().beginRemoteOperation(publish ? 'publish' : 'push')
-    let success = false
     try {
       await window.api.git.push({ worktreePath, publish, connectionId })
-      success = true
     } catch (error) {
-      // Why: centralize remote git failure feedback in the store so every caller
-      // gets the same actionable message without duplicating toast handling.
       toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
     } finally {
-      if (success) {
-        // Why: post-op refresh is best-effort — a status-fetch failure after a
-        // successful push must not surface a misleading 'Push failed' toast
-        // nor reject the promise, which would break runCompoundCommitAction's
-        // success gating and mislead the user about an op that actually landed.
-        try {
-          const status = (await window.api.git.status({
-            worktreePath,
-            connectionId
-          })) as GitStatusResult
-          get().setGitStatus(worktreeId, status)
-          await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
-        } catch (refreshError) {
-          console.error('post-op git status refresh failed', refreshError)
-        }
-      }
       get().endRemoteOperation()
     }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
   },
   pullBranch: async (worktreeId, worktreePath, connectionId) => {
     get().beginRemoteOperation('pull')
-    let success = false
     try {
       await window.api.git.pull({ worktreePath, connectionId })
-      success = true
     } catch (error) {
       toast.error(resolveRemoteOperationErrorMessage(error))
       throw error
     } finally {
-      if (success) {
-        // Why: post-op refresh is best-effort — a status-fetch failure after a
-        // successful pull must not surface a misleading 'Pull blocked' toast
-        // nor reject the promise, which would break runCompoundCommitAction's
-        // success gating and mislead the user about an op that actually landed.
-        try {
-          const status = (await window.api.git.status({
-            worktreePath,
-            connectionId
-          })) as GitStatusResult
-          get().setGitStatus(worktreeId, status)
-          await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
-        } catch (refreshError) {
-          console.error('post-op git status refresh failed', refreshError)
-        }
-      }
       get().endRemoteOperation()
     }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
   },
   syncBranch: async (worktreeId, worktreePath, connectionId) => {
+    // Why: same shape as pushBranch / pullBranch — fire-and-forget the
+    // post-op upstream refresh after the busy flag clears so the primary
+    // button label rotates immediately when the IPC resolves.
     get().beginRemoteOperation('sync')
-    let success = false
     // Why: the inner push stage toasts with { isSync: true } so its failure
     // surfaces a "Sync failed..." message instead of "Push failed..." — the
     // user invoked Sync; the underlying push is implementation detail. The
@@ -1990,7 +1965,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           throw error
         }
       }
-      success = true
     } catch (error) {
       if (!pushStageToastShown) {
         // Why: same isSync framing for fetch/pull/upstream-status failures so
@@ -2001,43 +1975,25 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
       throw error
     } finally {
-      if (success) {
-        // Why: post-op refresh is best-effort — a status-fetch failure after a
-        // successful sync must not surface a misleading 'Remote operation
-        // failed' toast nor reject the promise, which would break
-        // runCompoundCommitAction's success gating.
-        try {
-          const status = (await window.api.git.status({
-            worktreePath,
-            connectionId
-          })) as GitStatusResult
-          get().setGitStatus(worktreeId, status)
-          await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
-        } catch (refreshError) {
-          console.error('post-op git status refresh failed', refreshError)
-        }
-      }
       get().endRemoteOperation()
     }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
   },
   fetchBranch: async (worktreeId, worktreePath, connectionId) => {
-    // Why: mirror pushBranch/pullBranch/syncBranch so the dropdown Fetch action
-    // participates in isRemoteOperationActive (disabling the split button while
-    // the fetch is in flight) and uses the same toast error path.
+    // Why: same shape as pushBranch / pullBranch — fire-and-forget the
+    // upstream refresh after the busy flag clears. Fetch updates the
+    // remote refs only, so the visible signal we want is the new
+    // ahead/behind counts on the upstream-status payload.
     get().beginRemoteOperation('fetch')
     try {
       await window.api.git.fetch({ worktreePath, connectionId })
-      // Why: fetch doesn't change the working tree, but the refreshed remote
-      // refs are the whole point of the action — update the upstream status so
-      // the primary label can adapt (e.g. gaining a "Pull" count) without
-      // waiting for the polling interval.
-      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
     } catch (error) {
       toast.error(resolveRemoteOperationErrorMessage(error))
       throw error
     } finally {
       get().endRemoteOperation()
     }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
   },
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},
