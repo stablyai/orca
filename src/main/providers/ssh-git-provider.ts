@@ -17,17 +17,12 @@ import type {
   GitWorktreeInfo
 } from '../../shared/types'
 import {
-  getCommitMessageAgentSpec,
-  getCommitMessageModel,
-  isCustomAgentId
-} from '../../shared/commit-message-agent-spec'
-import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
   extractAgentErrorMessage,
-  planCustomCommand,
   truncateDiffForPrompt
 } from '../../shared/commit-message-prompt'
+import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
 import { applyOrcaAttribution } from '../git/commit-message-generator'
 
 const SSH_GENERATION_TIMEOUT_MS = 60_000
@@ -86,66 +81,11 @@ export class SshGitProvider implements IGitProvider {
     }
 
     const prompt = buildCommitPrompt(truncateDiffForPrompt(diff), request.customPrompt ?? '')
-
-    let binary: string
-    let args: string[]
-    let stdinPayload: string | null
-    let label: string
-    if (isCustomAgentId(request.agentId)) {
-      const command = request.customAgentCommand?.trim() ?? ''
-      if (!command) {
-        return {
-          success: false,
-          error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
-        }
-      }
-      const planned = planCustomCommand(command, prompt)
-      if (!planned.ok) {
-        return { success: false, error: planned.error }
-      }
-      binary = planned.binary
-      args = planned.args
-      stdinPayload = planned.stdinPayload
-      label = planned.binary
-    } else {
-      const spec = getCommitMessageAgentSpec(request.agentId)
-      if (!spec) {
-        return {
-          success: false,
-          error: `Agent "${request.agentId}" does not support AI commit messages.`
-        }
-      }
-      const model = getCommitMessageModel(request.agentId, request.model)
-      if (!model) {
-        return {
-          success: false,
-          error: `Model "${request.model}" is not available for ${spec.label}.`
-        }
-      }
-      if (request.thinkingLevel) {
-        if (!model.thinkingLevels) {
-          return {
-            success: false,
-            error: `Model "${model.label}" does not support a thinking effort level.`
-          }
-        }
-        if (!model.thinkingLevels.some((l) => l.id === request.thinkingLevel)) {
-          return {
-            success: false,
-            error: `Thinking level "${request.thinkingLevel}" is not valid for ${model.label}.`
-          }
-        }
-      }
-      const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
-      args = spec.buildArgs({
-        prompt: argvPrompt,
-        model: request.model,
-        thinkingLevel: request.thinkingLevel
-      })
-      stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
-      binary = spec.binary
-      label = spec.label
+    const planned = planCommitMessageGeneration(request, prompt)
+    if (!planned.ok) {
+      return { success: false, error: planned.error }
     }
+    const { binary, args, stdinPayload, label } = planned.plan
 
     const result = (await this.mux.request('agent.execNonInteractive', {
       binary,

@@ -1,10 +1,9 @@
 import { exec, spawn, type ChildProcess } from 'child_process'
+import { COMMIT_MESSAGE_AGENT_SPECS } from '../../shared/commit-message-agent-spec'
 import {
-  COMMIT_MESSAGE_AGENT_SPECS,
-  getCommitMessageAgentSpec,
-  getCommitMessageModel,
-  isCustomAgentId
-} from '../../shared/commit-message-agent-spec'
+  planCommitMessageGeneration,
+  type CommitMessagePlan
+} from '../../shared/commit-message-plan'
 
 // Why: on Windows, npm-installed CLIs like `claude` and `codex` are `.cmd`
 // shims — Node's `spawn` launches them through an implicit `cmd.exe /d /s /c`
@@ -34,7 +33,6 @@ import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
   extractAgentErrorMessage,
-  planCustomCommand,
   truncateDiffForPrompt
 } from '../../shared/commit-message-prompt'
 import { ORCA_GIT_COMMIT_TRAILER } from '../../shared/orca-attribution'
@@ -92,99 +90,18 @@ export function cancelGenerateCommitMessageLocal(worktreePath: string): void {
   }
 }
 
-type PresetPlan = {
-  kind: 'preset'
-  binary: string
-  label: string
-  args: string[]
-  stdinPayload: string | null
-}
-type CustomPlan = {
-  kind: 'custom'
-  binary: string
-  label: string
-  args: string[]
-  stdinPayload: string | null
-}
-type ResolvedPlan = PresetPlan | CustomPlan
-
-/**
- * Validates the request and produces a spawn-ready plan. Surfaces a single
- * actionable error per failure so the renderer can show it inline.
- */
-function planGeneration(
-  params: GenerateCommitMessageParams,
-  prompt: string
-): ResolvedPlan | { error: string } {
-  if (isCustomAgentId(params.agentId)) {
-    const command = params.customAgentCommand?.trim() ?? ''
-    if (!command) {
-      return { error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.' }
-    }
-    const planned = planCustomCommand(command, prompt)
-    if (!planned.ok) {
-      return { error: planned.error }
-    }
-    return {
-      kind: 'custom',
-      binary: planned.binary,
-      // Why: the binary doubles as the human-readable label in error prefixes
-      // when the user runs a custom command — there is no friendly name.
-      label: planned.binary,
-      args: planned.args,
-      stdinPayload: planned.stdinPayload
-    }
-  }
-
-  const spec = getCommitMessageAgentSpec(params.agentId)
-  if (!spec) {
-    return { error: `Agent "${params.agentId}" does not support AI commit messages.` }
-  }
-  const model = getCommitMessageModel(params.agentId, params.model)
-  if (!model) {
-    return { error: `Model "${params.model}" is not available for ${spec.label}.` }
-  }
-  if (params.thinkingLevel) {
-    if (!model.thinkingLevels) {
-      return { error: `Model "${model.label}" does not support a thinking effort level.` }
-    }
-    if (!model.thinkingLevels.some((l) => l.id === params.thinkingLevel)) {
-      return {
-        error: `Thinking level "${params.thinkingLevel}" is not valid for ${model.label}.`
-      }
-    }
-  }
-
-  const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
-  const args = spec.buildArgs({
-    prompt: argvPrompt,
-    model: params.model,
-    thinkingLevel: params.thinkingLevel
-  })
-  const stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
-  return {
-    kind: 'preset',
-    binary: spec.binary,
-    label: spec.label,
-    args,
-    stdinPayload
-  }
-}
-
 /**
  * Spawns the agent CLI in non-interactive mode, feeds the prompt via argv or
- * stdin per the spec, and returns the captured stdout. Always returns a
+ * stdin per the plan, and returns the captured stdout. Always returns a
  * GenerateCommitMessageResult — never throws — so the IPC handler can
  * round-trip the failure to the renderer for inline display.
  */
 async function runAgent(
-  binary: string,
-  args: string[],
-  promptForStdin: string | null,
+  plan: CommitMessagePlan,
   cwd: string,
-  attributionEnabled: boolean,
-  label: string
+  attributionEnabled: boolean
 ): Promise<GenerateCommitMessageResult> {
+  const { binary, args, stdinPayload, label } = plan
   return new Promise((resolve) => {
     let child
     try {
@@ -274,8 +191,8 @@ async function runAgent(
       finalize({ success: true, message: applyOrcaAttribution(cleaned, attributionEnabled) })
     })
 
-    if (promptForStdin !== null) {
-      child.stdin?.end(promptForStdin)
+    if (stdinPayload !== null) {
+      child.stdin?.end(stdinPayload)
     } else {
       child.stdin?.end()
     }
@@ -299,18 +216,11 @@ export async function generateCommitMessageLocal(
   }
 
   const prompt = buildCommitPrompt(truncateDiffForPrompt(diff), params.customPrompt ?? '')
-  const plan = planGeneration(params, prompt)
-  if ('error' in plan) {
-    return { success: false, error: plan.error }
+  const planned = planCommitMessageGeneration(params, prompt)
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
   }
-  return runAgent(
-    plan.binary,
-    plan.args,
-    plan.stdinPayload,
-    params.worktreePath,
-    params.attributionEnabled === true,
-    plan.label
-  )
+  return runAgent(planned.plan, params.worktreePath, params.attributionEnabled === true)
 }
 
 /** Re-export so the IPC layer can validate agent ids at the boundary. */

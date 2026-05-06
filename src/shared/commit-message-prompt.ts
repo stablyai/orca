@@ -49,9 +49,9 @@ export function truncateDiffForPrompt(
 export function cleanGeneratedCommitMessage(raw: string): string {
   let text = raw.replace(/\r\n/g, '\n').trim()
 
-  // Drop a single leading status line like "Generating…", "Thinking…", "..."
-  // that appears before a blank line. Real commit messages never start with
-  // an ellipsis or with the word "Generating".
+  // Why: real commit messages never start with an ellipsis or the word
+  // "Generating"/"Thinking" — those leak from CLIs that print a status line
+  // before the actual response.
   const firstNewline = text.indexOf('\n')
   if (firstNewline !== -1) {
     const firstLine = text.slice(0, firstNewline)
@@ -60,7 +60,6 @@ export function cleanGeneratedCommitMessage(raw: string): string {
     }
   }
 
-  // Strip a single enclosing fenced block: ```…``` or ```diff …```.
   const fence = /^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```$/
   const fenced = text.match(fence)
   if (fenced) {
