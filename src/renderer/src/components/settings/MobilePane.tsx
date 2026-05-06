@@ -198,7 +198,7 @@ export function MobilePane(): React.JSX.Element {
             Scan this code with the Orca mobile app. Each code creates a unique device token.
           </p>
           {pairingUrl && (
-            <div className="flex w-full max-w-sm flex-col gap-1.5 px-4">
+            <div className="flex w-full max-w-lg flex-col gap-1.5 px-4">
               <div className="text-muted-foreground text-center text-xs">
                 Or paste this code in the mobile app:
               </div>
@@ -206,7 +206,7 @@ export function MobilePane(): React.JSX.Element {
                 variant="outline"
                 size="sm"
                 onClick={() => void copyPairingCode()}
-                className="font-mono text-[10px] leading-tight whitespace-normal break-all h-auto py-2"
+                className="font-mono text-[11px] leading-tight whitespace-normal break-all h-auto py-2 px-3"
               >
                 <span className="flex-1 text-left">{pairingUrl}</span>
                 {codeCopied ? (
