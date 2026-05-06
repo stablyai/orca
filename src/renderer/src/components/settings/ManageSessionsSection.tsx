@@ -17,6 +17,7 @@ import {
 } from '../ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
+import { MANAGE_SESSIONS_SEARCH_ENTRIES } from './terminal-search'
 import { useAppStore } from '../../store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
@@ -282,9 +283,9 @@ export function ManageSessionsSection(): React.JSX.Element {
       </div>
 
       <SearchableSetting
-        title="Daemon sessions running"
-        description="Count of live PTY sessions across all workspaces."
-        keywords={['daemon', 'pty', 'sessions', 'manage', 'kill', 'restart', 'terminal']}
+        title={MANAGE_SESSIONS_SEARCH_ENTRIES[0].title}
+        description={MANAGE_SESSIONS_SEARCH_ENTRIES[0].description}
+        keywords={MANAGE_SESSIONS_SEARCH_ENTRIES[0].keywords}
         className="space-y-3"
       >
         {/* Why: full-width sessions card. The table *is* the primary

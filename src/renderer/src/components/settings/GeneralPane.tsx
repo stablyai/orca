@@ -422,7 +422,15 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         <SearchableSetting
           title="Cache Timer"
           description="Show a countdown after a Claude agent becomes idle."
-          keywords={['cache', 'timer', 'prompt', 'ttl', 'claude']}
+          // Why: this is the primary control for the section gated by
+          // GENERAL_CACHE_TIMER_SEARCH_ENTRIES (title "Prompt Cache Timer").
+          // Mirroring those keywords keeps a search for "Prompt Cache Timer"
+          // from rendering the section header with no body underneath.
+          keywords={GENERAL_CACHE_TIMER_SEARCH_ENTRIES.flatMap((entry) => [
+            entry.title,
+            entry.description ?? '',
+            ...(entry.keywords ?? [])
+          ])}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">

@@ -192,6 +192,7 @@ function Settings(): React.JSX.Element {
   // leak through into a normal reopen of Settings.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const terminalFontsLoadedRef = useRef(false)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
@@ -219,6 +220,30 @@ function Settings(): React.JSX.Element {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [closeSettingsPage])
+
+  useEffect(() => {
+    const handleFindShortcut = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.altKey || event.shiftKey) {
+        return
+      }
+      // Why: Cmd on Mac, Ctrl elsewhere — matches the rest of the app's
+      // mod-key convention (see App.tsx) and aligns with platform Find norms.
+      const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+      if (!mod || event.key.toLowerCase() !== 'f') {
+        return
+      }
+      const input = searchInputRef.current
+      if (!input) {
+        return
+      }
+      event.preventDefault()
+      input.focus()
+      input.select()
+    }
+
+    document.addEventListener('keydown', handleFindShortcut)
+    return () => document.removeEventListener('keydown', handleFindShortcut)
+  }, [isMac])
 
   useEffect(
     () => () => {
@@ -603,6 +628,7 @@ function Settings(): React.JSX.Element {
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
         searchQuery={settingsSearchQuery}
+        searchInputRef={searchInputRef}
         onBack={closeSettingsPage}
         onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
