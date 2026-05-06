@@ -74,11 +74,12 @@
 
 ## Iteration State
 
-Current iteration: 1
-Last completed phase: Validation
-Files fixed this iteration: []
-Validated for fixing:
-1. mergeSnapshotAndSessions.ts:109 — replace ORCA_WORKTREE_ID_SEPARATOR with shared WORKTREE_ID_SEPARATOR
-2. hydrate-local-pty-registry.ts + attach-main-window-services.ts — add idempotency one-shot gate
-3. daemon-pty-adapter.test.ts:415-426 — make test pin strict-format change with non-empty validWorktreeIds
-4. mergeSnapshotAndSessions.test.ts — add eslint-disable max-lines directive (file is 332 lines, oxlint cap 300)
+Current iteration: 2
+Last completed phase: Iteration 1 fixes applied
+Files fixed in iteration 1:
+- src/renderer/src/components/status-bar/mergeSnapshotAndSessions.ts (use shared WORKTREE_ID_SEPARATOR)
+- src/main/memory/hydrate-local-pty-registry.ts (add hasHydrated one-shot)
+- src/main/window/attach-main-window-services.ts (update comment for idempotency)
+- src/main/daemon/daemon-pty-adapter.test.ts (test pins strict-parser semantic)
+- src/renderer/src/components/status-bar/mergeSnapshotAndSessions.test.ts (eslint-disable max-lines)
+Build status: typecheck PASS, vitest 81/81 PASS

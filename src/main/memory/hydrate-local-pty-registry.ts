@@ -29,16 +29,23 @@ import type { Store } from '../persistence'
 // Why: `attachMainWindowServices` runs on every macOS dock re-activation
 // (see `app.on('activate', ...)` in src/main/index.ts), so this module
 // guards against re-running git I/O + daemon RPC after the first pass.
+// Stays false until we actually have a daemon provider, so a boot where
+// the daemon socket isn't up yet remains retry-eligible on later
+// re-activations.
 let hasHydrated = false
 
 /**
  * Read the live daemon session list and register every local session
  * the registry doesn't already know about.
  *
- * Once-per-process: subsequent calls are a no-op. `attachMainWindowServices`
- * fires on every macOS dock re-activation, so the module-level
- * `hasHydrated` guard ensures the git-worktree enumeration and
- * `reconcileOnStartup` daemon RPC only run on the first invocation.
+ * Once-per-process when the daemon is reachable on first call:
+ * `attachMainWindowServices` fires on every macOS dock re-activation, so
+ * the module-level `hasHydrated` guard ensures the git-worktree
+ * enumeration and `reconcileOnStartup` daemon RPC only run on the first
+ * successful invocation. If the daemon is offline at first call (no
+ * provider yet), the function returns without flipping the flag so a
+ * later macOS re-activation can retry; once a provider is obtained the
+ * flag flips and subsequent calls are a no-op.
  *
  * Wrapped in `try/catch` because the daemon socket may be unreachable
  * at boot (process not yet started, or just died); the renderer-side
@@ -50,11 +57,18 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Store): Promise<void>
     if (hasHydrated) {
       return
     }
-    hasHydrated = true
     const provider = getDaemonProvider()
     if (!provider) {
+      // Why: leave hasHydrated false so a later activation (after the
+      // daemon comes up) can retry. See doc §Failure-modes "Daemon
+      // offline at boot".
       return
     }
+    // Why: flip only once we have a provider — committed to either
+    // succeeding or failing on a daemon RPC. Retrying after an RPC
+    // throw uses the same socket and is unlikely to help; the
+    // renderer-side union still covers that case.
+    hasHydrated = true
 
     // Why: build the same valid-worktree set scheduleHistoryGc uses, so
     // reconcileOnStartup can prune sessions whose repo or worktree no
