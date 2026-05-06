@@ -1,10 +1,35 @@
-import { spawn } from 'child_process'
+import { exec, spawn, type ChildProcess } from 'child_process'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   type CommitMessageAgentSpec
 } from '../../shared/commit-message-agent-spec'
+
+// Why: on Windows, npm-installed CLIs like `claude` and `codex` are `.cmd`
+// shims — Node's `spawn` launches them through an implicit `cmd.exe /d /s /c`
+// wrapper, so `child.kill()` only terminates that wrapper and leaves the real
+// node.exe process running. `taskkill /T /F` walks the process tree from the
+// wrapper PID and force-kills every descendant, which is what users expect
+// when they hit "stop generating".
+function killProcessTree(child: ChildProcess): void {
+  const pid = child.pid
+  if (!pid) {
+    return
+  }
+  if (process.platform === 'win32') {
+    exec(`taskkill /pid ${pid} /T /F`, () => {
+      // Best-effort; the spawn's `close` listener fires once the tree exits.
+    })
+    return
+  }
+  try {
+    child.kill('SIGKILL')
+  } catch {
+    // The child may have already exited between the in-flight check and the
+    // kill — that race is benign and can be ignored.
+  }
+}
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
@@ -138,13 +163,14 @@ async function runAgent(
 
     cancelTokensByLane.set(laneKey, () => {
       canceledByUser = true
-      child.kill('SIGKILL')
+      killProcessTree(child)
     })
 
     const timer = setTimeout(() => {
-      // Why: SIGKILL because some CLIs trap SIGTERM and continue streaming
-      // tokens, which keeps the parent waiting indefinitely.
-      child.kill('SIGKILL')
+      // Why: tree-kill because some CLIs trap SIGTERM and continue streaming
+      // tokens, which keeps the parent waiting indefinitely. On Windows the
+      // immediate child is a cmd.exe wrapper, so we have to walk the tree.
+      killProcessTree(child)
       finalize({
         success: false,
         error: `Generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`

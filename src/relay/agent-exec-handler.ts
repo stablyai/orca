@@ -1,9 +1,33 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { exec, spawn, type ChildProcess } from 'child_process'
 import type { RelayDispatcher } from './dispatcher'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+
+// Why: mirrors src/main/git/commit-message-generator.ts. On Windows the
+// spawned `claude`/`codex` is a `.cmd` shim wrapped by an implicit cmd.exe,
+// so killing only the immediate child leaves the real node.exe running.
+// `taskkill /T /F` walks the process tree by PID and force-kills every
+// descendant. Kept duplicated rather than imported because the relay is a
+// separate runtime that ships independently to remote hosts.
+function killProcessTree(child: ChildProcess): void {
+  const pid = child.pid
+  if (!pid) {
+    return
+  }
+  if (process.platform === 'win32') {
+    exec(`taskkill /pid ${pid} /T /F`, () => {
+      // Best-effort; the spawn's `close` listener fires once the tree exits.
+    })
+    return
+  }
+  try {
+    child.kill('SIGKILL')
+  } catch {
+    // Child may already have exited between the kill request and now.
+  }
+}
 
 type ExecParams = {
   binary: unknown
@@ -54,7 +78,7 @@ export class AgentExecHandler {
       return { canceled: false }
     }
     entry.markCanceled()
-    entry.child.kill('SIGKILL')
+    killProcessTree(entry.child)
     return { canceled: true }
   }
 
@@ -123,14 +147,16 @@ export class AgentExecHandler {
 
       const timer = setTimeout(() => {
         timedOut = true
-        // Why: SIGKILL because some CLIs trap SIGTERM and continue streaming.
-        child.kill('SIGKILL')
+        // Why: tree-kill because some CLIs trap SIGTERM and continue streaming;
+        // also Windows wraps `.cmd` shims in cmd.exe, so the immediate child
+        // is not the real node.exe process.
+        killProcessTree(child)
       }, timeoutMs)
 
       child.stdout?.on('data', (chunk: Buffer) => {
         stdoutBytes += chunk.byteLength
         if (stdoutBytes > MAX_OUTPUT_BYTES) {
-          child.kill('SIGKILL')
+          killProcessTree(child)
           return
         }
         stdout += chunk.toString('utf-8')
@@ -138,7 +164,7 @@ export class AgentExecHandler {
       child.stderr?.on('data', (chunk: Buffer) => {
         stderrBytes += chunk.byteLength
         if (stderrBytes > MAX_OUTPUT_BYTES) {
-          child.kill('SIGKILL')
+          killProcessTree(child)
           return
         }
         stderr += chunk.toString('utf-8')

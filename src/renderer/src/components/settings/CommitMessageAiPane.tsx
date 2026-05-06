@@ -245,8 +245,9 @@ export function CommitMessageAiPane({
         <div className="space-y-0.5">
           <Label>Agent</Label>
           <p className="text-xs text-muted-foreground">
-            The CLI Orca runs in non-interactive mode. The binary must be installed on whichever
-            host you commit from.
+            Which agent CLI Orca runs in the background to draft the message. The agent must be
+            installed on the machine that hosts the worktree — your computer for local worktrees, or
+            the SSH host for remote ones.
           </p>
         </div>
         <Select value={activeAgentId} onValueChange={onAgentChange}>
