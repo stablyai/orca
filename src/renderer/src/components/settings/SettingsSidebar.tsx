@@ -1,4 +1,4 @@
-import type { Ref } from 'react'
+import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { Button } from '../ui/button'
@@ -24,7 +24,7 @@ type SettingsSidebarProps = {
   repoSections: RepoNavSection[]
   hasRepos: boolean
   searchQuery: string
-  searchInputRef?: Ref<HTMLInputElement>
+  searchInputRef?: RefObject<HTMLInputElement | null>
   onBack: () => void
   onSearchChange: (query: string) => void
   onSelectSection: (
