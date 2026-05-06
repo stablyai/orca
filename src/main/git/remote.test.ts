@@ -15,31 +15,30 @@ describe('git remote operations', () => {
     gitExecFileAsyncMock.mockReset()
   })
 
-  it('pushes with upstream tracking when publish mode is enabled', async () => {
+  it('pushes with --set-upstream regardless of publish flag', async () => {
+    // Why: every push uses --set-upstream so worktrees that were created
+    // tracking the BASE ref (origin/main) get their upstream repointed to
+    // origin/<branch> on first push. Without that the local branch keeps
+    // tracking origin/main forever and the UI's ahead/behind read via
+    // @{u} measures "ahead of base" rather than "ahead of remote branch".
+    // Both publish=true and publish=false take the same path now; the
+    // parameter is preserved in the signature for IPC compatibility but
+    // is no longer load-bearing.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
     await gitPush('/repo', true)
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['push', '--set-upstream', 'origin', 'HEAD'],
-      {
-        cwd: '/repo'
-      }
-    )
-  })
-
-  it('pushes via explicit origin HEAD refspec in non-publish mode', async () => {
-    // Why: bare `git push` is rejected by push.default=simple when the local
-    // branch name doesn't match its upstream branch name — exactly the case
-    // Orca creates by tracking a base ref like origin/main. Asserting the
-    // explicit refspec guards against a regression to the old `['push']` form.
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-
     await gitPush('/repo', false)
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['push', 'origin', 'HEAD'], {
-      cwd: '/repo'
-    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['push', '--set-upstream', 'origin', 'HEAD'],
+      { cwd: '/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['push', '--set-upstream', 'origin', 'HEAD'],
+      { cwd: '/repo' }
+    )
   })
 
   it('maps non-fast-forward push failures to an actionable message', async () => {

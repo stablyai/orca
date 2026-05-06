@@ -262,18 +262,19 @@ export class GitHandler {
   private async push(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
-    const publish = params.publish === true
-    // Why: explicit `origin HEAD` refspec works regardless of push.default
-    // (which is `simple` by default in modern git). Worktree branches that
-    // Orca creates with `git worktree add --track -b <name> <dir> <baseRef>`
-    // track the *base* (e.g. origin/main) so ahead/behind compares against
-    // the base. Bare `git push` then fails with "upstream branch... does
-    // not match the name of your current branch". Pushing to `origin HEAD`
-    // publishes the current branch to a same-named remote ref and bypasses
-    // that check. Mirrors src/main/git/remote.ts so SSH and local paths agree.
-    const args = publish ? ['push', '--set-upstream', 'origin', 'HEAD'] : ['push', 'origin', 'HEAD']
+    // Why: always pass --set-upstream (mirrors src/main/git/remote.ts).
+    // Orca's worktrees initially track the BASE ref (origin/main) because
+    // they're created via `git worktree add --track -b <name> <dir>
+    // <baseRef>` — without --set-upstream the local branch keeps tracking
+    // the base after the first push, so ahead/behind via @{u} measures
+    // "ahead of base" instead of "ahead of remote branch", and the UI's
+    // primary button never rotates from "Push" to "Commit". The `publish`
+    // flag is preserved in the param shape for IPC compatibility but is no
+    // longer load-bearing. On an already-published branch --set-upstream is
+    // a no-op for the tracking config.
+    void params.publish
     try {
-      await this.git(args, worktreePath)
+      await this.git(['push', '--set-upstream', 'origin', 'HEAD'], worktreePath)
     } catch (error) {
       // Why: mirror the local gitPush normalization so SSH users see the same
       // "non-fast-forward / pull first" guidance instead of raw git stderr.

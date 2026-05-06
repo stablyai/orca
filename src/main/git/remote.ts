@@ -1,19 +1,26 @@
 import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { gitExecFileAsync } from './runner'
 
-export async function gitPush(worktreePath: string, publish = false): Promise<void> {
+export async function gitPush(worktreePath: string, _publish = false): Promise<void> {
   try {
-    // Why: explicit `origin HEAD` refspec works regardless of push.default
-    // (which is `simple` by default in modern git). Worktree branches that
-    // Orca creates with `git worktree add --track -b <name> <dir> <baseRef>`
-    // track the *base* (e.g. origin/main) so the UI can compute ahead/behind
-    // against that base. Bare `git push` then fails with "fatal: The upstream
-    // branch of your current branch does not match the name of your current
-    // branch" because the upstream branch name (main) differs from the local
-    // branch name. Pushing to `origin HEAD` publishes the current branch to a
-    // same-named remote ref and never trips push.default's match check.
-    const args = publish ? ['push', '--set-upstream', 'origin', 'HEAD'] : ['push', 'origin', 'HEAD']
-    await gitExecFileAsync(args, { cwd: worktreePath })
+    // Why: always pass --set-upstream so that worktrees Orca creates with
+    // `git worktree add --track -b <name> <dir> <baseRef>` (which initially
+    // track the BASE — e.g. origin/main) get their upstream repointed to
+    // origin/<branch> on first push. Without this the local branch keeps
+    // tracking origin/main forever, so ahead/behind reads via @{u} measure
+    // "ahead of base" rather than "ahead of remote branch", and the primary
+    // button never rotates from "Push" to "Commit" after a successful push.
+    //
+    // The `publish` flag becomes redundant under this strategy — every push
+    // sets upstream, including the first. We keep the parameter in the
+    // signature so callers don't need to change, but it's no longer
+    // load-bearing. On an already-published branch --set-upstream is a
+    // no-op for the tracking config and a regular push otherwise.
+    //
+    // Branch-vs-base reporting (the "Committed on Branch" section) is
+    // unaffected because it uses branchCompare against an explicit baseRef
+    // from worktree config, not the upstream relationship.
+    await gitExecFileAsync(['push', '--set-upstream', 'origin', 'HEAD'], { cwd: worktreePath })
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'push'))
   }
