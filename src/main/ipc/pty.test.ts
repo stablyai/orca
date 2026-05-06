@@ -1728,4 +1728,144 @@ describe('registerPtyHandlers', () => {
       expect(trackMock).not.toHaveBeenCalledWith('agent_started', expect.anything())
     })
   })
+
+  describe('serializeBuffer dispatch', () => {
+    type SerializeListener = (
+      _event: unknown,
+      args: {
+        requestId?: string
+        snapshot?: { data?: unknown; cols?: unknown; rows?: unknown; lastTitle?: unknown } | null
+      }
+    ) => void
+    type SerializeController = {
+      serializeBuffer: (
+        ptyId: string,
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      ) => Promise<{ data: string; cols: number; rows: number; lastTitle?: string } | null>
+    }
+
+    function setup(): { listener: SerializeListener; controller: SerializeController } {
+      const runtime = {
+        setPtyController: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyData: vi.fn(),
+        onPtyExit: vi.fn(),
+        preAllocateHandleForPty: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const onCall = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:serializeBuffer:response'
+      )
+      if (!onCall) {
+        throw new Error('expected pty:serializeBuffer:response listener registration')
+      }
+      const listener = onCall[1] as SerializeListener
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as SerializeController
+      return { listener, controller }
+    }
+
+    function getSentRequestIds(): string[] {
+      return mainWindow.webContents.send.mock.calls
+        .filter((call: unknown[]) => call[0] === 'pty:serializeBuffer:request')
+        .map((call: unknown[]) => (call[1] as { requestId: string }).requestId)
+    }
+
+    it('registers exactly one persistent listener regardless of concurrent in-flight requests', async () => {
+      const { listener, controller } = setup()
+      const inflight = [
+        controller.serializeBuffer('pty-1'),
+        controller.serializeBuffer('pty-2'),
+        controller.serializeBuffer('pty-3'),
+        controller.serializeBuffer('pty-4'),
+        controller.serializeBuffer('pty-5'),
+        controller.serializeBuffer('pty-6'),
+        controller.serializeBuffer('pty-7'),
+        controller.serializeBuffer('pty-8'),
+        controller.serializeBuffer('pty-9'),
+        controller.serializeBuffer('pty-10'),
+        controller.serializeBuffer('pty-11'),
+        controller.serializeBuffer('pty-12')
+      ]
+      // Why: the bug being fixed registered one listener per request, so 12
+      // concurrent calls would register 12 listeners and trip Node's MaxListeners.
+      const responseChannelRegistrations = onMock.mock.calls.filter(
+        (call: unknown[]) => call[0] === 'pty:serializeBuffer:response'
+      )
+      expect(responseChannelRegistrations.length).toBe(1)
+      // Drain the in-flight requests so the test doesn't leak timers.
+      for (const requestId of getSentRequestIds()) {
+        listener(null, { requestId, snapshot: null })
+      }
+      await Promise.all(inflight)
+    })
+
+    it('routes each response to the originating request via requestId', async () => {
+      const { listener, controller } = setup()
+      const a = controller.serializeBuffer('pty-a')
+      const b = controller.serializeBuffer('pty-b')
+      const ids = getSentRequestIds()
+      const requestIdA = ids[0]
+      const requestIdB = ids[1]
+
+      listener(null, {
+        requestId: requestIdB,
+        snapshot: { data: 'B-data', cols: 80, rows: 24 }
+      })
+      listener(null, {
+        requestId: requestIdA,
+        snapshot: { data: 'A-data', cols: 100, rows: 30, lastTitle: 'A-title' }
+      })
+
+      await expect(b).resolves.toEqual({ data: 'B-data', cols: 80, rows: 24 })
+      await expect(a).resolves.toEqual({
+        data: 'A-data',
+        cols: 100,
+        rows: 30,
+        lastTitle: 'A-title'
+      })
+    })
+
+    it('ignores responses with unknown requestId without affecting pending requests', async () => {
+      const { listener, controller } = setup()
+      const pending = controller.serializeBuffer('pty-1')
+      const realRequestId = getSentRequestIds()[0]
+
+      listener(null, {
+        requestId: 'not-a-real-id',
+        snapshot: { data: 'irrelevant', cols: 1, rows: 1 }
+      })
+      listener(null, { requestId: undefined, snapshot: null })
+
+      let resolved = false
+      void pending.then(() => {
+        resolved = true
+      })
+      await new Promise((r) => setTimeout(r, 0))
+      expect(resolved).toBe(false)
+
+      listener(null, { requestId: realRequestId, snapshot: { data: 'ok', cols: 80, rows: 24 } })
+      await expect(pending).resolves.toEqual({ data: 'ok', cols: 80, rows: 24 })
+    })
+
+    it('resolves to null and removes the entry when the 750ms timeout fires', async () => {
+      vi.useFakeTimers()
+      try {
+        const { controller } = setup()
+        const pending = controller.serializeBuffer('pty-stuck')
+        vi.advanceTimersByTime(750)
+        await expect(pending).resolves.toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('resolves to null when the response snapshot is malformed', async () => {
+      const { listener, controller } = setup()
+      const pending = controller.serializeBuffer('pty-bad')
+      const requestId = getSentRequestIds()[0]
+      listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
+      await expect(pending).resolves.toBeNull()
+    })
+  })
 })
