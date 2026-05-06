@@ -1380,7 +1380,15 @@ function SourceControlInner(): React.JSX.Element {
               />
             )}
 
-          {(scope === 'all' || scope === 'uncommitted') && hasUncommittedEntries && (
+          {/* Why: keep CommitArea mounted across all source-control states.
+              The split-button primary rotates through Push / Pull / Sync /
+              Publish on a clean tree and disables Commit with a "Nothing to
+              commit" tooltip when nothing is staged — gating on
+              hasUncommittedEntries (added by #1448 for the older Commit-only
+              design) would unmount the whole action surface on clean
+              worktrees and tear it down mid-commit when the staged list
+              clears. */}
+          {(scope === 'all' || scope === 'uncommitted') && (
             <CommitArea
               commitMessage={commitMessage}
               commitError={commitError}
