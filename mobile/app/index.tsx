@@ -11,7 +11,10 @@ import {
   GitPullRequest,
   ChevronRight,
   Terminal,
-  Plus
+  Plus,
+  RefreshCw,
+  PowerOff,
+  Edit3
 } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
@@ -30,7 +33,7 @@ import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { StatusDot } from '../src/components/StatusDot'
 import { TextInputModal } from '../src/components/TextInputModal'
-import { ActionSheetModal } from '../src/components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
@@ -829,13 +832,10 @@ export default function HomeScreen() {
             state === 'connecting' ||
             state === 'handshaking' ||
             state === 'reconnecting'
-          const items: Array<{
-            label: string
-            destructive?: boolean
-            onPress: () => void
-          }> = []
+          const items: ActionSheetAction[] = []
           items.push({
             label: 'Reconnect',
+            icon: RefreshCw,
             onPress: () => {
               setActionTarget(null)
               void forceReconnectHost(host.id)
@@ -844,6 +844,7 @@ export default function HomeScreen() {
           if (isLive) {
             items.push({
               label: 'Disconnect',
+              icon: PowerOff,
               onPress: () => {
                 setActionTarget(null)
                 closeHostClient(host.id)
@@ -852,6 +853,7 @@ export default function HomeScreen() {
           }
           items.push({
             label: 'Rename',
+            icon: Edit3,
             onPress: () => {
               setActionTarget(null)
               setRenameTarget(host)
