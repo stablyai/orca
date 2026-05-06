@@ -397,7 +397,19 @@ export default function SessionScreen() {
           lastKnownTerminalCountRef.current = result.terminals.length
           const current = activeHandleRef.current
 
-          setTerminals(result.terminals)
+          // Why: defense-in-depth dedupe. If the server ever returns a list
+          // with the same handle twice (race during rename/split, or stale
+          // process tracking), React would throw 'two children with same
+          // key' on render. Keep the first occurrence — list order matters
+          // for the tab strip, and createParams puts new tabs at the end.
+          const seen = new Set<string>()
+          const deduped = result.terminals.filter((t) => {
+            if (seen.has(t.handle)) return false
+            seen.add(t.handle)
+            return true
+          })
+
+          setTerminals(deduped)
           setTerminalsLoaded(true)
 
           if (!current || !result.terminals.some((t) => t.handle === current)) {
@@ -747,10 +759,17 @@ export default function SessionScreen() {
         }
         activeHandleRef.current = created.handle
         setActiveHandle(created.handle)
-        setTerminals((prev) => [
-          ...prev,
-          { handle: created.handle, title: created.title || 'Terminal', isActive: true }
-        ])
+        setTerminals((prev) => {
+          // Why: guard against duplicates if a parallel fetchTerminals()
+          // already inserted this handle. Without this, React throws
+          // 'two children with the same key' when both the optimistic
+          // insert and a canonical refetch race during creation.
+          if (prev.some((t) => t.handle === created.handle)) return prev
+          return [
+            ...prev,
+            { handle: created.handle, title: created.title || 'Terminal', isActive: true }
+          ]
+        })
         subscribeToTerminal(created.handle)
         setTimeout(() => void fetchTerminals(), 500)
       } else {
