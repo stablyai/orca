@@ -253,4 +253,60 @@ describe('WebSocketTransport', () => {
     const ws = await connectWs(second.resolvedPort)
     ws.close()
   })
+
+  it('reaps a half-open client that stops responding to pings', async () => {
+    // Why: regression cover for the half-open-socket leak that would
+    // strand mobile clients in the connection pool until OS TCP keepalive
+    // (~2 hours) reaped them. With the heartbeat, two consecutive ping
+    // ticks without a pong should cause terminate() to fire and free the
+    // slot. Verifying via the server's connection-close handler, which
+    // is what frees up the MAX_WS_CONNECTIONS budget in production.
+    const tls = makeTls()
+    const port = findFreePort()
+    const transport = new WebSocketTransport({
+      host: '127.0.0.1',
+      port,
+      tlsCert: tls.cert,
+      tlsKey: tls.key,
+      heartbeatIntervalMs: 50
+    })
+    transport.onMessage(() => {})
+    transports.push(transport)
+
+    let serverClosed = false
+    transport.onConnectionClose(() => {
+      serverClosed = true
+    })
+
+    // Why: setClientId is what registers the ws → clientId mapping that
+    // onConnectionClose fires off. Hook the connection event before
+    // start so we can stamp every accepted ws with a token.
+    await transport.start()
+
+    const ws = await connectWs(port)
+    // Why: pausing the underlying TCP socket halts both read (ping in)
+    // and write (pong out) at the kernel level, so the `ws` library's
+    // auto-pong can't actually be flushed back. From the server's
+    // perspective the client looks half-open — exactly the production
+    // failure mode iOS produces when it suspends a backgrounded socket.
+    const underlying = (ws as unknown as { _socket: { pause: () => void } })._socket
+    underlying.pause()
+
+    // Why: we need a clientId on the ws so onConnectionClose actually
+    // fires. The transport sets it lazily via setClientId in production
+    // (after auth); in this test we don't run auth, so reach in.
+    const wss = (transport as unknown as { wss: { clients: Set<{ readyState: number }> } }).wss
+    for (const c of wss.clients) {
+      transport.setClientId(c as never, 'test-client')
+    }
+
+    // Wait long enough for two heartbeat ticks (50ms each) plus slack.
+    const start = Date.now()
+    while (!serverClosed && Date.now() - start < 2_000) {
+      await new Promise((r) => setTimeout(r, 25))
+    }
+
+    expect(serverClosed).toBe(true)
+    expect(wss.clients.size).toBe(0)
+  }, 5_000)
 })
