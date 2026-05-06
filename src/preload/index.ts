@@ -1533,6 +1533,10 @@ const api = {
       customPrompt?: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
+    cancelGenerateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:cancelGenerateCommitMessage', args),
     stage: (args: {
       worktreePath: string
       filePath: string

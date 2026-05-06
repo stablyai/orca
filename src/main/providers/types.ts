@@ -143,7 +143,7 @@ export type GenerateCommitMessageRequest = {
 
 export type GenerateCommitMessageResponse =
   | { success: true; message: string }
-  | { success: false; error: string }
+  | { success: false; error: string; canceled?: boolean }
 
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
@@ -151,6 +151,7 @@ export type IGitProvider = {
   generateCommitMessage(
     request: GenerateCommitMessageRequest
   ): Promise<GenerateCommitMessageResponse>
+  cancelGenerateCommitMessage(worktreePath: string): Promise<void>
   getDiff(
     worktreePath: string,
     filePath: string,

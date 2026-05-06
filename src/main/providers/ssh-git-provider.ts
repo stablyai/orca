@@ -31,6 +31,7 @@ type RemoteExecResult = {
   stderr: string
   exitCode: number | null
   timedOut: boolean
+  canceled?: boolean
   spawnError?: string
 }
 
@@ -135,6 +136,9 @@ export class SshGitProvider implements IGitProvider {
       }
       return { success: false, error: result.spawnError }
     }
+    if (result.canceled) {
+      return { success: false, error: 'Generation canceled.', canceled: true }
+    }
     if (result.timedOut) {
       return {
         success: false,
@@ -154,6 +158,17 @@ export class SshGitProvider implements IGitProvider {
     return {
       success: true,
       message: applyOrcaAttribution(cleaned, request.attributionEnabled === true)
+    }
+  }
+
+  async cancelGenerateCommitMessage(worktreePath: string): Promise<void> {
+    // Why: best-effort — the relay returns `{canceled: false}` when there is
+    // nothing in flight. Callers should not block UI updates on this.
+    try {
+      await this.mux.request('agent.cancelExec', { cwd: worktreePath })
+    } catch {
+      // Swallow: cancellation is a fire-and-forget user intent. The pending
+      // generateCommitMessage promise will still resolve with the kill result.
     }
   }
 

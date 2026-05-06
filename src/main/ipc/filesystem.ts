@@ -38,6 +38,7 @@ import {
   getBranchDiff
 } from '../git/status'
 import {
+  cancelGenerateCommitMessageLocal,
   generateCommitMessageLocal,
   type GenerateCommitMessageParams,
   type GenerateCommitMessageResult
@@ -580,6 +581,22 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return generateCommitMessageLocal({ ...baseRequest, worktreePath })
+    }
+  )
+
+  ipcMain.handle(
+    'git:cancelGenerateCommitMessage',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return
+        }
+        await provider.cancelGenerateCommitMessage(args.worktreePath)
+        return
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      cancelGenerateCommitMessageLocal(worktreePath)
     }
   )
 

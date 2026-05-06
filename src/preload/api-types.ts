@@ -926,7 +926,13 @@ export type PreloadApi = {
       thinkingLevel?: string
       customPrompt?: string
       connectionId?: string
-    }) => Promise<{ success: true; message: string } | { success: false; error: string }>
+    }) => Promise<
+      { success: true; message: string } | { success: false; error: string; canceled?: boolean }
+    >
+    cancelGenerateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<void>
     stage: (args: {
       worktreePath: string
       filePath: string

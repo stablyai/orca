@@ -75,7 +75,8 @@ const baseProps = {
   generateError: null as string | null,
   onCommitMessageChange: vi.fn(),
   onCommitSuccess: vi.fn(),
-  onGenerate: vi.fn()
+  onGenerate: vi.fn(),
+  onCancelGenerate: vi.fn()
 }
 
 describe('CommitArea', () => {

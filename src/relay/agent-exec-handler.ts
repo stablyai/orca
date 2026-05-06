@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn, type ChildProcess } from 'child_process'
 import type { RelayDispatcher } from './dispatcher'
 
 const DEFAULT_TIMEOUT_MS = 60_000
@@ -14,11 +14,17 @@ type ExecParams = {
   env: unknown
 }
 
+type CancelParams = {
+  cwd: unknown
+}
+
 type ExecResult = {
   stdout: string
   stderr: string
   exitCode: number | null
   timedOut: boolean
+  /** Set when the user canceled the exec via `agent.cancelExec`. */
+  canceled?: boolean
   /** Set when the binary could not be spawned (e.g. ENOENT). */
   spawnError?: string
 }
@@ -31,8 +37,25 @@ type ExecResult = {
  * and a clean exit code instead of an interactive session.
  */
 export class AgentExecHandler {
+  // Why: a single in-flight exec per cwd is enough — the renderer prevents
+  // double-clicks. Keying by cwd lets `agent.cancelExec({cwd})` find the
+  // child without the client having to track relay-internal request ids.
+  private inFlightByCwd = new Map<string, { child: ChildProcess; markCanceled: () => void }>()
+
   constructor(dispatcher: RelayDispatcher) {
     dispatcher.onRequest('agent.execNonInteractive', (p) => this.exec(p as ExecParams))
+    dispatcher.onRequest('agent.cancelExec', (p) => this.cancel(p as CancelParams))
+  }
+
+  private async cancel(params: CancelParams): Promise<{ canceled: boolean }> {
+    const cwd = typeof params.cwd === 'string' ? params.cwd : ''
+    const entry = this.inFlightByCwd.get(cwd)
+    if (!entry) {
+      return { canceled: false }
+    }
+    entry.markCanceled()
+    entry.child.kill('SIGKILL')
+    return { canceled: true }
   }
 
   private async exec(params: ExecParams): Promise<ExecResult> {
@@ -76,13 +99,26 @@ export class AgentExecHandler {
       let stdoutBytes = 0
       let stderrBytes = 0
       let timedOut = false
+      let canceled = false
       let settled = false
+      const laneKey = typeof cwd === 'string' ? cwd : ''
       const finish = (result: ExecResult): void => {
         if (settled) {
           return
         }
         settled = true
+        if (laneKey) {
+          this.inFlightByCwd.delete(laneKey)
+        }
         resolve(result)
+      }
+      if (laneKey) {
+        this.inFlightByCwd.set(laneKey, {
+          child,
+          markCanceled: () => {
+            canceled = true
+          }
+        })
       }
 
       const timer = setTimeout(() => {
@@ -119,7 +155,7 @@ export class AgentExecHandler {
       })
       child.on('close', (code) => {
         clearTimeout(timer)
-        finish({ stdout, stderr, exitCode: code, timedOut })
+        finish({ stdout, stderr, exitCode: code, timedOut, canceled })
       })
 
       if (stdinPayload !== null) {

@@ -43,7 +43,26 @@ export function applyOrcaAttribution(message: string, enabled: boolean): string 
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string }
-  | { success: false; error: string }
+  | { success: false; error: string; canceled?: boolean }
+
+// Why: a single in-flight generation per worktree is enough — the renderer
+// gates double-clicks via generateInFlightRef, so this map is at most 1:1.
+// Keying by `${connectionId ?? 'local'}:${worktreePath}` lets the cancel IPC
+// route to the same lane the start IPC used.
+const cancelTokensByLane = new Map<string, () => void>()
+
+function localLaneKey(worktreePath: string): string {
+  return `local:${worktreePath}`
+}
+
+/** Kills the in-flight local generation for a worktree, if any. No-op
+ *  otherwise (the SSH path cancels remotely via the relay). */
+export function cancelGenerateCommitMessageLocal(worktreePath: string): void {
+  const cancel = cancelTokensByLane.get(localLaneKey(worktreePath))
+  if (cancel) {
+    cancel()
+  }
+}
 
 /**
  * Validates user-supplied params against the spec. Surfaces a single
@@ -106,13 +125,21 @@ async function runAgent(
     let stdout = ''
     let stderr = ''
     let settled = false
+    let canceledByUser = false
+    const laneKey = localLaneKey(cwd)
     const finalize = (result: GenerateCommitMessageResult): void => {
       if (settled) {
         return
       }
       settled = true
+      cancelTokensByLane.delete(laneKey)
       resolve(result)
     }
+
+    cancelTokensByLane.set(laneKey, () => {
+      canceledByUser = true
+      child.kill('SIGKILL')
+    })
 
     const timer = setTimeout(() => {
       // Why: SIGKILL because some CLIs trap SIGTERM and continue streaming
@@ -144,6 +171,10 @@ async function runAgent(
     })
     child.on('close', (code) => {
       clearTimeout(timer)
+      if (canceledByUser) {
+        finalize({ success: false, error: 'Generation canceled.', canceled: true })
+        return
+      }
       if (code !== 0) {
         // Why: agent CLIs print a runtime preamble + the echoed prompt + hook
         // lifecycle messages before any error line, so the raw stderr/stdout

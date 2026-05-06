@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Settings2,
   Sparkles,
+  Square,
   Undo2,
   FileEdit,
   FileMinus,
@@ -570,9 +571,17 @@ function SourceControlInner(): React.JSX.Element {
         thinkingLevel,
         customPrompt: commitMessageAi.customPrompt,
         connectionId
-      })) as { success: true; message: string } | { success: false; error: string }
+      })) as
+        | { success: true; message: string }
+        | { success: false; error: string; canceled?: boolean }
 
       if (!result.success) {
+        // Why: cancellation is a deliberate user action, not a failure to
+        // surface. Clear any prior error and stay quiet.
+        if (result.canceled) {
+          setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+          return
+        }
         setGenerateErrors((prev) => ({
           ...prev,
           [activeWorktreeId]: result.error
@@ -602,6 +611,20 @@ function SourceControlInner(): React.JSX.Element {
       generateInFlightRef.current[activeWorktreeId] = false
     }
   }, [activeWorktreeId, commitMessageAi, worktreePath])
+
+  const handleCancelGenerate = useCallback((): void => {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+    if (!generateInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    // Why: fire-and-forget — the in-flight generateCommitMessage promise
+    // resolves with `{canceled: true}` once the kill propagates, which is
+    // where the spinner is cleared. Awaiting here would just delay UI feedback.
+    void window.api.git.cancelGenerateCommitMessage({ worktreePath, connectionId })
+  }, [activeWorktreeId, worktreePath])
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
@@ -1264,6 +1287,7 @@ function SourceControlInner(): React.JSX.Element {
               onGenerate={() => {
                 void handleGenerate()
               }}
+              onCancelGenerate={handleCancelGenerate}
             />
           )}
 
@@ -1530,6 +1554,7 @@ type CommitAreaProps = {
   onCommitMessageChange: (message: string) => void
   onCommitSuccess: () => void
   onGenerate: () => void
+  onCancelGenerate: () => void
 }
 
 export function CommitArea({
@@ -1544,7 +1569,8 @@ export function CommitArea({
   generateError,
   onCommitMessageChange,
   onCommitSuccess,
-  onGenerate
+  onGenerate,
+  onCancelGenerate
 }: CommitAreaProps): React.JSX.Element {
   // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
@@ -1616,24 +1642,35 @@ export function CommitArea({
             showGenerate ? 'pr-7' : ''
           }`}
         />
-        {showGenerate && (
-          <button
-            type="button"
-            disabled={isGenerateDisabled}
-            onClick={() => onGenerate()}
-            title={generateDisabledReason ?? 'Generate commit message with AI'}
-            aria-label={
-              isGenerating ? 'Generating commit message' : 'Generate commit message with AI'
-            }
-            className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-          >
-            {isGenerating ? (
-              <RefreshCw className="size-3.5 animate-spin" />
-            ) : (
+        {showGenerate &&
+          (isGenerating ? (
+            // Why: while generating the icon doubles as the cancel affordance.
+            // Default state shows the spinning RefreshCw; on hover/focus we
+            // swap to a Square ("stop") with a destructive tint so the user
+            // sees that clicking will abort the run. Group/group-hover toggles
+            // keep this stateless on the React side.
+            <button
+              type="button"
+              onClick={() => onCancelGenerate()}
+              title="Stop generating"
+              aria-label="Stop generating commit message"
+              className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
+            >
+              <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
+              <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={isGenerateDisabled}
+              onClick={() => onGenerate()}
+              title={generateDisabledReason ?? 'Generate commit message with AI'}
+              aria-label="Generate commit message with AI"
+              className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+            >
               <Sparkles className="size-3.5" />
-            )}
-          </button>
-        )}
+            </button>
+          ))}
       </div>
       {/* Why: match the "Squash and merge" button in PRActions
           (size="xs", px-3 text-[11px]) so the sidebar has a consistent
