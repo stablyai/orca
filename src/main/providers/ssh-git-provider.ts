@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: this provider mirrors IGitProvider one
+   method per RPC call (~16 methods). Splitting it would only add
+   indirection — every method is a 1:1 forwarder to a relay RPC plus a
+   small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type {
   GenerateCommitMessageRequest,
@@ -14,12 +18,14 @@ import type {
 } from '../../shared/types'
 import {
   getCommitMessageAgentSpec,
-  getCommitMessageModel
+  getCommitMessageModel,
+  isCustomAgentId
 } from '../../shared/commit-message-agent-spec'
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
   extractAgentErrorMessage,
+  planCustomCommand,
   truncateDiffForPrompt
 } from '../../shared/commit-message-prompt'
 import { applyOrcaAttribution } from '../git/commit-message-generator'
@@ -65,35 +71,6 @@ export class SshGitProvider implements IGitProvider {
   async generateCommitMessage(
     request: GenerateCommitMessageRequest
   ): Promise<GenerateCommitMessageResponse> {
-    const spec = getCommitMessageAgentSpec(request.agentId)
-    if (!spec) {
-      return {
-        success: false,
-        error: `Agent "${request.agentId}" does not support AI commit messages.`
-      }
-    }
-    const model = getCommitMessageModel(request.agentId, request.model)
-    if (!model) {
-      return {
-        success: false,
-        error: `Model "${request.model}" is not available for ${spec.label}.`
-      }
-    }
-    if (request.thinkingLevel) {
-      if (!model.thinkingLevels) {
-        return {
-          success: false,
-          error: `Model "${model.label}" does not support a thinking effort level.`
-        }
-      }
-      if (!model.thinkingLevels.some((l) => l.id === request.thinkingLevel)) {
-        return {
-          success: false,
-          error: `Thinking level "${request.thinkingLevel}" is not valid for ${model.label}.`
-        }
-      }
-    }
-
     let diff: string
     try {
       const diffResult = await this.exec(['diff', '--cached', '--no-color'], request.worktreePath)
@@ -109,16 +86,69 @@ export class SshGitProvider implements IGitProvider {
     }
 
     const prompt = buildCommitPrompt(truncateDiffForPrompt(diff), request.customPrompt ?? '')
-    const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
-    const args = spec.buildArgs({
-      prompt: argvPrompt,
-      model: request.model,
-      thinkingLevel: request.thinkingLevel
-    })
-    const stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
+
+    let binary: string
+    let args: string[]
+    let stdinPayload: string | null
+    let label: string
+    if (isCustomAgentId(request.agentId)) {
+      const command = request.customAgentCommand?.trim() ?? ''
+      if (!command) {
+        return {
+          success: false,
+          error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
+        }
+      }
+      const planned = planCustomCommand(command, prompt)
+      if (!planned.ok) {
+        return { success: false, error: planned.error }
+      }
+      binary = planned.binary
+      args = planned.args
+      stdinPayload = planned.stdinPayload
+      label = planned.binary
+    } else {
+      const spec = getCommitMessageAgentSpec(request.agentId)
+      if (!spec) {
+        return {
+          success: false,
+          error: `Agent "${request.agentId}" does not support AI commit messages.`
+        }
+      }
+      const model = getCommitMessageModel(request.agentId, request.model)
+      if (!model) {
+        return {
+          success: false,
+          error: `Model "${request.model}" is not available for ${spec.label}.`
+        }
+      }
+      if (request.thinkingLevel) {
+        if (!model.thinkingLevels) {
+          return {
+            success: false,
+            error: `Model "${model.label}" does not support a thinking effort level.`
+          }
+        }
+        if (!model.thinkingLevels.some((l) => l.id === request.thinkingLevel)) {
+          return {
+            success: false,
+            error: `Thinking level "${request.thinkingLevel}" is not valid for ${model.label}.`
+          }
+        }
+      }
+      const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
+      args = spec.buildArgs({
+        prompt: argvPrompt,
+        model: request.model,
+        thinkingLevel: request.thinkingLevel
+      })
+      stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
+      binary = spec.binary
+      label = spec.label
+    }
 
     const result = (await this.mux.request('agent.execNonInteractive', {
-      binary: spec.binary,
+      binary,
       args,
       cwd: request.worktreePath,
       stdin: stdinPayload,
@@ -131,7 +161,7 @@ export class SshGitProvider implements IGitProvider {
       if (/ENOENT/i.test(result.spawnError)) {
         return {
           success: false,
-          error: `${spec.binary} not found on the remote PATH. Install ${spec.label} on the SSH host.`
+          error: `${binary} not found on the remote PATH. Install ${label} on the SSH host.`
         }
       }
       return { success: false, error: result.spawnError }
@@ -149,11 +179,11 @@ export class SshGitProvider implements IGitProvider {
       const extracted = extractAgentErrorMessage(result.stdout, result.stderr)
       const detail =
         extracted ?? result.stderr.trim() ?? result.stdout.trim() ?? `exit code ${result.exitCode}`
-      return { success: false, error: `${spec.label} failed: ${detail}` }
+      return { success: false, error: `${label} failed: ${detail}` }
     }
     const cleaned = cleanGeneratedCommitMessage(result.stdout)
     if (!cleaned) {
-      return { success: false, error: `${spec.label} returned an empty message.` }
+      return { success: false, error: `${label} returned an empty message.` }
     }
     return {
       success: true,

@@ -70,6 +70,126 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   return text
 }
 
+export const CUSTOM_PROMPT_PLACEHOLDER = '{prompt}'
+
+export type TokenizeCustomCommandResult =
+  | { ok: true; tokens: string[] }
+  | { ok: false; error: string }
+
+// Why: deliberately POSIX-shell-style only for *grouping* (single + double
+// quotes, backslash escapes inside double quotes). We do NOT expand `$VAR`,
+// command substitution, backticks, globs, or `~`. The user's intent is
+// "spawn this exact CLI" — adding shell semantics on top would create
+// surprising behavior across platforms (especially Windows) and a security
+// surface we don't need.
+export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomCommandResult {
+  const tokens: string[] = []
+  let current = ''
+  let inToken = false
+  let quote: '"' | "'" | null = null
+  let i = 0
+
+  while (i < template.length) {
+    const ch = template[i]
+    if (quote) {
+      if (ch === '\\' && quote === '"' && i + 1 < template.length) {
+        current += template[i + 1]
+        i += 2
+        continue
+      }
+      if (ch === quote) {
+        quote = null
+        i++
+        // Why: leaving a quoted region still keeps the token open — `a"b"c`
+        // tokenizes as a single arg `abc`.
+        inToken = true
+        continue
+      }
+      current += ch
+      i++
+      continue
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      inToken = true
+      i++
+      continue
+    }
+
+    if (ch === '\\' && i + 1 < template.length) {
+      current += template[i + 1]
+      inToken = true
+      i += 2
+      continue
+    }
+
+    if (/\s/.test(ch)) {
+      if (inToken) {
+        tokens.push(current)
+        current = ''
+        inToken = false
+      }
+      i++
+      continue
+    }
+
+    current += ch
+    inToken = true
+    i++
+  }
+
+  if (quote) {
+    return { ok: false, error: 'Unclosed quote in command template.' }
+  }
+  if (inToken) {
+    tokens.push(current)
+  }
+  return { ok: true, tokens }
+}
+
+export type CustomCommandPlan =
+  | { ok: true; binary: string; args: string[]; stdinPayload: string | null }
+  | { ok: false; error: string }
+
+/**
+ * Parses a user-supplied command template into a spawn-ready binary + argv,
+ * substituting `{prompt}` with the agent prompt. When the template contains
+ * no `{prompt}`, the prompt is delivered via stdin (mirrors `claude -p`).
+ *
+ * Quoting is a tokenizer-level concern only — we use argv (no shell), so the
+ * substituted prompt is always passed as a single argument regardless of
+ * whether the template wrote `{prompt}` or `"{prompt}"`.
+ */
+export function planCustomCommand(template: string, prompt: string): CustomCommandPlan {
+  const tokenized = tokenizeCustomCommandTemplate(template)
+  if (!tokenized.ok) {
+    return { ok: false, error: tokenized.error }
+  }
+  if (tokenized.tokens.length === 0) {
+    return { ok: false, error: 'Custom command is empty.' }
+  }
+  const [binary, ...rest] = tokenized.tokens
+  if (!binary) {
+    return { ok: false, error: 'Custom command must start with a binary name.' }
+  }
+
+  const substitute = (token: string): string =>
+    token.includes(CUSTOM_PROMPT_PLACEHOLDER)
+      ? token.split(CUSTOM_PROMPT_PLACEHOLDER).join(prompt)
+      : token
+  const usesPlaceholder = tokenized.tokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
+  if (usesPlaceholder) {
+    return {
+      ok: true,
+      binary: substitute(binary),
+      args: rest.map(substitute),
+      stdinPayload: null
+    }
+  }
+  return { ok: true, binary, args: rest, stdinPayload: prompt }
+}
+
 // Why: agent CLIs (Codex, Claude) prefix their stdout/stderr with config
 // preamble, the echoed prompt, and hook lifecycle messages. When something
 // fails, the actionable error is buried far below all of that. This pulls

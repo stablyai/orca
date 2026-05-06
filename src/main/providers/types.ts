@@ -133,10 +133,12 @@ export type IFilesystemProvider = {
 
 export type GenerateCommitMessageRequest = {
   worktreePath: string
-  agentId: TuiAgent
+  agentId: TuiAgent | 'custom'
   model: string
   thinkingLevel?: string
   customPrompt?: string
+  /** Required when `agentId === 'custom'`: the user's command template. */
+  customAgentCommand?: string
   /** When true, the generator appends the Orca attribution trailer (`enableGitHubAttribution`). */
   attributionEnabled?: boolean
 }

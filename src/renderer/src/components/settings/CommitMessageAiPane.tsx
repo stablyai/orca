@@ -1,14 +1,23 @@
+/* eslint-disable max-lines -- Why: each agent setting (toggle, agent dropdown,
+   model dropdown, thinking effort dropdown, custom command, custom prompt) is
+   a SearchableSetting block, and splitting the pane across files would scatter
+   the ~6 conditional render branches without making any of them clearer. */
 import { useMemo } from 'react'
+import { Terminal } from 'lucide-react'
 import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
+  CUSTOM_AGENT_ID,
   DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
+  isCustomAgentId,
   listCommitMessageAgentIds,
+  type CommitMessageAgentChoice,
   type CommitMessageAgentSpec,
   type CommitMessageModel
 } from '../../../../shared/commit-message-agent-spec'
+import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/commit-message-prompt'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -29,7 +38,8 @@ const EMPTY_SETTINGS: CommitMessageAiSettings = {
   agentId: null,
   selectedModelByAgent: {},
   selectedThinkingByModel: {},
-  customPrompt: ''
+  customPrompt: '',
+  customAgentCommand: ''
 }
 
 function readSettings(settings: GlobalSettings): CommitMessageAiSettings {
@@ -77,8 +87,9 @@ export function CommitMessageAiPane({
   const config = readSettings(settings)
 
   const agentIds = useMemo(listCommitMessageAgentIds, [])
-  const activeAgentId = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
-  const activeSpec = getCommitMessageAgentSpec(activeAgentId)
+  const activeAgentId: CommitMessageAgentChoice = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+  const isCustom = isCustomAgentId(activeAgentId)
+  const activeSpec = isCustom ? undefined : getCommitMessageAgentSpec(activeAgentId)
   const activeModel = activeSpec ? resolveSelectedModel(config, activeSpec) : null
   const activeThinking = activeModel ? resolveSelectedThinking(config, activeModel) : undefined
 
@@ -94,15 +105,19 @@ export function CommitMessageAiPane({
     }
     // Why: when the user enables the feature for the first time, hydrate the
     // agent / model / thinking choices from the spec defaults so the Generate
-    // button works immediately without forcing them to pick first.
-    const seedAgentId = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
-    const seedSpec = getCommitMessageAgentSpec(seedAgentId)
+    // button works immediately without forcing them to pick first. If the
+    // user previously persisted 'custom', we keep that and let them re-edit
+    // the command — no implicit reset to a preset.
+    const seedAgentId: TuiAgent | 'custom' = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+    const seedSpec = isCustomAgentId(seedAgentId)
+      ? undefined
+      : getCommitMessageAgentSpec(seedAgentId)
     const seedModel = seedSpec ? resolveSelectedModel(config, seedSpec) : null
     const seedThinking = seedModel ? resolveSelectedThinking(config, seedModel) : undefined
 
     const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
-    if (seedSpec && !nextSelectedModelByAgent[seedAgentId]) {
-      nextSelectedModelByAgent[seedAgentId] = seedSpec.defaultModelId
+    if (seedSpec && !nextSelectedModelByAgent[seedSpec.id]) {
+      nextSelectedModelByAgent[seedSpec.id] = seedSpec.defaultModelId
     }
     const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
     if (seedModel && seedThinking && !nextSelectedThinkingByModel[seedModel.id]) {
@@ -117,6 +132,10 @@ export function CommitMessageAiPane({
   }
 
   const onAgentChange = (newAgentId: string): void => {
+    if (isCustomAgentId(newAgentId)) {
+      writeConfig({ agentId: CUSTOM_AGENT_ID })
+      return
+    }
     const spec = getCommitMessageAgentSpec(newAgentId as TuiAgent)
     if (!spec) {
       return
@@ -139,6 +158,10 @@ export function CommitMessageAiPane({
       selectedModelByAgent: nextSelectedModelByAgent,
       selectedThinkingByModel: nextSelectedThinkingByModel
     })
+  }
+
+  const onCustomCommandChange = (value: string): void => {
+    writeConfig({ customAgentCommand: value })
   }
 
   const onModelChange = (newModelId: string): void => {
@@ -269,8 +292,61 @@ export function CommitMessageAiPane({
                 </SelectItem>
               )
             })}
+            <SelectItem value={CUSTOM_AGENT_ID}>
+              <span className="flex items-center gap-2">
+                <Terminal className="size-3.5" />
+                <span>Custom</span>
+              </span>
+            </SelectItem>
           </SelectContent>
         </Select>
+      </SearchableSetting>
+    )
+  }
+
+  if (
+    config.enabled &&
+    isCustom &&
+    matchesSettingsSearch(searchQuery, {
+      title: 'Custom command',
+      description: 'Command line Orca runs to generate the commit message.',
+      keywords: ['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="custom-command"
+        title="Custom command"
+        description="Command line Orca runs to generate the commit message."
+        keywords={['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']}
+        className="space-y-2 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label htmlFor="commit-message-ai-custom-command">Custom command</Label>
+          <p className="text-xs text-muted-foreground">
+            Use{' '}
+            <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">
+              {CUSTOM_PROMPT_PLACEHOLDER}
+            </code>{' '}
+            where the prompt should be substituted (passed as a single argument). Omit it and the
+            prompt is piped via stdin instead — useful for CLIs like{' '}
+            <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">claude -p</code>. Quoting
+            is for grouping arguments only; we never invoke a shell, so{' '}
+            <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">$VAR</code> and backticks
+            are not expanded.
+          </p>
+        </div>
+        <input
+          id="commit-message-ai-custom-command"
+          type="text"
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          value={config.customAgentCommand}
+          onChange={(e) => onCustomCommandChange(e.target.value)}
+          placeholder={`e.g. ollama run llama3.1 ${CUSTOM_PROMPT_PLACEHOLDER}`}
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+        />
       </SearchableSetting>
     )
   }

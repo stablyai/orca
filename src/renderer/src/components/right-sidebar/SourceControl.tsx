@@ -537,27 +537,48 @@ function SourceControlInner(): React.JSX.Element {
     if (!commitMessageAi?.enabled || !commitMessageAi.agentId) {
       return
     }
-    const spec = getCommitMessageAgentSpec(commitMessageAi.agentId)
-    if (!spec) {
-      setGenerateErrors((prev) => ({
-        ...prev,
-        [activeWorktreeId]: `Agent "${commitMessageAi.agentId}" is no longer supported.`
-      }))
-      return
+
+    let agentId: TuiAgent | 'custom'
+    let modelId = ''
+    let thinkingLevel: string | undefined
+    let customAgentCommand: string | undefined
+    if (commitMessageAi.agentId === 'custom') {
+      const command = commitMessageAi.customAgentCommand?.trim() ?? ''
+      if (!command) {
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]:
+            'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
+        }))
+        return
+      }
+      agentId = 'custom'
+      customAgentCommand = command
+    } else {
+      const spec = getCommitMessageAgentSpec(commitMessageAi.agentId)
+      if (!spec) {
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: `Agent "${commitMessageAi.agentId}" is no longer supported.`
+        }))
+        return
+      }
+      const persistedModelId =
+        commitMessageAi.selectedModelByAgent[commitMessageAi.agentId] ?? spec.defaultModelId
+      const model = getCommitMessageModel(commitMessageAi.agentId, persistedModelId)
+      if (!model) {
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: `Model "${persistedModelId}" is no longer available for ${spec.label}.`
+        }))
+        return
+      }
+      thinkingLevel = model.thinkingLevels
+        ? (commitMessageAi.selectedThinkingByModel[model.id] ?? model.defaultThinkingLevel)
+        : undefined
+      agentId = commitMessageAi.agentId as TuiAgent
+      modelId = model.id
     }
-    const modelId =
-      commitMessageAi.selectedModelByAgent[commitMessageAi.agentId] ?? spec.defaultModelId
-    const model = getCommitMessageModel(commitMessageAi.agentId, modelId)
-    if (!model) {
-      setGenerateErrors((prev) => ({
-        ...prev,
-        [activeWorktreeId]: `Model "${modelId}" is no longer available for ${spec.label}.`
-      }))
-      return
-    }
-    const thinkingLevel = model.thinkingLevels
-      ? (commitMessageAi.selectedThinkingByModel[model.id] ?? model.defaultThinkingLevel)
-      : undefined
 
     generateInFlightRef.current[activeWorktreeId] = true
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
@@ -566,10 +587,11 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const result = (await window.api.git.generateCommitMessage({
         worktreePath,
-        agentId: commitMessageAi.agentId as TuiAgent,
-        model: model.id,
+        agentId,
+        model: modelId,
         thinkingLevel,
         customPrompt: commitMessageAi.customPrompt,
+        customAgentCommand,
         connectionId
       })) as
         | { success: true; message: string }
@@ -1269,7 +1291,13 @@ function SourceControlInner(): React.JSX.Element {
               isCommitting={isCommitting}
               aiEnabled={commitMessageAi?.enabled === true}
               aiAgentConfigured={
-                commitMessageAi?.enabled === true && commitMessageAi.agentId !== null
+                commitMessageAi?.enabled === true &&
+                commitMessageAi.agentId !== null &&
+                // Why: 'custom' is configured only once the user types a command.
+                // Without this guard, Generate would spawn an empty command and
+                // fail with a confusing error.
+                (commitMessageAi.agentId !== 'custom' ||
+                  (commitMessageAi.customAgentCommand ?? '').trim().length > 0)
               }
               isGenerating={isGenerating}
               generateError={generateError}

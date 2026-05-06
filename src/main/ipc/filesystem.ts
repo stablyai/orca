@@ -546,15 +546,25 @@ export function registerFilesystemHandlers(store: Store): void {
         model: string
         thinkingLevel?: string
         customPrompt?: string
+        customAgentCommand?: string
         connectionId?: string
       }
     ): Promise<GenerateCommitMessageResult> => {
       // Why: validate at the IPC boundary so unknown agents fail fast with a
-      // legible error instead of trying to spawn a missing binary.
-      if (!args.agentId || !(args.agentId in COMMIT_MESSAGE_AGENT_SPECS)) {
+      // legible error instead of trying to spawn a missing binary. The
+      // sentinel `'custom'` skips the spec lookup — its template is
+      // validated downstream in planCustomCommand.
+      const isCustom = args.agentId === 'custom'
+      if (!args.agentId || (!isCustom && !(args.agentId in COMMIT_MESSAGE_AGENT_SPECS))) {
         return {
           success: false,
           error: `Agent "${args.agentId}" does not support AI commit messages.`
+        }
+      }
+      if (isCustom && !args.customAgentCommand?.trim()) {
+        return {
+          success: false,
+          error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
         }
       }
       // Why: read the toggle from the persisted store so a single source of
@@ -563,10 +573,11 @@ export function registerFilesystemHandlers(store: Store): void {
       const attributionEnabled = store.getSettings().enableGitHubAttribution === true
       const baseRequest: GenerateCommitMessageParams = {
         worktreePath: args.worktreePath,
-        agentId: args.agentId as TuiAgent,
+        agentId: args.agentId as TuiAgent | 'custom',
         model: args.model,
         thinkingLevel: args.thinkingLevel,
         customPrompt: args.customPrompt,
+        customAgentCommand: args.customAgentCommand,
         attributionEnabled
       }
       if (args.connectionId) {

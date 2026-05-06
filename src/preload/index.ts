@@ -1531,6 +1531,7 @@ const api = {
       model: string
       thinkingLevel?: string
       customPrompt?: string
+      customAgentCommand?: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
     cancelGenerateCommitMessage: (args: {

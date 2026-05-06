@@ -1266,13 +1266,18 @@ export type GlobalSettings = {
 
 export type CommitMessageAiSettings = {
   enabled: boolean
-  agentId: TuiAgent | null
+  /** A TuiAgent id, the literal `'custom'` for a user-supplied command, or null. */
+  agentId: TuiAgent | 'custom' | null
   /** Per-agent: switching agents preserves the previously-picked model. */
   selectedModelByAgent: Partial<Record<TuiAgent, string>>
   /** Per-model: thinking effort depends on the model, not the agent. Keyed by model id. */
   selectedThinkingByModel: Record<string, string>
   /** Optional user-provided suffix appended to the base prompt (style overrides, etc.). */
   customPrompt: string
+  /** Command template used when `agentId === 'custom'`. Tokenized POSIX-style;
+   *  `{prompt}` is substituted with the diff prompt (argv delivery). When the
+   *  template has no `{prompt}`, the prompt is piped via stdin. */
+  customAgentCommand: string
 }
 
 export type GhosttyImportPreview = {

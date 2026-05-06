@@ -3,7 +3,7 @@ import {
   COMMIT_MESSAGE_AGENT_SPECS,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
-  type CommitMessageAgentSpec
+  isCustomAgentId
 } from '../../shared/commit-message-agent-spec'
 
 // Why: on Windows, npm-installed CLIs like `claude` and `codex` are `.cmd`
@@ -34,6 +34,7 @@ import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
   extractAgentErrorMessage,
+  planCustomCommand,
   truncateDiffForPrompt
 } from '../../shared/commit-message-prompt'
 import { ORCA_GIT_COMMIT_TRAILER } from '../../shared/orca-attribution'
@@ -44,10 +45,12 @@ const GENERATION_TIMEOUT_MS = 60_000
 
 export type GenerateCommitMessageParams = {
   worktreePath: string
-  agentId: TuiAgent
+  agentId: TuiAgent | 'custom'
   model: string
   thinkingLevel?: string
   customPrompt?: string
+  /** Required when agentId === 'custom': the user-supplied command template. */
+  customAgentCommand?: string
   /** When true, append `Co-authored-by: Orca …` after the cleaned message. */
   attributionEnabled?: boolean
 }
@@ -89,13 +92,50 @@ export function cancelGenerateCommitMessageLocal(worktreePath: string): void {
   }
 }
 
+type PresetPlan = {
+  kind: 'preset'
+  binary: string
+  label: string
+  args: string[]
+  stdinPayload: string | null
+}
+type CustomPlan = {
+  kind: 'custom'
+  binary: string
+  label: string
+  args: string[]
+  stdinPayload: string | null
+}
+type ResolvedPlan = PresetPlan | CustomPlan
+
 /**
- * Validates user-supplied params against the spec. Surfaces a single
+ * Validates the request and produces a spawn-ready plan. Surfaces a single
  * actionable error per failure so the renderer can show it inline.
  */
-function validateParams(
-  params: GenerateCommitMessageParams
-): { spec: CommitMessageAgentSpec } | { error: string } {
+function planGeneration(
+  params: GenerateCommitMessageParams,
+  prompt: string
+): ResolvedPlan | { error: string } {
+  if (isCustomAgentId(params.agentId)) {
+    const command = params.customAgentCommand?.trim() ?? ''
+    if (!command) {
+      return { error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.' }
+    }
+    const planned = planCustomCommand(command, prompt)
+    if (!planned.ok) {
+      return { error: planned.error }
+    }
+    return {
+      kind: 'custom',
+      binary: planned.binary,
+      // Why: the binary doubles as the human-readable label in error prefixes
+      // when the user runs a custom command — there is no friendly name.
+      label: planned.binary,
+      args: planned.args,
+      stdinPayload: planned.stdinPayload
+    }
+  }
+
   const spec = getCommitMessageAgentSpec(params.agentId)
   if (!spec) {
     return { error: `Agent "${params.agentId}" does not support AI commit messages.` }
@@ -114,7 +154,21 @@ function validateParams(
       }
     }
   }
-  return { spec }
+
+  const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
+  const args = spec.buildArgs({
+    prompt: argvPrompt,
+    model: params.model,
+    thinkingLevel: params.thinkingLevel
+  })
+  const stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
+  return {
+    kind: 'preset',
+    binary: spec.binary,
+    label: spec.label,
+    args,
+    stdinPayload
+  }
 }
 
 /**
@@ -124,16 +178,17 @@ function validateParams(
  * round-trip the failure to the renderer for inline display.
  */
 async function runAgent(
-  spec: CommitMessageAgentSpec,
+  binary: string,
   args: string[],
   promptForStdin: string | null,
   cwd: string,
-  attributionEnabled: boolean
+  attributionEnabled: boolean,
+  label: string
 ): Promise<GenerateCommitMessageResult> {
   return new Promise((resolve) => {
     let child
     try {
-      child = spawn(spec.binary, args, {
+      child = spawn(binary, args, {
         cwd,
         env: process.env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -189,7 +244,7 @@ async function runAgent(
       if (code === 'ENOENT') {
         finalize({
           success: false,
-          error: `${spec.binary} not found on PATH. Install ${spec.label} to use AI commit messages.`
+          error: `${binary} not found on PATH. Install ${label} to use AI commit messages.`
         })
         return
       }
@@ -208,12 +263,12 @@ async function runAgent(
         // back to the trimmed channels.
         const extracted = extractAgentErrorMessage(stdout, stderr)
         const detail = extracted ?? stderr.trim() ?? stdout.trim() ?? `exit code ${code}`
-        finalize({ success: false, error: `${spec.label} failed: ${detail}` })
+        finalize({ success: false, error: `${label} failed: ${detail}` })
         return
       }
       const cleaned = cleanGeneratedCommitMessage(stdout)
       if (!cleaned) {
-        finalize({ success: false, error: `${spec.label} returned an empty message.` })
+        finalize({ success: false, error: `${label} returned an empty message.` })
         return
       }
       finalize({ success: true, message: applyOrcaAttribution(cleaned, attributionEnabled) })
@@ -230,12 +285,6 @@ async function runAgent(
 export async function generateCommitMessageLocal(
   params: GenerateCommitMessageParams
 ): Promise<GenerateCommitMessageResult> {
-  const validation = validateParams(params)
-  if ('error' in validation) {
-    return { success: false, error: validation.error }
-  }
-  const { spec } = validation
-
   let diff: string
   try {
     diff = await getStagedDiff(params.worktreePath)
@@ -250,14 +299,18 @@ export async function generateCommitMessageLocal(
   }
 
   const prompt = buildCommitPrompt(truncateDiffForPrompt(diff), params.customPrompt ?? '')
-  const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
-  const args = spec.buildArgs({
-    prompt: argvPrompt,
-    model: params.model,
-    thinkingLevel: params.thinkingLevel
-  })
-  const stdinPayload = spec.promptDelivery === 'stdin' ? prompt : null
-  return runAgent(spec, args, stdinPayload, params.worktreePath, params.attributionEnabled === true)
+  const plan = planGeneration(params, prompt)
+  if ('error' in plan) {
+    return { success: false, error: plan.error }
+  }
+  return runAgent(
+    plan.binary,
+    plan.args,
+    plan.stdinPayload,
+    params.worktreePath,
+    params.attributionEnabled === true,
+    plan.label
+  )
 }
 
 /** Re-export so the IPC layer can validate agent ids at the boundary. */

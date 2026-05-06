@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
+  CUSTOM_AGENT_ID,
   DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
+  isCustomAgentId,
   listCommitMessageAgentIds
 } from './commit-message-agent-spec'
 
@@ -48,6 +50,18 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(haiku).toBeDefined()
     expect(haiku?.thinkingLevels).toBeUndefined()
     expect(haiku?.defaultThinkingLevel).toBeUndefined()
+  })
+
+  it('identifies the custom sentinel via isCustomAgentId', () => {
+    expect(isCustomAgentId(CUSTOM_AGENT_ID)).toBe(true)
+    expect(isCustomAgentId('claude')).toBe(false)
+    expect(isCustomAgentId('codex')).toBe(false)
+    expect(isCustomAgentId(null)).toBe(false)
+    expect(isCustomAgentId(undefined)).toBe(false)
+  })
+
+  it('does not list "custom" alongside preset agent ids', () => {
+    expect(listCommitMessageAgentIds()).not.toContain(CUSTOM_AGENT_ID)
   })
 
   it('orders Codex models by version descending to match the official picker', () => {

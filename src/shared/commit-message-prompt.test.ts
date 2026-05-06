@@ -3,7 +3,9 @@ import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
   extractAgentErrorMessage,
+  planCustomCommand,
   STAGED_DIFF_BYTE_BUDGET,
+  tokenizeCustomCommandTemplate,
   truncateDiffForPrompt
 } from './commit-message-prompt'
 
@@ -116,5 +118,86 @@ describe('extractAgentErrorMessage', () => {
   it('returns the JSON payload `message` field when no nested error is set', () => {
     const out = 'ERROR: {"message":"top-level only"}'
     expect(extractAgentErrorMessage(out, '')).toBe('top-level only')
+  })
+})
+
+describe('tokenizeCustomCommandTemplate', () => {
+  it('splits on whitespace', () => {
+    const r = tokenizeCustomCommandTemplate('claude -p')
+    expect(r).toEqual({ ok: true, tokens: ['claude', '-p'] })
+  })
+
+  it('groups double-quoted segments with spaces', () => {
+    const r = tokenizeCustomCommandTemplate('claude --msg "hello world"')
+    expect(r).toEqual({ ok: true, tokens: ['claude', '--msg', 'hello world'] })
+  })
+
+  it('groups single-quoted segments verbatim', () => {
+    const r = tokenizeCustomCommandTemplate(`agent --json '{"k":"v"}'`)
+    expect(r).toEqual({ ok: true, tokens: ['agent', '--json', '{"k":"v"}'] })
+  })
+
+  it('honors backslash escapes inside double quotes', () => {
+    const r = tokenizeCustomCommandTemplate('claude --msg "she said \\"hi\\""')
+    expect(r).toEqual({ ok: true, tokens: ['claude', '--msg', 'she said "hi"'] })
+  })
+
+  it('keeps adjacent quoted/unquoted regions in one token (a"b"c → abc)', () => {
+    const r = tokenizeCustomCommandTemplate('foo a"b"c')
+    expect(r).toEqual({ ok: true, tokens: ['foo', 'abc'] })
+  })
+
+  it('returns an error for an unclosed quote', () => {
+    const r = tokenizeCustomCommandTemplate('claude --msg "no end')
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error).toMatch(/unclosed/i)
+    }
+  })
+
+  it('returns an empty token list for whitespace-only input', () => {
+    const r = tokenizeCustomCommandTemplate('   \t  ')
+    expect(r).toEqual({ ok: true, tokens: [] })
+  })
+})
+
+describe('planCustomCommand', () => {
+  it('routes prompt via stdin when {prompt} is absent', () => {
+    const r = planCustomCommand('claude -p', 'COMMIT MSG')
+    expect(r).toEqual({ ok: true, binary: 'claude', args: ['-p'], stdinPayload: 'COMMIT MSG' })
+  })
+
+  it('substitutes {prompt} as a whole token via argv', () => {
+    const r = planCustomCommand('codex exec {prompt}', 'PROMPT')
+    expect(r).toEqual({ ok: true, binary: 'codex', args: ['exec', 'PROMPT'], stdinPayload: null })
+  })
+
+  it('treats "{prompt}" identically to bare {prompt} (no shell, no double-quoting)', () => {
+    const a = planCustomCommand('codex exec {prompt}', 'PROMPT')
+    const b = planCustomCommand('codex exec "{prompt}"', 'PROMPT')
+    expect(a).toEqual(b)
+  })
+
+  it('substitutes {prompt} embedded inside a token', () => {
+    const r = planCustomCommand('agent --msg={prompt}', 'PROMPT')
+    expect(r).toEqual({
+      ok: true,
+      binary: 'agent',
+      args: ['--msg=PROMPT'],
+      stdinPayload: null
+    })
+  })
+
+  it('errors on empty templates', () => {
+    const r = planCustomCommand('   ', 'PROMPT')
+    expect(r.ok).toBe(false)
+  })
+
+  it('propagates tokenizer errors', () => {
+    const r = planCustomCommand('agent "unclosed', 'PROMPT')
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error).toMatch(/unclosed/i)
+    }
   })
 })

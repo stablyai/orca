@@ -36,5 +36,10 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     description:
       'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
     keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
+  },
+  {
+    title: 'Custom command',
+    description: 'Command line Orca runs to generate the commit message.',
+    keywords: ['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder', 'ollama']
   }
 ]
