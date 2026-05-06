@@ -21,7 +21,9 @@ const {
   buildAgentHookEnvMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
-  isPwshAvailableMock
+  isPwshAvailableMock,
+  trackMock,
+  classifyErrorMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -40,7 +42,9 @@ const {
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
-  piClearPtyMock: vi.fn()
+  piClearPtyMock: vi.fn(),
+  trackMock: vi.fn(),
+  classifyErrorMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -95,6 +99,14 @@ vi.mock('../pi/titlebar-extension-service', () => ({
 vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
+
+vi.mock('../telemetry/client', () => ({
+  track: trackMock
+}))
+
+vi.mock('../telemetry/classify-error', () => ({
+  classifyError: classifyErrorMock
+}))
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import {
   registerPtyHandlers,
@@ -142,6 +154,8 @@ describe('registerPtyHandlers', () => {
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()
+    trackMock.mockReset()
+    classifyErrorMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
@@ -812,7 +826,10 @@ describe('registerPtyHandlers', () => {
     )
 
     await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
-    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', true)
+    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {
+      immediate: true,
+      keepHistory: false
+    })
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
@@ -1628,5 +1645,227 @@ describe('registerPtyHandlers', () => {
     expect(await handlers.get('pty:hasChildProcesses')!(null, { id: spawnResult.id })).toBe(false)
     expect(openCodeClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
     expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
+  })
+
+  describe('agent_started telemetry', () => {
+    // Why: telemetry-plan.md§Agent launch semantics — agent_started must
+    // fire only after provider.spawn resolves. The renderer threads
+    // launch metadata through `pty:spawn`; a missing or malformed
+    // payload must not produce a silently-malformed event.
+    it('emits agent_started after a successful spawn when telemetry is supplied', async () => {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        telemetry: {
+          agent_kind: 'claude-code',
+          launch_source: 'new_workspace_composer',
+          request_kind: 'new'
+        }
+      })
+      expect(trackMock).toHaveBeenCalledWith('agent_started', {
+        agent_kind: 'claude-code',
+        launch_source: 'new_workspace_composer',
+        request_kind: 'new'
+      })
+    })
+
+    it('does not emit agent_started when telemetry is omitted (bare-shell tab)', async () => {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      expect(trackMock).not.toHaveBeenCalled()
+    })
+
+    it('drops the event when any telemetry field is outside its closed enum', async () => {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        telemetry: {
+          agent_kind: 'claude-code',
+          launch_source: 'not_a_real_surface',
+          request_kind: 'new'
+        }
+      })
+      expect(trackMock).not.toHaveBeenCalledWith('agent_started', expect.anything())
+    })
+
+    it('does not emit agent_started when provider.spawn throws', async () => {
+      // Why: telemetry-plan contract is that agent_started fires only on
+      // confirmed launch. Inject a provider whose spawn throws so we hit
+      // the catch path with no race against the real LocalPtyProvider.
+      setLocalPtyProvider({
+        spawn: vi.fn(async () => {
+          throw new Error('spawn boom')
+        }),
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      classifyErrorMock.mockReturnValue({ error_class: 'unknown' })
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          command: 'claude',
+          telemetry: {
+            agent_kind: 'claude-code',
+            launch_source: 'new_workspace_composer',
+            request_kind: 'new'
+          }
+        })
+      ).rejects.toThrow(/spawn boom/)
+      expect(trackMock).not.toHaveBeenCalledWith('agent_started', expect.anything())
+    })
+  })
+
+  describe('serializeBuffer dispatch', () => {
+    type SerializeListener = (
+      _event: unknown,
+      args: {
+        requestId?: string
+        snapshot?: { data?: unknown; cols?: unknown; rows?: unknown; lastTitle?: unknown } | null
+      }
+    ) => void
+    type SerializeController = {
+      serializeBuffer: (
+        ptyId: string,
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      ) => Promise<{ data: string; cols: number; rows: number; lastTitle?: string } | null>
+    }
+
+    function setup(): { listener: SerializeListener; controller: SerializeController } {
+      const runtime = {
+        setPtyController: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyData: vi.fn(),
+        onPtyExit: vi.fn(),
+        preAllocateHandleForPty: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const onCall = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:serializeBuffer:response'
+      )
+      if (!onCall) {
+        throw new Error('expected pty:serializeBuffer:response listener registration')
+      }
+      const listener = onCall[1] as SerializeListener
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as SerializeController
+      return { listener, controller }
+    }
+
+    function getSentRequestIds(): string[] {
+      return mainWindow.webContents.send.mock.calls
+        .filter((call: unknown[]) => call[0] === 'pty:serializeBuffer:request')
+        .map((call: unknown[]) => (call[1] as { requestId: string }).requestId)
+    }
+
+    it('registers exactly one persistent listener regardless of concurrent in-flight requests', async () => {
+      const { listener, controller } = setup()
+      const inflight = [
+        controller.serializeBuffer('pty-1'),
+        controller.serializeBuffer('pty-2'),
+        controller.serializeBuffer('pty-3'),
+        controller.serializeBuffer('pty-4'),
+        controller.serializeBuffer('pty-5'),
+        controller.serializeBuffer('pty-6'),
+        controller.serializeBuffer('pty-7'),
+        controller.serializeBuffer('pty-8'),
+        controller.serializeBuffer('pty-9'),
+        controller.serializeBuffer('pty-10'),
+        controller.serializeBuffer('pty-11'),
+        controller.serializeBuffer('pty-12')
+      ]
+      // Why: the bug being fixed registered one listener per request, so 12
+      // concurrent calls would register 12 listeners and trip Node's MaxListeners.
+      const responseChannelRegistrations = onMock.mock.calls.filter(
+        (call: unknown[]) => call[0] === 'pty:serializeBuffer:response'
+      )
+      expect(responseChannelRegistrations.length).toBe(1)
+      // Drain the in-flight requests so the test doesn't leak timers.
+      for (const requestId of getSentRequestIds()) {
+        listener(null, { requestId, snapshot: null })
+      }
+      await Promise.all(inflight)
+    })
+
+    it('routes each response to the originating request via requestId', async () => {
+      const { listener, controller } = setup()
+      const a = controller.serializeBuffer('pty-a')
+      const b = controller.serializeBuffer('pty-b')
+      const ids = getSentRequestIds()
+      const requestIdA = ids[0]
+      const requestIdB = ids[1]
+
+      listener(null, {
+        requestId: requestIdB,
+        snapshot: { data: 'B-data', cols: 80, rows: 24 }
+      })
+      listener(null, {
+        requestId: requestIdA,
+        snapshot: { data: 'A-data', cols: 100, rows: 30, lastTitle: 'A-title' }
+      })
+
+      await expect(b).resolves.toEqual({ data: 'B-data', cols: 80, rows: 24 })
+      await expect(a).resolves.toEqual({
+        data: 'A-data',
+        cols: 100,
+        rows: 30,
+        lastTitle: 'A-title'
+      })
+    })
+
+    it('ignores responses with unknown requestId without affecting pending requests', async () => {
+      const { listener, controller } = setup()
+      const pending = controller.serializeBuffer('pty-1')
+      const realRequestId = getSentRequestIds()[0]
+
+      listener(null, {
+        requestId: 'not-a-real-id',
+        snapshot: { data: 'irrelevant', cols: 1, rows: 1 }
+      })
+      listener(null, { requestId: undefined, snapshot: null })
+
+      let resolved = false
+      void pending.then(() => {
+        resolved = true
+      })
+      await new Promise((r) => setTimeout(r, 0))
+      expect(resolved).toBe(false)
+
+      listener(null, { requestId: realRequestId, snapshot: { data: 'ok', cols: 80, rows: 24 } })
+      await expect(pending).resolves.toEqual({ data: 'ok', cols: 80, rows: 24 })
+    })
+
+    it('resolves to null and removes the entry when the 750ms timeout fires', async () => {
+      vi.useFakeTimers()
+      try {
+        const { controller } = setup()
+        const pending = controller.serializeBuffer('pty-stuck')
+        vi.advanceTimersByTime(750)
+        await expect(pending).resolves.toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('resolves to null when the response snapshot is malformed', async () => {
+      const { listener, controller } = setup()
+      const pending = controller.serializeBuffer('pty-bad')
+      const requestId = getSentRequestIds()[0]
+      listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
+      await expect(pending).resolves.toBeNull()
+    })
   })
 })

@@ -13,6 +13,7 @@ import type {
   CreateWorktreeArgs,
   CustomSidekick,
   FsChangedPayload,
+  GetRateLimitResult,
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
@@ -21,10 +22,41 @@ import type {
   ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
+  NotificationSoundDataResult,
+  NotificationSoundPathResult,
+  NotificationSoundResult,
   SearchResult
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { GhAuthDiagnostic } from '../shared/github-auth-types'
+import type {
+  AddIssueCommentBySlugArgs,
+  ClearProjectItemFieldArgs,
+  DeleteIssueCommentBySlugArgs,
+  GetProjectViewTableArgs,
+  GetProjectViewTableResult,
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAccessibleProjectsResult,
+  ListAssignableUsersBySlugArgs,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugArgs,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugArgs,
+  ListLabelsBySlugResult,
+  ListProjectViewsArgs,
+  ListProjectViewsResult,
+  ProjectWorkItemDetailsBySlugArgs,
+  ProjectWorkItemDetailsBySlugResult,
+  ResolveProjectRefArgs,
+  ResolveProjectRefResult,
+  UpdateIssueBySlugArgs,
+  UpdateIssueCommentBySlugArgs,
+  UpdateIssueTypeBySlugArgs,
+  UpdatePullRequestBySlugArgs,
+  UpdateProjectItemFieldArgs
+} from '../shared/github-project-types'
 import type {
   SshConnectionState,
   SshTarget,
@@ -32,6 +64,8 @@ import type {
   DetectedPort
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -50,6 +84,29 @@ type NativeDropResolution =
   // could be resolved. The caller must suppress the drop entirely instead of
   // falling back to 'editor' — fail-closed behavior per design §7.1.
   | { target: 'rejected' }
+
+// Why: one shared HTMLAudioElement per sound file, restarted from t=0 on each
+// play, with an in-flight guard that drops new plays while the sound is still
+// ringing. This mirrors VS Code's AccessibilitySignalService and GNOME's
+// libcanberra: a burst of triggers self-dedupes by the sound's own duration
+// (no magic time constant), while distinct sounds are still allowed to overlap.
+// We also cache the decoded blob URL by path so we don't re-read 10MB from
+// disk and re-transfer it over IPC on every notification.
+let cachedNotificationSound: {
+  path: string
+  blobUrl: string
+  audio: HTMLAudioElement
+} | null = null
+let isNotificationSoundPlaying = false
+
+function disposeCachedNotificationSound(): void {
+  if (cachedNotificationSound) {
+    cachedNotificationSound.audio.pause()
+    cachedNotificationSound.audio.src = ''
+    URL.revokeObjectURL(cachedNotificationSound.blobUrl)
+    cachedNotificationSound = null
+  }
+}
 
 /**
  * Walk the composed event path to classify which UI surface the native OS drop
@@ -329,6 +386,18 @@ const api = {
       worktreeId?: string
       sessionId?: string
       shellOverride?: string
+      // Why: closes the SIGKILL race documented in INVESTIGATION.md by
+      // letting main patch + sync-flush the (worktreeId, tabId, leafId →
+      // ptyId) binding before pty:spawn returns. Only the renderer's
+      // user-typing-Ctrl+T daemon-host path threads these.
+      tabId?: string
+      leafId?: string
+      // Why: telemetry-plan.md§Agent launch semantics — main fires
+      // `agent_started` only after the spawn succeeds. The renderer is the
+      // source of truth for the launch metadata; main is the source of
+      // truth for whether the launch happened. Loose typing here on
+      // purpose: validation lives at the main-side schema validator.
+      telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
       snapshot?: string
@@ -357,7 +426,8 @@ const api = {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
 
-    kill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', { id }),
+    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
+      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
@@ -396,6 +466,46 @@ const api = {
       return () => ipcRenderer.removeListener('pty:exit', listener)
     },
 
+    onSerializeBufferRequest: (
+      callback: (data: {
+        requestId: string
+        ptyId: string
+        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          requestId: string
+          ptyId: string
+          opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+        }
+      ) => callback(data)
+      ipcRenderer.on('pty:serializeBuffer:request', listener)
+      return () => ipcRenderer.removeListener('pty:serializeBuffer:request', listener)
+    },
+
+    sendSerializedBuffer: (
+      requestId: string,
+      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
+    ): void => {
+      ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
+    },
+
+    // Why: pre-signal handshake — renderer declares it will own the serializer
+    // for `paneKey` BEFORE issuing pty:spawn so the cooperation gate in main
+    // can suppress the daemon-snapshot seed. Returns a generation token that
+    // the renderer must echo on settle/clear so paneKey-reuse during teardown
+    // cannot defeat the pre-signal. See docs/mobile-prefer-renderer-scrollback.md.
+    declarePendingPaneSerializer: (paneKey: string): Promise<number> =>
+      ipcRenderer.invoke('pty:declarePendingPaneSerializer', { paneKey }),
+
+    settlePaneSerializer: (paneKey: string, gen: number): Promise<void> =>
+      ipcRenderer.invoke('pty:settlePaneSerializer', { paneKey, gen }),
+
+    clearPendingPaneSerializer: (paneKey: string, gen: number): Promise<void> =>
+      ipcRenderer.invoke('pty:clearPendingPaneSerializer', { paneKey, gen }),
+
     management: {
       listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
       killAll: () => ipcRenderer.invoke('pty:management:killAll'),
@@ -428,8 +538,11 @@ const api = {
     repoSlug: (args: { repoPath: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:repoSlug', args),
 
-    prForBranch: (args: { repoPath: string; branch: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:prForBranch', args),
+    prForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedPRNumber?: number | null
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:issue', args),
@@ -439,6 +552,14 @@ const api = {
       number: number
       type?: 'issue' | 'pr'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
+
+    workItemByOwnerRepo: (args: {
+      repoPath: string
+      owner: string
+      repo: string
+      number: number
+      type: 'issue' | 'pr'
+    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
 
     workItemDetails: (args: {
       repoPath: string
@@ -549,7 +670,65 @@ const api = {
       ipcRenderer.invoke('gh:listAssignableUsers', args),
 
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca')
+    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca'),
+
+    // Why: rate_limit is exempt from rate-limit accounting, but we still pass
+    // `force` through so callers can bust the 30s in-process cache after a
+    // known-expensive op (e.g. after ProjectPicker discovery).
+    rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
+      ipcRenderer.invoke('gh:rateLimit', args),
+
+    diagnoseAuth: (): Promise<GhAuthDiagnostic> => ipcRenderer.invoke('gh:diagnoseAuth'),
+
+    // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
+    listAccessibleProjects: (): Promise<ListAccessibleProjectsResult> =>
+      ipcRenderer.invoke('gh:listAccessibleProjects'),
+    resolveProjectRef: (args: ResolveProjectRefArgs): Promise<ResolveProjectRefResult> =>
+      ipcRenderer.invoke('gh:resolveProjectRef', args),
+    listProjectViews: (args: ListProjectViewsArgs): Promise<ListProjectViewsResult> =>
+      ipcRenderer.invoke('gh:listProjectViews', args),
+    getProjectViewTable: (args: GetProjectViewTableArgs): Promise<GetProjectViewTableResult> =>
+      ipcRenderer.invoke('gh:getProjectViewTable', args),
+    projectWorkItemDetailsBySlug: (
+      args: ProjectWorkItemDetailsBySlugArgs
+    ): Promise<ProjectWorkItemDetailsBySlugResult> =>
+      ipcRenderer.invoke('gh:projectWorkItemDetailsBySlug', args),
+    updateProjectItemField: (
+      args: UpdateProjectItemFieldArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updateProjectItemField', args),
+    clearProjectItemField: (
+      args: ClearProjectItemFieldArgs
+    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:clearProjectItemField', args),
+    updateIssueBySlug: (args: UpdateIssueBySlugArgs): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updateIssueBySlug', args),
+    updatePullRequestBySlug: (
+      args: UpdatePullRequestBySlugArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updatePullRequestBySlug', args),
+    addIssueCommentBySlug: (
+      args: AddIssueCommentBySlugArgs
+    ): Promise<GitHubProjectCommentMutationResult> =>
+      ipcRenderer.invoke('gh:addIssueCommentBySlug', args),
+    updateIssueCommentBySlug: (
+      args: UpdateIssueCommentBySlugArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:updateIssueCommentBySlug', args),
+    deleteIssueCommentBySlug: (
+      args: DeleteIssueCommentBySlugArgs
+    ): Promise<GitHubProjectMutationResult> =>
+      ipcRenderer.invoke('gh:deleteIssueCommentBySlug', args),
+    listLabelsBySlug: (args: ListLabelsBySlugArgs): Promise<ListLabelsBySlugResult> =>
+      ipcRenderer.invoke('gh:listLabelsBySlug', args),
+    listAssignableUsersBySlug: (
+      args: ListAssignableUsersBySlugArgs
+    ): Promise<ListAssignableUsersBySlugResult> =>
+      ipcRenderer.invoke('gh:listAssignableUsersBySlug', args),
+    listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs): Promise<ListIssueTypesBySlugResult> =>
+      ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
+    updateIssueTypeBySlug: (
+      args: UpdateIssueTypeBySlugArgs
+    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
   },
 
   linear: {
@@ -631,6 +810,10 @@ const api = {
     ipcRenderer.invoke('telemetry:track', name, props),
   telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
     ipcRenderer.invoke('telemetry:setOptIn', optedIn),
+  telemetryAcknowledgeBanner: (): Promise<void> =>
+    ipcRenderer.invoke('telemetry:acknowledgeBanner'),
+  telemetryGetConsentState: (): Promise<TelemetryConsentState> =>
+    ipcRenderer.invoke('telemetry:getConsentState'),
 
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
@@ -692,6 +875,11 @@ const api = {
       ipcRenderer.invoke('agentHooks:cursorStatus')
   },
 
+  agentTrust: {
+    markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }): Promise<void> =>
+      ipcRenderer.invoke('agentTrust:markTrusted', args)
+  },
+
   preflight: {
     check: (args?: {
       force?: boolean
@@ -713,7 +901,66 @@ const api = {
   notifications: {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
       ipcRenderer.invoke('notifications:dispatch', args),
-    openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings')
+    openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
+    playSound: async (options?: { force?: boolean }): Promise<NotificationSoundResult> => {
+      try {
+        // Why: drop replays while the sound is still ringing. The "test"
+        // button bypasses with force so the user always hears a confirmation.
+        if (!options?.force && isNotificationSoundPlaying) {
+          return { played: false, reason: 'deduped' }
+        }
+
+        const resolved = (await ipcRenderer.invoke(
+          'notifications:resolveSoundPath'
+        )) as NotificationSoundPathResult
+        if (!resolved.ok) {
+          if (cachedNotificationSound) {
+            disposeCachedNotificationSound()
+          }
+          return { played: false, reason: resolved.reason }
+        }
+
+        let entry = cachedNotificationSound
+        if (!entry || entry.path !== resolved.path) {
+          const sound = (await ipcRenderer.invoke(
+            'notifications:loadSound'
+          )) as NotificationSoundDataResult
+          if (!sound.ok) {
+            disposeCachedNotificationSound()
+            return { played: false, reason: sound.reason }
+          }
+          const arrayBuffer = new ArrayBuffer(sound.data.byteLength)
+          new Uint8Array(arrayBuffer).set(sound.data)
+          const blob = new Blob([arrayBuffer], { type: sound.mimeType })
+          disposeCachedNotificationSound()
+          const blobUrl = URL.createObjectURL(blob)
+          entry = { path: sound.path, blobUrl, audio: new Audio(blobUrl) }
+          cachedNotificationSound = entry
+        }
+
+        const audio = entry.audio
+        // Why: restart-from-zero on every play so a burst of triggers replays
+        // the sound from the start instead of stacking overlapping copies.
+        // Matches GNOME canberra and VS Code AccessibilitySignalService.
+        audio.currentTime = 0
+        isNotificationSoundPlaying = true
+        const release = (): void => {
+          isNotificationSoundPlaying = false
+        }
+        audio.addEventListener('ended', release, { once: true })
+        audio.addEventListener('error', release, { once: true })
+        try {
+          await audio.play()
+        } catch {
+          release()
+          return { played: false, reason: 'playback-failed' }
+        }
+        return { played: true }
+      } catch {
+        isNotificationSoundPlaying = false
+        return { played: false, reason: 'playback-failed' }
+      }
+    }
   },
 
   developerPermissions: {
@@ -739,6 +986,8 @@ const api = {
 
     pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
 
+    pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
+
     pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
       ipcRenderer.invoke('shell:pickDirectory', args),
 
@@ -748,10 +997,12 @@ const api = {
 
   sidekick: {
     import: (): Promise<CustomSidekick | null> => ipcRenderer.invoke('sidekick:import'),
-    read: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('sidekick:read', id, fileName),
-    delete: (id: string, fileName: string): Promise<void> =>
-      ipcRenderer.invoke('sidekick:delete', id, fileName)
+    importPetBundle: (): Promise<CustomSidekick | null> =>
+      ipcRenderer.invoke('sidekick:importPetBundle'),
+    read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('sidekick:read', id, fileName, kind),
+    delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
+      ipcRenderer.invoke('sidekick:delete', id, fileName, kind)
   },
 
   browser: {
@@ -759,6 +1010,7 @@ const api = {
       browserPageId: string
       workspaceId: string
       worktreeId: string
+      sessionProfileId?: string | null
       webContentsId: number
     }): Promise<void> => ipcRenderer.invoke('browser:registerGuest', args),
 
@@ -1358,13 +1610,8 @@ const api = {
       ipcRenderer.on('ui:openQuickOpen', listener)
       return () => ipcRenderer.removeListener('ui:openQuickOpen', listener)
     },
-    onOpenNewWorkspace: (callback: (tab: 'quick' | 'create-from') => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, tab: 'quick' | 'create-from') => {
-        // Why: older main-process builds may send this event without a payload
-        // — default to 'quick' so the preload contract stays forward-compatible
-        // during a partial rollout where only one side has shipped the tab arg.
-        callback(tab ?? 'quick')
-      }
+    onOpenNewWorkspace: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openNewWorkspace', listener)
       return () => ipcRenderer.removeListener('ui:openNewWorkspace', listener)
     },
@@ -1387,11 +1634,16 @@ const api = {
       return () => ipcRenderer.removeListener('ui:newBrowserTab', listener)
     },
     onRequestTabCreate: (
-      callback: (data: { requestId: string; url: string; worktreeId?: string }) => void
+      callback: (data: {
+        requestId: string
+        url: string
+        worktreeId?: string
+        sessionProfileId?: string
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { requestId: string; url: string; worktreeId?: string }
+        data: { requestId: string; url: string; worktreeId?: string; sessionProfileId?: string }
       ) => callback(data)
       ipcRenderer.on('browser:requestTabCreate', listener)
       return () => ipcRenderer.removeListener('browser:requestTabCreate', listener)
@@ -1402,6 +1654,19 @@ const api = {
       error?: string
     }): void => {
       ipcRenderer.send('browser:tabCreateReply', reply)
+    },
+    onRequestTabSetProfile: (
+      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { requestId: string; browserPageId: string; profileId: string }
+      ) => callback(data)
+      ipcRenderer.on('browser:requestTabSetProfile', listener)
+      return () => ipcRenderer.removeListener('browser:requestTabSetProfile', listener)
+    },
+    replyTabSetProfile: (reply: { requestId: string; error?: string }): void => {
+      ipcRenderer.send('browser:tabSetProfileReply', reply)
     },
     onRequestTabClose: (
       callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
@@ -1451,6 +1716,11 @@ const api = {
       ipcRenderer.on('ui:switchTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTab', listener)
     },
+    onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
+      ipcRenderer.on('ui:switchTabAcrossAllTypes', listener)
+      return () => ipcRenderer.removeListener('ui:switchTabAcrossAllTypes', listener)
+    },
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTerminalTab', listener)
@@ -1471,6 +1741,7 @@ const api = {
         repoId: string
         worktreeId: string
         setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+        startup?: { command: string; env?: Record<string, string> }
       }) => void
     ): (() => void) => {
       const listener = (
@@ -1479,6 +1750,7 @@ const api = {
           repoId: string
           worktreeId: string
           setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+          startup?: { command: string; env?: Record<string, string> }
         }
       ) => callback(data)
       ipcRenderer.on('ui:activateWorktree', listener)
@@ -1566,6 +1838,12 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:closeTerminal', listener)
       return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
+    },
+    onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
+        callback(data)
+      ipcRenderer.on('ui:sleepWorktree', listener)
+      return () => ipcRenderer.removeListener('ui:sleepWorktree', listener)
     },
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
@@ -1682,7 +1960,43 @@ const api = {
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph): Promise<RuntimeStatus> =>
       ipcRenderer.invoke('runtime:syncWindowGraph', graph),
-    getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus')
+    getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
+    getTerminalFitOverrides: (): Promise<
+      { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+    > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
+    restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
+      ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
+    onTerminalFitOverrideChanged: (
+      callback: (event: {
+        ptyId: string
+        mode: 'mobile-fit' | 'desktop-fit'
+        cols: number
+        rows: number
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { ptyId: string; mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }
+      ) => callback(data)
+      ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
+    },
+    onTerminalDriverChanged: (
+      callback: (event: {
+        ptyId: string
+        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          ptyId: string
+          driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+        }
+      ) => callback(data)
+      ipcRenderer.on('runtime:terminalDriverChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
+    }
   },
 
   rateLimits: {
@@ -1725,6 +2039,9 @@ const api = {
 
     getState: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:getState', args),
+
+    needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('ssh:needsPassphrasePrompt', args),
 
     testConnection: (args: {
       targetId: string
@@ -1831,6 +2148,35 @@ const api = {
   },
   e2e: {
     getConfig: () => preloadE2EConfig
+  },
+
+  mobile: {
+    listNetworkInterfaces: (): Promise<{
+      interfaces: { name: string; address: string }[]
+    }> => ipcRenderer.invoke('mobile:listNetworkInterfaces'),
+
+    getPairingQR: (args?: {
+      address?: string
+    }): Promise<
+      | { available: false }
+      | {
+          available: true
+          qrDataUrl: string
+          pairingUrl: string
+          endpoint: string
+          deviceId: string
+        }
+    > => ipcRenderer.invoke('mobile:getPairingQR', args),
+
+    listDevices: (): Promise<{
+      devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+    }> => ipcRenderer.invoke('mobile:listDevices'),
+
+    revokeDevice: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
+      ipcRenderer.invoke('mobile:revokeDevice', args),
+
+    isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
+      ipcRenderer.invoke('mobile:isWebSocketReady')
   },
 
   agentStatus: {

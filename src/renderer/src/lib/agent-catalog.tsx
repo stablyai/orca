@@ -1,5 +1,5 @@
 import React from 'react'
-import { ClaudeIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import type { TuiAgent } from '../../../shared/types'
 
 export type AgentCatalogEntry = {
@@ -107,6 +107,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://docs.augmentcode.com/cli/overview'
   },
   {
+    id: 'autohand',
+    label: 'Autohand Code',
+    cmd: 'autohand',
+    faviconDomain: 'autohand.ai',
+    homepageUrl: 'https://github.com/autohandai/code-cli'
+  },
+  {
     id: 'cline',
     label: 'Cline',
     cmd: 'cline',
@@ -138,7 +145,6 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     id: 'droid',
     label: 'Droid',
     cmd: 'droid',
-    faviconDomain: 'factory.ai',
     homepageUrl: 'https://docs.factory.ai/cli/getting-started/quickstart'
   },
   {
@@ -146,7 +152,7 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     label: 'Kimi',
     cmd: 'kimi',
     faviconDomain: 'moonshot.cn',
-    homepageUrl: 'https://www.kimi.com/code/docs/en/kimi-cli/guides/getting-started.html'
+    homepageUrl: 'https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html'
   },
   {
     id: 'mistral-vibe',
@@ -298,6 +304,9 @@ export function AgentIcon({
   }
   if (agent === 'codex') {
     return <OpenAIIcon size={size} />
+  }
+  if (agent === 'droid') {
+    return <DroidIcon size={size} />
   }
   if (agent === 'pi') {
     return <PiIcon size={size} />

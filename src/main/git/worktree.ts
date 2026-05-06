@@ -8,6 +8,12 @@ type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -35,12 +41,10 @@ function looksLikeWindowsPath(pathValue: string): boolean {
  */
 export function parseWorktreeList(output: string): GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = []
-  const blocks = output.includes('\0')
-    ? parseNullDelimitedWorktreeBlocks(output)
-    : output
-        .trim()
-        .split(/\r?\n\r?\n/)
-        .map((block) => block.trim().split(/\r?\n/))
+  const blocks = output
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
 
   for (const lines of blocks) {
     if (lines.length === 0) {
@@ -88,11 +92,12 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+    // Why: do not pass `-z` here. `-z` requires Git ≥ 2.36; older Git rejects
+    // it, listWorktrees returns [], and every create flow throws "Worktree
+    // created but not found in listing" (issue #1453).
+    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
       cwd: repoPath
     })
-    // Why: WSL path translation is line-oriented, but `-z` porcelain output is
-    // NUL-delimited. Parse first so only complete path fields are translated.
     const worktrees = parseWorktreeList(stdout).map((worktree) => {
       const translatedPath = translateWorktreePath(worktree.path, repoPath)
       return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
@@ -106,7 +111,21 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
         return isSparse ? { ...worktree, isSparse } : worktree
       })
     )
-  } catch {
+  } catch (err) {
+    if (getErrorCode(err) === 'ENOENT') {
+      try {
+        await stat(repoPath)
+      } catch (statErr) {
+        if (getErrorCode(statErr) === 'ENOENT') {
+          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+          return []
+        }
+      }
+    }
+    // Why: a silent catch turned issue #1453's underlying
+    // "git: unknown switch -z" into the opaque "not found in listing" toast.
+    // Surface the cause so future regressions show up immediately.
+    console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
 }
@@ -271,28 +290,6 @@ export async function removeWorktree(
       error
     )
   }
-}
-
-function parseNullDelimitedWorktreeBlocks(output: string): string[][] {
-  const blocks: string[][] = []
-  let current: string[] = []
-
-  for (const token of output.split('\0')) {
-    if (!token) {
-      if (current.length > 0) {
-        blocks.push(current)
-        current = []
-      }
-      continue
-    }
-    current.push(token)
-  }
-
-  if (current.length > 0) {
-    blocks.push(current)
-  }
-
-  return blocks
 }
 
 function translateWorktreePath(worktreePath: string, repoPath: string): string {

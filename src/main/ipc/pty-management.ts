@@ -107,7 +107,7 @@ export function registerDaemonManagementHandlers(): void {
           // and so a future adapter could honor it. Rejections are swallowed
           // per-session — remainingCount surfaces truly-stuck sessions in
           // the toast.
-          await owner.shutdown(session.sessionId, true).catch(() => {})
+          await owner.shutdown(session.sessionId, { immediate: true }).catch(() => {})
         })
       )
 
@@ -151,7 +151,7 @@ export function registerDaemonManagementHandlers(): void {
         return { success: false }
       }
       try {
-        await owner.shutdown(args.sessionId, true)
+        await owner.shutdown(args.sessionId, { immediate: true })
         return { success: true }
       } catch {
         return { success: false }

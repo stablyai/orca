@@ -1,10 +1,15 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import type { PersistedUIState } from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import type { AppState } from '../types'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 function createUIStore(): StoreApi<AppState> {
   // Only the UI slice, repo ids, and right sidebar width fallback are needed
@@ -108,6 +113,41 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('sanitizes task resume state field-by-field during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          githubMode: 'project',
+          githubItemsPreset: 'invalid',
+          githubItemsQuery: 42,
+          linearPreset: 'completed',
+          linearQuery: 'label:bug'
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({
+      githubMode: 'project',
+      linearPreset: 'completed',
+      linearQuery: 'label:bug'
+    })
+  })
+
+  it('merges and persists partial task resume updates', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ taskResumeState: { githubMode: 'project', linearPreset: 'all' } })
+    store.getState().setTaskResumeState({ githubItemsPreset: 'my-prs' })
+
+    const expected = { githubMode: 'project', linearPreset: 'all', githubItemsPreset: 'my-prs' }
+    expect(store.getState().taskResumeState).toEqual(expected)
+    expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })
 })
 

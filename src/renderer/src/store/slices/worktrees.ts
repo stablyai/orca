@@ -162,7 +162,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set({ hasHydratedWorktreePurge: true })
   },
 
-  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit', sparseCheckout) => {
+  createWorktree: async (
+    repoId,
+    name,
+    baseBranch,
+    setupDecision = 'inherit',
+    sparseCheckout,
+    telemetrySource
+  ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
@@ -180,7 +187,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             name: candidateName,
             baseBranch,
             setupDecision,
-            sparseCheckout
+            sparseCheckout,
+            ...(telemetrySource ? { telemetrySource } : {})
           })
           // Why: a file watcher (worktrees.onChanged) can fire between the
           // backend creating the worktree and this callback running, causing
@@ -584,16 +592,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   pruneLastVisitedTimestamps: () => {
     set((s) => {
-      const validIds = new Set<string>()
-      for (const list of Object.values(s.worktreesByRepo)) {
+      // Why: scope pruning per-repo. SSH-backed repos cannot enumerate
+      // worktrees until their connection is established, so at hydration
+      // time worktreesByRepo[sshRepoId] is empty/undefined. If we pruned
+      // globally based on the union of all repos' worktrees, we would wipe
+      // every persisted focus-recency entry for SSH worktrees — precisely
+      // the set this feature exists to preserve. Instead, only drop entries
+      // whose repo has a populated worktree list: a missing repoId means
+      // "not yet hydrated" (defer), a repoId with an empty list after a
+      // successful listing means the worktree really is gone (drop).
+      // The ssh:state-changed 'connected' handler re-fetches worktrees and
+      // a follow-up prune runs from the same site if needed.
+      const validIdsByRepo = new Map<string, Set<string>>()
+      for (const [repoId, list] of Object.entries(s.worktreesByRepo)) {
+        const ids = new Set<string>()
         for (const w of list) {
-          validIds.add(w.id)
+          ids.add(w.id)
         }
+        validIdsByRepo.set(repoId, ids)
       }
       let changed = false
       const next: Record<string, number> = {}
       for (const [id, ts] of Object.entries(s.lastVisitedAtByWorktreeId)) {
-        if (validIds.has(id)) {
+        const repoId = getRepoIdFromWorktreeId(id)
+        const repoIds = validIdsByRepo.get(repoId)
+        if (!repoIds) {
+          // Repo not yet hydrated (e.g. SSH not connected). Keep the entry.
+          next[id] = ts
+          continue
+        }
+        if (repoIds.has(id)) {
           next[id] = ts
         } else {
           changed = true

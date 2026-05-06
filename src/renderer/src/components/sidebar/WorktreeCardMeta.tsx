@@ -73,13 +73,16 @@ type PrSectionProps = {
   onClick: (e: React.MouseEvent) => void
 }
 
-export function PrSection({ pr, onClick }: PrSectionProps): React.JSX.Element {
+export function PrSection({ pr, onClick: _onClick }: PrSectionProps): React.JSX.Element {
   return (
     <HoverCard openDelay={300}>
       <HoverCardTrigger asChild>
-        <div
+        <a
+          href={pr.url}
+          target="_blank"
+          rel="noreferrer"
           className="flex items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40"
-          onClick={onClick}
+          onClick={(e) => e.stopPropagation()}
         >
           <PullRequestIcon
             className={cn(
@@ -93,20 +96,14 @@ export function PrSection({ pr, onClick }: PrSectionProps): React.JSX.Element {
             )}
           />
           <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px] leading-none">
-            <a
-              href={pr.url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-foreground opacity-80 shrink-0 hover:text-foreground hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <span className="text-foreground opacity-80 shrink-0 group-hover/meta:underline">
               PR #{pr.number}
-            </a>
+            </span>
             <span className="text-muted-foreground truncate group-hover/meta:text-foreground transition-colors">
               {pr.title}
             </span>
           </div>
-        </div>
+        </a>
       </HoverCardTrigger>
       <HoverCardContent side="right" align="start" className="w-72 p-3 text-xs space-y-1.5">
         <div className="font-semibold text-[13px]">

@@ -270,23 +270,22 @@ describe('resolveWindowShortcutAction', () => {
     ).toBeNull()
   })
 
-  it('routes Cmd/Ctrl+Shift+N to the Create-from tab of the new-workspace composer', () => {
-    // Why: the shift variant of the new-workspace shortcut jumps straight to
-    // the "Create from…" tab so users can start from an existing GH/Linear
-    // item without a detour through the quick-create form.
+  it('routes Cmd/Ctrl+Shift+N to the unified new-workspace composer', () => {
+    // Why: keep the former Create-from shortcut accepted so muscle memory
+    // still opens the composer; source switching now lives in the smart name field.
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyN', key: 'n', meta: true, control: false, alt: false, shift: true },
         'darwin'
       )
-    ).toEqual({ type: 'openNewWorkspace', tab: 'create-from' })
+    ).toEqual({ type: 'openNewWorkspace' })
 
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyN', key: 'n', meta: false, control: true, alt: false, shift: true },
         'linux'
       )
-    ).toEqual({ type: 'openNewWorkspace', tab: 'create-from' })
+    ).toEqual({ type: 'openNewWorkspace' })
 
     // Alt must still be rejected — the allowlist is alt-free for Cmd/Ctrl+N
     // so future chords like Cmd+Alt+Shift+N remain available.
@@ -320,7 +319,7 @@ describe('resolveWindowShortcutAction', () => {
       [{ code: 'KeyR', key: 'p', meta: true, alt: false, shift: false }, { type: 'openQuickOpen' }],
       [
         { code: 'KeyL', key: 'n', meta: true, alt: false, shift: false },
-        { type: 'openNewWorkspace', tab: 'quick' }
+        { type: 'openNewWorkspace' }
       ],
       [
         { code: 'KeyC', key: 'j', meta: true, alt: false, shift: false },
@@ -350,7 +349,7 @@ describe('resolveWindowShortcutAction', () => {
       ],
       [
         { code: 'KeyN', key: 'Dead', meta: true, alt: false, shift: false },
-        { type: 'openNewWorkspace', tab: 'quick' }
+        { type: 'openNewWorkspace' }
       ],
       [{ code: 'KeyP', meta: true, alt: false, shift: false }, { type: 'openQuickOpen' }]
     ]

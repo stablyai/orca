@@ -60,10 +60,10 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.providerStopped).toBe(1)
     expect(result.registryStopped).toBe(1)
 
-    expect(localProvider.shutdown).toHaveBeenCalledWith('w1@@abcd1234', true)
-    expect(localProvider.shutdown).toHaveBeenCalledWith('w1-registry-1', true)
-    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2@@efef5678', true)
-    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2-registry-2', true)
+    expect(localProvider.shutdown).toHaveBeenCalledWith('w1@@abcd1234', { immediate: true })
+    expect(localProvider.shutdown).toHaveBeenCalledWith('w1-registry-1', { immediate: true })
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2@@efef5678', { immediate: true })
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2-registry-2', { immediate: true })
   })
 
   it('skips the daemon prefix sweep safely when the provider uses numeric ids', async () => {
@@ -81,7 +81,7 @@ describe('killAllProcessesForWorktree', () => {
     // Prefix sweep must kill nothing; registry sweep must still fire.
     expect(result.providerStopped).toBe(0)
     expect(result.registryStopped).toBe(1)
-    expect(localProvider.shutdown).toHaveBeenCalledWith('1', true)
+    expect(localProvider.shutdown).toHaveBeenCalledWith('1', { immediate: true })
     expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
   })
 
@@ -114,12 +114,12 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([])
 
     const r1 = await killAllProcessesForWorktree('w1', { localProvider: providerA })
-    expect(providerA.shutdown).toHaveBeenCalledWith('w1@@aaaa', true)
+    expect(providerA.shutdown).toHaveBeenCalledWith('w1@@aaaa', { immediate: true })
     expect(providerB.shutdown).not.toHaveBeenCalled()
     expect(r1.providerStopped).toBe(1)
 
     const r2 = await killAllProcessesForWorktree('w1', { localProvider: providerB })
-    expect(providerB.shutdown).toHaveBeenCalledWith('w1@@bbbb', true)
+    expect(providerB.shutdown).toHaveBeenCalledWith('w1@@bbbb', { immediate: true })
     expect(providerB.shutdown).toHaveBeenCalledTimes(1)
     expect(r2.providerStopped).toBe(1)
   })

@@ -131,6 +131,32 @@ describe('browserManager', () => {
     })
   })
 
+  it('remembers the registered session profile for a browser page', () => {
+    const guest = {
+      id: 104,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId,
+      sessionProfileId: 'work'
+    })
+
+    expect(browserManager.getSessionProfileIdForTab('browser-1')).toBe('work')
+  })
+
   it('falls back to opening popup URLs externally before a guest is registered', () => {
     const guest = {
       id: 105,

@@ -6,6 +6,7 @@
  * and the eager-buffer reconnection logic share.
  */
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { EventProps } from '../../../../shared/telemetry-events'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel, routes events to transports by
@@ -13,6 +14,36 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-t
 // MaxListenersExceededWarning with many panes/tabs.
 
 export const ptyDataHandlers = new Map<string, (data: string) => void>()
+/** Sidecar subscriptions that observe PTY data without owning the primary
+ *  handler. Used by features that need to react to the live byte stream
+ *  (e.g. agent-paste-draft watching for DECSET 2004 / bracketed-paste-
+ *  enable). Sidecars are invoked AFTER the primary handler so xterm rendering
+ *  is never delayed by a side-effect-only watcher. Each Set entry is one
+ *  active subscription; removal is by Set.delete inside the unsubscribe fn. */
+export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
+
+/** Register a side-channel data watcher for a PTY without taking ownership
+ *  of the primary handler. Returns an unsubscribe fn. ensurePtyDispatcher()
+ *  is called automatically so the underlying IPC stream is wired up. */
+export function subscribeToPtyData(ptyId: string, watcher: (data: string) => void): () => void {
+  ensurePtyDispatcher()
+  let set = ptyDataSidecars.get(ptyId)
+  if (!set) {
+    set = new Set()
+    ptyDataSidecars.set(ptyId, set)
+  }
+  set.add(watcher)
+  return () => {
+    const current = ptyDataSidecars.get(ptyId)
+    if (!current) {
+      return
+    }
+    current.delete(watcher)
+    if (current.size === 0) {
+      ptyDataSidecars.delete(ptyId)
+    }
+  }
+}
 /** Per-PTY replay handlers for relay pty.attach replay data. Routed through
  *  a dedicated pty:replay IPC channel so the renderer can engage the replay
  *  guard and suppress xterm auto-replies during replay. */
@@ -50,6 +81,20 @@ export function ensurePtyDispatcher(): void {
   ptyDispatcherAttached = true
   window.api.pty.onData((payload) => {
     ptyDataHandlers.get(payload.id)?.(payload.data)
+    const sidecars = ptyDataSidecars.get(payload.id)
+    if (sidecars && sidecars.size > 0) {
+      // Why: snapshot the Set before iterating because watchers commonly
+      // unsubscribe themselves on the very chunk that satisfies them
+      // (e.g. agent-paste-draft resolves on DECSET 2004 and immediately
+      // tears down). Iterating the live Set in that case can skip a
+      // watcher or — if a watcher synchronously subscribes a sibling —
+      // double-fire. The Set is never large (one watcher per active
+      // ready-wait), so the array allocation is cheap.
+      const snapshot = Array.from(sidecars)
+      for (const watcher of snapshot) {
+        watcher(payload.data)
+      }
+    }
   })
   window.api.pty.onReplay((payload) => {
     ptyReplayHandlers.get(payload.id)?.(payload.data)
@@ -211,8 +256,19 @@ export type IpcPtyTransportOptions = {
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */
   worktreeId?: string
+  /** Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
+   *  main patch + sync-flush the (worktreeId, tabId, leafId → ptyId) binding
+   *  before pty:spawn returns. Only the renderer's daemon-host path threads
+   *  these from the calling pane's (tabId, leafId). */
+  tabId?: string
+  leafId?: string
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
+  /** Telemetry metadata for the `agent_started` event. Forwarded verbatim
+   *  to `pty:spawn` so main can fire the event after confirmed launch. The
+   *  IPC handler re-validates the schema; this type is the renderer-side
+   *  contract. */
+  telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void

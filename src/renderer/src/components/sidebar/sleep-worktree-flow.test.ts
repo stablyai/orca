@@ -40,7 +40,9 @@ describe('runSleepWorktree', () => {
     // are still populated. If terminals ran first and kept its old
     // browserTabsByWorktree delete, browsers would no-op and leak webviews.
     expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledWith('wt-1')
-    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-1')
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-1', {
+      keepIdentifiers: true
+    })
     const browsersCallOrder = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
     const terminalsCallOrder = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
     expect(browsersCallOrder).toBeLessThan(terminalsCallOrder)

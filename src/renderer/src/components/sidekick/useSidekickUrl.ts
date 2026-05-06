@@ -1,11 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CustomSidekick } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { BUNDLED_SIDEKICK, findBundledSidekick, isBundledSidekickId } from './sidekick-models'
-import { blobUrlCache, loadCustomBlobUrl } from './sidekick-blob-cache'
+import {
+  blobUrlCache,
+  detectedSpriteCache,
+  loadCustomBlobUrl,
+  type DetectedSpriteCacheEntry
+} from './sidekick-blob-cache'
 
 // Re-export so existing callers (the store slice) that point at this module
 // keep working without knowing about the cache module split.
 export { revokeCustomSidekickBlobUrl } from './sidekick-blob-cache'
+
+export type ResolvedSidekick =
+  | { url: string; ready: boolean; sprite: null; detected: null }
+  | {
+      url: string
+      ready: boolean
+      sprite: NonNullable<CustomSidekick['sprite']>
+      detected: null
+    }
+  | { url: string; ready: boolean; sprite: null; detected: DetectedSpriteCacheEntry }
 
 /** Resolve the active sidekick to a URL the overlay can render.
  *
@@ -13,7 +29,7 @@ export { revokeCustomSidekickBlobUrl } from './sidekick-blob-cache'
  *  IPC read and build a blob: URL with the correct MIME; until that resolves,
  *  we fall back to the bundled default so the overlay is never empty.
  */
-export function useSidekickUrl(): { url: string; ready: boolean } {
+export function useSidekickUrl(): ResolvedSidekick {
   const sidekickId = useAppStore((s) => s.sidekickId)
   const customSidekicks = useAppStore((s) => s.customSidekicks)
   const bundled = isBundledSidekickId(sidekickId)
@@ -30,6 +46,10 @@ export function useSidekickUrl(): { url: string; ready: boolean } {
   const customId = customMeta?.id ?? null
   const customFileName = customMeta?.fileName ?? null
   const customMime = customMeta?.mimeType ?? 'image/png'
+  const customKind = customMeta?.kind ?? 'image'
+  // Why: prefer manifest fps captured at import time; sprite-with-frame entries
+  // store fps on `sprite`, frame-less bundles carry it on `spriteFps`.
+  const customSpriteFps = customMeta?.sprite?.fps ?? customMeta?.spriteFps
   useEffect(() => {
     if (!customId || !customFileName) {
       setCustomUrl(null)
@@ -45,26 +65,39 @@ export function useSidekickUrl(): { url: string; ready: boolean } {
     setCustomUrl(null)
     pendingRef.current = customId
     let cancelled = false
-    void loadCustomBlobUrl(customId, customFileName, customMime).then((url) => {
-      if (cancelled || pendingRef.current !== customId) {
-        return
+    void loadCustomBlobUrl(customId, customFileName, customMime, customKind, customSpriteFps).then(
+      (url) => {
+        if (cancelled || pendingRef.current !== customId) {
+          return
+        }
+        setCustomUrl(url)
       }
-      setCustomUrl(url)
-    })
+    )
     return () => {
       cancelled = true
     }
-  }, [customId, customFileName, customMime])
+  }, [customId, customFileName, customMime, customKind, customSpriteFps])
 
   if (bundled) {
     const sidekick = findBundledSidekick(sidekickId) ?? BUNDLED_SIDEKICK
-    return { url: sidekick.url, ready: true }
+    return { url: sidekick.url, ready: true, sprite: null, detected: null }
   }
   if (customMeta && customUrl) {
-    return { url: customUrl, ready: true }
+    // Why: guard against manifest entries with zero/negative dims or fps —
+    // those would break the overlay's frame math, so fall through to detection.
+    if (
+      customMeta.sprite &&
+      customMeta.sprite.frameWidth > 0 &&
+      customMeta.sprite.frameHeight > 0 &&
+      customMeta.sprite.fps > 0
+    ) {
+      return { url: customUrl, ready: true, sprite: customMeta.sprite, detected: null }
+    }
+    const detected = detectedSpriteCache.get(customMeta.id)
+    if (detected) {
+      return { url: customUrl, ready: true, sprite: null, detected }
+    }
+    return { url: customUrl, ready: true, sprite: null, detected: null }
   }
-  // Fallback: while a custom blob URL is loading (or if the custom sidekick is
-  // missing entirely), render the bundled default so the overlay doesn't
-  // flash empty.
-  return { url: BUNDLED_SIDEKICK.url, ready: false }
+  return { url: BUNDLED_SIDEKICK.url, ready: false, sprite: null, detected: null }
 }

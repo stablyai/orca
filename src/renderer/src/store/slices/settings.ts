@@ -27,18 +27,34 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
   updateSettings: async (updates) => {
     try {
       await window.api.settings.set(updates)
-      set((s) => ({
-        settings: s.settings
-          ? {
-              ...s.settings,
-              ...updates,
-              notifications: {
-                ...s.settings.notifications,
-                ...updates.notifications
-              }
-            }
-          : null
-      }))
+      set((s) => {
+        if (!s.settings) {
+          return { settings: null }
+        }
+        // Deep-merge telemetry so partial writes do not clobber sibling
+        // fields like `installId`, `existedBeforeTelemetryRelease`, or
+        // `optedIn` in local renderer state until the next fetchSettings.
+        // Mirrors the main-side merge in src/main/persistence.ts:551-573.
+        // `telemetry` is optional on GlobalSettings, so guard against the case
+        // where both current and incoming telemetry are undefined — otherwise
+        // the spread would produce an empty object and we'd materialize a
+        // telemetry key that shouldn't exist.
+        const mergedTelemetry =
+          updates.telemetry !== undefined
+            ? { ...s.settings.telemetry, ...updates.telemetry }
+            : s.settings.telemetry
+        return {
+          settings: {
+            ...s.settings,
+            ...updates,
+            notifications: {
+              ...s.settings.notifications,
+              ...updates.notifications
+            },
+            ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
+          }
+        }
+      })
     } catch (err) {
       console.error('Failed to update settings:', err)
     }

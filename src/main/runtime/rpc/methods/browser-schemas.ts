@@ -90,6 +90,16 @@ export const TabSwitch = BrowserTarget.extend({
 
 export const TabCreate = z.object({
   url: OptionalString,
+  worktree: OptionalString,
+  profileId: OptionalString
+})
+
+export const TabShow = z.object({
+  page: requiredString('Missing required --page'),
+  worktree: OptionalString
+})
+
+export const TabCurrent = z.object({
   worktree: OptionalString
 })
 
@@ -100,6 +110,25 @@ export const TabClose = z.object({
     .pipe(z.number().optional()),
   page: OptionalString,
   worktree: OptionalString
+})
+
+export const TabSetProfile = BrowserTarget.extend({
+  profileId: requiredString('Missing required --profile')
+})
+
+export const TabProfileClone = BrowserTarget.extend({
+  profileId: requiredString('Missing required --profile')
+})
+
+export const ProfileCreate = z.object({
+  label: requiredString('Missing required --label'),
+  // Strict enum so unknown scope values surface validation errors instead of being
+  // silently coerced to 'isolated' (pr-bug-scan finding from #1397).
+  scope: z.enum(['isolated', 'imported'])
+})
+
+export const ProfileDelete = z.object({
+  profileId: requiredString('Missing required --profile')
 })
 
 export const Drag = BrowserTarget.extend({

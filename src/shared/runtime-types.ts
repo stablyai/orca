@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
 import type { TerminalPaneLayoutNode } from './types'
-import type { GitWorktreeInfo, Repo } from './types'
+import type { BrowserSessionProfile, GitWorktreeInfo, Repo } from './types'
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
@@ -11,6 +11,11 @@ export type RuntimeStatus = {
   authoritativeWindowId: number | null
   liveTabCount: number
   liveLeafCount: number
+  // Why: optional so mobile builds can read both new and pre-PR desktops.
+  // Absence is treated as 0 by mobile's compat evaluator. See
+  // src/shared/protocol-version.ts for bump discipline.
+  protocolVersion?: number
+  minCompatibleMobileVersion?: number
 }
 
 export type CliRuntimeState =
@@ -50,6 +55,7 @@ export type RuntimeSyncedLeaf = {
   paneRuntimeId: number
   ptyId: string | null
   paneTitle?: string | null
+  title?: string | null
 }
 
 export type RuntimeSyncWindowGraph = {
@@ -145,13 +151,19 @@ export type RuntimeWorktreePsSummary = {
   repo: string
   path: string
   branch: string
+  displayName: string
   linkedIssue: number | null
+  linkedPR: { number: number; state: string } | null
+  isPinned: boolean
   unread: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
   lastOutputAt: number | null
   preview: string
+  status: RuntimeWorktreeStatus
 }
+
+export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
 
 export type RuntimeWorktreeRecord = {
   id: string
@@ -252,6 +264,9 @@ export type BrowserTabInfo = {
   url: string
   title: string
   active: boolean
+  worktreeId?: string | null
+  profileId?: string | null
+  profileLabel?: string | null
 }
 
 export type BrowserTabListResult = {
@@ -261,6 +276,47 @@ export type BrowserTabListResult = {
 export type BrowserTabSwitchResult = {
   switched: number
   browserPageId: string
+}
+
+export type BrowserTabSetProfileResult = {
+  browserPageId: string
+  profileId: string | null
+  profileLabel: string | null
+}
+
+export type BrowserTabShowResult = {
+  tab: BrowserTabInfo
+}
+
+export type BrowserTabCurrentResult = {
+  tab: BrowserTabInfo
+}
+
+export type BrowserTabProfileShowResult = {
+  browserPageId: string
+  worktreeId: string | null
+  profileId: string | null
+  profileLabel: string | null
+}
+
+export type BrowserTabProfileCloneResult = {
+  browserPageId: string
+  sourceBrowserPageId: string
+  profileId: string | null
+  profileLabel: string | null
+}
+
+export type BrowserProfileListResult = {
+  profiles: BrowserSessionProfile[]
+}
+
+export type BrowserProfileCreateResult = {
+  profile: BrowserSessionProfile | null
+}
+
+export type BrowserProfileDeleteResult = {
+  deleted: boolean
+  profileId: string
 }
 
 export type BrowserHoverResult = {

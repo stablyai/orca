@@ -7,6 +7,7 @@
 // the variable on the next launch restores the user's stored preference.
 
 import type { GlobalSettings } from '../../shared/types'
+import type { TelemetryConsentState } from '../../shared/telemetry-consent-types'
 
 // Discriminated union instead of a boolean: the Privacy pane (PR 3) needs the
 // `reason` to render the correct "disabled because X" helper text, and the
@@ -14,13 +15,11 @@ import type { GlobalSettings } from '../../shared/types'
 // (`pending_banner`) from "user explicitly opted out" (`disabled`). A boolean
 // would force the UI to re-derive that, re-introducing the scattered env
 // checks this module exists to eliminate.
-export type ConsentState =
-  | { effective: 'enabled' }
-  | {
-      effective: 'disabled'
-      reason: 'do_not_track' | 'orca_disabled' | 'ci' | 'user_opt_out'
-    }
-  | { effective: 'pending_banner' }
+//
+// The type itself lives in `shared/telemetry-consent-types.ts` so the
+// renderer can import it across the IPC boundary; this re-export keeps
+// existing call sites in main working without a rename.
+export type ConsentState = TelemetryConsentState
 
 // Precedence for the `disabled` branches is documented alongside
 // `resolveConsent` below.

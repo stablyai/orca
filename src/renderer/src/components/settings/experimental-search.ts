@@ -22,6 +22,23 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    title: 'Mobile Pairing',
+    description:
+      'Pair a mobile device to control Orca remotely. Experimental — requires the Orca mobile APK from GitHub Releases.',
+    keywords: [
+      'experimental',
+      'mobile',
+      'phone',
+      'pair',
+      'qr',
+      'code',
+      'scan',
+      'remote',
+      'android',
+      'apk'
+    ]
+  },
+  {
     title: 'Sidekick',
     description: 'Floating animated sidekick in the bottom-right corner.',
     keywords: [
@@ -51,6 +68,23 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'DAG',
       'worker',
       'coordinator'
+    ]
+  },
+  {
+    title: 'Symlinks on worktrees',
+    description:
+      'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.',
+    keywords: [
+      'experimental',
+      'worktree',
+      'worktrees',
+      'symlink',
+      'symlinks',
+      'link',
+      'links',
+      'shared',
+      'env',
+      'node_modules'
     ]
   }
 ]

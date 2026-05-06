@@ -4,7 +4,7 @@ import path from 'node:path'
 import { app, clipboard, ipcMain, nativeImage, session } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import type { CreateWorktreeResult } from '../../shared/types'
+import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
@@ -40,7 +40,8 @@ export function attachMainWindowServices(
     runtime,
     getSelectedCodexHomePath,
     () => store.getSettings(),
-    prepareClaudeAuth
+    prepareClaudeAuth,
+    store
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live
@@ -199,56 +200,45 @@ function registerRuntimeWindowLifecycle(
   runtime: OrcaRuntimeService
 ): void {
   runtime.attachWindow(mainWindow.id)
-  runtime.setNotifier({
-    worktreesChanged: (repoId) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('worktrees:changed', { repoId })
-      }
-    },
-    reposChanged: () => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('repos:changed')
-      }
-    },
-    activateWorktree: (repoId, worktreeId, setup?: CreateWorktreeResult['setup']) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:activateWorktree', { repoId, worktreeId, setup })
-      }
-    },
-    createTerminal: (worktreeId, opts) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:createTerminal', {
-          worktreeId,
-          command: opts.command,
-          title: opts.title
-        })
-      }
-    },
-    splitTerminal: (tabId, paneRuntimeId, opts) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:splitTerminal', {
-          tabId,
-          paneRuntimeId,
-          direction: opts.direction,
-          command: opts.command
-        })
-      }
-    },
-    renameTerminal: (tabId, title) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:renameTerminal', { tabId, title })
-      }
-    },
-    focusTerminal: (tabId, worktreeId) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:focusTerminal', { tabId, worktreeId })
-      }
-    },
-    closeTerminal: (tabId, paneRuntimeId) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:closeTerminal', { tabId, paneRuntimeId })
-      }
+  const send = (channel: string, ...args: unknown[]): void => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, ...args)
     }
+  }
+  runtime.setNotifier({
+    worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    reposChanged: () => send('repos:changed'),
+    activateWorktree: (
+      repoId,
+      worktreeId,
+      setup?: CreateWorktreeResult['setup'],
+      startup?: WorktreeStartupLaunch
+    ) => {
+      send('ui:activateWorktree', {
+        repoId,
+        worktreeId,
+        ...(setup ? { setup } : {}),
+        ...(startup ? { startup } : {})
+      })
+    },
+    createTerminal: (worktreeId, opts) =>
+      send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+    splitTerminal: (tabId, paneRuntimeId, opts) => {
+      send('ui:splitTerminal', {
+        tabId,
+        paneRuntimeId,
+        direction: opts.direction,
+        command: opts.command
+      })
+    },
+    renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
+    focusTerminal: (tabId, worktreeId) => send('ui:focusTerminal', { tabId, worktreeId }),
+    closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
+    sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
+    terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
+      send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
+    terminalDriverChanged: (ptyId, driver) =>
+      send('runtime:terminalDriverChanged', { ptyId, driver })
   })
   // Why: the runtime must fail closed while the renderer graph is being torn
   // down or rebuilt, otherwise future CLI calls could act on stale terminal

@@ -428,6 +428,10 @@ function unsubscribe(worktreePath: string, senderId: number): void {
 // ── Remote watcher state ─────────────────────────────────────────────
 // Key: `${connectionId}:${worktreePath}`, Value: unwatch function
 const remoteWatchers = new Map<string, () => void>()
+const loggedUnavailableRemoteWatchers = new Set<string>()
+const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout>>()
+const REMOTE_WATCH_RETRY_MS = 1_000
+const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
 function replaceRemoteWatcher(key: string, unwatch: () => void): void {
   const previous = remoteWatchers.get(key)
@@ -441,6 +445,75 @@ function replaceRemoteWatcher(key: string, unwatch: () => void): void {
   remoteWatchers.set(key, unwatch)
 }
 
+async function installRemoteWatcher(
+  sender: WebContents,
+  connectionId: string,
+  worktreePath: string
+): Promise<boolean> {
+  const provider = getSshFilesystemProvider(connectionId)
+  if (!provider || sender.isDestroyed()) {
+    return false
+  }
+
+  const key = `${connectionId}:${worktreePath}`
+  const unwatch = await provider.watch(worktreePath, (events) => {
+    if (!sender.isDestroyed()) {
+      sender.send('fs:changed', {
+        worktreePath,
+        events
+      } satisfies FsChangedPayload)
+    }
+  })
+  replaceRemoteWatcher(key, unwatch)
+  loggedUnavailableRemoteWatchers.delete(key)
+
+  sender.once('destroyed', () => {
+    const unwatchFn = remoteWatchers.get(key)
+    if (unwatchFn) {
+      unwatchFn()
+      remoteWatchers.delete(key)
+    }
+    const retryTimer = pendingRemoteWatcherRetries.get(key)
+    if (retryTimer) {
+      clearTimeout(retryTimer)
+      pendingRemoteWatcherRetries.delete(key)
+    }
+  })
+  return true
+}
+
+function scheduleRemoteWatcherRetry(
+  sender: WebContents,
+  connectionId: string,
+  worktreePath: string,
+  startedAt = Date.now()
+): void {
+  const key = `${connectionId}:${worktreePath}`
+  if (pendingRemoteWatcherRetries.has(key)) {
+    return
+  }
+
+  if (Date.now() - startedAt >= REMOTE_WATCH_RETRY_TIMEOUT_MS || sender.isDestroyed()) {
+    pendingRemoteWatcherRetries.delete(key)
+    loggedUnavailableRemoteWatchers.delete(key)
+    return
+  }
+
+  const retryTimer = setTimeout(() => {
+    pendingRemoteWatcherRetries.delete(key)
+    void installRemoteWatcher(sender, connectionId, worktreePath)
+      .then((installed) => {
+        if (!installed) {
+          scheduleRemoteWatcherRetry(sender, connectionId, worktreePath, startedAt)
+        }
+      })
+      .catch(() => {
+        scheduleRemoteWatcherRetry(sender, connectionId, worktreePath, startedAt)
+      })
+  }, REMOTE_WATCH_RETRY_MS)
+  pendingRemoteWatcherRetries.set(key, retryTimer)
+}
+
 // ── Public API ───────────────────────────────────────────────────────
 
 export function registerFilesystemWatcherHandlers(): void {
@@ -448,29 +521,22 @@ export function registerFilesystemWatcherHandlers(): void {
     'fs:watchWorktree',
     async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
         const key = `${args.connectionId}:${args.worktreePath}`
-
-        const unwatch = await provider.watch(args.worktreePath, (events) => {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('fs:changed', {
-              worktreePath: args.worktreePath,
-              events
-            } satisfies FsChangedPayload)
+        const installed = await installRemoteWatcher(
+          event.sender,
+          args.connectionId,
+          args.worktreePath
+        )
+        if (!installed) {
+          if (!loggedUnavailableRemoteWatchers.has(key)) {
+            loggedUnavailableRemoteWatchers.add(key)
+            console.warn(
+              `[filesystem-watcher] SSH filesystem provider unavailable; retrying watch for ${args.worktreePath} on connection ${args.connectionId}`
+            )
           }
-        })
-        replaceRemoteWatcher(key, unwatch)
-
-        event.sender.once('destroyed', () => {
-          const unwatchFn = remoteWatchers.get(key)
-          if (unwatchFn) {
-            unwatchFn()
-            remoteWatchers.delete(key)
-          }
-        })
+          scheduleRemoteWatcherRetry(event.sender, args.connectionId, args.worktreePath)
+          return
+        }
         return
       }
       await subscribe(args.worktreePath, event.sender)
@@ -482,6 +548,12 @@ export function registerFilesystemWatcherHandlers(): void {
     (_event, args: { worktreePath: string; connectionId?: string }): void => {
       if (args.connectionId) {
         const key = `${args.connectionId}:${args.worktreePath}`
+        const retryTimer = pendingRemoteWatcherRetries.get(key)
+        if (retryTimer) {
+          clearTimeout(retryTimer)
+          pendingRemoteWatcherRetries.delete(key)
+        }
+        loggedUnavailableRemoteWatchers.delete(key)
         const unwatchFn = remoteWatchers.get(key)
         if (unwatchFn) {
           unwatchFn()
@@ -502,6 +574,12 @@ export async function closeAllWatchers(): Promise<void> {
     clearTimeout(timer)
   }
   pendingTeardowns.clear()
+
+  for (const timer of pendingRemoteWatcherRetries.values()) {
+    clearTimeout(timer)
+  }
+  pendingRemoteWatcherRetries.clear()
+  loggedUnavailableRemoteWatchers.clear()
 
   for (const [rootKey, root] of watchedRoots) {
     if (root.batch.timer) {

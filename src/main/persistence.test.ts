@@ -72,12 +72,14 @@ describe('Store', () => {
     expect(settings.branchPrefix).toBe('git-username')
     expect(settings.refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(settings.theme).toBe('system')
+    expect(settings.appFontFamily).toBe('Geist')
     expect(settings.editorAutoSave).toBe(false)
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
     expect(settings.terminalFontSize).toBe(14)
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
+    expect(settings.notifications.customSoundPath).toBeNull()
   })
 
   it('returns default UI state when no data file exists', async () => {
@@ -146,8 +148,34 @@ describe('Store', () => {
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
+    expect(store.getSettings().notifications.customSoundPath).toBeNull()
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
+  })
+
+  it('preserves custom notification sound paths from persisted settings', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        notifications: {
+          customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg'
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().notifications).toMatchObject({
+      enabled: true,
+      agentTaskComplete: true,
+      terminalBell: false,
+      suppressWhenFocused: true,
+      customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg'
+    })
   })
 
   it('preserves editorAutoSaveDelayMs when set in persisted data', async () => {
@@ -310,12 +338,14 @@ describe('Store', () => {
       theme: 'dark',
       editorAutoSave: true,
       editorAutoSaveDelayMs: 1500,
+      appFontFamily: 'Inter',
       terminalFontSize: 16,
       terminalFontWeight: 600
     })
     expect(updated.theme).toBe('dark')
     expect(updated.editorAutoSave).toBe(true)
     expect(updated.editorAutoSaveDelayMs).toBe(1500)
+    expect(updated.appFontFamily).toBe('Inter')
     expect(updated.terminalFontSize).toBe(16)
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
@@ -790,8 +820,7 @@ describe('Store', () => {
         telemetry: {
           optedIn: true,
           installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          existedBeforeTelemetryRelease: false,
-          firstRunNoticeShown: true
+          existedBeforeTelemetryRelease: false
         }
       },
       ui: {},
@@ -802,8 +831,7 @@ describe('Store', () => {
     expect(store.getSettings().telemetry).toEqual({
       optedIn: true,
       installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      existedBeforeTelemetryRelease: false,
-      firstRunNoticeShown: true
+      existedBeforeTelemetryRelease: false
     })
   })
 })

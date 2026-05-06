@@ -210,13 +210,15 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 __orca_restore_attribution_path
-# Why: emit OSC 133;A only after the user's startup hooks finish so Orca knows
-# the prompt is actually ready for a long startup command paste.
+# Why: zsh precmd runs before the prompt is drawn and before zle owns input,
+# which can double-echo startup commands. line-init fires when zle is ready.
 if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   __orca_prompt_mark() {
     printf "\\033]133;A\\007"
   }
-  precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+  autoload -Uz add-zle-hook-widget
+  zle -N __orca_prompt_mark
+  add-zle-hook-widget line-init __orca_prompt_mark
 fi
 `
   const bashRc = getBashShellReadyRcfileContent()

@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
@@ -13,11 +14,18 @@ import type { SshConnectionState } from '../../../shared/ssh-types'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
-import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
+import {
+  handleSwitchTab,
+  handleSwitchTabAcrossAllTypes,
+  handleSwitchTerminalTab
+} from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
+import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
+import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -129,7 +137,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onOpenNewWorkspace((tab) => {
+      window.api.ui.onOpenNewWorkspace(() => {
         // Why: mirror the renderer's App.tsx Cmd+N guard — only open the
         // composer when there is at least one real git repo configured, so
         // users on a fresh install don't get a modal with nothing to target.
@@ -138,15 +146,10 @@ export function useIpcEvents(): void {
           return
         }
         dispatchClearModifierHints()
-        // Why: if the composer is already open, switch tabs in place so
-        // repeated Cmd+N / Cmd+Shift+N presses toggle between Quick and
-        // Create-from without remounting and losing in-flight composer state
-        // (repo pick, note drafts). Opening when closed seeds the initial tab.
         if (store.activeModal === 'new-workspace-composer') {
-          store.setNewWorkspaceComposerTab(tab)
           return
         }
-        store.openModal('new-workspace-composer', { initialTab: tab })
+        store.openModal('new-workspace-composer', { telemetrySource: 'shortcut' })
       })
     )
 
@@ -191,7 +194,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup }) => {
+      window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup }) => {
         void (async () => {
           // Why: fetch worktrees first so the activation helper can resolve
           // the CLI-created worktree via findWorktreeById — it arrived from
@@ -202,7 +205,7 @@ export function useIpcEvents(): void {
           // ones. This records the visit in the back/forward history stack
           // (recordWorktreeVisit), without which the nav buttons would
           // ignore the CLI-driven workspace switch.
-          activateAndRevealWorktree(worktreeId, { setup })
+          activateAndRevealWorktree(worktreeId, { setup, startup })
         })().catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
@@ -313,6 +316,12 @@ export function useIpcEvents(): void {
         } else {
           useAppStore.getState().closeTab(tabId)
         }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onSleepWorktree(({ worktreeId }) => {
+        void runSleepWorktree(worktreeId)
       })
     )
 
@@ -429,7 +438,8 @@ export function useIpcEvents(): void {
 
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
-            targetGroupId: activeBrowserUnifiedTab?.groupId
+            targetGroupId: activeBrowserUnifiedTab?.groupId,
+            sessionProfileId: data.sessionProfileId
           })
           // Why: registerGuest fires with the page ID (not workspace ID) as
           // browserPageId. Return the page ID so waitForTabRegistration can
@@ -441,6 +451,38 @@ export function useIpcEvents(): void {
           window.api.ui.replyTabCreate({
             requestId: data.requestId,
             error: err instanceof Error ? err.message : 'Tab creation failed'
+          })
+        }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onRequestTabSetProfile((data) => {
+        try {
+          const store = useAppStore.getState()
+          const owningWorkspace = Object.values(store.browserTabsByWorktree)
+            .flat()
+            .find((workspace) => {
+              if (workspace.id === data.browserPageId) {
+                return true
+              }
+              const pages = store.browserPagesByWorkspace[workspace.id] ?? []
+              return pages.some((page) => page.id === data.browserPageId)
+            })
+          if (!owningWorkspace) {
+            window.api.ui.replyTabSetProfile({
+              requestId: data.requestId,
+              error: `Browser tab ${data.browserPageId} not found`
+            })
+            return
+          }
+          destroyPersistentWebview(data.browserPageId)
+          store.switchBrowserTabProfile(owningWorkspace.id, data.profileId)
+          window.api.ui.replyTabSetProfile({ requestId: data.requestId })
+        } catch (err) {
+          window.api.ui.replyTabSetProfile({
+            requestId: data.requestId,
+            error: err instanceof Error ? err.message : 'Tab profile update failed'
           })
         }
       })
@@ -549,6 +591,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
+    unsubs.push(window.api.ui.onSwitchTabAcrossAllTypes(handleSwitchTabAcrossAllTypes))
     unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
 
     // Hydrate initial rate limit state then subscribe to push updates
@@ -804,6 +847,28 @@ export function useIpcEvents(): void {
           return
         }
         store.setAgentStatus(data.paneKey, payload, title)
+      })
+    )
+
+    // Why: hydrate mobile-fit overrides before terminal panes run their first
+    // attach/fit logic, so a renderer reload doesn't undo active mobile fits.
+    void window.api.runtime.getTerminalFitOverrides().then((overrides) => {
+      hydrateOverrides(overrides)
+    })
+
+    unsubs.push(
+      window.api.runtime.onTerminalFitOverrideChanged((event) => {
+        setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
+      })
+    )
+
+    unsubs.push(
+      // Why: presence-lock driver state mirror. Updates the renderer's
+      // mobile-driver-state map so TerminalPane / pty-connection guards
+      // know which PTYs are currently driven by mobile. See
+      // docs/mobile-presence-lock.md.
+      window.api.runtime.onTerminalDriverChanged((event) => {
+        setDriverForPty(event.ptyId, event.driver)
       })
     )
 

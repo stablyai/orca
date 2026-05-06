@@ -123,6 +123,17 @@ export function registerShellHandlers(): void {
     return result.filePaths[0]
   })
 
+  ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    return result.filePaths[0]
+  })
+
   // Why: copying a picked image next to the markdown file lets us insert a
   // relative path (e.g. `![](image.png)`) instead of embedding base64,
   // keeping markdown files small and portable.

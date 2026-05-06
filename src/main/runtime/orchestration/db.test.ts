@@ -1,4 +1,8 @@
 /* eslint-disable max-lines -- Why: DB tests cover messages, tasks, dispatch contexts, decision gates, coordinator runs, and lifecycle in one suite to share the createDb() helper and afterEach cleanup. */
+import Database from 'better-sqlite3'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
@@ -196,6 +200,36 @@ describe('OrchestrationDb', () => {
       d.createTask({ spec: 'one' })
       d.createTask({ spec: 'two' })
       expect(d.listTasks()).toHaveLength(2)
+    })
+
+    it('listTasksWithDispatch joins active dispatch metadata', () => {
+      const d = createDb()
+      const ready = d.createTask({ spec: 'ready task' })
+      const dispatched = d.createTask({ spec: 'active task' })
+      const ctx = d.createDispatchContext(dispatched.id, 'term_worker')
+
+      const rows = d.listTasksWithDispatch()
+      const readyRow = rows.find((r) => r.id === ready.id)
+      const dispatchedRow = rows.find((r) => r.id === dispatched.id)
+
+      expect(readyRow?.assignee_handle).toBeNull()
+      expect(readyRow?.dispatch_id).toBeNull()
+      expect(dispatchedRow?.assignee_handle).toBe('term_worker')
+      expect(dispatchedRow?.dispatch_id).toBe(ctx.id)
+    })
+
+    it('listTasksWithDispatch does not surface completed dispatches', () => {
+      const d = createDb()
+      const task = d.createTask({ spec: 'work' })
+      d.createDispatchContext(task.id, 'term_worker')
+      d.updateTaskStatus(task.id, 'completed')
+
+      const rows = d.listTasksWithDispatch()
+      const row = rows.find((r) => r.id === task.id)
+      // Task is completed — its dispatch is terminal and should not appear as
+      // an "active" assignee.
+      expect(row?.assignee_handle).toBeNull()
+      expect(row?.dispatch_id).toBeNull()
     })
 
     it('supports parent_id for task decomposition', () => {
@@ -452,6 +486,280 @@ describe('OrchestrationDb', () => {
 
       expect(d.getInbox()).toHaveLength(1)
       expect(d.listTasks()).toHaveLength(0)
+    })
+  })
+
+  describe('heartbeat + thread helpers (fresh schema)', () => {
+    it('insertMessage accepts type = heartbeat', () => {
+      const d = createDb()
+      const msg = d.insertMessage({
+        from: 'worker',
+        to: 'coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ taskId: 'task_x', dispatchId: 'ctx_x' })
+      })
+      expect(msg.type).toBe('heartbeat')
+    })
+
+    it('recordHeartbeat updates last_heartbeat_at on dispatched rows', () => {
+      const d = createDb()
+      const task = d.createTask({ spec: 'work' })
+      const ctx = d.createDispatchContext(task.id, 'term_a')
+
+      d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
+      const after = d.getDispatchContext(task.id)
+      expect(after?.last_heartbeat_at).toBe('2026-05-04T00:00:00.000Z')
+    })
+
+    it('recordHeartbeat is a no-op for completed rows (straggler ignored)', () => {
+      const d = createDb()
+      const task = d.createTask({ spec: 'work' })
+      const ctx = d.createDispatchContext(task.id, 'term_a')
+      d.completeDispatch(ctx.id)
+
+      d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
+      const after = d.getDispatchContext(task.id)
+      expect(after?.last_heartbeat_at).toBeNull()
+    })
+
+    it('getStaleDispatches returns only dispatched rows past the grace window', () => {
+      const d = createDb()
+      // Fixture: four rows, SQL-backdated timestamps (no fake clock):
+      //  (a) dispatched, heartbeated 5 min ago → not stale
+      //  (b) dispatched, heartbeated 12 min ago → STALE (expected result)
+      //  (c) dispatched, never heartbeated, dispatched 30s ago → not stale (grace)
+      //  (d) completed, heartbeated 30 min ago → not stale (status filter)
+      const taskA = d.createTask({ spec: 'a' })
+      const taskB = d.createTask({ spec: 'b' })
+      const taskC = d.createTask({ spec: 'c' })
+      const taskD = d.createTask({ spec: 'd' })
+      const ctxA = d.createDispatchContext(taskA.id, 'term_a')
+      const ctxB = d.createDispatchContext(taskB.id, 'term_b')
+      const ctxC = d.createDispatchContext(taskC.id, 'term_c')
+      const ctxD = d.createDispatchContext(taskD.id, 'term_d')
+      d.completeDispatch(ctxD.id)
+
+      const now = Date.now()
+      const iso = (ms: number) => new Date(now - ms).toISOString()
+
+      // Backdate dispatched_at for a, b, d to long ago so the grace doesn't
+      // shield them. c keeps its default (≈now).
+      const sqlite = (d as unknown as { db: Database.Database }).db
+      sqlite
+        .prepare(
+          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
+        )
+        .run(iso(60 * 60 * 1000), iso(5 * 60 * 1000), ctxA.id)
+      sqlite
+        .prepare(
+          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
+        )
+        .run(iso(60 * 60 * 1000), iso(12 * 60 * 1000), ctxB.id)
+      sqlite
+        .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
+        .run(iso(30_000), ctxC.id)
+      sqlite
+        .prepare(
+          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
+        )
+        .run(iso(60 * 60 * 1000), iso(30 * 60 * 1000), ctxD.id)
+
+      const stale = d.getStaleDispatches(iso(10 * 60 * 1000))
+      expect(stale.map((s) => s.id)).toEqual([ctxB.id])
+    })
+
+    it('getThreadMessagesFor returns only same-thread replies to a handle', () => {
+      const d = createDb()
+      const outbound = d.insertMessage({
+        from: 'worker',
+        to: 'coord',
+        subject: 'Question',
+        type: 'decision_gate',
+        body: 'yes or no?'
+      })
+      // Reply in the same thread addressed to the worker
+      const reply = d.insertMessage({
+        from: 'coord',
+        to: 'worker',
+        subject: 'Re: Question',
+        body: 'yes',
+        threadId: outbound.id
+      })
+      // Distractor: different thread, same recipient
+      d.insertMessage({
+        from: 'coord',
+        to: 'worker',
+        subject: 'other',
+        body: 'unrelated',
+        threadId: 'thread_other'
+      })
+      // Distractor: same thread but not addressed to worker
+      d.insertMessage({
+        from: 'coord',
+        to: 'someone_else',
+        subject: 'cc',
+        body: 'not yours',
+        threadId: outbound.id
+      })
+
+      const replies = d.getThreadMessagesFor(outbound.id, 'worker', outbound.sequence)
+      expect(replies).toHaveLength(1)
+      expect(replies[0].id).toBe(reply.id)
+    })
+  })
+
+  describe('schema migration from v1 → v2', () => {
+    let dbPath: string
+    let tempDir: string
+
+    afterEach(() => {
+      if (tempDir) {
+        rmSync(tempDir, { recursive: true, force: true })
+      }
+    })
+
+    function createV1Snapshot(): string {
+      tempDir = mkdtempSync(join(tmpdir(), 'orca-db-migrate-'))
+      dbPath = join(tempDir, 'test.db')
+      const raw = new Database(dbPath)
+      // v1 schema: pre-heartbeat CHECK, no last_heartbeat_at column.
+      raw.exec(`
+        CREATE TABLE messages (
+          id            TEXT NOT NULL,
+          from_handle   TEXT NOT NULL,
+          to_handle     TEXT NOT NULL,
+          subject       TEXT NOT NULL,
+          body          TEXT NOT NULL DEFAULT '',
+          type          TEXT NOT NULL DEFAULT 'status'
+            CHECK(type IN (
+              'status', 'dispatch', 'worker_done', 'merge_ready',
+              'escalation', 'handoff', 'decision_gate'
+            )),
+          priority      TEXT NOT NULL DEFAULT 'normal'
+            CHECK(priority IN ('normal', 'high', 'urgent')),
+          thread_id     TEXT,
+          payload       TEXT,
+          read          INTEGER NOT NULL DEFAULT 0,
+          sequence      INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE UNIQUE INDEX idx_messages_id ON messages(id);
+        CREATE INDEX idx_inbox ON messages(to_handle, read);
+        CREATE INDEX idx_thread ON messages(thread_id);
+
+        CREATE TABLE tasks (
+          id TEXT PRIMARY KEY, parent_id TEXT, spec TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','ready','dispatched','completed','failed','blocked')),
+          deps TEXT NOT NULL DEFAULT '[]', result TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          completed_at TEXT
+        );
+
+        CREATE TABLE dispatch_contexts (
+          id TEXT PRIMARY KEY, task_id TEXT NOT NULL, assignee_handle TEXT,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','dispatched','completed','failed','circuit_broken')),
+          failure_count INTEGER NOT NULL DEFAULT 0, last_failure TEXT,
+          dispatched_at TEXT, completed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE decision_gates (
+          id TEXT PRIMARY KEY, task_id TEXT NOT NULL, question TEXT NOT NULL,
+          options TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','resolved','timeout')),
+          resolution TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          resolved_at TEXT
+        );
+
+        CREATE TABLE coordinator_runs (
+          id TEXT PRIMARY KEY, spec TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle'
+            CHECK(status IN ('idle','running','completed','failed')),
+          coordinator_handle TEXT NOT NULL,
+          poll_interval_ms INTEGER NOT NULL DEFAULT 2000,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          completed_at TEXT
+        );
+      `)
+      // Seed a pre-existing v1 message so migration must preserve data.
+      raw
+        .prepare(
+          `INSERT INTO messages (id, from_handle, to_handle, subject, type) VALUES ('msg_v1', 'a', 'b', 'pre-migration', 'status')`
+        )
+        .run()
+      raw.pragma('user_version = 0')
+      raw.close()
+      return dbPath
+    }
+
+    it('migrates a v1 snapshot to v2, accepts heartbeat, preserves indexes', () => {
+      const path = createV1Snapshot()
+      const d = new OrchestrationDb(path)
+      db = d
+
+      // (a) INSERT type='heartbeat' now succeeds
+      expect(() =>
+        d.insertMessage({
+          from: 'w',
+          to: 'c',
+          subject: 'alive',
+          type: 'heartbeat',
+          payload: '{"taskId":"t","dispatchId":"ctx"}'
+        })
+      ).not.toThrow()
+
+      // (b) last_heartbeat_at column exists on dispatch_contexts
+      const task = d.createTask({ spec: 'work' })
+      const ctx = d.createDispatchContext(task.id, 'term_a')
+      d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
+      expect(d.getDispatchContext(task.id)?.last_heartbeat_at).toBe('2026-05-04T00:00:00.000Z')
+
+      // (c) Indexes still attached to messages post-rebuild.
+      const sqlite = (d as unknown as { db: Database.Database }).db
+      const indexes = sqlite
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages' AND name NOT LIKE 'sqlite_%'`
+        )
+        .all() as { name: string }[]
+      const names = new Set(indexes.map((r) => r.name))
+      expect(names.has('idx_messages_id')).toBe(true)
+      expect(names.has('idx_inbox')).toBe(true)
+      expect(names.has('idx_thread')).toBe(true)
+
+      // v1 data preserved
+      expect(d.getMessageById('msg_v1')?.subject).toBe('pre-migration')
+    })
+
+    it('is idempotent: opening an already-migrated DB is a no-op', () => {
+      const path = createV1Snapshot()
+      const first = new OrchestrationDb(path)
+      first.insertMessage({
+        from: 'w',
+        to: 'c',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: '{}'
+      })
+      first.close()
+
+      const second = new OrchestrationDb(path)
+      db = second
+      expect(() =>
+        second.insertMessage({
+          from: 'w',
+          to: 'c',
+          subject: 'again',
+          type: 'heartbeat',
+          payload: '{}'
+        })
+      ).not.toThrow()
+      const inbox = second.getInbox(10)
+      expect(inbox.length).toBeGreaterThanOrEqual(2)
     })
   })
 })

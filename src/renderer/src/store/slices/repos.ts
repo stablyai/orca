@@ -23,6 +23,7 @@ export type RepoSlice = {
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'kind'
+        | 'symlinkPaths'
         | 'issueSourcePreference'
       >
     >

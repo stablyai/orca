@@ -122,8 +122,21 @@ describe('SshPtyProvider', () => {
   })
 
   it('shutdown sends pty.shutdown request', async () => {
-    await provider.shutdown('pty-1', true)
-    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', { id: 'pty-1', immediate: true })
+    await provider.shutdown('pty-1', { immediate: true })
+    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
+      id: 'pty-1',
+      immediate: true,
+      keepHistory: false
+    })
+  })
+
+  it('shutdown forwards keepHistory: true over the relay', async () => {
+    await provider.shutdown('pty-1', { immediate: true, keepHistory: true })
+    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
+      id: 'pty-1',
+      immediate: true,
+      keepHistory: true
+    })
   })
 
   it('sendSignal sends pty.sendSignal request', async () => {

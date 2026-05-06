@@ -7,7 +7,7 @@ export async function getCliStatus(
   userDataPath: string
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
   const metadata = tryReadMetadata(userDataPath)
-  if (!metadata?.transport || !metadata.authToken) {
+  if (!metadata?.transports?.length || !metadata.authToken) {
     return buildCliStatusResponse({
       app: {
         running: false,

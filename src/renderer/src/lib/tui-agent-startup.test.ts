@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan, isShellProcess } from './tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  isShellProcess
+} from './tui-agent-startup'
 
 describe('buildAgentStartupPlan', () => {
   it('passes Claude prompts as a positional interactive argument', () => {
@@ -11,6 +15,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'claude',
       launchCommand: "claude 'Fix the bug'",
       expectedProcess: 'claude',
       followupPrompt: null
@@ -26,6 +31,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })
     ).toEqual({
+      agent: 'gemini',
       launchCommand: "gemini --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'gemini',
       followupPrompt: null
@@ -41,9 +47,26 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })
     ).toEqual({
+      agent: 'aider',
       launchCommand: 'aider',
       expectedProcess: 'aider',
       followupPrompt: 'Refactor the parser'
+    })
+  })
+
+  it('launches Autohand Code first and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'autohand',
+        prompt: 'Add tests for the parser',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'autohand',
+      launchCommand: 'autohand',
+      expectedProcess: 'autohand',
+      followupPrompt: 'Add tests for the parser'
     })
   })
 
@@ -56,6 +79,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'cursor',
       launchCommand: "cursor-agent 'Review this file'",
       expectedProcess: 'cursor-agent',
       followupPrompt: null
@@ -71,6 +95,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })
     ).toEqual({
+      agent: 'droid',
       launchCommand: "/opt/factory/bin/droid 'Ship the fix'",
       expectedProcess: 'droid',
       followupPrompt: null
@@ -86,6 +111,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
       followupPrompt: null
@@ -112,9 +138,85 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
       followupPrompt: null
+    })
+  })
+})
+
+describe('buildAgentDraftLaunchPlan', () => {
+  it('uses Claude --prefill to seed the input box without submitting', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'claude',
+        draft: 'https://github.com/acme/repo/issues/42',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'claude',
+      launchCommand: "claude --prefill 'https://github.com/acme/repo/issues/42'",
+      expectedProcess: 'claude'
+    })
+  })
+
+  it('returns null for agents without a documented prefill flag', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'codex',
+        draft: 'https://github.com/acme/repo/issues/42',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('uses ORCA_PI_PREFILL env var for pi (no CLI flag exists)', () => {
+    // Why: pi has no `--prefill` flag, and bracketed-paste-after-ready races
+    // against pi's lengthy startup output. The Orca overlay installs an
+    // `orca-prefill` extension that reads ORCA_PI_PREFILL on session_start
+    // and seeds the editor. Plan plumbs the env var without polluting the
+    // shell command (no `FOO='...' pi` prefix typed into the terminal).
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'pi',
+        draft: 'https://github.com/acme/repo/issues/42',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'pi',
+      launchCommand: 'pi',
+      expectedProcess: 'pi',
+      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' }
+    })
+  })
+
+  it('returns null for an empty draft so callers fall back cleanly', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'claude',
+        draft: '   ',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('honors cmdOverrides so custom Claude install paths still prefill', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'claude',
+        draft: 'review this',
+        cmdOverrides: { claude: '/opt/anthropic/bin/claude' },
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'claude',
+      launchCommand: "/opt/anthropic/bin/claude --prefill 'review this'",
+      expectedProcess: 'claude'
     })
   })
 })

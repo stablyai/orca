@@ -1,5 +1,5 @@
 import React from 'react'
-import { Check, Trash2, Upload } from 'lucide-react'
+import { Check, PackageOpen, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ import {
   findBundledSidekick,
   isBundledSidekickId
 } from '../sidekick/sidekick-models'
+import { SIDEKICK_SIZE_MAX, SIDEKICK_SIZE_MIN } from '../../../../shared/types'
 
 // Why: cluster sidekick-related controls (show/hide, character picker, custom
 // upload + removal, jump-to-settings) behind a single status-bar segment. Only
@@ -34,6 +35,8 @@ function SidekickStatusSegmentInner(): React.JSX.Element {
   const customSidekicks = useAppStore((s) => s.customSidekicks)
   const addCustomSidekick = useAppStore((s) => s.addCustomSidekick)
   const removeCustomSidekick = useAppStore((s) => s.removeCustomSidekick)
+  const sidekickSize = useAppStore((s) => s.sidekickSize)
+  const setSidekickSize = useAppStore((s) => s.setSidekickSize)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
@@ -67,6 +70,27 @@ function SidekickStatusSegmentInner(): React.JSX.Element {
     }
   }
 
+  const handleImportPetBundle = async (): Promise<void> => {
+    if (!window.api?.sidekick?.importPetBundle) {
+      toast.error('Pet bundle import needs a full app restart (not just reload).')
+      return
+    }
+    try {
+      const model = await window.api.sidekick.importPetBundle()
+      if (!model) {
+        return
+      }
+      addCustomSidekick(model)
+      if (!sidekickVisible) {
+        setSidekickVisible(true)
+      }
+      setSidekickId(model.id)
+    } catch (error) {
+      console.error('[sidekick-overlay] pet bundle: error', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to import pet bundle')
+    }
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -92,6 +116,31 @@ function SidekickStatusSegmentInner(): React.JSX.Element {
         >
           {sidekickVisible ? 'Hide sidekick' : 'Show sidekick'}
         </DropdownMenuItem>
+        {/* Why: in-menu range so users can resize the overlay without leaving
+            the dropdown — pet sprites can import larger than the default 180px
+            box and visually overwhelm the viewport. preventDefault on pointer
+            events stops Radix from closing the menu while the user drags. */}
+        <div
+          className="px-2 py-1.5"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Size</span>
+            <span className="tabular-nums">{sidekickSize}px</span>
+          </div>
+          <input
+            type="range"
+            min={SIDEKICK_SIZE_MIN}
+            max={SIDEKICK_SIZE_MAX}
+            step={10}
+            value={sidekickSize}
+            onChange={(e) => setSidekickSize(Number(e.target.value))}
+            className="w-full"
+            aria-label="Sidekick size"
+          />
+        </div>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>Choose sidekick</DropdownMenuSubTrigger>
           {/* Why: portal so the submenu escapes the parent Content's overflow
@@ -164,6 +213,14 @@ function SidekickStatusSegmentInner(): React.JSX.Element {
               >
                 <Upload className="size-3.5" aria-hidden />
                 Upload your own…
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleImportPetBundle()
+                }}
+              >
+                <PackageOpen className="size-3.5" aria-hidden />
+                Import .codex-pet bundle…
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuPortal>

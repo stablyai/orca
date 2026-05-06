@@ -28,20 +28,27 @@ const WorktreeCreate = z.object({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing repo selector')),
-  name: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree name')),
+  name: OptionalString,
   baseBranch: OptionalString,
   linkedIssue: TriStateLinkedIssue,
   comment: OptionalString,
-  runHooks: OptionalBoolean
+  runHooks: OptionalBoolean,
+  setupDecision: z
+    .unknown()
+    .transform((v) =>
+      typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
+    )
+    .pipe(z.enum(['run', 'skip', 'inherit']).optional()),
+  // Why: mobile clients pass a startup command (e.g. 'claude') so the first
+  // terminal pane launches the selected agent instead of an idle shell.
+  startupCommand: OptionalString
 })
 
 const WorktreeSet = WorktreeSelector.extend({
   displayName: OptionalString,
   linkedIssue: TriStateLinkedIssue,
-  comment: OptionalString
+  comment: OptionalString,
+  isPinned: OptionalBoolean
 })
 
 const WorktreeRemove = WorktreeSelector.extend({
@@ -68,16 +75,28 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     })
   }),
   defineMethod({
+    name: 'worktree.sleep',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.sleepManagedWorktree(params.worktree)
+  }),
+  defineMethod({
+    name: 'worktree.activate',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.activateManagedWorktree(params.worktree)
+  }),
+  defineMethod({
     name: 'worktree.create',
     params: WorktreeCreate,
     handler: async (params, { runtime }) =>
       runtime.createManagedWorktree({
         repoSelector: params.repo,
-        name: params.name,
+        name: params.name ?? '',
         baseBranch: params.baseBranch,
         linkedIssue: params.linkedIssue,
         comment: params.comment,
-        runHooks: params.runHooks === true
+        runHooks: params.runHooks === true,
+        setupDecision: params.setupDecision,
+        startup: params.startupCommand ? { command: params.startupCommand } : undefined
       })
   }),
   defineMethod({
@@ -87,7 +106,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
         linkedIssue: params.linkedIssue,
-        comment: params.comment
+        comment: params.comment,
+        isPinned: params.isPinned
       })
     })
   }),

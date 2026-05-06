@@ -11,15 +11,17 @@ import {
   Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { SparsePreset, TuiAgent } from '../../../shared/types'
+import type { GitHubWorkItem, LinearIssue, SparsePreset, TuiAgent } from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
+import SmartWorkspaceNameField, {
+  type SmartWorkspaceNameSelection
+} from '@/components/new-workspace/SmartWorkspaceNameField'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -35,7 +37,12 @@ type NewWorkspaceComposerCardProps = {
   repoId: string
   onRepoChange: (value: string) => void
   name: string
-  onNameChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onNameValueChange: (value: string) => void
+  onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
+  onSmartBranchSelect: (refName: string) => void
+  onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  smartNameSelection: SmartWorkspaceNameSelection | null
+  onClearSmartNameSelection: () => void
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: () => void
   advancedOpen: boolean
@@ -175,7 +182,12 @@ export default function NewWorkspaceComposerCard({
   repoId,
   onRepoChange,
   name,
-  onNameChange,
+  onNameValueChange,
+  onSmartGitHubItemSelect,
+  onSmartBranchSelect,
+  onSmartLinearIssueSelect,
+  smartNameSelection,
+  onClearSmartNameSelection,
   detectedAgentIds,
   onOpenAgentSettings,
   advancedOpen,
@@ -240,12 +252,12 @@ export default function NewWorkspaceComposerCard({
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
       className={cn(
-        'grid gap-1 rounded-md transition',
+        'grid min-w-0 gap-1 rounded-md transition',
         isFileDragOver && 'ring-2 ring-ring/30',
         containerClassName
       )}
     >
-      <div className="space-y-4 pt-3">
+      <div className="min-w-0 space-y-4 pt-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">Repository</label>
@@ -284,30 +296,33 @@ export default function NewWorkspaceComposerCard({
           />
         </div>
 
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            Workspace Name <span className="text-muted-foreground/70">[Optional]</span>
+            Name or &apos;Create From&apos;{' '}
+            <span className="text-muted-foreground/70">[Optional]</span>
           </label>
-          <Input
-            ref={nameInputRef}
+          <SmartWorkspaceNameField
+            inputRef={nameInputRef}
+            repos={eligibleRepos}
+            repoId={repoId}
+            onRepoChange={onRepoChange}
             value={name}
-            onChange={onNameChange}
-            onKeyDown={(event) => {
+            onValueChange={onNameValueChange}
+            onGitHubItemSelect={onSmartGitHubItemSelect}
+            onBranchSelect={onSmartBranchSelect}
+            onLinearIssueSelect={onSmartLinearIssueSelect}
+            selectedSource={smartNameSelection}
+            onClearSelectedSource={onClearSmartNameSelection}
+            onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
               // progress through the form with just the keyboard.
-              if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey) {
-                return
-              }
-              event.preventDefault()
               const root = composerRef?.current
               const agentTrigger = root?.querySelector<HTMLElement>(
                 '[data-agent-combobox-root="true"][role="combobox"]'
               )
               agentTrigger?.focus()
             }}
-            placeholder="Workspace name"
-            className="h-9 text-sm"
           />
         </div>
 
@@ -348,6 +363,21 @@ export default function NewWorkspaceComposerCard({
           />
         </div>
 
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onToggleAdvanced}
+            className="-ml-2 text-xs"
+          >
+            Advanced
+            <ChevronDown
+              className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
+            />
+          </Button>
+        </div>
+
         <div
           className={cn(
             'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
@@ -368,6 +398,25 @@ export default function NewWorkspaceComposerCard({
                   : '-translate-y-1 opacity-0 delay-0'
               )}
             >
+              {smartNameSelection ? (
+                // Why: when a source (PR/issue/Linear/branch) is picked the
+                // smart field shows a pill instead of an editable name, so
+                // surface the auto-derived workspace name here under Advanced
+                // where it can be reviewed/overridden. When the user typed an
+                // explicit name there's no source pill — the smart input is
+                // already the name field, so we don't duplicate it here.
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(event) => onNameValueChange(event.target.value)}
+                    placeholder="Workspace name"
+                    className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  />
+                </div>
+              ) : null}
+
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Note</label>
                 <textarea
@@ -495,21 +544,6 @@ export default function NewWorkspaceComposerCard({
           {createError}
         </div>
       ) : null}
-
-      <div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onToggleAdvanced}
-          className="-ml-2 text-xs"
-        >
-          Advanced
-          <ChevronDown
-            className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
-          />
-        </Button>
-      </div>
 
       <div className="flex justify-end">
         <Button

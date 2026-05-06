@@ -79,12 +79,15 @@ export default function ChecksPanel(): React.JSX.Element {
     ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
     : 'unknown'
 
-  // Fetch PR data when the active worktree/branch changes
+  // Fetch PR data when the active worktree/branch changes.
+  // Why: pass linkedPR so worktrees created from a PR (whose new local branch
+  // differs from the PR's head ref) resolve via the number-based fallback.
+  const linkedPR = activeWorktree?.linkedPR ?? null
   useEffect(() => {
     if (repo && !isFolder && branch) {
-      void fetchPRForBranch(repo.path, branch)
+      void fetchPRForBranch(repo.path, branch, { linkedPRNumber: linkedPR })
     }
-  }, [repo, isFolder, branch, fetchPRForBranch])
+  }, [repo, isFolder, branch, linkedPR, fetchPRForBranch])
 
   useEffect(() => {
     if (!repo || isFolder || !branch || !pr || pr.mergeable !== 'CONFLICTING') {
@@ -102,8 +105,8 @@ export default function ChecksPanel(): React.JSX.Element {
     // them so we don't keep rendering cached branch summaries or empty file
     // lists from an older payload.
     conflictSummaryRefreshKeyRef.current = refreshKey
-    void fetchPRForBranch(repo.path, branch, { force: true })
-  }, [repo, isFolder, branch, pr, fetchPRForBranch])
+    void fetchPRForBranch(repo.path, branch, { force: true, linkedPRNumber: linkedPR })
+  }, [repo, isFolder, branch, pr, linkedPR, fetchPRForBranch])
 
   // Fetch checks via cached store method
   const fetchChecks = useCallback(
@@ -232,7 +235,10 @@ export default function ChecksPanel(): React.JSX.Element {
     }
     setIsRefreshing(true)
     try {
-      const refreshedPR = await fetchPRForBranch(repo.path, branch, { force: true })
+      const refreshedPR = await fetchPRForBranch(repo.path, branch, {
+        force: true,
+        linkedPRNumber: linkedPR
+      })
       if (refreshedPR) {
         await Promise.all([
           fetchChecks({ force: true, prNumberOverride: refreshedPR.number }),
@@ -245,7 +251,7 @@ export default function ChecksPanel(): React.JSX.Element {
     } finally {
       setIsRefreshing(false)
     }
-  }, [repo, branch, fetchPRForBranch, fetchChecks, fetchComments])
+  }, [repo, branch, linkedPR, fetchPRForBranch, fetchChecks, fetchComments])
 
   const handleStartEdit = useCallback(() => {
     if (!pr) {
@@ -275,13 +281,13 @@ export default function ChecksPanel(): React.JSX.Element {
       })
       if (ok) {
         // Re-fetch PR to get updated title
-        await fetchPRForBranch(repo.path, branch, { force: true })
+        await fetchPRForBranch(repo.path, branch, { force: true, linkedPRNumber: linkedPR })
       }
     } finally {
       setTitleSaving(false)
       setEditingTitle(false)
     }
-  }, [repo, pr, titleDraft, branch, fetchPRForBranch])
+  }, [repo, pr, titleDraft, branch, linkedPR, fetchPRForBranch])
 
   const handleTitleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -315,9 +321,9 @@ export default function ChecksPanel(): React.JSX.Element {
   // Refresh PR (passed to PRActions)
   const handleRefreshPR = useCallback(async () => {
     if (repo && branch) {
-      await fetchPRForBranch(repo.path, branch, { force: true })
+      await fetchPRForBranch(repo.path, branch, { force: true, linkedPRNumber: linkedPR })
     }
-  }, [repo, branch, fetchPRForBranch])
+  }, [repo, branch, linkedPR, fetchPRForBranch])
 
   // Open PR in browser
   const handleOpenPR = useCallback(() => {

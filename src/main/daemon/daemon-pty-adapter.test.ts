@@ -129,7 +129,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   describe('shutdown', () => {
     it('kills the session', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-      await adapter.shutdown(id, false)
+      await adapter.shutdown(id, { immediate: false })
       expect(lastSubprocess.kill).toHaveBeenCalled()
     })
   })
@@ -312,7 +312,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('prevents spawn after shutdown for same sessionId', async () => {
       const sessionId = 'tombstone-test'
       await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      await adapter.shutdown(sessionId, true)
+      await adapter.shutdown(sessionId, { immediate: true })
 
       await expect(adapter.spawn({ cols: 80, rows: 24, sessionId })).rejects.toThrow(
         'was explicitly killed'
@@ -321,7 +321,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('allows spawn for different sessionId after shutdown', async () => {
       await adapter.spawn({ cols: 80, rows: 24, sessionId: 'kill-me' })
-      await adapter.shutdown('kill-me', true)
+      await adapter.shutdown('kill-me', { immediate: true })
 
       const result = await adapter.spawn({ cols: 80, rows: 24, sessionId: 'fresh-one' })
       expect(result.id).toBe('fresh-one')
@@ -330,7 +330,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('clearTombstone allows re-spawn', async () => {
       const sessionId = 'cleared-tombstone'
       await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      await adapter.shutdown(sessionId, true)
+      await adapter.shutdown(sessionId, { immediate: true })
 
       adapter.clearTombstone(sessionId)
 
@@ -349,7 +349,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         const id = `evict-${i}`
         ids.push(id)
         await adapter.spawn({ cols: 80, rows: 24, sessionId: id })
-        await adapter.shutdown(id, true)
+        await adapter.shutdown(id, { immediate: true })
       }
 
       // All 5 should be tombstoned
@@ -362,7 +362,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // clearTombstone the first one, then re-kill it — it should still work
       adapter.clearTombstone(ids[0])
       await adapter.spawn({ cols: 80, rows: 24, sessionId: ids[0] })
-      await adapter.shutdown(ids[0], true)
+      await adapter.shutdown(ids[0], { immediate: true })
 
       // First tombstone was re-added at the end of the Map, so eviction
       // order is now [evict-1, evict-2, evict-3, evict-4, evict-0]
@@ -488,7 +488,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
 
-      await historyAdapter.shutdown(id, true)
+      await historyAdapter.shutdown(id, { immediate: true })
       await new Promise((r) => setTimeout(r, 50))
 
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(false)

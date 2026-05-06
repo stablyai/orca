@@ -53,3 +53,26 @@ export function replayIntoTerminal(
     }
   })
 }
+
+export function replayIntoTerminalAsync(
+  pane: ManagedPane,
+  replayingPanesRef: ReplayingPanesRef,
+  data: string
+): Promise<void> {
+  if (!data) {
+    return Promise.resolve()
+  }
+  const map = replayingPanesRef.current
+  map.set(pane.id, (map.get(pane.id) ?? 0) + 1)
+  return new Promise((resolve) => {
+    pane.terminal.write(data, () => {
+      const remaining = (map.get(pane.id) ?? 1) - 1
+      if (remaining <= 0) {
+        map.delete(pane.id)
+      } else {
+        map.set(pane.id, remaining)
+      }
+      resolve()
+    })
+  })
+}

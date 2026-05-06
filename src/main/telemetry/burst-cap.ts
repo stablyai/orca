@@ -12,9 +12,10 @@
 //       abuse at the per-event cap could emit ~650K events and blow the
 //       PostHog billing cap in one session.
 //
-//   (3) Consent-mutation bucket (≤5 `setOptIn` calls per session) — a real
-//       user flips the Privacy pane toggle a handful of times at most;
-//       beyond that it is either a bug or a compromised renderer.
+//   (3) Consent-mutation bucket (≤5 per session, shared across `setOptIn`
+//       and `acknowledgeBanner`) — a real user flips the Privacy pane
+//       toggle a handful of times at most; beyond that it is either a bug
+//       or a compromised renderer.
 //
 // All buckets reset when `resetBurstCapsForSession()` is called at the start
 // of a fresh telemetry session (on `initTelemetry`). Within a session, the

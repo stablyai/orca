@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Copy, RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
@@ -9,32 +9,9 @@ import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './experimental-search'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
-
-// Why: agents with a per-agent hook-service module under src/main that posts
-// status to the shared agent-hooks server. Keep this list in sync with the
-// hook-service.ts files — any agent without one will not appear in the inline
-// per-workspace-card agent activity list even when the experimental setting
-// is on.
-const AGENT_DASHBOARD_SUPPORTED_AGENTS: readonly TuiAgent[] = [
-  'claude',
-  'codex',
-  'gemini',
-  'cursor',
-  'opencode'
-] as const
-
-// Why: both AGENT_DASHBOARD_SUPPORTED_AGENTS and AGENT_CATALOG are static
-// module-level constants, so the resolved {id, label} pairs never change at
-// runtime. Computing this inside SupportedAgentsDisclaimer was O(N×M) work on
-// every parent re-render — notably on every keystroke in the settings search —
-// for a list that can only change at build time. Hoisting it makes the cost
-// a one-time module-load expense.
-const SUPPORTED_AGENT_ENTRIES: readonly { id: TuiAgent; label: string }[] =
-  AGENT_DASHBOARD_SUPPORTED_AGENTS.map((id) => {
-    const entry = AGENT_CATALOG.find((a) => a.id === id)
-    return { id, label: entry?.label ?? id }
-  })
+import { MobilePane } from './MobilePane'
+import { SupportedAgentsDisclaimer } from './SupportedAgentsDisclaimer'
+import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 
 export { EXPERIMENTAL_PANE_SEARCH_ENTRIES }
 
@@ -91,9 +68,13 @@ export function ExperimentalPane({
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_PANE_SEARCH_ENTRIES[0]
   ])
-  const showSidekick = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[1]])
+  const showMobile = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[1]])
+  const showSidekick = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[2]])
   const showOrchestration = matchesSettingsSearch(searchQuery, [
-    EXPERIMENTAL_PANE_SEARCH_ENTRIES[2]
+    EXPERIMENTAL_PANE_SEARCH_ENTRIES[3]
+  ])
+  const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
+    EXPERIMENTAL_PANE_SEARCH_ENTRIES[4]
   ])
 
   const [orchestrationEnabled, setOrchestrationEnabled] = useState<boolean>(() => {
@@ -229,11 +210,71 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
+      {showMobile ? (
+        <SearchableSetting
+          title="Mobile Pairing"
+          description="Pair a mobile device to control Orca remotely."
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[1].keywords}
+          className="space-y-3 px-1 py-2"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-1.5">
+              <Label>Mobile Pairing</Label>
+              <p className="text-xs text-muted-foreground">
+                Control Orca from your phone by scanning a QR code. Beta / early preview &mdash;
+                expect bugs and breaking changes. Get started from the{' '}
+                <button
+                  type="button"
+                  // Why: points at the current mobile release tag rather than
+                  // the generic /releases page, which is dominated by desktop
+                  // releases and forces the user to scroll. Update this URL
+                  // when cutting a new mobile-v* tag.
+                  onClick={() =>
+                    void window.api.shell.openUrl(
+                      'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.2'
+                    )
+                  }
+                  className="cursor-pointer underline underline-offset-2 hover:text-foreground"
+                >
+                  GitHub Releases page
+                </button>
+                .
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.experimentalMobile}
+              onClick={() =>
+                updateSettings({
+                  experimentalMobile: !settings.experimentalMobile
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.experimentalMobile ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
+                  settings.experimentalMobile ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          {settings.experimentalMobile ? (
+            <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+              <MobilePane />
+            </div>
+          ) : null}
+        </SearchableSetting>
+      ) : null}
+
       {showSidekick ? (
         <SearchableSetting
           title="Sidekick"
           description="Floating animated sidekick in the bottom-right corner."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[1].keywords}
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[2].keywords}
           className="space-y-3 px-1 py-2"
           id="experimental-sidekick"
         >
@@ -272,7 +313,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title="Agent Orchestration"
           description="Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[2].keywords}
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[3].keywords}
           className="space-y-3 px-1 py-2"
         >
           <div className="flex items-start justify-between gap-4">
@@ -349,66 +390,45 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
+      {showWorktreeSymlinks ? (
+        <SearchableSetting
+          title="Symlinks on worktrees"
+          description="Automatically symlink configured files or folders into newly created worktrees."
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[4].keywords}
+          className="space-y-3 px-1 py-2"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>Symlinks on worktrees</Label>
+              <p className="text-xs text-muted-foreground">
+                Allows for automatic symlinks of certain folders or files that must be connected to
+                created worktrees.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.experimentalWorktreeSymlinks}
+              onClick={() =>
+                updateSettings({
+                  experimentalWorktreeSymlinks: !settings.experimentalWorktreeSymlinks
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.experimentalWorktreeSymlinks ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
+                  settings.experimentalWorktreeSymlinks ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </SearchableSetting>
+      ) : null}
+
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}
     </div>
-  )
-}
-
-function SupportedAgentsDisclaimer(): React.JSX.Element {
-  return (
-    <div className="space-y-1 pt-0.5 text-xs text-muted-foreground">
-      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-        <span>Supported agents:</span>
-        {SUPPORTED_AGENT_ENTRIES.map(({ id, label }) => (
-          <span
-            key={id}
-            className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5"
-            title={label}
-          >
-            <AgentIcon agent={id} size={12} />
-            <span className="text-[11px] leading-none text-foreground/80">{label}</span>
-          </span>
-        ))}
-      </div>
-      <p className="text-[11px] italic">
-        We&apos;re currently working on support for more agent CLIs.
-      </p>
-    </div>
-  )
-}
-
-// Why: anything in this group is deliberately unfinished or staff-only. The
-// orange treatment (header tint, label colors) is the shared visual signal
-// for hidden-experimental items so future entries inherit the same
-// affordance without another round of styling decisions.
-function HiddenExperimentalGroup(): React.JSX.Element {
-  return (
-    <section className="space-y-3 rounded-lg border border-orange-500/40 bg-orange-500/5 p-3">
-      <div className="space-y-0.5">
-        <h4 className="text-sm font-semibold text-orange-500 dark:text-orange-300">
-          Hidden experimental
-        </h4>
-        <p className="text-xs text-orange-500/80 dark:text-orange-300/80">
-          Unlisted toggles for internal testing. Nothing here is supported.
-        </p>
-      </div>
-
-      <div className="flex items-start justify-between gap-4 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2.5">
-        <div className="min-w-0 shrink space-y-0.5">
-          <Label className="text-orange-600 dark:text-orange-300">Placeholder toggle</Label>
-          <p className="text-xs text-orange-600/80 dark:text-orange-300/80">
-            Does nothing today. Reserved as the first slot for hidden experimental options.
-          </p>
-        </div>
-        <button
-          type="button"
-          aria-label="Placeholder toggle"
-          className="relative inline-flex h-5 w-9 shrink-0 cursor-not-allowed items-center rounded-full border border-orange-500/40 bg-orange-500/20 opacity-70"
-          disabled
-        >
-          <span className="inline-block h-3.5 w-3.5 translate-x-0.5 transform rounded-full bg-orange-200 shadow-sm dark:bg-orange-100" />
-        </button>
-      </div>
-    </section>
   )
 }

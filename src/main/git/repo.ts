@@ -224,6 +224,63 @@ export async function getBaseRefDefault(path: string): Promise<string | null> {
 }
 
 /**
+ * Return { ahead, behind } for localRef vs remoteRef, or null on git failure.
+ *
+ * Why: `rev-list --left-right --count A...B` emits `<ahead>\t<behind>` —
+ * ahead = commits on A not reachable from B; behind = commits on B not
+ * reachable from A. This is the merge-base-symmetric delta used by the
+ * stale-base dispatch guard (§3.1). Returning null on any failure (bad
+ * ref, corrupt repo, non-numeric output) lets callers degrade gracefully
+ * instead of failing dispatch on a probe error.
+ */
+export function getRemoteDrift(
+  repoPath: string,
+  localRef: string,
+  remoteRef: string
+): { ahead: number; behind: number } | null {
+  try {
+    const stdout = gitExecFileSync(
+      ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
+      { cwd: repoPath }
+    )
+    const [aheadStr, behindStr] = stdout.trim().split(/\s+/)
+    const ahead = Number(aheadStr)
+    const behind = Number(behindStr)
+    if (!Number.isFinite(ahead) || !Number.isFinite(behind)) {
+      return null
+    }
+    return { ahead, behind }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Up to `limit` commit subjects present on remoteRef but not localRef, in
+ * recency order. Returns [] on git failure.
+ *
+ * Why: powers the preamble drift section (§3.2) so a worker dispatched
+ * against an acknowledged-stale base can see at a glance whether the
+ * drift touches their task area.
+ */
+export function getRecentDriftSubjects(
+  repoPath: string,
+  localRef: string,
+  remoteRef: string,
+  limit: number
+): string[] {
+  try {
+    const stdout = gitExecFileSync(
+      ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
+      { cwd: repoPath }
+    )
+    return stdout.split('\n').filter((s) => s.trim().length > 0)
+  } catch {
+    return []
+  }
+}
+
+/**
  * Parse `git remote` stdout into a count of configured remotes.
  *
  * Why: shared between the local path and the SSH relay path so the

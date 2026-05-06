@@ -1,15 +1,7 @@
 /* eslint-disable max-lines -- Why: the status bar keeps provider rendering,
 interaction menus, and compact-layout behavior together so the hover/click
 states stay consistent across Claude and Codex. */
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  MemoryStick as MemoryStickIcon,
-  RefreshCw,
-  Server,
-  Terminal
-} from 'lucide-react'
+import { AlertTriangle, Activity, ChevronDown, ChevronRight, RefreshCw, Server } from 'lucide-react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -32,9 +24,8 @@ import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
-import { SessionsStatusSegment } from './SessionsStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
-import { MemoryStatusSegment } from './MemoryStatusSegment'
+import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
 import { SidekickStatusSegment } from './SidekickStatusSegment'
 
 function getCodexAccountLabel(
@@ -774,9 +765,8 @@ function StatusBarInner(): React.JSX.Element | null {
   const showGemini = gemini !== null && statusBarItems.includes('gemini')
   const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
-  const showSessions = statusBarItems.includes('sessions')
-  const showMemory = statusBarItems.includes('memory')
-  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showMemory
+  const showResourceUsage = statusBarItems.includes('resource-usage')
+  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
@@ -850,8 +840,7 @@ function StatusBarInner(): React.JSX.Element | null {
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         {sidekickEnabled && <SidekickStatusSegment />}
-        {showMemory && <MemoryStatusSegment compact={compact} iconOnly={iconOnly} />}
-        {showSessions && <SessionsStatusSegment compact={compact} iconOnly={iconOnly} />}
+        {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
       </div>
 
@@ -901,18 +890,11 @@ function StatusBarInner(): React.JSX.Element | null {
             SSH Status
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('sessions')}
-            onCheckedChange={() => toggleStatusBarItem('sessions')}
+            checked={statusBarItems.includes('resource-usage')}
+            onCheckedChange={() => toggleStatusBarItem('resource-usage')}
           >
-            <Terminal className="size-3.5" />
-            Terminal Sessions
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('memory')}
-            onCheckedChange={() => toggleStatusBarItem('memory')}
-          >
-            <MemoryStickIcon className="size-3.5" />
-            Memory
+            <Activity className="size-3.5" />
+            Resource Usage
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

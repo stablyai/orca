@@ -15,9 +15,43 @@ import { basename, join, relative, resolve, sep } from 'path'
 import { app } from 'electron'
 
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
+const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 const PI_AGENT_DIR_NAME = '.pi'
 const PI_AGENT_SUBDIR = 'agent'
 const PI_OVERLAY_DIR_NAME = 'pi-agent-overlays'
+
+// Why: env-var name read by the prefill extension. Mirrors Claude's
+// `--prefill <text>` semantics for pi — the editor mounts with the text
+// already in its input box but unsubmitted, so the user can review/edit
+// before sending. Used by the new-workspace draft-launch flow to drop a
+// linked GitHub/Linear issue URL into pi without racing pi's lengthy
+// startup output (banner + skills + extensions) against the bracketed-
+// paste readiness detector.
+export const ORCA_PI_PREFILL_ENV_VAR = 'ORCA_PI_PREFILL'
+
+// Why: pi exposes `pi.ui.setEditorText(text)` from inside an extension's
+// session_start handler — that's the equivalent of Claude's `--prefill`.
+// We can't use a CLI flag (pi has none) and bracketed-paste-after-ready
+// races against pi's startup output, so we ship a tiny extension that
+// reads ORCA_PI_PREFILL on session_start and types it into the editor.
+// The env var is consumed (deleted from process.env) so /new in the same
+// session doesn't re-prefill.
+function getPiPrefillExtensionSource(): string {
+  return [
+    'export default function (pi) {',
+    "  pi.on('session_start', async (event, ctx) => {",
+    `    const prefill = process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
+    '    if (!prefill) return',
+    `    delete process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
+    "    if (event.reason !== 'startup') return",
+    '    try {',
+    '      ctx.ui.setEditorText(prefill)',
+    '    } catch {}',
+    '  })',
+    '}',
+    ''
+  ].join('\n')
+}
 
 function getPiTitlebarExtensionSource(): string {
   return [
@@ -272,6 +306,10 @@ export class PiTitlebarExtensionService {
       // instead of replacing that directory, otherwise Orca terminals would
       // silently disable the user's Pi customization inside Orca only.
       writeFileSync(join(extensionsDir, ORCA_PI_EXTENSION_FILE), getPiTitlebarExtensionSource())
+      writeFileSync(
+        join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
+        getPiPrefillExtensionSource()
+      )
     } catch {
       // Why: overlay creation is best-effort — permission errors (EPERM/EACCES)
       // on Windows can occur when the userData directory is restricted or when
