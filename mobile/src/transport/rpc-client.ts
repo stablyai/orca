@@ -41,7 +41,11 @@ export type RpcClient = {
 // "magic". Shorter backoff makes the auto-recovery path feel as fast.
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000]
 const REQUEST_TIMEOUT_MS = 30_000
+const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
+// Why: RN's WebSocket implementation may not expose static readyState
+// constants, but the protocol value for CONNECTING is stable across runtimes.
+const WEBSOCKET_CONNECTING_STATE = 0
 
 // Why: app-level liveness probe. The server runs its own ping/pong sweep
 // at 15s, but RN's WebSocket runtime auto-pongs at the native layer
@@ -67,6 +71,7 @@ export function connect(
   let requestCounter = 0
   let reconnectAttempt = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let connectTimer: ReturnType<typeof setTimeout> | null = null
   let handshakeTimer: ReturnType<typeof setTimeout> | null = null
   let activityProbeTimer: ReturnType<typeof setInterval> | null = null
   let intentionallyClosed = false
@@ -119,8 +124,23 @@ export function connect(
     sharedKey = null
 
     ws = new WebSocket(endpoint)
+    const openingWs = ws
+
+    // Why: React Native can leave TCP/WebSocket opens pending indefinitely on
+    // flaky network handoffs. Force the existing onclose reconnect path if
+    // onopen never arrives, instead of leaving the UI stuck at "Connecting...".
+    connectTimer = setTimeout(() => {
+      connectTimer = null
+      if (ws === openingWs && openingWs.readyState === WEBSOCKET_CONNECTING_STATE) {
+        openingWs.close()
+        if (ws === openingWs) {
+          handleSocketClosed(openingWs)
+        }
+      }
+    }, CONNECT_TIMEOUT_MS)
 
     ws.onopen = () => {
+      clearConnectTimer()
       reconnectAttempt = 0
       setState('handshaking')
 
@@ -258,26 +278,34 @@ export function connect(
     }
 
     ws.onclose = () => {
-      ws = null
-      sharedKey = null
-      if (handshakeTimer) {
-        clearTimeout(handshakeTimer)
-        handshakeTimer = null
-      }
-      stopActivityProbe()
-      if (intentionallyClosed) {
-        setState('disconnected')
-        rejectAllPending('Connection closed')
-        return
-      }
-      rejectAllPending('Connection interrupted')
-      setState('reconnecting')
-      scheduleReconnect()
+      handleSocketClosed(openingWs)
     }
 
     ws.onerror = () => {
       // onclose will fire after this
     }
+  }
+
+  function handleSocketClosed(closedWs: WebSocket) {
+    if (ws !== closedWs) {
+      return
+    }
+    clearConnectTimer()
+    ws = null
+    sharedKey = null
+    if (handshakeTimer) {
+      clearTimeout(handshakeTimer)
+      handshakeTimer = null
+    }
+    stopActivityProbe()
+    if (intentionallyClosed) {
+      setState('disconnected')
+      rejectAllPending('Connection closed')
+      return
+    }
+    rejectAllPending('Connection interrupted')
+    setState('reconnecting')
+    scheduleReconnect()
   }
 
   function scheduleReconnect() {
@@ -287,6 +315,13 @@ export function connect(
       reconnectTimer = null
       openConnection()
     }, delay)
+  }
+
+  function clearConnectTimer() {
+    if (connectTimer) {
+      clearTimeout(connectTimer)
+      connectTimer = null
+    }
   }
 
   // Why: app-level liveness probe — see ACTIVITY_PROBE_INTERVAL_MS comment
@@ -453,6 +488,7 @@ export function connect(
         clearTimeout(reconnectTimer)
         reconnectTimer = null
       }
+      clearConnectTimer()
       if (handshakeTimer) {
         clearTimeout(handshakeTimer)
         handshakeTimer = null
