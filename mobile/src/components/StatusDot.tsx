@@ -7,7 +7,7 @@ const stateColors: Record<ConnectionState, string> = {
   connecting: colors.statusAmber,
   handshaking: colors.statusAmber,
   reconnecting: colors.statusAmber,
-  disconnected: colors.statusRed,
+  disconnected: colors.textMuted,
   'auth-failed': colors.statusRed
 }
 

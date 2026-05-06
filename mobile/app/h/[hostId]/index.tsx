@@ -101,7 +101,6 @@ function getStatusDisplay(
   attempts: number
 ): { label: string; isError: boolean } {
   if (state === 'auth-failed') return { label: 'Auth failed', isError: true }
-  if (state === 'disconnected') return { label: 'Disconnected', isError: true }
   if (state === 'reconnecting' && attempts >= RECONNECT_FAILURE_THRESHOLD) {
     return { label: "Can't connect", isError: true }
   }
