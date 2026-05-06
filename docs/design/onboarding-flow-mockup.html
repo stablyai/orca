@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Orca onboarding — mockup</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --panel: #16181d;
+    --panel-2: #1c1f26;
+    --border: #2a2e37;
+    --text: #e7e9ee;
+    --muted: #8b91a0;
+    --accent: #7c5cff;
+    --accent-2: #5b8bff;
+    --green: #3ecf8e;
+    --red: #ff6b6b;
+    --yellow: #f2c14e;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app {
+    height: 100vh; display: grid; grid-template-columns: 1fr 1fr;
+    background: linear-gradient(180deg, #0e0f12 0%, #111317 100%);
+    position: relative;
+  }
+  /* macOS drag region + traffic-light padding */
+  .drag-strip {
+    position: absolute; top: 0; left: 0; right: 0; height: 48px;
+    -webkit-app-region: drag;
+    pointer-events: none;
+  }
+
+  /* Left pane */
+  .left {
+    padding: 56px 64px 40px; display: flex; flex-direction: column; min-width: 0;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 600; letter-spacing: .2px; color: var(--text);
+  }
+  .brand .logo {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: conic-gradient(from 210deg, #7c5cff, #5b8bff, #3ecf8e, #7c5cff);
+  }
+  .dots {
+    margin-top: 40px; display: flex; gap: 8px;
+  }
+  .dots .d {
+    width: 22px; height: 4px; border-radius: 2px; background: #2a2e37;
+    transition: background .2s;
+  }
+  .dots .d.active { background: var(--accent); }
+  .dots .d.done { background: #4b4f5c; }
+  .step-body {
+    flex: 1; margin-top: 36px; display: flex; flex-direction: column;
+    min-height: 0; overflow: auto;
+  }
+  h1 {
+    font-size: 28px; line-height: 1.2; margin: 0 0 10px;
+    font-weight: 600; letter-spacing: -0.01em;
+  }
+  .subtitle { color: var(--muted); margin: 0 0 28px; max-width: 52ch; }
+
+  .footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 20px; border-top: 1px solid var(--border); margin-top: 24px;
+    color: var(--muted);
+  }
+  .kbd {
+    display: inline-block; padding: 2px 6px; border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 4px; background: #1a1d24;
+    color: var(--muted); font-size: 11px; font-family: ui-monospace, Menlo, monospace;
+  }
+  .btn {
+    appearance: none; border: 1px solid var(--border); background: var(--panel);
+    color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    font: inherit; font-weight: 500;
+  }
+  .btn:hover { background: var(--panel-2); }
+  .btn.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  .btn.primary:hover { background: #6a4cf0; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .skip-link {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font: inherit; padding: 0; margin-right: 4px;
+  }
+  .skip-link:hover { color: var(--text); }
+
+  /* Right pane — preview */
+  .right {
+    background: radial-gradient(1000px 600px at 70% 10%, rgba(124,92,255,.12), transparent 60%),
+                radial-gradient(800px 500px at 20% 90%, rgba(91,139,255,.10), transparent 60%),
+                #0a0b0e;
+    border-left: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    padding: 48px; overflow: hidden; position: relative;
+  }
+  .preview {
+    width: 100%; max-width: 540px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,.45), 0 2px 0 rgba(255,255,255,.02) inset;
+  }
+  .preview .titlebar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    background: #12141a; color: var(--muted); font-size: 11px;
+  }
+  .preview .titlebar .dot { width: 10px; height: 10px; border-radius: 50%; background: #2a2e37; }
+  .preview .titlebar .dot.red { background: #ff6058; }
+  .preview .titlebar .dot.yellow { background: #ffbd2e; }
+  .preview .titlebar .dot.green { background: #28c93f; }
+  .preview .titlebar .tab {
+    margin-left: auto; padding: 2px 8px; border-radius: 5px; background: #1a1d24;
+    color: var(--text); font-size: 11px;
+  }
+  .preview .titlebar .title-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    display: inline-block; margin-right: 6px; opacity: 0;
+    transition: opacity .3s;
+  }
+  .preview .body { padding: 18px; }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+
+  /* Welcome step — feature pitch cards (Warp-style) */
+  .pitch-card {
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; background: var(--panel);
+    cursor: pointer; transition: border-color .15s, background .15s;
+    margin-bottom: 12px;
+  }
+  .pitch-card.selected {
+    border-color: var(--accent);
+    background: rgba(124,92,255,.06);
+    box-shadow: 0 0 0 3px rgba(124,92,255,.15);
+  }
+  .pitch-card .pitch-head {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  }
+  .pitch-card .pitch-title { font-weight: 600; font-size: 15px; }
+  .pitch-card .pitch-tag {
+    margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: #1a1d24; border: 1px solid var(--border); color: var(--muted);
+  }
+  .pitch-card .pitch-blurb { color: var(--muted); margin: 0 0 10px; font-size: 12px; line-height: 1.5; }
+  .pitch-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .pitch-list li { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .pitch-list .check { color: var(--green); font-weight: 700; }
+
+  /* Step 1 — agent grid */
+  .agent-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  }
+  .agent-card {
+    position: relative; padding: 14px 12px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel); cursor: pointer; text-align: left;
+    display: flex; flex-direction: column; gap: 6px; color: var(--text);
+    transition: border-color .15s, background .15s;
+  }
+  .agent-card:hover { background: var(--panel-2); }
+  .agent-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,92,255,.15);
+  }
+  .agent-card .name { font-weight: 600; }
+  .agent-card .bin { color: var(--muted); font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
+  .badge {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 10px; padding: 2px 6px; border-radius: 999px;
+    background: rgba(62,207,142,.15); color: var(--green);
+    border: 1px solid rgba(62,207,142,.3);
+  }
+
+  /* Step 2 (worktree card) — grouped checkboxes */
+  .group-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted);
+    margin: 4px 0 8px;
+  }
+  .group-label:not(:first-of-type) { margin-top: 18px; }
+  .check-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 8px; background: var(--panel);
+    cursor: pointer;
+  }
+  .check-row:hover { background: var(--panel-2); }
+  .check-row .meta .t { font-weight: 500; }
+  .check-row .meta .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .check-box {
+    width: 18px; height: 18px; border: 1px solid var(--border);
+    border-radius: 5px; background: #12141a;
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .check-box.on {
+    background: var(--accent); border-color: var(--accent);
+  }
+  .check-box.on::after {
+    content: ""; width: 5px; height: 9px;
+    border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+
+  /* Step 4 (notifications) — toggles */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 10px; background: var(--panel);
+  }
+  .toggle-row .meta .t { font-weight: 500; }
+  .toggle-row .meta .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .switch {
+    width: 36px; height: 20px; background: #2a2e37; border-radius: 999px;
+    position: relative; cursor: pointer; transition: background .15s;
+    flex-shrink: 0;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    transition: left .15s;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { left: 18px; }
+
+  /* Step 3 — theme */
+  .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .theme-card {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px; cursor: pointer; background: var(--panel);
+  }
+  .theme-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,92,255,.15);
+  }
+  .swatch { border-radius: 6px; height: 70px; margin-bottom: 8px; border: 1px solid var(--border); }
+  .swatch.dark { background: linear-gradient(135deg, #0e0f12, #1c1f26); }
+  .swatch.light { background: linear-gradient(135deg, #f4f5f8, #d9dde5); }
+  .swatch.system { background: linear-gradient(135deg, #0e0f12 50%, #d9dde5 50%); }
+  .theme-name { font-weight: 500; }
+  .checkbox-row {
+    margin-top: 14px; display: flex; align-items: center; gap: 8px; color: var(--muted);
+  }
+  .checkbox-row input { accent-color: var(--accent); }
+
+  /* Step 5 — add repo (drop zone + 3 tiles) */
+  .location-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel); margin-bottom: 14px;
+  }
+  .location-row .label { color: var(--muted); font-size: 12px; }
+  .location-row .path {
+    flex: 1; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+    color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .location-row .change {
+    background: none; border: none; color: var(--accent); cursor: pointer;
+    font: inherit; font-weight: 500;
+  }
+
+  .dropzone {
+    position: relative;
+    border: 2px dashed var(--border); border-radius: 14px;
+    padding: 24px; min-height: 280px;
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone.dragover {
+    border-color: var(--accent);
+    background: rgba(124,92,255,.06);
+  }
+  .dropzone-hint {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    pointer-events: none; opacity: 0; transition: opacity .15s;
+    color: var(--accent); font-weight: 600; font-size: 16px;
+  }
+  .dropzone.dragover .dropzone-hint { opacity: 1; }
+  .dropzone.dragover .repo-tiles { opacity: .3; }
+
+  .repo-tiles {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    transition: opacity .15s;
+  }
+  .repo-tile {
+    padding: 18px 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel); cursor: pointer; text-align: center; color: var(--text);
+    display: flex; flex-direction: column; gap: 6px; align-items: center;
+  }
+  .repo-tile:hover { background: var(--panel-2); }
+  .repo-tile.primary { border-color: var(--accent); background: rgba(124,92,255,.08); }
+  .repo-tile .icon { font-size: 22px; }
+  .repo-tile .t { font-weight: 600; }
+  .repo-tile .d { color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+  /* Previews */
+  .composer {
+    display: flex; gap: 8px; align-items: center;
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+    background: #0e0f12;
+  }
+  .composer .agent-chip {
+    padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    background: rgba(124,92,255,.15); color: #b9a8ff; border: 1px solid rgba(124,92,255,.3);
+  }
+  .composer .ph { color: var(--muted); flex: 1; }
+  .composer .send {
+    width: 26px; height: 26px; border-radius: 6px; background: var(--accent);
+    display: grid; place-items: center; color: white;
+  }
+  .worktree-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .worktree {
+    padding: 8px 10px; border-radius: 8px; background: #12141a;
+    border: 1px solid var(--border); display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--muted);
+  }
+  .worktree .status { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .worktree .status.running { background: var(--yellow); animation: pulse 1.2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: .4; }
+  }
+
+  /* Worktree-card preview (step 2) */
+  .wt-card {
+    border: 1px solid var(--border); border-radius: 10px;
+    background: #12141a; padding: 12px;
+  }
+  .wt-card .row1 {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .wt-card .branch {
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text);
+    font-weight: 600;
+  }
+  .wt-card .status-pill {
+    margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 999px;
+    background: rgba(242,193,78,.15); color: var(--yellow);
+    border: 1px solid rgba(242,193,78,.3);
+  }
+  .wt-card .signals {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center;
+  }
+  .chip {
+    font-size: 11px; padding: 2px 7px; border-radius: 999px;
+    background: #1a1d24; border: 1px solid var(--border); color: var(--muted);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .chip.ci-ok { color: var(--green); border-color: rgba(62,207,142,.3); }
+  .chip.pr { color: var(--accent-2); border-color: rgba(91,139,255,.3); }
+  .chip.issue { color: var(--yellow); border-color: rgba(242,193,78,.3); }
+  .chip.comment { color: var(--text); }
+  .chip.unread::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  }
+  .wt-card .agents-rows {
+    margin-top: 10px; display: flex; flex-direction: column; gap: 4px;
+    border-top: 1px solid var(--border); padding-top: 8px;
+  }
+  .wt-card .agent-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  .wt-card .agent-row .a-name {
+    color: var(--text); font-family: ui-monospace, Menlo, monospace;
+  }
+
+  .notif {
+    position: absolute; right: 20px; top: 20px;
+    width: 300px; background: #1a1d24; border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; box-shadow: 0 20px 40px rgba(0,0,0,.5);
+    transform: translateX(360px); transition: transform .4s cubic-bezier(.2,.8,.2,1);
+  }
+  .notif.show { transform: translateX(0); }
+  .notif .app-name { color: var(--muted); font-size: 11px; }
+  .notif .n-title { font-weight: 600; margin-top: 2px; }
+  .notif .n-body { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  /* Theme preview frame */
+  .theme-preview {
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+  }
+  .theme-preview.dark { background: #0e0f12; color: #e7e9ee; }
+  .theme-preview.light { background: #fbfbfc; color: #1a1d24; }
+  .theme-preview .tp-header {
+    padding: 8px 12px; border-bottom: 1px solid rgba(128,128,128,.2);
+    font-size: 11px; display: flex; gap: 8px; align-items: center;
+  }
+  .theme-preview .tp-body { padding: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="drag-strip"></div>
+
+  <!-- LEFT -->
+  <div class="left">
+    <div class="brand"><div class="logo"></div> Orca</div>
+    <div class="dots" id="dots"></div>
+
+    <div class="step-body" id="stepBody"></div>
+
+    <div class="footer">
+      <div><span class="kbd">⌘↵</span> next</div>
+      <div class="actions">
+        <button class="skip-link" id="skipBtn">Skip</button>
+        <button class="btn ghost" id="backBtn">Back</button>
+        <button class="btn primary" id="nextBtn">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right" id="right">
+    <div class="preview" id="preview"></div>
+    <div class="notif" id="notif">
+      <div class="app-name">Orca</div>
+      <div class="n-title">Task complete</div>
+      <div class="n-body">claude finished "Fix login redirect loop" — review diff</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 4-step flow per design doc §Flow: agent → theme → notifications → repo.
+  // Sidebar/worktree-card customization moved to a post-wizard coach-mark; welcome
+  // step dropped — shorter funnels convert better, and the preview teaches faster
+  // than copy. See doc §TL;DR and §Dropped settings.
+  const steps = [
+    { id: 'agent', title: 'Pick your default agent',
+      subtitle: 'Orca works with every CLI agent. Pick the one you\u2019ll use most \u2014 you can switch any time.' },
+    { id: 'theme', title: 'You\u2019ll be staring at this for hours',
+      subtitle: 'Pick a theme. We\u2019ll apply it to the editor and terminal.' },
+    { id: 'notifications', title: 'Agents report back',
+      subtitle: 'Orca watches your agents and tells you when they need you.' },
+    { id: 'repo', title: 'Add your first repo',
+      subtitle: 'One more step. Point Orca at some code and we\u2019ll take it from there.' },
+  ];
+
+  const state = {
+    i: 0,
+    agent: 'claude',
+    theme: 'system',
+    syncOs: true,
+    notif: { taskComplete: true, bell: true, suppress: true },
+    workspaceDir: '~/orca/projects',
+  };
+
+  const agents = [
+    { id: 'claude',   name: 'Claude Code', bin: 'claude',       detected: true },
+    { id: 'codex',    name: 'Codex',       bin: 'codex',        detected: true },
+    { id: 'cursor',   name: 'Cursor CLI',  bin: 'cursor-agent', detected: false },
+    { id: 'gemini',   name: 'Gemini',      bin: 'gemini',       detected: true },
+    { id: 'copilot',  name: 'Copilot',     bin: 'gh copilot',   detected: false },
+    { id: 'opencode', name: 'OpenCode',    bin: 'opencode',     detected: false },
+    { id: 'pi',       name: 'Pi',          bin: 'pi',           detected: false },
+    { id: 'amp',      name: 'Amp',         bin: 'amp',          detected: false },
+    { id: 'droid',    name: 'Droid',       bin: 'droid',        detected: false },
+  ];
+
+  const $ = (q, el=document) => el.querySelector(q);
+  const el = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
+
+  function renderDots() {
+    const dots = $('#dots'); dots.innerHTML = '';
+    steps.forEach((_, idx) => {
+      const d = document.createElement('div');
+      d.className = 'd' + (idx === state.i ? ' active' : idx < state.i ? ' done' : '');
+      dots.appendChild(d);
+    });
+  }
+
+  function renderStep() {
+    renderDots();
+    const body = $('#stepBody'); body.innerHTML = '';
+    const s = steps[state.i];
+    body.appendChild(el(`<h1>${s.title}</h1>`));
+    body.appendChild(el(`<p class="subtitle">${s.subtitle}</p>`));
+
+    if (s.id === 'agent') renderAgentStep(body);
+    if (s.id === 'theme') renderThemeStep(body);
+    if (s.id === 'notifications') renderNotifStep(body);
+    if (s.id === 'repo') renderRepoStep(body);
+
+    $('#backBtn').disabled = state.i === 0;
+    $('#backBtn').style.visibility = state.i === 0 ? 'hidden' : 'visible';
+    $('#nextBtn').textContent = state.i === steps.length - 1 ? 'Done' : 'Next';
+    // Step 4 has no default to write — Skip == abandon (see design doc §Flow).
+    $('#skipBtn').textContent = state.i === steps.length - 1
+      ? 'Skip \u2014 I\u2019ll add one later'
+      : 'Skip';
+
+    renderPreview();
+  }
+
+  function renderAgentStep(body) {
+    const grid = el(`<div class="agent-grid"></div>`);
+    agents.forEach(a => {
+      const card = el(`
+        <button class="agent-card ${state.agent === a.id ? 'selected' : ''}">
+          <div class="name">${a.name}</div>
+          <div class="bin">${a.bin}</div>
+          ${a.detected ? '<div class="badge">Detected</div>' : ''}
+        </button>
+      `);
+      card.onclick = () => { state.agent = a.id; renderStep(); };
+      grid.appendChild(card);
+    });
+    body.appendChild(grid);
+  }
+
+  function renderThemeStep(body) {
+    const themes = [
+      ['system', 'System', 'system'],
+      ['dark',   'Dark',   'dark'],
+      ['light',  'Light',  'light'],
+    ];
+    const grid = el(`<div class="theme-grid"></div>`);
+    themes.forEach(([id, name, cls]) => {
+      const card = el(`
+        <button class="theme-card ${state.theme === id ? 'selected' : ''}">
+          <div class="swatch ${cls}"></div>
+          <div class="theme-name">${name}</div>
+        </button>
+      `);
+      card.onclick = () => { state.theme = id; renderStep(); };
+      grid.appendChild(card);
+    });
+    body.appendChild(grid);
+
+    const cb = el(`
+      <label class="checkbox-row">
+        <input type="checkbox" ${state.syncOs ? 'checked' : ''} />
+        Sync with OS appearance
+      </label>
+    `);
+    cb.querySelector('input').onchange = (e) => { state.syncOs = e.target.checked; };
+    body.appendChild(cb);
+  }
+
+  function renderNotifStep(body) {
+    const rows = [
+      ['taskComplete', 'Task complete', 'Notify me when an agent finishes a task.'],
+      ['bell',         'Terminal bell', 'Ring when the terminal emits a bell.'],
+      ['suppress',     'Suppress while Orca is focused', 'Only notify when another app is frontmost.'],
+    ];
+    const wrap = el(`<div></div>`);
+    rows.forEach(([key, t, d]) => {
+      const row = el(`
+        <div class="toggle-row">
+          <div class="meta"><div class="t">${t}</div><div class="d">${d}</div></div>
+          <div class="switch ${state.notif[key] ? 'on' : ''}" data-k="${key}"></div>
+        </div>
+      `);
+      row.querySelector('.switch').onclick = () => {
+        state.notif[key] = !state.notif[key];
+        renderStep();
+      };
+      wrap.appendChild(row);
+    });
+    body.appendChild(wrap);
+  }
+
+  function renderRepoStep(body) {
+    // Location row at top — pre-filled from workspaceDir, only consumed by clone/sample.
+    const loc = el(`
+      <div class="location-row">
+        <span class="label">Location</span>
+        <span class="path">${state.workspaceDir}</span>
+        <button class="change">Change</button>
+      </div>
+    `);
+    body.appendChild(loc);
+
+    // Full-window-style drop zone with the 3-tile row inside as default content.
+    // Dragging anywhere fades the tiles and surfaces the dashed target (see design doc §5).
+    const dz = el(`
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-hint">Drop a folder to open it</div>
+        <div class="repo-tiles">
+          <button class="repo-tile primary" data-a="open">
+            <div class="icon">📁</div>
+            <div class="t">Open a folder</div>
+            <div class="d">Pick a local folder. If it\u2019s a git repo, we\u2019ll create a worktree.</div>
+          </button>
+          <button class="repo-tile" data-a="clone">
+            <div class="icon">⤓</div>
+            <div class="t">Clone from GitHub</div>
+            <div class="d">Paste a URL — clones into your Location.</div>
+          </button>
+          <button class="repo-tile" data-a="sample">
+            <div class="icon">✨</div>
+            <div class="t">Try the sample repo</div>
+            <div class="d">A tiny demo repo — hit the aha in 60 seconds.</div>
+          </button>
+        </div>
+      </div>
+    `);
+    dz.querySelectorAll('.repo-tile').forEach(b => {
+      b.onclick = () => alert('(mock) ' + b.dataset.a);
+    });
+    // Drag-over visualization (mockup-only; real impl resolves the dropped path).
+    dz.addEventListener('dragenter', (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragover',  (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', (e) => {
+      if (!dz.contains(e.relatedTarget)) dz.classList.remove('dragover');
+    });
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault(); dz.classList.remove('dragover');
+      alert('(mock) drop → resolves to "Open a folder"');
+    });
+    body.appendChild(dz);
+  }
+
+  /* PREVIEWS */
+  function renderPreview() {
+    const right = $('#right');
+    right.classList.toggle('light-mode', state.theme === 'light' && steps[state.i].id === 'theme');
+    const pv = $('#preview');
+    $('#notif').classList.remove('show');
+
+    const s = steps[state.i];
+    if (s.id === 'agent') {
+      const a = agents.find(x => x.id === state.agent) || agents[0];
+      pv.innerHTML = `
+        <div class="titlebar">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span>orca</span>
+          <span class="tab">feat/login</span>
+        </div>
+        <div class="body">
+          <div class="composer">
+            <span class="agent-chip">${a.name}</span>
+            <span class="ph">Fix the login redirect loop…</span>
+            <span class="send">↵</span>
+          </div>
+          <div class="worktree-list">
+            <div class="worktree"><span class="status running"></span> feat/login \u2014 ${a.bin} running</div>
+            <div class="worktree"><span class="status"></span> fix/onboarding \u2014 idle</div>
+          </div>
+        </div>`;
+    }
+    else if (s.id === 'theme') {
+      const isLight = state.theme === 'light';
+      pv.innerHTML = `
+        <div class="theme-preview ${isLight ? 'light' : 'dark'}">
+          <div class="tp-header">
+            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+            <span>${isLight ? 'Light' : state.theme === 'system' ? 'System (dark)' : 'Dark'} theme</span>
+          </div>
+          <div class="tp-body">
+            <div><span style="color:${isLight ? '#8250df' : '#b9a8ff'}">function</span> <span style="color:${isLight ? '#0550ae' : '#7cc5ff'}">greet</span>(<span style="color:${isLight ? '#953800' : '#ffa657'}">name</span>) {</div>
+            <div style="padding-left: 16px">return \`Hello, \${name}\`</div>
+            <div>}</div>
+          </div>
+        </div>`;
+    }
+    else if (s.id === 'notifications') {
+      pv.innerHTML = `
+        <div class="titlebar">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span><span class="title-dot" id="tdot"></span>orca</span>
+          <span class="tab">3 running</span>
+        </div>
+        <div class="body">
+          <div class="worktree-list">
+            <div class="worktree"><span class="status running"></span> feat/login \u2014 claude (2m)</div>
+            <div class="worktree"><span class="status running"></span> fix/sidebar \u2014 codex (48s)</div>
+            <div class="worktree"><span class="status"></span> chore/deps \u2014 done</div>
+          </div>
+        </div>`;
+      // Fire mock notification only if "task complete" is on, mirroring the real setting.
+      if (state.notif.taskComplete) {
+        setTimeout(() => {
+          $('#notif').classList.add('show');
+          const td = pv.querySelector('#tdot'); if (td) td.style.opacity = '1';
+        }, 500);
+      }
+    }
+    else if (s.id === 'repo') {
+      pv.innerHTML = `
+        <div class="titlebar">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span>Welcome to Orca</span>
+        </div>
+        <div class="body" style="text-align:center; padding: 40px 18px;">
+          <div style="font-size: 44px; margin-bottom: 8px;">🌊</div>
+          <div style="font-weight: 600; margin-bottom: 6px;">Almost there</div>
+          <div style="color: var(--muted); font-size: 12px; max-width: 32ch; margin: 0 auto;">
+            After you add a repo, Orca creates your first worktree and opens it with ${agents.find(a=>a.id===state.agent)?.name || 'your agent'} ready to go.
+          </div>
+        </div>`;
+    }
+  }
+
+  /* Nav */
+  function go(delta) {
+    const next = state.i + delta;
+    if (next < 0 || next >= steps.length) return;
+    state.i = next;
+    renderStep();
+  }
+  $('#backBtn').onclick = () => go(-1);
+  $('#nextBtn').onclick = () => {
+    if (state.i === steps.length - 1) {
+      alert('(mock) onboarding_completed — handing off to activation checklist');
+      return;
+    }
+    go(1);
+  };
+  // Skip writes the current default for this step and advances. No "skip everything"
+  // shortcut: Esc is intentionally unbound so muscle-memory dismissal can't abandon
+  // the activation moment (see design doc §Flow → Skip semantics).
+  $('#skipBtn').onclick = () => {
+    if (state.i === steps.length - 1) {
+      alert('(mock) onboarding_abandoned \u2014 closing wizard, landing on empty-state home');
+      return;
+    }
+    go(1);
+  };
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { $('#nextBtn').click(); }
+    else if (e.key === 'ArrowLeft') go(-1);
+    else if (e.key === 'ArrowRight') go(1);
+  });
+
+  renderStep();
+</script>
+</body>
+</html>
