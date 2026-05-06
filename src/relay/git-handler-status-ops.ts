@@ -56,8 +56,12 @@ export async function getStatusOp(
   const entries: Record<string, unknown>[] = []
 
   try {
+    // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8 in
+    // git's stdout instead of C-style octal escapes; without it the parsed
+    // entry.path renders as gibberish in the source-control sidebar and
+    // downstream blob lookups miss.
     const { stdout } = await git(
-      ['status', '--porcelain=v2', '--untracked-files=all'],
+      ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--untracked-files=all'],
       worktreePath
     )
     const parsed = parseStatusOutput(stdout)

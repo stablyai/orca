@@ -4,7 +4,7 @@ import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { mkdtempSync, writeFileSync } from 'fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
 import {
@@ -113,6 +113,26 @@ describe('GitHandler', () => {
       const staged = result.entries.find((e) => e.area === 'staged')
       expect(staged).toBeDefined()
       expect(staged!.status).toBe('modified')
+    })
+
+    // Why: regression for issue #1503 — git's default core.quotePath=true
+    // emits non-ASCII paths as octal-escaped, double-quoted strings (e.g.
+    // "docs/\346\227\245\346\234\254\350\252\236/sample.md"), which made the
+    // sidebar show gibberish and broke downstream blob reads.
+    it('preserves UTF-8 paths in status output', async () => {
+      gitInit(tmpDir)
+      const utf8Dir = path.join(tmpDir, 'docs', '日本語')
+      mkdirSync(utf8Dir, { recursive: true })
+      writeFileSync(path.join(utf8Dir, 'sample.md'), 'hello')
+
+      const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
+        entries: Record<string, unknown>[]
+      }
+      const entry = result.entries.find((e) =>
+        typeof e.path === 'string' ? e.path.endsWith('sample.md') : false
+      )
+      expect(entry).toBeDefined()
+      expect(entry!.path).toBe('docs/日本語/sample.md')
     })
   })
 
@@ -247,6 +267,40 @@ describe('GitHandler', () => {
         expect(result.entries.length).toBeGreaterThan(0)
         expect(result.summary.commitsAhead).toBe(1)
       }
+    })
+
+    // Why: regression for issue #1503 on the branch-diff path. Without
+    // -c core.quotePath=false the diff --name-status output is octal-escaped,
+    // which broke the "Committed on branch" file list.
+    it('preserves UTF-8 paths in branch-compare entries', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+
+      // Capture the default branch name before switching, so the test works
+      // regardless of whether git's init.defaultBranch is master or main.
+      const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+
+      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      const utf8Dir = path.join(tmpDir, 'docs', '日本語')
+      mkdirSync(utf8Dir, { recursive: true })
+      writeFileSync(path.join(utf8Dir, 'sample.md'), 'hello')
+      gitCommit(tmpDir, 'feature commit')
+
+      const result = (await dispatcher.callRequest('git.branchCompare', {
+        worktreePath: tmpDir,
+        baseRef
+      })) as { summary: Record<string, unknown>; entries: Record<string, unknown>[] }
+
+      expect(result.summary.status).toBe('ready')
+      const entry = result.entries.find((e) =>
+        typeof e.path === 'string' ? e.path.endsWith('sample.md') : false
+      )
+      expect(entry).toBeDefined()
+      expect(entry!.path).toBe('docs/日本語/sample.md')
     })
   })
 

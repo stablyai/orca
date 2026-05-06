@@ -190,8 +190,10 @@ export class GitHandler {
     }
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
+      // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8;
+      // without it parseBranchDiff would yield C-style octal-escaped paths.
       const { stdout } = await gitBound(
-        ['diff', '--name-status', '-M', '-C', mergeBase, headOid],
+        ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
         worktreePath
       )
       return parseBranchDiff(stdout)
