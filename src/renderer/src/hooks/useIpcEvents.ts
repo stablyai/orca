@@ -395,7 +395,7 @@ export function useIpcEvents(): void {
         if (!targetWt) {
           return
         }
-        store.focusBrowserTabInWorktree(targetWt, browserPageId, { surfacePane: true })
+        store.focusBrowserTabInWorktree(targetWt, browserPageId)
       })
     )
 

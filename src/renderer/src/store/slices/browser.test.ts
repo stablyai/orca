@@ -844,4 +844,24 @@ describe('focusBrowserTabInWorktree', () => {
     expect(after.activeTabType).toBe(before.activeTabType)
     expect(after.activeBrowserTabIdByWorktree[otherWt]).toBeUndefined()
   })
+
+  it('surfaces the pane by default when no options are passed (active worktree)', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/tmp/wt-active'
+    const otherWt = 'repo1::/tmp/wt-other'
+    seedTwoWorktrees(store, activeWt, otherWt)
+
+    const ws = store.getState().createBrowserTab(activeWt, 'https://example.com/a', { title: 'A' })
+    const pageId = (store.getState().browserPagesByWorkspace[ws.id] ?? [])[0]?.id
+    store.setState((s) => ({
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [activeWt]: 'terminal' }
+    }))
+
+    store.getState().focusBrowserTabInWorktree(activeWt, pageId!)
+
+    expect(store.getState().activeBrowserTabId).toBe(ws.id)
+    expect(store.getState().activeTabType).toBe('browser')
+    expect(store.getState().activeTabTypeByWorktree[activeWt]).toBe('browser')
+  })
 })

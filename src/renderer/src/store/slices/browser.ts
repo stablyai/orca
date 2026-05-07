@@ -908,7 +908,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       // page closed between the bridge switching and this IPC arriving.
       return
     }
-    const surfacePane = options?.surfacePane ?? false
+    // Default to true: the only caller (`tab switch --focus` IPC listener)
+    // wants the pane surfaced when targeting the active worktree. `false` is
+    // an opt-out for hypothetical pure-pre-staging callers.
+    const surfacePane = options?.surfacePane ?? true
     const pages = get().browserPagesByWorkspace[workspace.id] ?? []
     const nextWorkspace = mirrorWorkspaceFromActivePage(
       { ...workspace, activePageId: browserPageId },
