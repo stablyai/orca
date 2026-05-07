@@ -238,13 +238,6 @@ export default function SessionScreen() {
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
 
-      console.log('[fit][session] subscribe', {
-        handle: handle.slice(-8),
-        seq,
-        viewport: viewportRef.current,
-        viewportMeasured: viewportMeasuredRef.current
-      })
-
       // Why: server handles auto-fit on subscribe — no terminal.focus call needed.
       // The viewport is embedded in the subscribe params so the server resizes
       // the PTY before serializing scrollback. This eliminates the focus→safeFit
@@ -287,24 +280,8 @@ export default function SessionScreen() {
           } else if (eventSeq != null && data.type === 'scrollback') {
             layoutSeqRef.current.set(handle, eventSeq)
           }
-          if (data.type === 'scrollback' || data.type === 'resized') {
-            console.log('[fit][session] event', {
-              handle: handle.slice(-8),
-              type: data.type,
-              cols: data.cols,
-              rows: data.rows,
-              displayMode: data.displayMode,
-              seq: eventSeq,
-              reason: data.reason
-            })
-          }
           if (data.type === 'scrollback') {
             if (initializedHandlesRef.current.has(handle)) {
-              console.log('[fit][session] scrollback IGNORED (already initialized)', {
-                handle: handle.slice(-8),
-                cols: data.cols,
-                rows: data.rows
-              })
               return
             }
             const cols = (data.cols as number) || 80
@@ -358,10 +335,6 @@ export default function SessionScreen() {
                   scrollbackRows !== viewportRef.current.rows))
             if (needsResubscribe) {
               void (async () => {
-                console.log('[fit][session] post-scrollback measure-start', {
-                  handle: handle.slice(-8),
-                  containerHeight: terminalFrameHeightRef.current
-                })
                 // Why: wait for the WebView's init() rAF chain to fully
                 // run (term.open → renderService population → first
                 // paint) before measuring. Without this, the measure
@@ -381,20 +354,11 @@ export default function SessionScreen() {
                 // raced ahead via a parallel `measureViewportOnce`, the
                 // server still has a null viewport for THIS subscriber
                 // record — we MUST resubscribe so the server stores it.
-                console.log('[fit][session] post-scrollback measure-result', {
-                  handle: handle.slice(-8),
-                  dims,
-                  alreadyMeasured: viewportMeasuredRef.current
-                })
                 if (dims) {
                   viewportRef.current = dims
                   viewportMeasuredRef.current = true
                   unsubscribeTerminal(handle)
                   initializedHandlesRef.current.delete(handle)
-                  console.log('[fit][session] post-scrollback re-subscribe', {
-                    handle: handle.slice(-8),
-                    viewport: dims
-                  })
                   subscribeToTerminal(handle)
                 }
               })()
@@ -465,11 +429,6 @@ export default function SessionScreen() {
       // not a setting. The toggle only ever requests 'auto' or 'desktop'.
       const next: 'auto' | 'desktop' =
         current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
-      console.log('[fit][session] toggleDisplayMode', {
-        handle: handle.slice(-8),
-        current,
-        next
-      })
       toggleInFlightRef.current.add(handle)
       try {
         await client.sendRequest('terminal.setDisplayMode', {

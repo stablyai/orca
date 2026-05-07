@@ -213,36 +213,21 @@ const XTERM_HTML = `<!DOCTYPE html>
   var FIT_RETRY_MAX_FRAMES = 60;
   var fitRetryToken = 0;
   function applyFitScale(reason) {
-    if (!term || !term.element) {
-      flog('skip-no-term', { reason: reason });
-      return;
-    }
+    if (!term || !term.element) return;
     var token = ++fitRetryToken;
     var attempts = 0;
     var lastScrollWidth = -1;
-    flog('start', {
-      reason: reason,
-      cols: term.cols,
-      rows: term.rows,
-      vpWidth: window.innerWidth,
-      vpHeight: window.innerHeight
-    });
     function attempt() {
-      if (token !== fitRetryToken) {
-        flog('cancel-superseded', { reason: reason, attempts: attempts });
-        return;
-      }
+      if (token !== fitRetryToken) return;
       if (!term || !term.element) return;
       attempts++;
       var cellW = getCellWidth();
       if (cellW > 0 && term.cols > 0) {
-        flog('commit-cellW', { reason: reason, attempts: attempts, cellW: cellW, cols: term.cols });
         commitFitScale(reason, attempts, 'cellW');
         return;
       }
       var w = term.element.scrollWidth;
       if (w > 0 && w === lastScrollWidth) {
-        flog('commit-stableSW', { reason: reason, attempts: attempts, scrollWidth: w });
         commitFitScale(reason, attempts, 'stableSW');
         return;
       }
@@ -283,19 +268,20 @@ const XTERM_HTML = `<!DOCTYPE html>
     var expectedW = cellW * term.cols;
     var suspect =
       currentScale === 1 && term.cols > 0 && expectedW > vpW + 1; // expected wider than viewport but no zoom
-    flog(suspect ? 'commit-SUSPECT' : 'commit', {
-      reason: reason,
-      attempts: attempts,
-      gate: gate,
-      preSnapScale: preSnapScale,
-      finalScale: currentScale,
-      cellW: cellW,
-      cols: term.cols,
-      expectedW: expectedW,
-      scrollWidth: sw,
-      vpWidth: vpW,
-      suspect: suspect
-    });
+    if (suspect) {
+      flog('commit-SUSPECT', {
+        reason: reason,
+        attempts: attempts,
+        gate: gate,
+        preSnapScale: preSnapScale,
+        finalScale: currentScale,
+        cellW: cellW,
+        cols: term.cols,
+        expectedW: expectedW,
+        scrollWidth: sw,
+        vpWidth: vpW
+      });
+    }
   }
 
   function isAltScreenActive(data) {
@@ -347,15 +333,6 @@ const XTERM_HTML = `<!DOCTYPE html>
     afterDrainCallbacks = [];
     initRows = rows || 24;
     firstDataPending = true;
-    flog('init', {
-      cols: cols,
-      rows: rows,
-      hasInitialData: typeof initialData === 'string' && initialData.length > 0,
-      initialDataLen: typeof initialData === 'string' ? initialData.length : 0,
-      vpWidth: window.innerWidth,
-      vpHeight: window.innerHeight,
-      gen: gen
-    });
     var replayData = normalizeInitialData(initialData);
     activeAltScreenSnapshot = isAltScreenActive(replayData);
     if (term) term.dispose();

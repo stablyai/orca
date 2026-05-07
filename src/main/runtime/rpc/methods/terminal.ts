@@ -416,13 +416,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const ptyId = leaf.ptyId
       const clientId = params.client?.id
 
-      console.log('[fit][server] terminal.subscribe', {
-        ptyId: ptyId.slice(-8),
-        clientId: clientId?.slice(-8),
-        isMobile,
-        viewport: params.viewport
-      })
-
       // Server-side auto-fit: resize PTY to phone dims before serializing scrollback
       if (isMobile && clientId) {
         await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)

@@ -2244,14 +2244,6 @@ export class OrcaRuntimeService {
   ): void {
     const inner = this.mobileSubscribers.get(ptyId)
     const record = inner?.get(clientId)
-    console.log('[fit][server] updateMobileSubscriberViewport', {
-      ptyId: ptyId.slice(-8),
-      clientId: clientId.slice(-8),
-      viewport,
-      hasInner: !!inner,
-      innerSize: inner?.size ?? 0,
-      hasRecord: !!record
-    })
     if (!record) {
       return
     }
@@ -2277,17 +2269,7 @@ export class OrcaRuntimeService {
     viewport?: { cols: number; rows: number }
   ): Promise<boolean> {
     const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
-    const currentSize0 = this.getTerminalSize(ptyId)
-    console.log('[fit][server] handleMobileSubscribe', {
-      ptyId: ptyId.slice(-8),
-      clientId: clientId.slice(-8),
-      viewport,
-      mode,
-      currentSize: currentSize0,
-      hadInner: this.mobileSubscribers.has(ptyId)
-    })
     if (!viewport) {
-      console.log('[fit][server] handleMobileSubscribe NO_VIEWPORT — skipping fit')
       return false
     }
 
@@ -2391,24 +2373,13 @@ export class OrcaRuntimeService {
     // Route the actual resize through the state machine. The fresh-subscribe
     // gate lets enqueueLayout's "no layouts entry" short-circuit pass on
     // the very first transition for this PTY.
-    console.log('[fit][server] handleMobileSubscribe enqueueing phone fit', {
-      ptyId: ptyId.slice(-8),
-      cols: clampedCols,
-      rows: clampedRows,
-      mode
-    })
     this.freshSubscribeGuard.add(ptyId)
     try {
-      const result = await this.enqueueLayout(ptyId, {
+      await this.enqueueLayout(ptyId, {
         kind: 'phone',
         cols: clampedCols,
         rows: clampedRows,
         ownerClientId: clientId
-      })
-      console.log('[fit][server] handleMobileSubscribe enqueue result', {
-        ptyId: ptyId.slice(-8),
-        result,
-        sizeAfter: this.getTerminalSize(ptyId)
       })
     } finally {
       this.freshSubscribeGuard.delete(ptyId)
@@ -2570,16 +2541,6 @@ export class OrcaRuntimeService {
     const inner = this.mobileSubscribers.get(ptyId)
     const subscriber = inner ? this.pickMostRecentActor(inner) : null
     const subscriberRecord = subscriber && inner ? inner.get(subscriber.clientId) : null
-    console.log('[fit][server] applyMobileDisplayMode', {
-      ptyId: ptyId.slice(-8),
-      mode,
-      hasInner: !!inner,
-      innerSize: inner?.size ?? 0,
-      subscriberId: subscriber?.clientId.slice(-8),
-      hasRecord: !!subscriberRecord,
-      recordViewport: subscriberRecord?.viewport,
-      wasResizedToPhone: subscriberRecord?.wasResizedToPhone
-    })
 
     if (mode === 'desktop') {
       // Reset wasResizedToPhone on every fitted subscriber so a future
