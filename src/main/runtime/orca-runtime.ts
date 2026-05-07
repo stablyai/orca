@@ -2651,6 +2651,18 @@ export class OrcaRuntimeService {
     if (this.isResizeSuppressed()) {
       return
     }
+    // Why: while a mobile-fit override is in place, the PTY is parked at
+    // phone dims. Any desktop-renderer-reported pty:resize for this ptyId
+    // is reporting the override's phone dims back to us — not the
+    // underlying desktop pane geometry. Treating it as "external" would
+    // overwrite each subscriber's previousCols/Rows baseline with phone
+    // dims, which is the value resolveDesktopRestoreTarget reads when
+    // the user clicks Restore. The result: take-back enqueues
+    // {kind:'desktop', cols:49, rows:40}, which is a no-op resize and
+    // leaves xterm stuck at phone dims.
+    if (this.terminalFitOverrides.has(ptyId)) {
+      return
+    }
     this.lastRendererSizes.set(ptyId, { cols, rows })
 
     const inner = this.mobileSubscribers.get(ptyId)

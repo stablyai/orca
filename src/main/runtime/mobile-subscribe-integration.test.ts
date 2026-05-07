@@ -468,23 +468,54 @@ describe('mobile subscribe integration', () => {
       expect(ptySizes.get('pty-1')).toEqual({ cols: 105, rows: 40 })
     })
 
-    it('refreshes baseline on phone-fitted subscribers when their baseline is non-null', async () => {
-      // Behavior change per docs/mobile-terminal-layout-state-machine.md:
-      // legacy `!wasResizedToPhone` gate is replaced with `previousCols != null`.
-      // A phone-fitted subscriber's baseline IS non-null (captured at subscribe),
-      // so onExternalPtyResize now overwrites it with the renderer's reported geometry.
+    it('ignores reports while a mobile-fit override is in place', async () => {
+      // Why: while a mobile-fit override is in place, the PTY is parked at
+      // phone dims and the desktop renderer's safeFit will report those
+      // phone dims back to us. Treating that as "external" geometry would
+      // overwrite the subscriber's previousCols/Rows baseline with phone
+      // dims; resolveDesktopRestoreTarget would then return phone dims on
+      // the next "Restore" click, leaving xterm stuck at phone dims after
+      // a no-op desktop-restore. See docs/mobile-fit-hold.md.
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // Renderer reports 45x20 — under the new design, this overwrites baseline
-      // (previously it was skipped because the subscriber was phone-fitted).
+      // Renderer reports phone dims back (echo of override). Must be ignored.
       runtime.onExternalPtyResize('pty-1', 45, 20)
 
-      // Toggle to desktop — restore lands on what the renderer reported (45x20),
-      // not the original 150x40.
+      // Toggle to desktop — restore lands on the original desktop baseline,
+      // not the phone-dim echo.
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    })
+
+    it('still updates baseline once the override is cleared (real desktop resize)', async () => {
+      // Counterpart to the above: after the user takes back, the renderer's
+      // pty:resize events ARE legitimate geometry reports and must update
+      // the baseline used by the next phone-fit cycle.
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+
+      // Take back — clears override and arms the 500ms cascade-suppress.
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+      // Wait past the renderer-cascade suppress window.
+      await vi.advanceTimersByTimeAsync(500)
+
+      // User resizes the desktop window. Renderer fires pty:resize.
+      runtime.onExternalPtyResize('pty-1', 130, 35)
+
+      // Toggle back to phone, then take back again — should restore to the
+      // updated desktop geometry, not the original 150x40.
+      runtime.setMobileDisplayMode('pty-1', 'auto')
+      await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 130, rows: 35 })
     })
   })
 
@@ -567,6 +598,75 @@ describe('mobile subscribe integration', () => {
       // Mobile re-subscribes (e.g. tab switch). Must re-fit to phone dims.
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    })
+
+    it('reclaim with WS disconnect between cycles — held branch restores correctly each time', async () => {
+      // Why: regression for "subsequent take-back stuck on phone dims" with
+      // indefinite hold. The realistic flow is:
+      //   subscribe → desktop reclaim → WS disconnect (background app) →
+      //   phone re-subscribes → WS disconnect → desktop reclaim (held branch)
+      // The held branch must restore to real desktop dims every time, not
+      // get stuck reading current PTY size (= phone dims).
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+
+      for (let i = 0; i < 3; i++) {
+        // Phone subscribes, fits to phone dims.
+        await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+        expect(ptySizes.get('pty-1'), `iter ${i}: phone-fit`).toEqual({ cols: 45, rows: 20 })
+
+        // Phone WS disconnects (e.g. backgrounding). With indefinite hold,
+        // PTY stays at phone dims and override persists; subscriber is
+        // removed from inner.
+        runtime.onClientDisconnected('client-a')
+        await vi.advanceTimersByTimeAsync(0)
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(ptySizes.get('pty-1'), `iter ${i}: held after disconnect`).toEqual({
+          cols: 45,
+          rows: 20
+        })
+        expect(runtime.isMobileSubscriberActive('pty-1'), `iter ${i}: no subscribers`).toBe(false)
+        expect(
+          runtime.getTerminalFitOverride('pty-1'),
+          `iter ${i}: override held`
+        ).not.toBeNull()
+
+        // Desktop clicks Restore — held-override branch.
+        const ok = await runtime.reclaimTerminalForDesktop('pty-1')
+        expect(ok, `iter ${i}: reclaim ok`).toBe(true)
+        expect(ptySizes.get('pty-1'), `iter ${i}: PTY restored to desktop`).toEqual({
+          cols: 150,
+          rows: 40
+        })
+        expect(
+          runtime.getTerminalFitOverride('pty-1'),
+          `iter ${i}: override cleared`
+        ).toBeNull()
+      }
+    })
+
+    it('reclaim → re-subscribe → reclaim cycle works repeatedly', async () => {
+      // Why: regression for "subsequent take-back doesn't change dims, stuck
+      // at phone dims". The full ping-pong must work N times, not just once.
+      const { runtime, ptySizes } = createRuntime()
+
+      for (let i = 0; i < 3; i++) {
+        // Phone takes the floor (or first subscribe).
+        await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+        expect(ptySizes.get('pty-1'), `iter ${i}: phone-fit`).toEqual({ cols: 45, rows: 20 })
+
+        // Desktop reclaims.
+        const ok = await runtime.reclaimTerminalForDesktop('pty-1')
+        expect(ok, `iter ${i}: reclaim ok`).toBe(true)
+        expect(ptySizes.get('pty-1'), `iter ${i}: reclaimed to desktop`).toEqual({
+          cols: 150,
+          rows: 40
+        })
+        expect(
+          runtime.getTerminalFitOverride('pty-1'),
+          `iter ${i}: override cleared`
+        ).toBeNull()
+      }
     })
 
     it('null (indefinite) keeps PTY at phone dims when WS connection closes (onClientDisconnected)', async () => {
