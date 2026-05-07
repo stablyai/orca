@@ -12,6 +12,7 @@ export const OptionalFiniteNumber = z
   .unknown()
   .transform((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
   .pipe(z.number().optional())
+  .optional()
 
 export const OptionalPositiveInt = z
   .unknown()
@@ -19,21 +20,25 @@ export const OptionalPositiveInt = z
     typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
   )
   .pipe(z.number().optional())
+  .optional()
 
 export const OptionalString = z
   .unknown()
   .transform((value) => (typeof value === 'string' && value.length > 0 ? value : undefined))
   .pipe(z.string().optional())
+  .optional()
 
 export const OptionalPlainString = z
   .unknown()
   .transform((value) => (typeof value === 'string' ? value : undefined))
   .pipe(z.string().optional())
+  .optional()
 
 export const OptionalBoolean = z
   .unknown()
   .transform((value) => (typeof value === 'boolean' ? value : undefined))
   .pipe(z.boolean().optional())
+  .optional()
 
 // Why: runtime handlers accept `linkedIssue: number | null | undefined` with
 // distinct meanings — undefined means "no update", null means "clear", number
@@ -50,6 +55,7 @@ export const TriStateLinkedIssue = z
     return undefined
   })
   .pipe(z.union([z.number(), z.null(), z.undefined()]))
+  .optional()
 
 // Why: the legacy extractBrowserTarget treated worktree as a plain-string
 // passthrough (empty string preserved) but `page` as non-empty-string. The
