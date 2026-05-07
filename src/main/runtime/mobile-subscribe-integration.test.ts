@@ -270,6 +270,37 @@ describe('mobile subscribe integration', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
+  it('preserves held-override baseline across resubscribe-after-indefinite-hold', async () => {
+    // Why: when the last mobile subscriber leaves under indefinite hold,
+    // the inner-subscribers map is wiped but `terminalFitOverrides` retains
+    // the original desktop dims as previousCols/previousRows. A fresh
+    // resubscribe must inherit those — otherwise rendererSize/currentSize
+    // (both phone dims because the override held them) would replace the
+    // baseline with phone dims, and any subsequent desktop "Restore" would
+    // be a no-op (restore-target == current dims).
+    settingsState.mobileAutoRestoreFitMs = null // indefinite hold
+    const { runtime, ptySizes } = createRuntime()
+
+    // Initial subscribe at desktop 150x40 → fit to 45x20.
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+    // Phone leaves; indefinite hold keeps PTY at phone dims with no
+    // subscribers. Override baseline still carries 150x40.
+    runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+    // Phone reopens — fresh resubscribe (inner map is empty).
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+
+    // Desktop user clicks Restore.
+    await runtime.reclaimTerminalForDesktop('pty-1')
+
+    // Must restore to the original 150x40, not the phone-fit 45x20.
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+  })
+
   it('clamps viewport to valid range', async () => {
     const { runtime, ptySizes } = createRuntime()
 

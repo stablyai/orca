@@ -2328,15 +2328,24 @@ export class OrcaRuntimeService {
     // Multi-mobile: peer joiner against an already-fitted PTY captures null
     // — the existing baseline-holder's snapshot remains canonical. See
     // docs/mobile-presence-lock.md.
+    //
+    // Resubscribe-after-indefinite-hold: the held override carries the only
+    // authoritative pre-fit dims across the no-subscriber gap. Inherit it
+    // first; otherwise rendererSize/currentSize would be the held phone dims
+    // and applyLayout would clobber the override's previousCols with phone
+    // dims, making any subsequent Restore a no-op.
+    const heldOverride = this.terminalFitOverrides.get(ptyId)
     const existing = inner.get(clientId)
     const someoneAlreadyFitted = [...inner.values()].some((s) => s.wasResizedToPhone)
     const currentSize = this.getTerminalSize(ptyId)
     const rendererSize = this.lastRendererSizes.get(ptyId)
     const previousCols =
       existing?.previousCols ??
+      heldOverride?.previousCols ??
       (someoneAlreadyFitted ? null : (rendererSize?.cols ?? currentSize?.cols ?? null))
     const previousRows =
       existing?.previousRows ??
+      heldOverride?.previousRows ??
       (someoneAlreadyFitted ? null : (rendererSize?.rows ?? currentSize?.rows ?? null))
     const now = Date.now()
     const subscribedAt = existing?.subscribedAt ?? now
