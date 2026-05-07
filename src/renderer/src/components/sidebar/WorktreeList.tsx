@@ -34,7 +34,6 @@ import {
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
-import { useModifierHint } from '@/hooks/useModifierHint'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
@@ -74,7 +73,6 @@ type VirtualizedWorktreeViewportProps = {
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
-  hintByWorktreeId: Map<string, number> | null
   activeModal: string
   pendingRevealWorktreeId: string | null
   clearPendingRevealWorktreeId: () => void
@@ -97,7 +95,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   toggleGroup,
   collapsedGroups,
   handleCreateForRepo,
-  hintByWorktreeId,
   activeModal,
   pendingRevealWorktreeId,
   clearPendingRevealWorktreeId,
@@ -484,7 +481,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 repo={row.repo}
                 isActive={activeWorktreeId === row.worktree.id}
                 hideRepoBadge={groupBy === 'repo'}
-                hintNumber={hintByWorktreeId?.get(row.worktree.id)}
               />
             </div>
           )
@@ -719,14 +715,6 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   const worktrees = visibleWorktrees
 
-  // Cmd+1–9 hint overlay: map worktree ID → hint number (1–9) for the first
-  // 9 visible worktrees. Only populated while the user holds the modifier key.
-  // Why suppress during modals: shortcuts like Cmd+J can open overlays via IPC
-  // before the renderer observes the second key in the combo, which leaves the
-  // bare-modifier timer armed. Hint badges are only useful while the sidebar is
-  // the active navigation surface, so any modal should clear and disable them.
-  const { showHints } = useModifierHint(activeModal === 'none')
-
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
 
@@ -755,8 +743,8 @@ const WorktreeList = React.memo(function WorktreeList() {
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
   // 'pr-status') can reorder cards into grouped sections. Using the flat
-  // order would cause badge numbers and Cmd+1–9 shortcuts to not match
-  // the visual card positions when grouping is active.
+  // order would cause Cmd+1–9 shortcuts to not match the visual card
+  // positions when grouping is active.
   const renderedWorktrees = useMemo(
     () =>
       rows
@@ -775,18 +763,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   useLayoutEffect(() => {
     setVisibleWorktreeIds(renderedWorktrees.map((w) => w.id))
   }, [renderedWorktrees])
-
-  const hintByWorktreeId = useMemo(() => {
-    if (!showHints) {
-      return null
-    }
-    const map = new Map<string, number>()
-    const limit = Math.min(renderedWorktrees.length, 9)
-    for (let i = 0; i < limit; i++) {
-      map.set(renderedWorktrees[i].id, i + 1)
-    }
-    return map
-  }, [showHints, renderedWorktrees])
 
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
@@ -850,7 +826,6 @@ const WorktreeList = React.memo(function WorktreeList() {
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}
       handleCreateForRepo={handleCreateForRepo}
-      hintByWorktreeId={hintByWorktreeId}
       activeModal={activeModal}
       pendingRevealWorktreeId={pendingRevealWorktreeId}
       clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}

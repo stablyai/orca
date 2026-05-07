@@ -37,6 +37,7 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 // without re-entering the `slice → TerminalPane → store → slice` cycle
 // that otherwise leaves createTerminalSlice undefined at store-init time.
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
+import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 
 const MAX_BUFFER_BYTES = 512 * 1024
 
@@ -284,39 +285,42 @@ export default function TerminalPane({
     }
     const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
     const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
-    // Preserve existing buffersByLeafId so layout-only persists (resize, split,
-    // reorder) don't clobber previously captured scrollback.
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
-    if (existing?.buffersByLeafId) {
-      const currentLeafIds = new Set(manager.getPanes().map((p) => paneLeafId(p.id)))
-      layout.buffersByLeafId = Object.fromEntries(
-        Object.entries(existing.buffersByLeafId).filter(([id]) => currentLeafIds.has(id))
-      )
+    const currentPanes = manager.getPanes()
+    const currentLeafIds = new Set(currentPanes.map((p) => paneLeafId(p.id)))
+    // Preserve existing buffersByLeafId so layout-only persists (resize, split,
+    // reorder) don't clobber previously captured scrollback. Drop entries for
+    // leaves that no longer exist.
+    const mergedBuffers = mergeCapturedLeafState({
+      prior: existing?.buffersByLeafId,
+      fresh: {},
+      currentLeafIds
+    })
+    if (Object.keys(mergedBuffers).length > 0) {
+      layout.buffersByLeafId = mergedBuffers
     }
     // Why: between pane creation and the deferred rAF where PTYs actually
-    // attach, all transports have getPtyId() === null. If persistLayoutSnapshot
-    // fires during that window the live-transport block below finds no entries,
-    // so this block preserves the *prior* snapshot's leaf→PTY mappings. Without
-    // it, a rapid successive remount (tab moved again before the first rAF)
-    // would lose the mappings and force fresh PTY spawns.
-    if (existing?.ptyIdsByLeafId) {
-      const currentLeafIds = new Set(manager.getPanes().map((p) => paneLeafId(p.id)))
-      layout.ptyIdsByLeafId = Object.fromEntries(
-        Object.entries(existing.ptyIdsByLeafId).filter(([id]) => currentLeafIds.has(id))
-      )
-    }
-    // Preserve pane titles — uses the live React state (via ref) rather than
-    // the stale Zustand value because React state reflects in-flight title
-    // edits that haven't been persisted yet.
-    const currentPanes = manager.getPanes()
-    const ptyEntries = currentPanes
+    // attach, all transports have getPtyId() === null. The merge below
+    // preserves the *prior* snapshot's leaf→PTY mappings while still letting
+    // any live transports overwrite them. Without preservation, a rapid
+    // successive remount (tab moved again before the first rAF) would lose
+    // the mappings and force fresh PTY spawns.
+    const livePtyEntries = currentPanes
       .map(
         (p) => [paneLeafId(p.id), paneTransportsRef.current.get(p.id)?.getPtyId() ?? null] as const
       )
       .filter((entry): entry is readonly [string, string] => entry[1] !== null)
-    if (ptyEntries.length > 0) {
-      layout.ptyIdsByLeafId = Object.fromEntries(ptyEntries)
+    const mergedPtyIds = mergeCapturedLeafState({
+      prior: existing?.ptyIdsByLeafId,
+      fresh: Object.fromEntries(livePtyEntries),
+      currentLeafIds
+    })
+    if (Object.keys(mergedPtyIds).length > 0) {
+      layout.ptyIdsByLeafId = mergedPtyIds
     }
+    // Preserve pane titles — uses the live React state (via ref) rather than
+    // the stale Zustand value because React state reflects in-flight title
+    // edits that haven't been persisted yet.
     const titles = paneTitlesRef.current
     const titleEntries = currentPanes
       .filter((p) => titles[p.id])
@@ -860,9 +864,14 @@ export default function TerminalPane({
       }
       const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
       const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
-      if (Object.keys(buffers).length > 0) {
-        layout.buffersByLeafId = buffers
-      }
+      // Why: setTabLayout REPLACES — it doesn't merge. captureBuffers can
+      // run during a transient window (post-remount, just-attached,
+      // mid-replay) where xterm hasn't rendered yet so serialize returns 0
+      // bytes. Without preservation, that empty pass would wipe a known-good
+      // buffer. Merge prior state in for leaves whose live capture came back
+      // empty. Same shape as persistLayoutSnapshot.
+      const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      const currentLeafIds = new Set(panes.map((p) => paneLeafId(p.id)))
       const ptyEntries = panes
         .map(
           (pane) =>
@@ -872,8 +881,21 @@ export default function TerminalPane({
             ] as const
         )
         .filter((entry): entry is readonly [string, string] => entry[1] !== null)
-      if (ptyEntries.length > 0) {
-        layout.ptyIdsByLeafId = Object.fromEntries(ptyEntries)
+      const mergedBuffers = mergeCapturedLeafState({
+        prior: existing?.buffersByLeafId,
+        fresh: buffers,
+        currentLeafIds
+      })
+      const mergedPtyIds = mergeCapturedLeafState({
+        prior: existing?.ptyIdsByLeafId,
+        fresh: Object.fromEntries(ptyEntries),
+        currentLeafIds
+      })
+      if (Object.keys(mergedBuffers).length > 0) {
+        layout.buffersByLeafId = mergedBuffers
+      }
+      if (Object.keys(mergedPtyIds).length > 0) {
+        layout.ptyIdsByLeafId = mergedPtyIds
       }
       // Merge pane titles so the shutdown snapshot doesn't silently drop them.
       // Why: the old early-return on empty buffers skipped this entirely, which

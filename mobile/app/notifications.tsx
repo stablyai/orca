@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { View, Text, StyleSheet, Pressable, Switch } from 'react-native'
+import { useState, useCallback, useEffect } from 'react'
+import { AppState, Linking, View, Text, StyleSheet, Pressable, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -8,27 +8,68 @@ import {
   loadPushNotificationsEnabled,
   savePushNotificationsEnabled
 } from '../src/storage/preferences'
-import { ensureNotificationPermissions } from '../src/notifications/mobile-notifications'
+import {
+  ensureNotificationPermissions,
+  getNotificationPermissionState,
+  type NotificationPermissionState
+} from '../src/notifications/mobile-notifications'
+
+const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
+  granted: false,
+  status: 'undetermined',
+  canAskAgain: true
+}
 
 export default function NotificationsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [pushEnabled, setPushEnabled] = useState(false)
+  const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
+
+  const refreshSettings = useCallback(async () => {
+    const [enabled, permission] = await Promise.all([
+      loadPushNotificationsEnabled(),
+      getNotificationPermissionState()
+    ])
+    setPushEnabled(enabled)
+    setPermissionState(permission)
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
-      void loadPushNotificationsEnabled().then(setPushEnabled)
-    }, [])
+      void refreshSettings()
+    }, [refreshSettings])
   )
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void refreshSettings()
+      }
+    })
+    return () => subscription.remove()
+  }, [refreshSettings])
 
   const togglePush = async (value: boolean) => {
     if (value) {
       const granted = await ensureNotificationPermissions()
-      if (!granted) return
+      const permission = await getNotificationPermissionState()
+      setPermissionState(permission)
+      if (!granted) {
+        setPushEnabled(false)
+        await savePushNotificationsEnabled(false)
+        return
+      }
     }
     setPushEnabled(value)
     await savePushNotificationsEnabled(value)
   }
+
+  const switchEnabled = pushEnabled && permissionState.granted
+  const notificationsBlocked = permissionState.status === 'denied'
+  const hint = notificationsBlocked
+    ? 'Notifications are disabled in system settings.'
+    : 'Receive notifications when an agent task completes on your desktop.'
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -43,15 +84,25 @@ export default function NotificationsScreen() {
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Push Notifications</Text>
           <Switch
-            value={pushEnabled}
+            value={switchEnabled}
+            disabled={notificationsBlocked}
             onValueChange={(v) => void togglePush(v)}
             trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
             thumbColor={colors.textPrimary}
           />
         </View>
-        <Text style={styles.hint}>
-          Receive notifications when an agent task completes on your desktop.
-        </Text>
+        <Text style={styles.hint}>{hint}</Text>
+        {notificationsBlocked && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.settingsButton,
+              pressed && styles.settingsButtonPressed
+            ]}
+            onPress={() => void Linking.openSettings()}
+          >
+            <Text style={styles.settingsButtonText}>Open Settings</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   )
@@ -105,5 +156,22 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: spacing.md + 2,
     paddingBottom: spacing.md
+  },
+  settingsButton: {
+    alignSelf: 'flex-start',
+    marginHorizontal: spacing.md + 2,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    backgroundColor: colors.bgRaised
+  },
+  settingsButtonPressed: {
+    opacity: 0.6
+  },
+  settingsButtonText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   }
 })

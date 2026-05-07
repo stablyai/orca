@@ -361,16 +361,15 @@ describe('setOptIn()', () => {
     expect(order).toEqual(['optIn', 'capture:telemetry_opted_in'])
   })
 
-  it('console-mirrors telemetry_opted_in when no PostHog client is initialized', async () => {
+  it('drops telemetry_opted_in silently in non-official builds', async () => {
     settings.telemetry!.optedIn = false
     _setPostHogClientForTests(null)
     _enableTransportForTests(false)
 
     await setOptIn('settings', true)
 
-    expect(console.debug).toHaveBeenCalledWith('[telemetry]', 'telemetry_opted_in', {
-      via: 'settings'
-    })
+    expect(mock.capture).not.toHaveBeenCalled()
+    expect(console.debug).not.toHaveBeenCalled()
   })
 
   it('fires app_opened once after pending-banner opt-in enables the SDK', async () => {

@@ -567,7 +567,7 @@ export default function HomeScreen() {
             </Text>
             <Pressable style={styles.primaryButton} onPress={() => router.push('/pair-scan')}>
               <QrCode size={17} color={colors.bgBase} />
-              <Text style={styles.primaryButtonText}>Scan Pairing Code</Text>
+              <Text style={styles.primaryButtonText}>Pair Desktop</Text>
             </Pressable>
           </View>
 

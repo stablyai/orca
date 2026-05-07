@@ -130,6 +130,12 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: passphrase-gate waits register a teardown here so dispose() can
+  // actively unsubscribe + resolve them. Without this, a pane disposed
+  // mid-wait leaks its zustand subscriber and the surrounding async IIFE
+  // forever, since the subscriber's `disposed` check only fires when the
+  // store next emits — which may never happen after disconnect.
+  const waitTeardowns: (() => void)[] = []
   // Why: startup commands must only run once — in the pane they were
   // targeted at. Capture `deps.startup` into a local and clear the field on
   // the (already spread-copied) `deps` so nothing else inside this function
@@ -798,32 +804,76 @@ export function connectPanePty(
               // waitForSshConnection below has its own error path that will
               // surface the failure via reportError.
               await new Promise<void>((resolve) => {
-                const isTerminalStatus = (status: string | undefined): boolean =>
-                  status === 'connected' ||
-                  status === 'auth-failed' ||
-                  status === 'error' ||
-                  status === 'reconnection-failed'
-                const unsub = useAppStore.subscribe((state) => {
-                  if (disposed) {
-                    unsub()
-                    resolve()
+                // Why: 'disconnected' counts as terminal only after we've
+                // observed a non-disconnected status — i.e. the user actually
+                // initiated a connect attempt that returned to 'disconnected'
+                // (cancel/dismiss). Treating the entry-time 'disconnected'
+                // as terminal would skip the gate entirely, defeating the
+                // passphrase-prompt deferral.
+                let sawNonDisconnected =
+                  useAppStore.getState().sshConnectionStates.get(connectionId)?.status !==
+                    'disconnected' &&
+                  useAppStore.getState().sshConnectionStates.get(connectionId)?.status !== undefined
+                const isTerminalStatus = (status: string | undefined): boolean => {
+                  if (
+                    status === 'connected' ||
+                    status === 'auth-failed' ||
+                    status === 'error' ||
+                    status === 'reconnection-failed'
+                  ) {
+                    return true
+                  }
+                  // Why: a return to 'disconnected' after a connect attempt
+                  // means the user cancelled or the dialog was dismissed —
+                  // resolve so the gate doesn't hang forever.
+                  return sawNonDisconnected && status === 'disconnected'
+                }
+                let settled = false
+                const finish = (): void => {
+                  if (settled) {
                     return
                   }
-                  if (isTerminalStatus(state.sshConnectionStates.get(connectionId)?.status)) {
-                    unsub()
-                    resolve()
+                  settled = true
+                  unsub()
+                  const idx = waitTeardowns.indexOf(finish)
+                  if (idx !== -1) {
+                    waitTeardowns.splice(idx, 1)
+                  }
+                  resolve()
+                }
+                // Why: registering a teardown lets dispose() actively
+                // unsubscribe + resolve if the pane is torn down while the
+                // wait is in flight. Without this the zustand subscriber and
+                // the surrounding async IIFE leak for the rest of the app
+                // session because the callback only checks `disposed` when
+                // it next fires — and it may never fire again.
+                waitTeardowns.push(finish)
+                const unsub = useAppStore.subscribe((state) => {
+                  if (disposed) {
+                    finish()
+                    return
+                  }
+                  const status = state.sshConnectionStates.get(connectionId)?.status
+                  if (status && status !== 'disconnected') {
+                    sawNonDisconnected = true
+                  }
+                  if (isTerminalStatus(status)) {
+                    finish()
                   }
                 })
                 // Why: re-read state immediately after subscribing to close the
                 // race where status transitioned between the alreadyConnected
                 // check above and the subscribe registration — otherwise we'd
                 // wait forever for a state change that already happened.
+                if (disposed) {
+                  finish()
+                  return
+                }
                 const currentStatus = useAppStore
                   .getState()
                   .sshConnectionStates.get(connectionId)?.status
                 if (isTerminalStatus(currentStatus)) {
-                  unsub()
-                  resolve()
+                  finish()
                 }
               })
               if (disposed) {
@@ -1103,6 +1153,13 @@ export function connectPanePty(
   return {
     dispose() {
       disposed = true
+      // Why: actively resolve any in-flight passphrase-gate waits so their
+      // zustand subscribers + async IIFEs don't hang for the rest of the
+      // session when the pane is torn down before SSH state changes.
+      while (waitTeardowns.length > 0) {
+        const teardown = waitTeardowns.pop()
+        teardown?.()
+      }
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null

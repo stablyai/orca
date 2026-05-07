@@ -248,20 +248,19 @@ function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string):
   })
 }
 
+// In `pnpm dev` and any contributor / non-official build, `track()` is a
+// no-op: it returns immediately without transmitting, logging, or running
+// the burst-cap / consent / validator pipeline. Telemetry only flows in
+// official stable/rc builds where CI injects `ORCA_BUILD_IDENTITY` and
+// `ORCA_POSTHOG_WRITE_KEY`.
 export function track<N extends EventName>(name: N, props: EventProps<N>): void {
-  // Console mirror: always in non-official builds (so the whole team —
-  // contributors included — sees exactly what would transmit) and also in
-  // official builds when `TELEMETRY_ENABLED` is off (PR 2 verification).
-  // These are the only two paths that short-circuit before the pipeline.
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
-    console.debug('[telemetry]', name, props)
     return
   }
 
   // (1) Shutdown gate. Late IPC arrivals should not attempt to enqueue
   // against a client that is actively flushing.
   if (shuttingDown) {
-    console.debug('[telemetry] shutdown-gate drop:', name)
     return
   }
   if (!posthog || !commonProps || !storeRef) {

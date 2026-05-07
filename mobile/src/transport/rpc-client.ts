@@ -41,7 +41,24 @@ export type RpcClient = {
 // "magic". Shorter backoff makes the auto-recovery path feel as fast.
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000]
 const REQUEST_TIMEOUT_MS = 30_000
+const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
+// Why: RN's WebSocket implementation may not expose static readyState
+// constants, but the protocol value for CONNECTING is stable across runtimes.
+const WEBSOCKET_CONNECTING_STATE = 0
+
+// Why: app-level liveness probe. The server runs its own ping/pong sweep
+// at 15s, but RN's WebSocket runtime auto-pongs at the native layer
+// without surfacing anything to JS — so the mobile side can't *see* that
+// the server thinks the link is fine. To detect a half-open socket from
+// the mobile direction (e.g. server crashed, phone moved between wifi
+// and cellular without TCP RST) we periodically round-trip a tiny RPC.
+// If two consecutive probes time out we force-close the WS, which fires
+// the existing reconnect path. 20s cadence + the 30s request timeout =
+// worst-case ~50s before mobile decides the link is dead and kicks
+// reconnect, which is still inside the user's perceived "responsive"
+// window and well below iOS's typical background-disconnect window.
+const ACTIVITY_PROBE_INTERVAL_MS = 20_000
 
 export function connect(
   endpoint: string,
@@ -54,7 +71,9 @@ export function connect(
   let requestCounter = 0
   let reconnectAttempt = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let connectTimer: ReturnType<typeof setTimeout> | null = null
   let handshakeTimer: ReturnType<typeof setTimeout> | null = null
+  let activityProbeTimer: ReturnType<typeof setInterval> | null = null
   let intentionallyClosed = false
 
   // Why: fresh ephemeral keypair per connection provides forward secrecy.
@@ -105,8 +124,23 @@ export function connect(
     sharedKey = null
 
     ws = new WebSocket(endpoint)
+    const openingWs = ws
+
+    // Why: React Native can leave TCP/WebSocket opens pending indefinitely on
+    // flaky network handoffs. Force the existing onclose reconnect path if
+    // onopen never arrives, instead of leaving the UI stuck at "Connecting...".
+    connectTimer = setTimeout(() => {
+      connectTimer = null
+      if (ws === openingWs && openingWs.readyState === WEBSOCKET_CONNECTING_STATE) {
+        openingWs.close()
+        if (ws === openingWs) {
+          handleSocketClosed(openingWs)
+        }
+      }
+    }, CONNECT_TIMEOUT_MS)
 
     ws.onopen = () => {
+      clearConnectTimer()
       reconnectAttempt = 0
       setState('handshaking')
 
@@ -161,6 +195,7 @@ export function connect(
               handshakeTimer = null
             }
             setState('connected')
+            startActivityProbe()
             for (const [id, stream] of streamListeners) {
               sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
             }
@@ -243,25 +278,34 @@ export function connect(
     }
 
     ws.onclose = () => {
-      ws = null
-      sharedKey = null
-      if (handshakeTimer) {
-        clearTimeout(handshakeTimer)
-        handshakeTimer = null
-      }
-      if (intentionallyClosed) {
-        setState('disconnected')
-        rejectAllPending('Connection closed')
-        return
-      }
-      rejectAllPending('Connection interrupted')
-      setState('reconnecting')
-      scheduleReconnect()
+      handleSocketClosed(openingWs)
     }
 
     ws.onerror = () => {
       // onclose will fire after this
     }
+  }
+
+  function handleSocketClosed(closedWs: WebSocket) {
+    if (ws !== closedWs) {
+      return
+    }
+    clearConnectTimer()
+    ws = null
+    sharedKey = null
+    if (handshakeTimer) {
+      clearTimeout(handshakeTimer)
+      handshakeTimer = null
+    }
+    stopActivityProbe()
+    if (intentionallyClosed) {
+      setState('disconnected')
+      rejectAllPending('Connection closed')
+      return
+    }
+    rejectAllPending('Connection interrupted')
+    setState('reconnecting')
+    scheduleReconnect()
   }
 
   function scheduleReconnect() {
@@ -271,6 +315,65 @@ export function connect(
       reconnectTimer = null
       openConnection()
     }, delay)
+  }
+
+  function clearConnectTimer() {
+    if (connectTimer) {
+      clearTimeout(connectTimer)
+      connectTimer = null
+    }
+  }
+
+  // Why: app-level liveness probe — see ACTIVITY_PROBE_INTERVAL_MS comment
+  // at the top of the file. Fires while the channel is in 'connected'
+  // state, sends a tiny status.get, and force-closes the WS if the probe
+  // fails (which the existing onclose path then turns into a reconnect).
+  function startActivityProbe() {
+    stopActivityProbe()
+    activityProbeTimer = setInterval(() => {
+      // Why: only probe while the channel is actually in 'connected'. The
+      // sendRequest path itself waits for connected, but a probe scheduled
+      // during a reconnect would just stack up timeouts and confuse logs.
+      if (state !== 'connected' || !ws) return
+      const probeWs = ws
+      // Why: short timeout (8s) — server's heartbeat is 15s, so if we
+      // don't see *anything* back within 8s the link is almost certainly
+      // half-open. Using REQUEST_TIMEOUT_MS (30s) here would make the
+      // user wait nearly a minute before reconnect kicks in.
+      const id = nextId()
+      let timedOut = false
+      const timeout = setTimeout(() => {
+        timedOut = true
+        pending.delete(id)
+        // Why: only force-close if this is still the same socket the
+        // probe was sent on; a normal close that already swapped `ws`
+        // shouldn't trigger a redundant terminate.
+        if (probeWs === ws && probeWs.readyState === WebSocket.OPEN) {
+          probeWs.close()
+        }
+      }, 8_000)
+      pending.set(id, {
+        resolve: () => {
+          if (timedOut) return
+          clearTimeout(timeout)
+        },
+        reject: () => {
+          if (timedOut) return
+          clearTimeout(timeout)
+        }
+      })
+      if (!sendEncrypted({ id, deviceToken, method: 'status.get' })) {
+        clearTimeout(timeout)
+        pending.delete(id)
+      }
+    }, ACTIVITY_PROBE_INTERVAL_MS)
+  }
+
+  function stopActivityProbe() {
+    if (activityProbeTimer) {
+      clearInterval(activityProbeTimer)
+      activityProbeTimer = null
+    }
   }
 
   function rejectAllPending(reason: string) {
@@ -385,10 +488,12 @@ export function connect(
         clearTimeout(reconnectTimer)
         reconnectTimer = null
       }
+      clearConnectTimer()
       if (handshakeTimer) {
         clearTimeout(handshakeTimer)
         handshakeTimer = null
       }
+      stopActivityProbe()
       if (ws) {
         ws.close()
         ws = null

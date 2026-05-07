@@ -55,6 +55,21 @@ function resolveWorktreeMetaWithDiscoveryStamp(store: Store, worktreeId: string)
   return store.setWorktreeMeta(worktreeId, { lastActivityAt: Date.now() })
 }
 
+const loggedUnavailableSshGitProviders = new Set<string>()
+const loggedWorktreeListFailures = new Set<string>()
+
+function warnOnce(keySet: Set<string>, key: string, message: string, error?: unknown): void {
+  if (keySet.has(key)) {
+    return
+  }
+  keySet.add(key)
+  if (error) {
+    console.warn(message, error)
+  } else {
+    console.warn(message)
+  }
+}
+
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
@@ -92,18 +107,31 @@ export function registerWorktreeHandlers(
           } else if (repo.connectionId) {
             const provider = getSshGitProvider(repo.connectionId)
             if (!provider) {
+              warnOnce(
+                loggedUnavailableSshGitProviders,
+                `${repo.connectionId}:${repo.id}`,
+                `[worktrees] SSH git provider unavailable; skipping worktree list for repo "${repo.displayName}" (${repo.id}) at ${repo.path} on connection ${repo.connectionId}`
+              )
               return []
             }
+            loggedUnavailableSshGitProviders.delete(`${repo.connectionId}:${repo.id}`)
             gitWorktrees = await provider.listWorktrees(repo.path)
           } else {
             gitWorktrees = await listRepoWorktrees(repo)
           }
+          loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
           return gitWorktrees.map((gw) => {
             const worktreeId = `${repo.id}::${gw.path}`
             const meta = resolveWorktreeMetaWithDiscoveryStamp(store, worktreeId)
             return mergeWorktree(repo.id, gw, meta, repo.displayName)
           })
-        } catch {
+        } catch (err) {
+          warnOnce(
+            loggedWorktreeListFailures,
+            `${repo.id}:${repo.path}`,
+            `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
+            err
+          )
           return []
         }
       })
@@ -122,29 +150,46 @@ export function registerWorktreeHandlers(
       return []
     }
 
-    let gitWorktrees
-    if (isFolderRepo(repo)) {
-      gitWorktrees = [createFolderWorktree(repo)]
-    } else if (repo.connectionId) {
-      const provider = getSshGitProvider(repo.connectionId)
-      // Why: when SSH is disconnected the provider is null. Return [] so the
-      // renderer's fetchWorktrees guard (`worktrees.length === 0 && current.length > 0`)
-      // preserves its cached worktree list. This avoids a console error on every
-      // fetchAllWorktrees cycle while the connection is being (re-)established —
-      // worktrees will be properly populated when the SSH `connected` event fires
-      // and triggers a re-fetch.
-      if (!provider) {
-        return []
+    try {
+      let gitWorktrees
+      if (isFolderRepo(repo)) {
+        gitWorktrees = [createFolderWorktree(repo)]
+      } else if (repo.connectionId) {
+        const provider = getSshGitProvider(repo.connectionId)
+        // Why: when SSH is disconnected the provider is null. Return [] so the
+        // renderer's fetchWorktrees guard (`worktrees.length === 0 && current.length > 0`)
+        // preserves its cached worktree list. This avoids a console error on every
+        // fetchAllWorktrees cycle while the connection is being (re-)established —
+        // worktrees will be properly populated when the SSH `connected` event fires
+        // and triggers a re-fetch.
+        if (!provider) {
+          warnOnce(
+            loggedUnavailableSshGitProviders,
+            `${repo.connectionId}:${repo.id}`,
+            `[worktrees] SSH git provider unavailable; skipping worktree list for repo "${repo.displayName}" (${repo.id}) at ${repo.path} on connection ${repo.connectionId}`
+          )
+          return []
+        }
+        loggedUnavailableSshGitProviders.delete(`${repo.connectionId}:${repo.id}`)
+        gitWorktrees = await provider.listWorktrees(repo.path)
+      } else {
+        gitWorktrees = await listRepoWorktrees(repo)
       }
-      gitWorktrees = await provider.listWorktrees(repo.path)
-    } else {
-      gitWorktrees = await listRepoWorktrees(repo)
+      loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+      return gitWorktrees.map((gw) => {
+        const worktreeId = `${repo.id}::${gw.path}`
+        const meta = resolveWorktreeMetaWithDiscoveryStamp(store, worktreeId)
+        return mergeWorktree(repo.id, gw, meta, repo.displayName)
+      })
+    } catch (err) {
+      warnOnce(
+        loggedWorktreeListFailures,
+        `${repo.id}:${repo.path}`,
+        `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
+        err
+      )
+      return []
     }
-    return gitWorktrees.map((gw) => {
-      const worktreeId = `${repo.id}::${gw.path}`
-      const meta = resolveWorktreeMetaWithDiscoveryStamp(store, worktreeId)
-      return mergeWorktree(repo.id, gw, meta, repo.displayName)
-    })
   })
 
   ipcMain.handle(

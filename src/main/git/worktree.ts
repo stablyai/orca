@@ -8,6 +8,12 @@ type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -106,10 +112,20 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
       })
     )
   } catch (err) {
+    if (getErrorCode(err) === 'ENOENT') {
+      try {
+        await stat(repoPath)
+      } catch (statErr) {
+        if (getErrorCode(statErr) === 'ENOENT') {
+          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+          return []
+        }
+      }
+    }
     // Why: a silent catch turned issue #1453's underlying
     // "git: unknown switch -z" into the opaque "not found in listing" toast.
     // Surface the cause so future regressions show up immediately.
-    console.warn('[git/worktree] listWorktrees failed:', err)
+    console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
 }

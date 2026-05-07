@@ -16,22 +16,32 @@ type SubscribeResult = {
   subscriptionId: string
 }
 
-let permissionGranted: boolean | null = null
+export type NotificationPermissionState = {
+  granted: boolean
+  status: string
+  canAskAgain: boolean
+}
+
+export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
+  const { status, canAskAgain } = await Notifications.getPermissionsAsync()
+  return {
+    granted: status === 'granted',
+    status,
+    canAskAgain
+  }
+}
 
 // Why: permissions must be requested before scheduling any local notification.
-// Cache the result so we only prompt once per app session.
+// Read the OS state every time because users can change it in Settings while
+// Orca remains alive in the background.
 export async function ensureNotificationPermissions(): Promise<boolean> {
-  if (permissionGranted !== null) return permissionGranted
-
-  const { status: existingStatus } = await Notifications.getPermissionsAsync()
-  if (existingStatus === 'granted') {
-    permissionGranted = true
+  const existing = await getNotificationPermissionState()
+  if (existing.granted) {
     return true
   }
 
   const { status } = await Notifications.requestPermissionsAsync()
-  permissionGranted = status === 'granted'
-  return permissionGranted
+  return status === 'granted'
 }
 
 function configureNotificationChannel(): void {

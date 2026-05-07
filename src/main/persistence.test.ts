@@ -86,7 +86,7 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
-    expect(ui.groupBy).toBe('none')
+    expect(ui.groupBy).toBe('repo')
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
@@ -433,7 +433,7 @@ describe('Store', () => {
     store.updateUI({ sidebarWidth: 400 })
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(400)
-    expect(ui.groupBy).toBe('none') // default preserved
+    expect(ui.groupBy).toBe('repo') // default preserved
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 

@@ -19,7 +19,6 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
-import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -102,21 +101,18 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onToggleLeftSidebar(() => {
-        dispatchClearModifierHints()
         useAppStore.getState().toggleSidebar()
       })
     )
 
     unsubs.push(
       window.api.ui.onToggleRightSidebar(() => {
-        dispatchClearModifierHints()
         useAppStore.getState().toggleRightSidebar()
       })
     )
 
     unsubs.push(
       window.api.ui.onToggleWorktreePalette(() => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         if (store.activeModal === 'worktree-palette') {
           store.closeModal()
@@ -128,7 +124,6 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onOpenQuickOpen(() => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         if (store.activeView === 'terminal' && store.activeWorktreeId !== null) {
           store.openModal('quick-open')
@@ -145,7 +140,6 @@ export function useIpcEvents(): void {
         if (!store.repos.some((repo) => isGitRepoKind(repo))) {
           return
         }
-        dispatchClearModifierHints()
         if (store.activeModal === 'new-workspace-composer') {
           return
         }
@@ -155,7 +149,6 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onJumpToWorktreeIndex((index) => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         if (store.activeView !== 'terminal') {
           return
@@ -169,7 +162,6 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onWorktreeHistoryNavigate((direction) => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         // Why: mirror the button-visibility rule — worktree history navigation
         // is only meaningful in the terminal (worktree) view. Settings/Tasks
@@ -476,7 +468,16 @@ export function useIpcEvents(): void {
             })
             return
           }
-          destroyPersistentWebview(data.browserPageId)
+          // Why: a workspace can host multiple browser pages; profile switch must
+          // tear down every sibling webview, not just the one referenced by the IPC.
+          const workspacePages = store.browserPagesByWorkspace[owningWorkspace.id] ?? []
+          if (workspacePages.length > 0) {
+            for (const page of workspacePages) {
+              destroyPersistentWebview(page.id)
+            }
+          } else {
+            destroyPersistentWebview(data.browserPageId)
+          }
           store.switchBrowserTabProfile(owningWorkspace.id, data.profileId)
           window.api.ui.replyTabSetProfile({ requestId: data.requestId })
         } catch (err) {
