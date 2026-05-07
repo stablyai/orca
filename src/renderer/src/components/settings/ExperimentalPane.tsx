@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
-import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './experimental-search'
+import { EXPERIMENTAL_PANE_SEARCH_ENTRIES, EXPERIMENTAL_SEARCH_ENTRY } from './experimental-search'
 import { MobilePane } from './MobilePane'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 
@@ -31,13 +31,13 @@ export function ExperimentalPane({
   hiddenExperimentalUnlocked = false
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showMobile = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[1]])
-  const showSidekick = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[2]])
+  const showMobile = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.mobile])
+  const showSidekick = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.sidekick])
   const showOrchestration = matchesSettingsSearch(searchQuery, [
-    EXPERIMENTAL_PANE_SEARCH_ENTRIES[3]
+    EXPERIMENTAL_SEARCH_ENTRY.orchestration
   ])
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
-    EXPERIMENTAL_PANE_SEARCH_ENTRIES[4]
+    EXPERIMENTAL_SEARCH_ENTRY.symlinks
   ])
 
   const [orchestrationEnabled, setOrchestrationEnabled] = useState<boolean>(() => {
@@ -73,7 +73,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title="Mobile Pairing"
           description="Pair a mobile device to control Orca remotely."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[1].keywords}
+          keywords={EXPERIMENTAL_SEARCH_ENTRY.mobile.keywords}
           className="space-y-3 px-1 py-2"
         >
           <div className="flex items-start justify-between gap-4">
@@ -133,7 +133,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title="Sidekick"
           description="Floating animated sidekick in the bottom-right corner."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[2].keywords}
+          keywords={EXPERIMENTAL_SEARCH_ENTRY.sidekick.keywords}
           className="space-y-3 px-1 py-2"
           id="experimental-sidekick"
         >
@@ -172,7 +172,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title="Agent Orchestration"
           description="Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[3].keywords}
+          keywords={EXPERIMENTAL_SEARCH_ENTRY.orchestration.keywords}
           className="space-y-3 px-1 py-2"
         >
           <div className="flex items-start justify-between gap-4">
@@ -253,7 +253,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title="Symlinks on worktrees"
           description="Automatically symlink configured files or folders into newly created worktrees."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[4].keywords}
+          keywords={EXPERIMENTAL_SEARCH_ENTRY.symlinks.keywords}
           className="space-y-3 px-1 py-2"
         >
           <div className="flex items-start justify-between gap-4">

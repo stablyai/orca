@@ -1,16 +1,6 @@
 import type { SettingsSearchEntry } from './settings-search'
 
 export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  // Why: index 0 is preserved as a placeholder for the removed
-  // "Detailed agent activity" toggle. Entries downstream
-  // (ExperimentalPane.tsx) reference [1] Mobile, [2] Sidekick,
-  // [3] Orchestration, [4] Worktree symlinks by numeric index — keeping
-  // this slot prevents a search-index shift. Unused; do not match.
-  {
-    title: '',
-    description: '',
-    keywords: []
-  },
   {
     title: 'Mobile Pairing',
     description:
@@ -78,3 +68,21 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   }
 ]
+
+// Why: title-keyed lookup avoids a fragile numeric-index invariant — the array
+// shape can change without breaking consumers, and a typo/rename throws loudly
+// instead of silently matching the wrong (or empty) entry.
+function findEntry(title: string): SettingsSearchEntry {
+  const entry = EXPERIMENTAL_PANE_SEARCH_ENTRIES.find((e) => e.title === title)
+  if (!entry) {
+    throw new Error(`Missing experimental-pane search entry: "${title}"`)
+  }
+  return entry
+}
+
+export const EXPERIMENTAL_SEARCH_ENTRY = {
+  mobile: findEntry('Mobile Pairing'),
+  sidekick: findEntry('Sidekick'),
+  orchestration: findEntry('Agent Orchestration'),
+  symlinks: findEntry('Symlinks on worktrees')
+} as const

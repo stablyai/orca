@@ -5,8 +5,7 @@ Any PR that touches `src/main/persistence.ts` migration logic for
 Tick each box only after confirming the corresponding test passes
 AND the migration code's behavior matches the expected outcome.
 
-The companion design doc is `docs/agent-dashboard-default-on.md`. The
-load-bearing migration trap is documented inline at `src/main/persistence.ts`
+The load-bearing migration trap is documented inline at `src/main/persistence.ts`
 lines 175-220 (the TRAP comment).
 
 ## Why this checklist exists
