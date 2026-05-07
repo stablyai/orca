@@ -36,7 +36,8 @@ const AUTO_RESTORE_FIT_OPTIONS: {
 
 function autoRestoreSummary(ms: number | null | undefined): string {
   if (ms === undefined) return '…'
-  const exact = ms == null ? AUTO_RESTORE_FIT_OPTIONS[0]! : AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+  if (ms === null) return AUTO_RESTORE_FIT_OPTIONS[0]!.label
+  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
   return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
 }
 
