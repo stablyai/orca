@@ -87,8 +87,8 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ~4.3.6
+        version: 4.3.6
       zustand:
         specifier: ^5.0.13
         version: 5.0.13(@types/react@19.2.14)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
@@ -5637,8 +5637,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
   zustand@5.0.13:
     resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
@@ -12492,7 +12492,7 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.4.3: {}
+  zod@4.3.6: {}
 
   zustand@5.0.13(@types/react@19.2.14)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6)):
     optionalDependencies:

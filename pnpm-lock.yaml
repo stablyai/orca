@@ -227,8 +227,8 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ~4.3.6
+        version: 4.3.6
       zustand:
         specifier: ^5.0.13
         version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
@@ -244,7 +244,7 @@ importers:
         version: 1.59.1
       '@stablyai/playwright-test':
         specifier: ^2.1.14
-        version: 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+        version: 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
       '@tailwindcss/vite':
         specifier: ^4.2.4
         version: 4.2.4(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
@@ -6376,8 +6376,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
   zustand@5.0.13:
     resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
@@ -8224,27 +8224,27 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
-  '@stablyai/playwright-base@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
+  '@stablyai/playwright-base@2.1.14(@playwright/test@1.59.1)(zod@4.3.6)':
     dependencies:
       '@playwright/test': 1.59.1
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
-      zod: 4.4.3
+      zod: 4.3.6
 
-  '@stablyai/playwright-test@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
+  '@stablyai/playwright-test@2.1.14(@playwright/test@1.59.1)(zod@4.3.6)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
-      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+      '@stablyai/playwright': 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
+      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
     transitivePeerDependencies:
       - zod
 
-  '@stablyai/playwright@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
+  '@stablyai/playwright@2.1.14(@playwright/test@1.59.1)(zod@4.3.6)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
     transitivePeerDependencies:
       - zod
 
@@ -12882,7 +12882,7 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.4.3: {}
+  zod@4.3.6: {}
 
   zustand@5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5)):
     optionalDependencies:
