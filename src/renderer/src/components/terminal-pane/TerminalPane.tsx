@@ -159,6 +159,17 @@ export default function TerminalPane({
               if (!pane) {
                 continue
               }
+              // Why: skip the fallback for hidden/unmounted panes whose
+              // container is 0×0. Force-resizing xterm to the server's
+              // desktop dims while the DOM has no geometry leaves xterm
+              // with cols/rows that won't match when the tab is later
+              // activated (the activation refit will correct it). The
+              // fallback is for the *visible* pane that legitimately
+              // failed to refit via the rAF safeFit.
+              const rect = pane.container.getBoundingClientRect()
+              if (rect.width === 0 || rect.height === 0) {
+                continue
+              }
               safeFit(pane)
               const stuckAtMobile =
                 event.priorCols != null &&

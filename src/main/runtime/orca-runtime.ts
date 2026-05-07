@@ -2651,16 +2651,21 @@ export class OrcaRuntimeService {
     if (this.isResizeSuppressed()) {
       return
     }
-    // Why: while a mobile-fit override is in place, the PTY is parked at
-    // phone dims. Any desktop-renderer-reported pty:resize for this ptyId
-    // is reporting the override's phone dims back to us — not the
-    // underlying desktop pane geometry. Treating it as "external" would
-    // overwrite each subscriber's previousCols/Rows baseline with phone
-    // dims, which is the value resolveDesktopRestoreTarget reads when
-    // the user clicks Restore. The result: take-back enqueues
-    // {kind:'desktop', cols:49, rows:40}, which is a no-op resize and
-    // leaves xterm stuck at phone dims.
-    if (this.terminalFitOverrides.has(ptyId)) {
+    // Why: while a mobile-fit override is in place, the desktop renderer's
+    // safeFit echoes pty:resize(override.cols, override.rows). Treating that
+    // echo as legitimate geometry would overwrite each subscriber's
+    // previousCols/Rows baseline with phone dims, so the next take-back
+    // enqueues a no-op {kind:'desktop', cols:49, rows:40} and leaves xterm
+    // stuck. Only filter reports that EXACTLY match the override — a fresh
+    // measurement from a now-visible pane (e.g. user activated a previously
+    // hidden tab on desktop, container went 0×0 → 1782×1195) reports
+    // different dims and is the right baseline to remember.
+    const activeOverride = this.terminalFitOverrides.get(ptyId)
+    if (
+      activeOverride &&
+      activeOverride.cols === cols &&
+      activeOverride.rows === rows
+    ) {
       return
     }
     this.lastRendererSizes.set(ptyId, { cols, rows })

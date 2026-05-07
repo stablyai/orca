@@ -517,6 +517,32 @@ describe('mobile subscribe integration', () => {
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 130, rows: 35 })
     })
+
+    it('updates baseline mid-fit when desktop reports dims that differ from the override', async () => {
+      // Why: a previously-hidden desktop tab can become visible while the
+      // phone is still phone-fitting (e.g. user activates the tab on
+      // desktop). The pane's container goes 0×0 → real geometry, fitAddon
+      // measures, and pty:resize fires with REAL dims (not the override's
+      // phone dims). That report is legitimate and must refresh the
+      // restore baseline so take-back lands on the visible desktop
+      // geometry instead of whatever stale baseline the subscriber
+      // captured at first subscribe.
+      const { runtime, ptySizes } = createRuntime()
+      // Pre-populate with an old/stale baseline (e.g. spawn default 80×24)
+      // by first reporting it before subscribe, then subscribing.
+      ptySizes.set('pty-1', { cols: 80, rows: 24 })
+      runtime.onExternalPtyResize('pty-1', 80, 24)
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+
+      // Desktop tab gets activated mid-fit; renderer reports real dims.
+      // These differ from the override (45×20), so they must pass through.
+      runtime.onExternalPtyResize('pty-1', 200, 60)
+
+      // Take back — should land on 200×60, not 80×24.
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 200, rows: 60 })
+    })
   })
 
   describe('backward compatibility', () => {
