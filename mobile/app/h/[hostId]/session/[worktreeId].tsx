@@ -163,6 +163,13 @@ export default function SessionScreen() {
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
+  // Why: server-side layout state machine emits a monotonic seq on every
+  // applyLayout. Track the highest seq we've observed per handle and drop
+  // any scrollback/resized event with a strictly older seq — these are
+  // late-arriving events from a superseded layout (e.g. phone-fit dims
+  // landing after the user toggled to desktop). Drops below `>20`-window
+  // gap reset (treat as a fresh subscription, e.g. server restart).
+  const layoutSeqRef = useRef<Map<string, number>>(new Map())
   const sendingRef = useRef(false)
   // Why: tracks the pixel height of the terminal frame so measureFitDimensions
   // can use the exact container height instead of relying on window.innerHeight,
@@ -180,6 +187,10 @@ export default function SessionScreen() {
     terminalUnsubsRef.current.delete(handle)
     subscribingHandlesRef.current.delete(handle)
     subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
+    // Why: a fresh subscription will land on a new server-side state machine
+    // run (or the same one with a higher seq); reset the high-water mark so
+    // the first scrollback isn't accidentally dropped as stale.
+    layoutSeqRef.current.delete(handle)
   }, [])
 
   const clearTerminalCache = useCallback(() => {
@@ -191,6 +202,7 @@ export default function SessionScreen() {
     initializedHandlesRef.current.clear()
     webReadyHandlesRef.current.clear()
     subscribeSeqRef.current.clear()
+    layoutSeqRef.current.clear()
     for (const term of terminalRefs.current.values()) {
       term.clear()
     }
@@ -226,6 +238,13 @@ export default function SessionScreen() {
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
 
+      console.log('[fit][session] subscribe', {
+        handle: handle.slice(-8),
+        seq,
+        viewport: viewportRef.current,
+        viewportMeasured: viewportMeasuredRef.current
+      })
+
       // Why: server handles auto-fit on subscribe — no terminal.focus call needed.
       // The viewport is embedded in the subscribe params so the server resizes
       // the PTY before serializing scrollback. This eliminates the focus→safeFit
@@ -240,50 +259,168 @@ export default function SessionScreen() {
         (result) => {
           if (subscribeSeqRef.current.get(handle) !== seq) return
           const data = result as Record<string, unknown>
+          // Why: stale-event filter. Server-side state machine bumps a
+          // monotonic seq on every applyLayout. Drop `resized` events
+          // whose seq is strictly older than what we've already observed
+          // for this handle — they're late-arriving from a superseded
+          // layout. `scrollback` is the response to a fresh subscribe,
+          // so it always resets the high-water mark regardless of seq
+          // (post-WS-reconnect or post-resubscribe the server may emit
+          // scrollback at a seq lower than what we'd seen pre-reconnect;
+          // dropping it would leave the user with a blank terminal).
+          const eventSeq = typeof data.seq === 'number' ? data.seq : null
+          if (eventSeq != null && data.type === 'resized') {
+            const last = layoutSeqRef.current.get(handle)
+            if (last != null && eventSeq < last && last - eventSeq <= 20) {
+              console.log('[fit][session] DROP-stale-seq', {
+                handle: handle.slice(-8),
+                type: data.type,
+                eventSeq,
+                lastSeq: last,
+                cols: data.cols,
+                rows: data.rows,
+                displayMode: data.displayMode
+              })
+              return
+            }
+            layoutSeqRef.current.set(handle, eventSeq)
+          } else if (eventSeq != null && data.type === 'scrollback') {
+            layoutSeqRef.current.set(handle, eventSeq)
+          }
+          if (data.type === 'scrollback' || data.type === 'resized') {
+            console.log('[fit][session] event', {
+              handle: handle.slice(-8),
+              type: data.type,
+              cols: data.cols,
+              rows: data.rows,
+              displayMode: data.displayMode,
+              seq: eventSeq,
+              reason: data.reason
+            })
+          }
           if (data.type === 'scrollback') {
-            if (initializedHandlesRef.current.has(handle)) return
+            if (initializedHandlesRef.current.has(handle)) {
+              console.log('[fit][session] scrollback IGNORED (already initialized)', {
+                handle: handle.slice(-8),
+                cols: data.cols,
+                rows: data.rows
+              })
+              return
+            }
             const cols = (data.cols as number) || 80
             const rows = (data.rows as number) || 24
+            const scrollbackCols = cols
+            const scrollbackRows = rows
             const initialData =
               typeof data.serialized === 'string' && data.serialized.length > 0
                 ? data.serialized
                 : ''
-            getTerminalRef(handle)?.init(cols, rows, initialData)
+            const ref = getTerminalRef(handle)
+            // Why: previously we set `initializedHandlesRef` even when the
+            // WebView wasn't mounted yet (ref=null). The init message went
+            // nowhere, but the flag stayed true, so any subsequent scrollback
+            // for THIS handle was silently dropped → blank terminal. Only
+            // mark initialized if init() actually reached the WebView.
+            if (!ref) {
+              console.log('[fit][session] scrollback DROPPED — no terminal ref', {
+                handle: handle.slice(-8),
+                cols,
+                rows
+              })
+              return
+            }
+            ref.init(cols, rows, initialData)
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               setTerminalModes((prev) =>
                 new Map(prev).set(handle, data.displayMode as MobileDisplayMode)
               )
             }
-            // Why: cold-start fit-to-screen guard. The first init() runs
-            // before xterm's DOM/canvas has fully laid out, so the
-            // applyFitScale that init queues internally can land while
-            // term.element.scrollWidth is still stale or zero — leaving
-            // the terminal un-zoomed until the user toggles the resize
-            // button. Re-fire resetZoom after a short delay so it runs
-            // against a settled DOM. Mirrors the 'resized' handler below.
+            // Why: belt-and-suspenders cold-start fit. The applyFitScale
+            // queued by init() runs after writes drain, but on cold start
+            // xterm's scrollWidth can still be transient when it commits.
+            // Re-fire after a short delay so it runs against a settled DOM.
+            // Mirrors the 'resized' handler below.
             setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
             // Why: viewport measurement needs xterm to be initialized (cell
             // dimensions come from the renderer). On the first subscribe the
             // WebView hasn't loaded yet, so viewportRef is null and the server
             // can't auto-fit. After the first init we can measure, then
             // resubscribe so the server gets the viewport and phone-fits.
-            if (!viewportMeasuredRef.current) {
+            // If viewport was measured by a parallel path BUT the scrollback
+            // we just received came back at desktop dims, our subscribe
+            // beat the measure; the server still has a null viewport for
+            // this subscriber record — resubscribe so it gets stored.
+            const needsResubscribe =
+              !viewportMeasuredRef.current ||
+              (viewportRef.current != null &&
+                (scrollbackCols !== viewportRef.current.cols ||
+                  scrollbackRows !== viewportRef.current.rows))
+            if (needsResubscribe) {
               void (async () => {
+                console.log('[fit][session] post-scrollback measure-start', {
+                  handle: handle.slice(-8),
+                  containerHeight: terminalFrameHeightRef.current
+                })
+                // Why: wait for the WebView's init() rAF chain to fully
+                // run (term.open → renderService population → first
+                // paint) before measuring. Without this, the measure
+                // postMessage races ahead of init's async work and
+                // returns null (term not ready / cells size 0), the
+                // resubscribe never fires, and the server never gets
+                // phone dims. See log dump 2026-05-06 confirming the
+                // race + measure-result null pattern.
+                await getTerminalRef(handle)?.awaitReady()
                 const dims = await getTerminalRef(handle)?.measureFitDimensions(
                   terminalFrameHeightRef.current || undefined
                 )
-                if (dims && !viewportMeasuredRef.current) {
+                // Why: we just got `scrollback` with cols=80 (server's
+                // default fallback for null viewport). That means the
+                // server-side subscriber record was registered before we
+                // could send viewport. Even if `viewportMeasuredRef`
+                // raced ahead via a parallel `measureViewportOnce`, the
+                // server still has a null viewport for THIS subscriber
+                // record — we MUST resubscribe so the server stores it.
+                console.log('[fit][session] post-scrollback measure-result', {
+                  handle: handle.slice(-8),
+                  dims,
+                  alreadyMeasured: viewportMeasuredRef.current
+                })
+                if (dims) {
                   viewportRef.current = dims
                   viewportMeasuredRef.current = true
                   unsubscribeTerminal(handle)
                   initializedHandlesRef.current.delete(handle)
+                  console.log('[fit][session] post-scrollback re-subscribe', {
+                    handle: handle.slice(-8),
+                    viewport: dims
+                  })
                   subscribeToTerminal(handle)
                 }
               })()
             }
           } else if (data.type === 'data') {
-            getTerminalRef(handle)?.write(data.chunk as string)
+            // Why: log when data arrives but the WebView ref is missing
+            // — this is the most likely cause of "blank but input works":
+            // server stream is alive, sends flow, but writes are dropped
+            // because the WebView ref disappeared (unmount mid-flight) or
+            // the scrollback never landed (so xterm has no buffer).
+            const dataRef = getTerminalRef(handle)
+            if (!dataRef) {
+              console.log('[fit][session] data DROPPED — no terminal ref', {
+                handle: handle.slice(-8),
+                chunkLen: typeof data.chunk === 'string' ? data.chunk.length : 0,
+                initialized: initializedHandlesRef.current.has(handle)
+              })
+              return
+            }
+            if (!initializedHandlesRef.current.has(handle)) {
+              console.log('[fit][session] data RECEIVED before scrollback', {
+                handle: handle.slice(-8),
+                chunkLen: typeof data.chunk === 'string' ? data.chunk.length : 0
+              })
+            }
+            dataRef.write(data.chunk as string)
           } else if (data.type === 'resized') {
             // Why: inline resize event — the server changed the PTY dimensions
             // (mode toggle or desktop restore). Reinitialize xterm at the new
@@ -324,17 +461,29 @@ export default function SessionScreen() {
       if (!client) return
       if (toggleInFlightRef.current.has(handle)) return
       const current = terminalModes.get(handle) ?? 'auto'
-      const next: MobileDisplayMode = current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
+      // Why: 'phone' on the wire is an observation ("currently phone-fitted"),
+      // not a setting. The toggle only ever requests 'auto' or 'desktop'.
+      const next: 'auto' | 'desktop' =
+        current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
+      console.log('[fit][session] toggleDisplayMode', {
+        handle: handle.slice(-8),
+        current,
+        next
+      })
       toggleInFlightRef.current.add(handle)
       try {
         await client.sendRequest('terminal.setDisplayMode', {
           terminal: handle,
           mode: next,
-          // Why: presence-lock take-floor signal. Sending mode=auto/phone
-          // is a deliberate "I want to drive at phone dims" gesture.
+          // Why: presence-lock take-floor signal — requesting 'auto' is the
+          // explicit "I want to drive at phone dims" gesture.
           ...(deviceTokenRef.current
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-            : {})
+            : {}),
+          // Why: late-bind viewport for terminals whose subscribe record
+          // was registered before measurement landed. Without this the
+          // server's stored viewport is null and auto toggles no-op.
+          ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})
         })
       } catch {
         // Mode change failed — server state unchanged, UI stays in sync.
@@ -666,6 +815,7 @@ export default function SessionScreen() {
         // scrollback snapshot. Only resubscribe if this is a reload — on
         // first load the subscription is already running and pendingMessages
         // will flush the queued init after this callback returns.
+        // (unsubscribeTerminal also clears layoutSeqRef for this handle.)
         unsubscribeTerminal(handle)
         initializedHandlesRef.current.delete(handle)
         if (handle === activeHandleRef.current) {
@@ -676,10 +826,18 @@ export default function SessionScreen() {
       // Why: on first web-ready, the initial subscribeToTerminal call from
       // fetchTerminals may have been skipped (reason=no-ref, WebView wasn't
       // mounted yet). Now that the WebView is ready, subscribe if this is the
-      // active terminal and no subscription is running.
+      // active terminal and no subscription is running. Await measure before
+      // subscribe so the very first subscribe carries the viewport — without
+      // this, subscribe(viewport=null) lands on the server first and the
+      // post-scrollback measure path's resubscribe sees alreadyMeasured=true
+      // (because measureViewportOnce won the race) and silently skips.
       if (handle === activeHandleRef.current && !terminalUnsubsRef.current.has(handle)) {
-        void measureViewportOnce(handle)
-        subscribeToTerminal(handle)
+        void (async () => {
+          await measureViewportOnce(handle)
+          if (handle === activeHandleRef.current && !terminalUnsubsRef.current.has(handle)) {
+            subscribeToTerminal(handle)
+          }
+        })()
       }
     },
     [measureViewportOnce, subscribeToTerminal, unsubscribeTerminal]

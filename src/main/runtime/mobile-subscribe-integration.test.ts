@@ -118,10 +118,13 @@ describe('mobile subscribe integration', () => {
     vi.useRealTimers()
   })
 
-  it('handleMobileSubscribe resizes PTY to phone dims', () => {
+  it('handleMobileSubscribe resizes PTY to phone dims', async () => {
     const { runtime, ptySizes, resizes, notifications } = createRuntime()
 
-    const result = runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    const result = await runtime.handleMobileSubscribe('pty-1', 'client-a', {
+      cols: 45,
+      rows: 20
+    })
 
     expect(result).toBe(true)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
@@ -130,83 +133,88 @@ describe('mobile subscribe integration', () => {
     expect(runtime.isMobileSubscriberActive('pty-1')).toBe(true)
   })
 
-  it('handleMobileSubscribe skips resize when mode is desktop', () => {
+  it('handleMobileSubscribe skips resize when mode is desktop', async () => {
     const { runtime, ptySizes, resizes } = createRuntime()
     runtime.setMobileDisplayMode('pty-1', 'desktop')
 
-    const result = runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    const result = await runtime.handleMobileSubscribe('pty-1', 'client-a', {
+      cols: 45,
+      rows: 20
+    })
 
     expect(result).toBe(false)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     expect(resizes).toEqual([])
   })
 
-  it('handleMobileSubscribe skips resize when no viewport provided', () => {
+  it('handleMobileSubscribe skips resize when no viewport provided', async () => {
     const { runtime, ptySizes, resizes } = createRuntime()
 
-    const result = runtime.handleMobileSubscribe('pty-1', 'client-a')
+    const result = await runtime.handleMobileSubscribe('pty-1', 'client-a')
 
     expect(result).toBe(false)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     expect(resizes).toEqual([])
   })
 
-  it('handleMobileUnsubscribe restores PTY after 300ms debounce in auto mode', () => {
+  it('handleMobileUnsubscribe restores PTY after 300ms debounce in auto mode', async () => {
     const { runtime, ptySizes } = createRuntime()
-    runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
     // Not yet restored
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-    vi.advanceTimersByTime(300)
+    await vi.advanceTimersByTimeAsync(300)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
-  it('handleMobileUnsubscribe does not restore in phone mode', () => {
+  // Why: 'phone' (sticky-fit) mode was removed — there are now only 'auto'
+  // and 'desktop'. Auto-mode always restores on last unsubscribe. Test
+  // kept and inverted to lock in the new contract.
+  it('handleMobileUnsubscribe restores after auto-mode last unsubscribe', async () => {
     const { runtime, ptySizes } = createRuntime()
-    runtime.setMobileDisplayMode('pty-1', 'phone')
-    // In phone mode, handleMobileSubscribe still resizes because mode is 'phone'
-    runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    // mode defaults to 'auto'
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-    vi.advanceTimersByTime(1000)
-    // Still at phone dims — no restore for phone mode
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    await vi.advanceTimersByTimeAsync(1000)
+    // Restored to desktop dims — no sticky-phone retention.
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
   // TODO: inline restore on re-subscribe not yet implemented
-  it.skip('re-subscribe within 300ms cancels debounce timer and inline-restores old PTY', () => {
+  it.skip('re-subscribe within 300ms cancels debounce timer and inline-restores old PTY', async () => {
     const { runtime, ptySizes } = createRuntime()
-    runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
     // Re-subscribe to a different terminal before the timer fires
-    vi.advanceTimersByTime(100)
-    runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
+    await vi.advanceTimersByTimeAsync(100)
+    await runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
 
     // pty-1 was inline-restored when pty-2 subscribed (timer cancelled + immediate restore)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     expect(ptySizes.get('pty-2')).toEqual({ cols: 45, rows: 20 })
 
     // Advancing past the 300ms debounce should not cause a second restore
-    vi.advanceTimersByTime(300)
+    await vi.advanceTimersByTimeAsync(300)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
   // TODO: inline restore on re-subscribe not yet implemented
-  it.skip('rapid A→B→C tab navigation: inline restore of A when B subscribes', () => {
+  it.skip('rapid A→B→C tab navigation: inline restore of A when B subscribes', async () => {
     const { runtime, ptySizes } = createRuntime()
 
     // Subscribe to A
-    runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
     // Unsubscribe A, subscribe B — A's pending timer is cancelled, A gets inline restore
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-    runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
 
     // pty-1 should be restored inline (not waiting for timer)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
@@ -214,41 +222,41 @@ describe('mobile subscribe integration', () => {
 
     // Unsubscribe B, subscribe C — B's pending timer cancelled, B gets inline restore
     runtime.handleMobileUnsubscribe('pty-2', 'client-a')
-    runtime.handleMobileSubscribe('pty-3', 'client-a', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-3', 'client-a', { cols: 45, rows: 20 })
 
     expect(ptySizes.get('pty-2')).toEqual({ cols: 120, rows: 35 })
     expect(ptySizes.get('pty-3')).toEqual({ cols: 45, rows: 20 })
 
     // Verify final state
-    vi.advanceTimersByTime(1000)
+    await vi.advanceTimersByTimeAsync(1000)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     expect(ptySizes.get('pty-2')).toEqual({ cols: 120, rows: 35 })
     expect(ptySizes.get('pty-3')).toEqual({ cols: 45, rows: 20 })
   })
 
-  it('preserves previousDims across re-subscribes to same terminal', () => {
+  it('preserves previousDims across re-subscribes to same terminal', async () => {
     const { runtime, ptySizes } = createRuntime()
 
     // First subscribe at desktop 150x40
-    runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
     // Re-subscribe to the same terminal (e.g., after reconnect)
     // The PTY is already at 45x20, but previousDims should still be 150x40
-    runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
     // Unsubscribe and let restore fire
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-    vi.advanceTimersByTime(300)
+    await vi.advanceTimersByTimeAsync(300)
 
     // Should restore to original desktop dims, not 45x20
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
-  it('clamps viewport to valid range', () => {
+  it('clamps viewport to valid range', async () => {
     const { runtime, ptySizes } = createRuntime()
 
-    runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 10, rows: 3 })
+    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 10, rows: 3 })
     // Should clamp to minimum 20x8
     expect(ptySizes.get('pty-1')).toEqual({ cols: 20, rows: 8 })
   })
@@ -261,9 +269,6 @@ describe('mobile subscribe integration', () => {
 
     it('set/get round-trip', () => {
       const { runtime } = createRuntime()
-      runtime.setMobileDisplayMode('pty-1', 'phone')
-      expect(runtime.getMobileDisplayMode('pty-1')).toBe('phone')
-
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('desktop')
 
@@ -274,16 +279,16 @@ describe('mobile subscribe integration', () => {
   })
 
   describe('applyMobileDisplayMode', () => {
-    it('desktop mode restores PTY when currently phone-fitted', () => {
+    it('desktop mode restores PTY when currently phone-fitted', async () => {
       const { runtime, ptySizes } = createRuntime()
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
       const resizeEvents: unknown[] = []
       runtime.subscribeToTerminalResize('pty-1', (event) => resizeEvents.push(event))
 
       runtime.setMobileDisplayMode('pty-1', 'desktop')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
 
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
       expect(resizeEvents).toHaveLength(1)
@@ -291,17 +296,17 @@ describe('mobile subscribe integration', () => {
         cols: 150,
         rows: 40,
         displayMode: 'desktop',
-        reason: 'mode-change'
+        reason: 'apply-layout'
       })
     })
 
-    it('auto mode re-fits PTY when subscriber exists and not phone-fitted', () => {
+    it('auto mode re-fits PTY when subscriber exists and not phone-fitted', async () => {
       const { runtime, ptySizes } = createRuntime()
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
       // Switch to desktop (restores to 150x40)
       runtime.setMobileDisplayMode('pty-1', 'desktop')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
 
       const resizeEvents: unknown[] = []
@@ -309,25 +314,27 @@ describe('mobile subscribe integration', () => {
 
       // Switch back to auto (should re-fit to phone dims)
       runtime.setMobileDisplayMode('pty-1', 'auto')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
 
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
       expect(resizeEvents).toHaveLength(1)
       expect(resizeEvents[0]).toMatchObject({
-        displayMode: 'auto',
-        reason: 'mode-change'
+        displayMode: 'phone',
+        reason: 'apply-layout'
       })
     })
   })
 
   describe('cleanup paths', () => {
-    it('onClientDisconnected restores all PTYs immediately (no debounce)', () => {
+    it('onClientDisconnected restores all PTYs immediately (no debounce)', async () => {
       const { runtime, ptySizes } = createRuntime()
 
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
-      runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
 
       runtime.onClientDisconnected('client-a')
+      // onClientDisconnected enqueues fire-and-forget; flush microtasks + 0ms timers.
+      await vi.advanceTimersByTimeAsync(0)
 
       // Both PTYs restored immediately
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
@@ -336,22 +343,22 @@ describe('mobile subscribe integration', () => {
       expect(runtime.isMobileSubscriberActive('pty-2')).toBe(false)
     })
 
-    it('onClientDisconnected cancels pending restore timers', () => {
+    it('onClientDisconnected cancels pending restore timers', async () => {
       const { runtime, ptySizes } = createRuntime()
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
       // Timer is pending
 
       runtime.onClientDisconnected('client-a')
       // Timer should be cancelled, PTY already restored by disconnect handler
 
-      vi.advanceTimersByTime(1000)
+      await vi.advanceTimersByTimeAsync(1000)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     })
 
-    it('onPtyExit cleans up mobileSubscribers and pending timers', () => {
+    it('onPtyExit cleans up mobileSubscribers and pending timers', async () => {
       const { runtime } = createRuntime()
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
       // Timer pending for pty-1
 
@@ -360,31 +367,31 @@ describe('mobile subscribe integration', () => {
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
 
       // Timer should have been cancelled — no crash from resizing a dead PTY
-      vi.advanceTimersByTime(1000)
+      await vi.advanceTimersByTimeAsync(1000)
     })
 
-    it('onPtyExit does not cancel timers for other PTYs', () => {
+    it('onPtyExit does not cancel timers for other PTYs', async () => {
       const { runtime, ptySizes } = createRuntime()
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
       // pty-2 exits — should not affect pty-1's pending restore
       runtime.onPtyExit('pty-2', 0)
 
-      vi.advanceTimersByTime(300)
+      await vi.advanceTimersByTimeAsync(300)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     })
   })
 
   describe('resize listener system', () => {
-    it('subscribe/unsubscribe lifecycle', () => {
+    it('subscribe/unsubscribe lifecycle', async () => {
       const { runtime } = createRuntime()
       const events: unknown[] = []
       const unsubscribe = runtime.subscribeToTerminalResize('pty-1', (e) => events.push(e))
 
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.setMobileDisplayMode('pty-1', 'desktop')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
 
       expect(events.length).toBeGreaterThan(0)
 
@@ -393,36 +400,41 @@ describe('mobile subscribe integration', () => {
 
       // After unsubscribe, no more events
       runtime.setMobileDisplayMode('pty-1', 'auto')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
       expect(events.length).toBe(countBefore)
     })
   })
 
   describe('onExternalPtyResize', () => {
-    it('updates previousCols when desktop renderer resizes PTY after desktop restore', () => {
+    it('updates previousCols when desktop renderer resizes PTY after desktop restore', async () => {
       const { runtime, ptySizes } = createRuntime()
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
       // Toggle to desktop — restores to previousCols (150x40)
       runtime.setMobileDisplayMode('pty-1', 'desktop')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+      // Phone→desktop arms the 500ms renderer-cascade suppress window per
+      // docs/mobile-terminal-layout-state-machine.md. Wait it out before the
+      // renderer's correcting fit is allowed to update lastRendererSizes.
+      await vi.advanceTimersByTimeAsync(500)
 
       // Simulate desktop renderer's safeFit correcting to split-pane width
       runtime.onExternalPtyResize('pty-1', 105, 40)
 
       // Toggle back to auto — should capture previousCols=105 (not 150)
       runtime.setMobileDisplayMode('pty-1', 'auto')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
       // Toggle to desktop again — should restore to 105 (the corrected value)
       runtime.setMobileDisplayMode('pty-1', 'desktop')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 105, rows: 40 })
     })
 
-    it('uses lastRendererSize for previousCols on first subscribe', () => {
+    it('uses lastRendererSize for previousCols on first subscribe', async () => {
       const { runtime, ptySizes } = createRuntime()
 
       // Simulate: PTY spawned at 214 (ptySizes), but renderer already fit to 105
@@ -430,41 +442,46 @@ describe('mobile subscribe integration', () => {
       runtime.onExternalPtyResize('pty-1', 105, 40)
 
       // First mobile subscribe — should use rendererSize (105) not ptySizes (214)
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
       // Toggle to desktop — should restore to 105, not 214
       runtime.setMobileDisplayMode('pty-1', 'desktop')
-      runtime.applyMobileDisplayMode('pty-1')
+      await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 105, rows: 40 })
     })
 
-    it('does not update previousCols when PTY is phone-fitted', () => {
+    it('refreshes baseline on phone-fitted subscribers when their baseline is non-null', async () => {
+      // Behavior change per docs/mobile-terminal-layout-state-machine.md:
+      // legacy `!wasResizedToPhone` gate is replaced with `previousCols != null`.
+      // A phone-fitted subscriber's baseline IS non-null (captured at subscribe),
+      // so onExternalPtyResize now overwrites it with the renderer's reported geometry.
       const { runtime, ptySizes } = createRuntime()
-      runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // PTY is phone-fitted (wasResizedToPhone=true) — external resize should not
-      // overwrite previousCols with phone dims
+      // Renderer reports 45x20 — under the new design, this overwrites baseline
+      // (previously it was skipped because the subscriber was phone-fitted).
       runtime.onExternalPtyResize('pty-1', 45, 20)
 
-      // Toggle to desktop — should still restore to original 150x40
+      // Toggle to desktop — restore lands on what the renderer reported (45x20),
+      // not the original 150x40.
       runtime.setMobileDisplayMode('pty-1', 'desktop')
-      runtime.applyMobileDisplayMode('pty-1')
-      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+      await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
     })
   })
 
   describe('backward compatibility', () => {
-    it('old resizeForClient still works alongside new system', () => {
+    it('old resizeForClient still works alongside new system', async () => {
       const { runtime, ptySizes } = createRuntime()
 
       // Old flow: explicit resizeForClient
-      const fitResult = runtime.resizeForClient('pty-1', 'mobile-fit', 'client-old', 45, 20)
+      const fitResult = await runtime.resizeForClient('pty-1', 'mobile-fit', 'client-old', 45, 20)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
       expect(fitResult.mode).toBe('mobile-fit')
 
       // Old flow: restore
-      const restoreResult = runtime.resizeForClient('pty-1', 'restore', 'client-old')
+      const restoreResult = await runtime.resizeForClient('pty-1', 'restore', 'client-old')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
       expect(restoreResult.mode).toBe('desktop-fit')
     })

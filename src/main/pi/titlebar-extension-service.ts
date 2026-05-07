@@ -13,6 +13,10 @@ import {
 import { homedir } from 'os'
 import { basename, join, relative, resolve, sep } from 'path'
 import { app } from 'electron'
+import {
+  ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
+  getPiAgentStatusExtensionSource
+} from './agent-status-extension-source'
 
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
@@ -309,6 +313,14 @@ export class PiTitlebarExtensionService {
       writeFileSync(
         join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
         getPiPrefillExtensionSource()
+      )
+      // Why: bundled status extension that bridges pi's in-process event API
+      // to the unified /hook/pi endpoint. Without this, pi panes would have
+      // no entry in agentStatusByPaneKey and the dashboard would fall back
+      // to terminal-title heuristics like any uninstrumented CLI.
+      writeFileSync(
+        join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE),
+        getPiAgentStatusExtensionSource()
       )
     } catch {
       // Why: overlay creation is best-effort — permission errors (EPERM/EACCES)

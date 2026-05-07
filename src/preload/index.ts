@@ -515,6 +515,7 @@ const api = {
   feedback: {
     submit: (args: {
       feedback: string
+      submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
     }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
@@ -1187,6 +1188,17 @@ const api = {
         callback(data)
       ipcRenderer.on('browser:activateView', listener)
       return () => ipcRenderer.removeListener('browser:activateView', listener)
+    },
+
+    onPaneFocus: (
+      callback: (data: { worktreeId: string | null; browserPageId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string | null; browserPageId: string }
+      ) => callback(data)
+      ipcRenderer.on('browser:pane-focus', listener)
+      return () => ipcRenderer.removeListener('browser:pane-focus', listener)
     },
 
     onOpenLinkInOrcaTab: (

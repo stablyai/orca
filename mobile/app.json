@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.stably.orca.mobile",
-      "buildNumber": "11",
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your local network.",
         "NSAppTransportSecurity": {
@@ -51,7 +51,8 @@
       },
       "usesCleartextTraffic": true,
       "allowBackup": false,
-      "package": "com.stably.orca.mobile"
+      "package": "com.stably.orca.mobile",
+      "versionCode": 1
     },
     "plugins": [
       "expo-router",

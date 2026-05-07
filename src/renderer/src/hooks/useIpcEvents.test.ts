@@ -197,7 +197,8 @@ describe('useIpcEvents updater integration', () => {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
-          onActivateView: () => () => {}
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -393,7 +394,8 @@ describe('useIpcEvents updater integration', () => {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
-          onActivateView: () => () => {}
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -591,7 +593,8 @@ describe('useIpcEvents updater integration', () => {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
-          onActivateView: () => () => {}
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -800,7 +803,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
-          onActivateView: () => () => {}
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -994,7 +998,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
-          onActivateView: () => () => {}
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -1183,7 +1188,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
-          onActivateView: () => () => {}
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -1381,7 +1387,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
-          onActivateView: () => () => {}
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),

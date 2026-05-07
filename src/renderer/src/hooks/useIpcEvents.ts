@@ -374,6 +374,31 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: `orca tab switch --focus` lands here after the bridge's state-only
+    // `tabSwitch`. We deliberately DO NOT call `setActiveWorktree` — multiple
+    // agents drive browsers in parallel worktrees, so a global focus call from
+    // one agent's tab switch would steal the user's view from whichever
+    // worktree they're actually reading. Instead `focusBrowserTabInWorktree`
+    // updates the targeted worktree's per-worktree state in place; globals
+    // (activeBrowserTabId, activeTabType) only flip when the user is already
+    // on the targeted worktree. Cross-worktree --focus calls are silent
+    // pre-staging for whenever the user next visits that worktree.
+    unsubs.push(
+      window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
+        const store = useAppStore.getState()
+        // Why: main sends `worktreeId: null` if the tab closed between the
+        // bridge resolving tabSwitch and getWorktreeIdForTab running. Falling
+        // back to activeWorktreeId means a stale page id in another worktree
+        // is silently ignored by focusBrowserTabInWorktree (page not found
+        // in its tabsForWorktree.find), which is the intended no-op.
+        const targetWt = worktreeId ?? store.activeWorktreeId
+        if (!targetWt) {
+          return
+        }
+        store.focusBrowserTabInWorktree(targetWt, browserPageId)
+      })
+    )
+
     unsubs.push(
       window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
         const store = useAppStore.getState()
@@ -468,7 +493,16 @@ export function useIpcEvents(): void {
             })
             return
           }
-          destroyPersistentWebview(data.browserPageId)
+          // Why: a workspace can host multiple browser pages; profile switch must
+          // tear down every sibling webview, not just the one referenced by the IPC.
+          const workspacePages = store.browserPagesByWorkspace[owningWorkspace.id] ?? []
+          if (workspacePages.length > 0) {
+            for (const page of workspacePages) {
+              destroyPersistentWebview(page.id)
+            }
+          } else {
+            destroyPersistentWebview(data.browserPageId)
+          }
           store.switchBrowserTabProfile(owningWorkspace.id, data.profileId)
           window.api.ui.replyTabSetProfile({ requestId: data.requestId })
         } catch (err) {

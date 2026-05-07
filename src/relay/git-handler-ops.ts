@@ -217,8 +217,9 @@ export async function branchDiffEntries(
     return []
   }
 
+  // Why: see core.quotePath rationale in getStatusOp — keep UTF-8 paths intact.
   const { stdout } = await git(
-    ['diff', '--name-status', '-M', '-C', mergeBase, headOid],
+    ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
     worktreePath
   )
   const allChanges = parseBranchDiff(stdout)

@@ -6,6 +6,7 @@ import {
   createManagedCommandMatcher,
   readHooksJson,
   removeManagedCommands,
+  wrapPosixHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -39,7 +40,7 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32' ? scriptPath : `/bin/sh "${scriptPath}"`
+  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(): string {

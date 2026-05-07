@@ -33,9 +33,14 @@ import {
   useHostClient,
   useCloseHost,
   useForceReconnect,
-  useReconnectAttempt
+  useReconnectAttempt,
+  useLastConnectedAt
 } from '../../../src/transport/client-context'
-import type { ConnectionState, RpcSuccess } from '../../../src/transport/types'
+import {
+  classifyConnection,
+  type ConnectionVerdict
+} from '../../../src/transport/connection-health'
+import type { RpcSuccess } from '../../../src/transport/types'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModal } from '../../../src/components/NewWorktreeModal'
@@ -93,29 +98,8 @@ type FilterState = {
   selectedRepos: Set<string>
 }
 
-const STATUS_LABELS: Record<ConnectionState, string> = {
-  connecting: 'Connecting…',
-  handshaking: 'Securing…',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  reconnecting: 'Reconnecting…',
-  'auth-failed': 'Auth failed'
-}
-
-// Why: same threshold as the home screen — kicks the label from
-// "Reconnecting…" to "Can't connect" once the rpc-client has cycled enough
-// times to indicate a real problem (wrong port, server down, network change).
-const RECONNECT_FAILURE_THRESHOLD = 3
-
-function getStatusDisplay(
-  state: ConnectionState,
-  attempts: number
-): { label: string; isError: boolean } {
-  if (state === 'auth-failed') return { label: 'Auth failed', isError: true }
-  if (state === 'reconnecting' && attempts >= RECONNECT_FAILURE_THRESHOLD) {
-    return { label: "Can't connect", isError: true }
-  }
-  return { label: STATUS_LABELS[state], isError: false }
+function isErrorVerdict(v: ConnectionVerdict): boolean {
+  return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
 }
 
 const SORT_OPTIONS: PickerOption<SortMode>[] = [
@@ -282,6 +266,7 @@ export default function HostScreen() {
   // docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
+  const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
@@ -705,33 +690,45 @@ export default function HostScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <ChevronLeft size={22} color={colors.textPrimary} />
           </Pressable>
-          <View style={styles.hostIdentity}>
-            <StatusDot state={connState} />
-            <Text style={styles.hostNameText} numberOfLines={1}>
-              {hostName || 'Host'}
-            </Text>
-          </View>
-          {connState !== 'connected' &&
-            (() => {
-              const status = getStatusDisplay(connState, reconnectAttempts)
-              const showReconnectButton = status.isError && hostId && connState !== 'auth-failed'
-              return (
-                <View style={styles.statusRow}>
-                  <Text style={[styles.statusText, status.isError && { color: colors.statusRed }]}>
-                    {status.label}
+          {(() => {
+            const headerVerdict = classifyConnection({
+              state: connState,
+              reconnectAttempts,
+              lastConnectedAt
+            })
+            return (
+              <>
+                <View style={styles.hostIdentity}>
+                  <StatusDot state={connState} verdict={headerVerdict} />
+                  <Text style={styles.hostNameText} numberOfLines={1}>
+                    {hostName || 'Host'}
                   </Text>
-                  {showReconnectButton && (
-                    <Pressable
-                      style={styles.reconnectButton}
-                      onPress={() => void forceReconnectHost(hostId!)}
-                      hitSlop={8}
-                    >
-                      <Text style={styles.reconnectButtonText}>Reconnect</Text>
-                    </Pressable>
-                  )}
                 </View>
-              )
-            })()}
+                {connState !== 'connected' &&
+                  (() => {
+                    // Why: status label removed in favor of just the dot +
+                    // Reconnect button — the home screen already surfaces the
+                    // verdict text per host, and the dot color already
+                    // signals severity here. Auth-failed routes through its
+                    // dedicated banner so we still want to suppress the
+                    // Reconnect button for that case.
+                    const verdict = headerVerdict
+                    const isError = isErrorVerdict(verdict)
+                    const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
+                    if (!showReconnectButton) return null
+                    return (
+                      <Pressable
+                        style={styles.reconnectButton}
+                        onPress={() => void forceReconnectHost(hostId!)}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.reconnectButtonText}>Reconnect</Text>
+                      </Pressable>
+                    )
+                  })()}
+              </>
+            )
+          })()}
         </View>
 
         {/* Filter/sort/group toolbar */}
@@ -1181,15 +1178,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary
-  },
-  statusText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
   },
   reconnectButton: {
     paddingVertical: 4,

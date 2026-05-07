@@ -727,7 +727,9 @@ function Settings(): React.JSX.Element {
                     settings={settings}
                     updateSettings={updateSettings}
                     systemPrefersDark={systemPrefersDark}
-                    terminalFontSuggestions={fontSuggestions}
+                    terminalFontSuggestions={fontSuggestions.filter(
+                      (font) => font !== DEFAULT_APP_FONT_FAMILY
+                    )}
                     scrollbackMode={scrollbackMode}
                     setScrollbackMode={setScrollbackMode}
                     ghostty={ghostty}

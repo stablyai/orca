@@ -185,6 +185,9 @@ export type BrowserApi = {
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
   onActivateView: (callback: (data: { worktreeId: string }) => void) => () => void
+  onPaneFocus: (
+    callback: (data: { worktreeId: string | null; browserPageId: string }) => void
+  ) => () => void
   onOpenLinkInOrcaTab: (
     callback: (event: { browserPageId: string; url: string }) => void
   ) => () => void
@@ -497,6 +500,7 @@ export type PreloadApi = {
   feedback: {
     submit: (args: {
       feedback: string
+      submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
     }) => Promise<{ ok: true } | { ok: false; status: number | null; error: string }>

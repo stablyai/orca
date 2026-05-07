@@ -310,13 +310,16 @@ jobs:
           # already exist — that's a real conflict (someone tagged manually
           # over a shipped version) and needs human attention.
           if git rev-parse "v$new" >/dev/null 2>&1; then
-            # Use the REST API, not `gh release view`: the latter returns
-            # "release not found" for drafts *and* for absent releases,
-            # which would cause us to "recover" over a draft that a human
-            # is preparing. The API distinguishes them.
-            release_state="$(gh api \
+            # Why: use the REST API, not `gh release view`. `gh api` returns
+            # `true`/`false` for a real release, while a 404 means the tag is
+            # orphaned and can be safely re-dispatched. Capture failures
+            # explicitly so the 404 payload never leaks into the state check.
+            release_state="missing"
+            if gh api \
                 "repos/$GITHUB_REPOSITORY/releases/tags/v$new" \
-                --jq '.draft' 2>/dev/null || echo "missing")"
+                --jq '.draft' >"$RUNNER_TEMP/release-state" 2>/dev/null; then
+              release_state="$(cat "$RUNNER_TEMP/release-state")"
+            fi
             case "$release_state" in
               missing|true)
                 echo "::warning::Tag v$new already exists but no published release is attached — recovering by re-dispatching release.yml against the existing tag."

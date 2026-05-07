@@ -13,6 +13,17 @@ const testState = { dir: '' }
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
+  },
+  safeStorage: {
+    isEncryptionAvailable: () => true,
+    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext: Buffer) => {
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('encrypted:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('encrypted:'.length)
+    }
   }
 }))
 
@@ -443,6 +454,36 @@ describe('Store', () => {
     const ui = store.getUI()
     expect(ui.dismissedUpdateVersion).toBe('1.0.99')
     expect(ui.lastUpdateCheckAt).toBe(1234)
+  })
+
+  it('encrypts the Kagi session link on disk and decrypts it on load', async () => {
+    const sessionLink = 'https://kagi.com/search?token=secret'
+    const store = await createStore()
+
+    store.updateUI({ browserKagiSessionLink: sessionLink })
+    store.flush()
+
+    const persisted = readDataFile() as { ui: { browserKagiSessionLink: string } }
+    expect(persisted.ui.browserKagiSessionLink).not.toBe(sessionLink)
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
+  })
+
+  it('keeps plaintext Kagi session links readable for migration from older builds', async () => {
+    const sessionLink = 'https://kagi.com/search?token=secret'
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { browserKagiSessionLink: sessionLink },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
 
   it('preserves persisted smart sort value', async () => {

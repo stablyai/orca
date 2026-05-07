@@ -24,6 +24,7 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
+import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import { DEFAULT_SIDEKICK_ID, isBundledSidekickId } from '../../components/sidekick/sidekick-models'
 import { revokeCustomSidekickBlobUrl } from '../../components/sidekick/sidekick-blob-cache'
@@ -55,6 +56,7 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
       return 'is:open'
   }
 }
+
 // Why: persisted UI state pre-dated the consolidation of `memory` + `sessions`
 // into a single `resource-usage` entry. Rewrite legacy ids in place and
 // de-duplicate. We leave unknown ids alone so a downgrade→upgrade cycle
@@ -310,8 +312,10 @@ export type UISlice = {
   /** URL opened when a new browser tab is created. Null = blank tab (default). */
   browserDefaultUrl: string | null
   setBrowserDefaultUrl: (url: string | null) => void
-  browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | null
-  setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | null) => void
+  browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
+  setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null) => void
+  browserKagiSessionLink: string | null
+  setBrowserKagiSessionLink: (link: string | null) => void
 }
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
@@ -725,6 +729,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
           ui.trustedOrcaHooks ?? {},
@@ -809,5 +814,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setBrowserDefaultSearchEngine: (engine) => {
     void window.api.ui.set({ browserDefaultSearchEngine: engine }).catch(console.error)
     set({ browserDefaultSearchEngine: engine })
+  },
+  browserKagiSessionLink: null,
+  setBrowserKagiSessionLink: (link) => {
+    const normalized = link ? normalizeKagiSessionLink(link) : null
+    void window.api.ui.set({ browserKagiSessionLink: normalized }).catch(console.error)
+    set({ browserKagiSessionLink: normalized })
   }
 })

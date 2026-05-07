@@ -9,7 +9,20 @@ export const BROWSER_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Default Search Engine',
     description: 'Search engine used when typing non-URL text in the address bar.',
-    keywords: ['browser', 'search', 'engine', 'google', 'duckduckgo', 'bing', 'omnibox', 'query']
+    keywords: [
+      'browser',
+      'search',
+      'engine',
+      'google',
+      'duckduckgo',
+      'bing',
+      'kagi',
+      'session',
+      'private',
+      'token',
+      'omnibox',
+      'query'
+    ]
   },
   {
     title: 'Link Routing',
