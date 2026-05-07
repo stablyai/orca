@@ -1586,6 +1586,8 @@ export type GitStatusEntry = GitUncommittedEntry
 export type GitStatusResult = {
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation
+  head?: string
+  branch?: string
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a

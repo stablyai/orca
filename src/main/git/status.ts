@@ -23,6 +23,8 @@ const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
  */
 export async function getStatus(worktreePath: string): Promise<GitStatusResult> {
   const entries: GitStatusEntry[] = []
+  let head: string | undefined
+  let branch: string | undefined
 
   // Why: detectConflictOperation (4 existsSync + readFile) and git status are
   // independent. Running them concurrently saves one round-trip of I/O latency.
@@ -32,7 +34,7 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
   // in double quotes. Without it, the parsed entry.path is unreadable in the
   // sidebar and downstream `git show :"docs/\346..."` lookups silently miss.
   const statusPromise = gitExecFileAsync(
-    ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--untracked-files=all'],
+    ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--branch', '--untracked-files=all'],
     { cwd: worktreePath }
   )
   const conflictOperation = await conflictPromise
@@ -44,6 +46,17 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
     // avoiding trailing \r characters in parsed paths.
     for (const line of stdout.split(/\r?\n/)) {
       if (!line) {
+        continue
+      }
+
+      if (line.startsWith('# branch.oid ')) {
+        head = line.slice('# branch.oid '.length).trim()
+        continue
+      }
+
+      if (line.startsWith('# branch.head ')) {
+        const branchHead = line.slice('# branch.head '.length).trim()
+        branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
         continue
       }
 
@@ -95,7 +108,7 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
     // Not a git repo or git not available
   }
 
-  return { entries, conflictOperation }
+  return { entries, conflictOperation, head, branch }
 }
 
 function parseStatusChar(char: string): GitFileStatus {

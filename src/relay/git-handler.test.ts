@@ -65,9 +65,13 @@ describe('GitHandler', () => {
       const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
         entries: Record<string, unknown>[]
         conflictOperation: string
+        head?: string
+        branch?: string
       }
       expect(result.entries).toEqual([])
       expect(result.conflictOperation).toBe('unknown')
+      expect(result.branch).toMatch(/^refs\/heads\//)
+      expect(typeof result.head).toBe('string')
     })
 
     it('detects untracked files', async () => {

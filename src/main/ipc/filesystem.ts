@@ -46,8 +46,7 @@ import {
   resolveRegisteredWorktreePath,
   validateGitRelativeFilePath,
   isENOENT,
-  authorizeExternalPath,
-  rebuildAuthorizedRootsCache
+  authorizeExternalPath
 } from './filesystem-auth'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -106,7 +105,6 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
 }
 
 export function registerFilesystemHandlers(store: Store): void {
-  void rebuildAuthorizedRootsCache(store)
   const activeTextSearches = new Map<string, ChildProcess>()
 
   // ─── Filesystem ─────────────────────────────────────────

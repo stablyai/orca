@@ -5,7 +5,13 @@ import { rm } from 'fs/promises'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
-import type { CreateWorktreeArgs, CreateWorktreeResult, WorktreeMeta } from '../../shared/types'
+import type {
+  CreateWorktreeArgs,
+  CreateWorktreeResult,
+  GitWorktreeInfo,
+  Repo,
+  WorktreeMeta
+} from '../../shared/types'
 import { removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
@@ -33,7 +39,7 @@ import {
   createRemoteWorktree,
   notifyWorktreesChanged
 } from './worktree-remote'
-import { rebuildAuthorizedRootsCache, ensureAuthorizedRootsCache } from './filesystem-auth'
+import { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } from './filesystem-auth'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { getLocalPtyProvider } from './pty'
@@ -70,6 +76,23 @@ function warnOnce(keySet: Set<string>, key: string, message: string, error?: unk
   }
 }
 
+function rememberLocalWorktreeRoots(
+  store: Store,
+  repo: Repo,
+  gitWorktrees: GitWorktreeInfo[]
+): void {
+  if (repo.connectionId) {
+    return
+  }
+  // Why: worktrees:list already paid the `git worktree list` cost. Reusing
+  // that result keeps later git/file IPC validation from doing a second
+  // background scan that can trigger macOS folder-permission prompts.
+  registerWorktreeRootsForRepo(store, repo.id, [
+    repo.path,
+    ...gitWorktrees.map((worktree) => worktree.path)
+  ])
+}
+
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
@@ -90,10 +113,6 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('hooks:writeIssueCommand')
 
   ipcMain.handle('worktrees:listAll', async () => {
-    // Why: use ensureAuthorizedRootsCache (not rebuild) to avoid redundantly
-    // listing git worktrees when the cache is already fresh — the handler
-    // itself calls listWorktrees for every repo below.
-    await ensureAuthorizedRootsCache(store)
     const repos = store.getRepos()
 
     // Why: repos are listed in parallel so total time = slowest repo, not
@@ -119,6 +138,7 @@ export function registerWorktreeHandlers(
           } else {
             gitWorktrees = await listRepoWorktrees(repo)
           }
+          rememberLocalWorktreeRoots(store, repo, gitWorktrees)
           loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
           return gitWorktrees.map((gw) => {
             const worktreeId = `${repo.id}::${gw.path}`
@@ -132,6 +152,7 @@ export function registerWorktreeHandlers(
             `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
             err
           )
+          rememberLocalWorktreeRoots(store, repo, [])
           return []
         }
       })
@@ -141,10 +162,6 @@ export function registerWorktreeHandlers(
   })
 
   ipcMain.handle('worktrees:list', async (_event, args: { repoId: string }) => {
-    // Why: use ensureAuthorizedRootsCache (not rebuild) to avoid redundantly
-    // listing git worktrees when the cache is already fresh — the handler
-    // itself calls listWorktrees below.
-    await ensureAuthorizedRootsCache(store)
     const repo = store.getRepo(args.repoId)
     if (!repo) {
       return []
@@ -175,6 +192,7 @@ export function registerWorktreeHandlers(
       } else {
         gitWorktrees = await listRepoWorktrees(repo)
       }
+      rememberLocalWorktreeRoots(store, repo, gitWorktrees)
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       return gitWorktrees.map((gw) => {
         const worktreeId = `${repo.id}::${gw.path}`
@@ -188,6 +206,7 @@ export function registerWorktreeHandlers(
         `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
         err
       )
+      rememberLocalWorktreeRoots(store, repo, [])
       return []
     }
   })
@@ -412,7 +431,7 @@ export function registerWorktreeHandlers(
           await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
-          await rebuildAuthorizedRootsCache(store)
+          invalidateAuthorizedRootsCache()
           notifyWorktreesChanged(mainWindow, repoId)
           return
         }
@@ -420,7 +439,7 @@ export function registerWorktreeHandlers(
       }
       store.removeWorktreeMeta(args.worktreeId)
       deleteWorktreeHistoryDir(args.worktreeId)
-      await rebuildAuthorizedRootsCache(store)
+      invalidateAuthorizedRootsCache()
 
       notifyWorktreesChanged(mainWindow, repoId)
     }
