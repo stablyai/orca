@@ -1,4 +1,3 @@
-import { realpath } from 'fs/promises'
 import { resolve, relative, dirname, basename, isAbsolute } from 'path'
 import type { Store } from '../persistence'
 import { listRepoWorktrees } from '../repo-worktrees'
@@ -67,17 +66,22 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // all repos.  The previous sequential loop was the main bottleneck on
   // Windows where each `git worktree list` + realpath chain takes 500 ms+
   // due to slower process creation and antivirus I/O scanning.
+  //
+  // Why no realpath() here: this rebuild runs on sidebar refresh / worktree
+  // invalidation, so canonicalizing every repo root would repeatedly touch
+  // TCC-protected folders on macOS even when the user is idle. The actual
+  // file handlers still canonicalize the specific target path before any
+  // destructive or read/write operation, so the security boundary remains
+  // enforced where it matters.
   const repos = store.getRepos()
   const perRepoResults = await Promise.all(
     repos.map(async (repo) => {
       const roots: string[] = []
       try {
-        roots.push(await normalizeExistingPath(repo.path))
+        roots.push(resolve(repo.path))
 
         const worktrees = await listRepoWorktrees(repo)
-        const worktreeRoots = await Promise.all(
-          worktrees.map((wt) => normalizeExistingPath(wt.path))
-        )
+        const worktreeRoots = worktrees.map((wt) => resolve(wt.path))
         roots.push(...worktreeRoots)
       } catch (error) {
         // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
@@ -193,14 +197,6 @@ async function isPathAllowedIncludingRegisteredWorktrees(
   }
 
   return false
-}
-
-async function normalizeExistingPath(targetPath: string): Promise<string> {
-  try {
-    return await realpath(targetPath)
-  } catch {
-    return resolve(targetPath)
-  }
 }
 
 /**
