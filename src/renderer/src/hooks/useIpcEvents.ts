@@ -386,6 +386,11 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
         const store = useAppStore.getState()
+        // Why: main sends `worktreeId: null` if the tab closed between the
+        // bridge resolving tabSwitch and getWorktreeIdForTab running. Falling
+        // back to activeWorktreeId means a stale page id in another worktree
+        // is silently ignored by focusBrowserTabInWorktree (page not found
+        // in its tabsForWorktree.find), which is the intended no-op.
         const targetWt = worktreeId ?? store.activeWorktreeId
         if (!targetWt) {
           return

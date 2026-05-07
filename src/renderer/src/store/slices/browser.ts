@@ -914,6 +914,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       { ...workspace, activePageId: browserPageId },
       pages
     )
+    // TODO: per-worktree writes below duplicate setActiveBrowserTab /
+    // setActiveBrowserPage. We can't reuse those because they touch globals
+    // unconditionally (the very behavior --focus is avoiding). If they ever
+    // grow side-effects (analytics, persistence) those will silently diverge
+    // here. Consider extracting a private per-worktree-only helper that
+    // both call paths share.
     set((s) => {
       const isActiveWorktree = s.activeWorktreeId === worktreeId
       // Per-worktree slots: always update (safe pre-staging; only visible
