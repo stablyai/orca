@@ -7,6 +7,12 @@ import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { CustomSidekick } from '../../shared/types'
+import {
+  applyCodexPetDefaults,
+  readWebpDimensionsFromBuffer,
+  type PetManifestLike,
+  type ResolvedPetManifest
+} from './sidekick-pet-bundle'
 
 // Why: image-only sidekick uploads. Static + animated variants render natively
 // via <img>, so no 3D engine is needed. Main owns the accepted-format table as
@@ -96,7 +102,8 @@ const PetManifestSchema = z
       .refine(
         (p) => !p.includes('\0') && !p.startsWith('/') && !p.startsWith('\\') && !p.includes('..'),
         'invalid spritesheetPath'
-      ),
+      )
+      .optional(),
     frame: z
       .object({
         width: z.number().int().positive().max(1024),
@@ -121,7 +128,7 @@ const PetManifestSchema = z
   // key" error instead of just ignoring the extras.
   .loose()
 
-type PetManifest = z.infer<typeof PetManifestSchema>
+type PetManifest = z.infer<typeof PetManifestSchema> & PetManifestLike
 
 // Why: renderer-supplied IPC inputs are untrusted — validate shape before any
 // path resolution. resolveSidekickFile still gates the actual filesystem path.
@@ -134,6 +141,15 @@ const SidekickFileRequestSchema = z.object({
 async function readSheetDimensions(
   buffer: Buffer
 ): Promise<{ width: number; height: number } | null> {
+  // Why: Electron's nativeImage can fail to decode some valid WebP variants
+  // even though Chromium can render them. Sprite sheets only need the canvas
+  // size, so read WebP dimensions from the container header before falling
+  // back to native decoding.
+  const webpDims = readWebpDimensionsFromBuffer(buffer)
+  if (webpDims) {
+    return webpDims
+  }
+
   // Why: nativeImage decodes PNG/JPEG/GIF/WebP/BMP. SVG isn't supported here
   // (vector → no integer pixel grid), so pet bundles must use a raster sheet.
   const image = nativeImage.createFromBuffer(buffer)
@@ -286,7 +302,7 @@ export function registerSidekickHandlers(): void {
       throw new Error('pet.json must not be a symlink.')
     }
 
-    let manifest: PetManifest
+    let manifest: ResolvedPetManifest<PetManifest>
     try {
       const raw = await readFile(manifestPath, 'utf8')
       // Why: defend against TOCTOU between stat and read — the file could have
@@ -294,14 +310,16 @@ export function registerSidekickHandlers(): void {
       if (Buffer.byteLength(raw, 'utf8') > MAX_MANIFEST_BYTES) {
         throw new Error('pet.json exceeded the manifest size limit.')
       }
-      manifest = PetManifestSchema.parse(JSON.parse(raw))
+      manifest = applyCodexPetDefaults(PetManifestSchema.parse(JSON.parse(raw)))
     } catch (error) {
       throw new Error(`Invalid pet.json: ${error instanceof Error ? error.message : 'parse error'}`)
     }
 
-    // Why: spritesheetPath is bundle-relative. Reject absolute paths and any
-    // resolved path that escapes the bundle directory. Also reject symlinks so
-    // a malicious bundle can't reach outside via a sibling link.
+    // Why: spritesheetPath is bundle-relative. Codex pet.json files omit this
+    // path and use a fixed `spritesheet.webp`; applyCodexPetDefaults fills
+    // that shape before path validation. Reject absolute paths and any resolved
+    // path that escapes the bundle directory. Also reject symlinks so a
+    // malicious bundle can't reach outside via a sibling link.
     if (isAbsolute(manifest.spritesheetPath)) {
       throw new Error('spritesheetPath must be relative to the bundle.')
     }

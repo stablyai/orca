@@ -3,27 +3,50 @@ import { useSidekickUrl } from './useSidekickUrl'
 import type { DetectedSpriteCacheEntry } from './sidekick-blob-cache'
 import type { CustomSidekick } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { selectSidekickAnimationName, type SidekickAnimationName } from './sidekick-agent-state'
 
 type Sprite = NonNullable<CustomSidekick['sprite']>
 
+function useSidekickAnimationName(dragging: boolean): SidekickAnimationName {
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
+
+  // Re-render when the freshness scheduler ticks so stale live states stop
+  // driving sidekick animations even if no other store value changes.
+  void agentStatusEpoch
+
+  return selectSidekickAnimationName({
+    entries: Object.values(agentStatusByPaneKey),
+    retainedCount: Object.keys(retainedAgentsByPaneKey).length,
+    dragging,
+    now: Date.now(),
+    staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
+  })
+}
+
 // Why: pet bundles ship a sprite sheet — animate by stepping a CSS background
-// across the cells of one row. We pick which row + how many frames from the
-// manifest's defaultAnimation, falling back to the first row if the manifest
-// only declared frame size. imageRendering: 'pixelated' keeps edges crisp even
-// when scale is fractional (needed when frames exceed maxSize).
+// across the cells of one row. We pick the row from the live sidekick state
+// when the manifest provides that animation, then fall back to the bundle's
+// default animation. imageRendering: 'pixelated' keeps edges crisp even when
+// scale is fractional (needed when frames exceed maxSize).
 function SpriteFrame({
   url,
   sprite,
   animate,
-  maxSize
+  maxSize,
+  animationName
 }: {
   url: string
   sprite: Sprite
   animate: boolean
   maxSize: number
+  animationName: SidekickAnimationName
 }): React.JSX.Element {
   const animKeyframesId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const anim =
+    sprite.animations?.[animationName] ||
     (sprite.defaultAnimation && sprite.animations?.[sprite.defaultAnimation]) ||
     (sprite.animations ? Object.values(sprite.animations)[0] : undefined)
   const row = anim?.row ?? 0
@@ -129,7 +152,7 @@ function DetectedSpriteFrame({
         cancelAnimationFrame(raf)
       }
     }
-  }, [detected, animate, maxSize])
+  }, [detected, animate, maxSize, fps])
 
   return (
     <canvas
@@ -267,6 +290,7 @@ export function SidekickOverlay(): React.JSX.Element {
   }, [dragging, position])
 
   const animate = documentVisible && !reducedMotion && !dragging
+  const animationName = useSidekickAnimationName(dragging)
 
   // Why: setPointerCapture routes subsequent pointer events to this element
   // even when the cursor leaves the OS window, so dragging can't get stuck in
@@ -339,7 +363,13 @@ export function SidekickOverlay(): React.JSX.Element {
           }
         </style>
         {sprite ? (
-          <SpriteFrame url={url} sprite={sprite} animate={animate} maxSize={size} />
+          <SpriteFrame
+            url={url}
+            sprite={sprite}
+            animate={animate}
+            maxSize={size}
+            animationName={animationName}
+          />
         ) : detected ? (
           <DetectedSpriteFrame detected={detected} animate={animate} maxSize={size} />
         ) : (
