@@ -294,7 +294,7 @@ importers:
         specifier: ^0.41.0
         version: 0.41.0
       oxlint:
-        specifier: ^1.56.0
+        specifier: 1.56.0
         version: 1.56.0
       react:
         specifier: ^19.2.4
