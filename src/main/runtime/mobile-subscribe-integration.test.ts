@@ -546,6 +546,25 @@ describe('mobile subscribe integration', () => {
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
     })
 
+    it('null (indefinite) keeps PTY at phone dims when WS connection closes (onClientDisconnected)', async () => {
+      // Why: backgrounding the mobile app eventually closes the WebSocket,
+      // which routes through onClientDisconnected (NOT handleMobileUnsubscribe).
+      // The disconnect path predates indefinite-hold; without explicit gates
+      // it would unconditionally restore the PTY to desktop dims and clear
+      // the override, unmounting the desktop banner.
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+
+      runtime.onClientDisconnected('client-a')
+      await vi.advanceTimersByTimeAsync(0)
+      // Flush soft-leave grace too — that path also has its own desktop-restore branch.
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+      expect(runtime.getTerminalFitOverride('pty-1')).not.toBeNull()
+    })
+
     it('reclaimTerminalForDesktop returns held PTY to desktop dims (no subscriber)', async () => {
       settingsState.mobileAutoRestoreFitMs = null
       const { runtime, ptySizes } = createRuntime()

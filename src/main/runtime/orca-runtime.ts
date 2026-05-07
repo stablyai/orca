@@ -1544,7 +1544,11 @@ export class OrcaRuntimeService {
       }
 
       const cur = this.layouts.get(ptyId)
-      if (cur?.kind === 'phone') {
+      // Why: Indefinite hold (mobileAutoRestoreFitMs == null) keeps the PTY
+      // at phone dims after the phone disconnects; the desktop banner's
+      // Restore button is the explicit return path. See
+      // docs/mobile-fit-hold.md.
+      if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
         // Use the soft-leaver's snapshot baseline as a hint, falling
         // through to resolveDesktopRestoreTarget for missing values.
         const fallback = this.resolveDesktopRestoreTarget(ptyId)
@@ -1581,7 +1585,8 @@ export class OrcaRuntimeService {
     }
     for (const { ptyId, baseline } of ptysToRestore) {
       const cur = this.layouts.get(ptyId)
-      if (cur?.kind === 'phone') {
+      // Why: Indefinite hold gate — see soft-leaver branch above.
+      if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
         const fallback = this.resolveDesktopRestoreTarget(ptyId)
         const cols = baseline?.cols ?? fallback.cols
         const rows = baseline?.rows ?? fallback.rows
@@ -1636,6 +1641,11 @@ export class OrcaRuntimeService {
       }
       const cur = this.layouts.get(ptyId)
       if (cur?.kind !== 'phone') {
+        continue
+      }
+      // Why: Indefinite hold gate — see soft-leaver branch above. Legacy
+      // mobile clients (resizeForClient path) honor the same setting.
+      if (this.getAutoRestoreFitMs() == null) {
         continue
       }
       const fallback = this.resolveDesktopRestoreTarget(ptyId)
