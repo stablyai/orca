@@ -2668,8 +2668,37 @@ export class OrcaRuntimeService {
     ) {
       return
     }
-    this.lastRendererSizes.set(ptyId, { cols, rows })
+    this.refreshRendererGeometry(ptyId, cols, rows)
+  }
 
+  // Why: pty:reportGeometry IPC sibling. The renderer calls this when a
+  // desktop pane container goes from 0×0 to a real size while a mobile-fit
+  // override is active (e.g. user activates a previously-hidden tab on
+  // desktop after the phone has already taken the floor). We need the
+  // restore-target baseline to track real desktop dims even during the
+  // fit period — otherwise resolveDesktopRestoreTarget falls back to the
+  // PTY's spawn default (typically 80×24) and Take Back leaves the
+  // terminal partially restored. This is a measurement-only channel: it
+  // refreshes lastRendererSizes and non-null subscriber baselines, never
+  // resizes the PTY, and bypasses both isResizeSuppressed and the
+  // override-echo gate by design — the renderer only fires it when it
+  // has just measured fresh real geometry. See docs/mobile-fit-hold.md.
+  recordRendererGeometry(ptyId: string, cols: number, rows: number): void {
+    if (cols <= 0 || rows <= 0) {
+      return
+    }
+    this.refreshRendererGeometry(ptyId, cols, rows)
+  }
+
+  // Why: test seam — exposes lastRendererSizes for assertions about
+  // pty:reportGeometry / onExternalPtyResize side effects without making
+  // the underlying Map writable from the outside.
+  getLastRendererSize(ptyId: string): { cols: number; rows: number } | null {
+    return this.lastRendererSizes.get(ptyId) ?? null
+  }
+
+  private refreshRendererGeometry(ptyId: string, cols: number, rows: number): void {
+    this.lastRendererSizes.set(ptyId, { cols, rows })
     const inner = this.mobileSubscribers.get(ptyId)
     if (!inner) {
       return

@@ -434,6 +434,57 @@ export function connectPanePty(
     transport.resize(cols, rows)
   })
 
+  // Why: while a mobile-fit override is active, the onResize listener above
+  // and the matching server-side gate both correctly drop pty:resize so the
+  // PTY stays parked at phone dims. But the server still needs to learn the
+  // real desktop pane geometry — otherwise resolveDesktopRestoreTarget falls
+  // back to the PTY's spawn default (e.g. 80×24 for a hidden tab) and Take
+  // Back leaves the terminal partially restored. This observer measures the
+  // pane container as a side-channel, computes proposed cols/rows the way
+  // safeFit would, and reports it via pty:reportGeometry — a measurement-
+  // only IPC that updates lastRendererSizes and non-null subscriber
+  // baselines without resizing the PTY. We only fire while an override is
+  // active because the normal pty:resize path covers all other cases. See
+  // docs/mobile-fit-hold.md.
+  let pendingGeometryReportRaf: number | null = null
+  const reportPaneGeometry = (): void => {
+    pendingGeometryReportRaf = null
+    const currentPtyId = transport.getPtyId()
+    if (!currentPtyId) {
+      return
+    }
+    if (!getFitOverrideForPty(currentPtyId)) {
+      return
+    }
+    let proposed: { cols: number; rows: number } | undefined
+    try {
+      proposed = pane.fitAddon.proposeDimensions()
+    } catch {
+      proposed = undefined
+    }
+    if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
+      return
+    }
+    window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
+  }
+  const geometryReportObserver =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          if (pendingGeometryReportRaf !== null) {
+            return
+          }
+          pendingGeometryReportRaf = requestAnimationFrame(reportPaneGeometry)
+        })
+  // Why: pane.xtermContainer is created later in pane-lifecycle's
+  // attachWebgl/initial-fit path; pane.container is always present at the
+  // moment connectPanePty runs (it's the .pane element). Both report the
+  // same layout signal — when the outer pane resizes, the inner xterm
+  // container resizes too — so this is the safe element to observe.
+  if (geometryReportObserver && pane.container instanceof Element) {
+    geometryReportObserver.observe(pane.container)
+  }
+
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
   deps.pendingWritesRef.current.set(pane.id, '')
@@ -1174,6 +1225,11 @@ export function connectPanePty(
       }
       onDataDisposable.dispose()
       onResizeDisposable.dispose()
+      geometryReportObserver?.disconnect()
+      if (pendingGeometryReportRaf !== null) {
+        cancelAnimationFrame(pendingGeometryReportRaf)
+        pendingGeometryReportRaf = null
+      }
     }
   }
 }

@@ -418,6 +418,15 @@ const api = {
       ipcRenderer.send('pty:resize', { id, cols, rows })
     },
 
+    /** Why: measurement-only sibling of resize. Fires when a desktop pane
+     * container measures real geometry (e.g. previously hidden tab becomes
+     * visible) so the runtime's restore-target baseline can stay fresh
+     * even while a mobile-fit override blocks pty:resize. Never resizes
+     * the PTY. See docs/mobile-fit-hold.md. */
+    reportGeometry: (id: string, cols: number, rows: number): void => {
+      ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
+    },
+
     signal: (id: string, signal: string): void => {
       ipcRenderer.send('pty:signal', { id, signal })
     },

@@ -545,6 +545,65 @@ describe('mobile subscribe integration', () => {
     })
   })
 
+  describe('recordRendererGeometry (pty:reportGeometry IPC)', () => {
+    it('refreshes subscriber baseline while a mobile-fit override is active', async () => {
+      // Why: backs the partial-restore-width fix. When phone subscribes to
+      // a never-desktop-active terminal, the subscriber baseline is the
+      // PTY spawn default (e.g. 80×24). The renderer's measurement-only
+      // report (sent when the desktop pane finally measures real geometry)
+      // must update the baseline so Take Back restores to real dims.
+      const { runtime, ptySizes } = createRuntime()
+      ptySizes.set('pty-1', { cols: 80, rows: 24 })
+      runtime.onExternalPtyResize('pty-1', 80, 24)
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+
+      // Override is now in place (phone-fit). Desktop pane becomes visible
+      // and measures real geometry. The renderer reports it via the
+      // measurement-only channel.
+      runtime.recordRendererGeometry('pty-1', 214, 72)
+
+      // Take back — should restore to the reported dims, not 80×24.
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 214, rows: 72 })
+    })
+
+    it('updates lastRendererSizes for a never-subscribed PTY', () => {
+      // Why: handleMobileSubscribe's previousCols fallback chain reads
+      // lastRendererSizes. A geometry report fired before the first
+      // subscribe must populate that cache so the subscriber's baseline
+      // captures real dims, not the spawn default.
+      const { runtime } = createRuntime()
+      runtime.recordRendererGeometry('pty-99', 180, 50)
+
+      const renderer = runtime.getLastRendererSize('pty-99')
+      expect(renderer).toEqual({ cols: 180, rows: 50 })
+    })
+
+    it('ignores non-positive dims', () => {
+      const { runtime } = createRuntime()
+      runtime.recordRendererGeometry('pty-1', 0, 0)
+      runtime.recordRendererGeometry('pty-1', -5, 10)
+      runtime.recordRendererGeometry('pty-1', 10, -5)
+      expect(runtime.getLastRendererSize('pty-1')).toBeNull()
+    })
+
+    it('bypasses the cascade-suppress window (it is measurement-only)', async () => {
+      // Why: pty:resize is gated by a 500ms suppress to absorb the safeFit
+      // cascade after a mode flip. The measurement-only channel must not
+      // be gated — its whole purpose is to deliver a fresh measurement
+      // when the renderer detects the pane container has finally settled
+      // to real geometry, including potentially right after a flip.
+      const { runtime } = createRuntime()
+      // Arm cascade-suppress.
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+      // Within the 500ms window:
+      runtime.recordRendererGeometry('pty-1', 130, 40)
+      expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 130, rows: 40 })
+    })
+  })
+
   describe('backward compatibility', () => {
     it('old resizeForClient still works alongside new system', async () => {
       const { runtime, ptySizes } = createRuntime()

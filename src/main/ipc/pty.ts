@@ -1150,6 +1150,26 @@ export function registerPtyHandlers(
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 
+  // Why: pty:reportGeometry is a measurement-only sibling of pty:resize.
+  // pty:resize means "I want the PTY at this size" (a write/intent — gated
+  // by mobile-driver and cascade suppress). pty:reportGeometry means "the
+  // desktop pane I'm rendering currently measures this many cells" (a
+  // read/observation). Mobile-fit hold needs the latter even while the
+  // former is intentionally blocked: when a previously-hidden desktop
+  // tab becomes visible while a phone is driving, the server has no way
+  // to learn the real desktop dims, and resolveDesktopRestoreTarget
+  // returns the stale spawn default (e.g. 80×24) on Take Back. Splitting
+  // the channels keeps each guard simple — pty:resize keeps its mobile-
+  // driver gate; pty:reportGeometry never resizes the PTY, only refreshes
+  // the restore-target cache. See docs/mobile-fit-hold.md.
+  ipcMain.removeAllListeners('pty:reportGeometry')
+  ipcMain.on(
+    'pty:reportGeometry',
+    (_event, args: { id: string; cols: number; rows: number }) => {
+      runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
+    }
+  )
+
   // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold restore
   // cache after the renderer has consumed the data. No-op for non-daemon providers.
   ipcMain.on('pty:ackColdRestore', (_event, args: { id: string }) => {
