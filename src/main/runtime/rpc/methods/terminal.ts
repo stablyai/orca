@@ -329,7 +329,10 @@ const TerminalCreateParams = z.object({
   rendererBacked: z.unknown().optional(),
   activate: z.unknown().optional(),
   tabId: OptionalString,
-  leafId: OptionalString
+  leafId: OptionalString,
+  // Why: declared group name; resolved against layoutGroupIdByName in
+  // the renderer at create time.
+  groupName: OptionalString
 })
 
 const TerminalSplit = TerminalHandle.extend({
@@ -562,7 +565,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         rendererBacked: params.rendererBacked === true,
         activate: params.activate === true,
         tabId: params.tabId,
-        leafId: params.leafId
+        leafId: params.leafId,
+        groupName: params.groupName
       })
     })
   }),

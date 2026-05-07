@@ -97,6 +97,32 @@ describe('parseWorkspaceSession', () => {
     expect(parseWorkspaceSession(42).ok).toBe(false)
   })
 
+  it('preserves layoutGroupName on persisted tabGroups so post-restart binding rebuild can find them', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      tabGroups: {
+        'repo1::/path/wt1': [
+          {
+            id: 'g-editor',
+            worktreeId: 'repo1::/path/wt1',
+            activeTabId: null,
+            tabOrder: [],
+            layoutGroupName: 'editor'
+          }
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const groups = result.value.tabGroups?.['repo1::/path/wt1'] ?? []
+      expect(groups[0]?.layoutGroupName).toBe('editor')
+    }
+  })
+
   it('drops bad lastVisitedAtByWorktreeId entries rather than failing the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

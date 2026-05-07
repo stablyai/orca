@@ -94,7 +94,14 @@ const tabGroupSchema = z.object({
   worktreeId: z.string(),
   activeTabId: z.string().nullable(),
   tabOrder: z.array(z.string()),
-  recentTabIds: z.array(z.string()).optional()
+  recentTabIds: z.array(z.string()).optional(),
+  // Why: layout-rules — name maps to YAML group, kind enforces type.
+  // Both persist so post-restart resolves --group + kind-lock. The
+  // catch on `kind` keeps a session written by a future Orca (with a
+  // 5th kind value) hydratable on this build instead of collapsing
+  // the whole tabGroupSchema and losing the persisted layout.
+  layoutGroupName: z.string().optional(),
+  kind: z.enum(['editor', 'terminal', 'browser', 'mixed']).optional().catch(undefined)
 })
 
 const tabGroupSplitDirectionSchema = z.enum(['horizontal', 'vertical'])

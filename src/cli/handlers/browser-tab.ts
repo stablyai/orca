@@ -59,10 +59,18 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'tab create': async ({ flags, client, cwd, json }) => {
     const url = getOptionalStringFlag(flags, 'url')
     const profileId = getOptionalStringFlag(flags, 'profile')
+    const groupName = getOptionalStringFlag(flags, 'group')
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<{ browserPageId: string }>(
       'browser.tabCreate',
-      { url, worktree, profileId },
+      {
+        url,
+        worktree,
+        profileId,
+        // Why: --group is opt-in. Conditional spread keeps the RPC payload
+        // byte-identical to the pre-flag form when --group is absent.
+        ...(groupName !== undefined ? { groupName } : {})
+      },
       { timeoutMs: 60_000 }
     )
     printResult(result, json, (v) => `Created tab ${v.browserPageId}`)

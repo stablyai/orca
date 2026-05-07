@@ -42,6 +42,8 @@ import {
   getEffectiveHooksFromConfig,
   getSetupRunnerEnvVars,
   loadHooks,
+  loadLayoutConfig,
+  loadLayoutConfigFromReader,
   parseOrcaYaml,
   readIssueCommand,
   runHook,
@@ -551,6 +553,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:listLineage')
   ipcMain.removeHandler('worktrees:updateLineage')
   ipcMain.removeHandler('worktrees:persistSortOrder')
+  ipcMain.removeHandler('worktree:layoutConfig')
   ipcMain.removeHandler('hooks:check')
   ipcMain.removeHandler('hooks:inspectSetupScriptImports')
   ipcMain.removeHandler('hooks:createIssueCommandRunner')
@@ -1357,4 +1360,26 @@ export function registerWorktreeHandlers(
     }
     writeIssueCommand(repo.path, args.content)
   })
+
+  // Why: pull-side counterpart to the CLI's notifier push, so UI-driven
+  // worktree activation also surfaces the parsed `orca.yaml layout`.
+  ipcMain.handle(
+    'worktree:layoutConfig',
+    async (_event, args: { worktreeId: string }) => {
+      const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
+      const repo = store.getRepo(repoId)
+      if (!repo || isFolderRepo(repo)) {
+        return null
+      }
+      try {
+        if (repo.connectionId) {
+          const provider = getSshFilesystemProvider(repo.connectionId)
+          return provider ? await loadLayoutConfigFromReader(provider, worktreePath) : null
+        }
+        return loadLayoutConfig(worktreePath)
+      } catch {
+        return null
+      }
+    }
+  )
 }

@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: hook parsing, layered issue-command resolution, and cross-platform runner setup share one execution surface, so keeping them together avoids subtle drift across create/read/write paths. */
-import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'fs'
+import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync, statSync } from 'fs'
 import { dirname, join } from 'path'
 import { exec, execFile } from 'child_process'
+import { parse as parseYaml } from 'yaml'
 import { getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
@@ -15,6 +16,7 @@ import type {
   SetupRunPolicy,
   WorktreeSetupLaunch
 } from '../shared/types'
+import { INVALID_YAML_SENTINEL } from '../shared/orca-yaml-layout'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
 
@@ -139,7 +141,7 @@ export function hasHooksFile(repoPath: string): boolean {
 // return `null` from `parseOrcaYaml` and show a confusing "could not be parsed"
 // error.  Detecting well-formed but unrecognised keys lets the UI suggest an
 // update instead of implying the file is broken.
-const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand'])
+const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand', 'layout'])
 
 /**
  * Return true when `orca.yaml` contains at least one top-level key that this
@@ -174,6 +176,75 @@ export function getIssueCommandFilePath(repoPath: string): string {
 
 export function getSharedIssueCommand(repoPath: string): string | null {
   return loadHooks(repoPath)?.issueCommand?.trim() || null
+}
+
+// Why: 256 KB cap so a malformed multi-MB orca.yaml can't stall the
+// main thread inside the YAML parser before Zod gets to reject it.
+const MAX_ORCA_YAML_BYTES = 256 * 1024
+
+// Why: extract the raw `layout` block without validating — the renderer
+// Zod-validates and surfaces schema errors via toast. Forwarding raw
+// here means a malformed config is distinguishable from a missing one
+// downstream instead of both collapsing to null silently.
+function extractLayoutBlock(content: string, sourceLabel: string): unknown | null {
+  if (content.length > MAX_ORCA_YAML_BYTES) {
+    console.warn(
+      `[layout-rules] orca.yaml at ${sourceLabel} is ${content.length} bytes (cap ${MAX_ORCA_YAML_BYTES}); skipping.`
+    )
+    return null
+  }
+  let raw: unknown
+  try {
+    raw = parseYaml(content)
+  } catch (err) {
+    console.warn(`[layout-rules] orca.yaml at ${sourceLabel} failed to parse:`, err)
+    // Why: sentinel (renderer recognizes via isInvalidYamlSentinel).
+    // null is reserved for "file or layout block absent".
+    const message = err instanceof Error ? err.message : String(err)
+    return { [INVALID_YAML_SENTINEL]: true, message }
+  }
+  if (!raw || typeof raw !== 'object' || !('layout' in raw)) {
+    return null
+  }
+  return (raw as { layout: unknown }).layout
+}
+
+export function loadLayoutConfig(worktreePath: string): unknown | null {
+  const yamlPath = join(worktreePath, 'orca.yaml')
+  if (!existsSync(yamlPath)) {
+    return null
+  }
+  try {
+    if (statSync(yamlPath).size > MAX_ORCA_YAML_BYTES) {
+      console.warn(
+        `[layout-rules] orca.yaml at ${yamlPath} exceeds ${MAX_ORCA_YAML_BYTES} bytes; skipping.`
+      )
+      return null
+    }
+    return extractLayoutBlock(readFileSync(yamlPath, 'utf-8'), yamlPath)
+  } catch {
+    return null
+  }
+}
+
+// Why: SSH equivalent — same extract path through the relay's readFile.
+// Cap-check happens post-read inside extractLayoutBlock; the SSH relay
+// has its own response-size limits at the transport layer, so a runaway
+// remote orca.yaml is bounded there before this function sees it.
+export async function loadLayoutConfigFromReader(
+  reader: { readFile: (path: string) => Promise<{ content: string } | string> },
+  worktreePath: string
+): Promise<unknown | null> {
+  // Why: relay guarantees POSIX remote paths; path.join on Windows
+  // host would inject backslashes.
+  const yamlPath = `${worktreePath}/orca.yaml`
+  try {
+    const result = await reader.readFile(yamlPath)
+    const content = typeof result === 'string' ? result : result.content
+    return extractLayoutBlock(content, yamlPath)
+  } catch {
+    return null
+  }
 }
 
 export type ResolvedIssueCommand = {

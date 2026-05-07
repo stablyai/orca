@@ -36,6 +36,7 @@ import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createLayoutRulesSlice } from './layout-rules'
 
 export const TEST_REPO = {
   id: 'repo1',
@@ -74,7 +75,8 @@ export function createTestStore() {
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
+    ...createWorkspaceCleanupSlice(...a),
+    ...createLayoutRulesSlice(...a)
   }))
 }
 

@@ -1,0 +1,55 @@
+# Sample `orca.yaml` showing the layout-rules feature from #1499.
+# Drop a copy of this file (renamed `orca.yaml`) at the root of any
+# repo registered in Orca, then create a fresh worktree from that repo
+# to see the declared layout materialize on first mount.
+#
+# Existing repos with persisted layout state are NOT re-shuffled —
+# layout-rules only seed fresh worktrees. To preview against an existing
+# worktree, delete it from Orca and re-create, or open a brand-new worktree
+# (e.g. via `orca worktree create --branch some/new-branch`).
+
+layout:
+  # `groups` defines named regions of the worktree's tab layout.
+  # Each group has a `position` anchor that the seed algorithm
+  # translates into a sequence of horizontal/vertical splits.
+  #
+  # Available positions:
+  #   center, left, right, top, bottom,
+  #   left-top, left-bottom, right-top, right-bottom
+  #
+  # Optional `kind` field locks a group to a single content type:
+  #   editor   — only editor / file tabs (incl. diff, conflict-review)
+  #   terminal — only terminal tabs
+  #   browser  — only browser tabs
+  #   mixed    — accepts everything (default; same as omitting `kind`)
+  #
+  # Effect of `kind`:
+  #   1. Per-create resolution: if a CLI / UI action would place a tab
+  #      with mismatched kind in this group, it's redirected to the
+  #      group declared by the matching `rules` entry instead.
+  #   2. UI "+" dropdown filters out non-matching options for this
+  #      group (e.g. browser-locked group hides "New Terminal").
+  groups:
+    editor:
+      position: left-top
+      kind: editor
+    terminal:
+      position: left-bottom
+      kind: terminal
+    browser:
+      position: right
+      kind: browser
+
+  # `rules` map "what just got created" to "which named group it lands in".
+  # Resolution priority: explicit caller --group > rule for content kind >
+  # current activeGroupIdByWorktree (today's behavior).
+  #
+  # Keys (currently recognized):
+  #   new-editor-tab  — files opened in the editor (via sidebar / CLI)
+  #   new-terminal    — `orca terminal create` and the initial terminal
+  #                     spawned at first-mount
+  #   new-browser-tab — `orca tab create` and clicked links routed to the tab strip
+  rules:
+    new-editor-tab: editor
+    new-terminal: terminal
+    new-browser-tab: browser

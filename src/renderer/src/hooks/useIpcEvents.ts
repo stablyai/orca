@@ -1,9 +1,10 @@
 /* oxlint-disable max-lines -- Why: this App-level IPC bridge intentionally keeps the renderer's main-process event contract in one place so shortcut, runtime, updater, and agent-status wiring do not drift across files. */
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree, seedLayoutFromStore } from '@/lib/worktree-activation'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
@@ -85,6 +86,12 @@ import {
   syncAgentHookCompletionNotificationSettings
 } from './agent-hook-completion-notifications'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import {
+  LayoutConfigSchema,
+  groupAllowsContentKind,
+  isInvalidYamlSentinel
+} from '../../../shared/orca-yaml-layout'
+import { tryReseedAfterLateConfigArrival } from '@/lib/layout-rules'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -894,6 +901,9 @@ export function useIpcEvents(): void {
               // logic; see docs/cmd-j-empty-query-ordering.md.
               store.markWorktreeVisited(worktreeId)
             }
+            // Why: seed before createTab so CLI/runtime terminal reveals
+            // land in the rule-resolved group when no explicit group is set.
+            seedLayoutFromStore(worktreeId)
             const existingTab = ptyId
               ? (store.tabsByWorktree[worktreeId] ?? []).find(
                   (candidate) =>
@@ -1015,6 +1025,83 @@ export function useIpcEvents(): void {
       )
     )
 
+    unsubs.push(
+      // Why: re-validate against the same Zod schema main used — defense in depth.
+      window.api.ui.onLayoutConfig(({ worktreeId, config }) => {
+        // Why: mirror prefetch invalid-tracking so Reset Layout reflects latest outcome.
+        const markInvalid = (): void => {
+          const live = useAppStore.getState().layoutConfigInvalidIds
+          if (!live.has(worktreeId)) {
+            useAppStore.setState({
+              layoutConfigInvalidIds: new Set([...live, worktreeId])
+            })
+          }
+        }
+        const clearInvalid = (): void => {
+          const live = useAppStore.getState().layoutConfigInvalidIds
+          if (live.has(worktreeId)) {
+            const next = new Set(live)
+            next.delete(worktreeId)
+            useAppStore.setState({ layoutConfigInvalidIds: next })
+          }
+        }
+        if (!config) {
+          useAppStore.getState().setLayoutConfigForWorktree(worktreeId, null)
+          clearInvalid()
+          return
+        }
+        if (isInvalidYamlSentinel(config)) {
+          toast.error('orca.yaml could not be parsed', {
+            description: config.message
+          })
+          useAppStore.getState().setLayoutConfigForWorktree(worktreeId, null)
+          markInvalid()
+          return
+        }
+        const parsed = LayoutConfigSchema.safeParse(config)
+        if (!parsed.success) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[layout-rules] Renderer rejected layout config from main as malformed:',
+            parsed.error.issues
+          )
+          const firstIssue = parsed.error.issues[0]
+          const detail = firstIssue
+            ? `${firstIssue.path.join('.') || 'layout'}: ${firstIssue.message}`
+            : 'see DevTools console for full Zod error'
+          toast.error('orca.yaml layout rejected', { description: detail })
+          useAppStore.getState().setLayoutConfigForWorktree(worktreeId, null)
+          markInvalid()
+          return
+        }
+        useAppStore.getState().setLayoutConfigForWorktree(worktreeId, parsed.data)
+        clearInvalid()
+        // Why: IPC may resolve AFTER the worktree was activated with
+        // its default group + auto-spawn — tear down and apply layout.
+        const s = useAppStore.getState()
+        tryReseedAfterLateConfigArrival(worktreeId, parsed.data, {
+          getGroupsForWorktree: (wt) => useAppStore.getState().groupsByWorktree[wt] ?? [],
+          getTabsForWorktree: (wt) => useAppStore.getState().tabsByWorktree[wt] ?? [],
+          ensureWorktreeRootGroup: s.ensureWorktreeRootGroup,
+          createEmptySplitGroup: s.createEmptySplitGroup,
+          focusGroup: s.focusGroup,
+          recordLayoutGroupBinding: s.recordLayoutGroupBinding,
+          closeTab: s.closeTab,
+          closeEmptyGroup: s.closeEmptyGroup,
+          recreateInitialTerminal: (wt) => {
+            // Why: closeTab during teardown may have null'd activeWorktreeId; restore first.
+            const live = useAppStore.getState()
+            if (live.activeWorktreeId !== wt) {
+              live.setActiveWorktree(wt)
+            }
+            useAppStore.getState().createTab(wt, undefined, undefined, {
+              pendingActivationSpawn: true
+            })
+          }
+        })
+      })
+    )
+
     // Why: CLI-driven terminal creation sends a request and waits for the
     // tabId reply so it can resolve a handle the caller can use immediately.
     // This mirrors the browser's onRequestTabCreate/replyTabCreate pattern.
@@ -1037,6 +1124,51 @@ export function useIpcEvents(): void {
             })
             return
           }
+          // Why: validate --group BEFORE seeding or mutating UI. Peek
+          // at layoutConfigByWorktree (already in store from prefetch
+          // or main-side push) so a typo'd cross-worktree CLI command
+          // can't pre-stage the target worktree's layout as a side
+          // effect of a failing validation.
+          let resolvedTargetGroupId = data.targetGroupId
+          if (data.groupName) {
+            const peek = useAppStore.getState()
+            const config = peek.layoutConfigByWorktree[worktreeId]
+            const declared = config?.groups?.[data.groupName]
+            if (!declared) {
+              const known = config ? Object.keys(config.groups ?? {}).sort() : []
+              const hint =
+                known.length > 0
+                  ? ` Available: ${known.join(', ')}.`
+                  : ' No layout config loaded for this worktree (open it once or add a `layout:` block to orca.yaml).'
+              window.api.ui.replyTerminalCreate({
+                requestId: data.requestId,
+                error: `Unknown layout group "${data.groupName}".${hint}`
+              })
+              return
+            }
+            if (declared.kind && !groupAllowsContentKind(declared.kind, 'terminal')) {
+              window.api.ui.replyTerminalCreate({
+                requestId: data.requestId,
+                error: `Layout group "${data.groupName}" is locked to kind '${declared.kind}' and cannot host a terminal.`
+              })
+              return
+            }
+            // Validation passed — now safe to seed + resolve to UUID.
+            seedLayoutFromStore(worktreeId)
+            const groupId = useAppStore.getState().layoutGroupIdByName[worktreeId]?.[data.groupName]
+            if (!groupId) {
+              window.api.ui.replyTerminalCreate({
+                requestId: data.requestId,
+                error: `Layout group "${data.groupName}" is declared but not yet materialized; try again after the worktree finishes activating.`
+              })
+              return
+            }
+            resolvedTargetGroupId = groupId
+          } else {
+            // Why: no --group → seed so the rule-resolved group exists
+            // when createTab consults `new-terminal`. Idempotent.
+            seedLayoutFromStore(worktreeId)
+          }
           const shouldActivate = data.activate !== false
           if (shouldActivate) {
             store.setActiveView('terminal')
@@ -1055,7 +1187,7 @@ export function useIpcEvents(): void {
           }
           const tab = store.createTab(
             worktreeId,
-            data.targetGroupId,
+            resolvedTargetGroupId,
             undefined,
             shouldActivate ? undefined : { activate: false, recordInteraction: false }
           )
@@ -1453,19 +1585,72 @@ export function useIpcEvents(): void {
             window.api.ui.replyTabCreate({ requestId: data.requestId, error: 'No active worktree' })
             return
           }
-          // Why: CLI-created tabs should land in the same group as the active
-          // browser tab, not the terminal's group (which is typically the
-          // UI-active group when an agent is running commands).
-          const activeBrowserTabId = store.activeBrowserTabIdByWorktree[worktreeId]
-          const activeBrowserUnifiedTab = activeBrowserTabId
-            ? (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-                (t) => t.contentType === 'browser' && t.entityId === activeBrowserTabId
-              )
-            : undefined
+          // Why: validate --group BEFORE seeding so a typo doesn't pre-
+          // stage the target worktree's layout as a side effect. Peek
+          // at layoutConfigByWorktree (already in store from prefetch).
+          let resolvedTargetGroupId: string | undefined
+          if (data.groupName) {
+            const peek = useAppStore.getState()
+            const config = peek.layoutConfigByWorktree[worktreeId]
+            const declared = config?.groups?.[data.groupName]
+            if (!declared) {
+              const known = config ? Object.keys(config.groups ?? {}).sort() : []
+              const hint =
+                known.length > 0
+                  ? ` Available: ${known.join(', ')}.`
+                  : ' No layout config loaded for this worktree (open it once or add a `layout:` block to orca.yaml).'
+              window.api.ui.replyTabCreate({
+                requestId: data.requestId,
+                error: `Unknown layout group "${data.groupName}".${hint}`
+              })
+              return
+            }
+            if (declared.kind && !groupAllowsContentKind(declared.kind, 'browser')) {
+              window.api.ui.replyTabCreate({
+                requestId: data.requestId,
+                error: `Layout group "${data.groupName}" is locked to kind '${declared.kind}' and cannot host a browser tab.`
+              })
+              return
+            }
+            seedLayoutFromStore(worktreeId)
+            const groupId = useAppStore.getState().layoutGroupIdByName[worktreeId]?.[data.groupName]
+            if (!groupId) {
+              window.api.ui.replyTabCreate({
+                requestId: data.requestId,
+                error: `Layout group "${data.groupName}" is declared but not yet materialized; try again after the worktree finishes activating.`
+              })
+              return
+            }
+            resolvedTargetGroupId = groupId
+          } else {
+            // Why: no --group → seed first so rules['new-browser-tab']
+            // and the active-browser fallback both have populated
+            // bindings to consult. Idempotent.
+            seedLayoutFromStore(worktreeId)
+            const fresh = useAppStore.getState()
+            // Why: prefer rules['new-browser-tab'] over the
+            // active-browser-group fallback so the layout contract
+            // beats "land next to the active browser tab" UX.
+            const ruleTarget = fresh.layoutConfigByWorktree[worktreeId]?.rules?.['new-browser-tab']
+            const ruleGroupId = ruleTarget
+              ? fresh.layoutGroupIdByName[worktreeId]?.[ruleTarget]
+              : undefined
+            if (ruleGroupId) {
+              resolvedTargetGroupId = ruleGroupId
+            } else {
+              const activeBrowserTabId = fresh.activeBrowserTabIdByWorktree[worktreeId]
+              const activeBrowserUnifiedTab = activeBrowserTabId
+                ? (fresh.unifiedTabsByWorktree[worktreeId] ?? []).find(
+                    (t) => t.contentType === 'browser' && t.entityId === activeBrowserTabId
+                  )
+                : undefined
+              resolvedTargetGroupId = activeBrowserUnifiedTab?.groupId
+            }
+          }
 
-          const workspace = store.createBrowserTab(worktreeId, data.url, {
+          const workspace = useAppStore.getState().createBrowserTab(worktreeId, data.url, {
             title: data.url,
-            targetGroupId: activeBrowserUnifiedTab?.groupId,
+            targetGroupId: resolvedTargetGroupId,
             sessionProfileId: data.sessionProfileId,
             activate: false
           })

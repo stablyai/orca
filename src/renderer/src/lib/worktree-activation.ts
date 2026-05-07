@@ -16,6 +16,7 @@ import {
   activateWebRuntimeSessionWorktree,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import { applyLayoutSeed } from '@/lib/layout-rules'
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
@@ -122,6 +123,23 @@ function buildCreatedAgentReopenStartup(worktree: Worktree):
       request_kind: 'resume'
     }
   }
+}
+
+// Why: callable from any tab-create site; idempotent so the
+// worktree-activation path stays safe when this also fires from CLI.
+export function seedLayoutFromStore(worktreeId: string): void {
+  const layoutConfig = useAppStore.getState().layoutConfigByWorktree[worktreeId]
+  if (!layoutConfig) {
+    return
+  }
+  const s = useAppStore.getState()
+  applyLayoutSeed(worktreeId, layoutConfig, {
+    getGroupsForWorktree: (wt) => useAppStore.getState().groupsByWorktree[wt] ?? [],
+    ensureWorktreeRootGroup: s.ensureWorktreeRootGroup,
+    createEmptySplitGroup: s.createEmptySplitGroup,
+    focusGroup: s.focusGroup,
+    recordLayoutGroupBinding: s.recordLayoutGroupBinding
+  })
 }
 
 export function activateAndRevealWorktree(
@@ -234,6 +252,10 @@ export function ensureWorktreeHasInitialTerminal(
   ) {
     return null
   }
+
+  // Why: layout-rules — seed declared groups BEFORE creating the
+  // initial terminal so the terminal lands in the rule-resolved group.
+  seedLayoutFromStore(worktreeId)
 
   // Why: this tab only exists because the user clicked/activated a worktree
   // that had no focusable surface yet. Tag it so the resulting PTY spawn

@@ -67,6 +67,17 @@ export type WorktreeSlice = {
    * sessions (design §4.4). Session-only; never persisted.
    */
   hasHydratedWorktreePurge: boolean
+  /**
+   * Worktree IDs whose `orca.yaml layout` has already been prefetched
+   * during this session. Tracked even when the result is null so repos
+   * without layout config don't keep re-firing IPC.
+   */
+  layoutConfigPrefetchedIds: Set<string>
+  /**
+   * Worktree IDs whose last layout-config fetch returned invalid YAML or
+   * schema errors. Drives Reset Layout recovery visibility.
+   */
+  layoutConfigInvalidIds: Set<string>
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>

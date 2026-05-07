@@ -260,10 +260,16 @@ describe('fetchWorktrees', () => {
     const detected = makeDetectedResult('repo1', [existing])
 
     mockApi.worktrees.listDetected.mockResolvedValueOnce(detected)
+    // Why: pre-seed `layoutConfigPrefetchedIds` so the worktree is
+    // treated as already-prefetched. Without this, the layout-rules
+    // prefetch path fires on first sight (correct behaviour) and
+    // notifies the subscriber, which is unrelated to the worktree-
+    // payload equality this test pins.
     store.setState({
       worktreesByRepo: { repo1: [existing] },
       detectedWorktreesByRepo: { repo1: detected },
-      sortEpoch: 7
+      sortEpoch: 7,
+      layoutConfigPrefetchedIds: new Set([existing.id])
     } as Partial<AppState>)
 
     const unsubscribe = store.subscribe(subscriber)

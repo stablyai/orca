@@ -118,7 +118,10 @@ export const TabCreate = z.object({
   url: OptionalString,
   worktree: OptionalString,
   profileId: OptionalString,
-  waitForRegistration: z.boolean().optional()
+  waitForRegistration: z.boolean().optional(),
+  // Why: declared group name; resolved against layoutGroupIdByName in
+  // the renderer at create time.
+  groupName: OptionalString
 })
 
 export const TabShow = z.object({

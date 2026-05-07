@@ -717,6 +717,7 @@ export type PreloadApi = {
     list: (args: { repoId: string }) => Promise<Worktree[]>
     listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
+    getLayoutConfig: (args: { worktreeId: string }) => Promise<unknown | null>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     resolvePrBase: (args: {
       repoId: string
@@ -1793,6 +1794,7 @@ export type PreloadApi = {
         url: string
         worktreeId?: string
         sessionProfileId?: string
+        groupName?: string
       }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
@@ -1827,6 +1829,9 @@ export type PreloadApi = {
         startup?: WorktreeStartupLaunch
       }) => void
     ) => () => void
+    onLayoutConfig: (
+      callback: (data: { worktreeId: string; config: unknown | null }) => void
+    ) => () => void
     onCreateTerminal: (
       callback: (data: {
         requestId?: string
@@ -1850,6 +1855,7 @@ export type PreloadApi = {
         command?: string
         title?: string
         activate?: boolean
+        groupName?: string
       }) => void
     ) => () => void
     replyTerminalCreate: (reply: {

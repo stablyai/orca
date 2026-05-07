@@ -18,6 +18,9 @@ import {
   Bell,
   BellOff,
   CircleX,
+  LayoutGrid,
+  Link,
+  MessageSquare,
   Moon,
   Pencil,
   Pin,
@@ -43,6 +46,7 @@ import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { runResetWorktreeLayout } from './reset-layout-flow'
 
 type Props = {
   worktree: Worktree
@@ -197,6 +201,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
+  // Why: visible only when a config exists or the last fetch was invalid
+  // — prefetch lock would also flag config-less worktrees (no-op there).
+  const showResetLayout = useAppStore(
+    (s) => !!s.layoutConfigByWorktree[worktree.id] || s.layoutConfigInvalidIds.has(worktree.id)
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(selectedWorktrees)
@@ -368,6 +377,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       void runSleepWorktrees(worktreeIds)
     }, 50)
   }, [setMenuOpenState, sleepableWorktrees])
+
+  const handleResetLayout = useCallback(async () => {
+    setMenuOpen(false)
+    await runResetWorktreeLayout(worktree.id)
+  }, [worktree.id])
 
   const handleDelete = useCallback(() => {
     // Folder mode handled inline because it routes to a different modal;
@@ -636,6 +650,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 : 'Close all active panels in this workspace to free up memory and CPU.'}
             </TooltipContent>
           </Tooltip>
+          {showResetLayout && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuItem onSelect={handleResetLayout} disabled={isDeleting}>
+                  <LayoutGrid className="size-3.5" />
+                  Reset Layout
+                </DropdownMenuItem>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8} className="max-w-[220px] text-pretty">
+                Tear down panels and re-seed from the latest orca.yaml.
+              </TooltipContent>
+            </Tooltip>
+          )}
           {/* Why: `git worktree remove` always rejects the main worktree, so we
              disable the item upfront. Radix forwards unknown props to the DOM
              element, so `title` works directly without a wrapper span — this

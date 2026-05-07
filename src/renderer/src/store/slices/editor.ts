@@ -8,6 +8,7 @@ import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal
 import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
+import { resolveTargetGroup } from '@/lib/layout-rules'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -507,8 +508,24 @@ function openWorkspaceEditorItem(
   isPreview?: boolean,
   targetGroupId?: string
 ): string {
+  // Why: layout-rules — single source of truth for "which group does
+  // this editor item land in". File-tree click, sidebar quick-open,
+  // diff/conflict-review openers all flow through here. Resolver
+  // honors caller's explicit targetGroupId UNLESS the target group's
+  // declared `kind` rejects this content; then it redirects via the
+  // matching rule. Falls back to current active-group default when
+  // no layout config is in play.
+  const ruleResolvedGroupId = resolveTargetGroup({
+    worktreeId,
+    contentKind: contentType,
+    explicitGroupId: targetGroupId ?? null,
+    activeGroupId: state.activeGroupIdByWorktree?.[worktreeId],
+    groupsByWorktree: state.groupsByWorktree ?? {},
+    layoutConfigByWorktree: state.layoutConfigByWorktree,
+    layoutGroupIdByName: state.layoutGroupIdByName
+  })
   const resolvedGroupId =
-    targetGroupId ??
+    ruleResolvedGroupId ??
     state.activeGroupIdByWorktree?.[worktreeId] ??
     state.groupsByWorktree?.[worktreeId]?.[0]?.id
   if (resolvedGroupId) {
@@ -1162,8 +1179,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // Why: resolve the target group up-front so preview replacement can be
       // scoped to that group. Opening as preview in group B must not evict a
       // preview tab belonging to group A (split tab groups).
+      // Layout-rules — resolver picks priority:
+      //   1. options.targetGroupId IFF group's declared `kind` accepts
+      //      editor tabs (or kind is unset/mixed)
+      //   2. group declared by rules['new-editor-tab']
+      //   3. undefined — fall back to active-group default below
+      const resolvedTargetGroupId = resolveTargetGroup({
+        worktreeId,
+        contentKind: 'editor',
+        explicitGroupId: options?.targetGroupId ?? null,
+        activeGroupId: s.activeGroupIdByWorktree?.[worktreeId],
+        groupsByWorktree: s.groupsByWorktree ?? {},
+        layoutConfigByWorktree: s.layoutConfigByWorktree,
+        layoutGroupIdByName: s.layoutGroupIdByName
+      })
       const targetGroupId =
-        options?.targetGroupId ??
+        resolvedTargetGroupId ??
         s.activeGroupIdByWorktree?.[worktreeId] ??
         s.groupsByWorktree?.[worktreeId]?.[0]?.id ??
         undefined

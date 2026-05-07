@@ -19,10 +19,13 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
 import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import { getGroupKindForUuid, resolveTargetGroup } from '@/lib/layout-rules'
+import { groupAllowsContentKind } from '../../../../shared/orca-yaml-layout'
 import {
   dedupeTabOrder,
   ensureGroup,
   findTabByEntityInGroup,
+  nextLayoutForCreatedGroup,
   pushRecentTabId,
   sanitizeRecentTabIds,
   updateGroup
@@ -570,15 +573,49 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         targetGroupId && s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
           ? targetGroupId
           : undefined
+      // Why: layout-rules — the resolver knows three priority levels:
+      //   1. explicit groupId (passed by caller) IFF the group's
+      //      declared `kind` accepts terminals (or kind is unset/mixed)
+      //   2. group declared by `rules['new-terminal']` in orca.yaml
+      //   3. undefined — caller falls back to `activeGroupIdByWorktree`
+      // The resolver is no-op when the worktree has no layout config.
+      const resolvedTargetGroupId = resolveTargetGroup({
+        worktreeId,
+        contentKind: 'terminal',
+        explicitGroupId: validTargetGroupId,
+        activeGroupId: s.activeGroupIdByWorktree[worktreeId],
+        groupsByWorktree: s.groupsByWorktree,
+        layoutConfigByWorktree: s.layoutConfigByWorktree,
+        layoutGroupIdByName: s.layoutGroupIdByName
+      })
+      const allowsTerminal = (groupId: string): boolean =>
+        groupAllowsContentKind(
+          getGroupKindForUuid({
+            worktreeId,
+            groupId,
+            groupsByWorktree: s.groupsByWorktree,
+            layoutConfigByWorktree: s.layoutConfigByWorktree,
+            layoutGroupIdByName: s.layoutGroupIdByName
+          }),
+          'terminal'
+        )
+      const beforeGroupIds = new Set((s.groupsByWorktree[worktreeId] ?? []).map((g) => g.id))
       const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
         s.groupsByWorktree,
         s.activeGroupIdByWorktree,
         worktreeId,
-        validTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId]
+        resolvedTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId],
+        allowsTerminal
       )
+      // Why: activate the group ensureGroup actually picked, not the
+      // resolved target. ensureGroup may have rejected the resolved
+      // target via allowsTerminal and fallen back to a different
+      // existing group or created a fresh mixed-kind one — using
+      // resolvedTargetGroupId here would desync UI focus from where
+      // the terminal actually lives.
       const nextActiveGroupIdByWorktree =
-        shouldActivate && validTargetGroupId
-          ? { ...activeGroupIdByWorktree, [worktreeId]: validTargetGroupId }
+        shouldActivate && resolvedTargetGroupId
+          ? { ...activeGroupIdByWorktree, [worktreeId]: group.id }
           : activeGroupIdByWorktree
       const existingUnifiedTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
       const existingTerminalTab = findTabByEntityInGroup(
@@ -632,10 +669,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           })
         },
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-        layoutByWorktree: {
-          ...s.layoutByWorktree,
-          [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-        },
+        // Why: when ensureGroup's allowsTerminal predicate created a
+        // brand-new mixed-kind fallback group, attach it as a sibling
+        // in the existing split tree. Without this the terminal lives
+        // in groupsByWorktree but the layout tree never references it.
+        layoutByWorktree: nextLayoutForCreatedGroup(
+          s.layoutByWorktree,
+          worktreeId,
+          group.id,
+          beforeGroupIds
+        ),
         activeTabId: shouldActivate ? tab.id : s.activeTabId,
         activeTabIdByWorktree: {
           ...s.activeTabIdByWorktree,
