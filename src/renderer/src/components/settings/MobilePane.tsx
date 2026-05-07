@@ -12,7 +12,7 @@ import { useAppStore } from '../../store'
 // duration knob. Indefinite hold (`null`) is the default. Server clamps
 // anything outside [5_000ms, 60min]. See docs/mobile-fit-hold.md.
 const AUTO_RESTORE_FIT_OPTIONS: { value: string; label: string; ms: number | null }[] = [
-  { value: 'indefinite', label: 'Keep at phone size', ms: null },
+  { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
   { value: '60s', label: 'After 1 minute', ms: 60_000 },
   { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
   { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
