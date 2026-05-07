@@ -626,3 +626,159 @@ describe('shutdownWorktreeBrowsers', () => {
     expect(store.getState().activeTabType).toBe('terminal')
   })
 })
+
+// Why: focusBrowserTabInWorktree is the renderer side of `tab switch --focus`.
+// The defining invariant is no cross-worktree screen theft: when multiple
+// agents drive browsers in parallel worktrees, an agent focusing a tab in
+// worktree X must never yank the user's view away from worktree Y.
+describe('focusBrowserTabInWorktree', () => {
+  function seedTwoWorktrees(
+    store: ReturnType<typeof createTestStore>,
+    activeWt: string,
+    otherWt: string
+  ): void {
+    seedStore(store, {
+      activeRepoId: 'repo1',
+      activeWorktreeId: activeWt,
+      activeTabType: 'terminal',
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: activeWt, repoId: 'repo1', path: '/tmp/wt-active' }),
+          makeWorktree({ id: otherWt, repoId: 'repo1', path: '/tmp/wt-other' })
+        ]
+      },
+      groupsByWorktree: {
+        [activeWt]: [
+          makeTabGroup({ id: 'g-active', worktreeId: activeWt, activeTabId: null, tabOrder: [] })
+        ],
+        [otherWt]: [
+          makeTabGroup({ id: 'g-other', worktreeId: otherWt, activeTabId: null, tabOrder: [] })
+        ]
+      },
+      activeGroupIdByWorktree: { [activeWt]: 'g-active', [otherWt]: 'g-other' },
+      activeTabTypeByWorktree: { [activeWt]: 'terminal', [otherWt]: 'terminal' },
+      browserTabsByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+  }
+
+  it('does not yank activeWorktreeId when focusing a tab in a non-active worktree', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/tmp/wt-active'
+    const otherWt = 'repo1::/tmp/wt-other'
+    seedTwoWorktrees(store, activeWt, otherWt)
+
+    const ws = store.getState().createBrowserTab(otherWt, 'https://example.com/a', { title: 'A' })
+    const pageId = (store.getState().browserPagesByWorkspace[ws.id] ?? [])[0]?.id
+    expect(pageId).toBeDefined()
+    // createBrowserTab on a non-active worktree leaves activeWorktreeId alone;
+    // re-pin it here in case any future change to that path regresses it.
+    store.setState({ activeWorktreeId: activeWt, activeTabType: 'terminal' })
+
+    store.getState().focusBrowserTabInWorktree(otherWt, pageId!, { surfacePane: true })
+
+    expect(store.getState().activeWorktreeId).toBe(activeWt)
+    expect(store.getState().activeTabType).toBe('terminal')
+  })
+
+  it('updates per-worktree active tab and tab type for the targeted worktree even when not active', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/tmp/wt-active'
+    const otherWt = 'repo1::/tmp/wt-other'
+    seedTwoWorktrees(store, activeWt, otherWt)
+
+    const ws = store.getState().createBrowserTab(otherWt, 'https://example.com/a', { title: 'A' })
+    const pageId = (store.getState().browserPagesByWorkspace[ws.id] ?? [])[0]?.id
+    store.setState({ activeWorktreeId: activeWt, activeTabType: 'terminal' })
+
+    store.getState().focusBrowserTabInWorktree(otherWt, pageId!, { surfacePane: true })
+
+    // Per-worktree slots: pre-staged for whenever the user next visits otherWt.
+    expect(store.getState().activeBrowserTabIdByWorktree[otherWt]).toBe(ws.id)
+    expect(store.getState().activeTabTypeByWorktree[otherWt]).toBe('browser')
+  })
+
+  it('flips global activeBrowserTabId and activeTabType when targeting the active worktree with surfacePane', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/tmp/wt-active'
+    const otherWt = 'repo1::/tmp/wt-other'
+    seedTwoWorktrees(store, activeWt, otherWt)
+
+    const ws = store.getState().createBrowserTab(activeWt, 'https://example.com/a', { title: 'A' })
+    const pageId = (store.getState().browserPagesByWorkspace[ws.id] ?? [])[0]?.id
+    // Reset to terminal so we can prove --focus surfaces the pane.
+    store.setState((s) => ({
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [activeWt]: 'terminal' }
+    }))
+
+    store.getState().focusBrowserTabInWorktree(activeWt, pageId!, { surfacePane: true })
+
+    expect(store.getState().activeBrowserTabId).toBe(ws.id)
+    expect(store.getState().activeTabType).toBe('browser')
+  })
+
+  it('without surfacePane, leaves activeTabType alone even on the active worktree', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/tmp/wt-active'
+    const otherWt = 'repo1::/tmp/wt-other'
+    seedTwoWorktrees(store, activeWt, otherWt)
+
+    const ws = store.getState().createBrowserTab(activeWt, 'https://example.com/a', { title: 'A' })
+    const pageId = (store.getState().browserPagesByWorkspace[ws.id] ?? [])[0]?.id
+    // Reset both globals and per-worktree slot so we can prove surfacePane=false
+    // does NOT flip the user back into the browser pane (createBrowserTab
+    // itself flips both because it activates the new tab).
+    store.setState((s) => ({
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [activeWt]: 'terminal' }
+    }))
+
+    store.getState().focusBrowserTabInWorktree(activeWt, pageId!, { surfacePane: false })
+
+    // Per-worktree active tab still pre-staged, but the user is still on terminal.
+    expect(store.getState().activeBrowserTabIdByWorktree[activeWt]).toBe(ws.id)
+    expect(store.getState().activeTabType).toBe('terminal')
+    expect(store.getState().activeTabTypeByWorktree[activeWt]).toBe('terminal')
+  })
+
+  it('finds the owning workspace via pageIds for multi-page workspaces', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/tmp/wt-active'
+    const otherWt = 'repo1::/tmp/wt-other'
+    seedTwoWorktrees(store, activeWt, otherWt)
+
+    const ws = store.getState().createBrowserTab(otherWt, 'https://example.com/a', { title: 'A' })
+    const pageB = store
+      .getState()
+      .createBrowserPage(ws.id, 'https://example.com/b', { title: 'B', activate: false })
+    expect(pageB).not.toBeNull()
+
+    store.getState().focusBrowserTabInWorktree(otherWt, pageB!.id, { surfacePane: true })
+
+    // The workspace's activePageId must follow the focused page id, not its
+    // first page. Renderer otherwise shows the wrong tab on next visit.
+    const updatedWs = store
+      .getState()
+      .browserTabsByWorktree[otherWt]?.find((t) => t.id === ws.id)
+    expect(updatedWs?.activePageId).toBe(pageB!.id)
+    expect(store.getState().activeBrowserTabIdByWorktree[otherWt]).toBe(ws.id)
+  })
+
+  it('is a no-op when the page id is not present in the targeted worktree', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/tmp/wt-active'
+    const otherWt = 'repo1::/tmp/wt-other'
+    seedTwoWorktrees(store, activeWt, otherWt)
+
+    const before = store.getState()
+    before.focusBrowserTabInWorktree(otherWt, 'page-that-does-not-exist', { surfacePane: true })
+    const after = store.getState()
+
+    // Nothing globally or per-worktree should have moved. Best-effort: the
+    // page may have closed between the bridge switching and the IPC arriving.
+    expect(after.activeWorktreeId).toBe(before.activeWorktreeId)
+    expect(after.activeTabType).toBe(before.activeTabType)
+    expect(after.activeBrowserTabIdByWorktree[otherWt]).toBeUndefined()
+  })
+})

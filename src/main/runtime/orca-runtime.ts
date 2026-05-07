@@ -4489,20 +4489,18 @@ export class OrcaRuntimeService {
     }
   }
 
-  // Why: `tabSwitch` only flips the bridge's `activeWebContentsId` — it does
-  // not surface the browser pane in the renderer. If the user is currently
-  // looking at terminal/editor, the switch is invisible.
+  // Why: `tabSwitch` only flips the bridge's `activeWebContentsId` — it
+  // does not surface the browser pane in the renderer. Without --focus, the
+  // switch is invisible to the user. With --focus, we send a dedicated IPC
+  // so the renderer can update its per-worktree active-tab state.
   //
-  // Why a dedicated IPC instead of reusing `browser:activateView`: the
-  // renderer's `setActiveWorktree` slice restores `activeTabType` from
-  // `activeTabTypeByWorktree[worktreeId]` (default `'terminal'`), so just
-  // dispatching `setActiveTabType('browser')` after a worktree switch races:
-  // the worktree-restore path may overwrite it back to terminal. The
-  // dedicated listener resolves the order atomically — set worktree first,
-  // then flip the tab type — so the browser tab type is the last word.
-  //
-  // Opt-in via `--focus` so existing automation that switches tabs in the
-  // background isn't disrupted.
+  // Why this IPC carries `worktreeId` instead of letting the renderer
+  // dispatch `setActiveWorktree`: multiple agents drive browsers in parallel
+  // worktrees. A global focus call from agent X would steal the user's
+  // screen from agent Y's worktree. The renderer-side handler
+  // (focusBrowserTabInWorktree) updates per-worktree state unconditionally
+  // and only flips globals when the user is already on the targeted
+  // worktree. Cross-worktree --focus calls pre-stage silently.
   private notifyRendererBrowserPaneFocus(
     worktreeId: string | undefined,
     browserPageId: string
@@ -4689,9 +4687,9 @@ export class OrcaRuntimeService {
     if (params.focus) {
       // Why: prefer the explicit --worktree the caller passed; fall back to
       // the bridge's owning-worktree map for the just-switched tab. The
-      // owning worktree is what the renderer needs to focus to actually
-      // surface this tab — switching to a tab in another worktree's pane
-      // without this falls back to whatever worktree was already active.
+      // owning worktree is what the renderer needs to scope the focus to.
+      // The renderer NEVER yanks the user across worktrees on this signal
+      // (see focusBrowserTabInWorktree).
       const worktreeId =
         target.worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
       this.notifyRendererBrowserPaneFocus(worktreeId, result.browserPageId)

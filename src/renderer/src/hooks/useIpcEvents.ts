@@ -382,36 +382,23 @@ export function useIpcEvents(): void {
       })
     )
 
-    // Why: `orca tab switch --focus` lands here after the bridge's
-    // state-only `tabSwitch`. The browser pane needs to surface in the
-    // renderer (the only thing `tab create` does for free as a side effect).
-    // Order matters: `setActiveWorktree` overwrites `activeTabType` from the
-    // per-worktree memory map (defaulting to `'terminal'` for never-visited
-    // worktrees), so flipping the tab type AFTER the worktree switch is the
-    // only way to win the race. Skip the worktree step when it's already
-    // active to avoid a redundant `setActiveWorktree` cycle that resets
-    // unrelated per-worktree state.
+    // Why: `orca tab switch --focus` lands here after the bridge's state-only
+    // `tabSwitch`. We deliberately DO NOT call `setActiveWorktree` — multiple
+    // agents drive browsers in parallel worktrees, so a global focus call from
+    // one agent's tab switch would steal the user's view from whichever
+    // worktree they're actually reading. Instead `focusBrowserTabInWorktree`
+    // updates the targeted worktree's per-worktree state in place; globals
+    // (activeBrowserTabId, activeTabType) only flip when the user is already
+    // on the targeted worktree. Cross-worktree --focus calls are silent
+    // pre-staging for whenever the user next visits that worktree.
     unsubs.push(
       window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
         const store = useAppStore.getState()
-        if (worktreeId && worktreeId !== store.activeWorktreeId) {
-          store.setActiveWorktree(worktreeId)
+        const targetWt = worktreeId ?? store.activeWorktreeId
+        if (!targetWt) {
+          return
         }
-        // Why: bridge identifies tabs by `browserPageId` (CDP page id stored in
-        // BrowserPage.id), but the renderer's tab strip activates a workspace
-        // (BrowserWorkspace.id, a local UUID). They diverge whenever a workspace
-        // owns more than one page. Walk pageIds to find the owning workspace,
-        // then activate workspace+page atomically.
-        const after = useAppStore.getState()
-        const wt = after.activeWorktreeId ?? ''
-        const owningWorkspace = (after.browserTabsByWorktree[wt] ?? []).find((tab) =>
-          (tab.pageIds ?? []).includes(browserPageId)
-        )
-        if (owningWorkspace) {
-          after.setActiveBrowserTab(owningWorkspace.id)
-          after.setActiveBrowserPage(owningWorkspace.id, browserPageId)
-        }
-        useAppStore.getState().setActiveTabType('browser')
+        store.focusBrowserTabInWorktree(targetWt, browserPageId, { surfacePane: true })
       })
     )
 

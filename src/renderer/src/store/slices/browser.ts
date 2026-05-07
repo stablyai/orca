@@ -77,6 +77,19 @@ export type BrowserSlice = {
   closeBrowserPage: (pageId: string) => void
   reopenClosedBrowserPage: (workspaceId: string) => BrowserPage | null
   setActiveBrowserPage: (workspaceId: string, pageId: string) => void
+  // Why: scoped sibling of setActiveBrowserTab+setActiveBrowserPage that
+  // never yanks the user across worktrees. Multiple agents can drive
+  // browsers in parallel worktrees; a global focus call from agent X would
+  // steal the screen from the user reading agent Y. Updates per-worktree
+  // active tab/page unconditionally; updates the GLOBAL active tab and (if
+  // surfacePane) global activeTabType only when worktreeId === active
+  // worktree. Cross-worktree calls pre-stage the targeted worktree's view
+  // for whenever the user next switches to it.
+  focusBrowserTabInWorktree: (
+    worktreeId: string,
+    browserPageId: string,
+    options?: { surfacePane?: boolean }
+  ) => void
   consumeAddressBarFocusRequest: (pageId: string) => boolean
   updateBrowserTabPageState: (pageId: string, updates: BrowserTabPageState) => void
   updateBrowserPageState: (pageId: string, updates: BrowserTabPageState) => void
@@ -873,6 +886,73 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       .find((entry) => entry.contentType === 'browser' && entry.entityId === workspaceId)
     if (item) {
       get().setTabLabel(item.id, workspace.title)
+    }
+  },
+
+  focusBrowserTabInWorktree: (worktreeId, browserPageId, options) => {
+    // Why: bridge identifies the target by browserPageId (CDP page id stored
+    // on BrowserPage.id), but the renderer's tab strip activates a workspace
+    // (BrowserWorkspace.id, a local UUID). They diverge whenever a workspace
+    // owns more than one page. Walk pageIds in the targeted worktree's tab
+    // list to find the owning workspace.
+    const tabsForWorktree = get().browserTabsByWorktree[worktreeId] ?? []
+    const workspace = tabsForWorktree.find((tab) =>
+      (tab.pageIds ?? []).includes(browserPageId)
+    )
+    if (!workspace) {
+      // Best-effort: state for this worktree may not be hydrated yet, or the
+      // page closed between the bridge switching and this IPC arriving.
+      return
+    }
+    const surfacePane = options?.surfacePane ?? false
+    const pages = get().browserPagesByWorkspace[workspace.id] ?? []
+    const nextWorkspace = mirrorWorkspaceFromActivePage(
+      { ...workspace, activePageId: browserPageId },
+      pages
+    )
+    set((s) => {
+      const isActiveWorktree = s.activeWorktreeId === worktreeId
+      // Per-worktree slots: always update (safe pre-staging; only visible
+      // when user navigates to this worktree).
+      const nextTabsByWorktree = {
+        ...s.browserTabsByWorktree,
+        [worktreeId]: tabsForWorktree.map((tab) =>
+          tab.id === workspace.id ? nextWorkspace : tab
+        )
+      }
+      const nextActiveTabIdByWorktree = {
+        ...s.activeBrowserTabIdByWorktree,
+        [worktreeId]: workspace.id
+      }
+      const nextActiveTabTypeByWorktree = surfacePane
+        ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' as const }
+        : s.activeTabTypeByWorktree
+      // Globals: only mutate when the targeted worktree is currently active.
+      // This is the line that keeps cross-worktree --focus calls silent.
+      return {
+        browserTabsByWorktree: nextTabsByWorktree,
+        activeBrowserTabIdByWorktree: nextActiveTabIdByWorktree,
+        activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+        activeBrowserTabId: isActiveWorktree ? workspace.id : s.activeBrowserTabId,
+        activeTabType: isActiveWorktree && surfacePane ? 'browser' : s.activeTabType
+      }
+    })
+
+    // Why: notify the CDP bridge which guest webContents is now active so
+    // subsequent agent commands target the correct page. Mirrors the
+    // notifyActiveTabChanged calls in setActiveBrowserTab/setActiveBrowserPage.
+    if (typeof window !== 'undefined' && window.api?.browser) {
+      window.api.browser.notifyActiveTabChanged({ browserPageId }).catch(() => {})
+    }
+
+    // Why: keep the unified-tab strip's active entry in sync within the
+    // targeted worktree. activateTab only mutates per-worktree slices, so
+    // it's safe to call cross-worktree without yanking the user.
+    const item = (get().unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (entry) => entry.contentType === 'browser' && entry.entityId === workspace.id
+    )
+    if (item) {
+      get().activateTab(item.id)
     }
   },
 

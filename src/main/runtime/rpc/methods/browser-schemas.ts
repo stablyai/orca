@@ -74,11 +74,11 @@ export const TabList = z.object({
 // so the dispatcher surfaces a single legible error instead of either shape
 // leaking into the runtime.
 //
-// `focus` is opt-in: when true, the runtime sends a `browser:pane-focus` IPC
-// to the renderer after the switch lands. Without it, `tabSwitch` only mutates
-// the bridge's active-WC pointer — the browser pane stays hidden if the user
-// is on terminal/editor. Surface that side-effect explicitly via the flag so
-// existing automation (which doesn't expect pane shifts) stays unchanged.
+// `focus` is opt-in: when true, the runtime sends `browser:pane-focus` to
+// the renderer after the switch lands. The renderer surfaces the browser
+// pane only if the user is already on the targeted worktree; otherwise it
+// pre-stages per-worktree state silently. This avoids cross-worktree screen
+// theft when multiple agents drive browsers in parallel worktrees.
 export const TabSwitch = BrowserTarget.extend({
   index: z
     .unknown()
