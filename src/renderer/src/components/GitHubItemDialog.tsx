@@ -1355,19 +1355,6 @@ function ConversationTab({
             onCommentAdded={onCommentAdded}
           />
         )}
-
-        {item.type !== 'pr' ? (
-          <div className="flex justify-start pt-1">
-            <Button
-              onClick={() => onUse(item)}
-              className="gap-2"
-              aria-label="Start workspace from issue"
-            >
-              Start workspace from issue
-              <ArrowRight className="size-4" />
-            </Button>
-          </div>
-        ) : null}
       </div>
 
       {rightPanel}
@@ -1711,7 +1698,8 @@ function GHEditSection({
   localLabels,
   onStateChange,
   onLabelsChange,
-  assignees
+  assignees,
+  onUse
 }: {
   item: GitHubWorkItem
   repoPath: string | null
@@ -1721,6 +1709,7 @@ function GHEditSection({
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
   assignees: string[]
+  onUse: (item: GitHubWorkItem) => void
 }): React.JSX.Element | null {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
@@ -2111,6 +2100,16 @@ function GHEditSection({
           )}
         </PopoverContent>
       </Popover>
+
+      <Button
+        size="sm"
+        onClick={() => onUse(item)}
+        className="ml-auto gap-2"
+        aria-label="Start workspace from issue"
+      >
+        Start workspace from issue
+        <ArrowRight className="size-4" />
+      </Button>
     </div>
   )
 }
@@ -2180,7 +2179,7 @@ function GHCommentComposer({
   )
 
   return (
-    <div className={cn('flex items-start gap-2', className)}>
+    <div className={cn('flex flex-col items-start gap-2', className)}>
       <MentionTextarea
         textareaRef={textareaRef}
         value={body}
@@ -2192,14 +2191,13 @@ function GHCommentComposer({
         placeholder="Add a comment…"
         rows={4}
         mentionOptions={mentionOptions}
-        wrapperClassName="flex min-h-20 items-stretch"
+        wrapperClassName="flex min-h-20 w-full items-stretch"
         className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
       <Button
-        size="icon"
         onClick={handleSubmit}
         disabled={!body.trim() || submitting}
-        className="size-9 shrink-0"
+        className="gap-2"
         aria-label="Send comment"
       >
         {submitting ? (
@@ -2207,6 +2205,7 @@ function GHCommentComposer({
         ) : (
           <Send className="size-3.5" />
         )}
+        Comment
       </Button>
     </div>
   )
@@ -2525,6 +2524,7 @@ export default function GitHubItemDialog({
                 onStateChange={setLocalState}
                 onLabelsChange={setLocalLabels}
                 assignees={details?.assignees ?? []}
+                onUse={onUse}
               />
             )}
 
