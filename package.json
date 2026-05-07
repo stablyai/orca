@@ -141,7 +141,7 @@
     "react-grab": "^0.1.28",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1",
+    "vite": "^7.3.2",
     "vitest": "^4.1.1"
   },
   "lint-staged": {
