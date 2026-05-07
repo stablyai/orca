@@ -1,4 +1,10 @@
-import type { RpcResponse, RpcSuccess, ConnectionState } from './types'
+import type {
+  RpcResponse,
+  RpcSuccess,
+  ConnectionState,
+  ConnectionLogLevel,
+  ConnectionLogSink
+} from './types'
 import {
   generateKeyPair,
   deriveSharedKey,
@@ -60,12 +66,38 @@ const WEBSOCKET_CONNECTING_STATE = 0
 // window and well below iOS's typical background-disconnect window.
 const ACTIVITY_PROBE_INTERVAL_MS = 20_000
 
+export type ConnectOptions = {
+  onStateChange?: (state: ConnectionState) => void
+  // Fires for every observable lifecycle event so the UI can render a
+  // detailed connection log. Useful when 'Connecting…' hangs forever
+  // (e.g. broken Tailscale route) and you need to see *where* it's stuck.
+  onLog?: ConnectionLogSink
+}
+
 export function connect(
   endpoint: string,
   deviceToken: string,
   serverPublicKeyB64: string,
-  onStateChange?: (state: ConnectionState) => void
+  optionsOrLegacy?: ConnectOptions | ((state: ConnectionState) => void)
 ): RpcClient {
+  // Why: keep backward-compat with callers that pass a bare onStateChange fn.
+  const options: ConnectOptions =
+    typeof optionsOrLegacy === 'function'
+      ? { onStateChange: optionsOrLegacy }
+      : (optionsOrLegacy ?? {})
+  const onStateChange = options.onStateChange
+  const onLog = options.onLog
+  let logCounter = 0
+  function emitLog(level: ConnectionLogLevel, message: string, detail?: string) {
+    if (!onLog) return
+    onLog({
+      id: `log-${++logCounter}-${Date.now()}`,
+      ts: Date.now(),
+      level,
+      message,
+      detail
+    })
+  }
   let ws: WebSocket | null = null
   let state: ConnectionState = 'disconnected'
   let requestCounter = 0
@@ -123,6 +155,12 @@ export function connect(
     setState('connecting')
     sharedKey = null
 
+    emitLog(
+      'info',
+      reconnectAttempt > 0 ? `Reconnecting (attempt ${reconnectAttempt + 1})` : 'Opening WebSocket',
+      endpoint
+    )
+
     ws = new WebSocket(endpoint)
     const openingWs = ws
 
@@ -132,6 +170,11 @@ export function connect(
     connectTimer = setTimeout(() => {
       connectTimer = null
       if (ws === openingWs && openingWs.readyState === WEBSOCKET_CONNECTING_STATE) {
+        emitLog(
+          'error',
+          'WebSocket connect timeout',
+          `No TCP/WS handshake within ${CONNECT_TIMEOUT_MS / 1000}s — endpoint unreachable?`
+        )
         openingWs.close()
         if (ws === openingWs) {
           handleSocketClosed(openingWs)
@@ -143,6 +186,7 @@ export function connect(
       clearConnectTimer()
       reconnectAttempt = 0
       setState('handshaking')
+      emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
 
       // Why: generate a fresh ephemeral keypair for each connection.
       // This provides forward secrecy — compromising one session's key
@@ -153,11 +197,17 @@ export function connect(
         publicKeyB64: publicKeyToBase64(ephemeral.publicKey)
       })
       ws?.send(hello)
+      emitLog('info', 'Sent e2ee_hello', 'Awaiting server e2ee_ready')
 
       sharedKey = deriveSharedKey(ephemeral.secretKey, serverPublicKey)
 
       handshakeTimer = setTimeout(() => {
         handshakeTimer = null
+        emitLog(
+          'error',
+          'Handshake timeout',
+          `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`
+        )
         ws?.close()
       }, HANDSHAKE_TIMEOUT_MS)
     }
@@ -171,6 +221,7 @@ export function connect(
         try {
           const msg = JSON.parse(raw)
           if (msg.type === 'e2ee_ready') {
+            emitLog('success', 'Received e2ee_ready', 'Sending device token')
             sendEncrypted({ type: 'e2ee_auth', deviceToken })
             return
           }
@@ -195,11 +246,17 @@ export function connect(
               handshakeTimer = null
             }
             setState('connected')
+            emitLog('success', 'Authenticated', 'Channel ready for RPC')
             startActivityProbe()
             for (const [id, stream] of streamListeners) {
               sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
             }
           } else if (msg.type === 'e2ee_error' || (!msg.ok && msg.error?.code === 'unauthorized')) {
+            emitLog(
+              'error',
+              'Authentication rejected',
+              typeof msg.error?.message === 'string' ? msg.error.message : 'Unauthorized'
+            )
             intentionallyClosed = true
             ws?.close()
             ws = null
@@ -303,6 +360,7 @@ export function connect(
       rejectAllPending('Connection closed')
       return
     }
+    emitLog('warn', 'WebSocket closed', 'Will attempt to reconnect')
     rejectAllPending('Connection interrupted')
     setState('reconnecting')
     scheduleReconnect()
@@ -311,6 +369,7 @@ export function connect(
   function scheduleReconnect() {
     const delay = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)]!
     reconnectAttempt++
+    emitLog('info', `Reconnect scheduled in ${delay}ms`, `Attempt ${reconnectAttempt}`)
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
       openConnection()

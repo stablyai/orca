@@ -35,6 +35,20 @@ export const PairingOfferSchema = z.object({
 
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
 
+export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
+
+export type ConnectionLogEntry = {
+  id: string
+  ts: number
+  level: ConnectionLogLevel
+  // Short human-readable phase label, e.g. 'Opening WebSocket'.
+  message: string
+  // Optional second line for endpoint/error/elapsed detail.
+  detail?: string
+}
+
+export type ConnectionLogSink = (entry: ConnectionLogEntry) => void
+
 export type ConnectionState =
   | 'connecting'
   | 'handshaking'

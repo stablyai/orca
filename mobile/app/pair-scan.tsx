@@ -7,9 +7,15 @@ import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-na
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { PairingOffer, RpcResponse } from '../src/transport/types'
+import type { ConnectionLogEntry, PairingOffer, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
+import { ConnectionLog } from '../src/components/ConnectionLog'
+
+// Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
+// route surfaces as a real error with the log visible instead of a
+// silent infinite spinner.
+const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 function Step({ number, text }: { number: number; text: string }) {
   return (
@@ -29,6 +35,8 @@ export default function PairScanScreen() {
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
   const [pasteVisible, setPasteVisible] = useState(false)
+  const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
+  const logsRef = useRef<ConnectionLogEntry[]>([])
   const processingRef = useRef(false)
 
   const handleBarCodeScanned = useCallback(
@@ -67,6 +75,8 @@ export default function PairScanScreen() {
 
   async function testAndSave(offer: PairingOffer) {
     setStatus('connecting')
+    logsRef.current = []
+    setLogs([])
     let client: ReturnType<typeof connect> | null = null
 
     // Why: split the try/catch around the network call vs the local save
@@ -74,15 +84,31 @@ export default function PairScanScreen() {
     // "Cannot connect — same network?" error. Pairing reached the
     // desktop fine; the failure is local persistence.
     let response: RpcResponse
+    let timedOut = false
+    const overallTimer = setTimeout(() => {
+      timedOut = true
+      client?.close()
+    }, PAIRING_OVERALL_TIMEOUT_MS)
     try {
-      client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64)
+      client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
+        onLog: (entry) => {
+          logsRef.current = [...logsRef.current, entry]
+          setLogs(logsRef.current)
+        }
+      })
       response = await client.sendRequest('status.get')
+      clearTimeout(overallTimer)
       client.close()
       client = null
     } catch (err) {
+      clearTimeout(overallTimer)
       console.warn('[pair] connect failed', err)
       setStatus('error')
-      setErrorMessage('Cannot connect — check that your computer is on the same network')
+      setErrorMessage(
+        timedOut
+          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
+          : 'Cannot connect — check that your computer is on the same network'
+      )
       processingRef.current = false
       client?.close()
       return
@@ -126,6 +152,8 @@ export default function PairScanScreen() {
   function retry() {
     setStatus('scanning')
     setErrorMessage('')
+    logsRef.current = []
+    setLogs([])
     processingRef.current = false
   }
 
@@ -240,12 +268,20 @@ export default function PairScanScreen() {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.textSecondary} />
           <Text style={styles.connectingText}>Connecting…</Text>
+          <View style={styles.logSlot}>
+            <ConnectionLog entries={logs} title="Pairing log" />
+          </View>
         </View>
       )}
 
       {status === 'error' && (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{errorMessage}</Text>
+          {logs.length > 0 && (
+            <View style={styles.logSlot}>
+              <ConnectionLog entries={logs} title="Pairing log" />
+            </View>
+          )}
           <View style={styles.errorActions}>
             <Pressable style={styles.primaryButton} onPress={retry}>
               <Text style={styles.primaryButtonText}>Try Again</Text>
@@ -397,6 +433,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.bodySize,
     marginTop: spacing.lg
+  },
+  logSlot: {
+    width: '100%',
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.sm
   },
   errorText: {
     color: colors.statusRed,
