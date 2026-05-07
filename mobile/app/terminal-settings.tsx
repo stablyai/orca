@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone } from 'lucide-react-native'
@@ -8,17 +8,22 @@ import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
+import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 
-const AUTO_RESTORE_FIT_OPTIONS: {
-  value: string
-  label: string
-  ms: number | null
-}[] = [
+type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
+
+const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | null })[] = [
   { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
   { value: '60s', label: 'After 1 minute', ms: 60_000 },
   { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
   { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
 ]
+
+function valueFromMs(ms: number | null | undefined): RestoreValue {
+  if (ms == null) return 'indefinite'
+  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+  return exact ? exact.value : 'indefinite'
+}
 
 function autoRestoreSummary(ms: number | null | undefined): string {
   if (ms === undefined) return '…'
@@ -27,88 +32,30 @@ function autoRestoreSummary(ms: number | null | undefined): string {
   return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
 }
 
-function AutoRestoreFitRow({
+function HostFitRow({
   client,
-  hostName
+  hostName,
+  ms,
+  onPress
 }: {
   client: RpcClient | null
   hostName: string
+  ms: number | null | undefined
+  onPress: () => void
 }): React.JSX.Element {
-  const [ms, setMs] = useState<number | null | undefined>(undefined)
-  const [expanded, setExpanded] = useState(false)
-
-  useEffect(() => {
-    if (!client) return
-    let cancelled = false
-    void client
-      .sendRequest('terminal.getAutoRestoreFit')
-      .then((resp) => {
-        if (cancelled) return
-        const value = (resp as { ms?: number | null } | null)?.ms
-        setMs(value === undefined ? null : value)
-      })
-      .catch(() => {
-        if (!cancelled) setMs(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [client])
-
-  async function selectOption(opt: { value: string; label: string; ms: number | null }) {
-    if (!client) return
-    setExpanded(false)
-    setMs(opt.ms)
-    try {
-      const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
-        ms: opt.ms
-      })) as { ms?: number | null } | null
-      const finalMs = resp?.ms === undefined ? null : resp.ms
-      setMs(finalMs)
-    } catch {
-      try {
-        const resp = (await client.sendRequest('terminal.getAutoRestoreFit')) as {
-          ms?: number | null
-        } | null
-        setMs(resp?.ms === undefined ? null : resp.ms)
-      } catch {
-        // give up silently — the next mount retries
-      }
-    }
-  }
-
   return (
-    <View>
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-        onPress={() => setExpanded((v) => !v)}
-      >
-        <Smartphone size={16} color={colors.textSecondary} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowLabel}>{hostName}</Text>
-          <Text style={styles.rowSublabel}>{autoRestoreSummary(ms)}</Text>
-        </View>
-        <ChevronRight
-          size={16}
-          color={colors.textMuted}
-          style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}
-        />
-      </Pressable>
-      {expanded &&
-        AUTO_RESTORE_FIT_OPTIONS.map((opt) => (
-          <Pressable
-            key={opt.value}
-            style={({ pressed }) => [
-              styles.optionRow,
-              pressed && styles.rowPressed,
-              opt.ms === (ms ?? null) && styles.optionRowSelected
-            ]}
-            onPress={() => void selectOption(opt)}
-          >
-            <Text style={styles.optionLabel}>{opt.label}</Text>
-          </Pressable>
-        ))}
-    </View>
+    <Pressable
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      onPress={onPress}
+      disabled={!client}
+    >
+      <Smartphone size={16} color={colors.textSecondary} />
+      <View style={styles.rowContent}>
+        <Text style={styles.rowLabel}>{hostName}</Text>
+        <Text style={styles.rowSublabel}>{autoRestoreSummary(ms)}</Text>
+      </View>
+      <ChevronRight size={16} color={colors.textMuted} />
+    </Pressable>
   )
 }
 
@@ -122,6 +69,66 @@ export default function TerminalSettingsScreen() {
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const hostClients = useAllHostClients(hostIds)
 
+  // Why: per-host current value, lazily fetched. We keep state at the
+  // screen level rather than per-row so the picker can render at root
+  // level — embedding PickerModal inside a row clipped its BottomDrawer
+  // absoluteFill backdrop to the ScrollView content frame and made the
+  // drawer appear cut-off.
+  const [hostMs, setHostMs] = useState<Record<string, number | null | undefined>>({})
+  const [pickerHostId, setPickerHostId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    for (const host of hosts) {
+      const entry = hostClients.find((e) => e.hostId === host.id)
+      const client = entry?.client ?? null
+      if (!client) continue
+      void client
+        .sendRequest('terminal.getAutoRestoreFit')
+        .then((resp) => {
+          if (cancelled) return
+          const value = (resp as { ms?: number | null } | null)?.ms
+          setHostMs((prev) => ({ ...prev, [host.id]: value === undefined ? null : value }))
+        })
+        .catch(() => {
+          if (!cancelled) setHostMs((prev) => ({ ...prev, [host.id]: null }))
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [hosts, hostClients])
+
+  async function selectValue(hostId: string, value: RestoreValue) {
+    const entry = hostClients.find((e) => e.hostId === hostId)
+    const client = entry?.client ?? null
+    if (!client) return
+    const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === value)
+    if (!opt) return
+    setHostMs((prev) => ({ ...prev, [hostId]: opt.ms }))
+    try {
+      const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
+        ms: opt.ms
+      })) as { ms?: number | null } | null
+      const finalMs = resp?.ms === undefined ? null : resp.ms
+      setHostMs((prev) => ({ ...prev, [hostId]: finalMs }))
+    } catch {
+      try {
+        const resp = (await client.sendRequest('terminal.getAutoRestoreFit')) as {
+          ms?: number | null
+        } | null
+        setHostMs((prev) => ({
+          ...prev,
+          [hostId]: resp?.ms === undefined ? null : resp.ms
+        }))
+      } catch {
+        // give up silently — the next mount retries
+      }
+    }
+  }
+
+  const pickerHost = pickerHostId ? hosts.find((h) => h.id === pickerHostId) : null
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
@@ -131,26 +138,54 @@ export default function TerminalSettingsScreen() {
         <Text style={styles.heading}>Terminal</Text>
       </View>
 
-      {hosts.length === 0 ? (
-        <View style={styles.section}>
-          <Text style={styles.emptyText}>
-            No paired desktops yet. Pair one to control terminal behavior.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.section}>
-          <Text style={styles.sectionHeading}>When you leave the app</Text>
-          {hosts.map((host, idx) => {
-            const entry = hostClients.find((e) => e.hostId === host.id)
-            return (
-              <View key={host.id}>
-                {idx > 0 && <View style={styles.separator} />}
-                <AutoRestoreFitRow client={entry?.client ?? null} hostName={host.name} />
-              </View>
-            )
-          })}
-        </View>
-      )}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
+        <Text style={styles.groupDescription}>
+          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your
+          screen. When you close the app or switch away, this controls whether it stays at
+          phone size (so apps like Claude Code don&apos;t reflow) or resizes back to your
+          desktop. You can always tap Restore on the terminal banner to resize it manually.
+        </Text>
+
+        {hosts.length === 0 ? (
+          <View style={[styles.section, styles.sectionTopGap]}>
+            <Text style={styles.emptyText}>
+              No paired desktops yet. Pair one to control terminal behavior.
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.section, styles.sectionTopGap]}>
+            {hosts.map((host, idx) => {
+              const entry = hostClients.find((e) => e.hostId === host.id)
+              return (
+                <View key={host.id}>
+                  {idx > 0 && <View style={styles.separator} />}
+                  <HostFitRow
+                    client={entry?.client ?? null}
+                    hostName={host.name}
+                    ms={hostMs[host.id]}
+                    onPress={() => setPickerHostId(host.id)}
+                  />
+                </View>
+              )
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      <PickerModal<RestoreValue>
+        visible={pickerHost != null}
+        title={pickerHost ? `Restore ${pickerHost.name}` : ''}
+        options={AUTO_RESTORE_FIT_OPTIONS}
+        selected={valueFromMs(pickerHost ? hostMs[pickerHost.id] : null)}
+        onSelect={(v) => {
+          if (pickerHost) void selectValue(pickerHost.id, v)
+        }}
+        onClose={() => setPickerHostId(null)}
+      />
     </View>
   )
 }
@@ -159,12 +194,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
-    padding: spacing.lg
+    paddingHorizontal: spacing.lg,
+    paddingTop: 0
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xl
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg
   },
   backButton: {
     width: 36,
@@ -179,10 +216,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary
   },
+  scrollContent: {
+    paddingBottom: spacing.xl
+  },
+  groupHeading: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xs
+  },
+  groupDescription: {
+    fontSize: typography.bodySize - 1,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    paddingHorizontal: spacing.xs
+  },
   section: {
     backgroundColor: colors.bgPanel,
     borderRadius: 12,
     overflow: 'hidden'
+  },
+  sectionTopGap: {
+    marginTop: spacing.sm
   },
   emptyText: {
     fontSize: typography.bodySize,
@@ -199,8 +256,10 @@ const styles = StyleSheet.create({
   rowPressed: {
     backgroundColor: colors.bgRaised
   },
+  rowContent: {
+    flex: 1
+  },
   rowLabel: {
-    flex: 1,
     fontSize: typography.bodySize,
     fontWeight: '500',
     color: colors.textPrimary
@@ -209,26 +268,6 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize - 2,
     color: colors.textSecondary,
     marginTop: 2
-  },
-  sectionHeading: {
-    fontSize: typography.bodySize - 2,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    paddingHorizontal: spacing.md + 2,
-    paddingTop: spacing.sm + 2,
-    paddingBottom: spacing.xs
-  },
-  optionRow: {
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md + 2 + 22 + spacing.sm + 2,
-    backgroundColor: colors.bgRaised
-  },
-  optionRowSelected: {
-    backgroundColor: colors.bgPanel
-  },
-  optionLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
   },
   separator: {
     height: StyleSheet.hairlineWidth,
