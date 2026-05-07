@@ -436,10 +436,9 @@ app.whenReady().then(async () => {
   starNag.registerIpcHandlers()
   runtime.setAgentBrowserBridge(new AgentBrowserBridge(browserManager))
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Why: managed hook installation mutates user-global agent config.
-  // Startup must fail open so a malformed local config never bricks Orca —
-  // a malformed local config must never brick startup, so each installer
-  // runs inside its own try/catch.
+  // Why: managed hook installation mutates user-global agent config. Each
+  // installer runs inside its own try/catch so a malformed local config
+  // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
   for (const installManagedHooks of [
     () => claudeHookService.install(),
     () => codexHookService.install(),

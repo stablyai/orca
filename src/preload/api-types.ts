@@ -344,7 +344,8 @@ export type CodexUsageApi = {
 
 export type AppApi = {
   /** Relaunches the app via Electron's app.relaunch() + app.exit(0). Used
-   *  by the "Restart now" button on the Experimental settings pane. */
+   *  by settings panes that need a full restart to apply changes (e.g. the
+   *  terminal-window blur setting in TerminalWindowSection). */
   relaunch: () => Promise<void>
   /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
    *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the

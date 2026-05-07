@@ -634,9 +634,34 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
     expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('respects a deliberate uncheck after migration flag is set', async () => {
+  it('adds inline-agents for users who launched a prior RC with the experiment off', async () => {
+    // Why: the legacy flag _inlineAgentsDefaultedForExperiment was stamped
+    // unconditionally on every prior load, so opt-out RC users already have
+    // it set to true on disk. The default-on migration must NOT be gated on
+    // that legacy flag — it must use the new _inlineAgentsDefaultedForAllUsers
+    // flag instead. Without this test, the regression would re-appear if
+    // anyone tried to "consolidate" the two flags.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('respects a deliberate post-migration uncheck', async () => {
     // Why: once migrated, an empty-of-inline-agents array is treated as a
     // user choice — not a legacy pre-migration state — so we must not
     // re-add it on every subsequent launch.
@@ -647,7 +672,7 @@ describe('Store', () => {
       settings: {},
       ui: {
         worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForExperiment: true
+        _inlineAgentsDefaultedForAllUsers: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -679,7 +704,78 @@ describe('Store', () => {
     const store = await createStore()
     const props = store.getUI().worktreeCardProperties
     expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
-    expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {
+    // Why: a user who turned the experiment on and then deliberately
+    // unchecked 'inline-agents' from the sidebar options menu has the same
+    // on-disk shape as a never-touched user (legacy flag true, no
+    // 'inline-agents' in worktreeCardProperties). The migration discriminates
+    // them via the deprecated experimentalAgentDashboard value still riding
+    // on disk. Without this discriminator, the deliberate uncheck would be
+    // silently overridden on first load after upgrade.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('Case B preservation is durable across restarts', async () => {
+    // Why: once the new flag is stamped, the discriminator is no longer
+    // consulted. Subsequent loads must leave the deliberate uncheck intact
+    // even if a future settings-write code path were to strip the deprecated
+    // experimentalAgentDashboard key from disk.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true,
+        _inlineAgentsDefaultedForAllUsers: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it('lapsed Case B (experiment off at upgrade time) re-adds inline-agents', async () => {
+    // Why: documented limitation. A user who turned experiment on, unchecked,
+    // then turned the experiment off again before upgrading has
+    // experimentalAgentDashboard: false on disk. The discriminator only sees
+    // the most recent value, so they fall into the Case C path. They re-uncheck
+    // once and it sticks (new flag stamps). This test locks the limitation in
+    // so a future "fix" doesn't accidentally regress something else.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
   // ── GitHub Cache ───────────────────────────────────────────────────

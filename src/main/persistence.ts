@@ -95,6 +95,18 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
 }
 
+// Why: read a settings field that was removed from the GlobalSettings type
+// but still round-trips on disk via the ...parsed.settings spread. One-shot
+// use only — for the inline-agents default-on migration's Case B discriminator.
+// Delete with the migration in the cleanup release (see
+// docs/agent-dashboard-default-on.md "Long-term cleanup").
+function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
+  return (
+    (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
+      ?.experimentalAgentDashboard === true
+  )
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -179,13 +191,38 @@ export class Store {
             // feature is default-on for everyone, every existing user needs
             // 'inline-agents' appended to their persisted
             // worktreeCardProperties on first load after upgrade so the
-            // inline agent rows render without further opt-in. The flag
+            // inline agent rows render without further opt-in. A flag
             // prevents re-firing so a deliberate uncheck from the Workspaces
             // view options menu sticks across restarts.
+            //
+            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
+            // That legacy flag was stamped unconditionally on every successful
+            // load() in prior builds, regardless of whether the experiment was
+            // toggled on. Every prior-RC user therefore already has it set to
+            // true on disk, including the opt-out cohort this widened
+            // migration was specifically written to reach. Gating on the
+            // legacy flag would silently skip exactly those users. The
+            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
+            // the new default-on migration can distinguish "already migrated
+            // under the new rules" from "happened to launch a prior build".
+            //
+            // Case B preservation: a user who turned the experiment on and then
+            // deliberately unchecked 'inline-agents' from the sidebar options
+            // menu has the same on-disk shape as a never-touched user. The
+            // discriminator below reads the deprecated `experimentalAgentDashboard`
+            // value as a one-shot signal. Both branches of the migration stamp
+            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
+            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
-            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForExperiment === true
+            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
+            const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
+            const deliberateUncheck =
+              hadExperimentOn &&
+              Array.isArray(rawCardProps) &&
+              !rawCardProps.includes('inline-agents')
             const needsInlineAgentsMigration =
               !inlineAgentsMigrated &&
+              !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
             const migratedCardProps =
@@ -200,7 +237,11 @@ export class Store {
               ...(migratedCardProps !== undefined
                 ? { worktreeCardProperties: migratedCardProps }
                 : {}),
-              _inlineAgentsDefaultedForExperiment: true
+              // Why: keep stamping the legacy flag for forward-compat with
+              // a rollback to a pre-default-on build that still reads it.
+              // The new flag is the one that actually gates the migration.
+              _inlineAgentsDefaultedForExperiment: true,
+              _inlineAgentsDefaultedForAllUsers: true
             }
           })(),
           // Why: the workspace session is the most volatile persisted surface
