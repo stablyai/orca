@@ -55,6 +55,14 @@ function decrypt(ciphertext: string): string {
   }
 }
 
+function encryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? encrypt(value) : null
+}
+
+function decryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? decrypt(value) : null
+}
+
 // Why: the data-file path must not be a module-level constant. Module-level
 // code runs at import time — before configureDevUserDataPath() redirects the
 // userData path in index.ts — so a constant would capture the default (non-dev)
@@ -127,6 +135,9 @@ export class Store {
         // Decrypt at the load boundary so the rest of the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
+        }
+        if (parsed.ui?.browserKagiSessionLink) {
+          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
         }
 
         // Merge with defaults in case new fields were added
@@ -348,6 +359,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -389,6 +404,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 

@@ -14,10 +14,13 @@ import type {
   GitConflictStatusSource,
   GitStatusEntry,
   GitStatusResult,
+  GitUpstreamStatus,
   SearchResult,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import { stripCredentialsFromMessage } from '../../../../shared/git-remote-error'
+import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 
 export type DiffSource =
   | 'unstaged'
@@ -265,6 +268,38 @@ export type EditorSlice = {
   // Why: lightweight updater for conflict operation only, used to clear stale
   // "Rebasing"/"Merging" badges on non-active worktrees without a full git status poll.
   setConflictOperation: (worktreeId: string, operation: GitConflictOperation) => void
+  remoteStatusesByWorktree: Record<string, GitUpstreamStatus>
+  setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
+  // Why: refcount-backed busy flag. A bare boolean races across worktrees —
+  // push on A finishing while pull on B is still in flight would flip the
+  // flag off and prematurely re-enable B's button. beginRemoteOperation /
+  // endRemoteOperation must be paired (begin at the start of the async
+  // operation, end in finally) so the derived boolean only flips to false
+  // once every in-flight remote op has finished.
+  isRemoteOperationActive: boolean
+  remoteOperationDepth: number
+  // Why: surfaces *which* remote op the user actually triggered so the
+  // primary button can mirror it (label + spinner) rather than leaving a
+  // stale label from before the dropdown click. Cleared when depth hits 0.
+  // Last-write-wins on concurrent ops, which is fine — the UI disables
+  // every entry while busy, so concurrent ops can't be initiated through it.
+  inFlightRemoteOpKind: RemoteOpKind | null
+  beginRemoteOperation: (kind?: RemoteOpKind) => void
+  endRemoteOperation: () => void
+  fetchUpstreamStatus: (
+    worktreeId: string,
+    worktreePath: string,
+    connectionId?: string
+  ) => Promise<void>
+  pushBranch: (
+    worktreeId: string,
+    worktreePath: string,
+    publish?: boolean,
+    connectionId?: string
+  ) => Promise<void>
+  pullBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
+  syncBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
+  fetchBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
@@ -340,6 +375,109 @@ function openWorkspaceEditorItem(
     targetGroupId: resolvedGroupId
   })
   return created?.id ?? fileId
+}
+
+const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
+const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
+
+// Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
+// server-side pre-receive hook message) should not blow up the toast. Cap the
+// detail length so the toast stays readable; the underlying error is still
+// rethrown for console/logs if a caller needs the full payload.
+function truncateDetail(detail: string): string {
+  if (detail.length <= REMOTE_OPERATION_DETAIL_MAX_LENGTH) {
+    return detail
+  }
+  return `${detail.slice(0, REMOTE_OPERATION_DETAIL_MAX_LENGTH).trimEnd()}...`
+}
+
+function extractPublishFailureDetail(message: string): string | null {
+  const normalized = message.replace(/\r\n/g, '\n')
+  const lines = normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const fatalLine = lines.find((line) => line.startsWith('fatal:'))
+  if (fatalLine) {
+    return truncateDetail(stripCredentialsFromMessage(fatalLine.slice('fatal:'.length).trim()))
+  }
+  const remoteLine = lines.find((line) => line.startsWith('remote:'))
+  if (remoteLine) {
+    return truncateDetail(stripCredentialsFromMessage(remoteLine.slice('remote:'.length).trim()))
+  }
+  return null
+}
+
+function resolveRemoteOperationErrorMessage(
+  error: unknown,
+  options?: { publish?: boolean; isPush?: boolean; isSync?: boolean }
+): string {
+  if (!(error instanceof Error)) {
+    return REMOTE_OPERATION_FAILED_MESSAGE
+  }
+
+  // Why: under sync, the inner push runs *after* a successful pull, so a
+  // non-fast-forward at that point means the remote raced ahead between
+  // fetch and push — not "user forgot to pull". Saying "Pull first" would
+  // be wrong (sync just did). Branch isSync above the shared NFF path so
+  // sync gets a sync-shaped message instead of inheriting the push wording.
+  if (
+    options?.isSync &&
+    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
+  ) {
+    return 'Sync failed — remote moved while syncing. Try again.'
+  }
+
+  // Why: non-fast-forward/rejected detection is shared across publish and push so
+  // both paths surface the same actionable toast regardless of operation type.
+  if (/non-fast-forward|fetch first|updates were rejected/i.test(error.message)) {
+    return 'Push rejected — remote has changes. Pull first, then try again.'
+  }
+
+  // Why: `git pull` / merge refuses to run when the working tree has changes
+  // that would be overwritten; surface a single readable line instead of the
+  // multi-line git stderr (which lists every affected path).
+  if (
+    /local changes.*would be overwritten|Please commit your changes or stash them/i.test(
+      error.message
+    )
+  ) {
+    return 'Pull blocked — commit or stash your local changes first.'
+  }
+
+  if (options?.publish) {
+    // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
+    // keeps the toast human-readable while preserving the actionable fatal reason.
+    const detail = extractPublishFailureDetail(error.message)
+    if (detail) {
+      return `Publish Branch failed. ${detail}. Check your remote access and try again.`
+    }
+
+    return 'Publish Branch failed. Check your remote access and try again.'
+  }
+
+  if (options?.isSync) {
+    // Why: the user invoked Sync — surface "Sync failed" rather than leaking
+    // the inner-step name ("Push failed"). Detail extraction matches push so
+    // auth / protected-branch reasons stay actionable.
+    const detail = extractPublishFailureDetail(error.message)
+    if (detail) {
+      return `Sync failed. ${detail}. Check your remote access and try again.`
+    }
+    return 'Sync failed. Check your connection and try again.'
+  }
+
+  if (options?.isPush) {
+    // Why: surfacing fatal/remote lines from git is more actionable than a generic
+    // connection message for auth errors, protected branches, etc.
+    const detail = extractPublishFailureDetail(error.message)
+    if (detail) {
+      return `Push failed. ${detail}. Check your remote access and try again.`
+    }
+    return 'Push failed. Check your connection and try again.'
+  }
+
+  return error.message
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
@@ -1711,6 +1849,152 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             })
       }
     }),
+  remoteStatusesByWorktree: {},
+  setUpstreamStatus: (worktreeId, status) =>
+    set((s) => ({
+      remoteStatusesByWorktree: {
+        ...s.remoteStatusesByWorktree,
+        [worktreeId]: status
+      }
+    })),
+  isRemoteOperationActive: false,
+  remoteOperationDepth: 0,
+  inFlightRemoteOpKind: null,
+  beginRemoteOperation: (kind) =>
+    set((s) => ({
+      remoteOperationDepth: s.remoteOperationDepth + 1,
+      isRemoteOperationActive: true,
+      // Why: last-write-wins. The UI disables every action entry while busy,
+      // so a second remote op can't be started from inside Orca. If a
+      // background caller (future) triggers one, surfacing the most recent
+      // kind matches "what the user is currently watching".
+      inFlightRemoteOpKind: kind ?? s.inFlightRemoteOpKind
+    })),
+  endRemoteOperation: () =>
+    set((s) => {
+      const next = Math.max(0, s.remoteOperationDepth - 1)
+      return {
+        remoteOperationDepth: next,
+        isRemoteOperationActive: next > 0,
+        // Why: only clear the in-flight kind when no remote op remains. Until
+        // depth reaches 0 some other op is still running and its label/
+        // spinner should keep displaying.
+        inFlightRemoteOpKind: next > 0 ? s.inFlightRemoteOpKind : null
+      }
+    }),
+  fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId) => {
+    try {
+      const status = await window.api.git.upstreamStatus({
+        worktreePath,
+        connectionId
+      })
+      get().setUpstreamStatus(worktreeId, status)
+    } catch (error) {
+      // Why: on error we leave the prior status in place rather than writing a
+      // synthetic {hasUpstream:false} — that would flash 'Publish Branch' on a
+      // tracked branch after any transient IPC hiccup and a user click would
+      // re-publish, clobbering the upstream relationship. If the branch is
+      // genuinely newly unpublished, the polling effect will eventually correct
+      // the status on success.
+      console.error('fetchUpstreamStatus failed', error)
+    }
+  },
+  pushBranch: async (worktreeId, worktreePath, publish = false, connectionId) => {
+    // Why: don't *await* a post-op git status / upstream refresh here.
+    // Chaining awaited refreshes inside the mutation extends the gap before
+    // compound flows (runCompoundCommitAction → runRemoteAction) reach the
+    // next step. But we still need a near-immediate upstream refresh so
+    // the primary button label rotates from "Push" to "Commit" as soon as
+    // ahead=0 — the polling layer is on a 3s interval, which is long
+    // enough to read as a stuck label. Solution: fire the upstream refresh
+    // as fire-and-forget so it doesn't block the mutation but updates the
+    // store as soon as the IPC resolves.
+    get().beginRemoteOperation(publish ? 'publish' : 'push')
+    try {
+      await window.api.git.push({ worktreePath, publish, connectionId })
+    } catch (error) {
+      toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
+      throw error
+    } finally {
+      get().endRemoteOperation()
+    }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+  },
+  pullBranch: async (worktreeId, worktreePath, connectionId) => {
+    get().beginRemoteOperation('pull')
+    try {
+      await window.api.git.pull({ worktreePath, connectionId })
+    } catch (error) {
+      toast.error(resolveRemoteOperationErrorMessage(error))
+      throw error
+    } finally {
+      get().endRemoteOperation()
+    }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+  },
+  syncBranch: async (worktreeId, worktreePath, connectionId) => {
+    // Why: same shape as pushBranch / pullBranch — fire-and-forget the
+    // post-op upstream refresh after the busy flag clears so the primary
+    // button label rotates immediately when the IPC resolves.
+    get().beginRemoteOperation('sync')
+    // Why: the inner push stage toasts with { isSync: true } so its failure
+    // surfaces a "Sync failed..." message instead of "Push failed..." — the
+    // user invoked Sync; the underlying push is implementation detail. The
+    // outer catch must then skip toasting to avoid a double-toast.
+    let pushStageToastShown = false
+    try {
+      await window.api.git.fetch({ worktreePath, connectionId })
+      await window.api.git.pull({ worktreePath, connectionId })
+      // Why: push only if the pull left local commits that aren't on the
+      // remote. After a merge pull the ahead count can be >0 (local commits +
+      // the new merge commit) or 0 (pure fast-forward), and we avoid a
+      // no-op push round-trip in the fast-forward case.
+      const upstreamStatus = await window.api.git.upstreamStatus({
+        worktreePath,
+        connectionId
+      })
+      if (upstreamStatus.ahead > 0) {
+        try {
+          await window.api.git.push({ worktreePath, connectionId })
+        } catch (error) {
+          // Why: format under the user-facing operation (sync) rather than
+          // the inner step (push) — the user clicked Sync and shouldn't see
+          // a "Push failed" toast for a step they didn't directly invoke.
+          toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+          pushStageToastShown = true
+          throw error
+        }
+      }
+    } catch (error) {
+      if (!pushStageToastShown) {
+        // Why: same isSync framing for fetch/pull/upstream-status failures so
+        // every sync failure path consistently reads as "Sync failed..." (or
+        // a more specific actionable message like "Pull blocked..." when the
+        // shared classifiers match first).
+        toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+      }
+      throw error
+    } finally {
+      get().endRemoteOperation()
+    }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+  },
+  fetchBranch: async (worktreeId, worktreePath, connectionId) => {
+    // Why: same shape as pushBranch / pullBranch — fire-and-forget the
+    // upstream refresh after the busy flag clears. Fetch updates the
+    // remote refs only, so the visible signal we want is the new
+    // ahead/behind counts on the upstream-status payload.
+    get().beginRemoteOperation('fetch')
+    try {
+      await window.api.git.fetch({ worktreePath, connectionId })
+    } catch (error) {
+      toast.error(resolveRemoteOperationErrorMessage(error))
+      throw error
+    } finally {
+      get().endRemoteOperation()
+    }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+  },
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},
   gitBranchCompareRequestKeyByWorktree: {},

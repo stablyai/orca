@@ -23,13 +23,20 @@ const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
  */
 export async function getStatus(worktreePath: string): Promise<GitStatusResult> {
   const entries: GitStatusEntry[] = []
+  let head: string | undefined
+  let branch: string | undefined
 
   // Why: detectConflictOperation (4 existsSync + readFile) and git status are
   // independent. Running them concurrently saves one round-trip of I/O latency.
   const conflictPromise = detectConflictOperation(worktreePath)
-  const statusPromise = gitExecFileAsync(['status', '--porcelain=v2', '--untracked-files=all'], {
-    cwd: worktreePath
-  })
+  // Why: -c core.quotePath=false keeps non-ASCII filenames (Japanese, emoji,
+  // etc.) as raw UTF-8 instead of git's default C-style octal escapes wrapped
+  // in double quotes. Without it, the parsed entry.path is unreadable in the
+  // sidebar and downstream `git show :"docs/\346..."` lookups silently miss.
+  const statusPromise = gitExecFileAsync(
+    ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--branch', '--untracked-files=all'],
+    { cwd: worktreePath }
+  )
   const conflictOperation = await conflictPromise
 
   try {
@@ -39,6 +46,17 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
     // avoiding trailing \r characters in parsed paths.
     for (const line of stdout.split(/\r?\n/)) {
       if (!line) {
+        continue
+      }
+
+      if (line.startsWith('# branch.oid ')) {
+        head = line.slice('# branch.oid '.length).trim()
+        continue
+      }
+
+      if (line.startsWith('# branch.head ')) {
+        const branchHead = line.slice('# branch.head '.length).trim()
+        branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
         continue
       }
 
@@ -90,7 +108,7 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
     // Not a git repo or git not available
   }
 
-  return { entries, conflictOperation }
+  return { entries, conflictOperation, head, branch }
 }
 
 function parseStatusChar(char: string): GitFileStatus {
@@ -430,8 +448,10 @@ async function loadBranchChanges(
   mergeBase: string,
   headOid: string
 ): Promise<GitBranchChangeEntry[]> {
+  // Why: see core.quotePath=false rationale in getStatus — same reason here so
+  // branch-diff entries render with their real UTF-8 paths.
   const { stdout } = await gitExecFileAsync(
-    ['diff', '--name-status', '-M', '-C', mergeBase, headOid],
+    ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
     { cwd: worktreePath, maxBuffer: MAX_GIT_SHOW_BYTES }
   )
 

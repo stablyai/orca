@@ -46,6 +46,7 @@ export const Scroll = BrowserTarget.extend({
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
     .pipe(z.number().optional())
+    .optional()
 })
 
 export const Screenshot = BrowserTarget.extend({
@@ -53,11 +54,13 @@ export const Screenshot = BrowserTarget.extend({
     .unknown()
     .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
     .pipe(z.enum(['png', 'jpeg']).optional())
+    .optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()
+    .optional()
     .transform((v) => (v === 'jpeg' ? 'jpeg' : 'png'))
     .pipe(z.enum(['png', 'jpeg']))
 })
@@ -83,7 +86,8 @@ export const TabSwitch = BrowserTarget.extend({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.number().optional())
+    .optional(),
   focus: z.boolean().optional()
 }).refine(
   (val) => {
@@ -114,7 +118,8 @@ export const TabClose = z.object({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.number().optional())
+    .optional(),
   page: OptionalString,
   worktree: OptionalString
 })
@@ -129,15 +134,9 @@ export const TabProfileClone = BrowserTarget.extend({
 
 export const ProfileCreate = z.object({
   label: requiredString('Missing required --label'),
-  scope: z
-    .unknown()
-    .transform((value) => {
-      if (value === 'imported') {
-        return 'imported'
-      }
-      return 'isolated'
-    })
-    .pipe(z.enum(['isolated', 'imported']))
+  // Strict enum so unknown scope values surface validation errors instead of being
+  // silently coerced to 'isolated' (pr-bug-scan finding from #1397).
+  scope: z.enum(['isolated', 'imported'])
 })
 
 export const ProfileDelete = z.object({
@@ -162,7 +161,8 @@ export const Wait = BrowserTarget.extend({
   timeout: z
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.number().optional())
+    .optional(),
   text: OptionalPlainString,
   url: OptionalPlainString,
   load: OptionalPlainString,
@@ -174,6 +174,7 @@ export const Check = BrowserTarget.extend({
   element: requiredString('Missing required --element'),
   checked: z
     .unknown()
+    .optional()
     .transform((v) => v !== false)
     .pipe(z.boolean())
 })
@@ -275,6 +276,7 @@ export const InterceptEnable = BrowserTarget.extend({
     .unknown()
     .transform((v) => (Array.isArray(v) ? (v as string[]) : undefined))
     .pipe(z.array(z.string()).optional())
+    .optional()
 })
 
 export const MouseXY = BrowserTarget.extend({

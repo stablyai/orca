@@ -115,6 +115,30 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
+  it('hydrates a valid Kagi session link', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        browserKagiSessionLink: 'https://kagi.com/search?token=secret&q=%s'
+      })
+    )
+
+    expect(store.getState().browserKagiSessionLink).toBe('https://kagi.com/search?token=secret')
+  })
+
+  it('drops an invalid Kagi session link during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        browserKagiSessionLink: 'https://example.com/search?token=secret'
+      })
+    )
+
+    expect(store.getState().browserKagiSessionLink).toBeNull()
+  })
+
   it('sanitizes task resume state field-by-field during hydration', () => {
     const store = createUIStore()
 

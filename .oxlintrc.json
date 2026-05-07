@@ -7,7 +7,6 @@
   "rules": {
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-undef": "error",
-    "react/jsx-uses-vars": "error",
     "react/no-children-prop": "error",
     "react/no-danger-with-children": "error",
     "react/no-direct-mutation-state": "error",

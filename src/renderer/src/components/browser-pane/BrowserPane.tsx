@@ -35,7 +35,8 @@ import type {
 } from '../../../../shared/types'
 import {
   normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl
+  normalizeExternalBrowserUrl,
+  redactKagiSessionToken
 } from '../../../../shared/browser-url'
 import {
   browserViewportPresetToOverride,
@@ -105,12 +106,12 @@ function buildLoadError(event: {
   return {
     code: event.errorCode ?? -1,
     description: event.errorDescription ?? 'Unknown load failure',
-    validatedUrl: event.validatedURL ?? 'about:blank'
+    validatedUrl: redactKagiSessionToken(event.validatedURL ?? 'about:blank')
   }
 }
 
 function toDisplayUrl(url: string): string {
-  return url === ORCA_BROWSER_BLANK_URL ? 'about:blank' : url
+  return url === ORCA_BROWSER_BLANK_URL ? 'about:blank' : redactKagiSessionToken(url)
 }
 
 function getBrowserDisplayTitle(title: string | null | undefined, url: string): string {
@@ -168,7 +169,7 @@ function getOpenableExternalUrl(
       currentUrl = fallbackUrl
     }
   }
-  return normalizeExternalBrowserUrl(currentUrl)
+  return normalizeExternalBrowserUrl(redactKagiSessionToken(currentUrl))
 }
 
 function getCurrentBrowserUrl(webview: Electron.WebviewTag | null, fallbackUrl: string): string {
@@ -991,13 +992,16 @@ function BrowserPagePane({
 
     const handleDidStopLoading = (): void => {
       const currentUrl = webview.getURL() || webview.src || 'about:blank'
+      const browserModelUrl = redactKagiSessionToken(currentUrl)
       const activeLoadFailure = activeLoadFailureRef.current
       if (isChromiumErrorPage(currentUrl)) {
         trackNextLoadingEventRef.current = false
         const synthesizedFailure = {
           code: -1,
           description: 'This site could not be reached.',
-          validatedUrl: browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+          validatedUrl: redactKagiSessionToken(
+            browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+          )
         }
         activeLoadFailureRef.current = synthesizedFailure
         onUpdatePageStateRef.current(browserTab.id, {
@@ -1010,7 +1014,8 @@ function BrowserPagePane({
         const normalizedAttemptedUrl =
           normalizeBrowserNavigationUrl(activeLoadFailure.validatedUrl) ??
           activeLoadFailure.validatedUrl
-        const normalizedCurrentUrl = normalizeBrowserNavigationUrl(currentUrl) ?? currentUrl
+        const normalizedCurrentUrl =
+          normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
         if (normalizedAttemptedUrl === normalizedCurrentUrl) {
           trackNextLoadingEventRef.current = false
           // Why: some webview failures still emit did-stop-loading on the
@@ -1019,7 +1024,7 @@ function BrowserPagePane({
           // already knows this exact load failed.
           onUpdatePageStateRef.current(browserTab.id, {
             loading: false,
-            title: getBrowserDisplayTitle(webview.getTitle(), currentUrl),
+            title: getBrowserDisplayTitle(webview.getTitle(), browserModelUrl),
             faviconUrl: faviconUrlRef.current,
             canGoBack: webview.canGoBack(),
             canGoForward: webview.canGoForward(),
@@ -1030,14 +1035,15 @@ function BrowserPagePane({
       }
       trackNextLoadingEventRef.current = false
       activeLoadFailureRef.current = null
-      lastKnownWebviewUrlRef.current = normalizeBrowserNavigationUrl(currentUrl) ?? currentUrl
-      rememberLiveBrowserUrl(browserTab.id, currentUrl)
+      lastKnownWebviewUrlRef.current =
+        normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+      rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
       // Why: don't overwrite in-progress typing. See comment on the
       // browserTab.url sync effect above.
       if (document.activeElement !== addressBarInputRef.current) {
-        setAddressBarValue(toDisplayUrl(currentUrl))
+        setAddressBarValue(toDisplayUrl(browserModelUrl))
       }
-      onSetUrlRef.current(browserTab.id, currentUrl)
+      onSetUrlRef.current(browserTab.id, browserModelUrl)
       if (keepAddressBarFocusRef.current && currentUrl === ORCA_BROWSER_BLANK_URL) {
         focusAddressBarNow()
       } else {
@@ -1045,7 +1051,7 @@ function BrowserPagePane({
       }
       onUpdatePageStateRef.current(browserTab.id, {
         loading: false,
-        title: getBrowserDisplayTitle(webview.getTitle(), currentUrl),
+        title: getBrowserDisplayTitle(webview.getTitle(), browserModelUrl),
         faviconUrl: faviconUrlRef.current,
         canGoBack: webview.canGoBack(),
         canGoForward: webview.canGoForward(),
@@ -1061,15 +1067,17 @@ function BrowserPagePane({
       if (isChromiumErrorPage(currentUrl)) {
         return
       }
-      lastKnownWebviewUrlRef.current = normalizeBrowserNavigationUrl(currentUrl) ?? currentUrl
-      rememberLiveBrowserUrl(browserTab.id, currentUrl)
+      const browserModelUrl = redactKagiSessionToken(currentUrl)
+      lastKnownWebviewUrlRef.current =
+        normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+      rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
       // Why: don't overwrite in-progress typing (see above).
       if (document.activeElement !== addressBarInputRef.current) {
-        setAddressBarValue(toDisplayUrl(currentUrl))
+        setAddressBarValue(toDisplayUrl(browserModelUrl))
       }
-      onSetUrlRef.current(browserTab.id, currentUrl)
+      onSetUrlRef.current(browserTab.id, browserModelUrl)
       onUpdatePageStateRef.current(browserTab.id, {
-        title: webview.getTitle() || currentUrl,
+        title: webview.getTitle() || browserModelUrl,
         canGoBack: webview.canGoBack(),
         canGoForward: webview.canGoForward()
       })
@@ -1078,9 +1086,10 @@ function BrowserPagePane({
     const handleTitleUpdate = (event: { title?: string }): void => {
       try {
         const currentUrl = webview.getURL() || browserTab.url
-        const title = getBrowserDisplayTitle(event.title, currentUrl)
+        const browserModelUrl = redactKagiSessionToken(currentUrl)
+        const title = getBrowserDisplayTitle(event.title, browserModelUrl)
         onUpdatePageStateRef.current(browserTab.id, { title })
-        addBrowserHistoryEntryRef.current(currentUrl, title)
+        addBrowserHistoryEntryRef.current(browserModelUrl, title)
       } catch {
         // Why: title-updated can fire before dom-ready, making getURL() throw.
       }
@@ -1265,7 +1274,7 @@ function BrowserPagePane({
           loadError: {
             code: -1,
             description: 'This site could not be reached.',
-            validatedUrl: attemptedUrl
+            validatedUrl: redactKagiSessionToken(attemptedUrl)
           }
         })
       } catch {
@@ -1492,12 +1501,13 @@ function BrowserPagePane({
 
   const navigateToUrl = useCallback(
     (url: string): void => {
-      setAddressBarValue(toDisplayUrl(url))
-      onSetUrlRef.current(browserTab.id, url)
+      const browserModelUrl = redactKagiSessionToken(url)
+      setAddressBarValue(toDisplayUrl(browserModelUrl))
+      onSetUrlRef.current(browserTab.id, browserModelUrl)
       onUpdatePageStateRef.current(browserTab.id, {
         loading: true,
         loadError: null,
-        title: getBrowserDisplayTitle(url, url)
+        title: getBrowserDisplayTitle(browserModelUrl, browserModelUrl)
       })
       setResourceNotice(null)
 
@@ -1506,7 +1516,8 @@ function BrowserPagePane({
         return
       }
       trackNextLoadingEventRef.current = url !== ORCA_BROWSER_BLANK_URL
-      lastKnownWebviewUrlRef.current = url
+      lastKnownWebviewUrlRef.current =
+        normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
       webview.src = url
       if (url !== ORCA_BROWSER_BLANK_URL) {
         focusWebviewNow()
@@ -1518,13 +1529,18 @@ function BrowserPagePane({
   const submitAddressBar = (): void => {
     keepAddressBarFocusRef.current = false
     const searchEngine = useAppStore.getState().browserDefaultSearchEngine
-    const nextUrl = normalizeBrowserNavigationUrl(addressBarValue, searchEngine)
+    const kagiSessionLink = useAppStore.getState().browserKagiSessionLink
+    const nextUrl = normalizeBrowserNavigationUrl(addressBarValue, searchEngine, {
+      kagiSessionLink
+    })
     if (!nextUrl) {
       onUpdatePageStateRef.current(browserTab.id, {
         loadError: {
           code: 0,
           description: 'Enter a valid http(s) or localhost URL.',
-          validatedUrl: addressBarValue.trim() || 'about:blank'
+          // Why: the user may have pasted a Kagi URL with a token; redact
+          // before persisting it into BrowserPage.loadError.
+          validatedUrl: redactKagiSessionToken(addressBarValue.trim()) || 'about:blank'
         }
       })
       return

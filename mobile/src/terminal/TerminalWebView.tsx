@@ -10,6 +10,11 @@ export type TerminalWebViewHandle = {
   clear: () => void
   measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
   resetZoom: () => void
+  // Why: lets callers await the WebView-side `init` rAF chain (term.open
+  // → renderService population → first paint) so a follow-up measure
+  // doesn't race ahead and find term=null or cellWidth=0. Resolves on
+  // the next 'ready' notify after the most recent init.
+  awaitReady: () => Promise<void>
 }
 
 type Props = {
@@ -82,14 +87,49 @@ const XTERM_HTML = `<!DOCTYPE html>
   var terminalGeneration = 0;
   var activeAltScreenSnapshot = false;
   var handledMessageIds = [];
+  // Why: after init() the initial scrollback applyFitScale may have run
+  // against an empty buffer (or one without the widest line yet). Re-fit
+  // once when the first live data chunk arrives so a wider line that pushes
+  // scrollWidth past the previously-measured value gets re-scaled to fit.
+  var firstDataPending = false;
 
+  // Diagnostic logger — bridges WebView console.log to RN via postMessage.
+  // Tag with [fit] so it's easy to filter in the Expo/Metro logs.
+  function flog(tag, payload) {
+    try {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log', tag: '[fit]' + tag, payload: payload
+        }));
+      }
+    } catch (e) {}
+  }
+
+  function getCellWidth() {
+    if (!term || !term._core) return 0;
+    var core = term._core;
+    if (core._renderService && core._renderService.dimensions) {
+      return core._renderService.dimensions.css.cell.width || 0;
+    }
+    return 0;
+  }
+
+  // Why: width measurement strategy.
+  //   1. Prefer cellWidth × term.cols — this is what xterm's renderer uses
+  //      to lay out and is independent of buffer content. It's the "logical
+  //      width" of the terminal grid.
+  //   2. Fall back to term.element.scrollWidth — the actual rendered DOM
+  //      width — only when cellWidth isn't available yet (renderer not
+  //      initialized). This is content-dependent (reflects widest row),
+  //      but better than nothing.
+  //   3. If both are 0, return 1 (no scale change). The retry loop in
+  //      applyFitScale will keep trying until one is positive.
   function computeFitScale() {
     if (!term) return 1;
-    var el = term.element;
-    if (!el) return 1;
-    var termWidth = el.scrollWidth;
-    var vpWidth = window.innerWidth;
+    var cellW = getCellWidth();
+    var termWidth = cellW > 0 ? cellW * term.cols : (term.element ? term.element.scrollWidth : 0);
     if (termWidth <= 0) return 1;
+    var vpWidth = window.innerWidth;
     return Math.min(1, vpWidth / termWidth);
   }
 
@@ -159,33 +199,63 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
-  // Why: on cold start (first WebView load + first scrollback) xterm's DOM
-  // and canvas need several frames to reflow after term.open(). If we
-  // computeFitScale() too eagerly we read scrollWidth=0 or a stale width
-  // from before the new cols took effect, scrollWidth/vpWidth >= 1, and
-  // currentScale snaps to 1 — which is exactly the "didn't zoom to fit"
-  // bug users see on first load. Retry across frames until we get a
-  // positive, stable scrollWidth, then commit. Capped to keep this from
-  // spinning forever if the WebView never lays out (e.g. backgrounded).
-  var FIT_RETRY_MAX_FRAMES = 30;
+  // Why: cold-start fit. After init() opens xterm, the renderer needs
+  // several frames before cell dimensions are computed. Reading too early
+  // gives cellWidth=0 (renderer service not ready) or scrollWidth=0 (DOM
+  // not laid out), and computeFitScale returns 1 → no zoom.
+  //
+  // Gate: cellWidth × cols is the canonical "logical width" of the grid
+  // and reflects xterm's layout decision, independent of buffer content.
+  // We commit when cellWidth becomes positive (renderer ready). Fallback:
+  // if cellWidth never becomes available, gate on stable positive
+  // scrollWidth (xterm rendered something). Cap at 60 frames (~1s @60Hz)
+  // so a backgrounded WebView never spins forever.
+  var FIT_RETRY_MAX_FRAMES = 60;
   var fitRetryToken = 0;
-  function applyFitScale() {
-    if (!term || !term.element) return;
+  function applyFitScale(reason) {
+    if (!term || !term.element) {
+      flog('skip-no-term', { reason: reason });
+      return;
+    }
     var token = ++fitRetryToken;
     var attempts = 0;
-    var lastWidth = -1;
+    var lastScrollWidth = -1;
+    flog('start', {
+      reason: reason,
+      cols: term.cols,
+      rows: term.rows,
+      vpWidth: window.innerWidth,
+      vpHeight: window.innerHeight
+    });
     function attempt() {
-      if (token !== fitRetryToken) return;
-      if (!term || !term.element) return;
-      var w = term.element.scrollWidth;
-      attempts++;
-      if (w > 0 && w === lastWidth) {
-        commitFitScale();
+      if (token !== fitRetryToken) {
+        flog('cancel-superseded', { reason: reason, attempts: attempts });
         return;
       }
-      lastWidth = w;
+      if (!term || !term.element) return;
+      attempts++;
+      var cellW = getCellWidth();
+      if (cellW > 0 && term.cols > 0) {
+        flog('commit-cellW', { reason: reason, attempts: attempts, cellW: cellW, cols: term.cols });
+        commitFitScale(reason, attempts, 'cellW');
+        return;
+      }
+      var w = term.element.scrollWidth;
+      if (w > 0 && w === lastScrollWidth) {
+        flog('commit-stableSW', { reason: reason, attempts: attempts, scrollWidth: w });
+        commitFitScale(reason, attempts, 'stableSW');
+        return;
+      }
+      lastScrollWidth = w;
       if (attempts >= FIT_RETRY_MAX_FRAMES) {
-        commitFitScale();
+        flog('commit-timeout', {
+          reason: reason,
+          attempts: attempts,
+          cellW: cellW,
+          scrollWidth: w,
+          cols: term.cols
+        });
+        commitFitScale(reason, attempts, 'timeout');
         return;
       }
       requestAnimationFrame(attempt);
@@ -193,17 +263,39 @@ const XTERM_HTML = `<!DOCTYPE html>
     requestAnimationFrame(attempt);
   }
 
-  function commitFitScale() {
+  function commitFitScale(reason, attempts, gate) {
     if (!term || !term.element) return;
-    currentScale = computeFitScale();
-    // Why: when the scale is very close to 1 (e.g. 0.97 due to xterm
-    // scrollbar width), snap to 1.0 to avoid sub-pixel shrinkage.
+    var preSnapScale = computeFitScale();
+    currentScale = preSnapScale;
+    // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
+    // sub-pixels) snap to 1 to avoid imperceptible shrinkage that prevents
+    // a second applyFitScale from observing a "no-op needed" state.
     if (currentScale >= 0.95) currentScale = 1;
     userScale = 1;
     panX = 0;
     panY = 0;
     updateTransform();
     adjustRowsForViewport();
+
+    var cellW = getCellWidth();
+    var sw = term.element.scrollWidth;
+    var vpW = window.innerWidth;
+    var expectedW = cellW * term.cols;
+    var suspect =
+      currentScale === 1 && term.cols > 0 && expectedW > vpW + 1; // expected wider than viewport but no zoom
+    flog(suspect ? 'commit-SUSPECT' : 'commit', {
+      reason: reason,
+      attempts: attempts,
+      gate: gate,
+      preSnapScale: preSnapScale,
+      finalScale: currentScale,
+      cellW: cellW,
+      cols: term.cols,
+      expectedW: expectedW,
+      scrollWidth: sw,
+      vpWidth: vpW,
+      suspect: suspect
+    });
   }
 
   function isAltScreenActive(data) {
@@ -254,6 +346,16 @@ const XTERM_HTML = `<!DOCTYPE html>
     writesDraining = false;
     afterDrainCallbacks = [];
     initRows = rows || 24;
+    firstDataPending = true;
+    flog('init', {
+      cols: cols,
+      rows: rows,
+      hasInitialData: typeof initialData === 'string' && initialData.length > 0,
+      initialDataLen: typeof initialData === 'string' ? initialData.length : 0,
+      vpWidth: window.innerWidth,
+      vpHeight: window.innerHeight,
+      gen: gen
+    });
     var replayData = normalizeInitialData(initialData);
     activeAltScreenSnapshot = isAltScreenActive(replayData);
     if (term) term.dispose();
@@ -304,7 +406,7 @@ const XTERM_HTML = `<!DOCTYPE html>
       ready = true;
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
-        applyFitScale();
+        applyFitScale('init-replay');
         notify({ type: 'ready', cols: cols, rows: rows });
       });
     });
@@ -313,6 +415,18 @@ const XTERM_HTML = `<!DOCTYPE html>
   function write(data) {
     writeQueue.push(data);
     pumpWrites(terminalGeneration);
+    // Why: first live data chunk after init may widen the buffer past
+    // what the post-replay applyFitScale measured. Re-fit once after this
+    // chunk drains to catch the wider line. Subsequent chunks don't re-fit
+    // (the user's manual zoom is sticky after that).
+    if (firstDataPending) {
+      firstDataPending = false;
+      var gen = terminalGeneration;
+      afterWritesDrained(function() {
+        if (gen !== terminalGeneration) return;
+        applyFitScale('first-data');
+      });
+    }
   }
 
   function notify(msg) {
@@ -321,22 +435,35 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
-  function measureFitDimensions(containerHeightPx) {
-    if (!term || !term.element) {
-      notify({ type: 'measure-result', cols: null, rows: null });
-      return;
-    }
-    // Why: measure actual xterm cell dimensions from the renderer, not from
-    // font metrics alone. This accounts for the exact font, size, and line
-    // height that xterm is using.
-    var core = term._core;
+  function measureFitDimensions(containerHeightPx, retriesLeft) {
+    if (typeof retriesLeft !== 'number') retriesLeft = 30;
+    // Why: init and measure are posted back-to-back from React, but
+    // init has an async rAF chain. A measure that runs synchronously
+    // after init can find term null, disposed, lacking element, or
+    // with cells size 0. Retry the whole gate for ~500ms.
+    var notReady = !term || !term.element;
     var cellWidth = 0;
     var cellHeight = 0;
-    if (core && core._renderService && core._renderService.dimensions) {
-      cellWidth = core._renderService.dimensions.css.cell.width;
-      cellHeight = core._renderService.dimensions.css.cell.height;
+    if (!notReady) {
+      var core = term._core;
+      if (core && core._renderService && core._renderService.dimensions) {
+        cellWidth = core._renderService.dimensions.css.cell.width;
+        cellHeight = core._renderService.dimensions.css.cell.height;
+      }
     }
-    if (cellWidth <= 0 || cellHeight <= 0) {
+    if (notReady || cellWidth <= 0 || cellHeight <= 0) {
+      if (retriesLeft > 0) {
+        requestAnimationFrame(function() {
+          measureFitDimensions(containerHeightPx, retriesLeft - 1);
+        });
+        return;
+      }
+      flog('measure-fail', {
+        notReady: notReady,
+        cellWidth: cellWidth,
+        cellHeight: cellHeight,
+        retriesLeft: retriesLeft
+      });
       notify({ type: 'measure-result', cols: null, rows: null });
       return;
     }
@@ -381,7 +508,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     } else if (msg.type === 'measure') {
       measureFitDimensions(msg.containerHeight);
     } else if (msg.type === 'reset-zoom') {
-      applyFitScale();
+      applyFitScale('reset-zoom-msg');
     }
   }
 
@@ -528,6 +655,11 @@ const XTERM_HTML = `<!DOCTYPE html>
   });
 
   window.addEventListener('resize', function() {
+    // Why: viewport changed (keyboard open/close, orientation, RN container
+    // size update). Re-fit so the scale matches the new vpWidth — without
+    // this, opening the keyboard leaves the terminal at the old scale even
+    // though there's now less vertical room and the fit ratio may differ.
+    applyFitScale('window-resize');
     adjustRowsForViewport();
     clampPan();
     updateTransform();
@@ -554,6 +686,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const measureResolveRef = useRef<
     ((result: { cols: number; rows: number } | null) => void) | null
   >(null)
+  // Why: each init() call posts 'init' to the WebView and arms a fresh
+  // ready promise. WebView's init() rAF chain ends with a 'ready' notify
+  // that resolves it. measureFitDimensions awaits this so it doesn't
+  // race ahead of term.open() / renderService population.
+  const readyPromiseRef = useRef<Promise<void> | null>(null)
+  const readyResolveRef = useRef<(() => void) | null>(null)
 
   const sendToWebView = useCallback((msg: TerminalMessage) => {
     messageIdRef.current += 1
@@ -592,6 +730,15 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         isWebReadyRef.current = true
         onWebReady?.()
         flushPendingMessages()
+      } else if (msg.type === 'ready') {
+        // Why: the WebView's init() rAF chain has run — term is open,
+        // renderService is populated, first paint has happened. Resolve
+        // any pending awaitReady() so a queued measure can now safely
+        // read cell dims.
+        const resolve = readyResolveRef.current
+        readyResolveRef.current = null
+        readyPromiseRef.current = null
+        resolve?.()
       } else if (msg.type === 'measure-result') {
         const resolve = measureResolveRef.current
         measureResolveRef.current = null
@@ -600,6 +747,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           const rows = typeof msg.rows === 'number' ? msg.rows : null
           resolve(cols && rows && cols >= 20 && rows >= 8 ? { cols, rows } : null)
         }
+      } else if (msg.type === 'log') {
+        // Surface fit-scale diagnostics in the RN/Metro console.
+        const tag = typeof msg.tag === 'string' ? msg.tag : '[fit]'
+        // eslint-disable-next-line no-console
+        console.log(tag, msg.payload)
       }
     },
     [flushPendingMessages, onWebReady]
@@ -616,6 +768,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         postMessage({ type: 'write', data })
       },
       init(cols: number, rows: number, initialData?: string) {
+        // Why: arm a fresh ready promise BEFORE posting init. The WebView
+        // resolves it via the 'ready' notify at the end of its rAF chain.
+        // Re-init supersedes any prior in-flight ready (we don't bridge
+        // generations; the older promise just never resolves, and its
+        // callers have moved on by then).
+        readyPromiseRef.current = new Promise<void>((resolve) => {
+          readyResolveRef.current = resolve
+        })
         postMessage({ type: 'init', cols, rows, initialData })
       },
       clear() {
@@ -642,6 +802,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       },
       resetZoom() {
         postMessage({ type: 'reset-zoom' })
+      },
+      async awaitReady(): Promise<void> {
+        // Why: returns the in-flight ready promise (set by init); resolves
+        // immediately if no init is pending. Capped at 3s so a stuck
+        // WebView doesn't hang the caller.
+        const p = readyPromiseRef.current
+        if (!p) return
+        await Promise.race([p, new Promise<void>((resolve) => setTimeout(resolve, 3000))])
       }
     }),
     [postMessage, sendToWebView]

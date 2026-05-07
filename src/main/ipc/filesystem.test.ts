@@ -96,7 +96,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from './filesystem-auth'
+import { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } from './filesystem-auth'
 
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
@@ -217,6 +217,12 @@ describe('registerFilesystemHandlers', () => {
     )
 
     expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('does not enumerate worktrees when filesystem handlers register', () => {
+    registerFilesystemHandlers(store as never)
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('rejects writes to directories', async () => {
@@ -342,6 +348,19 @@ describe('registerFilesystemHandlers', () => {
     // Why: validateGitRelativeFilePath uses path.relative() which produces
     // platform-specific separators (backslashes on Windows).
     expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, path.join('src', 'file.ts'))
+  })
+
+  it('uses worktree roots seeded by worktrees:list without rebuilding the cache', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [] })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(realpathMock).not.toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {

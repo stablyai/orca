@@ -13,6 +13,7 @@ import type {
   WorkspaceSessionState
 } from '../../../../shared/types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
 
@@ -141,7 +142,7 @@ const MAX_BROWSER_HISTORY_ENTRIES = 200
 
 function normalizeHistoryUrl(url: string): string {
   try {
-    const parsed = new URL(url)
+    const parsed = new URL(redactKagiSessionToken(url))
     parsed.hostname = parsed.hostname.toLowerCase()
     parsed.protocol = parsed.protocol.toLowerCase()
     let normalized = parsed.toString()
@@ -150,7 +151,7 @@ function normalizeHistoryUrl(url: string): string {
     }
     return normalized
   } catch {
-    return url.toLowerCase()
+    return redactKagiSessionToken(url).toLowerCase()
   }
 }
 
@@ -158,12 +159,13 @@ function deduplicateHistory(entries: BrowserHistoryEntry[]): BrowserHistoryEntry
   const seen = new Set<string>()
   const deduped: BrowserHistoryEntry[] = []
   for (const entry of entries) {
-    const key = entry.normalizedUrl || normalizeHistoryUrl(entry.url)
+    const safeUrl = redactKagiSessionToken(entry.url)
+    const key = normalizeHistoryUrl(safeUrl)
     if (seen.has(key)) {
       continue
     }
     seen.add(key)
-    deduped.push(entry.normalizedUrl ? entry : { ...entry, normalizedUrl: key })
+    deduped.push({ ...entry, url: safeUrl, normalizedUrl: key })
   }
   return deduped.slice(0, MAX_BROWSER_HISTORY_ENTRIES)
 }
@@ -173,7 +175,11 @@ function normalizeUrl(url: string): string {
   if (trimmed.length === 0) {
     return 'about:blank'
   }
-  return trimmed
+  // Why: setBrowserPageUrl is the single sink for URL updates from did-navigate,
+  // CDP navigation-update IPC, and direct address-bar submits. Redact at this
+  // boundary so the Kagi bearer token cannot reach BrowserPage.url, which is
+  // persisted to disk via the workspace session writer.
+  return redactKagiSessionToken(trimmed)
 }
 
 function normalizeBrowserTitle(title: string | null | undefined, url: string): string {
@@ -896,9 +902,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     // owns more than one page. Walk pageIds in the targeted worktree's tab
     // list to find the owning workspace.
     const tabsForWorktree = get().browserTabsByWorktree[worktreeId] ?? []
-    const workspace = tabsForWorktree.find((tab) =>
-      (tab.pageIds ?? []).includes(browserPageId)
-    )
+    const workspace = tabsForWorktree.find((tab) => (tab.pageIds ?? []).includes(browserPageId))
     if (!workspace) {
       // Best-effort: state for this worktree may not be hydrated yet, or the
       // page closed between the bridge switching and this IPC arriving.
@@ -916,9 +920,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       // when user navigates to this worktree).
       const nextTabsByWorktree = {
         ...s.browserTabsByWorktree,
-        [worktreeId]: tabsForWorktree.map((tab) =>
-          tab.id === workspace.id ? nextWorkspace : tab
-        )
+        [worktreeId]: tabsForWorktree.map((tab) => (tab.id === workspace.id ? nextWorkspace : tab))
       }
       const nextActiveTabIdByWorktree = {
         ...s.activeBrowserTabIdByWorktree,
@@ -1479,10 +1481,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   addBrowserHistoryEntry: (url, title) => {
-    if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank' || !url) {
+    const safeUrl = redactKagiSessionToken(url)
+    if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
       return
     }
-    const normalized = normalizeHistoryUrl(url)
+    const normalized = normalizeHistoryUrl(safeUrl)
     set((s) => {
       const existing = s.browserUrlHistory.find((entry) => entry.normalizedUrl === normalized)
       let next: BrowserHistoryEntry[] = existing
@@ -1492,7 +1495,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               : entry
           )
         : [
-            { url, normalizedUrl: normalized, title, lastVisitedAt: Date.now(), visitCount: 1 },
+            {
+              url: safeUrl,
+              normalizedUrl: normalized,
+              title,
+              lastVisitedAt: Date.now(),
+              visitCount: 1
+            },
             ...s.browserUrlHistory
           ]
       if (next.length > MAX_BROWSER_HISTORY_ENTRIES) {

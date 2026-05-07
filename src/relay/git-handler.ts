@@ -14,6 +14,7 @@ import {
 } from './git-handler-ops'
 import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -40,6 +41,10 @@ export class GitHandler {
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
+    this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
+    this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
+    this.dispatcher.onRequest('git.push', (p) => this.push(p))
+    this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
@@ -185,12 +190,112 @@ export class GitHandler {
     }
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
+      // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8;
+      // without it parseBranchDiff would yield C-style octal-escaped paths.
       const { stdout } = await gitBound(
-        ['diff', '--name-status', '-M', '-C', mergeBase, headOid],
+        ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
         worktreePath
       )
       return parseBranchDiff(stdout)
     })
+  }
+
+  private async upstreamStatus(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+
+    try {
+      const { stdout: upstreamStdout } = await this.git(
+        ['rev-parse', '--abbrev-ref', 'HEAD@{u}'],
+        worktreePath
+      )
+      const upstreamName = upstreamStdout.trim()
+      if (!upstreamName) {
+        return { hasUpstream: false, ahead: 0, behind: 0 }
+      }
+      const { stdout: countsStdout } = await this.git(
+        ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
+        worktreePath
+      )
+      const tokens = countsStdout.trim().split(/\s+/)
+      if (tokens.length !== 2) {
+        // Why: 'rev-list --left-right --count HEAD...@{u}' must emit exactly two
+        // tokens; anything else (empty stdout, SSH transport truncation, unexpected
+        // locale) is a real failure and must not be silently reported as "in sync" 0/0.
+        throw new Error(`Unexpected git rev-list output: ${JSON.stringify(countsStdout)}`)
+      }
+      const ahead = Number.parseInt(tokens[0]!, 10)
+      const behind = Number.parseInt(tokens[1]!, 10)
+      if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
+        throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(countsStdout)}`)
+      }
+      return {
+        hasUpstream: true,
+        upstreamName,
+        ahead,
+        behind
+      }
+    } catch (error) {
+      // Why: we only swallow the 'no upstream configured' error — that's an
+      // expected state, not a failure. Other errors (auth, corruption, network)
+      // should surface to the user so they can act on them.
+      if (isNoUpstreamError(error)) {
+        return { hasUpstream: false, ahead: 0, behind: 0 }
+      }
+      // Why: match fetch/push/pull normalization so execFile preamble and local
+      // paths don't leak to the renderer.
+      throw new Error(normalizeGitErrorMessage(error, 'upstream'))
+    }
+  }
+
+  private async fetch(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+    try {
+      await this.git(['fetch', '--prune'], worktreePath)
+    } catch (error) {
+      // Why: mirror the local gitFetch normalization so SSH users see the same
+      // actionable messages instead of raw git stderr (which varies across
+      // versions/locales and may embed credentials).
+      throw new Error(normalizeGitErrorMessage(error, 'fetch'))
+    }
+  }
+
+  private async push(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+    // Why: always pass --set-upstream (mirrors src/main/git/remote.ts).
+    // Orca's worktrees initially track the BASE ref (origin/main) because
+    // they're created via `git worktree add --track -b <name> <dir>
+    // <baseRef>` — without --set-upstream the local branch keeps tracking
+    // the base after the first push, so ahead/behind via @{u} measures
+    // "ahead of base" instead of "ahead of remote branch", and the UI's
+    // primary button never rotates from "Push" to "Commit". The `publish`
+    // flag is preserved in the param shape for IPC compatibility but is no
+    // longer load-bearing. On an already-published branch --set-upstream is
+    // a no-op for the tracking config.
+    void params.publish
+    try {
+      await this.git(['push', '--set-upstream', 'origin', 'HEAD'], worktreePath)
+    } catch (error) {
+      // Why: mirror the local gitPush normalization so SSH users see the same
+      // "non-fast-forward / pull first" guidance instead of raw git stderr.
+      throw new Error(normalizeGitErrorMessage(error, 'push'))
+    }
+  }
+
+  private async pull(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+    // Why: plain `git pull` uses the user's configured pull strategy (merge by
+    // default) so diverged branches reconcile instead of erroring out.
+    try {
+      await this.git(['pull'], worktreePath)
+    } catch (error) {
+      // Why: mirror the local gitPull normalization so SSH users see the same
+      // actionable messages instead of raw git stderr.
+      throw new Error(normalizeGitErrorMessage(error, 'pull'))
+    }
   }
 
   private async branchDiff(params: Record<string, unknown>) {

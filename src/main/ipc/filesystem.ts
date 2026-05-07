@@ -11,6 +11,7 @@ import type {
   GitBranchCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitUpstreamStatus,
   GitStatusResult,
   MarkdownDocument,
   SearchOptions,
@@ -37,14 +38,15 @@ import {
   getBranchCompare,
   getBranchDiff
 } from '../git/status'
+import { getUpstreamStatus } from '../git/upstream'
+import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
   validateGitRelativeFilePath,
   isENOENT,
-  authorizeExternalPath,
-  rebuildAuthorizedRootsCache
+  authorizeExternalPath
 } from './filesystem-auth'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -103,7 +105,6 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
 }
 
 export function registerFilesystemHandlers(store: Store): void {
-  void rebuildAuthorizedRootsCache(store)
   const activeTextSearches = new Map<string, ChildProcess>()
 
   // ─── Filesystem ─────────────────────────────────────────
@@ -543,6 +544,76 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getBranchCompare(worktreePath, args.baseRef)
+    }
+  )
+
+  ipcMain.handle(
+    'git:upstreamStatus',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<GitUpstreamStatus> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getUpstreamStatus(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getUpstreamStatus(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:fetch',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.fetchRemote(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await gitFetch(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:push',
+    async (
+      _event,
+      args: { worktreePath: string; publish?: boolean; connectionId?: string }
+    ): Promise<void> => {
+      // Why: coerce to strict boolean at the IPC boundary so a malformed
+      // renderer payload (e.g. string 'false') can't silently enable
+      // --set-upstream mode. Mirrors the relay handler in src/relay/git-handler.ts.
+      const publish = args.publish === true
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.pushBranch(args.worktreePath, publish)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await gitPush(worktreePath, publish)
+    }
+  )
+
+  ipcMain.handle(
+    'git:pull',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.pullBranch(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await gitPull(worktreePath)
     }
   )
 

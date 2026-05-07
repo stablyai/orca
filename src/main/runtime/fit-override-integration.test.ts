@@ -68,7 +68,7 @@ const store = {
 }
 
 describe('fit override integration', () => {
-  it('full lifecycle: fit → getSize → restore → verify PTY dims', () => {
+  it('full lifecycle: fit → getSize → restore → verify PTY dims', async () => {
     const runtime = new OrcaRuntimeService(store)
     const currentSize = { cols: 150, rows: 40 }
     const resizes: { ptyId: string; cols: number; rows: number }[] = []
@@ -130,7 +130,7 @@ describe('fit override integration', () => {
     expect(currentSize).toEqual({ cols: 150, rows: 40 })
 
     console.log('\n=== Step 2: Mobile fit to 45x20 ===')
-    const fitResult = runtime.resizeForClient('pty-1', 'mobile-fit', 'client-phone', 45, 20)
+    const fitResult = await runtime.resizeForClient('pty-1', 'mobile-fit', 'client-phone', 45, 20)
     console.log('Fit result:', fitResult)
     console.log('PTY size after fit:', currentSize)
     console.log('Override:', runtime.getTerminalFitOverride('pty-1'))
@@ -142,7 +142,7 @@ describe('fit override integration', () => {
     // Simulate what runtime:restoreTerminalFit IPC handler does
     const override = runtime.getTerminalFitOverride('pty-1')
     expect(override).not.toBeNull()
-    const restoreResult = runtime.resizeForClient('pty-1', 'restore', override!.clientId)
+    const restoreResult = await runtime.resizeForClient('pty-1', 'restore', override!.clientId)
     console.log('Restore result:', restoreResult)
     console.log('PTY size after restore:', currentSize)
     console.log('Override after restore:', runtime.getTerminalFitOverride('pty-1'))
@@ -165,17 +165,17 @@ describe('fit override integration', () => {
 
     console.log('\n=== Step 6: Mobile restore via RPC path ===')
     // Re-fit, then restore via the mobile RPC handler path
-    runtime.resizeForClient('pty-1', 'mobile-fit', 'client-phone', 45, 20)
+    await runtime.resizeForClient('pty-1', 'mobile-fit', 'client-phone', 45, 20)
     expect(currentSize).toEqual({ cols: 45, rows: 20 })
 
     // This is what terminal.resizeForClient RPC handler does
-    const mobileRestore = runtime.resizeForClient('pty-1', 'restore', 'client-phone')
+    const mobileRestore = await runtime.resizeForClient('pty-1', 'restore', 'client-phone')
     console.log('Mobile restore result:', mobileRestore)
     console.log('PTY size after mobile restore:', currentSize)
     expect(currentSize).toEqual({ cols: 150, rows: 40 })
   })
 
-  it('restore resizes PTY even with mounted leaf (the bug fix)', () => {
+  it('restore resizes PTY even with mounted leaf (the bug fix)', async () => {
     const runtime = new OrcaRuntimeService(store)
     let ptySize = { cols: 120, rows: 35 }
     const resizes: string[] = []
@@ -229,17 +229,17 @@ describe('fit override integration', () => {
     })
 
     // Mobile fit
-    runtime.resizeForClient('pty-1', 'mobile-fit', 'phone-a', 42, 18)
+    await runtime.resizeForClient('pty-1', 'mobile-fit', 'phone-a', 42, 18)
     expect(ptySize).toEqual({ cols: 42, rows: 18 })
 
     // Restore — THIS is the critical assertion.
     // Before the fix, mounted leaves skipped the PTY resize.
-    runtime.resizeForClient('pty-1', 'restore', 'phone-a')
+    await runtime.resizeForClient('pty-1', 'restore', 'phone-a')
     expect(ptySize).toEqual({ cols: 120, rows: 35 })
     expect(resizes).toEqual(['pty-1:42x18', 'pty-1:120x35'])
   })
 
-  it('disconnect auto-restore also resizes PTY', () => {
+  it('disconnect auto-restore also resizes PTY', async () => {
     const runtime = new OrcaRuntimeService(store)
     let ptySize = { cols: 100, rows: 30 }
 
@@ -267,11 +267,13 @@ describe('fit override integration', () => {
       terminalDriverChanged: vi.fn()
     })
 
-    runtime.resizeForClient('pty-1', 'mobile-fit', 'phone-disconnect', 45, 20)
+    await runtime.resizeForClient('pty-1', 'mobile-fit', 'phone-disconnect', 45, 20)
     expect(ptySize).toEqual({ cols: 45, rows: 20 })
 
     // Simulate WS disconnect
     runtime.onClientDisconnected('phone-disconnect')
+    // onClientDisconnected enqueues fire-and-forget; flush microtasks
+    await new Promise((r) => setTimeout(r, 0))
     expect(ptySize).toEqual({ cols: 100, rows: 30 })
     expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
   })

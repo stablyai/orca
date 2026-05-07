@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
+import { getDefaultUIState } from '../../shared/constants'
 
 import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
@@ -43,7 +43,6 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
-import { dispatchClearModifierHints } from './hooks/useModifierHint'
 
 const isMac = navigator.userAgent.includes('Mac')
 const Landing = lazy(() => import('./components/Landing'))
@@ -335,25 +334,7 @@ function App(): React.JSX.Element {
       } catch (error) {
         console.error('Failed to hydrate workspace session:', error)
         if (!cancelled) {
-          actions.hydratePersistedUI({
-            lastActiveRepoId: null,
-            lastActiveWorktreeId: null,
-            sidebarWidth: 280,
-            rightSidebarWidth: 350,
-            groupBy: 'none',
-            sortBy: 'recent',
-            showActiveOnly: false,
-            hideDefaultBranchWorkspace: false,
-            filterRepoIds: [],
-            collapsedGroups: [],
-            uiZoomLevel: 0,
-            editorFontZoomLevel: 0,
-            worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
-            statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
-            statusBarVisible: true,
-            dismissedUpdateVersion: null,
-            lastUpdateCheckAt: null
-          })
+          actions.hydratePersistedUI(getDefaultUIState())
           actions.hydrateWorkspaceSession({
             activeRepoId: null,
             activeWorktreeId: null,
@@ -610,7 +591,6 @@ function App(): React.JSX.Element {
         if (activeView !== 'terminal' && activeView !== 'tasks') {
           return
         }
-        dispatchClearModifierHints()
         e.preventDefault()
         const store = useAppStore.getState()
         if (e.code === 'ArrowLeft') {
@@ -627,7 +607,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+B — toggle left sidebar
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.toggleSidebar()
         return
@@ -647,7 +626,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+L — toggle right sidebar
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.toggleRightSidebar()
         return
@@ -655,7 +633,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('explorer')
         actions.setRightSidebarOpen(true)
@@ -664,7 +641,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('search')
         actions.setRightSidebarOpen(true)
@@ -680,7 +656,6 @@ function App(): React.JSX.Element {
         if (document.querySelector('[data-terminal-search-root]')) {
           return
         }
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
@@ -691,7 +666,6 @@ function App(): React.JSX.Element {
       // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
       // intercepting it would break an essential developer tool.
       if (isMac && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)

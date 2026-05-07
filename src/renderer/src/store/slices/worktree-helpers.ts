@@ -108,6 +108,10 @@ export type WorktreeSlice = {
    * one-shot at hydration time. See design §4.4.
    */
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
+  updateWorktreeGitIdentity: (
+    worktreeId: string,
+    identity: { head?: string; branch?: string }
+  ) => void
 }
 
 export function findWorktreeById(

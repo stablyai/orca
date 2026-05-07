@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -6,10 +6,18 @@ import { ChevronLeft } from 'lucide-react-native'
 import { parsePairingCode } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { PairingOffer, RpcResponse } from '../src/transport/types'
+import type { ConnectionLogEntry, PairingOffer, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { ConnectionLog } from '../src/components/ConnectionLog'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
+
+// Why: cap how long the user stares at "Connecting…" during pairing.
+// rpc-client retries forever by design (good for live sessions), but for
+// the *initial* pair we want a hard ceiling so a half-broken Tailscale
+// route surfaces an actionable error with the log visible, instead of
+// spinning silently. ~25s allows for one full connect-timeout + a retry.
+const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 export default function PairConfirmScreen() {
   const router = useRouter()
@@ -18,6 +26,11 @@ export default function PairConfirmScreen() {
   const [offer, setOffer] = useState<PairingOffer | null>(null)
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
+  const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
+  // Why: collect logs in a ref so the rpc-client callback (which closures
+  // over the initial state setter) always sees the freshest list and we
+  // batch fewer setState calls when entries arrive in bursts.
+  const logsRef = useRef<ConnectionLogEntry[]>([])
 
   useEffect(() => {
     if (!params.code) {
@@ -37,21 +50,39 @@ export default function PairConfirmScreen() {
   async function confirm() {
     if (!offer) return
     setStatus('connecting')
+    logsRef.current = []
+    setLogs([])
     let client: ReturnType<typeof connect> | null = null
 
     // Why: split the try/catch around the network call vs the local save
     // so a Keychain or AsyncStorage failure doesn't masquerade as a
     // "Cannot connect" error.
     let response: RpcResponse
+    let timedOut = false
+    const overallTimer = setTimeout(() => {
+      timedOut = true
+      client?.close()
+    }, PAIRING_OVERALL_TIMEOUT_MS)
     try {
-      client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64)
+      client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
+        onLog: (entry) => {
+          logsRef.current = [...logsRef.current, entry]
+          setLogs(logsRef.current)
+        }
+      })
       response = await client.sendRequest('status.get')
+      clearTimeout(overallTimer)
       client.close()
       client = null
     } catch (err) {
+      clearTimeout(overallTimer)
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
-      setErrorMessage('Cannot connect — check that your computer is on the same network')
+      setErrorMessage(
+        timedOut
+          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
+          : 'Cannot connect — check that your computer is on the same network'
+      )
       client?.close()
       return
     }
@@ -119,12 +150,20 @@ export default function PairConfirmScreen() {
           <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
             <Text style={styles.connectingText}>Connecting…</Text>
+            <View style={styles.logSlot}>
+              <ConnectionLog entries={logs} title="Pairing log" />
+            </View>
           </>
         )}
 
         {status === 'error' && (
           <>
             <Text style={styles.errorText}>{errorMessage}</Text>
+            {logs.length > 0 && (
+              <View style={styles.logSlot}>
+                <ConnectionLog entries={logs} title="Pairing log" />
+              </View>
+            )}
             <Pressable style={styles.primaryButton} onPress={cancel}>
               <Text style={styles.primaryButtonText}>Back to home</Text>
             </Pressable>
@@ -201,6 +240,11 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     marginTop: spacing.lg,
     textAlign: 'center'
+  },
+  logSlot: {
+    width: '100%',
+    marginTop: spacing.lg,
+    marginBottom: spacing.md
   },
   errorText: {
     color: colors.statusRed,
