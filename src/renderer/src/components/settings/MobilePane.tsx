@@ -7,17 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import type { SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
 
-// Why: indefinite hold (`null`) is the default; finite presets give users
-// a wall-clock auto-restore. Each label reads as a complete sentence
-// answering "what happens when I leave the mobile app?" — that framing
-// surfaced in user research as the only way the picker is intelligible
-// without reading the description. Values are server-clamped into
-// [5_000ms, 60min]. See docs/mobile-fit-hold.md.
+// Why: the section heading "When you leave the mobile app" carries the
+// "what happens" framing so the option labels only need to vary on the
+// duration knob. Indefinite hold (`null`) is the default. Server clamps
+// anything outside [5_000ms, 60min]. See docs/mobile-fit-hold.md.
 const AUTO_RESTORE_FIT_OPTIONS: { value: string; label: string; ms: number | null }[] = [
-  { value: 'indefinite', label: 'Keep at phone size until I press Restore', ms: null },
-  { value: '60s', label: 'Resize to desktop after 1 minute', ms: 60_000 },
-  { value: '5m', label: 'Resize to desktop after 5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: 'Resize to desktop after 30 minutes', ms: 30 * 60_000 }
+  { value: 'indefinite', label: 'Keep at phone size', ms: null },
+  { value: '60s', label: 'After 1 minute', ms: 60_000 },
+  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
+  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
 ]
 
 function autoRestoreValueFromMs(ms: number | null | undefined): string {

@@ -26,42 +26,18 @@ import type { RpcClient } from '../src/transport/rpc-client'
 const AUTO_RESTORE_FIT_OPTIONS: {
   value: string
   label: string
-  summary: string
   ms: number | null
 }[] = [
-  {
-    value: 'indefinite',
-    label: 'Keep at phone size',
-    summary: 'Stays at phone size until you tap Restore',
-    ms: null
-  },
-  {
-    value: '60s',
-    label: 'Resize to desktop after 1 min',
-    summary: 'Resizes to desktop 1 minute after you leave',
-    ms: 60_000
-  },
-  {
-    value: '5m',
-    label: 'Resize to desktop after 5 min',
-    summary: 'Resizes to desktop 5 minutes after you leave',
-    ms: 5 * 60_000
-  },
-  {
-    value: '30m',
-    label: 'Resize to desktop after 30 min',
-    summary: 'Resizes to desktop 30 minutes after you leave',
-    ms: 30 * 60_000
-  }
+  { value: 'indefinite', label: 'Keep at phone size', ms: null },
+  { value: '60s', label: 'After 1 minute', ms: 60_000 },
+  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
+  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
 ]
 
 function autoRestoreSummary(ms: number | null | undefined): string {
   if (ms === undefined) return '…'
-  if (ms == null) {
-    return AUTO_RESTORE_FIT_OPTIONS[0]!.summary
-  }
-  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  return exact ? exact.summary : `Resizes to desktop ${Math.round(ms / 1000)}s after you leave`
+  const exact = ms == null ? AUTO_RESTORE_FIT_OPTIONS[0]! : AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+  return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
 }
 
 // Why: a single small inline picker. We avoid pulling in a full picker
