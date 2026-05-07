@@ -54,9 +54,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
-  const dashboardExperimentEnabled = useAppStore(
-    (s) => s.settings?.experimentalAgentDashboard === true
-  )
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -571,15 +568,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
         )}
 
-        {/* Why: inline agent list. Gated on the experimental setting so
-             managed hook data is only surfaced where the cockpit is enabled,
-             and on the 'inline-agents' card property so users can hide it.
-             Layout coupling: this block grows the card height dynamically —
-             WorktreeList uses measureElement on each row, so the virtualizer
-             re-measures naturally when agents appear/disappear. */}
-        {dashboardExperimentEnabled && cardProps.includes('inline-agents') && (
-          <WorktreeCardAgents worktreeId={worktree.id} />
-        )}
+        {/* Why: inline agent list. Gated on the 'inline-agents' card
+             property so users can hide it. Layout coupling: this block
+             grows the card height dynamically — WorktreeList uses
+             measureElement on each row, so the virtualizer re-measures
+             naturally when agents appear/disappear. */}
+        {cardProps.includes('inline-agents') && <WorktreeCardAgents worktreeId={worktree.id} />}
       </div>
     </div>
   )

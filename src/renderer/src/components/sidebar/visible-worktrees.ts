@@ -175,18 +175,13 @@ export function getVisibleWorktreeIds(): string[] {
 
   let sortedIds: string[]
 
-  // Why: matches WorktreeList's gate — when the experimental agent-activity
-  // feature is off, the agent-status map is not populated, so fall back to
-  // the non-status sort heuristics instead of scoring against an empty map.
-  const agentStatusForSort =
-    state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
   if (state.sortBy === 'smart') {
     sortedIds = sortWorktreesSmart(
       allWorktrees,
       state.tabsByWorktree,
       repoMap,
       state.prCache,
-      agentStatusForSort
+      state.agentStatusByPaneKey
     ).map((w) => w.id)
   } else {
     const sorted = [...allWorktrees].sort(
@@ -197,7 +192,7 @@ export function getVisibleWorktreeIds(): string[] {
         state.prCache,
         Date.now(),
         null,
-        agentStatusForSort
+        state.agentStatusByPaneKey
       )
     )
     sortedIds = sorted.map((w) => w.id)

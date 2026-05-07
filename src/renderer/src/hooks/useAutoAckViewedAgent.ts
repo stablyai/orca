@@ -102,13 +102,11 @@ export function useAutoAckViewedAgent(): void {
     let lastAgentStatus: unknown = undefined
     let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
-    // Why: settings is tracked so flipping `experimentalAgentDashboard`
-    // alone re-evaluates the feature gate below — without this, a pure
-    // settings change would be swallowed by the fast-path until some other
-    // tracked slice changed. Tracking the whole settings reference (rather
-    // than the one specific boolean) is acceptable because settings changes
-    // are rare compared to agent-status updates, and it matches the existing
-    // pattern of tracking whole slice references.
+    // Why: settings is tracked so future settings-driven re-evaluations of
+    // the ack predicate (e.g. visibility-affecting toggles) do not get
+    // swallowed by the fast-path until some other tracked slice changes.
+    // Tracking the whole settings reference matches the existing pattern of
+    // tracking whole slice references.
     let lastSettings: unknown = undefined
 
     const maybeAck = (): void => {
@@ -121,17 +119,6 @@ export function useAutoAckViewedAgent(): void {
         s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
         s.settings === lastSettings
       ) {
-        return
-      }
-
-      // Why: mirror the inline agents' visibility gate — when the
-      // experimental agent-activity feature is off, nothing in the UI reads
-      // the ack map, so accumulating entries for unseen agents is wasted
-      // memory and the Object.entries scan below is pure overhead. The
-      // subscribe callback fires on any store change, so flipping the
-      // setting naturally re-evaluates this guard without a separate
-      // subscription.
-      if (s.settings?.experimentalAgentDashboard !== true) {
         return
       }
 

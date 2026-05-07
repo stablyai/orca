@@ -1,25 +1,15 @@
 import type { SettingsSearchEntry } from './settings-search'
 
 export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  // Why: index 0 is preserved as a placeholder for the removed
+  // "Detailed agent activity" toggle. Entries downstream
+  // (ExperimentalPane.tsx) reference [1] Mobile, [2] Sidekick,
+  // [3] Orchestration, [4] Worktree symlinks by numeric index — keeping
+  // this slot prevents a search-index shift. Unused; do not match.
   {
-    title: 'Detailed agent activity',
-    description:
-      'Shows each agent’s live status, prompt, and last message inside its workspace card. Experimental — managed hook installs require an app restart.',
-    keywords: [
-      'experimental',
-      'agent',
-      'activity',
-      'status',
-      'live',
-      'workspace',
-      'card',
-      'inline',
-      'hook',
-      'claude',
-      'codex',
-      'gemini',
-      'sidebar'
-    ]
+    title: '',
+    description: '',
+    keywords: []
   },
   {
     title: 'Mobile Pairing',

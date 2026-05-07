@@ -175,24 +175,17 @@ export class Store {
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
             // Why: the 'inline-agents' card property was added after the
-            // experimentalAgentDashboard toggle. Users who had the toggle on
-            // in a prior rc already had worktreeCardProperties persisted
-            // without the new entry, so a simple defaults merge wouldn't
-            // reach them and the inline agent list stayed hidden after
-            // upgrade. One-shot append 'inline-agents' to their persisted
-            // array when the experimental toggle is true; the flag prevents
-            // re-firing so a deliberate uncheck from the Workspaces view
-            // options menu sticks across restarts.
-            // The flag is stamped on every successful load — including when
-            // the experiment is off — so that a later flip-on is handled by
-            // the renderer's ExperimentalPane handler rather than re-firing
-            // this migration.
+            // feature shipped behind an experimental toggle. Now that the
+            // feature is default-on for everyone, every existing user needs
+            // 'inline-agents' appended to their persisted
+            // worktreeCardProperties on first load after upgrade so the
+            // inline agent rows render without further opt-in. The flag
+            // prevents re-firing so a deliberate uncheck from the Workspaces
+            // view options menu sticks across restarts.
             const rawCardProps = parsed.ui?.worktreeCardProperties
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForExperiment === true
-            const experimentOn = parsed.settings?.experimentalAgentDashboard === true
             const needsInlineAgentsMigration =
               !inlineAgentsMigrated &&
-              experimentOn &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
             const migratedCardProps =

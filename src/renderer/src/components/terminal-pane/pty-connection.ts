@@ -356,14 +356,8 @@ export function connectPanePty(
       // setAgentStatus call observe the same state. Re-reading getState()
       // between the two lines opens a brief window where the title could
       // shift (OSC title update landing in between) and the status would be
-      // stored against a title that was never paired with it. The same
-      // snapshot also gates on the experimental dashboard setting — without
-      // the opt-in, OSC 9999 status payloads are dropped before they reach
-      // the store.
+      // stored against a title that was never paired with it.
       const currentState = useAppStore.getState()
-      if (currentState.settings?.experimentalAgentDashboard !== true) {
-        return
-      }
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
     }

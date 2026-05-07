@@ -800,16 +800,10 @@ export function useIpcEvents(): void {
     // Why: agent status arrives from native hook receivers in the main process.
     // Re-parse it here so the renderer enforces the same normalization rules
     // (state enum, field truncation) regardless of whether the source was a
-    // hook callback or an OSC fallback path. The subscription itself is
-    // unconditional so flipping the experimental dashboard setting takes
-    // effect without re-running this App-mount effect; the per-event guard
-    // inside the handler drops payloads when the setting is off.
+    // hook callback or an OSC fallback path.
     unsubs.push(
       window.api.agentStatus.onSet((data) => {
         const store = useAppStore.getState()
-        if (store.settings?.experimentalAgentDashboard !== true) {
-          return
-        }
         // Why: the IPC payload is already a structured object — pass it
         // straight to the object-input normalizer instead of round-tripping
         // through JSON.stringify/JSON.parse. Hook events can fire many times

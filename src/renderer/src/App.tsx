@@ -143,13 +143,6 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
-  // Why: render-level gate for the experimental agent dashboard retention
-  // sync. Reading the flag here (rather than only inside useDashboardData /
-  // useRetainedAgentsSync) lets us skip mounting RetainedAgentsSyncGate
-  // entirely for non-toggled users, which drops all feature-tied
-  // subscriptions (agentStatusByPaneKey, agentStatusEpoch, etc.) instead of
-  // keeping them alive behind an early-return inside the hook bodies.
-  const agentDashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
   const sidekickEnabled = useAppStore((s) => s.settings?.experimentalSidekick === true)
   const sidekickVisible = useAppStore((s) => s.sidekickVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
@@ -163,26 +156,11 @@ function App(): React.JSX.Element {
   // Why: retention must run at App level so the inline per-card agents list
   // always sees retained entries. If retention ran inside the sidebar-card
   // subtree, "done" agents would vanish any time the user collapsed a card's
-  // inline agents section.
-  //
-  // The retention hooks are hosted inside <RetainedAgentsSyncGate /> (a leaf
-  // component that renders null) rather than being called inline here.
-  // Calling useDashboardData() from App.tsx would subscribe the root component
-  // to high-churn slices (agentStatusByPaneKey + agentStatusEpoch tick at PTY
-  // event frequency), re-rendering the entire app tree on every agent status
-  // update. Hosting the subscriptions in a leaf isolates that churn.
-  //
-  // The render-level gate on <RetainedAgentsSyncGate /> (see
-  // agentDashboardEnabled above) keeps the experimental feature fully dark
-  // for non-toggled users: without the gate mounted, none of its feature-tied
-  // zustand selectors (agentStatusByPaneKey / agentStatusEpoch / etc.) are
-  // ever subscribed, so PTY agent-status events cause zero work for them.
-  //
-  // The inner hook guards (useDashboardData early-returns [] from its memo;
-  // useRetainedAgentsSync early-returns from its effect) remain as
-  // defense-in-depth: they keep both hooks safe to call from any future
-  // callsite, and they handle the in-session off→on toggle transition
-  // cleanly without relying on a remount race when the setting flips.
+  // inline agents section. The retention hooks are hosted inside
+  // <RetainedAgentsSyncGate /> (a leaf component that renders null) rather
+  // than being called inline here so its high-churn store subscriptions
+  // (agentStatusByPaneKey + agentStatusEpoch tick at PTY event frequency)
+  // do not re-render the App tree on every agent status update.
   // Why: git conflict-operation state also drives the worktree cards. Polling
   // cannot live under RightSidebar because App unmounts that subtree when the
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
@@ -921,16 +899,10 @@ function App(): React.JSX.Element {
       }
     >
       <TooltipProvider delayDuration={400}>
-        {/* Why: leaf-mounted retention sync, gated at the render level by
-            agentDashboardEnabled. Hosting useDashboardData() +
+        {/* Why: leaf-mounted retention sync — hosting useDashboardData() +
             useRetainedAgentsSync() inside a null-rendering leaf keeps their
-            high-churn store subscriptions from re-rendering the App tree;
-            the outer conditional drops those subscriptions entirely for
-            users who have not toggled the experimental agent dashboard on,
-            so PTY agent-status events do no feature-tied work for them.
-            The hooks' internal early-returns remain as defense-in-depth
-            (see the comment above useIpcEvents()). */}
-        {agentDashboardEnabled ? <RetainedAgentsSyncGate /> : null}
+            high-churn store subscriptions from re-rendering the App tree. */}
+        <RetainedAgentsSyncGate />
         <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
           {/* Why: the non-workspace titlebar lives inside this left+center
               wrapper so it does not span over the right-sidebar column —
