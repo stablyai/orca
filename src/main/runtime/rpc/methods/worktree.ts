@@ -38,7 +38,8 @@ const WorktreeCreate = z.object({
     .transform((v) =>
       typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
     )
-    .pipe(z.enum(['run', 'skip', 'inherit']).optional()),
+    .pipe(z.enum(['run', 'skip', 'inherit']).optional())
+    .optional(),
   // Why: mobile clients pass a startup command (e.g. 'claude') so the first
   // terminal pane launches the selected agent instead of an idle shell.
   startupCommand: OptionalString

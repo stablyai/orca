@@ -8,6 +8,7 @@ import { z } from 'zod'
 // Why: the original handlers treated non-numeric/NaN limit values as "no
 // limit" rather than as errors. Preserve that forgiving behavior so CLI
 // callers passing stringified numbers or Infinity still reach the runtime.
+// The outer .optional() preserves omitted object keys under Zod 4.4.
 export const OptionalFiniteNumber = z
   .unknown()
   .transform((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
