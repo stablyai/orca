@@ -21,7 +21,8 @@ const {
   loadHooksMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  gitExecFileAsyncMock
+  gitExecFileAsyncMock,
+  gitPushMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -42,7 +43,8 @@ const {
   loadHooksMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
   ensurePathWithinWorkspaceMock: vi.fn(),
-  gitExecFileAsyncMock: vi.fn()
+  gitExecFileAsyncMock: vi.fn(),
+  gitPushMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -62,6 +64,10 @@ vi.mock('../git/worktree', () => ({
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: vi.fn()
+}))
+
+vi.mock('../git/remote', () => ({
+  gitPush: gitPushMock
 }))
 
 vi.mock('../git/repo', () => ({
@@ -158,6 +164,7 @@ describe('registerWorktreeHandlers', () => {
       computeWorktreePathMock,
       ensurePathWithinWorkspaceMock,
       gitExecFileAsyncMock,
+      gitPushMock,
       mainWindow.webContents.send,
       store.getRepos,
       store.getRepo,
@@ -199,6 +206,7 @@ describe('registerWorktreeHandlers', () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
+      publishRemoteBranchOnWorktreeCreate: false,
       refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: '/workspace'
     })
@@ -594,6 +602,61 @@ describe('registerWorktreeHandlers', () => {
       isMainWorktree: false
     }
   ]
+
+  it('publishes the new branch to origin when the setting is enabled', async () => {
+    listWorktreesMock.mockResolvedValue(createdWorktreeList)
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      publishRemoteBranchOnWorktreeCreate: true,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace'
+    })
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(gitPushMock).toHaveBeenCalledWith('/workspace/improve-dashboard', true)
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        repoId: 'repo-1',
+        path: '/workspace/improve-dashboard',
+        branch: 'improve-dashboard'
+      })
+    })
+  })
+
+  it('returns the created worktree with a warning when branch publish fails', async () => {
+    listWorktreesMock.mockResolvedValue(createdWorktreeList)
+    gitPushMock.mockRejectedValueOnce(new Error('Authentication failed.'))
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      publishRemoteBranchOnWorktreeCreate: true,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace'
+    })
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        repoId: 'repo-1',
+        path: '/workspace/improve-dashboard',
+        branch: 'improve-dashboard'
+      }),
+      warning:
+        'Workspace created, but Orca could not publish its branch to origin: Authentication failed.'
+    })
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
 
   it('returns a setup launch payload when setup should run', async () => {
     listWorktreesMock.mockResolvedValue(createdWorktreeList)

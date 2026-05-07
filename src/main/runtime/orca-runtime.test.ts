@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/types'
 import { addWorktree, listWorktrees, removeWorktree } from '../git/worktree'
+import { gitPush } from '../git/remote'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -14,6 +15,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 const {
   MOCK_GIT_WORKTREES,
   addWorktreeMock,
+  gitPushMock,
   removeWorktreeMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
@@ -29,6 +31,7 @@ const {
     }
   ],
   addWorktreeMock: vi.fn(),
+  gitPushMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
   ensurePathWithinWorkspaceMock: vi.fn(),
@@ -39,6 +42,10 @@ vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
+}))
+
+vi.mock('../git/remote', () => ({
+  gitPush: gitPushMock
 }))
 
 vi.mock('../hooks', () => ({
@@ -83,6 +90,7 @@ vi.mock('../git/repo', async (importOriginal) => {
 afterEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
+  vi.mocked(gitPush).mockReset()
   vi.mocked(removeWorktree).mockReset()
   vi.mocked(createSetupRunnerScript).mockReset()
   vi.mocked(getEffectiveHooks).mockReset()
@@ -173,6 +181,7 @@ const store = {
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    publishRemoteBranchOnWorktreeCreate: false,
     branchPrefix: 'none',
     branchPrefixCustom: ''
   })
@@ -1162,6 +1171,69 @@ describe('OrcaRuntimeService', () => {
     expect(result.worktree.createdAt).toBe(result.worktree.lastActivityAt)
   })
 
+  it('publishes CLI-created worktree branches when the setting is enabled', async () => {
+    const publishStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        publishRemoteBranchOnWorktreeCreate: true
+      })
+    }
+    const runtime = new OrcaRuntimeService(publishStore as never)
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-publish')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-publish')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/runtime-publish',
+        head: 'def',
+        branch: 'runtime-publish',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-publish'
+    })
+
+    expect(gitPush).toHaveBeenCalledWith('/tmp/workspaces/runtime-publish', true)
+    expect(result.warning).toBeUndefined()
+  })
+
+  it('keeps CLI worktree creation successful when publish fails', async () => {
+    const publishStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        publishRemoteBranchOnWorktreeCreate: true
+      })
+    }
+    const runtime = new OrcaRuntimeService(publishStore as never)
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-publish-fail')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-publish-fail')
+    vi.mocked(gitPush).mockRejectedValueOnce(new Error('Authentication failed.'))
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/runtime-publish-fail',
+        head: 'def',
+        branch: 'runtime-publish-fail',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-publish-fail'
+    })
+
+    expect(result.worktree.path).toBe('/tmp/workspaces/runtime-publish-fail')
+    expect(result.warning).toBe(
+      'Workspace created, but Orca could not publish its branch to origin: Authentication failed.'
+    )
+  })
+
   it('skips archive hooks for CLI worktree removal by default', async () => {
     const runtime = new OrcaRuntimeService(store)
     vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -1279,6 +1351,7 @@ describe('OrcaRuntimeService', () => {
         workspaceDir: 'C:\\workspaces',
         nestWorkspaces: false,
         refreshLocalBaseRefOnWorktreeCreate: false,
+        publishRemoteBranchOnWorktreeCreate: false,
         branchPrefix: 'none',
         branchPrefixCustom: ''
       })
@@ -1402,9 +1475,10 @@ describe('OrcaRuntimeService', () => {
 
       runtime.setAgentBrowserBridge({ tabSwitch: tabSwitchMock } as never)
 
-      await expect(
-        runtime.browserTabSwitch({ page: 'page-1', focus: true })
-      ).resolves.toEqual({ switched: 0, browserPageId: 'page-1' })
+      await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({
+        switched: 0,
+        browserPageId: 'page-1'
+      })
       // Bridge is unchanged — focus is delivered to the renderer via IPC
       // (notifyRendererBrowserPaneFocus), not threaded through bridge state.
       expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')

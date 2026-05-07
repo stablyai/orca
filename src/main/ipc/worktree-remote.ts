@@ -21,6 +21,7 @@ import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
+import { gitPush } from '../git/remote'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
@@ -57,6 +58,24 @@ export function emitCreateWorktreeProgress(
 ): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('createWorktree:progress', { phase })
+  }
+}
+
+function formatPublishRemoteBranchWarning(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return `Workspace created, but Orca could not publish its branch to origin: ${message}`
+}
+
+async function publishCreatedBranchToOrigin(
+  publish: () => Promise<void>
+): Promise<string | undefined> {
+  try {
+    await publish()
+    return undefined
+  } catch (error) {
+    // Why: publishing is a post-create convenience. If auth or network fails,
+    // keep the real local/SSH worktree visible and surface the publish failure.
+    return formatPublishRemoteBranchWarning(error)
   }
 }
 
@@ -220,6 +239,9 @@ export async function createRemoteWorktree(
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
   const worktree = mergeWorktree(repo.id, created, meta)
+  const publishWarning = settings.publishRemoteBranchOnWorktreeCreate
+    ? await publishCreatedBranchToOrigin(() => provider.pushBranch(created.path, true))
+    : undefined
 
   // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
   // remote (SSH) worktrees. Creating symlinks on the remote host would
@@ -228,7 +250,7 @@ export async function createRemoteWorktree(
   // `symlinkPaths` configured have them silently ignored here.
 
   notifyWorktreesChanged(mainWindow, repo.id)
-  return { worktree }
+  return { worktree, ...(publishWarning ? { warning: publishWarning } : {}) }
 }
 
 export async function createLocalWorktree(
@@ -464,6 +486,9 @@ export async function createLocalWorktree(
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
   const worktree = mergeWorktree(repo.id, created, meta)
+  const publishWarning = settings.publishRemoteBranchOnWorktreeCreate
+    ? await publishCreatedBranchToOrigin(() => gitPush(created.path, true))
+    : undefined
   // Why: the authorized-roots cache is consulted lazily on the next filesystem
   // access (`ensureAuthorizedRootsCache` rebuilds on demand when dirty). We
   // just invalidate the cache marker instead of blocking worktree creation on
@@ -523,6 +548,7 @@ export async function createLocalWorktree(
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree,
-    ...(setup ? { setup } : {})
+    ...(setup ? { setup } : {}),
+    ...(publishWarning ? { warning: publishWarning } : {})
   }
 }

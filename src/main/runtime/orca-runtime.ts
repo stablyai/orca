@@ -109,6 +109,7 @@ import {
   getRecentDriftSubjects
 } from '../git/repo'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
+import { gitPush } from '../git/remote'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -171,8 +172,37 @@ type RuntimeStore = {
     workspaceDir: string
     nestWorkspaces: boolean
     refreshLocalBaseRefOnWorktreeCreate: boolean
+    publishRemoteBranchOnWorktreeCreate: boolean
     branchPrefix: string
     branchPrefixCustom: string
+  }
+}
+
+function appendCreateWarning(
+  current: string | undefined,
+  next: string | undefined
+): string | undefined {
+  if (!next) {
+    return current
+  }
+  return current ? `${current}\n${next}` : next
+}
+
+function formatPublishRemoteBranchWarning(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return `Workspace created, but Orca could not publish its branch to origin: ${message}`
+}
+
+async function publishCreatedBranchToOrigin(
+  publish: () => Promise<void>
+): Promise<string | undefined> {
+  try {
+    await publish()
+    return undefined
+  } catch (error) {
+    // Why: the runtime caller may be headless. Keep the created worktree and
+    // return a warning instead of reporting the entire create as failed.
+    return formatPublishRemoteBranchWarning(error)
   }
 }
 
@@ -3329,6 +3359,12 @@ export class OrcaRuntimeService {
 
     let setup: CreateWorktreeResult['setup']
     let warning: string | undefined
+    if (settings.publishRemoteBranchOnWorktreeCreate) {
+      warning = appendCreateWarning(
+        warning,
+        await publishCreatedBranchToOrigin(() => gitPush(created.path, true))
+      )
+    }
     // Why: CLI-created worktrees do not have a renderer preview to mismatch
     // against. Trust is granted by the direct CLI invocation (`--run-hooks`),
     // so loading the setup hook from the created worktree is intentional here.
@@ -3362,7 +3398,10 @@ export class OrcaRuntimeService {
       }
     } else if (hooks?.scripts.setup) {
       // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
-      warning = `orca.yaml setup hook skipped for ${worktreePath}; pass --run-hooks to run it.`
+      warning = appendCreateWarning(
+        warning,
+        `orca.yaml setup hook skipped for ${worktreePath}; pass --run-hooks to run it.`
+      )
       console.warn(`[hooks] ${warning}`)
     }
 

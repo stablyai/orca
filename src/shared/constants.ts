@@ -116,6 +116,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     workspaceDir: `${homedir}/orca/workspaces`,
     nestWorkspaces: true,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    publishRemoteBranchOnWorktreeCreate: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     enableGitHubAttribution: false,

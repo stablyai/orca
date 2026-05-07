@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Worktree, WorkspaceVisibleTabType, WorktreeMeta } from '../../../../shared/types'
 import {
@@ -239,6 +240,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               sortEpoch: s.sortEpoch + 1
             }
           })
+          if (result.warning) {
+            toast.warning(result.warning)
+          }
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

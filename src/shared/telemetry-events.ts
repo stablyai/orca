@@ -130,6 +130,7 @@ type BooleanGlobalSettingsKey = {
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
+  'publishRemoteBranchOnWorktreeCreate',
   'experimentalAgentDashboard',
   'experimentalMobile',
   'experimentalSidekick',

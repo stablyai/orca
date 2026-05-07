@@ -1038,6 +1038,9 @@ export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  /** When true, new worktree branches are immediately pushed to origin and
+   *  configured to track their matching remote branch. */
+  publishRemoteBranchOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean

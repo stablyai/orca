@@ -111,6 +111,47 @@ export function GitPane({
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
+      title: 'Publish New Workspace Branches',
+      description: 'Push newly-created worktree branches to origin and set upstream tracking.',
+      keywords: ['publish', 'remote branch', 'origin', 'upstream', 'push', 'worktree']
+    }) ? (
+      <SearchableSetting
+        key="publish-remote-branch"
+        title="Publish New Workspace Branches"
+        description="Push newly-created worktree branches to origin and set upstream tracking."
+        keywords={['publish', 'remote branch', 'origin', 'upstream', 'push', 'worktree']}
+        className="flex items-center justify-between gap-4 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Publish New Workspace Branches</Label>
+          <p className="text-xs text-muted-foreground">
+            When enabled, Orca runs <code>git push -u origin HEAD</code> after creating a workspace
+            so terminal pushes target the workspace branch.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={settings.publishRemoteBranchOnWorktreeCreate}
+          onClick={() =>
+            updateSettings({
+              publishRemoteBranchOnWorktreeCreate: !settings.publishRemoteBranchOnWorktreeCreate
+            })
+          }
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            settings.publishRemoteBranchOnWorktreeCreate
+              ? 'bg-foreground'
+              : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              settings.publishRemoteBranchOnWorktreeCreate ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
       title: 'Orca Attribution',
       description: 'Add Orca attribution to commits, PRs, and issues.',
       keywords: ['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']

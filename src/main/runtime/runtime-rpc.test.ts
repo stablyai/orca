@@ -152,6 +152,8 @@ describe('OrcaRuntimeRpcServer', () => {
     getSettings: () => ({
       workspaceDir: '/tmp/workspaces',
       nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      publishRemoteBranchOnWorktreeCreate: false,
       branchPrefix: 'none',
       branchPrefixCustom: ''
     })

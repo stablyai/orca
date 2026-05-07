@@ -64,6 +64,7 @@ const store = {
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    publishRemoteBranchOnWorktreeCreate: false,
     branchPrefix: 'none',
     branchPrefixCustom: ''
   })
