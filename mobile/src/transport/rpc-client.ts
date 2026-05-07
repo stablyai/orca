@@ -42,22 +42,24 @@ export type RpcClient = {
   close: () => void
 }
 
-// Why: capped at 4s so the worst-case "stuck reconnecting" window the
-// user perceives is short. Prior 16s ceiling combined with Android's
-// suspended-timer behaviour during background → foreground transitions
-// often felt like the app would just sit on 'Reconnecting…' forever
-// (the timer was queued, the OS had simply not run it yet). Tapping the
-// manual Reconnect button bypassed the timer, which is why it felt
-// "magic". Shorter backoff makes the auto-recovery path feel as fast.
-const RECONNECT_DELAYS = [500, 1000, 2000, 4000]
-// Why: cap auto-retry once we're clearly unreachable. With the 4s
-// backoff cap that's ≈20s of solid failure before we stop. The UI
-// renders an "unreachable, re-pair?" banner at this point; user taps
-// Retry or Re-pair to resume. MUST stay aligned with
-// connection-health.ts UNREACHABLE_ATTEMPTS so the verdict matches the
-// moment the loop pauses — if these drift the user sees "Reconnecting…"
-// while the loop is silently parked.
-const GIVE_UP_AFTER_ATTEMPTS = 6
+// Why: tiered backoff. The first four entries (500ms→4s) keep
+// auto-recovery snappy for the common case — a brief Wi-Fi blip,
+// laptop wake, or AP-isolation cycle. Beyond that we slow down
+// (8s→60s) so a phone whose desktop is genuinely unreachable doesn't
+// burn a TCP SYN every 4s indefinitely while still healing on its
+// own when the network recovers. Total time across all 12 attempts
+// is ≈ 2m 5s before the give-up cap fires.
+const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
+// Why: cap auto-retry once we're clearly unreachable for a long time.
+// With the tiered backoff above this is ≈ 2 minutes of continuous
+// failure before we stop and surface the re-pair banner. The longer
+// runway tolerates flaky AP-isolation routers and laptop sleep cycles
+// that briefly drop the LAN path. MUST stay aligned with
+// connection-health.ts UNREACHABLE_ATTEMPTS so the "unreachable"
+// verdict matches the moment the loop actually pauses — if these
+// drift the user sees "Reconnecting…" while the loop is silently
+// parked.
+const GIVE_UP_AFTER_ATTEMPTS = 12
 const REQUEST_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000

@@ -6,16 +6,17 @@ import type { ConnectionState } from './types'
 // - WARNING_ATTEMPTS: 3 → label flips to "Can't connect" (existing
 //   behavior). Calibrated to absorb a normal laptop wake / brief
 //   network blip without alarming the user.
-// - UNREACHABLE_ATTEMPTS: 6 → with the 4s backoff cap that's ≈ 20s of
-//   continuous failure. Combined with the never-connected /
-//   stale-since-last-connect heuristic below, this is the trigger to
-//   surface a "re-pair?" affordance.
+// - UNREACHABLE_ATTEMPTS: 12 → with the tiered 0.5s→60s backoff this
+//   is ≈ 2 minutes of continuous failure. Combined with the
+//   never-connected / stale-since-last-connect heuristic below, this
+//   is the trigger to surface a "re-pair?" affordance. MUST stay
+//   aligned with rpc-client.ts GIVE_UP_AFTER_ATTEMPTS.
 // - STALE_SINCE_LAST_CONNECT_MS: 60s → if we WERE connected this
 //   session but haven't been for ≥ 1 minute despite the retry loop
 //   spinning, treat the same as never-connected. Catches the case
 //   where the desktop's IP changed mid-session.
 export const WARNING_ATTEMPTS = 3
-export const UNREACHABLE_ATTEMPTS = 6
+export const UNREACHABLE_ATTEMPTS = 12
 export const STALE_SINCE_LAST_CONNECT_MS = 60_000
 
 export type ConnectionVerdict =
