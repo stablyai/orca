@@ -222,39 +222,6 @@ export function MobilePane(): React.JSX.Element {
         </div>
       </div>
 
-      {/* When you leave the mobile app — terminal sizing preference */}
-      <div className="rounded-lg border border-border/60 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Smartphone className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">When you leave the mobile app</span>
-        </div>
-        <p className="text-muted-foreground mb-3 text-xs">
-          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your phone
-          screen. When you close the app or switch away, this controls whether it stays at
-          phone size (so apps like Claude Code don&apos;t reflow) or resizes back to your
-          desktop. You can always click Restore on the terminal banner to resize it manually.
-        </p>
-        <Select
-          value={autoRestoreValueFromMs(autoRestoreFitMs)}
-          onValueChange={(v) => {
-            const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === v)
-            if (!opt) return
-            void updateSettings({ mobileAutoRestoreFitMs: opt.ms })
-          }}
-        >
-          <SelectTrigger size="sm" className="min-w-[220px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {AUTO_RESTORE_FIT_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* QR code display */}
       {qrDataUrl && (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-border/60 py-6">
@@ -332,6 +299,39 @@ export function MobilePane(): React.JSX.Element {
             Revoking a device disconnects it immediately.
           </p>
         )}
+      </div>
+
+      {/* Mobile behavior — terminal sizing when leaving the app */}
+      <div className="rounded-lg border border-border/60 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Smartphone className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium">When you leave the mobile app</span>
+        </div>
+        <p className="text-muted-foreground mb-3 text-xs">
+          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your phone
+          screen. When you close the app or switch away, this controls whether it stays at
+          phone size (so apps like Claude Code don&apos;t reflow) or resizes back to your
+          desktop. You can always click Restore on the terminal banner to resize it manually.
+        </p>
+        <Select
+          value={autoRestoreValueFromMs(autoRestoreFitMs)}
+          onValueChange={(v) => {
+            const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === v)
+            if (!opt) return
+            void updateSettings({ mobileAutoRestoreFitMs: opt.ms })
+          }}
+        >
+          <SelectTrigger size="sm" className="min-w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {AUTO_RESTORE_FIT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Enlarged QR dialog */}
