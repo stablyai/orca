@@ -13,7 +13,7 @@ import { z } from 'zod'
 export const OptionalFiniteNumber = z
   .unknown()
   .transform((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
-  .pipe(z.number().optional())
+  .pipe(z.union([z.number(), z.undefined()]))
   .optional()
 
 export const OptionalPositiveInt = z
@@ -21,25 +21,25 @@ export const OptionalPositiveInt = z
   .transform((value) =>
     typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
   )
-  .pipe(z.number().optional())
+  .pipe(z.union([z.number(), z.undefined()]))
   .optional()
 
 export const OptionalString = z
   .unknown()
   .transform((value) => (typeof value === 'string' && value.length > 0 ? value : undefined))
-  .pipe(z.string().optional())
+  .pipe(z.union([z.string(), z.undefined()]))
   .optional()
 
 export const OptionalPlainString = z
   .unknown()
   .transform((value) => (typeof value === 'string' ? value : undefined))
-  .pipe(z.string().optional())
+  .pipe(z.union([z.string(), z.undefined()]))
   .optional()
 
 export const OptionalBoolean = z
   .unknown()
   .transform((value) => (typeof value === 'boolean' ? value : undefined))
-  .pipe(z.boolean().optional())
+  .pipe(z.union([z.boolean(), z.undefined()]))
   .optional()
 
 // Why: runtime handlers accept `linkedIssue: number | null | undefined` with

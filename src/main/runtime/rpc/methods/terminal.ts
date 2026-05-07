@@ -90,7 +90,7 @@ const TerminalSplit = TerminalHandle.extend({
   direction: z
     .unknown()
     .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
-    .pipe(z.enum(['vertical', 'horizontal']).optional())
+    .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
     .optional(),
   command: OptionalString
 })
