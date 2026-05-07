@@ -18,20 +18,50 @@ import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
 
-// Why: must mirror the desktop preset list so the two surfaces stay in
-// sync. The server clamps anything outside [5_000, 60min] (see
-// docs/mobile-fit-hold.md).
-const AUTO_RESTORE_FIT_OPTIONS: { value: string; label: string; ms: number | null }[] = [
-  { value: 'indefinite', label: 'Indefinite', ms: null },
-  { value: '60s', label: '1 minute', ms: 60_000 },
-  { value: '5m', label: '5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: '30 minutes', ms: 30 * 60_000 }
+// Why: mirrors the desktop labels but compressed to fit a phone row.
+// The compact-summary form (rowSublabel) shows the *currently chosen*
+// behavior in plain language; the option rows use the same compact
+// phrasing. The server clamps anything outside [5_000, 60min].
+// See docs/mobile-fit-hold.md.
+const AUTO_RESTORE_FIT_OPTIONS: {
+  value: string
+  label: string
+  summary: string
+  ms: number | null
+}[] = [
+  {
+    value: 'indefinite',
+    label: 'Keep at phone size',
+    summary: 'Stays at phone size until you tap Restore',
+    ms: null
+  },
+  {
+    value: '60s',
+    label: 'Resize to desktop after 1 min',
+    summary: 'Resizes to desktop 1 minute after you leave',
+    ms: 60_000
+  },
+  {
+    value: '5m',
+    label: 'Resize to desktop after 5 min',
+    summary: 'Resizes to desktop 5 minutes after you leave',
+    ms: 5 * 60_000
+  },
+  {
+    value: '30m',
+    label: 'Resize to desktop after 30 min',
+    summary: 'Resizes to desktop 30 minutes after you leave',
+    ms: 30 * 60_000
+  }
 ]
 
-function autoRestoreLabel(ms: number | null | undefined): string {
-  if (ms == null) return 'Indefinite'
+function autoRestoreSummary(ms: number | null | undefined): string {
+  if (ms === undefined) return '…'
+  if (ms == null) {
+    return AUTO_RESTORE_FIT_OPTIONS[0]!.summary
+  }
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  return exact ? exact.label : `${Math.round(ms / 1000)}s`
+  return exact ? exact.summary : `Resizes to desktop ${Math.round(ms / 1000)}s after you leave`
 }
 
 // Why: a single small inline picker. We avoid pulling in a full picker
@@ -97,7 +127,7 @@ function AutoRestoreFitRow({
         <Smartphone size={16} color={colors.textSecondary} />
         <View style={{ flex: 1 }}>
           <Text style={styles.rowLabel}>{hostName}</Text>
-          <Text style={styles.rowSublabel}>Auto-restore: {autoRestoreLabel(ms)}</Text>
+          <Text style={styles.rowSublabel}>{autoRestoreSummary(ms)}</Text>
         </View>
         <ChevronRight
           size={16}
@@ -173,7 +203,7 @@ export default function SettingsScreen() {
 
       {hosts.length > 0 && (
         <View style={[styles.section, styles.sectionSpacer]}>
-          <Text style={styles.sectionHeading}>Terminal width hold</Text>
+          <Text style={styles.sectionHeading}>When you leave the app</Text>
           {hosts.map((host, idx) => {
             const entry = hostClients.find((e) => e.hostId === host.id)
             return (

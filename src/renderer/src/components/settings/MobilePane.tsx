@@ -8,13 +8,16 @@ import type { SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
 
 // Why: indefinite hold (`null`) is the default; finite presets give users
-// a wall-clock auto-restore for the rare case where they prefer it. Values
-// are server-clamped into [5_000ms, 60min]. See docs/mobile-fit-hold.md.
+// a wall-clock auto-restore. Each label reads as a complete sentence
+// answering "what happens when I leave the mobile app?" — that framing
+// surfaced in user research as the only way the picker is intelligible
+// without reading the description. Values are server-clamped into
+// [5_000ms, 60min]. See docs/mobile-fit-hold.md.
 const AUTO_RESTORE_FIT_OPTIONS: { value: string; label: string; ms: number | null }[] = [
-  { value: 'indefinite', label: 'Indefinite (default)', ms: null },
-  { value: '60s', label: '1 minute', ms: 60_000 },
-  { value: '5m', label: '5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: '30 minutes', ms: 30 * 60_000 }
+  { value: 'indefinite', label: 'Keep at phone size until I press Restore', ms: null },
+  { value: '60s', label: 'Resize to desktop after 1 minute', ms: 60_000 },
+  { value: '5m', label: 'Resize to desktop after 5 minutes', ms: 5 * 60_000 },
+  { value: '30m', label: 'Resize to desktop after 30 minutes', ms: 30 * 60_000 }
 ]
 
 function autoRestoreValueFromMs(ms: number | null | undefined): string {
@@ -42,9 +45,9 @@ export const MOBILE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['network', 'interface', 'tailscale', 'vpn', 'overlay', 'ip', 'address', 'wifi']
   },
   {
-    title: 'Auto-restore terminal width',
+    title: 'When you leave the mobile app',
     description:
-      'How long to keep a terminal at phone size after the mobile app leaves before restoring desktop dimensions.',
+      'Choose what happens to terminals you were viewing on mobile after you close the app or switch away.',
     keywords: [
       'mobile',
       'terminal',
@@ -54,7 +57,9 @@ export const MOBILE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'width',
       'resize',
       'hold',
-      'indefinite'
+      'leave',
+      'background',
+      'close'
     ]
   }
 ]
@@ -219,16 +224,17 @@ export function MobilePane(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Auto-restore terminal width preference */}
+      {/* When you leave the mobile app — terminal sizing preference */}
       <div className="rounded-lg border border-border/60 p-4">
         <div className="mb-3 flex items-center gap-2">
           <Smartphone className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Auto-restore terminal width</span>
+          <span className="text-sm font-medium">When you leave the mobile app</span>
         </div>
         <p className="text-muted-foreground mb-3 text-xs">
-          When you leave the mobile app, terminals stay at phone size by default so TUI apps
-          like Claude Code don&apos;t reflow. Pick a duration to auto-restore them to desktop
-          width, or use the &quot;Restore&quot; button on the terminal banner at any time.
+          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your phone
+          screen. When you close the app or switch away, this controls whether it stays at
+          phone size (so apps like Claude Code don&apos;t reflow) or resizes back to your
+          desktop. You can always click Restore on the terminal banner to resize it manually.
         </p>
         <Select
           value={autoRestoreValueFromMs(autoRestoreFitMs)}
