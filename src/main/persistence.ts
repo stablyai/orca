@@ -98,9 +98,8 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
 // Why: read a settings field that was removed from the GlobalSettings type
 // but still round-trips on disk via the ...parsed.settings spread. One-shot
 // use only — for the inline-agents default-on migration's Case B discriminator.
-// Delete with the migration in the cleanup release (see
-// docs/agent-dashboard-default-on-reviewer-checklist.md
-// "Discriminator removal (cleanup release)").
+// Delete with the migration in the cleanup release (2+ stable releases after
+// _inlineAgentsDefaultedForAllUsers ships).
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
   return (
     (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
