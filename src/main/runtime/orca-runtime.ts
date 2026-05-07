@@ -16,6 +16,7 @@ import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   CreateWorktreeResult,
+  GlobalSettings,
   Repo,
   StatsSummary,
   WorktreeStartupLaunch
@@ -173,7 +174,12 @@ type RuntimeStore = {
     refreshLocalBaseRefOnWorktreeCreate: boolean
     branchPrefix: string
     branchPrefixCustom: string
+    mobileAutoRestoreFitMs?: number | null
   }
+  // Why: narrow to `unknown` return so test mocks can return void without
+  // a cast. The runtime never reads the return value — the persisted value
+  // is read back via getSettings() on the next access.
+  updateSettings?: (updates: Partial<GlobalSettings>) => unknown
 }
 
 type RuntimeLeafRecord = RuntimeSyncedLeaf & {
@@ -1801,17 +1807,107 @@ export class OrcaRuntimeService {
   }
 
   // Why: invoked from `runtime:restoreTerminalFit` IPC (the desktop "Take
-  // back" button). Forces the PTY back to desktop dims and flips the driver
-  // to `desktop`, suppressing further mobile-driven dim changes until a
-  // mobile actor takes the floor again.
+  // back" / "Restore" button). Forces the PTY back to desktop dims and
+  // flips the driver to `desktop`, suppressing further mobile-driven dim
+  // changes until a mobile actor takes the floor again. Two cases:
+  //   1. Active mobile subscriber: route through applyMobileDisplayMode so
+  //      the existing 'resized' event reaches the phone.
+  //   2. Held with no mobile subscriber (post-indefinite-hold): no inner
+  //      subscriber to notify; resolve restore target and enqueueLayout
+  //      directly. applyLayout is the SOLE writer of terminalFitOverrides;
+  //      the held branch must not duplicate that mutation. See
+  //      docs/mobile-fit-hold.md.
   async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
-    if (!this.isMobileSubscriberActive(ptyId)) {
-      return false
+    if (this.isMobileSubscriberActive(ptyId)) {
+      this.setMobileDisplayMode(ptyId, 'desktop')
+      await this.applyMobileDisplayMode(ptyId)
+      this.setDriver(ptyId, { kind: 'desktop' })
+      return true
     }
-    this.setMobileDisplayMode(ptyId, 'desktop')
-    await this.applyMobileDisplayMode(ptyId)
-    this.setDriver(ptyId, { kind: 'desktop' })
-    return true
+    const heldOverride = this.terminalFitOverrides.get(ptyId)
+    if (heldOverride) {
+      const pending = this.pendingRestoreTimers.get(ptyId)
+      if (pending) {
+        clearTimeout(pending.timer)
+        this.pendingRestoreTimers.delete(ptyId)
+      }
+      // Why: with no subscribers, resolveDesktopRestoreTarget falls through
+      // to current PTY size — which is at phone dims (wrong). Prefer the
+      // baseline captured on the override at first phone-fit; this is the
+      // last desktop geometry the layout machine knew about. Then chain
+      // to the standard resolver for the residual fallbacks.
+      const fallback = this.resolveDesktopRestoreTarget(ptyId)
+      const cols = heldOverride.previousCols ?? fallback.cols
+      const rows = heldOverride.previousRows ?? fallback.rows
+      await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
+      this.setDriver(ptyId, { kind: 'desktop' })
+      return true
+    }
+    return false
+  }
+
+  // Why: read-side clamp for mobileAutoRestoreFitMs. `null` means
+  // indefinite hold (no auto-restore timer). A finite value is clamped
+  // to [MIN, MAX] to defend against bad config — the smallest useful
+  // value is a few seconds, the largest is one hour. See
+  // docs/mobile-fit-hold.md.
+  private getAutoRestoreFitMs(): number | null {
+    const raw = this.store?.getSettings().mobileAutoRestoreFitMs ?? null
+    if (raw == null) {
+      return null
+    }
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      return null
+    }
+    return Math.min(Math.max(raw, MOBILE_AUTO_RESTORE_FIT_MIN_MS), MOBILE_AUTO_RESTORE_FIT_MAX_MS)
+  }
+
+  // Why: invoked when the user changes mobileAutoRestoreFitMs to `null`
+  // (Indefinite). Clears every pending restore timer so the just-expressed
+  // preference "do not auto-restore" is honored for ALL currently-pending
+  // PTYs, not just one. See docs/mobile-fit-hold.md.
+  cancelAllPendingFitRestoreTimers(): void {
+    for (const [, entry] of this.pendingRestoreTimers) {
+      clearTimeout(entry.timer)
+    }
+    this.pendingRestoreTimers.clear()
+  }
+
+  // Why: read the persisted user preference (clamped) for surfacing to UI
+  // callers (mobile RPC, desktop preferences). Returns null when the
+  // setting is unset or `null` ("Indefinite").
+  getMobileAutoRestoreFitMs(): number | null {
+    return this.getAutoRestoreFitMs()
+  }
+
+  // Why: persisted-preference setter routed through the same `Store` the
+  // desktop preferences UI writes to. Transitions to `null` (Indefinite)
+  // clear every pending restore timer to honor the preference change for
+  // already-held PTYs. Transitions to a finite value do NOT retroactively
+  // schedule timers for PTYs that are currently held — those PTYs were
+  // already-not-restored under the old preference, and silently scheduling
+  // a restore on a settings change would be surprising. The new value
+  // takes effect on the next unsubscribe. See docs/mobile-fit-hold.md.
+  setMobileAutoRestoreFitMs(ms: number | null): number | null {
+    if (!this.store?.updateSettings) {
+      return this.getAutoRestoreFitMs()
+    }
+    let normalized: number | null
+    if (ms == null) {
+      normalized = null
+    } else if (typeof ms !== 'number' || !Number.isFinite(ms)) {
+      normalized = null
+    } else {
+      normalized = Math.min(
+        Math.max(ms, MOBILE_AUTO_RESTORE_FIT_MIN_MS),
+        MOBILE_AUTO_RESTORE_FIT_MAX_MS
+      )
+    }
+    this.store.updateSettings({ mobileAutoRestoreFitMs: normalized })
+    if (normalized == null) {
+      this.cancelAllPendingFitRestoreTimers()
+    }
+    return normalized
   }
 
   // Why: with multiple subscribers, the active phone-fit dims follow the
@@ -2399,31 +2495,44 @@ export class OrcaRuntimeService {
       const existingTimer = this.pendingRestoreTimers.get(ptyId)
       if (existingTimer) {
         clearTimeout(existingTimer.timer)
-      }
-      // Snapshot the disconnecting subscriber's baseline NOW, before the
-      // timer fires. By the time the timer runs (300ms later), the
-      // subscriber map has been deleted; resolveDesktopRestoreTarget would
-      // fall through to lastRendererSizes → current PTY size (which is at
-      // phone dims, wrong). The disconnecting subscriber's baseline is the
-      // correct restore target.
-      const fallback = this.lastRendererSizes.get(ptyId)
-      const restoreCols =
-        subscriber.previousCols ?? fallback?.cols ?? this.getTerminalSize(ptyId)?.cols ?? 80
-      const restoreRows =
-        subscriber.previousRows ?? fallback?.rows ?? this.getTerminalSize(ptyId)?.rows ?? 24
-      const timer = setTimeout(() => {
         this.pendingRestoreTimers.delete(ptyId)
-        if (this.isMobileSubscriberActive(ptyId)) {
-          return
-        }
-        void this.enqueueLayout(ptyId, {
-          kind: 'desktop',
-          cols: restoreCols,
-          rows: restoreRows
-        })
-      }, 300)
+      }
+      // Why: scheduling is conditional on the user's mobileAutoRestoreFitMs
+      // preference. `null` (default, "Indefinite") leaves the PTY at phone
+      // dims until the user clicks Restore on the desktop banner — the
+      // central UX promise of docs/mobile-fit-hold.md. A finite value runs
+      // the restore that long after the last unsubscribe.
+      const autoRestoreMs = this.getAutoRestoreFitMs()
+      if (autoRestoreMs == null) {
+        // Indefinite hold: the fit override persists, the SOFT_LEAVE_GRACE
+        // driver-state grace above still releases the input lock, and the
+        // banner's Restore button is the explicit return path.
+      } else {
+        // Snapshot the disconnecting subscriber's baseline NOW, before the
+        // timer fires. By the time the timer runs, the subscriber map has
+        // been deleted; resolveDesktopRestoreTarget would fall through to
+        // lastRendererSizes → current PTY size (which is at phone dims,
+        // wrong). The disconnecting subscriber's baseline is the correct
+        // restore target.
+        const fallback = this.lastRendererSizes.get(ptyId)
+        const restoreCols =
+          subscriber.previousCols ?? fallback?.cols ?? this.getTerminalSize(ptyId)?.cols ?? 80
+        const restoreRows =
+          subscriber.previousRows ?? fallback?.rows ?? this.getTerminalSize(ptyId)?.rows ?? 24
+        const timer = setTimeout(() => {
+          this.pendingRestoreTimers.delete(ptyId)
+          if (this.isMobileSubscriberActive(ptyId)) {
+            return
+          }
+          void this.enqueueLayout(ptyId, {
+            kind: 'desktop',
+            cols: restoreCols,
+            rows: restoreRows
+          })
+        }, autoRestoreMs)
 
-      this.pendingRestoreTimers.set(ptyId, { timer, clientId })
+        this.pendingRestoreTimers.set(ptyId, { timer, clientId })
+      }
     }
     // 'desktop' mode: was never resized, nothing to restore.
   }
@@ -6159,6 +6268,14 @@ const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const TUI_IDLE_POLL_INTERVAL_MS = 2000
 const TUI_IDLE_QUIESCENCE_MS = 3000
 const MESSAGE_WAIT_DEFAULT_TIMEOUT_MS = 2 * 60 * 1000
+
+// Clamp range for the user-facing mobileAutoRestoreFitMs preference.
+// MIN floor: a couple of seconds is the smallest useful auto-restore
+// (anything tighter is the legacy 300ms debounce).
+// MAX ceiling: one hour — a held PTY beyond that is almost certainly
+// "I forgot" rather than intentional.
+const MOBILE_AUTO_RESTORE_FIT_MIN_MS = 5_000
+const MOBILE_AUTO_RESTORE_FIT_MAX_MS = 60 * 60 * 1000
 
 function buildTerminalWaitResult(
   handle: string,

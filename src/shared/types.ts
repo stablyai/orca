@@ -1216,6 +1216,14 @@ export type GlobalSettings = {
    *  the cursor-agent hook path are unaffected by this toggle. */
   experimentalAgentDashboard: boolean
   experimentalMobile: boolean
+  /** Auto-restore window for a phone-fit PTY after the last mobile
+   *  subscriber leaves. `null` (default) holds the PTY at phone size
+   *  indefinitely; the desktop "Restore" banner remains the explicit
+   *  return-to-desktop-size action. A finite millisecond value schedules
+   *  an automatic restore that long after the last unsubscribe. Clamped
+   *  on read into [5_000ms, 60min] to defend against bad config.
+   *  See docs/mobile-fit-hold.md. */
+  mobileAutoRestoreFitMs: number | null
   /** Experimental: floating animated sidekick (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the

@@ -44,6 +44,16 @@ vi.mock('../git/repo', async (importOriginal) => {
   }
 })
 
+// Why: many tests pre-date the mobileAutoRestoreFitMs preference. Default
+// the mock store to MIN (5_000ms — the new clamp floor) so legacy
+// assertions about "restore fires after the configured delay" keep their
+// shape while new tests can override per-test. Indefinite/null is the
+// real-world default and is exercised by a dedicated test below.
+const LEGACY_RESTORE_MS = 5_000
+const settingsState = {
+  mobileAutoRestoreFitMs: LEGACY_RESTORE_MS as number | null
+}
+
 const store = {
   getRepo: () => ({
     id: 'repo-1',
@@ -65,8 +75,14 @@ const store = {
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
-    branchPrefixCustom: ''
-  })
+    branchPrefixCustom: '',
+    mobileAutoRestoreFitMs: settingsState.mobileAutoRestoreFitMs
+  }),
+  updateSettings: (updates: { mobileAutoRestoreFitMs?: number | null }) => {
+    if ('mobileAutoRestoreFitMs' in updates) {
+      settingsState.mobileAutoRestoreFitMs = updates.mobileAutoRestoreFitMs ?? null
+    }
+  }
 }
 
 function createRuntime() {
@@ -112,6 +128,7 @@ function createRuntime() {
 describe('mobile subscribe integration', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    settingsState.mobileAutoRestoreFitMs = LEGACY_RESTORE_MS
   })
 
   afterEach(() => {
@@ -157,7 +174,7 @@ describe('mobile subscribe integration', () => {
     expect(resizes).toEqual([])
   })
 
-  it('handleMobileUnsubscribe restores PTY after 300ms debounce in auto mode', async () => {
+  it('handleMobileUnsubscribe restores PTY after debounce in auto mode', async () => {
     const { runtime, ptySizes } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
@@ -166,7 +183,7 @@ describe('mobile subscribe integration', () => {
     // Not yet restored
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
@@ -180,7 +197,7 @@ describe('mobile subscribe integration', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
     // Restored to desktop dims — no sticky-phone retention.
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
@@ -247,7 +264,7 @@ describe('mobile subscribe integration', () => {
 
     // Unsubscribe and let restore fire
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
 
     // Should restore to original desktop dims, not 45x20
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
@@ -352,7 +369,7 @@ describe('mobile subscribe integration', () => {
       runtime.onClientDisconnected('client-a')
       // Timer should be cancelled, PTY already restored by disconnect handler
 
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     })
 
@@ -367,7 +384,7 @@ describe('mobile subscribe integration', () => {
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
 
       // Timer should have been cancelled — no crash from resizing a dead PTY
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
     })
 
     it('onPtyExit does not cancel timers for other PTYs', async () => {
@@ -378,7 +395,7 @@ describe('mobile subscribe integration', () => {
       // pty-2 exits — should not affect pty-1's pending restore
       runtime.onPtyExit('pty-2', 0)
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     })
   })
@@ -484,6 +501,114 @@ describe('mobile subscribe integration', () => {
       const restoreResult = await runtime.resizeForClient('pty-1', 'restore', 'client-old')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
       expect(restoreResult.mode).toBe('desktop-fit')
+    })
+  })
+
+  // See docs/mobile-fit-hold.md.
+  describe('mobileAutoRestoreFitMs (fit hold)', () => {
+    it('null (indefinite) keeps PTY at phone dims after last unsubscribe', async () => {
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      // Wait long past the legacy 300ms debounce — PTY must remain held.
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    })
+
+    it('finite ms restores after the configured delay', async () => {
+      settingsState.mobileAutoRestoreFitMs = 60_000
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      // Not yet — still mid-window.
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    })
+
+    it('re-subscribe before timer fires cancels pending restore', async () => {
+      settingsState.mobileAutoRestoreFitMs = 60_000
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+
+      // The pending timer should have been cancelled by the new subscribe.
+      // Wait long past what would've been the restore moment.
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    })
+
+    it('reclaimTerminalForDesktop returns held PTY to desktop dims (no subscriber)', async () => {
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      // No subscribers, indefinite hold — PTY stays at phone dims.
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+      expect(runtime.isMobileSubscriberActive('pty-1')).toBe(false)
+
+      // Manual reclaim: PTY restored to desktop dims via the held branch.
+      const ok = await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(ok).toBe(true)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    })
+
+    it('setMobileAutoRestoreFitMs(null) clears all pending timers', async () => {
+      settingsState.mobileAutoRestoreFitMs = 60_000
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      // Pending timer exists. Switch preference → indefinite.
+      runtime.setMobileAutoRestoreFitMs(null)
+      // Now wait far longer than the original 60s window. No restore fires.
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    })
+
+    it('setMobileAutoRestoreFitMs to a finite value does not retroactively schedule', async () => {
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      // Indefinite hold — no timer scheduled at unsubscribe.
+      // Switch preference → 60s. The already-held PTY is NOT auto-restored;
+      // the new value applies to the *next* unsubscribe.
+      runtime.setMobileAutoRestoreFitMs(60_000)
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    })
+
+    it('setMobileAutoRestoreFitMs clamps below MIN to MIN', () => {
+      const { runtime } = createRuntime()
+      const result = runtime.setMobileAutoRestoreFitMs(100)
+      expect(result).toBe(5_000)
+    })
+
+    it('setMobileAutoRestoreFitMs clamps above MAX to MAX', () => {
+      const { runtime } = createRuntime()
+      const result = runtime.setMobileAutoRestoreFitMs(99 * 60 * 60 * 1000)
+      expect(result).toBe(60 * 60 * 1000)
+    })
+
+    it('reclaimTerminalForDesktop on already-restored PTY returns false', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
+      // Now restored to desktop — no subscriber, no override.
+      expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(false)
     })
   })
 })

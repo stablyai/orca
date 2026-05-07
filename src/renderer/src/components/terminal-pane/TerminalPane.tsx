@@ -29,7 +29,11 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
-import { getPaneIdsForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  getFitOverrideForPty,
+  getPaneIdsForPty,
+  onOverrideChange
+} from '@/lib/pane-manager/mobile-fit-overrides'
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
@@ -1167,14 +1171,16 @@ export default function TerminalPane({
         if (!ptyId) {
           return null
         }
-        // Why: presence-lock — banner is gated on driver state, not on
-        // fit-override. The banner now communicates "input is paused"
-        // (the load-bearing fact) instead of dimensional state. The
-        // dimensional override may still be active and is reflected in
-        // the PTY but not in the banner copy. See
-        // docs/mobile-presence-lock.md.
+        // Why: two-state banner. (1) Driver is mobile → presence-lock,
+        // input paused (docs/mobile-presence-lock.md). (2) No mobile
+        // driver but a phone-fit override is still in place → indefinite
+        // hold (docs/mobile-fit-hold.md): the user left mobile, the PTY
+        // is held at phone dims, and the banner is the explicit
+        // return-to-desktop-size escape hatch.
         const driver = getDriverForPty(ptyId)
-        if (driver.kind !== 'mobile') {
+        const isMobileDriving = driver.kind === 'mobile'
+        const isHeldAtPhoneFit = !isMobileDriving && getFitOverrideForPty(ptyId) !== null
+        if (!isMobileDriving && !isHeldAtPhoneFit) {
           return null
         }
         return createPortal(
@@ -1197,7 +1203,9 @@ export default function TerminalPane({
             }}
           >
             <span>
-              Mobile is driving this terminal — your input is paused. Click Take back to resume.
+              {isMobileDriving
+                ? 'Mobile is driving this terminal — your input is paused. Click Take back to resume.'
+                : 'This terminal is held at phone size for the mobile app. Click Restore to return it to desktop size.'}
             </span>
             <button
               style={{
@@ -1212,15 +1220,15 @@ export default function TerminalPane({
               onClick={() => {
                 const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
                 if (ptyId) {
-                  // Why: same IPC route — handler now also reclaims the
-                  // input floor for the desktop via the driver state
-                  // machine, so the banner unmounts and input is unblocked
-                  // until the next mobile interaction.
+                  // Why: same IPC route — handler resolves both the
+                  // active-mobile-subscriber path and the held-no-subscriber
+                  // path (docs/mobile-fit-hold.md), so the banner unmounts
+                  // and the PTY returns to desktop dims in either case.
                   void window.api.runtime.restoreTerminalFit(ptyId)
                 }
               }}
             >
-              Take back
+              {isMobileDriving ? 'Take back' : 'Restore'}
             </button>
           </div>,
           pane.container,

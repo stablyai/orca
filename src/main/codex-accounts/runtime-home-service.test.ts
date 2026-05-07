@@ -97,6 +97,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalMacOptionAsAltMigrated: true,
     experimentalAgentDashboard: false,
     experimentalMobile: false,
+    mobileAutoRestoreFitMs: null,
     experimentalSidekick: false,
     experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
