@@ -11,19 +11,15 @@ const FEEDBACK_API_FALLBACK_URL = 'https://www.onorca.dev/v1/feedback'
 
 export type FeedbackSubmitArgs = {
   feedback: string
+  submitAnonymously?: boolean
   githubLogin: string | null
   githubEmail: string | null
-  // Why: when the user submits anonymously they can still volunteer a GitHub
-  // handle (so we can @-mention them on the fix PR), an email, or an x.com
-  // handle for follow-up. Three separate fields rather than reusing
-  // githubLogin/githubEmail so the backend can tell verified gh identity
-  // apart from a self-typed handle.
-  anonymousGithubLogin?: string | null
-  anonymousEmail?: string | null
-  anonymousX?: string | null
 }
 
-type FeedbackSubmitBody = FeedbackSubmitArgs & {
+type FeedbackSubmitBody = {
+  feedback: string
+  githubLogin: string | null
+  githubEmail: string | null
   appVersion: string
   platform: NodeJS.Platform
   osRelease: string
@@ -40,8 +36,15 @@ export type FeedbackSubmitResult =
 // node os module), so we enrich the payload here rather than trusting the
 // renderer.
 function buildSubmitBody(args: FeedbackSubmitArgs): FeedbackSubmitBody {
+  const identity = args.submitAnonymously
+    ? { githubLogin: null, githubEmail: null }
+    : { githubLogin: args.githubLogin, githubEmail: args.githubEmail }
+
+  // Why: anonymity is an IPC-only privacy decision. Allow-list fields here so
+  // stale renderer state or future identity-shaped fields cannot leak upstream.
   return {
-    ...args,
+    feedback: args.feedback,
+    ...identity,
     appVersion: app.getVersion(),
     platform: process.platform,
     osRelease: os.release(),

@@ -46,6 +46,7 @@ export const Scroll = BrowserTarget.extend({
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
     .pipe(z.number().optional())
+    .optional()
 })
 
 export const Screenshot = BrowserTarget.extend({
@@ -53,6 +54,7 @@ export const Screenshot = BrowserTarget.extend({
     .unknown()
     .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
     .pipe(z.enum(['png', 'jpeg']).optional())
+    .optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({
@@ -78,6 +80,7 @@ export const TabSwitch = BrowserTarget.extend({
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
     .pipe(z.number().optional())
+    .optional()
 }).refine(
   (val) => {
     if (val.page !== undefined) {
@@ -107,7 +110,8 @@ export const TabClose = z.object({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.number().optional())
+    .optional(),
   page: OptionalString,
   worktree: OptionalString
 })
@@ -149,7 +153,8 @@ export const Wait = BrowserTarget.extend({
   timeout: z
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.number().optional())
+    .optional(),
   text: OptionalPlainString,
   url: OptionalPlainString,
   load: OptionalPlainString,
@@ -262,6 +267,7 @@ export const InterceptEnable = BrowserTarget.extend({
     .unknown()
     .transform((v) => (Array.isArray(v) ? (v as string[]) : undefined))
     .pipe(z.array(z.string()).optional())
+    .optional()
 })
 
 export const MouseXY = BrowserTarget.extend({

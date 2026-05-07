@@ -44,6 +44,7 @@ const TerminalRead = TerminalHandle.extend({
           message: 'Cursor must be a non-negative integer'
         })
     )
+    .optional()
 })
 
 // Why: the legacy handler allowed `title: string | null` and rejected every
@@ -89,7 +90,8 @@ const TerminalSplit = TerminalHandle.extend({
   direction: z
     .unknown()
     .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
-    .pipe(z.enum(['vertical', 'horizontal']).optional()),
+    .pipe(z.enum(['vertical', 'horizontal']).optional())
+    .optional(),
   command: OptionalString
 })
 

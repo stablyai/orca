@@ -504,11 +504,9 @@ export type PreloadApi = {
   feedback: {
     submit: (args: {
       feedback: string
+      submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
-      anonymousGithubLogin?: string | null
-      anonymousEmail?: string | null
-      anonymousX?: string | null
     }) => Promise<{ ok: true } | { ok: false; status: number | null; error: string }>
   }
   export: ExportApi
