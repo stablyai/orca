@@ -22,15 +22,16 @@ type State = {
 export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null, fileId: this.props.fileId }
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
-    return { error }
-  }
-
   static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
     if (props.fileId !== state.fileId) {
       return { error: null, fileId: props.fileId }
     }
+
     return null
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    return { error }
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {

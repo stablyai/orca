@@ -42,14 +42,6 @@ function getSubmitIdentity(viewer: GitHubViewer | null, anonymous: boolean): Sub
   }
 }
 
-// Why: when a user goes anonymous they lose the auto-attached gh identity, so
-// the only way we can tag them on the fix PR or reach out when it lands is if
-// they volunteer one of these. Strip the leading @ users tend to type.
-function normalizeOptional(value: string): string | null {
-  const trimmed = value.trim().replace(/^@+/, '')
-  return trimmed.length > 0 ? trimmed : null
-}
-
 function FeedbackDialog({
   open,
   onOpenChange
@@ -62,9 +54,6 @@ function FeedbackDialog({
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
   const [isViewerLoading, setIsViewerLoading] = useState(false)
   const [submitAnonymously, setSubmitAnonymously] = useState(false)
-  const [anonGithubLogin, setAnonGithubLogin] = useState('')
-  const [anonEmail, setAnonEmail] = useState('')
-  const [anonX, setAnonX] = useState('')
 
   React.useEffect(() => {
     if (!open) {
@@ -114,14 +103,9 @@ function FeedbackDialog({
       // and prod.
       const result = await window.api.feedback.submit({
         feedback: trimmed,
+        submitAnonymously,
         githubLogin: identity.githubLogin,
-        githubEmail: identity.githubEmail,
-        // Why: only forward the opt-in fields when the user explicitly went
-        // anonymous. Otherwise the regular gh identity already covers tagging
-        // and contact, and we don't want to surprise non-anonymous submitters.
-        anonymousGithubLogin: submitAnonymously ? normalizeOptional(anonGithubLogin) : null,
-        anonymousEmail: submitAnonymously ? normalizeOptional(anonEmail) : null,
-        anonymousX: submitAnonymously ? normalizeOptional(anonX) : null
+        githubEmail: identity.githubEmail
       })
 
       if (!result.ok) {
@@ -131,9 +115,6 @@ function FeedbackDialog({
       toast.success('Thanks for the feedback.')
       setFeedback('')
       setSubmitAnonymously(false)
-      setAnonGithubLogin('')
-      setAnonEmail('')
-      setAnonX('')
       onOpenChange(false)
     } catch (err) {
       toast.error('Failed to submit feedback. Please try again.')
@@ -236,49 +217,6 @@ function FeedbackDialog({
             </div>
           )}
         </div>
-        {/* Why: grid-rows 0fr→1fr gives a smooth height animation without
-            measuring the DOM. Only shown when the user opts into anonymous so
-            the dialog stays compact in the common case. */}
-        <div
-          className={cn(
-            'grid transition-all duration-300 ease-out',
-            submitAnonymously ? 'mt-2 grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-          )}
-          aria-hidden={!submitAnonymously}
-        >
-          <div className="overflow-hidden">
-            <div className="space-y-2 rounded-md border border-border/70 bg-muted/30 p-3">
-              <div className="text-xs text-foreground">
-                If we fix the issue, we can&apos;t let you know 🥲 (all optional)
-              </div>
-              <input
-                type="text"
-                value={anonGithubLogin}
-                onChange={(event) => setAnonGithubLogin(event.target.value)}
-                placeholder="GitHub username — we'll tag you on the PR"
-                tabIndex={submitAnonymously ? 0 : -1}
-                className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <input
-                type="email"
-                value={anonEmail}
-                onChange={(event) => setAnonEmail(event.target.value)}
-                placeholder="Email — we'll reach out when fixed"
-                tabIndex={submitAnonymously ? 0 : -1}
-                className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <input
-                type="text"
-                value={anonX}
-                onChange={(event) => setAnonX(event.target.value)}
-                placeholder="x.com handle — we'll reach out when fixed"
-                tabIndex={submitAnonymously ? 0 : -1}
-                className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </div>
-        </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
