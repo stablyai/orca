@@ -546,6 +546,29 @@ describe('mobile subscribe integration', () => {
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
     })
 
+    it('reclaimTerminalForDesktop with active subscriber resets mode so next subscribe re-fits', async () => {
+      // Why: desktop "Take back" while the phone is actively driving sets
+      // mobileDisplayMode='desktop' to drive the layout transition. Without
+      // resetting it, the next mobile subscribe (e.g. user switches tabs
+      // back on the phone) sees mode='desktop' and enters passive watch,
+      // never re-fitting the PTY to phone dims. The phone then renders the
+      // desktop-dim scrollback echoed back at it. See docs/mobile-fit-hold.md.
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      // Desktop reclaim while phone is still subscribed.
+      const ok = await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(ok).toBe(true)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+      // Mode reset so a re-subscribe takes the auto path.
+      expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
+
+      // Mobile re-subscribes (e.g. tab switch). Must re-fit to phone dims.
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    })
+
     it('null (indefinite) keeps PTY at phone dims when WS connection closes (onClientDisconnected)', async () => {
       // Why: backgrounding the mobile app eventually closes the WebSocket,
       // which routes through onClientDisconnected (NOT handleMobileUnsubscribe).

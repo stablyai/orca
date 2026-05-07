@@ -1832,6 +1832,11 @@ export class OrcaRuntimeService {
       this.setMobileDisplayMode(ptyId, 'desktop')
       await this.applyMobileDisplayMode(ptyId)
       this.setDriver(ptyId, { kind: 'desktop' })
+      // Why: a desktop-initiated reclaim is "I'm taking over right now",
+      // not a sticky preference. The next mobile subscribe (e.g. user
+      // switches back to the terminal tab on the phone) must default to
+      // phone-fit again, not stay in passive desktop-watch mode.
+      this.setMobileDisplayMode(ptyId, 'auto')
       return true
     }
     const heldOverride = this.terminalFitOverrides.get(ptyId)
@@ -1851,6 +1856,12 @@ export class OrcaRuntimeService {
       const rows = heldOverride.previousRows ?? fallback.rows
       await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       this.setDriver(ptyId, { kind: 'desktop' })
+      // Why: a desktop-initiated reclaim is "I'm taking over right now",
+      // not a sticky preference. Reset to auto so the next mobile subscribe
+      // re-enters phone-fit. (Held-PTY branch may not have an entry, but
+      // calling setMobileDisplayMode('auto') is a no-op deletion in that
+      // case — safe and idempotent.)
+      this.setMobileDisplayMode(ptyId, 'auto')
       return true
     }
     return false
