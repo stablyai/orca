@@ -60,10 +60,6 @@ For diff status, file-tree decorations, and the changes view, use the git decora
 
 Use these *only* for git status. Don't reuse them for unrelated state colors — that breaks the convention.
 
-### Cancel is not destructive
-
-`destructive` is for actions that lose data or can't be undone. **Cancel, Dismiss, Close, and Discard are not destructive** — they back the user out of an in-progress action and should stay quiet (default ghost button, no color, no keyboard chip). Save the visual weight for the affirmative action so the two don't compete. See *UX rules → 3. Don't overload the back-out path*.
-
 ### List rows: hover, selected, current
 
 A common point of drift. Use these conventions for any list-style row (worktrees, command palette items, settings nav):
@@ -94,12 +90,10 @@ This keeps light/dark parity automatic.
   - 12px (sub-text, paths, secondary content)
   - 13px (sidebar items, dense list rows)
   - 14px (default body, button text in `default` size)
-  - 48px / 700 (landing-style titles only — almost never used)
 
-## Spacing & radius
+## Radius
 
-- **Spacing:** Tailwind default scale, 4px base. Don't introduce custom pixel values for gaps/padding when a `gap-*` / `p-*` utility exists.
-- **Radius:** `--radius: 0.625rem` (10px) is the base; the rest are computed (`--radius-sm` = 0.6×, `--radius-md` = 0.8×, `--radius-lg` = 1×, `--radius-xl` = 1.4×, etc.). Buttons and inputs use `rounded-md`; the `Card` primitive uses `rounded-xl`; badges use `rounded-full`. Match the existing primitive's radius rather than introducing a new one.
+`--radius: 0.625rem` (10px) is the base; the rest are computed (`--radius-sm` = 0.6×, `--radius-md` = 0.8×, `--radius-lg` = 1×, `--radius-xl` = 1.4×, etc.). Buttons and inputs use `rounded-md`; the `Card` primitive uses `rounded-xl`; badges use `rounded-full`. Match the existing primitive's radius rather than introducing a new one.
 
 ## Elevation & shadows
 
@@ -136,7 +130,7 @@ Sizes: `default` (36px), `sm` (32px), `xs` (24px), `lg` (40px), plus `icon`, `ic
 
 ### Other primitives in this repo
 
-`accordion`, `badge`, `button-group`, `card`, `command`, `context-menu`, `dialog`, `dropdown-menu`, `hover-card`, `input`, `label`, `popover`, `progress`, `repo-multi-combobox`, `scroll-area`, `select`, `separator`, `sheet`, `sonner` (toast), `tabs`, `team-multi-combobox`, `toggle`, `toggle-group`, `tooltip`. Most wrap a Radix UI primitive — exceptions are `command` (wraps `cmdk`), `sonner` (wraps `sonner`), and the visual-only wrappers (`badge`, `button-group`, `card`, `input`) which apply tokens and Tailwind utilities directly. Never reimplement headless behavior; extend the existing wrapper.
+Browse `src/renderer/src/components/ui/` for the full list. Most wrap a Radix UI primitive — exceptions are `command` (wraps `cmdk`), `sonner` (wraps `sonner`), and the visual-only wrappers (`badge`, `button-group`, `card`, `input`) which apply tokens and Tailwind utilities directly. Never reimplement headless behavior; extend the existing wrapper.
 
 ### Picking the right primitive
 
@@ -168,8 +162,7 @@ Tooltips exist to *name* a control whose meaning isn't obvious from its appearan
 - **Mounting:** the global `<TooltipProvider delayDuration={400}>` lives at the App root. Don't nest a second `TooltipProvider` unless you need a different delay for a tightly-scoped surface.
 - **Trigger pattern:** wrap the trigger element with `<TooltipTrigger asChild>` so the tooltip's accessibility props attach to the button (not a wrapper span). This is required for keyboard focus to surface the tooltip.
 - **Placement:** default `side="top" sideOffset={4}` — match the toolbar pattern in `sidebar/SidebarToolbar.tsx`. Pick a different side only when the default would clip against the viewport.
-- **Copy:** sentence case, no trailing period, ≤ 5 words. "Open folder picker", not "Click here to open the folder picker."
-- **Shortcut chips inside tooltips:** if the action has a keyboard shortcut, append it to the tooltip text using `<ShortcutKeyCombo />` rather than baking the keys into the label string. The chips render correctly per platform; baked-in strings drift.
+- **Shortcut chips inside tooltips:** if the action has a keyboard shortcut, append `<ShortcutKeyCombo />` rather than baking the keys into the label string. The chips render correctly per platform; baked-in strings drift.
 
 ```tsx
 <Tooltip>
@@ -191,10 +184,7 @@ Icons come from **`lucide-react`**. Don't import a second icon library.
 - **`size-7`+:** for featured/empty-state hero icons only.
 - **Stroke width:** lucide's default 2px. Don't override per-icon.
 - **Color:** inherit from surrounding text — `text-muted-foreground` for secondary, `text-destructive` for destructive, etc. Don't apply a token to the SVG directly when the parent already carries the right color.
-
-### Loading state
-
-The canonical spinner is `<Loader2 className="size-4 animate-spin" />` from `lucide-react`. Pair it with the disabled state per *UX rule 1* (duration → feedback). For 3s+ multi-step work, prefer a label that names the stage ("Cloning…" → "Installing…") over an unlabeled spinner.
+- **Spinner:** the canonical loading icon is `<Loader2 className="size-4 animate-spin" />`. For 3s+ multi-step work, prefer a label that names the stage ("Cloning…" → "Installing…") over an unlabeled spinner. See *UX rule 1*.
 
 ### Keyboard shortcut chips
 
@@ -211,11 +201,9 @@ See `Landing.tsx` for the canonical pattern. Don't roll a one-off `<kbd>` — kb
 
 **Where shortcuts surface in the UI:**
 
-- **Tooltips on icon buttons** — append the chip after the label so users discover the binding. Trailing, not leading.
-- **Dropdown / context-menu items** — use `<DropdownMenuShortcut>` (or its context-menu equivalent) for the right-aligned chip; don't add the chip yourself with absolute positioning.
-- **Affirmative buttons in modals** — chip on the primary action only ("Create ⌘↩"). Never on Cancel.
-- **Hint rows in empty / landing states** — vertical list of `action — chip` pairs (see `Landing.tsx`).
-- **Don't put chips next to inline text actions** (`link` variant) or on Cancel/Dismiss — see *UX rule 3*.
+- **Tooltips on icon buttons** — append the chip after the label, trailing.
+- **Dropdown / context-menu items** — use `<DropdownMenuShortcut>` (or its context-menu equivalent) for the right-aligned chip; don't position one yourself.
+- **Never on Cancel, Dismiss, or `link`-variant inline actions** — see *UX rule 3*.
 
 **The label MUST match the actual binding for the platform.** If the keyboard handler reads `metaKey` on Mac and `ctrlKey` elsewhere, the chip must show `⌘` on Mac and `Ctrl` elsewhere. Mismatched chips are worse than no chip.
 
@@ -268,42 +256,16 @@ When there's no sibling, match the surrounding chrome — button sizes, icon wei
 
 ### 3. Don't overload the back-out path
 
-Keyboard chips, accent colors, animated affordances, prominent icons — these belong on the affirmative action, not on Cancel/Dismiss/Discard. The back-out path should be discoverable but quiet, so it doesn't compete with the primary action visually. Keyboard handlers can still honor Esc; the visible decoration is what stays minimal.
-
-### 4. The user's named fix outranks a cleverer alternative
-
-If the user specifies how to fix something, that's the spec. If you think the named fix has a problem, raise the specific concern in one sentence and let them decide — don't quietly ship a different design. Substituting your preferred approach erodes trust faster than any individual UX bug.
+`destructive` is for actions that lose data or can't be undone. **Cancel, Dismiss, Close, and Discard are not destructive** — they back the user out of an in-progress action and should stay quiet (default ghost button, no color, no keyboard chip, no animated affordance). Save the visual weight for the affirmative action so the two don't compete. Keyboard handlers can still honor Esc; the visible decoration is what stays minimal.
 
 ## Cross-platform
 
-Orca runs on macOS, Linux, and Windows. Every UI change must hold up on all three.
+Orca runs on macOS, Linux, and Windows. Every UI change must hold up on all three, in both light and dark mode.
 
 - **Modifier keys:** Never hardcode `e.metaKey`. Use `navigator.userAgent.includes('Mac')` to choose `metaKey` on Mac and `ctrlKey` on Linux/Windows. Electron menu accelerators should use `CmdOrCtrl`.
 - **Shortcut labels:** Display `⌘` / `⇧` on Mac; display `Ctrl+` / `Shift+` on other platforms. The label must reflect the actual binding for that platform.
 - **Window chrome:** macOS shows traffic lights; the titlebar reserves an 80px gutter (`titlebar-traffic-light-pad`) so they don't overlap content. Don't put hit targets in that band on Mac.
-- **SSH:** Many users run Orca on a remote machine. Loading states, focus management, and animations must hold up under 50–200 ms of extra latency. See *UX rules → 1*.
-
-## Do's and don'ts
-
-**Do**
-
-- Use `var(--token)` or Tailwind utilities bound to tokens (`bg-background`, `text-muted-foreground`, `border-border`).
-- Reach for the existing shadcn primitive before writing custom CSS.
-- Add tokens to `main.css` (both `:root` and `.dark`) when you genuinely need a new one, and expose them in the `@theme inline` block so Tailwind utilities pick them up.
-- Test every change in both light and dark mode before claiming it's done.
-- Test SSH-relevant flows under simulated latency (or actual SSH) — local-only verification isn't enough.
-
-**Don't**
-
-- Don't introduce a new hex value when a token already covers the role.
-- Don't put accent color, keyboard chips, or animated affordances on Cancel.
-- Don't use `destructive` for "secondary action" — it's for irreversible actions only.
-- Don't hardcode `e.metaKey` or `⌘` strings — pick by platform.
-- Don't strip `data-slot` attributes from a primitive that has one — they're load-bearing for CSS targeting.
-- Don't put critical messaging in a tooltip — errors and blocking warnings go inline, where they're visible without hover.
-- Don't ship a chip whose label doesn't match the actual platform binding — wrong is worse than absent.
-- Don't add a new shadow tier; use the three documented levels.
-- Don't import `Inter` or any other sans — `Geist` is the family.
+- **SSH:** Many users run Orca on a remote machine. Loading states, focus management, and animations must hold up under 50–200 ms of extra latency. Test under simulated latency (or actual SSH) — local-only verification isn't enough. See *UX rules → 1*.
 
 ## When this guide is silent
 
