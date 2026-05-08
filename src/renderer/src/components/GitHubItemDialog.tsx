@@ -1924,10 +1924,6 @@ function GHEditSection({
     [item.number, repoPath, projectOrigin, localAssignees, patchProjectRowIfNeeded, run]
   )
 
-  if (item.type === 'pr') {
-    return null
-  }
-
   const checkIcon = (
     <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
       <path
@@ -2101,15 +2097,17 @@ function GHEditSection({
         </PopoverContent>
       </Popover>
 
-      <Button
-        size="sm"
-        onClick={() => onUse(item)}
-        className="ml-auto gap-2"
-        aria-label="Start workspace from issue"
-      >
-        Start workspace from issue
-        <ArrowRight className="size-4" />
-      </Button>
+      {item.type !== 'pr' ? (
+        <Button
+          size="sm"
+          onClick={() => onUse(item)}
+          className="ml-auto gap-2"
+          aria-label="Start workspace from issue"
+        >
+          Start workspace from issue
+          <ArrowRight className="size-4" />
+        </Button>
+      ) : null}
     </div>
   )
 }
