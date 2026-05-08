@@ -216,14 +216,13 @@ export function GhAuthErrorHelp({
             </button>
           ))}
           {docsUrl ? (
-            <a
-              href={docsUrl}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => openExternal(docsUrl)}
               className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
             >
               <ExternalLink className="size-3" /> Docs
-            </a>
+            </button>
           ) : null}
         </div>
       </div>
