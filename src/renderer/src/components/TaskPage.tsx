@@ -12,6 +12,7 @@ import {
   EllipsisVertical,
   ExternalLink,
   Github,
+  Gitlab,
   GitPullRequest,
   LoaderCircle,
   Lock,
@@ -77,12 +78,22 @@ import { useTeamStates } from '@/hooks/useIssueMetadata'
 import type {
   GitHubOwnerRepo,
   GitHubWorkItem,
+  GitLabWorkItem,
   LinearIssue,
   TaskViewPresetId
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 
-type TaskSource = 'github' | 'linear'
+type TaskSource = 'github' | 'linear' | 'gitlab'
+
+type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
+
+const GITLAB_TASK_FILTERS: { id: GitLabTaskFilter; label: string }[] = [
+  { id: 'opened', label: 'Open' },
+  { id: 'merged', label: 'Merged' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'all', label: 'All' }
+]
 type TaskQueryPreset = {
   id: TaskViewPresetId
   label: string
@@ -109,6 +120,11 @@ const SOURCE_OPTIONS: SourceOption[] = [
     id: 'github',
     label: 'GitHub',
     Icon: ({ className }) => <Github className={className} />
+  },
+  {
+    id: 'gitlab',
+    label: 'GitLab',
+    Icon: ({ className }) => <Gitlab className={className} />
   },
   {
     id: 'linear',
@@ -800,6 +816,16 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [projectModeVisible, githubMode])
 
+  // ── GitLab task-source state ──────────────────────────────────────
+  // Why: parallel to Linear's slim per-source state. Skips workItemsCache
+  // and cross-repo aggregation in v1 — the GitLab list fetches directly
+  // from `window.api.gl.listMRs` / `listIssues` for the primary repo.
+  const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter>('opened')
+  const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
+  const [gitlabLoading, setGitlabLoading] = useState(false)
+  const [gitlabError, setGitlabError] = useState<string | null>(null)
+  const [gitlabRefreshNonce, setGitlabRefreshNonce] = useState(0)
+
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
   const [activeTaskPreset, setActiveTaskPreset] = useState<TaskViewPresetId | null>(
@@ -1055,6 +1081,91 @@ export default function TaskPage(): React.JSX.Element {
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSource, linearStatus.connected])
+
+  // Why: GitLab task-source data fetch. Pulls MRs (filtered by state)
+  // and issues for the primary selected repo in parallel; merges and
+  // sorts by updatedAt desc so the rendered list reflects whichever
+  // resource the user touched last. v1 keeps the surface single-repo —
+  // the cross-repo aggregation that powers the GitHub list lives in a
+  // dedicated store slice and isn't worth porting until the GitLab side
+  // graduates beyond paste-URL + tab-list demos.
+  useEffect(() => {
+    if (taskSource !== 'gitlab') {
+      return
+    }
+    if (!primaryRepo?.path || primaryRepo.connectionId) {
+      setGitlabItems([])
+      setGitlabLoading(false)
+      setGitlabError(null)
+      return
+    }
+    let stale = false
+    setGitlabLoading(true)
+    setGitlabError(null)
+    void Promise.all([
+      window.api.gl.listMRs({
+        repoPath: primaryRepo.path,
+        state: gitlabFilter,
+        page: 1,
+        perPage: 50
+      }),
+      // Why: GitLab issues only have 'opened' / 'closed' states; the
+      // filter chip values 'merged' and 'all' don't apply to issues.
+      // Map 'merged' to 'opened' (no merged issues exist) and 'all' to
+      // a no-state pass-through so the issues list still surfaces
+      // alongside MRs in those modes.
+      gitlabFilter === 'merged'
+        ? Promise.resolve([])
+        : window.api.gl.listIssues({
+            repoPath: primaryRepo.path,
+            limit: 50
+          })
+    ])
+      .then(([mrs, issues]) => {
+        if (stale) {
+          return
+        }
+        const mrItems = (mrs as { items: GitLabWorkItem[]; error?: { message: string } }).items
+        const mrErr = (mrs as { error?: { message: string } }).error
+        if (mrErr) {
+          setGitlabError(mrErr.message)
+        }
+        // Why: listIssues returns the bare items array (the IPC unwraps
+        // the structured envelope, matching gh:listIssues); listMRs
+        // returns the envelope with items + error. Stamp repoId on both
+        // so row attribution works after the merge.
+        const issueItems = (issues as GitLabWorkItem[]).map((it) => ({
+          ...it,
+          repoId: primaryRepo.id
+        }))
+        const merged = [
+          ...mrItems.map((m) => ({ ...m, repoId: primaryRepo.id })),
+          ...issueItems
+        ].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+        setGitlabItems(merged)
+      })
+      .catch((err) => {
+        if (!stale) {
+          setGitlabError(err instanceof Error ? err.message : String(err))
+          setGitlabItems([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setGitlabLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [
+    taskSource,
+    gitlabFilter,
+    gitlabRefreshNonce,
+    primaryRepo?.id,
+    primaryRepo?.path,
+    primaryRepo?.connectionId
+  ])
 
   const defaultLinearTeamSelection = settings?.defaultLinearTeamSelection
   const [linearTeamSelection, setLinearTeamSelection] = useState<ReadonlySet<string>>(() => {
@@ -2213,6 +2324,57 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     </div>
                   </div>
+                ) : taskSource === 'gitlab' ? (
+                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        {GITLAB_TASK_FILTERS.map(({ id, label }) => {
+                          const active = gitlabFilter === id
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => {
+                                setGitlabFilter(id)
+                                setGitlabRefreshNonce((n) => n + 1)
+                              }}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setGitlabRefreshNonce((n) => n + 1)}
+                              disabled={gitlabLoading}
+                              aria-label="Refresh GitLab work items"
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              {gitlabLoading ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            Refresh GitLab work items
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </div>
                 ) : null}
               </div>
             </section>
@@ -2497,6 +2659,81 @@ export default function TaskPage(): React.JSX.Element {
                     }}
                   />
                 ) : null}
+              </div>
+            </div>
+          ) : taskSource === 'gitlab' ? (
+            <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
+              <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                <span>ID</span>
+                <span>Title</span>
+                <span>Type / State</span>
+                <span>Updated</span>
+                <span />
+              </div>
+              <div
+                className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
+                style={{ scrollbarGutter: 'stable' }}
+              >
+                {gitlabError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {gitlabError}
+                  </div>
+                ) : null}
+                {gitlabLoading && gitlabItems.length === 0 ? (
+                  // Why: matches the GitHub / Linear shimmer pattern so the card
+                  // never flashes empty during the initial fetch.
+                  <div className="divide-y divide-border/50">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="grid w-full gap-3 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
+                      >
+                        <div className="h-4 w-16 animate-pulse rounded bg-muted/70" />
+                        <div>
+                          <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
+                        </div>
+                        <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                        <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                        <div />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {!gitlabLoading && gitlabItems.length === 0 && !gitlabError ? (
+                  <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+                    {primaryRepo
+                      ? 'No GitLab work matches this filter.'
+                      : 'Select a repo to see GitLab work items.'}
+                  </div>
+                ) : null}
+                <div className="divide-y divide-border/50">
+                  {gitlabItems.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      onClick={() => void window.api.shell.openUrl(item.url)}
+                      className="grid w-full gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {/* Why: GitLab's user-facing convention is `!N` for MRs
+                            and `#N` for issues — matches gitlab.com's UI so users
+                            scanning the list can map rows back to web links. */}
+                        {item.type === 'mr' ? '!' : '#'}
+                        {item.number}
+                      </span>
+                      <span className="min-w-0 truncate text-sm">{item.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.type === 'mr' ? 'MR' : 'Issue'} · {item.state}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
+                      </span>
+                      <span className="flex justify-end">
+                        <ExternalLink className="size-3.5 text-muted-foreground" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : !linearStatusChecked ? (

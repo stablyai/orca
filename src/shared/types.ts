@@ -1326,7 +1326,7 @@ export type GlobalSettings = {
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
    *  reopens to the same provider instead of always defaulting to GitHub. */
-  defaultTaskSource: 'github' | 'linear'
+  defaultTaskSource: 'github' | 'linear' | 'gitlab'
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays
