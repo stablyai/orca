@@ -147,6 +147,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ? issueEntry.data
       : undefined
     : null
+  const issueDisplay =
+    issue ??
+    (worktree.linkedIssue
+      ? {
+          number: worktree.linkedIssue,
+          // Why: linked metadata is persisted immediately, but GitHub details
+          // arrive asynchronously. Show the durable link number instead of
+          // making the worktree look unlinked while the cache warms.
+          title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
+        }
+      : null)
 
   const isDeleting = deleteState?.isDeleting ?? false
 
@@ -554,12 +565,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         {/* Meta section: Issue / PR Links / Comment
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
-        {((cardProps.includes('issue') && issue) ||
+        {((cardProps.includes('issue') && issueDisplay) ||
           (cardProps.includes('pr') && pr) ||
           (cardProps.includes('comment') && worktree.comment)) && (
           <div className="flex flex-col gap-[3px] mt-0.5">
-            {cardProps.includes('issue') && issue && (
-              <IssueSection issue={issue} onClick={handleEditIssue} />
+            {cardProps.includes('issue') && issueDisplay && (
+              <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
             )}
             {cardProps.includes('pr') && pr && <PrSection pr={pr} onClick={handleEditIssue} />}
             {cardProps.includes('comment') && worktree.comment && (

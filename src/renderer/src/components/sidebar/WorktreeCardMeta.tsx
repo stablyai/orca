@@ -16,11 +16,20 @@ import type { PRInfo, IssueInfo } from '../../../../shared/types'
 // ── Issue section ────────────────────────────────────────────────────
 
 type IssueSectionProps = {
-  issue: IssueInfo
+  issue:
+    | IssueInfo
+    | {
+        number: number
+        title: string
+        state?: IssueInfo['state']
+        url?: string
+        labels?: string[]
+      }
   onClick: (e: React.MouseEvent) => void
 }
 
 export function IssueSection({ issue, onClick }: IssueSectionProps): React.JSX.Element {
+  const labels = issue.labels ?? []
   return (
     <HoverCard openDelay={300}>
       <HoverCardTrigger asChild>
@@ -41,26 +50,30 @@ export function IssueSection({ issue, onClick }: IssueSectionProps): React.JSX.E
         <div className="font-semibold text-[13px]">
           #{issue.number} {issue.title}
         </div>
-        <div className="text-muted-foreground">
-          State: {issue.state === 'open' ? 'Open' : 'Closed'}
-        </div>
-        {issue.labels.length > 0 && (
+        {issue.state && (
+          <div className="text-muted-foreground">
+            State: {issue.state === 'open' ? 'Open' : 'Closed'}
+          </div>
+        )}
+        {labels.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {issue.labels.map((l) => (
+            {labels.map((l) => (
               <Badge key={l} variant="outline" className="h-4 px-1.5 text-[9px]">
                 {l}
               </Badge>
             ))}
           </div>
         )}
-        <a
-          href={issue.url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
-        >
-          View on GitHub
-        </a>
+        {issue.url && (
+          <a
+            href={issue.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            View on GitHub
+          </a>
+        )}
       </HoverCardContent>
     </HoverCard>
   )

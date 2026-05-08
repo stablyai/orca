@@ -223,6 +223,25 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
+    const meta: {
+      linkedIssue?: number
+      linkedPR?: number
+      linkedLinearIssue?: string
+    } = {}
+    if (item.type === 'issue' && item.number) {
+      meta.linkedIssue = item.number
+    } else if (item.type === 'pr' && item.number) {
+      meta.linkedPR = item.number
+    }
+    if (item.linearIdentifier) {
+      meta.linkedLinearIssue = item.linearIdentifier
+    }
+    if (Object.keys(meta).length > 0) {
+      // Why: the Project direct-launch path activates the new workspace
+      // immediately. Persist the link first so the first sidebar render can
+      // show the issue/PR association instead of briefly looking unlinked.
+      await store.updateWorktreeMeta(worktreeId, meta)
+    }
 
     const detectedIds = new Set(await detectedAgentsPromise)
     effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
@@ -299,25 +318,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const message = error instanceof Error ? error.message : 'Failed to create workspace.'
     toast.error(message)
     return
-  }
-
-  const meta: {
-    linkedIssue?: number
-    linkedPR?: number
-    linkedLinearIssue?: string
-  } = {}
-  if (item.type === 'issue' && item.number) {
-    meta.linkedIssue = item.number
-  } else if (item.type === 'pr' && item.number) {
-    meta.linkedPR = item.number
-  }
-  if (item.linearIdentifier) {
-    meta.linkedLinearIssue = item.linearIdentifier
-  }
-  if (Object.keys(meta).length > 0) {
-    void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
-      // Meta update is non-critical for the draft flow — continue.
-    })
   }
 
   store.setSidebarOpen(true)
