@@ -1,6 +1,7 @@
 import type {
   GlobalSettings,
   NotificationSettings,
+  OnboardingState,
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
@@ -108,6 +109,28 @@ export function getDefaultNotificationSettings(): NotificationSettings {
     terminalBell: false,
     suppressWhenFocused: true,
     customSoundPath: null
+  }
+}
+
+export function getDefaultOnboardingState(): OnboardingState {
+  return {
+    closedAt: null,
+    outcome: null,
+    lastCompletedStep: -1,
+    checklist: {
+      addedRepo: false,
+      choseAgent: false,
+      ranFirstAgent: false,
+      ranSecondAgentOnSameTask: false,
+      triedCmdJ: false,
+      shapedSidebar: false,
+      reviewedDiff: false,
+      openedPr: false,
+      addedFolder: false,
+      openedFile: false,
+      ranAgentOnFile: false,
+      dismissed: false
+    }
   }
 }
 
@@ -240,7 +263,8 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     ui: getDefaultUIState(),
     githubCache: { pr: {}, issue: {} },
     workspaceSession: getDefaultWorkspaceSession(),
-    sshTargets: []
+    sshTargets: [],
+    onboarding: getDefaultOnboardingState()
   }
 }
 

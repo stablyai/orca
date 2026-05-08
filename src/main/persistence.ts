@@ -20,6 +20,7 @@ import { getGitUsername } from './git/repo'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
+  getDefaultOnboardingState,
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession
@@ -231,7 +232,29 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
-          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget)
+          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          onboarding: (() => {
+            // Why: profiles with persisted repos predate onboarding — established
+            // users must not be dropped into the first-run wizard after upgrade.
+            // Backfill as completed (not dismissed) so analytics distinguish
+            // upgrade-cohort users from people who explicitly bailed mid-funnel.
+            if (!parsed.onboarding && (parsed.repos?.length ?? 0) > 0) {
+              return {
+                ...defaults.onboarding,
+                closedAt: Date.now(),
+                outcome: 'completed' as const,
+                lastCompletedStep: 4
+              }
+            }
+            return {
+              ...defaults.onboarding,
+              ...parsed.onboarding,
+              checklist: {
+                ...defaults.onboarding.checklist,
+                ...parsed.onboarding?.checklist
+              }
+            }
+          })()
         }
       }
     } catch (err) {
@@ -598,6 +621,34 @@ export class Store {
         : normalizeSortBy(this.state.ui?.sortBy)
     }
     this.scheduleSave()
+  }
+
+  // ── Onboarding ────────────────────────────────────────────────────
+
+  getOnboarding(): PersistedState['onboarding'] {
+    const defaults = getDefaultOnboardingState()
+    return {
+      ...defaults,
+      ...this.state.onboarding,
+      checklist: {
+        ...defaults.checklist,
+        ...this.state.onboarding?.checklist
+      }
+    }
+  }
+
+  updateOnboarding(updates: Partial<PersistedState['onboarding']>): PersistedState['onboarding'] {
+    const current = this.getOnboarding()
+    this.state.onboarding = {
+      ...current,
+      ...updates,
+      checklist: {
+        ...current.checklist,
+        ...updates.checklist
+      }
+    }
+    this.scheduleSave()
+    return this.getOnboarding()
   }
 
   // ── GitHub Cache ──────────────────────────────────────────────────

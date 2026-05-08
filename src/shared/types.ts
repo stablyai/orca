@@ -1313,6 +1313,41 @@ export type NotificationSoundPathResult =
   | { ok: true; path: string }
   | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
 
+export type OnboardingOutcome = 'completed' | 'dismissed'
+
+export type OnboardingChecklistState = {
+  addedRepo: boolean
+  choseAgent: boolean
+  ranFirstAgent: boolean
+  ranSecondAgentOnSameTask: boolean
+  triedCmdJ: boolean
+  shapedSidebar: boolean
+  reviewedDiff: boolean
+  openedPr: boolean
+  addedFolder: boolean
+  openedFile: boolean
+  ranAgentOnFile: boolean
+  // Why: UI state flag (panel visibility), not an activation event. The
+  // telemetry checklist enum in telemetry-events.ts intentionally omits this.
+  dismissed: boolean
+}
+
+export type OnboardingState = {
+  closedAt: number | null
+  outcome: OnboardingOutcome | null
+  // Sentinel `-1` = not started; `1..4` = highest wizard step the user
+  // finished. Kept as `number` (not a literal union) because callers clamp
+  // via `Math.max`/`Math.min` against arbitrary numerics.
+  lastCompletedStep: number
+  checklist: OnboardingChecklistState
+}
+
+export type NotificationPermissionStatusResult = {
+  supported: boolean
+  platform: NodeJS.Platform
+  requested: boolean
+}
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
@@ -1515,6 +1550,7 @@ export type PersistedState = {
   }
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
+  onboarding: OnboardingState
 }
 
 // ─── Filesystem ─────────────────────────────────────────────

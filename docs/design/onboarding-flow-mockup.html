@@ -183,6 +183,20 @@
     border: 1px solid rgba(62,207,142,.3);
   }
 
+  .more-agents { margin-top: 14px; }
+  .more-agents > summary {
+    cursor: pointer; color: var(--muted); font-size: 12px;
+    padding: 6px 0; list-style: none; user-select: none;
+  }
+  .more-agents > summary::-webkit-details-marker { display: none; }
+  .more-agents > summary::before {
+    content: "▸"; display: inline-block; margin-right: 6px;
+    transition: transform .15s; font-size: 10px;
+  }
+  .more-agents[open] > summary::before { transform: rotate(90deg); }
+  .more-agents > summary:hover { color: var(--text); }
+  .more-agents .more-grid { margin-top: 10px; }
+
   /* Step 2 (worktree card) — grouped checkboxes */
   .group-label {
     font-size: 11px; font-weight: 600; text-transform: uppercase;
@@ -253,6 +267,20 @@
     margin-top: 14px; display: flex; align-items: center; gap: 8px; color: var(--muted);
   }
   .checkbox-row input { accent-color: var(--accent); }
+  .theme-more {
+    margin-top: 18px; padding: 14px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel);
+    display: flex; align-items: center; gap: 14px; justify-content: space-between;
+  }
+  .theme-more-text { color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .theme-more .inline-link { color: var(--accent); text-decoration: none; }
+  .theme-more .inline-link:hover { text-decoration: underline; }
+  .ghostty-import {
+    display: inline-flex; align-items: center; gap: 6px;
+    flex-shrink: 0; font-size: 12px;
+  }
+  .ghostty-icon { font-size: 14px; }
 
   /* Step 5 — add repo (drop zone + 3 tiles) */
   .location-row {
@@ -441,19 +469,18 @@
     { id: 'agent', title: 'Pick your default agent',
       subtitle: 'Orca works with every CLI agent. Pick the one you\u2019ll use most \u2014 you can switch any time.' },
     { id: 'theme', title: 'You\u2019ll be staring at this for hours',
-      subtitle: 'Pick a theme. We\u2019ll apply it to the editor and terminal.' },
+      subtitle: 'Pick the look that feels easiest to work in.' },
     { id: 'notifications', title: 'Agents report back',
       subtitle: 'Orca watches your agents and tells you when they need you.' },
     { id: 'repo', title: 'Add your first repo',
-      subtitle: 'One more step. Point Orca at some code and we\u2019ll take it from there.' },
+      subtitle: 'Point Orca at some code. Your first task will create an isolated worktree.' },
   ];
 
   const state = {
     i: 0,
     agent: 'claude',
     theme: 'system',
-    syncOs: true,
-    notif: { taskComplete: true, bell: true, suppress: true },
+    notif: { taskComplete: true, bell: false, suppress: true },
     workspaceDir: '~/orca/projects',
   };
 
@@ -505,8 +532,15 @@
   }
 
   function renderAgentStep(body) {
+    // Only detected agents are shown by default — undetected ones are noise and most
+    // users won't install something new mid-onboarding. Rest live behind "More agents".
+    const detected = agents.filter(a => a.detected);
+    const rest = agents.filter(a => !a.detected);
+    // If the user picked an undetected agent (e.g. via "More agents"), keep the panel open.
+    const restSelected = rest.some(a => a.id === state.agent);
+
     const grid = el(`<div class="agent-grid"></div>`);
-    agents.forEach(a => {
+    const renderCard = (a) => {
       const card = el(`
         <button class="agent-card ${state.agent === a.id ? 'selected' : ''}">
           <div class="name">${a.name}</div>
@@ -515,9 +549,23 @@
         </button>
       `);
       card.onclick = () => { state.agent = a.id; renderStep(); };
-      grid.appendChild(card);
-    });
+      return card;
+    };
+    detected.forEach(a => grid.appendChild(renderCard(a)));
     body.appendChild(grid);
+
+    if (rest.length === 0) return;
+
+    const more = el(`
+      <details class="more-agents" ${restSelected || state.showMoreAgents ? 'open' : ''}>
+        <summary>More agents (${rest.length})</summary>
+        <div class="agent-grid more-grid"></div>
+      </details>
+    `);
+    const moreGrid = more.querySelector('.more-grid');
+    rest.forEach(a => moreGrid.appendChild(renderCard(a)));
+    more.addEventListener('toggle', () => { state.showMoreAgents = more.open; });
+    body.appendChild(more);
   }
 
   function renderThemeStep(body) {
@@ -539,14 +587,23 @@
     });
     body.appendChild(grid);
 
-    const cb = el(`
-      <label class="checkbox-row">
-        <input type="checkbox" ${state.syncOs ? 'checked' : ''} />
-        Sync with OS appearance
-      </label>
+    // Terminal has many more knobs (font, cursor, palette) than just light/dark.
+    // Tell users they can fine-tune later, and offer Ghostty config import as a shortcut.
+    const more = el(`
+      <div class="theme-more">
+        <div class="theme-more-text">
+          Want to fine-tune fonts, cursor, and the terminal palette? You can do that in
+          <a href="#" class="inline-link">Settings → Terminal</a> any time.
+        </div>
+        <button class="btn ghostty-import">
+          <span class="ghostty-icon">👻</span>
+          Import from Ghostty
+        </button>
+      </div>
     `);
-    cb.querySelector('input').onchange = (e) => { state.syncOs = e.target.checked; };
-    body.appendChild(cb);
+    more.querySelector('.ghostty-import').onclick = () =>
+      alert('(mock) reads ~/.config/ghostty/config and imports font + theme');
+    body.appendChild(more);
   }
 
   function renderNotifStep(body) {
@@ -584,7 +641,7 @@
     body.appendChild(loc);
 
     // Full-window-style drop zone with the 3-tile row inside as default content.
-    // Dragging anywhere fades the tiles and surfaces the dashed target (see design doc §5).
+    // Dragging anywhere fades the tiles and surfaces the dashed target (see design doc step 4).
     const dz = el(`
       <div class="dropzone" id="dropzone">
         <div class="dropzone-hint">Drop a folder to open it</div>
@@ -592,17 +649,17 @@
           <button class="repo-tile primary" data-a="open">
             <div class="icon">📁</div>
             <div class="t">Open a folder</div>
-            <div class="d">Pick a local folder. If it\u2019s a git repo, we\u2019ll create a worktree.</div>
+            <div class="d">Pick a local folder. If it\u2019s a git repo, your first task creates a worktree.</div>
           </button>
           <button class="repo-tile" data-a="clone">
             <div class="icon">⤓</div>
             <div class="t">Clone from GitHub</div>
             <div class="d">Paste a URL — clones into your Location.</div>
           </button>
-          <button class="repo-tile" data-a="sample">
-            <div class="icon">✨</div>
-            <div class="t">Try the sample repo</div>
-            <div class="d">A tiny demo repo — hit the aha in 60 seconds.</div>
+          <button class="repo-tile" data-a="remote">
+            <div class="icon">🛰</div>
+            <div class="t">Open remote</div>
+            <div class="d">Pick an SSH target and a path on it.</div>
           </button>
         </div>
       </div>
@@ -698,7 +755,7 @@
           <div style="font-size: 44px; margin-bottom: 8px;">🌊</div>
           <div style="font-weight: 600; margin-bottom: 6px;">Almost there</div>
           <div style="color: var(--muted); font-size: 12px; max-width: 32ch; margin: 0 auto;">
-            After you add a repo, Orca creates your first worktree and opens it with ${agents.find(a=>a.id===state.agent)?.name || 'your agent'} ready to go.
+            After you add a repo, type your first task. Orca creates an isolated worktree and opens it with ${agents.find(a=>a.id===state.agent)?.name || 'your agent'} ready to go.
           </div>
         </div>`;
     }
@@ -721,10 +778,10 @@
   };
   // Skip writes the current default for this step and advances. No "skip everything"
   // shortcut: Esc is intentionally unbound so muscle-memory dismissal can't abandon
-  // the activation moment (see design doc §Flow → Skip semantics).
+  // repo-add setup (see design doc §Flow → Skip semantics).
   $('#skipBtn').onclick = () => {
     if (state.i === steps.length - 1) {
-      alert('(mock) onboarding_abandoned \u2014 closing wizard, landing on empty-state home');
+      alert('(mock) onboarding_dismissed \u2014 closing wizard, landing on empty-state home');
       return;
     }
     go(1);

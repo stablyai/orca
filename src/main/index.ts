@@ -587,7 +587,10 @@ app.whenReady().then(async () => {
   // dialog either doesn't appear or gets immediately covered by the maximized
   // window, making it impossible for the user to click "Allow".
   win.once('show', () => {
-    triggerStartupNotificationRegistration(store!)
+    const onboarding = store!.getOnboarding()
+    if (onboarding.closedAt !== null) {
+      triggerStartupNotificationRegistration(store!)
+    }
   })
 
   app.on('activate', () => {

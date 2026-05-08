@@ -78,6 +78,7 @@ export const workspaceSourceSchema = z.enum([
   'sidebar',
   'shortcut',
   'drag_drop',
+  'onboarding',
   'unknown'
 ])
 export type WorkspaceSource = z.infer<typeof workspaceSourceSchema>
@@ -90,6 +91,7 @@ export const launchSourceSchema = z.enum([
   'new_workspace_composer',
   'workspace_jump_palette',
   'shortcut',
+  'onboarding',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
@@ -187,6 +189,65 @@ const settingsChangedSchema = z
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 
+// ── Onboarding ──────────────────────────────────────────────────────────
+//
+// Closed enums only — no raw paths, repo names, clone URLs, or error
+// strings. The funnel exists to measure activation, not to debug specific
+// user repos.
+const onboardingStepSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+const onboardingPathSchema = z.enum(['open_folder', 'clone_url'])
+const onboardingFailureReasonSchema = z.enum([
+  'invalid_path',
+  'clone_failed',
+  'cancelled',
+  'unknown'
+])
+const onboardingValueKindSchema = z.enum(['agent', 'theme', 'notifications', 'repo'])
+// `dismissed` from `OnboardingChecklistState` is intentionally excluded —
+// it is a UI panel-visibility flag, not an activation event, so it never
+// fires `activation_checklist_item_completed`. Keep this list in sync with
+// the activation keys of `OnboardingChecklistState` in shared/types.ts.
+const onboardingChecklistItemSchema = z.enum([
+  'addedRepo',
+  'addedFolder',
+  'choseAgent',
+  'ranFirstAgent',
+  'ranSecondAgentOnSameTask',
+  'triedCmdJ',
+  'shapedSidebar',
+  'reviewedDiff',
+  'openedPr',
+  'openedFile',
+  'ranAgentOnFile'
+])
+
+const onboardingStartedSchema = z
+  .object({ resumed_from_step: onboardingStepSchema.optional() })
+  .strict()
+const onboardingStepViewedSchema = z.object({ step: onboardingStepSchema }).strict()
+const onboardingStepCompletedSchema = z
+  .object({ step: onboardingStepSchema, value_kind: onboardingValueKindSchema })
+  .strict()
+const onboardingStepSkippedSchema = z.object({ step: onboardingStepSchema }).strict()
+const onboardingStep4PathClickedSchema = z.object({ path: onboardingPathSchema }).strict()
+const onboardingStep4PathFailedSchema = z
+  .object({ path: onboardingPathSchema, reason: onboardingFailureReasonSchema })
+  .strict()
+const onboardingCompletedSchema = z
+  .object({
+    path: onboardingPathSchema,
+    is_git_repo: z.boolean(),
+    total_duration_ms: z.number().int().nonnegative()
+  })
+  .strict()
+const onboardingDismissedSchema = z.object({ last_step: onboardingStepSchema }).strict()
+const activationChecklistItemCompletedSchema = z
+  .object({
+    item: onboardingChecklistItemSchema,
+    time_since_completed_ms: z.number().int().nonnegative()
+  })
+  .strict()
+
 // ── Event registry: the one record the validator consumes ───────────────
 //
 // The validator does `eventSchemas[name].safeParse(props)`. `EventMap` is
@@ -212,7 +273,17 @@ export const eventSchemas = {
   settings_changed: settingsChangedSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
-  telemetry_opted_out: telemetryOptedOutSchema
+  telemetry_opted_out: telemetryOptedOutSchema,
+
+  onboarding_started: onboardingStartedSchema,
+  onboarding_step_viewed: onboardingStepViewedSchema,
+  onboarding_step_completed: onboardingStepCompletedSchema,
+  onboarding_step_skipped: onboardingStepSkippedSchema,
+  onboarding_step4_path_clicked: onboardingStep4PathClickedSchema,
+  onboarding_step4_path_failed: onboardingStep4PathFailedSchema,
+  onboarding_completed: onboardingCompletedSchema,
+  onboarding_dismissed: onboardingDismissedSchema,
+  activation_checklist_item_completed: activationChecklistItemCompletedSchema
 } as const
 
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }

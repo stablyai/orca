@@ -23,6 +23,7 @@ import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
+import OnboardingFlow, { shouldShowOnboarding } from './components/onboarding/OnboardingFlow'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
@@ -44,6 +45,7 @@ import {
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
 import { dispatchClearModifierHints } from './hooks/useModifierHint'
+import type { OnboardingState } from '../../shared/types'
 
 const isMac = navigator.userAgent.includes('Mac')
 const Landing = lazy(() => import('./components/Landing'))
@@ -158,6 +160,7 @@ function App(): React.JSX.Element {
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -245,6 +248,10 @@ function App(): React.JSX.Element {
           actions.pruneLastVisitedTimestamps()
           actions.seedActiveWorktreeLastVisitedIfMissing()
           await actions.fetchBrowserSessionProfiles()
+          const onboardingState = await window.api.onboarding.get()
+          if (!cancelled) {
+            setOnboarding(onboardingState)
+          }
 
           // Why: SSH connections must be re-established BEFORE terminal
           // reconnect so that reconnectPersistedTerminals can route SSH-backed
@@ -1124,6 +1131,9 @@ function App(): React.JSX.Element {
       <TelemetryFirstLaunchSurface />
       <ZoomOverlay />
       <SshPassphraseDialog />
+      {onboarding && shouldShowOnboarding(onboarding) ? (
+        <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
+      ) : null}
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
     </div>
   )

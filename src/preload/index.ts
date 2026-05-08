@@ -21,9 +21,11 @@ import type {
   ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
+  NotificationPermissionStatusResult,
   NotificationSoundDataResult,
   NotificationSoundPathResult,
   NotificationSoundResult,
+  OnboardingState,
   SearchResult
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
@@ -901,6 +903,10 @@ const api = {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
       ipcRenderer.invoke('notifications:dispatch', args),
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
+    getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
+      ipcRenderer.invoke('notifications:getPermissionStatus'),
+    requestPermission: (): Promise<NotificationPermissionStatusResult> =>
+      ipcRenderer.invoke('notifications:requestPermission'),
     playSound: async (options?: { force?: boolean }): Promise<NotificationSoundResult> => {
       try {
         // Why: drop replays while the sound is still ringing. The "test"
@@ -960,6 +966,12 @@ const api = {
         return { played: false, reason: 'playback-failed' }
       }
     }
+  },
+
+  onboarding: {
+    get: (): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:get'),
+    update: (updates: Partial<OnboardingState>): Promise<OnboardingState> =>
+      ipcRenderer.invoke('onboarding:update', updates)
   },
 
   developerPermissions: {

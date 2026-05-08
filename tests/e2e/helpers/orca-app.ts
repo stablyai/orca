@@ -38,6 +38,11 @@ type OrcaWorkerFixtures = {
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
+  // Why: ORCA_E2E_FORCE_HEADFUL lets a developer watch any spec in a real
+  // window without retagging it `@headful` or switching projects.
+  if (process.env.ORCA_E2E_FORCE_HEADFUL === '1') {
+    return true
+  }
   return testInfo.project.metadata.orcaHeadful === true
 }
 
@@ -129,8 +134,35 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // which Node rejects with "bad option" and the process exits immediately.
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
     void _unused
+    // Why: ORCA_E2E_SLOWMO_MS adds a pause between every Playwright action so a
+    // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
+    // the test does. Defaults to 0 (no slowdown) for normal runs.
+    const slowMoRaw = process.env.ORCA_E2E_SLOWMO_MS
+    const slowMoParsed = slowMoRaw === undefined ? 0 : Number(slowMoRaw)
+    // Why: surface bad env input loudly — silently coercing NaN to 0 makes a
+    // developer think slow-mo is on when their typo disabled it.
+    if (slowMoRaw !== undefined && !Number.isFinite(slowMoParsed)) {
+      console.warn(
+        `[orca-e2e] ORCA_E2E_SLOWMO_MS="${slowMoRaw}" is not a number; ignoring (using 0).`
+      )
+    }
+    const slowMo = Number.isFinite(slowMoParsed) && slowMoParsed > 0 ? slowMoParsed : 0
+    // Why: ORCA_E2E_RECORD_VIDEO=1 captures a webm of the renderer so a
+    // developer can replay the run later — Electron's Playwright trace viewer
+    // does not produce DOM snapshots, so video is the only reliable replay.
+    // Why: testInfo.outputDir is created lazily by Playwright; on Windows the
+    // dir may not exist when the fixture initializes, and Electron silently
+    // drops the recording. mkdir up-front so the recorder always has a home.
+    const recordVideoDir = process.env.ORCA_E2E_RECORD_VIDEO === '1'
+      ? testInfo.outputDir
+      : null
+    if (recordVideoDir) {
+      mkdirSync(recordVideoDir, { recursive: true })
+    }
     const app = await electron.launch({
       args: [mainPath],
+      ...(slowMo > 0 ? { slowMo } : {}),
+      ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir } } : {}),
       // Why: keep NODE_ENV=development so window.__store is exposed and
       // dev-only helpers activate. ORCA_E2E_USER_DATA_DIR overrides the usual
       // shared dev profile so every spec gets a clean persistence root.
