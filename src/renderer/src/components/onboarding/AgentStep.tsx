@@ -19,6 +19,10 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet }: AgentStepPro
     selectedAgent && !detectedSet.has(selectedAgent)
       ? AGENT_CATALOG.find((a) => a.id === selectedAgent)
       : undefined
+  // Why: keep the collapsed bucket open when the selected agent lives there, so
+  // the active card is visible without forcing the user to expand the disclosure.
+  const selectedEntryIsCollapsed =
+    selectedAgent != null && fallbackRest.some((a) => a.id === selectedAgent)
   return (
     <div className="space-y-5">
       {!hasDetected && (
@@ -60,7 +64,7 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet }: AgentStepPro
         </div>
       </section>
       {fallbackRest.length > 0 && (
-        <details className="group space-y-3">
+        <details className="group space-y-3" open={selectedEntryIsCollapsed}>
           <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground hover:text-foreground group-open:mb-3">
             Show {fallbackRest.length} more {hasDetected ? 'agents' : ''}→
           </summary>

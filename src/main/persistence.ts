@@ -13,6 +13,8 @@ import type {
   SparsePreset,
   WorktreeMeta,
   GlobalSettings,
+  OnboardingChecklistState,
+  OnboardingOutcome,
   OnboardingState
 } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
@@ -24,7 +26,8 @@ import {
   getDefaultOnboardingState,
   getDefaultUIState,
   getDefaultRepoHookSettings,
-  getDefaultWorkspaceSession
+  getDefaultWorkspaceSession,
+  ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 
@@ -95,6 +98,48 @@ function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' 
 // so imported SSH aliases keep resolving through ssh -G after upgrade.
 function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
+}
+
+// Why: shared by load-time merge and the IPC update handler so the same
+// strict whitelist guards every entry into onboarding state — arbitrary
+// renderer/disk input cannot inject unknown keys or wrong-typed values.
+// Returns only validated fields; unknown keys are dropped silently.
+export function sanitizeOnboardingUpdate(input: unknown): Partial<OnboardingState> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+  const raw = input as Record<string, unknown>
+  const out: Partial<OnboardingState> = {}
+
+  if ('closedAt' in raw) {
+    out.closedAt = typeof raw.closedAt === 'number' ? raw.closedAt : null
+  }
+  if ('outcome' in raw) {
+    const v = raw.outcome
+    out.outcome = v === 'completed' || v === 'dismissed' ? (v as OnboardingOutcome) : null
+  }
+  if ('lastCompletedStep' in raw) {
+    const v = raw.lastCompletedStep
+    out.lastCompletedStep =
+      typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP
+        ? v
+        : -1
+  }
+  if ('checklist' in raw) {
+    const rawChecklist = raw.checklist
+    if (rawChecklist && typeof rawChecklist === 'object' && !Array.isArray(rawChecklist)) {
+      const defaults = getDefaultOnboardingState().checklist
+      const checklist = { ...defaults }
+      const rc = rawChecklist as Record<string, unknown>
+      for (const key of Object.keys(defaults) as (keyof OnboardingChecklistState)[]) {
+        if (key in rc) {
+          checklist[key] = typeof rc[key] === 'boolean' ? (rc[key] as boolean) : defaults[key]
+        }
+      }
+      out.checklist = checklist
+    }
+  }
+  return out
 }
 
 export class Store {
@@ -246,30 +291,21 @@ export class Store {
                 ...defaults.onboarding,
                 closedAt: Date.now(),
                 outcome: 'completed' as const,
-                lastCompletedStep: 4
+                lastCompletedStep: ONBOARDING_FINAL_STEP
               }
             }
-            // Why: guard parsed.onboarding/checklist to plain objects before
-            // spreading — a string or other primitive would inject garbage
-            // keys. Mirrors the workspaceSession defensive pattern above.
-            const rawOnboarding =
-              parsed.onboarding &&
-              typeof parsed.onboarding === 'object' &&
-              !Array.isArray(parsed.onboarding)
-                ? (parsed.onboarding as Partial<OnboardingState>)
-                : {}
-            const rawChecklist =
-              rawOnboarding.checklist &&
-              typeof rawOnboarding.checklist === 'object' &&
-              !Array.isArray(rawOnboarding.checklist)
-                ? rawOnboarding.checklist
-                : {}
+            // Why: validate every persisted onboarding key explicitly via the
+            // shared sanitizer instead of spreading raw values. A type-flipped
+            // field on disk (string where number expected, unknown checklist
+            // key) is dropped or coerced to the default rather than poisoning
+            // in-memory state.
+            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding)
             return {
               ...defaults.onboarding,
-              ...rawOnboarding,
+              ...sanitized,
               checklist: {
                 ...defaults.onboarding.checklist,
-                ...rawChecklist
+                ...sanitized.checklist
               }
             }
           })()

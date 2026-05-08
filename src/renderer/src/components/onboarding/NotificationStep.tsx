@@ -42,6 +42,7 @@ export function NotificationStep({ value, onChange }: NotificationStepProps) {
             aria-checked={value[row.key]}
             className={cn(
               'flex w-full items-center justify-between gap-6 px-5 py-4 text-left transition-colors hover:bg-muted/50',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               idx > 0 && 'border-t border-border'
             )}
             onClick={() => onChange({ ...value, [row.key]: !value[row.key] })}

@@ -53,7 +53,9 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
     // Footer hint shows the platform-correct continue shortcut (⌘↵ on Mac,
     // Ctrl+Enter elsewhere). Match either form so the test runs cross-platform.
-    await expect(orcaPage.getByText(/⌘↵|Ctrl\+Enter/)).toBeVisible()
+    // Why: scope to the footer's <kbd> element so background UI (e.g. menus or
+    // command palette hints) can't false-positive this assertion.
+    await expect(orcaPage.locator('footer kbd').filter({ hasText: /⌘↵|Ctrl\+Enter/ })).toBeVisible()
   })
 
   test('Continue advances steps, persists progress, and applies user-visible settings', async ({
@@ -106,6 +108,13 @@ test.describe('Onboarding flow', () => {
     // either 'dark' or 'light' depending on the host. Click the opposite tile
     // so we always observe a live flip — the assertion that proves the wizard
     // applies the choice immediately, not just on Continue.
+    // Why: 'system' resolves async on mount, so wait for the class to settle
+    // before snapshotting — otherwise startingTheme can be stale.
+    await orcaPage.waitForFunction(
+      () =>
+        document.documentElement.classList.contains('dark') ||
+        document.documentElement.classList.contains('light')
+    )
     const startingTheme = await getDocumentThemeClass(orcaPage)
     const oppositeTheme: 'dark' | 'light' = startingTheme === 'dark' ? 'light' : 'dark'
     const oppositeTileName = oppositeTheme === 'light' ? /Bright & crisp/ : /Easy on the eyes/
@@ -182,6 +191,10 @@ test.describe('Onboarding flow', () => {
     const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
     const accelerator = isMac ? 'Meta+Enter' : 'Control+Enter'
 
+    // Why: in headless Linux CI the window-level capture-phase listener can
+    // miss synthetic keyboard events when no element holds focus. Click an
+    // inert area inside the overlay first to anchor focus, then press.
+    await orcaPage.locator('footer').click({ position: { x: 1, y: 1 } })
     await orcaPage.keyboard.press(accelerator)
     await expect(
       orcaPage.getByRole('heading', { name: /Make it feel like home/i })

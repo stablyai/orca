@@ -46,9 +46,10 @@ export default function OnboardingFlow({
   const flow = useOnboardingFlow(onboarding, onOnboardingChange)
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
+  // Why: depend on stable callbacks + step id only so the listener doesn't
+  // re-bind on every render of the parent (flow object identity changes).
+  const { next: flowNext, openFolder: flowOpenFolder } = flow
 
-  // Why: explicit deps so the listener re-binds when the step changes and
-  // never closes over a stale `next` / `openFolder` callback.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
@@ -62,14 +63,14 @@ export default function OnboardingFlow({
       }
       event.preventDefault()
       if (currentStep.id === 'repo') {
-        void flow.openFolder()
+        void flowOpenFolder()
       } else {
-        void flow.next()
+        void flowNext()
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [currentStep.id, flow])
+  }, [currentStep.id, flowNext, flowOpenFolder])
 
   return (
     <div className="fixed inset-0 z-[100] overflow-auto bg-background text-foreground">
@@ -175,7 +176,11 @@ export default function OnboardingFlow({
           </div>
           <div className="flex items-center gap-2">
             <button
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+              className={
+                currentStep.id === 'repo'
+                  ? 'rounded-md border border-foreground/20 bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted-foreground/10'
+                  : 'rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground'
+              }
               onClick={() => void flow.skip()}
             >
               {currentStep.id === 'repo' ? "I'll add one later" : 'Skip'}

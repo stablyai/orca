@@ -14,7 +14,8 @@
 
 import { z } from 'zod'
 
-import type { GlobalSettings } from './types'
+import { ONBOARDING_FINAL_STEP } from './constants'
+import type { GlobalSettings, OnboardingChecklistState } from './types'
 
 // ── Shared property enums ───────────────────────────────────────────────
 
@@ -194,7 +195,10 @@ const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 // Closed enums only — no raw paths, repo names, clone URLs, or error
 // strings. The funnel exists to measure activation, not to debug specific
 // user repos.
-const onboardingStepSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+// Why: bound is derived from ONBOARDING_FINAL_STEP so adding a wizard step
+// only requires bumping the constant. Zod can't build a literal-union from a
+// numeric constant without runtime gymnastics, so we use a clamped int range.
+const onboardingStepSchema = z.number().int().min(1).max(ONBOARDING_FINAL_STEP)
 const onboardingPathSchema = z.enum(['open_folder', 'clone_url'])
 const onboardingFailureReasonSchema = z.enum([
   'invalid_path',
@@ -220,6 +224,24 @@ const onboardingChecklistItemSchema = z.enum([
   'openedFile',
   'ranAgentOnFile'
 ])
+
+// Why: compile-time guard that the enum above stays in lockstep with the
+// activation keys of OnboardingChecklistState (everything except the UI-only
+// `dismissed` flag). Adding/removing a checklist key without updating this
+// schema breaks the build here rather than silently dropping telemetry.
+type _OnboardingChecklistItemSync =
+  z.infer<typeof onboardingChecklistItemSchema> extends Exclude<
+    keyof OnboardingChecklistState,
+    'dismissed'
+  >
+    ? Exclude<keyof OnboardingChecklistState, 'dismissed'> extends z.infer<
+        typeof onboardingChecklistItemSchema
+      >
+      ? true
+      : never
+    : never
+const _onboardingChecklistItemSyncCheck: _OnboardingChecklistItemSync = true
+void _onboardingChecklistItemSyncCheck
 
 const onboardingStartedSchema = z
   .object({ resumed_from_step: onboardingStepSchema.optional() })

@@ -6,6 +6,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
 
@@ -74,6 +75,42 @@ export function useOnboardingFlow(
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Why: settings load async; the lazy useState initializers above run before
+  // settings hydrates. Re-sync once when settings transitions to non-null,
+  // unless the user has already interacted with that field.
+  const themeInteractedRef = useRef(false)
+  const agentInteractedRef = useRef(false)
+  const settingsHydratedRef = useRef(false)
+  useEffect(() => {
+    if (!settings || settingsHydratedRef.current) {
+      return
+    }
+    settingsHydratedRef.current = true
+    if (!themeInteractedRef.current) {
+      setTheme(settings.theme)
+    }
+    if (!agentInteractedRef.current) {
+      const fromSettings =
+        settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
+          ? settings.defaultTuiAgent
+          : null
+      if (fromSettings !== null) {
+        setSelectedAgent(fromSettings)
+      }
+    }
+  }, [settings])
+
+  // Why: track user interaction so async settings hydration above doesn't
+  // overwrite a value the user explicitly chose.
+  const setThemeInteractive = useCallback((value: GlobalSettings['theme']) => {
+    themeInteractedRef.current = true
+    setTheme(value)
+  }, [])
+  const setSelectedAgentInteractive = useCallback((value: TuiAgent | null) => {
+    agentInteractedRef.current = true
+    setSelectedAgent(value)
+  }, [])
+
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
 
@@ -102,7 +139,14 @@ export function useOnboardingFlow(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Why: ref guard prevents StrictMode's double-invoke from emitting
+  // `onboarding_started` twice on mount.
+  const startedTrackedRef = useRef(false)
   useEffect(() => {
+    if (startedTrackedRef.current) {
+      return
+    }
+    startedTrackedRef.current = true
     // Why: `resumed_from_step` is the step the user finished (1..3), not the
     // step we resume into.
     const lastCompleted = onboarding.lastCompletedStep
@@ -119,15 +163,26 @@ export function useOnboardingFlow(
     track('onboarding_step_viewed', { step: currentStep.stepNumber })
   }, [currentStep.stepNumber])
 
+  // Why: only auto-pick on first mount when detection completes; otherwise
+  // selecting an agent would re-trigger this effect and clobber/race user clicks.
+  const didAutoSelectRef = useRef(false)
+  const selectedAgentRef = useRef(selectedAgent)
   useEffect(() => {
+    selectedAgentRef.current = selectedAgent
+  }, [selectedAgent])
+  useEffect(() => {
+    if (didAutoSelectRef.current) {
+      return
+    }
+    didAutoSelectRef.current = true
     void ensureDetectedAgents().then((ids) => {
-      if (selectedAgent !== null) {
+      if (selectedAgentRef.current !== null) {
         return
       }
       const preferred = AGENT_CATALOG.find((agent) => ids.includes(agent.id))?.id ?? null
       setSelectedAgent(preferred)
     })
-  }, [ensureDetectedAgents, selectedAgent])
+  }, [ensureDetectedAgents])
 
   const closeWith = useCallback(
     async (
@@ -144,7 +199,7 @@ export function useOnboardingFlow(
         nextState = await window.api.onboarding.update({
           closedAt: Date.now(),
           outcome,
-          lastCompletedStep: outcome === 'completed' ? 4 : -1,
+          lastCompletedStep: outcome === 'completed' ? ONBOARDING_FINAL_STEP : -1,
           checklist: {
             ...checklist,
             dismissed: outcome === 'dismissed'
@@ -295,6 +350,10 @@ export function useOnboardingFlow(
   }, [busyLabel, currentStep.id, currentStep.stepNumber, currentStep.valueKind, persistCurrentStep])
 
   const openFolder = useCallback(async () => {
+    // Why: re-entry guard — rapid Cmd+Enter must not launch duplicate pickers.
+    if (busyLabel !== null) {
+      return
+    }
     setError(null)
     track('onboarding_step4_path_clicked', { path: 'open_folder' })
     const path = await window.api.repos.pickFolder()
@@ -318,9 +377,13 @@ export function useOnboardingFlow(
     } finally {
       setBusyLabel(null)
     }
-  }, [completeRepo])
+  }, [busyLabel, completeRepo])
 
   const clone = useCallback(async () => {
+    // Why: re-entry guard — prevents Enter spamming from triggering duplicate clones.
+    if (busyLabel !== null) {
+      return
+    }
     const trimmed = cloneUrl.trim()
     if (!trimmed || !settings) {
       return
@@ -340,7 +403,7 @@ export function useOnboardingFlow(
     } finally {
       setBusyLabel(null)
     }
-  }, [cloneUrl, completeRepo, settings])
+  }, [busyLabel, cloneUrl, completeRepo, settings])
 
   const skip = useCallback(async () => {
     if (busyLabel) {
@@ -378,9 +441,9 @@ export function useOnboardingFlow(
     stepIndex,
     currentStep,
     selectedAgent,
-    setSelectedAgent,
+    setSelectedAgent: setSelectedAgentInteractive,
     theme,
-    setTheme,
+    setTheme: setThemeInteractive,
     notifications,
     setNotifications,
     cloneUrl,

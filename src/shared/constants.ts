@@ -1,6 +1,7 @@
 import type {
   GlobalSettings,
   NotificationSettings,
+  OnboardingChecklistState,
   OnboardingState,
   PersistedState,
   PersistedUIState,
@@ -13,6 +14,10 @@ import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
+
+// Why: the onboarding wizard's last step index. Centralized so backfill,
+// clamps, and UI step references all agree on the same upper bound.
+export const ONBOARDING_FINAL_STEP = 4
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -130,7 +135,7 @@ export function getDefaultOnboardingState(): OnboardingState {
       openedFile: false,
       ranAgentOnFile: false,
       dismissed: false
-    }
+    } satisfies OnboardingChecklistState
   }
 }
 
