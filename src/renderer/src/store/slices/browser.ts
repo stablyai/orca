@@ -13,6 +13,7 @@ import type {
   WorkspaceSessionState
 } from '../../../../shared/types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
 
@@ -77,6 +78,19 @@ export type BrowserSlice = {
   closeBrowserPage: (pageId: string) => void
   reopenClosedBrowserPage: (workspaceId: string) => BrowserPage | null
   setActiveBrowserPage: (workspaceId: string, pageId: string) => void
+  // Why: scoped sibling of setActiveBrowserTab+setActiveBrowserPage that
+  // never yanks the user across worktrees. Multiple agents can drive
+  // browsers in parallel worktrees; a global focus call from agent X would
+  // steal the screen from the user reading agent Y. Updates per-worktree
+  // active tab/page unconditionally; updates the GLOBAL active tab and (if
+  // surfacePane) global activeTabType only when worktreeId === active
+  // worktree. Cross-worktree calls pre-stage the targeted worktree's view
+  // for whenever the user next switches to it.
+  focusBrowserTabInWorktree: (
+    worktreeId: string,
+    browserPageId: string,
+    options?: { surfacePane?: boolean }
+  ) => void
   consumeAddressBarFocusRequest: (pageId: string) => boolean
   updateBrowserTabPageState: (pageId: string, updates: BrowserTabPageState) => void
   updateBrowserPageState: (pageId: string, updates: BrowserTabPageState) => void
@@ -128,7 +142,7 @@ const MAX_BROWSER_HISTORY_ENTRIES = 200
 
 function normalizeHistoryUrl(url: string): string {
   try {
-    const parsed = new URL(url)
+    const parsed = new URL(redactKagiSessionToken(url))
     parsed.hostname = parsed.hostname.toLowerCase()
     parsed.protocol = parsed.protocol.toLowerCase()
     let normalized = parsed.toString()
@@ -137,7 +151,7 @@ function normalizeHistoryUrl(url: string): string {
     }
     return normalized
   } catch {
-    return url.toLowerCase()
+    return redactKagiSessionToken(url).toLowerCase()
   }
 }
 
@@ -145,12 +159,13 @@ function deduplicateHistory(entries: BrowserHistoryEntry[]): BrowserHistoryEntry
   const seen = new Set<string>()
   const deduped: BrowserHistoryEntry[] = []
   for (const entry of entries) {
-    const key = entry.normalizedUrl || normalizeHistoryUrl(entry.url)
+    const safeUrl = redactKagiSessionToken(entry.url)
+    const key = normalizeHistoryUrl(safeUrl)
     if (seen.has(key)) {
       continue
     }
     seen.add(key)
-    deduped.push(entry.normalizedUrl ? entry : { ...entry, normalizedUrl: key })
+    deduped.push({ ...entry, url: safeUrl, normalizedUrl: key })
   }
   return deduped.slice(0, MAX_BROWSER_HISTORY_ENTRIES)
 }
@@ -160,7 +175,11 @@ function normalizeUrl(url: string): string {
   if (trimmed.length === 0) {
     return 'about:blank'
   }
-  return trimmed
+  // Why: setBrowserPageUrl is the single sink for URL updates from did-navigate,
+  // CDP navigation-update IPC, and direct address-bar submits. Redact at this
+  // boundary so the Kagi bearer token cannot reach BrowserPage.url, which is
+  // persisted to disk via the workspace session writer.
+  return redactKagiSessionToken(trimmed)
 }
 
 function normalizeBrowserTitle(title: string | null | undefined, url: string): string {
@@ -876,6 +895,78 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
+  focusBrowserTabInWorktree: (worktreeId, browserPageId, options) => {
+    // Why: bridge identifies the target by browserPageId (CDP page id stored
+    // on BrowserPage.id), but the renderer's tab strip activates a workspace
+    // (BrowserWorkspace.id, a local UUID). They diverge whenever a workspace
+    // owns more than one page. Walk pageIds in the targeted worktree's tab
+    // list to find the owning workspace.
+    const tabsForWorktree = get().browserTabsByWorktree[worktreeId] ?? []
+    const workspace = tabsForWorktree.find((tab) => (tab.pageIds ?? []).includes(browserPageId))
+    if (!workspace) {
+      // Best-effort: state for this worktree may not be hydrated yet, or the
+      // page closed between the bridge switching and this IPC arriving.
+      return
+    }
+    // Default to true: the only caller (`tab switch --focus` IPC listener)
+    // wants the pane surfaced when targeting the active worktree. `false` is
+    // an opt-out for hypothetical pure-pre-staging callers.
+    const surfacePane = options?.surfacePane ?? true
+    const pages = get().browserPagesByWorkspace[workspace.id] ?? []
+    const nextWorkspace = mirrorWorkspaceFromActivePage(
+      { ...workspace, activePageId: browserPageId },
+      pages
+    )
+    // TODO: per-worktree writes below duplicate setActiveBrowserTab /
+    // setActiveBrowserPage. We can't reuse those because they touch globals
+    // unconditionally (the very behavior --focus is avoiding). If they ever
+    // grow side-effects (analytics, persistence) those will silently diverge
+    // here. Consider extracting a private per-worktree-only helper that
+    // both call paths share.
+    set((s) => {
+      const isActiveWorktree = s.activeWorktreeId === worktreeId
+      // Per-worktree slots: always update (safe pre-staging; only visible
+      // when user navigates to this worktree).
+      const nextTabsByWorktree = {
+        ...s.browserTabsByWorktree,
+        [worktreeId]: tabsForWorktree.map((tab) => (tab.id === workspace.id ? nextWorkspace : tab))
+      }
+      const nextActiveTabIdByWorktree = {
+        ...s.activeBrowserTabIdByWorktree,
+        [worktreeId]: workspace.id
+      }
+      const nextActiveTabTypeByWorktree = surfacePane
+        ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' as const }
+        : s.activeTabTypeByWorktree
+      // Globals: only mutate when the targeted worktree is currently active.
+      // This is the line that keeps cross-worktree --focus calls silent.
+      return {
+        browserTabsByWorktree: nextTabsByWorktree,
+        activeBrowserTabIdByWorktree: nextActiveTabIdByWorktree,
+        activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+        activeBrowserTabId: isActiveWorktree ? workspace.id : s.activeBrowserTabId,
+        activeTabType: isActiveWorktree && surfacePane ? 'browser' : s.activeTabType
+      }
+    })
+
+    // Why: notify the CDP bridge which guest webContents is now active so
+    // subsequent agent commands target the correct page. Mirrors the
+    // notifyActiveTabChanged calls in setActiveBrowserTab/setActiveBrowserPage.
+    if (typeof window !== 'undefined' && window.api?.browser) {
+      window.api.browser.notifyActiveTabChanged({ browserPageId }).catch(() => {})
+    }
+
+    // Why: keep the unified-tab strip's active entry in sync within the
+    // targeted worktree. activateTab only mutates per-worktree slices, so
+    // it's safe to call cross-worktree without yanking the user.
+    const item = (get().unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (entry) => entry.contentType === 'browser' && entry.entityId === workspace.id
+    )
+    if (item) {
+      get().activateTab(item.id)
+    }
+  },
+
   consumeAddressBarFocusRequest: (pageId) => {
     const state = get()
     if (
@@ -1399,10 +1490,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   addBrowserHistoryEntry: (url, title) => {
-    if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank' || !url) {
+    const safeUrl = redactKagiSessionToken(url)
+    if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
       return
     }
-    const normalized = normalizeHistoryUrl(url)
+    const normalized = normalizeHistoryUrl(safeUrl)
     set((s) => {
       const existing = s.browserUrlHistory.find((entry) => entry.normalizedUrl === normalized)
       let next: BrowserHistoryEntry[] = existing
@@ -1412,7 +1504,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               : entry
           )
         : [
-            { url, normalizedUrl: normalized, title, lastVisitedAt: Date.now(), visitCount: 1 },
+            {
+              url: safeUrl,
+              normalizedUrl: normalized,
+              title,
+              lastVisitedAt: Date.now(),
+              visitCount: 1
+            },
             ...s.browserUrlHistory
           ]
       if (next.length > MAX_BROWSER_HISTORY_ENTRIES) {

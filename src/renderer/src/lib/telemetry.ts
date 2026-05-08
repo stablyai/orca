@@ -15,6 +15,12 @@
 import type { EventName, EventProps } from '../../../shared/telemetry-events'
 import type { TelemetryConsentState } from '../../../shared/telemetry-consent-types'
 
+// Re-exported so renderer call sites can import the mapper from this lib
+// alongside `track`. The implementation lives in `src/shared/agent-kind.ts`
+// because main-process telemetry emission needs the same mapping when it
+// receives a `TuiAgent`-derived agent kind through the spawn IPC.
+export { tuiAgentToAgentKind } from '../../../shared/agent-kind'
+
 // Why: single source-of-truth for the privacy doc URL linked from the two
 // telemetry surfaces (FirstLaunchBanner, PrivacyPane). Keeping it here — in
 // the shared telemetry lib — prevents the surfaces from drifting if the doc

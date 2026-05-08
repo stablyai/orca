@@ -378,6 +378,136 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
+  it('stamps lastActivityAt on first discovery so newly-added worktrees sort to the top of Recent', async () => {
+    // Why: a worktree that exists on disk but has no persisted WorktreeMeta
+    // (e.g. a folder repo just added, or a pre-existing worktree in a
+    // newly-added git repo) would otherwise fall back to `lastActivityAt: 0`
+    // and rank dead last in the Recent sort.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/discovered-wt',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getWorktreeMeta.mockReturnValue(undefined)
+    const stampedMeta = { lastActivityAt: 1_700_000_000_000 }
+    store.setWorktreeMeta.mockReturnValue(stampedMeta)
+
+    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
+      id: string
+      lastActivityAt: number
+    }[]
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/discovered-wt',
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+    expect(listed[0]).toMatchObject({
+      id: 'repo-1::/workspace/discovered-wt',
+      lastActivityAt: 1_700_000_000_000
+    })
+  })
+
+  it('does not re-stamp lastActivityAt when a worktree already has persisted meta', async () => {
+    // Why: only the *first* discovery should stamp. Re-stamping on every list
+    // would overwrite real activity and reshuffle the sidebar on refresh.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/existing-wt',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getWorktreeMeta.mockReturnValue({
+      displayName: '',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 42
+    })
+
+    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
+      id: string
+      lastActivityAt: number
+    }[]
+
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(listed[0].lastActivityAt).toBe(42)
+  })
+
+  it('stamps lastActivityAt on first discovery for folder-mode repos', async () => {
+    // Why: folder repos produce a synthetic worktree that flows through the
+    // same list path. Without the stamp, adding a folder puts its card at the
+    // bottom of Recent even though the user just added it.
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder'
+      }
+    ])
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder'
+    })
+    store.getWorktreeMeta.mockReturnValue(undefined)
+    store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
+
+    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/folder',
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+  })
+
+  it('stamps lastActivityAt on first discovery via worktrees:listAll', async () => {
+    // Why: the stamping logic lives in both worktrees:list and worktrees:listAll.
+    // Without a dedicated test, a regression in the listAll loop would silently
+    // bury newly-discovered worktrees from the multi-repo sidebar view.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/discovered-wt',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getWorktreeMeta.mockReturnValue(undefined)
+    store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
+
+    const listed = (await handlers['worktrees:listAll'](null, undefined)) as {
+      id: string
+      lastActivityAt: number
+    }[]
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/discovered-wt',
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+    expect(listed[0]).toMatchObject({
+      id: 'repo-1::/workspace/discovered-wt',
+      lastActivityAt: 1_700_000_000_000
+    })
+  })
+
   it('skips past a suffix that already belongs to a PR after an initial branch conflict', async () => {
     // Why: `gh pr list` is network-bound and previously fired on every single
     // create, adding 1–3s to the happy path. We now only probe PR conflicts

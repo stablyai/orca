@@ -4,13 +4,18 @@ const PINS_PREFIX = 'orca:pins:'
 const PREFS_PREFIX = 'orca:prefs:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
 
+// Why: default-off so the iOS notification permission prompt never
+// fires until the user explicitly opts in via Settings → Notifications.
+// Apple's review guideline 4.5.4 and HIG both prefer user-initiated
+// permission prompts; default-on would fire the prompt the moment the
+// desktop sent its first notification, which can read as unsolicited.
 export async function loadPushNotificationsEnabled(): Promise<boolean> {
   try {
     const raw = await AsyncStorage.getItem(NOTIF_KEY)
-    if (raw === null) return true
+    if (raw === null) return false
     return raw === 'true'
   } catch {
-    return true
+    return false
   }
 }
 

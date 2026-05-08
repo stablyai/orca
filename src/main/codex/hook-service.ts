@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
 import { homedir } from 'os'
 import { join } from 'path'
 import { app } from 'electron'
@@ -6,10 +7,22 @@ import {
   createManagedCommandMatcher,
   readHooksJson,
   removeManagedCommands,
+  wrapPosixHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import {
+  computeTrustKey,
+  computeTrustedHash,
+  parseTrustKey,
+  readHookTrustEntries,
+  removeHookTrustEntries,
+  upsertHookTrustEntries,
+  type CodexEventLabel,
+  type CodexHookTrustState,
+  type CodexTrustEntry
+} from './config-toml-trust'
 
 // Why: PreToolUse/PostToolUse give the dashboard a live readout of the
 // in-flight tool (name + input preview) between UserPromptSubmit and Stop.
@@ -30,6 +43,22 @@ function getConfigPath(): string {
   return join(homedir(), '.codex', 'hooks.json')
 }
 
+function getCodexConfigTomlPath(): string {
+  return join(homedir(), '.codex', 'config.toml')
+}
+
+// Why: Codex's hash key uses the snake_case event label (see
+// codex-rs/hooks/src/lib.rs::hook_event_key_label). Our hooks.json uses the
+// PascalCase serde-rename. Map between them at one place so the trust-write
+// path can't drift from the install path.
+const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> = {
+  SessionStart: 'session_start',
+  UserPromptSubmit: 'user_prompt_submit',
+  PreToolUse: 'pre_tool_use',
+  PostToolUse: 'post_tool_use',
+  Stop: 'stop'
+}
+
 function getManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
 }
@@ -39,7 +68,7 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32' ? scriptPath : `/bin/sh "${scriptPath}"`
+  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(): string {
@@ -108,37 +137,102 @@ export class CodexHookService {
       }
     }
 
-    // Why: Report `partial` when only some managed events are registered so the
-    // sidebar surfaces a degraded install rather than a false-positive
-    // `installed`. Each CODEX_EVENTS entry must contain the managed command for
-    // the integration to function end-to-end (e.g. PreToolUse is required for
-    // permission-prompt detection per the comment above).
+    // Why: Report `partial` when managed events are missing OR when their
+    // trust entries are missing/stale. Codex 0.129+ silently drops untrusted
+    // hooks, so a green status without trust verification is misleading.
     const command = getManagedCommand(scriptPath)
+    const tomlPath = getCodexConfigTomlPath()
+    // Why: an unreadable config.toml (EACCES/EIO) is distinct from "file
+    // absent" (which returns an empty Map without throwing). Hooks.json may
+    // still be fine, so report partial with a specific reason rather than
+    // collapsing to a generic error or masking it as universally-stale trust.
+    let trustEntries: Map<string, CodexHookTrustState>
+    let trustReadError: string | null = null
+    try {
+      trustEntries = readHookTrustEntries(tomlPath)
+    } catch (error) {
+      trustEntries = new Map()
+      trustReadError = error instanceof Error ? error.message : String(error)
+    }
+
     const missing: string[] = []
+    const trustMissing: string[] = []
+    const disabled: string[] = []
     let presentCount = 0
     for (const eventName of CODEX_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
-      const hasCommand = definitions.some((definition) =>
-        (definition.hooks ?? []).some((hook) => hook.command === command)
-      )
-      if (hasCommand) {
-        presentCount += 1
-      } else {
+      // Why: install() appends our managed definition at the end, so its
+      // group index is the LAST match. Picking the first match would
+      // misreport stale duplicates as trust-missing.
+      let foundGroupIndex = -1
+      let foundHandlerIndex = -1
+      definitions.forEach((definition, idx) => {
+        const hooks = definition.hooks ?? []
+        // Why: mirror the LAST-match-wins rule at the group level — if a user
+        // merged hook arrays and ended up with our command at multiple indices
+        // in one group, the surviving runtime entry is the last one.
+        const handlerIdx = hooks.findLastIndex((hook) => hook.command === command)
+        if (handlerIdx !== -1) {
+          foundGroupIndex = idx
+          foundHandlerIndex = handlerIdx
+        }
+      })
+      if (foundGroupIndex === -1) {
         missing.push(eventName)
+        continue
+      }
+      presentCount += 1
+      // Why: a stale hash blocks firing the same as a missing entry, so
+      // compare against the canonical hash we would write.
+      // Why: capture the actual handler index — Codex's hook_key uses the
+      // positional handlerIndex, and a user-merged hook array can put our
+      // command at a non-zero slot, so hardcoding 0 would misreport trust.
+      const trustInput: CodexTrustEntry = {
+        sourcePath: configPath,
+        eventLabel: CODEX_EVENT_LABEL[eventName],
+        groupIndex: foundGroupIndex,
+        handlerIndex: foundHandlerIndex,
+        command
+      }
+      const expectedHash = computeTrustedHash(trustInput)
+      const actualState = trustEntries.get(computeTrustKey(trustInput))
+      if (actualState?.trustedHash !== expectedHash) {
+        trustMissing.push(eventName)
+      } else if (actualState?.enabled === false) {
+        disabled.push(eventName)
       }
     }
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
-    if (missing.length === 0) {
-      state = 'installed'
-      detail = null
-    } else if (presentCount === 0) {
+    if (presentCount === 0) {
       state = 'not_installed'
+      // Why: surface the trust read error even when not_installed so the user
+      // has actionable info if config.toml is broken.
+      detail = trustReadError !== null ? `Trust entries unverifiable: ${trustReadError}` : null
+    } else if (
+      missing.length === 0 &&
+      trustMissing.length === 0 &&
+      disabled.length === 0 &&
+      trustReadError === null
+    ) {
+      state = 'installed'
       detail = null
     } else {
       state = 'partial'
-      detail = `Managed hook missing for events: ${missing.join(', ')}`
+      const parts: string[] = []
+      if (missing.length > 0) {
+        parts.push(`Managed hook missing for events: ${missing.join(', ')}`)
+      }
+      if (trustReadError !== null) {
+        parts.push(`Trust entries unverifiable: ${trustReadError}`)
+      } else if (trustMissing.length > 0) {
+        parts.push(`Trust entry missing or stale for events: ${trustMissing.join(', ')}`)
+      }
+      if (disabled.length > 0) {
+        parts.push(`Managed hook disabled for events: ${disabled.join(', ')}`)
+      }
+      detail = parts.join('; ')
     }
     return { agent: 'codex', state, configPath, managedHooksPresent, detail }
   }
@@ -190,6 +284,11 @@ export class CodexHookService {
       }
     }
 
+    // Why: Codex 0.129+ requires a per-hook trust entry in config.toml or the
+    // hook sits in the "review required" pile. We compute the trust hash for
+    // each managed entry as we install it and persist it alongside hooks.json
+    // so the user does not have to /hooks-approve after every install.
+    const trustEntries: CodexTrustEntry[] = []
     for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
@@ -197,11 +296,36 @@ export class CodexHookService {
         hooks: [{ type: 'command', command }]
       }
       nextHooks[eventName] = [...cleaned, definition]
+      // Why: our managed definition is appended after `cleaned`, so its
+      // group index in the resulting hooks.json is `cleaned.length`. The
+      // handler is always the first (and only) entry in the group, so
+      // handler index is 0. Codex's hook_key uses these positional indices.
+      trustEntries.push({
+        sourcePath: configPath,
+        eventLabel: CODEX_EVENT_LABEL[eventName],
+        groupIndex: cleaned.length,
+        handlerIndex: 0,
+        command
+      })
     }
 
     config.hooks = nextHooks
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
+    // Why: trust entries write last so a half-write can't leave a hash
+    // pointing at a hook that doesn't exist. Surface failures — without this,
+    // getStatus would report green for a hook Codex won't actually fire.
+    try {
+      upsertHookTrustEntries(getCodexConfigTomlPath(), trustEntries)
+    } catch (error) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath,
+        managedHooksPresent: true,
+        detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
+      }
+    }
     return this.getStatus()
   }
 
@@ -238,6 +362,56 @@ export class CodexHookService {
     }
     config.hooks = nextHooks
     writeHooksJson(configPath, config)
+
+    // Why: also drop our trust entries so config.toml doesn't accumulate dead
+    // [hooks.state."..."] blocks across install/remove cycles. Best-effort —
+    // a stale entry is harmless once hooks.json no longer references it.
+    try {
+      const tomlPath = getCodexConfigTomlPath()
+      const existingEntries = readHookTrustEntries(tomlPath)
+      const scriptPath = getManagedScriptPath()
+      const command = getManagedCommand(scriptPath)
+      const managedEventLabels = new Set<CodexEventLabel>(
+        CODEX_EVENTS.map((event) => CODEX_EVENT_LABEL[event])
+      )
+      // Why: only drop entries WE wrote. configPath (~/.codex/hooks.json) is
+      // shared with Codex CLI, so user-approved trust entries for non-Orca
+      // commands live in the same `[hooks.state.*]` namespace. Match by hash
+      // equivalence to our managed command — a sourcePath-only filter would
+      // wipe the user's manually-approved entries.
+      const ourKeys: string[] = []
+      for (const [key, state] of existingEntries) {
+        const parts = parseTrustKey(key)
+        if (parts === null) {
+          continue
+        }
+        if (parts.sourcePath !== configPath) {
+          continue
+        }
+        if (!managedEventLabels.has(parts.eventLabel)) {
+          continue
+        }
+        const expectedHash = computeTrustedHash({
+          sourcePath: configPath,
+          eventLabel: parts.eventLabel,
+          groupIndex: parts.groupIndex,
+          handlerIndex: parts.handlerIndex,
+          command
+        })
+        if (state.trustedHash !== expectedHash) {
+          continue
+        }
+        ourKeys.push(key)
+      }
+      if (ourKeys.length > 0) {
+        removeHookTrustEntries(tomlPath, ourKeys)
+      }
+    } catch (error) {
+      // Best effort — stale trust entries are harmless once hooks.json no
+      // longer references the hook. Log so a programmer error doesn't disappear silently.
+      console.warn('[codex-hook-service] failed to clean trust entries', error)
+    }
+
     return this.getStatus()
   }
 }

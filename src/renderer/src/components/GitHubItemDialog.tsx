@@ -61,15 +61,8 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
-import {
-  useRepoLabels,
-  useRepoAssignees,
-  useImmediateMutation
-} from '@/hooks/useIssueMetadata'
-import {
-  useRepoLabelsBySlug,
-  useRepoAssigneesBySlug
-} from '@/hooks/useGitHubSlugMetadata'
+import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import type {
   GitHubOwnerRepo,
@@ -1362,19 +1355,6 @@ function ConversationTab({
             onCommentAdded={onCommentAdded}
           />
         )}
-
-        {item.type !== 'pr' ? (
-          <div className="flex justify-start pt-1">
-            <Button
-              onClick={() => onUse(item)}
-              className="gap-2"
-              aria-label="Start workspace from issue"
-            >
-              Start workspace from issue
-              <ArrowRight className="size-4" />
-            </Button>
-          </div>
-        ) : null}
       </div>
 
       {rightPanel}
@@ -1682,14 +1662,12 @@ function MentionTextarea({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
-async function runIssueUpdate(
-  args: {
-    repoPath: string | null
-    projectOrigin: GitHubItemDialogProjectOrigin | undefined
-    number: number
-    updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
-  }
-): Promise<void> {
+async function runIssueUpdate(args: {
+  repoPath: string | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  number: number
+  updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
+}): Promise<void> {
   if (args.projectOrigin) {
     const res = await window.api.gh.updateIssueBySlug({
       owner: args.projectOrigin.owner,
@@ -1720,7 +1698,8 @@ function GHEditSection({
   localLabels,
   onStateChange,
   onLabelsChange,
-  assignees
+  assignees,
+  onUse
 }: {
   item: GitHubWorkItem
   repoPath: string | null
@@ -1730,6 +1709,7 @@ function GHEditSection({
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
   assignees: string[]
+  onUse: (item: GitHubWorkItem) => void
 }): React.JSX.Element | null {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
@@ -1746,7 +1726,9 @@ function GHEditSection({
   // See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
-      if (!projectOrigin) {return}
+      if (!projectOrigin) {
+        return
+      }
       patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, patch)
     },
     [projectOrigin, patchProjectRowContent]
@@ -1942,10 +1924,6 @@ function GHEditSection({
     [item.number, repoPath, projectOrigin, localAssignees, patchProjectRowIfNeeded, run]
   )
 
-  if (item.type === 'pr') {
-    return null
-  }
-
   const checkIcon = (
     <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
       <path
@@ -2118,6 +2096,18 @@ function GHEditSection({
           )}
         </PopoverContent>
       </Popover>
+
+      {item.type !== 'pr' ? (
+        <Button
+          size="sm"
+          onClick={() => onUse(item)}
+          className="ml-auto gap-2"
+          aria-label="Start workspace from issue"
+        >
+          Start workspace from issue
+          <ArrowRight className="size-4" />
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -2187,7 +2177,7 @@ function GHCommentComposer({
   )
 
   return (
-    <div className={cn('flex items-start gap-2', className)}>
+    <div className={cn('flex flex-col items-start gap-2', className)}>
       <MentionTextarea
         textareaRef={textareaRef}
         value={body}
@@ -2199,14 +2189,13 @@ function GHCommentComposer({
         placeholder="Add a comment…"
         rows={4}
         mentionOptions={mentionOptions}
-        wrapperClassName="flex min-h-20 items-stretch"
+        wrapperClassName="flex min-h-20 w-full items-stretch"
         className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
       <Button
-        size="icon"
         onClick={handleSubmit}
         disabled={!body.trim() || submitting}
-        className="size-9 shrink-0"
+        className="gap-2"
         aria-label="Send comment"
       >
         {submitting ? (
@@ -2214,6 +2203,7 @@ function GHCommentComposer({
         ) : (
           <Send className="size-3.5" />
         )}
+        Comment
       </Button>
     </div>
   )
@@ -2532,6 +2522,7 @@ export default function GitHubItemDialog({
                 onStateChange={setLocalState}
                 onLabelsChange={setLocalLabels}
                 assignees={details?.assignees ?? []}
+                onUse={onUse}
               />
             )}
 

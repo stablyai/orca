@@ -41,12 +41,10 @@ describe('isTransientGhError', () => {
     // Why: when GitHub returns Retry-After, the server is telling us how long
     // to wait. Retrying on our 250ms cadence just earns another 429 and burns
     // the retry budget.
-    expect(
-      isTransientGhError('HTTP 429 Too Many Requests\nRetry-After: 60\n')
-    ).toBe(false)
+    expect(isTransientGhError('HTTP 429 Too Many Requests\nRetry-After: 60\n')).toBe(false)
   })
 
-  it('does NOT retry 4xx that aren\'t 429', () => {
+  it("does NOT retry 4xx that aren't 429", () => {
     expect(isTransientGhError('HTTP 401 Unauthorized')).toBe(false)
     expect(isTransientGhError('HTTP 404 Not Found')).toBe(false)
     expect(isTransientGhError('HTTP 422 Unprocessable Entity')).toBe(false)

@@ -4,7 +4,6 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
-import type { AppRuntimeFlags } from './api-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
@@ -17,6 +16,7 @@ import type {
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
+  GitUpstreamStatus,
   GhosttyImportPreview,
   ListWorkItemsResult,
   MemorySnapshot,
@@ -28,6 +28,7 @@ import type {
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -63,6 +64,7 @@ import type {
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -235,7 +237,6 @@ document.addEventListener(
 // Custom APIs for renderer
 const api = {
   app: {
-    getRuntimeFlags: (): Promise<AppRuntimeFlags> => ipcRenderer.invoke('app:getRuntimeFlags'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
     // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
     // the renderer's keyboard-layout probe can distinguish Polish Pro / US
@@ -391,6 +392,18 @@ const api = {
       worktreeId?: string
       sessionId?: string
       shellOverride?: string
+      // Why: closes the SIGKILL race documented in INVESTIGATION.md by
+      // letting main patch + sync-flush the (worktreeId, tabId, leafId →
+      // ptyId) binding before pty:spawn returns. Only the renderer's
+      // user-typing-Ctrl+T daemon-host path threads these.
+      tabId?: string
+      leafId?: string
+      // Why: telemetry-plan.md§Agent launch semantics — main fires
+      // `agent_started` only after the spawn succeeds. The renderer is the
+      // source of truth for the launch metadata; main is the source of
+      // truth for whether the launch happened. Loose typing here on
+      // purpose: validation lives at the main-side schema validator.
+      telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
       snapshot?: string
@@ -411,6 +424,15 @@ const api = {
       ipcRenderer.send('pty:resize', { id, cols, rows })
     },
 
+    /** Why: measurement-only sibling of resize. Fires when a desktop pane
+     * container measures real geometry (e.g. previously hidden tab becomes
+     * visible) so the runtime's restore-target baseline can stay fresh
+     * even while a mobile-fit override blocks pty:resize. Never resizes
+     * the PTY. See docs/mobile-fit-hold.md. */
+    reportGeometry: (id: string, cols: number, rows: number): void => {
+      ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
+    },
+
     signal: (id: string, signal: string): void => {
       ipcRenderer.send('pty:signal', { id, signal })
     },
@@ -419,7 +441,8 @@ const api = {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
 
-    kill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', { id }),
+    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
+      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
@@ -509,6 +532,7 @@ const api = {
   feedback: {
     submit: (args: {
       feedback: string
+      submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
     }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
@@ -530,8 +554,11 @@ const api = {
     repoSlug: (args: { repoPath: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:repoSlug', args),
 
-    prForBranch: (args: { repoPath: string; branch: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:prForBranch', args),
+    prForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedPRNumber?: number | null
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:issue', args),
@@ -666,6 +693,8 @@ const api = {
     // known-expensive op (e.g. after ProjectPicker discovery).
     rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
       ipcRenderer.invoke('gh:rateLimit', args),
+
+    diagnoseAuth: (): Promise<GhAuthDiagnostic> => ipcRenderer.invoke('gh:diagnoseAuth'),
 
     // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
     listAccessibleProjects: (): Promise<ListAccessibleProjectsResult> =>
@@ -1080,10 +1109,12 @@ const api = {
 
   sidekick: {
     import: (): Promise<CustomSidekick | null> => ipcRenderer.invoke('sidekick:import'),
-    read: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('sidekick:read', id, fileName),
-    delete: (id: string, fileName: string): Promise<void> =>
-      ipcRenderer.invoke('sidekick:delete', id, fileName)
+    importPetBundle: (): Promise<CustomSidekick | null> =>
+      ipcRenderer.invoke('sidekick:importPetBundle'),
+    read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('sidekick:read', id, fileName, kind),
+    delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
+      ipcRenderer.invoke('sidekick:delete', id, fileName, kind)
   },
 
   browser: {
@@ -1270,6 +1301,17 @@ const api = {
         callback(data)
       ipcRenderer.on('browser:activateView', listener)
       return () => ipcRenderer.removeListener('browser:activateView', listener)
+    },
+
+    onPaneFocus: (
+      callback: (data: { worktreeId: string | null; browserPageId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string | null; browserPageId: string }
+      ) => callback(data)
+      ipcRenderer.on('browser:pane-focus', listener)
+      return () => ipcRenderer.removeListener('browser:pane-focus', listener)
     },
 
     onOpenLinkInOrcaTab: (
@@ -1605,6 +1647,19 @@ const api = {
       baseRef: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
+    upstreamStatus: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+    fetch: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:fetch', args),
+    push: (args: {
+      worktreePath: string
+      publish?: boolean
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:push', args),
+    pull: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:pull', args),
     branchDiff: (args: {
       worktreePath: string
       compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
@@ -1963,6 +2018,35 @@ const api = {
       ipcRenderer.on('window:fullscreen-changed', listener)
       return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
     },
+    /** Windows only: minimize the window via the renderer-drawn title bar. */
+    minimize: (): void => {
+      ipcRenderer.send('window:minimize')
+    },
+    /** Windows only: toggle maximize/restore via the renderer-drawn title bar. */
+    maximize: (): void => {
+      ipcRenderer.send('window:maximize')
+    },
+    /** Windows only: subscribe to maximize state changes so the renderer-drawn
+     *  maximize button can show the correct restore/maximize icon. */
+    onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>
+        callback(isMaximized)
+      ipcRenderer.on('window:maximize-changed', listener)
+      return () => ipcRenderer.removeListener('window:maximize-changed', listener)
+    },
+    /** Windows only: request a close from the renderer-drawn close button.
+     *  Routes through main so the BrowserWindow 'close' event fires and the
+     *  terminal-running confirmation guard in the renderer stays active.
+     *  window.close() is unreliable in sandboxed renderers. */
+    requestClose: (): void => {
+      ipcRenderer.send('window:request-close')
+    },
+    /** Windows only: pop up the application menu at the cursor position.
+     *  Replicates the Alt-key reveal that autoHideMenuBar normally provides,
+     *  triggered by the ··· button in the renderer-drawn title bar. */
+    popupMenu: (): void => {
+      ipcRenderer.send('menu:popup')
+    },
     /** Fired by the main process when the user tries to close the window
      *  (X button, Cmd+Q, etc.). Renderer should show a confirmation dialog
      *  if terminals are still running, then call confirmWindowClose().
@@ -2227,7 +2311,13 @@ const api = {
       address?: string
     }): Promise<
       | { available: false }
-      | { available: true; qrDataUrl: string; endpoint: string; deviceId: string }
+      | {
+          available: true
+          qrDataUrl: string
+          pairingUrl: string
+          endpoint: string
+          deviceId: string
+        }
     > => ipcRenderer.invoke('mobile:getPairingQR', args),
 
     listDevices: (): Promise<{

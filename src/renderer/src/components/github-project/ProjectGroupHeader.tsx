@@ -32,9 +32,7 @@ export default function ProjectGroupHeader({
       <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
         {group.rows.length}
       </span>
-      {dateRange ? (
-        <span className="text-[10px] text-muted-foreground">{dateRange}</span>
-      ) : null}
+      {dateRange ? <span className="text-[10px] text-muted-foreground">{dateRange}</span> : null}
       {isCurrent ? (
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
           Current
@@ -46,9 +44,10 @@ export default function ProjectGroupHeader({
 
 function formatDateRange(startDate: string, duration: number): string {
   const start = new Date(`${startDate}T00:00:00Z`)
-  if (Number.isNaN(start.getTime())) {return ''}
+  if (Number.isNaN(start.getTime())) {
+    return ''
+  }
   const end = new Date(start.getTime() + (duration - 1) * 86_400_000)
-  const fmt = (d: Date): string =>
-    `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+  const fmt = (d: Date): string => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
   return `${fmt(start)} – ${fmt(end)}`
 }

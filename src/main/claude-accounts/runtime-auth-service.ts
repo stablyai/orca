@@ -314,13 +314,35 @@ export class ClaudeRuntimeAuthService {
   private writeRuntimeCredentials(contents: string): void {
     const credentialsPath = this.pathResolver.getRuntimePaths().credentialsPath
     mkdirSync(dirname(credentialsPath), { recursive: true })
+    // Why: repeated Claude spawns sync auth, but credentials rarely change.
+    // Skipping unchanged rewrites avoids Windows EPERM contention in #1507.
+    if (this.lastWrittenCredentialsJson === contents && existsSync(credentialsPath)) {
+      return
+    }
+    if (this.fileContentsEqual(credentialsPath, contents)) {
+      this.lastWrittenCredentialsJson = contents
+      return
+    }
     writeFileAtomically(credentialsPath, contents, { mode: 0o600 })
     this.lastWrittenCredentialsJson = contents
   }
 
   private writeJson(targetPath: string, value: unknown): void {
+    const serialized = `${JSON.stringify(value, null, 2)}\n`
     mkdirSync(dirname(targetPath), { recursive: true })
-    writeFileAtomically(targetPath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 })
+    // Why: same Windows contention reason as writeRuntimeCredentials.
+    if (this.fileContentsEqual(targetPath, serialized)) {
+      return
+    }
+    writeFileAtomically(targetPath, serialized, { mode: 0o600 })
+  }
+
+  private fileContentsEqual(targetPath: string, contents: string): boolean {
+    try {
+      return existsSync(targetPath) && readFileSync(targetPath, 'utf-8') === contents
+    } catch {
+      return false
+    }
   }
 
   private readJsonObject(targetPath: string): Record<string, unknown> {

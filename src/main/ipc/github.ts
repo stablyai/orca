@@ -34,6 +34,7 @@ import {
 } from '../github/client'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
+import { diagnoseGhAuth } from '../github/auth-diagnose'
 import type { GitHubPRFile } from '../../shared/types'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
 import {
@@ -84,22 +85,25 @@ function assertRegisteredRepo(repoPath: string, store: Store): Repo {
 }
 
 export function registerGitHubHandlers(store: Store, stats: StatsCollector): void {
-  ipcMain.handle('gh:prForBranch', async (_event, args: { repoPath: string; branch: string }) => {
-    const repo = assertRegisteredRepo(args.repoPath, store)
-    const pr = await getPRForBranch(repo.path, args.branch)
-    // Emit pr_created when a PR is first detected for a branch.
-    // Why here: the renderer polls gh:prForBranch to check PR status per worktree.
-    // This captures PRs opened from any workflow (Orca UI, gh CLI, github.com).
-    if (pr && !stats.hasCountedPR(pr.url)) {
-      stats.record({
-        type: 'pr_created',
-        at: Date.now(),
-        repoId: repo.id,
-        meta: { prNumber: pr.number, prUrl: pr.url }
-      })
+  ipcMain.handle(
+    'gh:prForBranch',
+    async (_event, args: { repoPath: string; branch: string; linkedPRNumber?: number | null }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      const pr = await getPRForBranch(repo.path, args.branch, args.linkedPRNumber ?? null)
+      // Emit pr_created when a PR is first detected for a branch.
+      // Why here: the renderer polls gh:prForBranch to check PR status per worktree.
+      // This captures PRs opened from any workflow (Orca UI, gh CLI, github.com).
+      if (pr && !stats.hasCountedPR(pr.url)) {
+        stats.record({
+          type: 'pr_created',
+          at: Date.now(),
+          repoId: repo.id,
+          meta: { prNumber: pr.number, prUrl: pr.url }
+        })
+      }
+      return pr
     }
-    return pr
-  })
+  )
 
   ipcMain.handle('gh:issue', (_event, args: { repoPath: string; number: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
@@ -402,6 +406,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle('gh:rateLimit', (_event, args?: { force?: boolean }) =>
     getRateLimit(args?.force ? { force: true } : undefined)
   )
+
+  ipcMain.handle('gh:diagnoseAuth', () => diagnoseGhAuth())
 
   // ── GitHub ProjectV2 view handlers ─────────────────────────────────
   // Why: registered unconditionally so enabling the experimental flag at

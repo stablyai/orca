@@ -12,7 +12,9 @@ export function useGitStatusPolling(): void {
   const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
+  const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const repoMap = useRepoMap()
@@ -55,10 +57,25 @@ export function useGitStatusPolling(): void {
         connectionId
       })) as GitStatusResult
       setGitStatus(activeWorktreeId, status)
+      // Why: branch switches can happen inside a terminal. `git status
+      // --branch` gives us the new identity without a separate worktree-list
+      // poll that would repeatedly touch repo/worktree roots.
+      updateWorktreeGitIdentity(activeWorktreeId, {
+        head: status.head,
+        branch: status.branch
+      })
+      await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
     } catch {
       // ignore
     }
-  }, [activeRepoSupportsGit, activeWorktreeId, worktreePath, setGitStatus])
+  }, [
+    activeRepoSupportsGit,
+    activeWorktreeId,
+    fetchUpstreamStatus,
+    worktreePath,
+    setGitStatus,
+    updateWorktreeGitIdentity
+  ])
 
   useEffect(() => {
     void fetchStatus()
@@ -81,15 +98,17 @@ export function useGitStatusPolling(): void {
     }
   }, [fetchStatus])
 
+  // Why: terminal-driven `git checkout` in a non-active worktree of the active
+  // repo would otherwise leave its previously-attached merged PR key in the
+  // sidebar indefinitely (the active-worktree git status poll only refreshes
+  // identity for activeWorktreeId). Poll the active repo's worktree list while
+  // the window is focused so branch switches in any of its worktrees update the
+  // sidebar's PR key. Gated on focus to avoid background permission probes.
   useEffect(() => {
     if (!activeRepoId || !activeRepoSupportsGit) {
       return
     }
 
-    // Why: checkout/switch operations happen inside the terminal, outside the
-    // renderer's normal worktree-change events. Poll the active repo's worktree
-    // list so a branch change updates the sidebar's PR key instead of leaving
-    // the previous merged PR attached to this worktree indefinitely.
     void fetchWorktrees(activeRepoId)
     const intervalId = setInterval(() => {
       if (document.hasFocus()) {

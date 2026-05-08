@@ -204,8 +204,16 @@ export async function createRemoteWorktree(
   }
 
   const worktreeId = `${repo.id}::${created.path}`
+  const now = Date.now()
   const metaUpdates: Partial<WorktreeMeta> = {
-    lastActivityAt: Date.now(),
+    lastActivityAt: now,
+    // Why: grants the new worktree a short grace window at the top of the
+    // Recent sort. During worktree creation (git fetch + add can take several
+    // seconds) other worktrees get ambient PTY bumps that would otherwise
+    // leave the newly-created one below them; the Recent comparator uses
+    // max(lastActivityAt, createdAt + GRACE_MS) to keep it on top until the
+    // window elapses. See smart-sort.ts `CREATE_GRACE_MS`.
+    createdAt: now,
     ...(shouldSetDisplayName(requestedName, branchName, sanitizedName)
       ? { displayName: requestedName }
       : {})
@@ -434,11 +442,15 @@ export async function createLocalWorktree(
   }
 
   const worktreeId = `${repo.id}::${created.path}`
+  const now = Date.now()
   const metaUpdates: Partial<WorktreeMeta> = {
     // Stamp activity so the worktree sorts into its final position
     // immediately — prevents scroll-to-reveal racing with a later
     // bumpWorktreeActivity that would re-sort the list.
-    lastActivityAt: Date.now(),
+    lastActivityAt: now,
+    // See createRemoteWorktree above: createdAt protects the newly-created
+    // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
+    createdAt: now,
     ...(shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
       ? { displayName: effectiveRequestedName }
       : {}),

@@ -76,7 +76,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.clj': 'clojure',
   '.vue': 'vue',
   '.svelte': 'svelte',
-  '.astro': 'html',
+  '.astro': 'astro',
   '.tf': 'hcl',
   '.hcl': 'hcl',
   '.prisma': 'graphql',

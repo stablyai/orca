@@ -169,6 +169,37 @@ describe('fetchWorktrees', () => {
   })
 })
 
+describe('updateWorktreeGitIdentity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('updates branch identity from git status without fetching worktrees', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'old-head',
+      branch: 'refs/heads/main'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'new-head',
+      branch: 'refs/heads/feature'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      head: 'new-head',
+      branch: 'refs/heads/feature'
+    })
+    expect(store.getState().sortEpoch).toBe(4)
+    expect(mockApi.worktrees.list).not.toHaveBeenCalled()
+  })
+})
+
 describe('removeWorktree state cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -654,6 +685,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     await store.getState().fetchAllWorktrees()
 
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(2)
     expect(store.getState().tabsByWorktree).toEqual({
       'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
       'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
@@ -669,6 +701,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
     await store.getState().fetchAllWorktrees()
 
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(4)
     expect(store.getState().tabsByWorktree['repoA::/a/new-zombie']).toBeDefined()
   })
 })

@@ -5,6 +5,7 @@ import type {
   GitDiffResult,
   GitBranchCompareResult,
   GitConflictOperation,
+  GitUpstreamStatus,
   GitWorktreeInfo,
   SearchOptions,
   SearchResult
@@ -79,7 +80,7 @@ export type IPtyProvider = {
   attach(id: string): Promise<void>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
-  shutdown(id: string, immediate: boolean): Promise<void>
+  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>
@@ -146,6 +147,10 @@ export type IGitProvider = {
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
+  getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus>
+  pushBranch(worktreePath: string, publish?: boolean): Promise<void>
+  pullBranch(worktreePath: string): Promise<void>
+  fetchRemote(worktreePath: string): Promise<void>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,

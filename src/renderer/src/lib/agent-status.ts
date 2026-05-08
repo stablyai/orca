@@ -98,7 +98,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   gemini: 'Gemini',
   opencode: 'OpenCode',
   cursor: 'Cursor',
-  aider: 'Aider'
+  aider: 'Aider',
+  pi: 'Pi'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {

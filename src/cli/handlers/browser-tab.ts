@@ -5,13 +5,12 @@ import type {
   BrowserTabSwitchResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
+import { formatTabList, formatTabListWithProfiles, formatTabShow, printResult } from '../format'
 import {
-  formatTabList,
-  formatTabListWithProfiles,
-  formatTabShow,
-  printResult
-} from '../format'
-import { getOptionalNonNegativeIntegerFlag, getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+  getOptionalNonNegativeIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 
@@ -44,9 +43,15 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     // targeted tab switches should match the rest of the --page command model:
     // global by default, with --worktree only acting as explicit validation.
     const target = await getBrowserCommandTarget(flags, cwd, client)
+    // Why: --focus is an opt-in side effect. The renderer's handler is
+    // worktree-scoped: it surfaces the browser pane only when the user is
+    // already on the targeted worktree, otherwise it pre-stages silently.
+    // Spread conditionally so the RPC payload stays shape-identical to the
+    // pre-flag form when --focus is absent.
     const result = await client.call<BrowserTabSwitchResult>('browser.tabSwitch', {
       index,
       page,
+      ...(flags.has('focus') ? { focus: true } : {}),
       ...target
     })
     printResult(result, json, (v) => `Switched to tab ${v.switched} (${v.browserPageId})`)

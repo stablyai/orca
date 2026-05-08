@@ -38,15 +38,21 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   // a 'resized' event to any active mobile subscriber. This uses the same
   // code path as the mobile toggle button (terminal.setDisplayMode RPC).
   ipcMain.removeHandler('runtime:restoreTerminalFit')
-  ipcMain.handle('runtime:restoreTerminalFit', (_event, args: { ptyId: string }) => {
+  ipcMain.handle('runtime:restoreTerminalFit', async (_event, args: { ptyId: string }) => {
     // Why: this IPC powers the desktop "Take back" button. Beyond restoring
     // PTY dims (the original semantic), it now also reclaims the input
     // floor for the desktop via the driver state machine. The lock banner
     // unmounts and desktop input/resize are unblocked until the next
     // mobile interaction takes the floor again. See
     // docs/mobile-presence-lock.md.
+    //
+    // Why async: reclaimTerminalForDesktop awaits applyMobileDisplayMode's
+    // PTY-resize chain. Returning the unresolved Promise to ipcMain made
+    // Electron try to structured-clone a Promise — "An object could not
+    // be cloned" error — and the renderer's restoreTerminalFit() rejected
+    // with no useful info.
     try {
-      const reclaimed = runtime.reclaimTerminalForDesktop(args.ptyId)
+      const reclaimed = await runtime.reclaimTerminalForDesktop(args.ptyId)
       return { restored: reclaimed }
     } catch {
       return { restored: false }

@@ -202,7 +202,9 @@ describe('onOverrideChange', () => {
       ptyId: 'pty-1',
       mode: 'mobile-fit',
       cols: 49,
-      rows: 20
+      rows: 20,
+      priorCols: null,
+      priorRows: null
     })
 
     unsub()
@@ -218,7 +220,28 @@ describe('onOverrideChange', () => {
       ptyId: 'pty-1',
       mode: 'desktop-fit',
       cols: 120,
-      rows: 40
+      rows: 40,
+      priorCols: null,
+      priorRows: null
+    })
+
+    unsub()
+  })
+
+  it('passes prior mobile-fit dims to desktop-fit listeners', () => {
+    setFitOverride('pty-1', 'mobile-fit', 49, 20)
+    const listener = vi.fn()
+    const unsub = onOverrideChange(listener)
+
+    setFitOverride('pty-1', 'desktop-fit', 120, 40)
+
+    expect(listener).toHaveBeenCalledWith({
+      ptyId: 'pty-1',
+      mode: 'desktop-fit',
+      cols: 120,
+      rows: 40,
+      priorCols: 49,
+      priorRows: 20
     })
 
     unsub()

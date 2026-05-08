@@ -190,10 +190,7 @@ export default function GitHubRateLimitPill(): React.JSX.Element | null {
               <div key={b.key} className="flex items-center justify-between gap-3">
                 <span>{b.description}</span>
                 <span
-                  className={cn(
-                    t === 'crit' && 'text-red-400',
-                    t === 'warn' && 'text-amber-400'
-                  )}
+                  className={cn(t === 'crit' && 'text-red-400', t === 'warn' && 'text-amber-400')}
                 >
                   {v.remaining} of {v.limit} left · resets in {formatReset(v.resetAt)}
                 </span>

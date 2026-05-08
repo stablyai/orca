@@ -2,6 +2,7 @@ import type {
   CreateWorktreeResult,
   CreateSparseCheckoutRequest,
   SetupDecision,
+  WorkspaceCreateTelemetrySource,
   Worktree,
   WorktreeMeta
 } from '../../../../shared/types'
@@ -59,7 +60,11 @@ export type WorktreeSlice = {
     name: string,
     baseBranch?: string,
     setupDecision?: SetupDecision,
-    sparseCheckout?: CreateSparseCheckoutRequest
+    sparseCheckout?: CreateSparseCheckoutRequest,
+    /** Telemetry-only: which renderer surface initiated this create. Optional
+     *  so existing callers default to `unknown`; specify when the surface
+     *  matters for the activation funnel. */
+    telemetrySource?: WorkspaceCreateTelemetrySource
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -103,6 +108,10 @@ export type WorktreeSlice = {
    * one-shot at hydration time. See design §4.4.
    */
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
+  updateWorktreeGitIdentity: (
+    worktreeId: string,
+    identity: { head?: string; branch?: string }
+  ) => void
 }
 
 export function findWorktreeById(

@@ -37,11 +37,15 @@ type GhRateLimitPayload = {
   }
 }
 
-function parseBucket(raw: {
-  limit?: number
-  remaining?: number
-  reset?: number
-} | undefined): GitHubRateLimitBucket {
+function parseBucket(
+  raw:
+    | {
+        limit?: number
+        remaining?: number
+        reset?: number
+      }
+    | undefined
+): GitHubRateLimitBucket {
   // Why: if a bucket is absent from the response (old gh, partial response),
   // return 0/0/now so the UI shows a clear "unknown" state (0/0 is
   // unambiguous) rather than a misleading "plenty left" fallback.
@@ -81,12 +85,14 @@ export type RateLimitBucketKind = 'core' | 'graphql' | 'search'
  * it advisory (returns a reason, doesn't throw) so callers can format the
  * envelope/error in their own shape.
  */
-export function rateLimitGuard(bucket: RateLimitBucketKind): { blocked: false } | {
-  blocked: true
-  remaining: number
-  limit: number
-  resetAt: number
-} {
+export function rateLimitGuard(bucket: RateLimitBucketKind):
+  | { blocked: false }
+  | {
+      blocked: true
+      remaining: number
+      limit: number
+      resetAt: number
+    } {
   if (!cached) {
     return { blocked: false }
   }

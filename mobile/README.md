@@ -138,6 +138,37 @@ cd ..
 pnpm typecheck:node
 ```
 
+## Protocol Version Compatibility
+
+Mobile and desktop talk over a versioned protocol. Because mobile updates lag desktop by 24-48h via the App Store, both sides exchange version numbers on `status.get` so a genuinely incompatible combo can hard-block instead of silently misbehaving.
+
+Constants live in two files (Metro can't resolve outside `mobile/`):
+
+- `src/shared/protocol-version.ts` — `DESKTOP_PROTOCOL_VERSION`, `MIN_COMPATIBLE_MOBILE_VERSION`
+- `mobile/src/transport/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
+
+Today all four are set so `evaluateCompat` always returns `{ kind: 'ok' }` — nothing blocks. The wire format is in place to flip a switch when needed.
+
+### When to bump
+
+Bump `DESKTOP_PROTOCOL_VERSION` (and the mobile mirror `MOBILE_PROTOCOL_VERSION` when relevant) for **breaking** changes:
+
+- Removed RPC method or required parameter that mobile uses
+- Changed meaning (units, nullability) of an existing field mobile reads
+- Changed encryption, framing, or auth handshake
+
+Do **not** bump for additive changes:
+
+- New RPC methods
+- New optional fields on existing methods
+- New event types in `terminal.subscribe`
+
+Set `MIN_COMPATIBLE_MOBILE_VERSION` (kill-switch) when desktop ships a change that requires a minimum mobile version to function safely. Same for `MIN_COMPATIBLE_DESKTOP_VERSION` from the mobile side.
+
+When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at either the App Store (mobile too old) or GitHub Releases (desktop too old).
+
+To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
+
 ## Mock Server
 
 Develop the mobile app without a running Orca desktop instance:

@@ -13,6 +13,17 @@ const testState = { dir: '' }
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
+  },
+  safeStorage: {
+    isEncryptionAvailable: () => true,
+    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext: Buffer) => {
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('encrypted:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('encrypted:'.length)
+    }
   }
 }))
 
@@ -86,7 +97,7 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
-    expect(ui.groupBy).toBe('none')
+    expect(ui.groupBy).toBe('repo')
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
@@ -433,7 +444,7 @@ describe('Store', () => {
     store.updateUI({ sidebarWidth: 400 })
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(400)
-    expect(ui.groupBy).toBe('none') // default preserved
+    expect(ui.groupBy).toBe('repo') // default preserved
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
@@ -443,6 +454,36 @@ describe('Store', () => {
     const ui = store.getUI()
     expect(ui.dismissedUpdateVersion).toBe('1.0.99')
     expect(ui.lastUpdateCheckAt).toBe(1234)
+  })
+
+  it('encrypts the Kagi session link on disk and decrypts it on load', async () => {
+    const sessionLink = 'https://kagi.com/search?token=secret'
+    const store = await createStore()
+
+    store.updateUI({ browserKagiSessionLink: sessionLink })
+    store.flush()
+
+    const persisted = readDataFile() as { ui: { browserKagiSessionLink: string } }
+    expect(persisted.ui.browserKagiSessionLink).not.toBe(sessionLink)
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
+  })
+
+  it('keeps plaintext Kagi session links readable for migration from older builds', async () => {
+    const sessionLink = 'https://kagi.com/search?token=secret'
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { browserKagiSessionLink: sessionLink },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
 
   it('preserves persisted smart sort value', async () => {
@@ -612,19 +653,19 @@ describe('Store', () => {
   // ── inline-agents card-property migration ──────────────────────────
   //
   // Why: 'inline-agents' was added to DEFAULT_WORKTREE_CARD_PROPERTIES after
-  // the experimentalAgentDashboard toggle. Users who had the toggle on in a
-  // prior rc already had worktreeCardProperties persisted without the new
-  // entry, so the defaults-merge in load() wouldn't reach them and the
-  // inline agent list stayed hidden after upgrade. The migration appends
-  // 'inline-agents' once and sets a flag so a later deliberate uncheck
-  // from the Workspaces view options menu sticks across restarts.
+  // the inline agents feature shipped default-on. Existing users had
+  // worktreeCardProperties persisted without the new entry, so the
+  // defaults-merge in load() wouldn't reach them and the inline agent list
+  // stayed hidden after upgrade. The migration appends 'inline-agents' once
+  // for every user and sets a flag so a later deliberate uncheck from the
+  // Workspaces view options menu sticks across restarts.
 
-  it('adds inline-agents to persisted cardProps when experimental toggle is on', async () => {
+  it('adds inline-agents to persisted cardProps on first load after upgrade', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
+      settings: {},
       ui: {
         worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment']
       },
@@ -634,28 +675,34 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
     expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('does not add inline-agents when experimental toggle is off', async () => {
-    // Why: the experimental toggle gates whether inline agents render at all,
-    // so there's no value in checking the view-mode option for opted-out users.
+  it('adds inline-agents for users who launched a prior RC with the experiment off', async () => {
+    // Why: the legacy flag _inlineAgentsDefaultedForExperiment was stamped
+    // unconditionally on every prior load, so opt-out RC users already have
+    // it set to true on disk. The default-on migration must NOT be gated on
+    // that legacy flag — it must use the new _inlineAgentsDefaultedForAllUsers
+    // flag instead. Without this test, the regression would re-appear if
+    // anyone tried to "consolidate" the two flags.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: false },
+      settings: {},
       ui: {
-        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment']
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
-    expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('respects a deliberate uncheck after migration flag is set', async () => {
+  it('respects a deliberate post-migration uncheck', async () => {
     // Why: once migrated, an empty-of-inline-agents array is treated as a
     // user choice — not a legacy pre-migration state — so we must not
     // re-add it on every subsequent launch.
@@ -663,10 +710,10 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
+      settings: {},
       ui: {
         worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForExperiment: true
+        _inlineAgentsDefaultedForAllUsers: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -680,7 +727,7 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
+      settings: {},
       ui: {
         worktreeCardProperties: [
           'status',
@@ -698,7 +745,78 @@ describe('Store', () => {
     const store = await createStore()
     const props = store.getUI().worktreeCardProperties
     expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
-    expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {
+    // Why: a user who turned the experiment on and then deliberately
+    // unchecked 'inline-agents' from the sidebar options menu has the same
+    // on-disk shape as a never-touched user (legacy flag true, no
+    // 'inline-agents' in worktreeCardProperties). The migration discriminates
+    // them via the deprecated experimentalAgentDashboard value still riding
+    // on disk. Without this discriminator, the deliberate uncheck would be
+    // silently overridden on first load after upgrade.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('Case B preservation is durable across restarts', async () => {
+    // Why: once the new flag is stamped, the discriminator is no longer
+    // consulted. Subsequent loads must leave the deliberate uncheck intact
+    // even if a future settings-write code path were to strip the deprecated
+    // experimentalAgentDashboard key from disk.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true,
+        _inlineAgentsDefaultedForAllUsers: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it('lapsed Case B (experiment off at upgrade time) re-adds inline-agents', async () => {
+    // Why: documented limitation. A user who turned experiment on, unchecked,
+    // then turned the experiment off again before upgrading has
+    // experimentalAgentDashboard: false on disk. The discriminator only sees
+    // the most recent value, so they fall into the Case C path. They re-uncheck
+    // once and it sticks (new flag stamps). This test locks the limitation in
+    // so a future "fix" doesn't accidentally regress something else.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
   // ── GitHub Cache ───────────────────────────────────────────────────

@@ -99,10 +99,22 @@ describe('sortRows', () => {
     })
     const rows = [
       makeRow('r2', 1, {
-        F_status: { kind: 'single-select', fieldId: 'F_status', optionId: 'opt_b', name: 'In Progress', color: 'YELLOW' }
+        F_status: {
+          kind: 'single-select',
+          fieldId: 'F_status',
+          optionId: 'opt_b',
+          name: 'In Progress',
+          color: 'YELLOW'
+        }
       }),
       makeRow('r1', 0, {
-        F_status: { kind: 'single-select', fieldId: 'F_status', optionId: 'opt_a', name: 'Todo', color: 'GRAY' }
+        F_status: {
+          kind: 'single-select',
+          fieldId: 'F_status',
+          optionId: 'opt_a',
+          name: 'Todo',
+          color: 'GRAY'
+        }
       })
     ]
     const sorted = sortRows(makeTable(view, rows), rows)
@@ -119,10 +131,22 @@ describe('sortRows', () => {
     })
     const rows = [
       makeRow('rB', 5, {
-        F_status: { kind: 'single-select', fieldId: 'F_status', optionId: 'orphan_2', name: 'Gone', color: 'GRAY' }
+        F_status: {
+          kind: 'single-select',
+          fieldId: 'F_status',
+          optionId: 'orphan_2',
+          name: 'Gone',
+          color: 'GRAY'
+        }
       }),
       makeRow('rA', 1, {
-        F_status: { kind: 'single-select', fieldId: 'F_status', optionId: 'orphan_1', name: 'Gone', color: 'GRAY' }
+        F_status: {
+          kind: 'single-select',
+          fieldId: 'F_status',
+          optionId: 'orphan_1',
+          name: 'Gone',
+          color: 'GRAY'
+        }
       })
     ]
     const sorted = sortRows(makeTable(view, rows), rows)
@@ -169,7 +193,13 @@ describe('sortRows', () => {
     const rows = [
       makeRow('rEmpty', 0, {}),
       makeRow('rHas', 1, {
-        F_status: { kind: 'single-select', fieldId: 'F_status', optionId: 'opt_a', name: 'Todo', color: 'GRAY' }
+        F_status: {
+          kind: 'single-select',
+          fieldId: 'F_status',
+          optionId: 'opt_a',
+          name: 'Todo',
+          color: 'GRAY'
+        }
       })
     ]
     const sorted = sortRows(makeTable(view, rows), rows)
@@ -186,7 +216,13 @@ describe('groupRows', () => {
     const rows = [
       makeRow('rNone', 0, {}),
       makeRow('rA', 1, {
-        F_status: { kind: 'single-select', fieldId: 'F_status', optionId: 'opt_a', name: 'Todo', color: 'GRAY' }
+        F_status: {
+          kind: 'single-select',
+          fieldId: 'F_status',
+          optionId: 'opt_a',
+          name: 'Todo',
+          color: 'GRAY'
+        }
       })
     ]
     const groups = groupRows(makeTable(view, rows), rows)

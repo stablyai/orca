@@ -77,7 +77,14 @@ function CommentRow({
       <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
         <span>{comment.author}</span>
         <div className="flex gap-2">
-          <button type="button" className="hover:underline" onClick={() => { setDraft(comment.body); setEditing(true) }}>
+          <button
+            type="button"
+            className="hover:underline"
+            onClick={() => {
+              setDraft(comment.body)
+              setEditing(true)
+            }}
+          >
             Edit
           </button>
           <button type="button" className="hover:underline" onClick={() => void onDelete()}>
@@ -142,7 +149,9 @@ export function NewCommentForm({
           disabled={!draft.trim() || submitting}
           onClick={async () => {
             const body = draft.trim()
-            if (!body) {return}
+            if (!body) {
+              return
+            }
             setSubmitting(true)
             try {
               const res = await window.api.gh.addIssueCommentBySlug({ owner, repo, number, body })

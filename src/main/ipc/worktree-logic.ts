@@ -174,6 +174,7 @@ export function mergeWorktree(
     isPinned: meta?.isPinned ?? false,
     sortOrder: meta?.sortOrder ?? 0,
     lastActivityAt: meta?.lastActivityAt ?? 0,
+    ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(git.isSparse === true
       ? {
           sparseDirectories: meta?.sparseDirectories,

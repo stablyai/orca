@@ -671,6 +671,9 @@ const hasUpstreamCandidateDivergence = (
 
 export default function TaskPage(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  const taskResumeState = useAppStore((s) => s.taskResumeState)
+  const setTaskResumeState = useAppStore((s) => s.setTaskResumeState)
   const pageData = useAppStore((s) => s.taskPageData)
   const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -693,7 +696,7 @@ export default function TaskPage(): React.JSX.Element {
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   // Why: in workspace view (a worktree is active) App.tsx hides its
-  // full-width titlebar, so this page renders its own 42px titlebar strip to
+  // full-width titlebar, so this page renders its own 36px titlebar strip to
   // keep the top band continuous with the sidebar header and tab rows. When
   // the sidebar is also collapsed, App.tsx floats its titlebar-left controls
   // (traffic lights, sidebar toggle, agent badge) over our strip — reserve
@@ -786,6 +789,10 @@ export default function TaskPage(): React.JSX.Element {
 
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
   const [taskSource, setTaskSource] = useState<TaskSource>(pageData.taskSource ?? defaultTaskSource)
+  const taskResumeAppliedRef = useRef(false)
+  const githubSearchPersistReadyRef = useRef(false)
+  const linearSearchPersistReadyRef = useRef(false)
+  const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
   // Why: pageData.taskSource changes when the user clicks a specific source
   // icon in the sidebar while the task page is already open. useState only
@@ -796,12 +803,18 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [pageData.taskSource])
 
-  // Why: settings load asynchronously — the useState initializer may capture
-  // null settings on fast navigation. Sync once settings arrive, but only
-  // when no explicit source was passed via sidebar icon click.
+  // Why: when settings hydrate after Tasks mounts, seed taskSource from
+  // defaultTaskSource — but only once. Re-running on every defaultTaskSource
+  // change would clobber an in-session manual source pick (e.g. the user
+  // clicked the Linear icon and then changed the default in Settings).
+  const defaultTaskSourceSeededRef = useRef(false)
   useEffect(() => {
+    if (defaultTaskSourceSeededRef.current) {
+      return
+    }
     if (!pageData.taskSource && settings?.defaultTaskSource) {
       setTaskSource(settings.defaultTaskSource)
+      defaultTaskSourceSeededRef.current = true
     }
   }, [settings?.defaultTaskSource, pageData.taskSource])
 
@@ -810,13 +823,6 @@ export default function TaskPage(): React.JSX.Element {
   // gated on a non-null `activeProject` once they pick one.
   const projectModeVisible = taskSource === 'github'
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
-  useEffect(() => {
-    // Snap back to items if the user leaves the GitHub task source while
-    // sitting in Project mode.
-    if (!projectModeVisible && githubMode === 'project') {
-      setGithubMode('items')
-    }
-  }, [projectModeVisible, githubMode])
 
   // ── GitLab task-source state ──────────────────────────────────────
   // Why: parallel to Linear's slim per-source state. Skips workItemsCache
@@ -1073,8 +1079,46 @@ export default function TaskPage(): React.JSX.Element {
   const [linearLoading, setLinearLoading] = useState(false)
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
+  const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
   const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+
+  useEffect(() => {
+    if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
+      return
+    }
+
+    setTaskSource(pageData.taskSource ?? settings.defaultTaskSource)
+    setRepoSelection(resolvedInitialSelection)
+
+    const nextGithubMode = taskResumeState?.githubMode ?? 'items'
+    setGithubMode(nextGithubMode)
+
+    const preset = taskResumeState?.githubItemsPreset
+    if (preset === null) {
+      const query = taskResumeState?.githubItemsQuery ?? ''
+      setTaskSearchInput(query)
+      setAppliedTaskSearch(query)
+      setActiveTaskPreset(null)
+    } else {
+      const presetId = preset ?? settings.defaultTaskViewPreset
+      const query = getTaskPresetQuery(presetId)
+      setTaskSearchInput(query)
+      setAppliedTaskSearch(query)
+      setActiveTaskPreset(presetId)
+    }
+
+    const linearPreset = taskResumeState?.linearPreset ?? 'all'
+    const linearQuery = taskResumeState?.linearQuery ?? ''
+    setActiveLinearPreset(linearPreset)
+    setLinearSearchInput(linearQuery)
+    setAppliedLinearSearch(linearQuery)
+
+    // Why: settings and persisted UI hydrate asynchronously. Apply the restored
+    // Tasks context exactly once so later source/filter clicks remain local.
+    taskResumeAppliedRef.current = true
+    setTaskResumeApplied(true)
+  }, [persistedUIReady, settings, pageData.taskSource, resolvedInitialSelection, taskResumeState])
 
   // Why: fetch the full team list from the Linear API so the selector shows
   // all teams the user belongs to, not just teams with issues in the current
@@ -1084,6 +1128,9 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
     if (taskSource !== 'linear' || !linearStatus.connected) {
       return
     }
@@ -1094,7 +1141,7 @@ export default function TaskPage(): React.JSX.Element {
         console.warn('[TaskPage] Failed to fetch Linear teams')
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSource, linearStatus.connected])
+  }, [taskSource, linearStatus.connected, taskResumeApplied])
 
   // Why: GitLab task-source data fetch. Pulls MRs (filtered by state)
   // Why: fetch in parallel across every selected non-remote repo and
@@ -1364,19 +1411,45 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
     const timeout = window.setTimeout(() => {
       setAppliedTaskSearch(taskSearchInput)
     }, TASK_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timeout)
-  }, [taskSearchInput])
+  }, [taskSearchInput, taskResumeApplied])
 
   useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (!githubSearchPersistReadyRef.current) {
+      githubSearchPersistReadyRef.current = true
+      return
+    }
+    // Why: persist the debounced applied query regardless of the active
+    // preset. The preset-click handler writes the canonical query for that
+    // preset, so persisting again here is at worst idempotent. When the
+    // user types into the search box `handleTaskSearchChange` clears the
+    // preset, but persisting unconditionally also covers paths that change
+    // appliedTaskSearch without going through that handler.
+    setTaskResumeState({
+      githubItemsPreset: activeTaskPreset,
+      githubItemsQuery: appliedTaskSearch.trim()
+    })
+  }, [activeTaskPreset, appliedTaskSearch, setTaskResumeState, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
     // Why: both early-return branches must clear `retryingRepoPaths` — if the
     // user clicks Retry and then switches `taskSource` away from 'github' (or
     // somehow ends up with zero repos selected) before the fetch dispatches,
     // neither the `.then` nor the `.catch` below will fire, and the Retry
     // button would stay stuck in its disabled/Retrying state indefinitely.
-    if (taskSource !== 'github') {
+    if (taskSource !== 'github' || githubMode !== 'items') {
       setRetryingRepoPaths(new Set())
       return
     }
@@ -1514,15 +1587,24 @@ export default function TaskPage(): React.JSX.Element {
     // updates. `workItemsInvalidationNonce` is explicitly included so a
     // preference flip (which only evicts cache) re-dispatches this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRepos, appliedTaskSearch, taskRefreshNonce, taskSource, workItemsInvalidationNonce])
+  }, [
+    selectedRepos,
+    appliedTaskSearch,
+    taskRefreshNonce,
+    taskSource,
+    githubMode,
+    workItemsInvalidationNonce,
+    taskResumeApplied
+  ])
 
   const handleApplyTaskSearch = useCallback((): void => {
     const trimmed = taskSearchInput.trim()
     setTaskSearchInput(trimmed)
     setAppliedTaskSearch(trimmed)
     setActiveTaskPreset(null)
+    setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: trimmed })
     setTaskRefreshNonce((current) => current + 1)
-  }, [taskSearchInput])
+  }, [setTaskResumeState, taskSearchInput])
 
   const handleTaskSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
     const next = event.target.value
@@ -1572,7 +1654,8 @@ export default function TaskPage(): React.JSX.Element {
       openModal('new-workspace-composer', {
         linkedWorkItem,
         prefilledName: getLinkedWorkItemSuggestedName(item),
-        initialRepoId: item.repoId
+        initialRepoId: item.repoId,
+        telemetrySource: 'sidebar'
       })
     },
     [openModal]
@@ -1585,7 +1668,8 @@ export default function TaskPage(): React.JSX.Element {
       // setup before the worktree is created. Earlier the "Use" CTA created
       // and activated the worktree synchronously, which was disorienting —
       // the worktree appeared in the sidebar before the user had a chance
-      // to review it. The composer already owns the prefill flow.
+      // to review it. The composer already owns the prefill flow. Telemetry
+      // attribution flows via `openComposerForItem` (sets telemetrySource).
       openComposerForItem(item)
     },
     [openComposerForItem]
@@ -1772,18 +1856,34 @@ export default function TaskPage(): React.JSX.Element {
 
   // Why: debounce the Linear search input so we don't fire a request on every
   // keystroke — matches the 300ms cadence used for GitHub search.
-  const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
   useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
     const timeout = window.setTimeout(() => {
       setAppliedLinearSearch(linearSearchInput)
     }, TASK_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timeout)
-  }, [linearSearchInput])
+  }, [linearSearchInput, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (!linearSearchPersistReadyRef.current) {
+      linearSearchPersistReadyRef.current = true
+      return
+    }
+    setTaskResumeState({ linearQuery: appliedLinearSearch.trim() })
+  }, [appliedLinearSearch, setTaskResumeState, taskResumeApplied])
 
   // Why: fetch Linear issues when the tab is active and the account is
   // connected. An empty search falls back to `listLinearIssues` (assigned
   // issues) so the default view shows the user's own work.
   useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
     if (taskSource !== 'linear') {
       return
     }
@@ -1828,7 +1928,8 @@ export default function TaskPage(): React.JSX.Element {
     linearStatus.connected,
     appliedLinearSearch,
     activeLinearPreset,
-    linearRefreshNonce
+    linearRefreshNonce,
+    taskResumeApplied
   ])
 
   // Why: for Linear issues the "Use" flow opens the composer with the issue
@@ -1845,7 +1946,8 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        prefilledName: getLinkedWorkItemSuggestedName(issue)
+        prefilledName: getLinkedWorkItemSuggestedName(issue),
+        telemetrySource: 'sidebar'
       })
     },
     [openModal]
@@ -1856,7 +1958,7 @@ export default function TaskPage(): React.JSX.Element {
       // Why: same rationale as handleUseWorkItem — open the New Workspace
       // dialog pre-filled rather than yolo-creating the worktree, so the
       // user can confirm name / agent / setup before the worktree lands in
-      // the sidebar.
+      // the sidebar. Telemetry attribution flows via openComposerForLinearItem.
       openComposerForLinearItem(issue)
     },
     [openComposerForLinearItem]
@@ -1898,7 +2000,7 @@ export default function TaskPage(): React.JSX.Element {
           paint above our content and receive the click cleanly. */}
       <div className="relative flex min-h-0 flex-1 flex-col">
         {/* Why: in workspace view App.tsx suppresses its full-width titlebar,
-            so render a matching 42px strip here to keep the top band
+            so render a matching 36px strip here to keep the top band
             continuous with the sidebar header and tab rows. When the sidebar
             is collapsed, App.tsx floats its titlebar-left controls (traffic
             lights, sidebar toggle, agent badge) over the top-left of this
@@ -1911,7 +2013,7 @@ export default function TaskPage(): React.JSX.Element {
             non-workspace mode because App.tsx already owns the top titlebar
             and a second strip would produce a duplicate band. */}
         {workspaceActive ? (
-          <div className="flex-none flex h-[42px]">
+          <div className="flex-none flex h-9">
             {reserveCollapsedHeaderSpace ? (
               // Why: the floating titlebar-left hosts real interactive chrome
               // (sidebar-expand toggle, agent badge) under this segment. Both
@@ -1938,7 +2040,13 @@ export default function TaskPage(): React.JSX.Element {
           </div>
         ) : null}
 
-        <div className="mx-auto flex w-full flex-1 flex-col min-h-0 px-5 pt-3 pb-5 md:px-8 md:pt-3 md:pb-7">
+        {/* Why: pt-1.5 vertically centers this row's 32px icon cluster (X +
+            source toggles) with the sidebar's "Tasks" nav row. Sidebar Tasks
+            center sits 22px below the titlebar (pt-2 + py-1.5 + half size-4
+            icon). Matching that here needs 6px top padding above the 32px
+            cluster (6 + 16 = 22). The previous pt-3 placed the cluster 6px
+            too low, breaking the visual band across the top chrome. */}
+        <div className="mx-auto flex w-full flex-1 flex-col min-h-0 px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
           <div className="flex-none flex flex-col gap-3">
             <section className="flex flex-col gap-3">
               <div className="flex flex-col gap-3">
@@ -2033,7 +2141,10 @@ export default function TaskPage(): React.JSX.Element {
                             <button
                               key={mode}
                               type="button"
-                              onClick={() => setGithubMode(mode)}
+                              onClick={() => {
+                                setGithubMode(mode)
+                                setTaskResumeState({ githubMode: mode })
+                              }}
                               className={cn(
                                 'rounded-md border px-2 py-1 text-xs transition',
                                 active
@@ -2092,6 +2203,10 @@ export default function TaskPage(): React.JSX.Element {
                                 setTaskSearchInput(query)
                                 setAppliedTaskSearch(query)
                                 setActiveTaskPreset(option.id)
+                                setTaskResumeState({
+                                  githubItemsPreset: option.id,
+                                  githubItemsQuery: query
+                                })
                                 setTaskRefreshNonce((current) => current + 1)
                               }}
                               onContextMenu={(event) => {
@@ -2183,6 +2298,7 @@ export default function TaskPage(): React.JSX.Element {
                               setTaskSearchInput('')
                               setAppliedTaskSearch('')
                               setActiveTaskPreset(null)
+                              setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: '' })
                               setTaskRefreshNonce((current) => current + 1)
                             }}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
@@ -2279,6 +2395,7 @@ export default function TaskPage(): React.JSX.Element {
                                 setLinearSearchInput('')
                                 setAppliedLinearSearch('')
                                 setActiveLinearPreset(preset.id)
+                                setTaskResumeState({ linearPreset: preset.id, linearQuery: '' })
                                 setLinearRefreshNonce((n) => n + 1)
                               }}
                               className={cn(
@@ -2356,7 +2473,10 @@ export default function TaskPage(): React.JSX.Element {
                                 return
                               }
                               e.preventDefault()
-                              setAppliedLinearSearch(linearSearchInput.trim())
+                              const trimmed = linearSearchInput.trim()
+                              setLinearSearchInput(trimmed)
+                              setAppliedLinearSearch(trimmed)
+                              setTaskResumeState({ linearQuery: trimmed })
                               setLinearRefreshNonce((n) => n + 1)
                             }
                           }}
@@ -2370,6 +2490,7 @@ export default function TaskPage(): React.JSX.Element {
                             onClick={() => {
                               setLinearSearchInput('')
                               setAppliedLinearSearch('')
+                              setTaskResumeState({ linearQuery: '' })
                               setLinearRefreshNonce((n) => n + 1)
                             }}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"

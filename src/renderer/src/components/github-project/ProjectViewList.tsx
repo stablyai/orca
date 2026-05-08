@@ -1,15 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
-import ProjectRow, { buildGridTemplate } from './ProjectRow'
+import ProjectRow from './ProjectRow'
 import { groupRows, sortRows } from './group-sort'
+import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
-  getAvailableColumns,
-  loadHiddenColumns,
-  saveHiddenColumns
-} from './columns'
+  buildGridTemplate,
+  loadColumnWidths,
+  MIN_COLUMN_WIDTH,
+  resolveWidth,
+  saveColumnWidths
+} from './column-widths'
 import type {
   GitHubIssueType,
   GitHubProjectField,
@@ -68,20 +72,51 @@ export default function ProjectViewList({
     [availableFields, hidden]
   )
 
+  const [widths, setWidths] = useState<Readonly<Record<string, number>>>(() =>
+    loadColumnWidths(scopeKey)
+  )
+  useEffect(() => {
+    setWidths(loadColumnWidths(scopeKey))
+  }, [scopeKey])
+
+  const setColumnPair = useCallback(
+    (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {
+      setWidths((prev) => {
+        const updated = {
+          ...prev,
+          [fieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(width)),
+          [nextFieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(nextWidth))
+        }
+        saveColumnWidths(scopeKey, updated)
+        return updated
+      })
+    },
+    [scopeKey]
+  )
+
+  const gridTemplate = useMemo(() => buildGridTemplate(fields, widths), [fields, widths])
+
   const toggleColumn = (fieldId: string): void => {
     setHidden((prev) => {
       const next = new Set(prev)
-      if (next.has(fieldId)) {next.delete(fieldId)}
-      else {next.add(fieldId)}
+      if (next.has(fieldId)) {
+        next.delete(fieldId)
+      } else {
+        next.add(fieldId)
+      }
       saveHiddenColumns(scopeKey, next)
       return next
     })
   }
 
   const effectiveTable = useMemo<GitHubProjectTable>(() => {
-    if (!sortOverride) {return table}
+    if (!sortOverride) {
+      return table
+    }
     const field = fields.find((f) => f.id === sortOverride.fieldId)
-    if (!field) {return table}
+    if (!field) {
+      return table
+    }
     return {
       ...table,
       selectedView: {
@@ -101,8 +136,12 @@ export default function ProjectViewList({
 
   const handleSortClick = (fieldId: string): void => {
     setSortOverride((prev) => {
-      if (!prev || prev.fieldId !== fieldId) {return { fieldId, direction: 'ASC' }}
-      if (prev.direction === 'ASC') {return { fieldId, direction: 'DESC' }}
+      if (!prev || prev.fieldId !== fieldId) {
+        return { fieldId, direction: 'ASC' }
+      }
+      if (prev.direction === 'ASC') {
+        return { fieldId, direction: 'DESC' }
+      }
       return null
     })
   }
@@ -128,7 +167,7 @@ export default function ProjectViewList({
       : null
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
       <ProjectHeaderRow
         fields={fields}
         availableFields={availableFields}
@@ -136,6 +175,9 @@ export default function ProjectViewList({
         onToggleColumn={toggleColumn}
         activeSort={activeSort}
         onSortClick={handleSortClick}
+        widths={widths}
+        gridTemplate={gridTemplate}
+        onResizeColumn={setColumnPair}
       />
       {groups.map((g) => {
         const expanded = !collapsed.has(g.key)
@@ -148,8 +190,11 @@ export default function ProjectViewList({
                 onToggle={() => {
                   setCollapsed((prev) => {
                     const next = new Set(prev)
-                    if (next.has(g.key)) {next.delete(g.key)}
-                    else {next.add(g.key)}
+                    if (next.has(g.key)) {
+                      next.delete(g.key)
+                    } else {
+                      next.add(g.key)
+                    }
                     return next
                   })
                 }}
@@ -161,6 +206,9 @@ export default function ProjectViewList({
                     key={row.id}
                     row={row}
                     fields={fields}
+                    gridTemplate={gridTemplate}
+                    widths={widths}
+                    onResizeColumn={setColumnPair}
                     editable
                     onOpenDialog={() => onOpenDialog?.(row)}
                     onEditField={(fieldId, value) => onEditField?.(row, fieldId, value)}
@@ -185,7 +233,10 @@ function ProjectHeaderRow({
   hidden,
   onToggleColumn,
   activeSort,
-  onSortClick
+  onSortClick,
+  widths,
+  gridTemplate,
+  onResizeColumn
 }: {
   fields: GitHubProjectField[]
   availableFields: GitHubProjectField[]
@@ -193,6 +244,9 @@ function ProjectHeaderRow({
   onToggleColumn: (fieldId: string) => void
   activeSort: SortOverride | null
   onSortClick: (fieldId: string) => void
+  widths: Readonly<Record<string, number>>
+  gridTemplate: string
+  onResizeColumn: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
 }): React.JSX.Element {
   // Why: matches GitHub Projects' fixed column header — sticky so it stays
   // pinned while scrolling the rows beneath it. The trailing slot mirrors the
@@ -200,30 +254,46 @@ function ProjectHeaderRow({
   return (
     <div
       className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur"
-      style={{ gridTemplateColumns: buildGridTemplate(fields) }}
+      style={{ gridTemplateColumns: gridTemplate }}
     >
-      {fields.map((f) => {
+      {fields.map((f, idx) => {
         const isActive = activeSort?.fieldId === f.id
         const Icon = isActive ? (activeSort.direction === 'ASC' ? ArrowUp : ArrowDown) : ArrowUpDown
+        // Why: only render a resize handle when there is a neighbor to
+        // borrow width from. The trailing field has no field neighbor on
+        // its right (the action column is fixed and not part of the
+        // user-resizable pair set), so omit its handle to keep the total
+        // table width invariant.
+        const next = fields[idx + 1]
         return (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => onSortClick(f.id)}
-            className={cn(
-              'group flex min-w-0 items-center gap-1 truncate text-left uppercase tracking-wide hover:text-foreground',
-              isActive && 'text-foreground'
-            )}
-            aria-label={`Sort by ${f.name}`}
-          >
-            <span className="truncate">{f.name}</span>
-            <Icon
+          <div key={f.id} className="relative flex min-w-0 items-center">
+            <button
+              type="button"
+              onClick={() => onSortClick(f.id)}
               className={cn(
-                'size-3 shrink-0 transition-opacity',
-                isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
+                'group flex min-w-0 flex-1 items-center gap-1 truncate text-left uppercase tracking-wide hover:text-foreground',
+                isActive && 'text-foreground'
               )}
-            />
-          </button>
+              aria-label={`Sort by ${f.name}`}
+            >
+              <span className="truncate">{f.name}</span>
+              <Icon
+                className={cn(
+                  'size-3 shrink-0 transition-opacity',
+                  isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
+                )}
+              />
+            </button>
+            {next ? (
+              <ColumnResizeHandle
+                fieldId={f.id}
+                nextFieldId={next.id}
+                currentWidth={resolveWidth(f, widths)}
+                nextWidth={resolveWidth(next, widths)}
+                onResize={onResizeColumn}
+              />
+            ) : null}
+          </div>
         )
       })}
       <div className="flex items-center justify-end">

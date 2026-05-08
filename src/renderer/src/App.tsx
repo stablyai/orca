@@ -1,15 +1,20 @@
 /* eslint-disable max-lines */
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
+import { getDefaultUIState } from '../../shared/constants'
 
-import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import {
-  FOCUS_TERMINAL_PANE_EVENT,
-  SYNC_FIT_PANES_EVENT,
-  TOGGLE_TERMINAL_PANE_EXPAND_EVENT
-} from '@/constants/terminal'
+  ArrowLeft,
+  ArrowRight,
+  Minimize2,
+  MoreHorizontal,
+  PanelLeft,
+  PanelRight
+} from 'lucide-react'
+import logo from '../../../resources/logo.svg'
+import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,7 +24,7 @@ import { useIpcEvents } from './hooks/useIpcEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
-import { shutdownBufferCaptures } from './components/terminal-pane/TerminalPane'
+import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import RightSidebar from './components/right-sidebar'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
@@ -46,9 +51,63 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
-import { dispatchClearModifierHints } from './hooks/useModifierHint'
 
 const isMac = navigator.userAgent.includes('Mac')
+const isWindows = !isMac && navigator.userAgent.includes('Windows')
+
+// Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
+// so we render our own minimize/maximize/close buttons.  These SVG icons match
+// the Fluent/Win11 style: thin 10×10 paths on a 40×30 hit area.
+function WindowControls(): React.JSX.Element {
+  const [maximized, setMaximized] = useState(false)
+  useEffect(() => {
+    return window.api.ui.onMaximizeChanged(setMaximized)
+  }, [])
+  return (
+    <div className="window-controls">
+      <button
+        className="window-controls-btn"
+        aria-label="Minimize"
+        onClick={() => window.api.ui.minimize()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+          <path d="M0 5h10v1H0z" fill="currentColor" />
+        </svg>
+      </button>
+      <button
+        className="window-controls-btn"
+        aria-label={maximized ? 'Restore' : 'Maximize'}
+        onClick={() => window.api.ui.maximize()}
+      >
+        {maximized ? (
+          // Restore icon (two overlapping squares)
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+            <path d="M2 0v2H0v8h8V8h2V0H2zm6 9H1V3h7v6zM9 7H8V2H3V1h6v6z" fill="currentColor" />
+          </svg>
+        ) : (
+          // Maximize icon (single square outline)
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+            <path d="M0 0v10h10V0H0zm9 9H1V1h8v8z" fill="currentColor" />
+          </svg>
+        )}
+      </button>
+      <button
+        className="window-controls-btn window-controls-close"
+        aria-label="Close"
+        // Why: IPC to main so the BrowserWindow 'close' event fires, which
+        // sends 'window:close-requested' back to the renderer and keeps the
+        // terminal-running confirmation guard active. window.close() is
+        // unreliable in sandboxed renderers.
+        onClick={() => window.api.ui.requestClose()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+          <path d="M1 0L0 1l4 4-4 4 1 1 4-4 4 4 1-1-4-4 4-4-1-1-4 4-4-4z" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 const Landing = lazy(() => import('./components/Landing'))
 const TaskPage = lazy(() => import('./components/TaskPage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
@@ -147,13 +206,6 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
-  // Why: render-level gate for the experimental agent dashboard retention
-  // sync. Reading the flag here (rather than only inside useDashboardData /
-  // useRetainedAgentsSync) lets us skip mounting RetainedAgentsSyncGate
-  // entirely for non-toggled users, which drops all feature-tied
-  // subscriptions (agentStatusByPaneKey, agentStatusEpoch, etc.) instead of
-  // keeping them alive behind an early-return inside the hook bodies.
-  const agentDashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
   const sidekickEnabled = useAppStore((s) => s.settings?.experimentalSidekick === true)
   const sidekickVisible = useAppStore((s) => s.sidekickVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
@@ -167,26 +219,11 @@ function App(): React.JSX.Element {
   // Why: retention must run at App level so the inline per-card agents list
   // always sees retained entries. If retention ran inside the sidebar-card
   // subtree, "done" agents would vanish any time the user collapsed a card's
-  // inline agents section.
-  //
-  // The retention hooks are hosted inside <RetainedAgentsSyncGate /> (a leaf
-  // component that renders null) rather than being called inline here.
-  // Calling useDashboardData() from App.tsx would subscribe the root component
-  // to high-churn slices (agentStatusByPaneKey + agentStatusEpoch tick at PTY
-  // event frequency), re-rendering the entire app tree on every agent status
-  // update. Hosting the subscriptions in a leaf isolates that churn.
-  //
-  // The render-level gate on <RetainedAgentsSyncGate /> (see
-  // agentDashboardEnabled above) keeps the experimental feature fully dark
-  // for non-toggled users: without the gate mounted, none of its feature-tied
-  // zustand selectors (agentStatusByPaneKey / agentStatusEpoch / etc.) are
-  // ever subscribed, so PTY agent-status events cause zero work for them.
-  //
-  // The inner hook guards (useDashboardData early-returns [] from its memo;
-  // useRetainedAgentsSync early-returns from its effect) remain as
-  // defense-in-depth: they keep both hooks safe to call from any future
-  // callsite, and they handle the in-session off→on toggle transition
-  // cleanly without relying on a remount race when the setting flips.
+  // inline agents section. The retention hooks are hosted inside
+  // <RetainedAgentsSyncGate /> (a leaf component that renders null) rather
+  // than being called inline here so its high-churn store subscriptions
+  // (agentStatusByPaneKey + agentStatusEpoch tick at PTY event frequency)
+  // do not re-render the App tree on every agent status update.
   // Why: git conflict-operation state also drives the worktree cards. Polling
   // cannot live under RightSidebar because App unmounts that subtree when the
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
@@ -338,25 +375,7 @@ function App(): React.JSX.Element {
       } catch (error) {
         console.error('Failed to hydrate workspace session:', error)
         if (!cancelled) {
-          actions.hydratePersistedUI({
-            lastActiveRepoId: null,
-            lastActiveWorktreeId: null,
-            sidebarWidth: 280,
-            rightSidebarWidth: 350,
-            groupBy: 'none',
-            sortBy: 'recent',
-            showActiveOnly: false,
-            hideDefaultBranchWorkspace: false,
-            filterRepoIds: [],
-            collapsedGroups: [],
-            uiZoomLevel: 0,
-            editorFontZoomLevel: 0,
-            worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
-            statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
-            statusBarVisible: true,
-            dismissedUpdateVersion: null,
-            lastUpdateCheckAt: null
-          })
+          actions.hydratePersistedUI(getDefaultUIState())
           actions.hydrateWorkspaceSession({
             activeRepoId: null,
             activeWorktreeId: null,
@@ -438,7 +457,7 @@ function App(): React.JSX.Element {
       if (!useAppStore.getState().workspaceSessionReady) {
         return
       }
-      for (const capture of shutdownBufferCaptures) {
+      for (const capture of shutdownBufferCaptures.values()) {
         try {
           capture()
         } catch {
@@ -613,7 +632,6 @@ function App(): React.JSX.Element {
         if (activeView !== 'terminal' && activeView !== 'tasks') {
           return
         }
-        dispatchClearModifierHints()
         e.preventDefault()
         const store = useAppStore.getState()
         if (e.code === 'ArrowLeft') {
@@ -630,7 +648,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+B — toggle left sidebar
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.toggleSidebar()
         return
@@ -650,7 +667,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+L — toggle right sidebar
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.toggleRightSidebar()
         return
@@ -658,7 +674,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('explorer')
         actions.setRightSidebarOpen(true)
@@ -667,7 +682,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('search')
         actions.setRightSidebarOpen(true)
@@ -683,7 +697,6 @@ function App(): React.JSX.Element {
         if (document.querySelector('[data-terminal-search-root]')) {
           return
         }
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
@@ -694,7 +707,6 @@ function App(): React.JSX.Element {
       // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
       // intercepting it would break an essential developer tool.
       if (isMac && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)
@@ -762,7 +774,33 @@ function App(): React.JSX.Element {
     // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
     <div ref={titlebarLeftControlsRef} className="flex h-full w-full shrink-0 items-center">
       <div className="flex h-full items-center">
-        <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
+        {isMac && !isFullScreen ? (
+          <div className="titlebar-traffic-light-pad" />
+        ) : isWindows ? (
+          /* Why: on Windows the native title bar is hidden, so we render the
+             Orca logo as a non-interactive identity anchor and a ··· button
+             that pops up the application menu (the same menu revealed by Alt
+             on the default autoHideMenuBar). */
+          <>
+            <img src={logo} alt="" aria-hidden className="titlebar-logo" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="titlebar-icon-button"
+                  aria-label="Application menu"
+                  onClick={() => window.api.ui.popupMenu()}
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Application menu
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : (
+          <div className="pl-2" />
+        )}
         {showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -844,22 +882,7 @@ function App(): React.JSX.Element {
                             className="titlebar-agent-hovercard-agent"
                             onClick={() => {
                               activateAndRevealWorktree(worktreeId)
-                              useAppStore.getState().setActiveTab(agent.tabId)
-                              if (agent.paneId !== null) {
-                                // Why: a split-terminal tab can host multiple
-                                // agents. After selecting the tab, wait one
-                                // frame so the active TerminalPane can mount
-                                // and then focus the specific pane the user
-                                // clicked instead of leaving whichever pane
-                                // was previously active highlighted.
-                                requestAnimationFrame(() => {
-                                  window.dispatchEvent(
-                                    new CustomEvent(FOCUS_TERMINAL_PANE_EVENT, {
-                                      detail: { tabId: agent.tabId, paneId: agent.paneId }
-                                    })
-                                  )
-                                })
-                              }
+                              activateTabAndFocusPane(agent.tabId, agent.paneId)
                             }}
                           >
                             <span className="titlebar-agent-hovercard-agent-label">
@@ -965,128 +988,137 @@ function App(): React.JSX.Element {
       }
     >
       <TooltipProvider delayDuration={400}>
-        {/* Why: leaf-mounted retention sync, gated at the render level by
-            agentDashboardEnabled. Hosting useDashboardData() +
+        {/* Why: leaf-mounted retention sync — hosting useDashboardData() +
             useRetainedAgentsSync() inside a null-rendering leaf keeps their
-            high-churn store subscriptions from re-rendering the App tree;
-            the outer conditional drops those subscriptions entirely for
-            users who have not toggled the experimental agent dashboard on,
-            so PTY agent-status events do no feature-tied work for them.
-            The hooks' internal early-returns remain as defense-in-depth
-            (see the comment above useIpcEvents()). */}
-        {agentDashboardEnabled ? <RetainedAgentsSyncGate /> : null}
-        {/* Why: in workspace view (split groups always enabled), the full-width
-            titlebar is removed so tab groups + terminal extend to the top of
-            the window. Left titlebar controls move to a header above the sidebar.
-            Settings, landing, and the tasks page keep the full-width titlebar. */}
-        {!workspaceActive ? (
-          <div className="titlebar">
-            <div
-              className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
-              style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
-            >
-              {titlebarLeftControls}
-            </div>
-            <div
-              id="titlebar-tabs"
-              className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
-            />
-            {showTitlebarExpandButton && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className="titlebar-icon-button"
-                    onClick={handleToggleExpand}
-                    aria-label="Collapse pane"
-                    disabled={!activeTabCanExpand}
-                  >
-                    <Minimize2 size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Collapse pane
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {rightSidebarToggle}
-          </div>
-        ) : null}
+            high-churn store subscriptions from re-rendering the App tree. */}
+        <RetainedAgentsSyncGate />
         <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-          {showSidebar ? (
-            workspaceActive ? (
-              /* Why: left column wraps the sidebar with a titlebar-height
-                 header above it. The header holds the same controls
-                 (traffic lights, sidebar toggle, "Orca" title, agent badge)
-                 that the full-width titlebar held while the center and right
-                 columns keep their own top strips at the same 42px height.
-                 When the sidebar is collapsed, take this header out of flex
-                 layout so the terminal/editor reclaim the left edge instead of
-                 leaving behind a content-width blank strip. */
-              <div
-                className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-              >
+          {/* Why: the non-workspace titlebar lives inside this left+center
+              wrapper so it does not span over the right-sidebar column —
+              when the right sidebar is open, its own header anchors at the
+              top alongside the titlebar instead of being pushed below it. */}
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+            {/* Why: in workspace view (split groups always enabled), the
+                full-width titlebar is removed so tab groups + terminal extend
+                to the top of the window. Left titlebar controls move to a
+                header above the sidebar. Settings, landing, and the tasks
+                page keep the titlebar. */}
+            {!workspaceActive ? (
+              <div className="titlebar">
                 <div
-                  // Why: when the sidebar is collapsed, titlebar-left floats
-                  // absolutely on top of the center column's own `border-l`
-                  // (see TabGroupSplitLayout), occluding that seam. Add a
-                  // `border-r` in the floating state so the vertical line
-                  // between the traffic-light/nav cluster and the tab strip
-                  // stays visible in both states.
-                  className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
-                  style={{
-                    // Why: the Sidebar resize hook updates the sidebar DOM width
-                    // directly during drag and only persists to Zustand on
-                    // mouseup. In workspace view, size this header from the
-                    // wrapper's live width so it tracks those in-flight resizes
-                    // instead of leaving a stale-width gap until the drag ends.
-                    width: sidebarOpen ? '100%' : undefined
-                  }}
+                  className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
+                  style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
                 >
                   {titlebarLeftControls}
                 </div>
-                <div className="flex min-h-0 flex-1">
-                  {/* Why: the workspace-view wrapper adds a fixed 42px header
-                      above the sidebar. Without a flex-1/min-h-0 slot here,
-                      the sidebar falls back to its content height, so the
-                      worktree list loses its scroll viewport and the fixed
-                      bottom toolbar (including Add Project) gets pushed offscreen. */}
+                <div
+                  id="titlebar-tabs"
+                  className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+                />
+                {showTitlebarExpandButton && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="titlebar-icon-button"
+                        onClick={handleToggleExpand}
+                        aria-label="Collapse pane"
+                        disabled={!activeTabCanExpand}
+                      >
+                        <Minimize2 size={14} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Collapse pane
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {/* Why: when the right sidebar is open, its own header renders
+                    an identical close button — hide this copy so only one is
+                    visible at a time. */}
+                {!rightSidebarOpen && rightSidebarToggle}
+                {/* Why: reserve space so content is not obscured by the
+                    fixed-position window-controls overlay on Windows. */}
+                {isWindows && <div className="window-controls-titlebar-spacer" />}
+              </div>
+            ) : null}
+            <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+              {showSidebar ? (
+                workspaceActive ? (
+                  /* Why: left column wraps the sidebar with a titlebar-height
+                     header above it. The header holds the same controls
+                     (traffic lights, sidebar toggle, "Orca" title, agent badge)
+                     that the full-width titlebar held while the center and right
+                     columns keep their own top strips at the same 36px height.
+                     When the sidebar is collapsed, take this header out of flex
+                     layout so the terminal/editor reclaim the left edge instead of
+                     leaving behind a content-width blank strip. */
+                  <div
+                    className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                  >
+                    <div
+                      // Why: when the sidebar is collapsed, titlebar-left floats
+                      // absolutely on top of the center column's own `border-l`
+                      // (see TabGroupSplitLayout), occluding that seam. Add a
+                      // `border-r` in the floating state so the vertical line
+                      // between the traffic-light/nav cluster and the tab strip
+                      // stays visible in both states.
+                      className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
+                      style={{
+                        // Why: the Sidebar resize hook updates the sidebar DOM width
+                        // directly during drag and only persists to Zustand on
+                        // mouseup. In workspace view, size this header from the
+                        // wrapper's live width so it tracks those in-flight resizes
+                        // instead of leaving a stale-width gap until the drag ends.
+                        width: sidebarOpen ? '100%' : undefined
+                      }}
+                    >
+                      {titlebarLeftControls}
+                    </div>
+                    <div className="flex min-h-0 flex-1">
+                      {/* Why: the workspace-view wrapper adds a fixed 36px header
+                          above the sidebar. Without a flex-1/min-h-0 slot here,
+                          the sidebar falls back to its content height, so the
+                          worktree list loses its scroll viewport and the fixed
+                          bottom toolbar (including Add Project) gets pushed offscreen. */}
+                      <Sidebar />
+                    </div>
+                  </div>
+                ) : (
                   <Sidebar />
+                )
+              ) : null}
+              <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+                {/* Why: right sidebar toggle floats at the top-right of the center
+                    column so it's always accessible whether the right sidebar is
+                    open or closed. Match the RightSidebar header's 36px height and
+                    top-0 anchor so the icon's vertical center is identical between
+                    open and closed states — otherwise toggling makes the icon jump
+                    a few pixels, which reads as layout jitter. */}
+                {workspaceActive && !rightSidebarOpen && (
+                  <div
+                    className="absolute top-0 right-0 z-10 flex items-center h-[36px]"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                  >
+                    {rightSidebarToggle}
+                  </div>
+                )}
+                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                  <div
+                    className={
+                      activeView !== 'terminal' || !activeWorktreeId
+                        ? 'hidden flex-1 min-w-0 min-h-0'
+                        : 'flex flex-1 min-w-0 min-h-0'
+                    }
+                  >
+                    <Terminal />
+                  </div>
+                  <Suspense fallback={null}>
+                    {activeView === 'settings' ? <Settings /> : null}
+                    {activeView === 'tasks' ? <TaskPage /> : null}
+                    {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+                  </Suspense>
                 </div>
               </div>
-            ) : (
-              <Sidebar />
-            )
-          ) : null}
-          <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-            {/* Why: right sidebar toggle floats at the top-right of the center
-                column so it's always accessible whether the right sidebar is
-                open or closed. Match the RightSidebar header's 42px height and
-                top-0 anchor so the icon's vertical center is identical between
-                open and closed states — otherwise toggling makes the icon jump
-                a few pixels, which reads as layout jitter. */}
-            {workspaceActive && !rightSidebarOpen && (
-              <div
-                className="absolute top-0 right-0 z-10 flex items-center h-[36px]"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              >
-                {rightSidebarToggle}
-              </div>
-            )}
-            <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-              <div
-                className={
-                  activeView !== 'terminal' || !activeWorktreeId
-                    ? 'hidden flex-1 min-w-0 min-h-0'
-                    : 'flex flex-1 min-w-0 min-h-0'
-                }
-              >
-                <Terminal />
-              </div>
-              <Suspense fallback={null}>
-                {activeView === 'settings' ? <Settings /> : null}
-                {activeView === 'tasks' ? <TaskPage /> : null}
-                {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
-              </Suspense>
             </div>
           </div>
           {/* Why: keep RightSidebar mounted even when closed so that its
@@ -1131,6 +1163,11 @@ function App(): React.JSX.Element {
       <ZoomOverlay />
       <SshPassphraseDialog />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+      {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
+          in DOM order. Electron's hit-test for drag regions is DOM-order-based and
+          ignores z-index — placing WindowControls earlier caused the drag region to
+          win, making the buttons unclickable. */}
+      {isWindows && <WindowControls />}
     </div>
   )
 }

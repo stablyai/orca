@@ -7,10 +7,15 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { parseGitHubIssueOrPRNumber, normalizeGitHubLinkQuery } from '@/lib/github-links'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import {
+  parseGitHubIssueOrPRNumber,
+  parseGitHubIssueOrPRLink,
+  normalizeGitHubLinkQuery
+} from '@/lib/github-links'
+import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
   GitHubWorkItem,
@@ -20,7 +25,8 @@ import type {
   SetupDecision,
   SetupRunPolicy,
   SparsePreset,
-  TuiAgent
+  TuiAgent,
+  WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
 import {
   ADD_ATTACHMENT_SHORTCUT,
@@ -62,6 +68,12 @@ export type UseComposerStateOptions = {
    *  which drives repo selection from the page header, not the card. */
   repoIdOverride?: string
   onRepoIdOverrideChange?: (value: string) => void
+  /** Telemetry surface that opened this composer. Threaded into
+   *  `createWorktree` so `workspace_created.source` reflects the actual
+   *  entry point (Cmd+J palette → `command_palette`, sidebar buttons →
+   *  `sidebar`, keyboard shortcut → `shortcut`). Omitted callers default
+   *  to `unknown` at the IPC boundary. */
+  telemetrySource?: WorkspaceCreateTelemetrySource
 }
 
 export type ComposerCardProps = {
@@ -175,7 +187,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     persistDraft,
     onCreated,
     repoIdOverride,
-    onRepoIdOverrideChange
+    onRepoIdOverrideChange,
+    telemetrySource
   } = options
 
   // Why: each `useAppStore(s => s.someAction)` registers its own equality
@@ -374,6 +387,43 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   agentPromptRef.current = agentPrompt
 
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+
+  // Why: resolves the selected repo's owner/repo slug so a PR URL pasted
+  // into the workspace name field can be matched against the current repo.
+  // Pasting a PR URL from a different repo would otherwise recover only the
+  // PR number, mislinking the worktree to an unrelated PR with the same
+  // number in the selected repo.
+  const [selectedRepoSlug, setSelectedRepoSlug] = useState<{ owner: string; repo: string } | null>(
+    null
+  )
+  const selectedRepoPath = selectedRepo?.path
+  useEffect(() => {
+    if (!selectedRepoPath) {
+      setSelectedRepoSlug(null)
+      return
+    }
+    let cancelled = false
+    void (
+      window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
+        owner: string
+        repo: string
+      } | null>
+    )
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+        setSelectedRepoSlug(result)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedRepoSlug(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedRepoPath])
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
   const sparsePresets = sparsePresetsForRepo ?? EMPTY_SPARSE_PRESETS
   const normalizedSparseDirectories = useMemo(
@@ -418,6 +468,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => (linkedIssue.trim() ? parseGitHubIssueOrPRNumber(linkedIssue) : null),
     [linkedIssue]
   )
+  // Why: when the user pastes a PR URL straight into the workspace name field
+  // (without picking from the source picker), `linkedPR` stays null and the
+  // worktree card has no PR strip. Recover the PR number from the name on
+  // submit so create-from-PR worktrees always link back to their PR.
+  const effectiveLinkedPR = useMemo<number | null>(() => {
+    if (linkedPR !== null) {
+      return linkedPR
+    }
+    const fromName = parseGitHubIssueOrPRLink(name)
+    if (fromName && fromName.type === 'pr') {
+      // Why: only adopt a number when the URL's owner/repo matches the
+      // selected repo. Pasting `github.com/other/repo/pull/1234` must not
+      // mislink the worktree to an unrelated PR #1234 in the current repo.
+      // If the slug hasn't resolved yet, suppress recovery rather than
+      // risking a cross-repo mislink.
+      if (
+        selectedRepoSlug &&
+        fromName.slug.owner.toLowerCase() === selectedRepoSlug.owner.toLowerCase() &&
+        fromName.slug.repo.toLowerCase() === selectedRepoSlug.repo.toLowerCase()
+      ) {
+        return fromName.number
+      }
+    }
+    return null
+  }, [linkedPR, name, selectedRepoSlug])
   const setupConfig = useMemo(
     () => getSetupConfig(selectedRepo, yamlHooks),
     [selectedRepo, yamlHooks]
@@ -1224,20 +1299,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
-      const details = [
-        `[${issue.identifier}] ${issue.title}`,
-        `Status: ${issue.state.name} · Team: ${issue.team.name}`,
-        issue.assignee ? `Assignee: ${issue.assignee.displayName}` : null,
-        issue.labels.length > 0 ? `Labels: ${issue.labels.join(', ')}` : null,
-        `URL: ${issue.url}`,
-        issue.description ? `\n${issue.description}` : null
-      ]
-        .filter(Boolean)
-        .join('\n')
-      if (!noteRef.current.trim() || noteRef.current === lastAutoNoteRef.current) {
-        setNote(details)
-        lastAutoNoteRef.current = details
-      }
+      // Why: match the GitHub issue/PR flow — paste only the URL as a draft
+      // into the agent's input (no auto-submit). The launch path already
+      // drafts `linkedWorkItem.url` when the note is empty; auto-filling the
+      // note here would flip Linear into the `isLinearTypedOnly` branch and
+      // auto-submit the full details block.
     },
     [name]
   )
@@ -1349,13 +1415,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               directories: normalizedSparseDirectories,
               ...(effectivePresetId ? { presetId: effectivePresetId } : {})
             }
-          : undefined
+          : undefined,
+        telemetrySource
       )
       const worktree = result.worktree
 
       await applyWorktreeMeta(worktree.id, {
         ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
-        ...(linkedPR !== null ? { linkedPR } : {}),
+        // Why: main introduced effectiveLinkedPR (a memoized resolution
+        // that prefers an explicitly-set linkedPR over null). Keep that
+        // for the GitHub side and add the GitLab parallel slots so a
+        // workspace created from a GitLab MR/issue persists its link.
+        ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
         ...(linkedGitLabIssue !== null ? { linkedGitLabIssue } : {}),
         ...(linkedGitLabMR !== null ? { linkedGitLabMR } : {}),
         ...(note.trim() ? { comment: note.trim() } : {})
@@ -1377,10 +1448,27 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         platform: CLIENT_PLATFORM
       })
 
+      // Why: thread agent_started telemetry through the queued startup so
+      // main fires the event after the spawn succeeds. The composer
+      // "create" path is the new-workspace surface; request_kind is
+      // `'new'` because this is always a fresh session (issue/PR-driven
+      // follow-ups go through launch-work-item-direct.ts).
+      const composerTelemetry: AgentStartedTelemetry = {
+        agent_kind: tuiAgentToAgentKind(tuiAgent),
+        launch_source: 'new_workspace_composer',
+        request_kind: 'new'
+      }
       activateAndRevealWorktree(worktree.id, {
         setup: result.setup,
         issueCommand,
-        ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
+        ...(startupPlan
+          ? {
+              startup: {
+                command: startupPlan.launchCommand,
+                telemetry: composerTelemetry
+              }
+            }
+          : {})
       })
       if (startupPlan) {
         void ensureAgentStartupInTerminal({
@@ -1410,7 +1498,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createWorktree,
     applyWorktreeMeta,
     issueCommandTemplate,
-    linkedPR,
+    effectiveLinkedPR,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
     note,
@@ -1430,6 +1518,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     sparseEnabled,
     sparseError,
     effectivePresetId,
+    telemetrySource,
     tuiAgent,
     shouldRunIssueAutomation,
     shouldWaitForIssueAutomationCheck,
@@ -1477,14 +1566,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 directories: normalizedSparseDirectories,
                 ...(effectivePresetId ? { presetId: effectivePresetId } : {})
               }
-            : undefined
+            : undefined,
+          telemetrySource
         )
         const worktree = result.worktree
 
         const trimmedNote = note.trim()
         await applyWorktreeMeta(worktree.id, {
           ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
-          ...(linkedPR !== null ? { linkedPR } : {}),
+          ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
           ...(trimmedNote ? { comment: trimmedNote } : {})
         })
 
@@ -1538,7 +1628,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent: draftLaunchPlan.agent,
             launchCommand: draftLaunchPlan.launchCommand,
             expectedProcess: draftLaunchPlan.expectedProcess,
-            followupPrompt: null
+            followupPrompt: null,
+            ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
           }
         } else if (agent !== null) {
           startupPlan = buildAgentStartupPlan({
@@ -1553,9 +1644,29 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           }
         }
 
+        // Why: only attach telemetry when an agent was selected — the
+        // quick path also handles "blank shell" (agent === null) where no
+        // agent_started event should fire. When telemetry is present main
+        // emits the event after pty:spawn succeeds.
+        const quickTelemetry: AgentStartedTelemetry | null =
+          agent === null
+            ? null
+            : {
+                agent_kind: tuiAgentToAgentKind(agent),
+                launch_source: 'new_workspace_composer',
+                request_kind: 'new'
+              }
         activateAndRevealWorktree(worktree.id, {
           setup: result.setup,
-          ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
+          ...(startupPlan
+            ? {
+                startup: {
+                  command: startupPlan.launchCommand,
+                  ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                  ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
+                }
+              }
+            : {})
         })
         if (startupPlan) {
           void ensureAgentStartupInTerminal({
@@ -1586,6 +1697,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       clearNewWorkspaceDraft,
       createWorktree,
       fallbackCreatureName,
+      effectiveLinkedPR,
       linkedPR,
       linkedWorkItem,
       name,
@@ -1607,6 +1719,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       sparseEnabled,
       sparseError,
       effectivePresetId,
+      telemetrySource,
       shouldWaitForSetupCheck
     ]
   )

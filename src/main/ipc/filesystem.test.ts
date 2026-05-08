@@ -96,7 +96,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from './filesystem-auth'
+import { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } from './filesystem-auth'
 
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
@@ -217,6 +217,79 @@ describe('registerFilesystemHandlers', () => {
     )
 
     expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('allows readDir when a registered worktree resolves to a macOS canonical alias', async () => {
+    const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
+    const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, aliasWorktreePath])
+    realpathMock.mockImplementation(async (targetPath: string) => {
+      if (targetPath === aliasWorktreePath) {
+        return canonicalWorktreePath
+      }
+      return targetPath
+    })
+    readdirMock.mockResolvedValue([dirEntry({ name: 'README.md', file: true })])
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: aliasWorktreePath })
+    ).resolves.toEqual([{ name: 'README.md', isDirectory: false, isSymlink: false }])
+
+    expect(readdirMock).toHaveBeenCalledWith(canonicalWorktreePath, { withFileTypes: true })
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {
+    const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
+    const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')
+    const aliasFilePath = path.join(aliasWorktreePath, 'README.md')
+    const canonicalFilePath = path.join(canonicalWorktreePath, 'README.md')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, aliasWorktreePath])
+    realpathMock.mockImplementation(async (targetPath: string) => {
+      if (targetPath === aliasWorktreePath) {
+        return canonicalWorktreePath
+      }
+      return targetPath
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('fs:deletePath')!(null, { targetPath: aliasFilePath })
+
+    expect(trashItemMock).toHaveBeenCalledWith(canonicalFilePath)
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects readFile when a symlink in a canonical alias worktree escapes the registered root', async () => {
+    const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
+    const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')
+    const aliasLinkPath = path.join(aliasWorktreePath, 'link.txt')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, aliasWorktreePath])
+    realpathMock.mockImplementation(async (targetPath: string) => {
+      if (targetPath === aliasWorktreePath) {
+        return canonicalWorktreePath
+      }
+      if (targetPath === aliasLinkPath) {
+        return path.resolve('/private/secret.txt')
+      }
+      return targetPath
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:readFile')!(null, { filePath: aliasLinkPath })).rejects.toThrow(
+      'Access denied: path resolves outside allowed directories'
+    )
+
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('does not enumerate worktrees when filesystem handlers register', () => {
+    registerFilesystemHandlers(store as never)
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('rejects writes to directories', async () => {
@@ -342,6 +415,19 @@ describe('registerFilesystemHandlers', () => {
     // Why: validateGitRelativeFilePath uses path.relative() which produces
     // platform-specific separators (backslashes on Windows).
     expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, path.join('src', 'file.ts'))
+  })
+
+  it('uses worktree roots seeded by worktrees:list without rebuilding the cache', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [] })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(realpathMock).not.toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {

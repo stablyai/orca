@@ -71,7 +71,9 @@ export type ProjectRowContentPatch = {
 // different rows when the view's stored filter is non-empty, so it gets its
 // own cache key.
 function queryOverrideKeyPart(queryOverride: string | undefined): string {
-  if (queryOverride === undefined) {return ''}
+  if (queryOverride === undefined) {
+    return ''
+  }
   return `:q=${queryOverride}`
 }
 
@@ -405,7 +407,7 @@ export type GitHubSlice = {
   fetchPRForBranch: (
     repoPath: string,
     branch: string,
-    options?: FetchOptions
+    options?: FetchOptions & { linkedPRNumber?: number | null }
   ) => Promise<PRInfo | null>
   fetchIssue: (repoPath: string, number: number) => Promise<IssueInfo | null>
   fetchPRChecks: (
@@ -566,11 +568,7 @@ export type GitHubSlice = {
    *  alone only walks `workItemsCache` and would leave the Project view stale
    *  until the next refresh. The actual write is dispatched separately via
    *  the slug-addressed update IPCs. */
-  patchProjectRowContent: (
-    cacheKey: string,
-    rowId: string,
-    patch: ProjectRowContentPatch
-  ) => void
+  patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
 }
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -784,12 +782,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     // Optimistic content patch.
     const nextContent = { ...previousRow.content }
-    if (updates.title !== undefined) {nextContent.title = updates.title}
-    if (updates.body !== undefined) {nextContent.body = updates.body}
+    if (updates.title !== undefined) {
+      nextContent.title = updates.title
+    }
+    if (updates.body !== undefined) {
+      nextContent.body = updates.body
+    }
     if (updates.addLabels || updates.removeLabels) {
       const next = new Map(nextContent.labels.map((l) => [l.name, l]))
       for (const name of updates.addLabels ?? []) {
-        if (!next.has(name)) {next.set(name, { name, color: '808080' })}
+        if (!next.has(name)) {
+          next.set(name, { name, color: '808080' })
+        }
       }
       for (const name of updates.removeLabels ?? []) {
         next.delete(name)
@@ -799,7 +803,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (updates.addAssignees || updates.removeAssignees) {
       const next = new Map(nextContent.assignees.map((u) => [u.login, u]))
       for (const login of updates.addAssignees ?? []) {
-        if (!next.has(login)) {next.set(login, { login, name: null, avatarUrl: null })}
+        if (!next.has(login)) {
+          next.set(login, { login, name: null, avatarUrl: null })
+        }
       }
       for (const login of updates.removeAssignees ?? []) {
         next.delete(login)
@@ -827,7 +833,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ...(updates.body !== undefined ? { body: updates.body } : {})
         }
       })
-      if (!prRes.ok) {envelope = prRes}
+      if (!prRes.ok) {
+        envelope = prRes
+      }
     }
     if (
       envelope.ok &&
@@ -851,7 +859,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
         }
       })
-      if (!issueRes.ok) {envelope = issueRes}
+      if (!issueRes.ok) {
+        envelope = issueRes
+      }
     }
     if (!envelope.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
@@ -913,8 +923,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return
     }
     const nextContent = { ...previousRow.content }
-    if (patch.title !== undefined) {nextContent.title = patch.title}
-    if (patch.body !== undefined) {nextContent.body = patch.body}
+    if (patch.title !== undefined) {
+      nextContent.title = patch.title
+    }
+    if (patch.body !== undefined) {
+      nextContent.body = patch.body
+    }
     if (patch.state !== undefined) {
       // Why: ProjectV2 row.state mirrors GitHub's UPPERCASE state enum
       // ('OPEN' | 'CLOSED' | 'MERGED'). The dialog tracks lowercase
@@ -1167,21 +1181,27 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
     const cacheKey = `${repoPath}::${branch}`
     const cached = get().prCache[cacheKey]
-    if (!options?.force && isFresh(cached)) {
+    // Why: if a prior caller without a linkedPR cached `null` for this branch,
+    // the worktree-card lookup (which has a linked PR fallback) would otherwise
+    // return null forever. Refetch when the cached miss could now resolve via
+    // the linkedPR path.
+    const linkedRefetch = cached?.data === null && (options?.linkedPRNumber ?? null) !== null
+    if (!options?.force && !linkedRefetch && isFresh(cached)) {
       return cached.data
     }
 
     const inflightRequest = inflightPRRequests.get(cacheKey)
-    if (inflightRequest && (!options?.force || inflightRequest.force)) {
+    if (inflightRequest && (!options?.force || inflightRequest.force) && !linkedRefetch) {
       return inflightRequest.promise
     }
 
     const generation = (prRequestGenerations.get(cacheKey) ?? 0) + 1
     prRequestGenerations.set(cacheKey, generation)
 
+    const linkedPRNumber = options?.linkedPRNumber ?? null
     const request = (async () => {
       try {
-        const pr = await window.api.gh.prForBranch({ repoPath, branch })
+        const pr = await window.api.gh.prForBranch({ repoPath, branch, linkedPRNumber })
         if (prRequestGenerations.get(cacheKey) === generation) {
           set((s) => ({
             prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: Date.now() } }

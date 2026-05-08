@@ -17,3 +17,19 @@ export function shouldSuppressEnterSubmit(
   }
   return false
 }
+
+export function shouldAllowComposerEnterSubmitTarget(
+  target: EventTarget | null,
+  composer: HTMLElement | null
+): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  if (composer?.contains(target)) {
+    return true
+  }
+  // Why: selecting a PR/issue/Linear row replaces the focused input with a
+  // source pill, and Chromium can retarget the next global keydown to body.
+  // Keep the modal shortcut alive for that post-selection focus fallback.
+  return target === document.body || target === document.documentElement
+}

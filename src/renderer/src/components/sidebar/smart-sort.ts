@@ -8,6 +8,38 @@ import {
 
 type SortBy = 'name' | 'smart' | 'recent' | 'repo'
 
+// Why: a newly-created worktree's lastActivityAt is stamped at the moment
+// createLocalWorktree finishes git + setup-runner prep (often several seconds
+// after the user clicked Create). During and after that window, ambient PTY
+// bumps on OTHER worktrees (data flush, exit, reconnect) can push the new
+// worktree below them in Recent sort. This grace period gives the new
+// worktree a floor of `createdAt + CREATE_GRACE_MS` in the Recent comparator
+// so it stays on top until the user has had a chance to notice it. 5 min is
+// long enough for the user to interact, short enough that steady-state
+// ordering resumes quickly.
+export const CREATE_GRACE_MS = 5 * 60 * 1000
+
+/**
+ * Rank a worktree in Recent sort using `lastActivityAt`, but with a floor of
+ * `createdAt + CREATE_GRACE_MS` *only during* the grace window (i.e. while
+ * `now < createdAt + CREATE_GRACE_MS`). Once the window has elapsed, returns
+ * `lastActivityAt` unchanged. Returns `lastActivityAt` unchanged for worktrees
+ * without `createdAt` (discovered on disk, or persisted before this field
+ * existed).
+ */
+export function effectiveRecentActivity(worktree: Worktree, now: number): number {
+  const { lastActivityAt, createdAt } = worktree
+  // Why bound by now: a worktree with createdAt set but no subsequent activity
+  // should not retain artificially-high recency forever; the floor exists to
+  // absorb the noisy creation window only. Without this bound, a worktree
+  // created days ago and never touched would keep ranking as if its activity
+  // were `createdAt + 5min`, masking truly fresher worktrees indefinitely.
+  if (createdAt === undefined || now >= createdAt + CREATE_GRACE_MS) {
+    return lastActivityAt
+  }
+  return Math.max(lastActivityAt, createdAt + CREATE_GRACE_MS)
+}
+
 type PRCacheEntry = { data: object | null; fetchedAt: number }
 export type SmartSortOverride = {
   worktree: Worktree
@@ -276,18 +308,27 @@ export function buildWorktreeComparator(
               )
         return (
           scoreB - scoreA ||
-          smartB.worktree.lastActivityAt - smartA.worktree.lastActivityAt ||
+          effectiveRecentActivity(smartB.worktree, now) -
+            effectiveRecentActivity(smartA.worktree, now) ||
           a.displayName.localeCompare(b.displayName)
         )
       }
       case 'recent':
-        // Why lastActivityAt (not sortOrder): sortOrder is a snapshot of the
-        // smart-sort ranking that only gets repersisted while the user is in
-        // "Smart" mode, so it's frozen in Recent mode and ignores new terminal
-        // events, meta edits, etc. lastActivityAt is the real "recency" signal
-        // — it's bumped by bumpWorktreeActivity (PTY spawn, background events)
-        // and by meaningful meta edits (comment, isUnread).
-        return b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
+        // Why effectiveRecentActivity (not raw lastActivityAt): newly-created
+        // worktrees get a CREATE_GRACE_MS floor on top of lastActivityAt so
+        // ambient PTY bumps in other worktrees don't immediately push them
+        // down. See CREATE_GRACE_MS above.
+        //
+        // Why not sortOrder: sortOrder is a snapshot of the smart-sort
+        // ranking that only gets repersisted while the user is in "Smart"
+        // mode, so it's frozen in Recent mode and ignores new terminal
+        // events, meta edits, etc. lastActivityAt is the real "recency"
+        // signal — bumped by bumpWorktreeActivity (PTY spawn, background
+        // events) and by meaningful meta edits (comment, isUnread).
+        return (
+          effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now) ||
+          a.displayName.localeCompare(b.displayName)
+        )
       case 'repo': {
         const ra = repoMap.get(a.repoId)?.displayName ?? ''
         const rb = repoMap.get(b.repoId)?.displayName ?? ''

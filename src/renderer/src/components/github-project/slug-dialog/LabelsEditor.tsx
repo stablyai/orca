@@ -19,7 +19,9 @@ export function LabelsEditor({
   const [options, setOptions] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   useEffect(() => {
-    if (!open) {return}
+    if (!open) {
+      return
+    }
     // Why: guard against late responses overwriting newer state when the
     // popover toggles owner/repo (or closes/reopens) while the IPC is still
     // in flight. Mirrors the requestIdRef pattern used for the details fetch.
@@ -28,11 +30,17 @@ export function LabelsEditor({
     window.api.gh
       .listLabelsBySlug({ owner, repo })
       .then((res) => {
-        if (cancelled) {return}
-        if (res.ok) {setOptions(res.labels)}
+        if (cancelled) {
+          return
+        }
+        if (res.ok) {
+          setOptions(res.labels)
+        }
       })
       .finally(() => {
-        if (cancelled) {return}
+        if (cancelled) {
+          return
+        }
         setLoading(false)
       })
     return () => {
@@ -62,11 +70,19 @@ export function LabelsEditor({
                 type="button"
                 className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted/50"
                 onClick={() => {
-                  if (isOn) {void onChange([], [name])}
-                  else {void onChange([name], [])}
+                  if (isOn) {
+                    void onChange([], [name])
+                  } else {
+                    void onChange([name], [])
+                  }
                 }}
               >
-                <span className={cn('inline-block size-2 rounded-full', isOn ? 'bg-primary' : 'bg-muted-foreground/40')} />
+                <span
+                  className={cn(
+                    'inline-block size-2 rounded-full',
+                    isOn ? 'bg-primary' : 'bg-muted-foreground/40'
+                  )}
+                />
                 {name}
               </button>
             )

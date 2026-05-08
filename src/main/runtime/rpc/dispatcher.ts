@@ -74,7 +74,11 @@ export class RpcDispatcher {
   // Why: streaming dispatch sends multiple responses through the reply callback
   // instead of returning a single Promise. This enables terminal.subscribe and
   // other subscription-style methods that push data over time.
-  async dispatchStreaming(request: RpcRequest, reply: (response: string) => void): Promise<void> {
+  async dispatchStreaming(
+    request: RpcRequest,
+    reply: (response: string) => void,
+    options?: { connectionId?: string }
+  ): Promise<void> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
     if (!method) {
@@ -94,7 +98,10 @@ export class RpcDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
-        const result = await method.handler(parsedParams.value, { runtime: this.runtime })
+        const result = await method.handler(parsedParams.value, {
+          runtime: this.runtime,
+          connectionId: options?.connectionId
+        })
         reply(JSON.stringify(successResponse(request.id, meta, result)))
       } catch (error) {
         reply(JSON.stringify(this.mapError(request, meta, error)))
@@ -109,7 +116,11 @@ export class RpcDispatcher {
     }
 
     try {
-      await method.handler(parsedParams.value, { runtime: this.runtime }, emit)
+      await method.handler(
+        parsedParams.value,
+        { runtime: this.runtime, connectionId: options?.connectionId },
+        emit
+      )
     } catch (error) {
       reply(JSON.stringify(this.mapError(request, meta, error)))
     }

@@ -1,10 +1,24 @@
-import { View, Text, StyleSheet, Pressable, Linking } from 'react-native'
+import { View, Text, StyleSheet, Pressable, Linking, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Globe } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
+import Constants from 'expo-constants'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
+
+// Why: read version + native build identifier from expo-constants at
+// runtime so the About screen never drifts out of sync with app.json.
+// nativeBuildVersion is iOS buildNumber on iOS and versionCode on
+// Android — different concepts, same role (monotonic native build id).
+function getVersionLabel(): string {
+  const version = Constants.expoConfig?.version ?? '?.?.?'
+  const build =
+    Platform.OS === 'ios'
+      ? Constants.expoConfig?.ios?.buildNumber
+      : String(Constants.expoConfig?.android?.versionCode ?? '')
+  return build ? `v${version} (${build})` : `v${version}`
+}
 
 function GithubIcon({ size = 16, color = colors.textSecondary }) {
   return (
@@ -66,6 +80,8 @@ export default function AboutScreen() {
           <Text style={styles.rowValue}>@orca_build</Text>
         </Pressable>
       </View>
+
+      <Text style={styles.versionText}>{getVersionLabel()}</Text>
     </View>
   )
 }
@@ -141,5 +157,11 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
+  },
+  versionText: {
+    marginTop: spacing.lg,
+    textAlign: 'center',
+    fontSize: typography.metaSize,
+    color: colors.textMuted
   }
 })

@@ -14,66 +14,91 @@
 
 import { z } from 'zod'
 
+import type { GlobalSettings } from './types'
+
 // ── Shared property enums ───────────────────────────────────────────────
 
-// Mirrors the detectable agents in `src/shared/agent-detection.ts`
-// (`AGENT_NAMES`), with one deliberate shift: `claude` in AGENT_NAMES ↔
-// `claude-code` here (product, not CLI string) so dashboards read cleanly.
+// Mirrors the shipped `TuiAgent` launch surface, with one deliberate shift:
+// `claude` in settings/launch state ↔ `claude-code` here (product, not CLI
+// string) so dashboards read cleanly.
 //
-// Enum values are limited to agents that have a real emit path today. Adding
-// a new agent is additive-safe — extend this enum when the call site that
-// would emit it lands, not in anticipation.
-export const agentKindSchema = z.enum([
+// `other` remains as a telemetry escape hatch, but project-owned TuiAgents
+// should map to concrete values; see `tuiAgentToAgentKind`.
+export const AGENT_KIND_VALUES = [
   'claude-code',
   'codex',
-  'gemini',
-  'copilot',
-  'cursor',
+  'autohand',
   'opencode',
+  'pi',
+  'gemini',
   'aider',
+  'goose',
+  'amp',
+  'kilo',
+  'kiro',
+  'crush',
+  'aug',
+  'cline',
+  'codebuff',
+  'continue',
+  'cursor',
+  'droid',
+  'kimi',
+  'mistral-vibe',
+  'qwen-code',
+  'rovo',
+  'hermes',
+  'copilot',
   'other'
-])
+] as const
+export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
-export const errorClassSchema = z.enum([
-  'network_timeout',
-  'auth_expired',
-  'rate_limited',
-  'provider_unavailable',
-  'provider_error_generic',
-  'binary_not_found',
-  'binary_version_mismatch',
-  'workspace_gone',
-  'user_cancelled',
-  'unknown'
-])
+// Trimmed to the two values Orca's PTY-typed-command launch architecture can
+// actually emit:
+//   - `binary_not_found` — `provider.spawn` ENOENT (the *shell* binary is
+//     missing). The agent CLI being missing is invisible: Orca spawns a
+//     healthy shell and types the command, and bash/zsh's "command not found"
+//     surfaces only as terminal output.
+//   - `unknown` — every other thrown error (paste-readiness timeout, env-build
+//     failures, unclassifiable shell-spawn errors).
+// Provider-side errors (`auth_expired`, `rate_limited`, `network_timeout`,
+// `provider_*`) happen inside the agent CLI subprocess and are not observable
+// to Orca — see telemetry-plan.md §Decision: Defer per-incident error fields.
+// Adding a new value is additive-safe; do it when the call site lands, not in
+// anticipation.
+export const errorClassSchema = z.enum(['binary_not_found', 'unknown'])
 export type ErrorClass = z.infer<typeof errorClassSchema>
-
-// Closed whitelist of error `name` strings allowed on `agent_error`. This is
-// the one free-ish string that can leave the machine on an agent_error event
-// — the validator drops anything not in this set.
-//
-// A regex-shape check (e.g. `/^[A-Z][A-Za-z]{0,32}$/`) would permit
-// identifier-shaped leaks like `PaymentFailedForUserAlice` or
-// `TimeoutInRepoMyCompanyInternalMonorepo` — context-concatenation bugs
-// under deadline pressure. A closed whitelist forces each new error name
-// through review. Same pattern as `SETTINGS_CHANGED_WHITELIST`.
-export const AGENT_ERROR_NAME_WHITELIST = [
-  'NetworkTimeout',
-  'AuthExpired',
-  'RateLimited',
-  'ProviderUnavailable',
-  'ProviderErrorGeneric',
-  'BinaryNotFound',
-  'BinaryVersionMismatch',
-  'WorkspaceGone',
-  'UserCancelled'
-] as const
-export const agentErrorNameSchema = z.enum(AGENT_ERROR_NAME_WHITELIST)
-export type AgentErrorName = z.infer<typeof agentErrorNameSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
 export type RepoMethod = z.infer<typeof repoMethodSchema>
+
+// Five Setup-step affordances the user can pick after `repo_added` fires (see
+// AddRepoSetupStep). One enum because every value lives on the same screen and
+// the funnel question is "which one did they pick" — adding a sixth value
+// later is additive-safe per the schema-evolution doctrine below.
+export const addRepoSetupStepActionSchema = z.enum([
+  'create_worktree',
+  'configure',
+  'skip',
+  'open_existing',
+  'back'
+])
+export type AddRepoSetupStepAction = z.infer<typeof addRepoSetupStepActionSchema>
+
+// Deliberately a separate enum from `errorClassSchema` (PTY-spawn taxonomy):
+// different domain — this one buckets git/filesystem failures thrown by
+// `createLocalWorktree` / `createRemoteWorktree`. Merging the two would lock
+// both domains to the union forever, which the schema-evolution comment
+// below warns against.
+export const workspaceCreateErrorClassSchema = z.enum([
+  'git_failed',
+  'path_collision',
+  'permission_denied',
+  'base_ref_missing',
+  'unknown'
+])
+export type WorkspaceCreateErrorClass = z.infer<typeof workspaceCreateErrorClassSchema>
 
 export const workspaceSourceSchema = z.enum([
   'command_palette',
@@ -126,12 +151,17 @@ export type OptInVia = z.infer<typeof optInViaSchema>
 //
 // Kept as an `as const` tuple so the Zod enum below and any call-site usage
 // share one array — typo-drift is impossible.
+type BooleanGlobalSettingsKey = {
+  [Key in keyof GlobalSettings]-?: GlobalSettings[Key] extends boolean ? Key : never
+}[keyof GlobalSettings]
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
-  'experimentalTerminalDaemon',
-  'experimentalAgentDashboard'
-] as const
+  'experimentalMobile',
+  'experimentalSidekick',
+  'experimentalWorktreeSymlinks',
+  'geminiCliOAuthEnabled'
+] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
 
@@ -142,14 +172,25 @@ export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
 // unknown keys at parse time. This is the runtime counterpart to the
 // compile-time "unions of string literals, no raw `string`" rule.
 
-const emptySchema = z.object({}).strict()
+// Cohort signal — see docs/onboarding-funnel-cohort-addendum.md. One integer
+// shared across the events listed in `COHORT_EXTENDED` below: the count of
+// repos the user has at emit time, read from `store.getRepos().length`.
+// `.int().nonnegative()` constrains malformed values to the floor;
+// `.optional()` lets the classifier's fail-soft fallback (returning
+// `undefined`) validate cleanly so a read error never crashes a track call.
+const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 
-const repoAddedSchema = z.object({ method: repoMethodSchema }).strict()
+const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
+
+const repoAddedSchema = z
+  .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
+  .strict()
 
 const workspaceCreatedSchema = z
   .object({
     source: workspaceSourceSchema,
-    from_existing_branch: z.boolean()
+    from_existing_branch: z.boolean(),
+    nth_repo_added: nthRepoAddedSchema
   })
   .strict()
 
@@ -157,26 +198,21 @@ const agentStartedSchema = z
   .object({
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
-    request_kind: requestKindSchema
+    request_kind: requestKindSchema,
+    nth_repo_added: nthRepoAddedSchema
   })
   .strict()
 
-// Enum-only by design for `error_class` + `agent_kind`. `error_name` is the
-// one free-ish string that can leave the machine on this event, and it is
-// drawn from the closed `AGENT_ERROR_NAME_WHITELIST` — adding a new value
-// requires a PR to the whitelist, giving review a chance to catch
-// context-concatenation patterns.
-//
-// `error_message` and `error_stack` are deliberately absent from this schema.
-// `.strict()` rejects either key if a call site ever tries to attach one,
-// which fails the validator and drops the event. Raw error strings carry
-// arbitrary user/workspace/path content; keeping them off the wire is the
-// only way to guarantee we never transmit them by accident.
+// Enum-only by design for both fields. `error_message` and `error_stack` are
+// deliberately absent — `.strict()` rejects either key if a call site ever
+// tries to attach one, which fails the validator and drops the event. Raw
+// error strings carry arbitrary user/workspace/path content; keeping them off
+// the wire is the only way to guarantee we never transmit them by accident.
 const agentErrorSchema = z
   .object({
     error_class: errorClassSchema,
     agent_kind: agentKindSchema,
-    error_name: agentErrorNameSchema.optional()
+    nth_repo_added: nthRepoAddedSchema
   })
   .strict()
 
@@ -189,6 +225,22 @@ const settingsChangedSchema = z
 
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
+
+const addRepoSetupStepActionEventSchema = z
+  .object({ action: addRepoSetupStepActionSchema, nth_repo_added: nthRepoAddedSchema })
+  .strict()
+
+// Why: same enum-only discipline as `agent_error` — `.strict()` rejects raw
+// error strings if a future call site tries to attach `error_message` /
+// `error_stack`. The classifier in worktrees.ts reads `error.message` to
+// bucket into the enum, but those strings never cross the wire.
+const workspaceCreateFailedSchema = z
+  .object({
+    source: workspaceSourceSchema,
+    error_class: workspaceCreateErrorClassSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 // ── Event registry: the one record the validator consumes ───────────────
 //
@@ -204,10 +256,12 @@ const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 // change silently blends pre- and post-change rows under one event name,
 // which cannot be unmixed after the fact.
 export const eventSchemas = {
-  app_opened: emptySchema,
+  app_opened: appOpenedSchema,
 
   repo_added: repoAddedSchema,
+  add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
   workspace_created: workspaceCreatedSchema,
+  workspace_create_failed: workspaceCreateFailedSchema,
 
   agent_started: agentStartedSchema,
   agent_error: agentErrorSchema,
@@ -221,6 +275,29 @@ export const eventSchemas = {
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }
 export type EventName = keyof EventMap
 export type EventProps<N extends EventName> = EventMap[N]
+
+// Events whose schemas declare `nth_repo_added`. Derived from `eventSchemas`
+// at module load by probing each schema's `.shape` — there is no parallel
+// hand-maintained list to drift out of sync. The IPC `telemetry:track`
+// handler injects the cohort property only when the incoming event name is
+// in this set: the schemas are `.strict()`, so injecting `nth_repo_added`
+// on an event whose schema does not declare it would fail validation and
+// silently drop the entire event.
+//
+// Schema-additions checklist for adding a new cohort-extended event:
+//   add `nth_repo_added: nthRepoAddedSchema` to the event's schema above.
+//   That is the *only* step — this set updates automatically.
+const COHORT_EXTENDED_SET: ReadonlySet<EventName> = new Set(
+  (Object.entries(eventSchemas) as [EventName, z.ZodObject<z.ZodRawShape>][])
+    .filter(([, schema]) => 'nth_repo_added' in schema.shape)
+    .map(([name]) => name)
+)
+export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_SET)
+export type CohortExtendedEvent = EventName
+
+export function isCohortExtendedEvent(name: EventName): name is CohortExtendedEvent {
+  return COHORT_EXTENDED_SET.has(name)
+}
 
 // Common props attached by the client — declared here so the validator knows
 // which keys to allow on every outgoing event.

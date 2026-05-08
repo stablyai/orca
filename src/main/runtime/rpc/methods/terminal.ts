@@ -44,6 +44,7 @@ const TerminalRead = TerminalHandle.extend({
           message: 'Cursor must be a non-negative integer'
         })
     )
+    .optional()
 })
 
 // Why: the legacy handler allowed `title: string | null` and rejected every
@@ -89,7 +90,8 @@ const TerminalSplit = TerminalHandle.extend({
   direction: z
     .unknown()
     .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
-    .pipe(z.enum(['vertical', 'horizontal']).optional()),
+    .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
+    .optional(),
   command: OptionalString
 })
 
@@ -128,13 +130,29 @@ const TerminalSubscribe = TerminalHandle.extend({
 })
 
 const TerminalSetDisplayMode = TerminalHandle.extend({
-  mode: z.enum(['auto', 'phone', 'desktop']),
+  // Why: 'phone' was previously a "stay at phone dims after unsubscribe"
+  // mode that the toggle UI never produced and nothing in product
+  // depended on. Removed in favor of two clean modes: 'auto' (mobile
+  // drives dims while subscribed, desktop restores on last-leave) and
+  // 'desktop' (no resize, mobile scales the wide canvas down to fit).
+  mode: z.enum(['auto', 'desktop']),
   // Why: identifies the caller for the driver state machine. Optional for
   // backward compatibility with older mobile clients.
   client: z
     .object({
       id: requiredString('Missing client ID'),
       type: z.enum(['mobile', 'desktop']).default('desktop').optional()
+    })
+    .optional(),
+  // Why: subscribers that registered before viewport was measured have
+  // a null viewport on their record. Toggling to 'auto' would no-op
+  // because applyMobileDisplayMode skips phone-fit when viewport is
+  // missing. Allow the toggle to carry the latest measured viewport so
+  // the server can store it on the subscriber record before fitting.
+  viewport: z
+    .object({
+      cols: z.number().int().positive(),
+      rows: z.number().int().positive()
     })
     .optional()
 })
@@ -169,6 +187,13 @@ const TerminalUpdateViewport = TerminalHandle.extend({
     cols: z.number().int().min(20).max(240),
     rows: z.number().int().min(8).max(120)
   })
+})
+
+// Why: phone-fit auto-restore preference (docs/mobile-fit-hold.md). `null`
+// means Indefinite; finite millisecond values are clamped server-side
+// into [5_000, 60min] before persistence.
+const TerminalSetAutoRestoreFit = z.object({
+  ms: z.number().nullable()
 })
 
 export const TERMINAL_METHODS: RpcAnyMethod[] = [
@@ -217,14 +242,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       // Why: deliberate mobile input is a take-floor action. Drives the
       // `* → mobile{clientId}` driver transition so the desktop banner
       // remounts (if previously reclaimed) and active phone-fit dims follow
-      // the most recent actor. Only mobile-typed callers take the floor;
-      // desktop callers (CLI / agents) do not. Older mobile builds without
-      // a `client` field continue to work — the runtime then keeps the
-      // current driver state.
+      // the most recent actor. Only mobile-typed callers take the floor.
       if (params.client && params.client.type === 'mobile') {
         const leaf = runtime.resolveLeafForHandle(params.terminal)
         if (leaf?.ptyId) {
-          runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+          await runtime.mobileTookFloor(leaf.ptyId, params.client.id)
         }
       }
       return { send: result }
@@ -273,7 +295,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
-      const result = runtime.resizeForClient(
+      const result = await runtime.resizeForClient(
         leaf.ptyId,
         params.mode,
         params.clientId,
@@ -310,16 +332,22 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
+      // Why: late-bind viewport for callers that subscribed in desktop
+      // mode (no viewport stored). Without this, a 'auto' toggle on a
+      // viewport-less record skips phone-fit and the user sees no resize.
+      if (params.viewport && params.client?.id) {
+        runtime.updateMobileSubscriberViewport(leaf.ptyId, params.client.id, params.viewport)
+      }
       runtime.setMobileDisplayMode(leaf.ptyId, params.mode)
-      runtime.applyMobileDisplayMode(leaf.ptyId)
+      await runtime.applyMobileDisplayMode(leaf.ptyId)
       // Why: a deliberate mobile mode change is a take-floor action when
       // moving to auto/phone (the user explicitly chose to drive at phone
       // dims). Setting mode to desktop is intentionally NOT a take-floor
       // action — that's a "watch from desktop dims" gesture.
       if (params.client && params.client.type === 'mobile' && params.mode !== 'desktop') {
-        runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+        await runtime.mobileTookFloor(leaf.ptyId, params.client.id)
       }
-      return { mode: params.mode }
+      return { mode: params.mode, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),
   defineMethod({
@@ -340,8 +368,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
-      const updated = runtime.updateMobileViewport(leaf.ptyId, params.client.id, params.viewport)
-      return { updated }
+      const updated = await runtime.updateMobileViewport(
+        leaf.ptyId,
+        params.client.id,
+        params.viewport
+      )
+      return { updated, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),
   // Why: terminal.subscribe streams live terminal output over WebSocket.
@@ -386,7 +418,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
       // Server-side auto-fit: resize PTY to phone dims before serializing scrollback
       if (isMobile && clientId) {
-        runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+        await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
       }
 
       const read = await runtime.readTerminal(params.terminal)
@@ -395,6 +427,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       })
       const size = runtime.getTerminalSize(ptyId)
       const displayMode = runtime.getMobileDisplayMode(ptyId)
+      // Why: emit the current layout seq with the initial scrollback so
+      // the mobile client's stale-event filter knows the high-water mark.
+      // Undefined when the PTY has never transitioned (filter is fail-open).
+      // See docs/mobile-terminal-layout-state-machine.md.
+      const seq = runtime.getLayout(ptyId)?.seq
       emit({
         type: 'scrollback',
         lines: read.tail,
@@ -402,7 +439,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         serialized: serialized?.data,
         cols: serialized?.cols ?? size?.cols,
         rows: serialized?.rows ?? size?.rows,
-        displayMode
+        displayMode,
+        seq
       })
 
       await new Promise<void>((resolve) => {
@@ -426,7 +464,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             rows: event.rows,
             serialized: fresh?.data,
             displayMode: event.displayMode,
-            reason: event.reason
+            reason: event.reason,
+            seq: event.seq
           })
         })
 
@@ -476,5 +515,19 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       return { unsubscribed: true }
     }
+  }),
+  defineMethod({
+    name: 'terminal.getAutoRestoreFit',
+    params: z.object({}),
+    handler: async (_params, { runtime }) => ({
+      ms: runtime.getMobileAutoRestoreFitMs()
+    })
+  }),
+  defineMethod({
+    name: 'terminal.setAutoRestoreFit',
+    params: TerminalSetAutoRestoreFit,
+    handler: async (params, { runtime }) => ({
+      ms: runtime.setMobileAutoRestoreFitMs(params.ms)
+    })
   })
 ]

@@ -121,8 +121,12 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux.notify('pty.resize', { id, cols, rows })
   }
 
-  async shutdown(id: string, immediate: boolean): Promise<void> {
-    await this.mux.request('pty.shutdown', { id, immediate })
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    await this.mux.request('pty.shutdown', {
+      id,
+      immediate: opts.immediate ?? false,
+      keepHistory: opts.keepHistory ?? false
+    })
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {

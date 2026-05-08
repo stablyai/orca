@@ -15,6 +15,7 @@ import type {
   SetupSplitDirection,
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
+import type { EventProps } from '../../../../shared/telemetry-events'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -52,7 +53,13 @@ type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
-  startup?: { command: string; env?: Record<string, string> } | null
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
+     *  so main fires the event only after the spawn succeeds. */
+    telemetry?: EventProps<'agent_started'>
+  } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
    *  keeping the main terminal interactive. */
@@ -88,7 +95,6 @@ type UseTerminalPaneLifecycleDeps = {
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>
   panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
-  pendingWritesRef: React.RefObject<Map<number, string>>
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
@@ -176,7 +182,6 @@ export function useTerminalPaneLifecycle({
   paneMode2031Ref,
   paneLastThemeModeRef,
   panePtyBindingsRef,
-  pendingWritesRef,
   replayingPanesRef,
   isActiveRef,
   isVisibleRef,
@@ -260,7 +265,6 @@ export function useTerminalPaneLifecycle({
     const expandedStyleSnapshots = expandedStyleSnapshotRef.current
     const paneTransports = paneTransportsRef.current
     const panePtyBindings = panePtyBindingsRef.current
-    const pendingWrites = pendingWritesRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
@@ -324,7 +328,6 @@ export function useTerminalPaneLifecycle({
       cwd,
       startup,
       paneTransportsRef,
-      pendingWritesRef,
       replayingPanesRef,
       isActiveRef,
       isVisibleRef,
@@ -582,7 +585,6 @@ export function useTerminalPaneLifecycle({
         }
         clearRuntimePaneTitle(tabId, paneId)
         paneFontSizesRef.current.delete(paneId)
-        pendingWritesRef.current.delete(paneId)
         replayingPanesRef.current.delete(paneId)
         // Clean up pane title state so closed panes don't leave stale entries.
         setPaneTitles((prev) => {
@@ -902,7 +904,6 @@ export function useTerminalPaneLifecycle({
       }
       panePtyBindings.clear()
       paneTransports.clear()
-      pendingWrites.clear()
       manager.destroy()
       managerRef.current = null
       if (e2eConfig.exposeStore) {

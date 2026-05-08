@@ -127,7 +127,9 @@ export async function updateProjectItemFieldValue(
     value: valVar.val
   }
   const res = await runGraphql<unknown>(query, vars)
-  if (!res.ok) {return { ok: false, error: res.error }}
+  if (!res.ok) {
+    return { ok: false, error: res.error }
+  }
   return { ok: true }
 }
 
@@ -151,7 +153,9 @@ export async function clearProjectItemFieldValue(
     itemId: args.itemId,
     fieldId: args.fieldId
   })
-  if (!res.ok) {return { ok: false, error: res.error }}
+  if (!res.ok) {
+    return { ok: false, error: res.error }
+  }
   return { ok: true }
 }
 
@@ -161,13 +165,18 @@ export async function updateIssueBySlug(
   args: UpdateIssueBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const n = assertPositiveInt(args.number, 'number')
-  if (!n.ok) {return { ok: false, error: n.error }}
+  if (!n.ok) {
+    return { ok: false, error: n.error }
+  }
   if (!args.updates || typeof args.updates !== 'object') {
     return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
   }
-  const { title, body, state, addLabels, removeLabels, addAssignees, removeAssignees } = args.updates
+  const { title, body, state, addLabels, removeLabels, addAssignees, removeAssignees } =
+    args.updates
 
   // Title / body / state go through PATCH /repos/{owner}/{repo}/issues/{n}.
   // Labels/assignees go through their dedicated endpoints.
@@ -176,11 +185,19 @@ export async function updateIssueBySlug(
   // 1) PATCH body
   if (title !== undefined || body !== undefined || state !== undefined) {
     const patchArgs: string[] = ['-X', 'PATCH', base]
-    if (title !== undefined) {patchArgs.push('--raw-field', `title=${title}`)}
-    if (body !== undefined) {patchArgs.push('--raw-field', `body=${body}`)}
-    if (state !== undefined) {patchArgs.push('--raw-field', `state=${state}`)}
+    if (title !== undefined) {
+      patchArgs.push('--raw-field', `title=${title}`)
+    }
+    if (body !== undefined) {
+      patchArgs.push('--raw-field', `body=${body}`)
+    }
+    if (state !== undefined) {
+      patchArgs.push('--raw-field', `state=${state}`)
+    }
     const r = await runRest<unknown>(patchArgs)
-    if (!r.ok) {return { ok: false, error: r.error }}
+    if (!r.ok) {
+      return { ok: false, error: r.error }
+    }
   }
 
   // 2) Labels — collapse multi-delete fan-out into a single PUT when removing
@@ -194,36 +211,49 @@ export async function updateIssueBySlug(
   if (removeCount > 1) {
     type RawLabelResp = { name?: string }[]
     const fetched = await runRest<RawLabelResp>(['-X', 'GET', `${base}/labels`])
-    if (!fetched.ok) {return { ok: false, error: fetched.error }}
+    if (!fetched.ok) {
+      return { ok: false, error: fetched.error }
+    }
     const currentNames = new Set(
       fetched.data.map((l) => l.name).filter((n): n is string => typeof n === 'string')
     )
-    for (const l of removeLabels ?? []) {currentNames.delete(l)}
-    for (const l of addLabels ?? []) {currentNames.add(l)}
+    for (const l of removeLabels ?? []) {
+      currentNames.delete(l)
+    }
+    for (const l of addLabels ?? []) {
+      currentNames.add(l)
+    }
     if (currentNames.size === 0) {
       // Why: `gh api -X PUT` with no `--raw-field` arguments sends an empty
       // body — GitHub does NOT interpret that as "clear labels". The
       // dedicated DELETE endpoint is the documented way to remove all
       // labels in a single call.
-      const r = await runRest<unknown>(
-        ['-X', 'DELETE', `${base}/labels`],
-        undefined,
-        'core',
-        { expectEmpty: true }
-      )
-      if (!r.ok && r.error.type !== 'not_found') {return { ok: false, error: r.error }}
+      const r = await runRest<unknown>(['-X', 'DELETE', `${base}/labels`], undefined, 'core', {
+        expectEmpty: true
+      })
+      if (!r.ok && r.error.type !== 'not_found') {
+        return { ok: false, error: r.error }
+      }
     } else {
       const putArgs = ['-X', 'PUT', `${base}/labels`]
-      for (const name of currentNames) {putArgs.push('--raw-field', `labels[]=${name}`)}
+      for (const name of currentNames) {
+        putArgs.push('--raw-field', `labels[]=${name}`)
+      }
       const r = await runRest<unknown>(putArgs)
-      if (!r.ok) {return { ok: false, error: r.error }}
+      if (!r.ok) {
+        return { ok: false, error: r.error }
+      }
     }
   } else {
     if (addCount > 0) {
       const restArgs = ['-X', 'POST', `${base}/labels`]
-      for (const l of addLabels ?? []) {restArgs.push('--raw-field', `labels[]=${l}`)}
+      for (const l of addLabels ?? []) {
+        restArgs.push('--raw-field', `labels[]=${l}`)
+      }
       const r = await runRest<unknown>(restArgs)
-      if (!r.ok) {return { ok: false, error: r.error }}
+      if (!r.ok) {
+        return { ok: false, error: r.error }
+      }
     }
     if (removeCount === 1) {
       const r = await runRest<unknown>(
@@ -232,7 +262,9 @@ export async function updateIssueBySlug(
         'core',
         { expectEmpty: true }
       )
-      if (!r.ok && r.error.type !== 'not_found') {return { ok: false, error: r.error }}
+      if (!r.ok && r.error.type !== 'not_found') {
+        return { ok: false, error: r.error }
+      }
     }
   }
 
@@ -240,15 +272,23 @@ export async function updateIssueBySlug(
   //    add/remove are at most 2 calls regardless of array size.
   if (addAssignees && addAssignees.length > 0) {
     const restArgs = ['-X', 'POST', `${base}/assignees`]
-    for (const u of addAssignees) {restArgs.push('--raw-field', `assignees[]=${u}`)}
+    for (const u of addAssignees) {
+      restArgs.push('--raw-field', `assignees[]=${u}`)
+    }
     const r = await runRest<unknown>(restArgs)
-    if (!r.ok) {return { ok: false, error: r.error }}
+    if (!r.ok) {
+      return { ok: false, error: r.error }
+    }
   }
   if (removeAssignees && removeAssignees.length > 0) {
     const restArgs = ['-X', 'DELETE', `${base}/assignees`]
-    for (const u of removeAssignees) {restArgs.push('--raw-field', `assignees[]=${u}`)}
+    for (const u of removeAssignees) {
+      restArgs.push('--raw-field', `assignees[]=${u}`)
+    }
     const r = await runRest<unknown>(restArgs)
-    if (!r.ok) {return { ok: false, error: r.error }}
+    if (!r.ok) {
+      return { ok: false, error: r.error }
+    }
   }
   return { ok: true }
 }
@@ -257,13 +297,21 @@ export async function updatePullRequestBySlug(
   args: UpdatePullRequestBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const n = assertPositiveInt(args.number, 'number')
-  if (!n.ok) {return { ok: false, error: n.error }}
+  if (!n.ok) {
+    return { ok: false, error: n.error }
+  }
   if (!args.updates || typeof args.updates !== 'object') {
     return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
   }
-  const patchArgs: string[] = ['-X', 'PATCH', `repos/${args.owner}/${args.repo}/pulls/${args.number}`]
+  const patchArgs: string[] = [
+    '-X',
+    'PATCH',
+    `repos/${args.owner}/${args.repo}/pulls/${args.number}`
+  ]
   // Why: count fields explicitly rather than inferring from patchArgs.length —
   // adding a future header/flag arg silently breaks an array-length check.
   let fieldCount = 0
@@ -280,7 +328,9 @@ export async function updatePullRequestBySlug(
     return { ok: true }
   }
   const r = await runRest<unknown>(patchArgs)
-  if (!r.ok) {return { ok: false, error: r.error }}
+  if (!r.ok) {
+    return { ok: false, error: r.error }
+  }
   return { ok: true }
 }
 
@@ -308,9 +358,13 @@ export async function addIssueCommentBySlug(
   args: AddIssueCommentBySlugArgs
 ): Promise<GitHubProjectCommentMutationResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const n = assertPositiveInt(args.number, 'number')
-  if (!n.ok) {return { ok: false, error: n.error }}
+  if (!n.ok) {
+    return { ok: false, error: n.error }
+  }
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
@@ -321,7 +375,9 @@ export async function addIssueCommentBySlug(
     '--raw-field',
     `body=${args.body}`
   ])
-  if (!r.ok) {return { ok: false, error: r.error }}
+  if (!r.ok) {
+    return { ok: false, error: r.error }
+  }
   return { ok: true, comment: mapIssueComment(r.data, args.body) }
 }
 
@@ -329,9 +385,13 @@ export async function updateIssueCommentBySlug(
   args: UpdateIssueCommentBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const n = assertPositiveInt(args.commentId, 'commentId')
-  if (!n.ok) {return { ok: false, error: n.error }}
+  if (!n.ok) {
+    return { ok: false, error: n.error }
+  }
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
@@ -342,7 +402,9 @@ export async function updateIssueCommentBySlug(
     '--raw-field',
     `body=${args.body}`
   ])
-  if (!r.ok) {return { ok: false, error: r.error }}
+  if (!r.ok) {
+    return { ok: false, error: r.error }
+  }
   return { ok: true }
 }
 
@@ -350,16 +412,22 @@ export async function deleteIssueCommentBySlug(
   args: DeleteIssueCommentBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const n = assertPositiveInt(args.commentId, 'commentId')
-  if (!n.ok) {return { ok: false, error: n.error }}
+  if (!n.ok) {
+    return { ok: false, error: n.error }
+  }
   const r = await runRest<unknown>(
     ['-X', 'DELETE', `repos/${args.owner}/${args.repo}/issues/comments/${args.commentId}`],
     undefined,
     'core',
     { expectEmpty: true }
   )
-  if (!r.ok) {return { ok: false, error: r.error }}
+  if (!r.ok) {
+    return { ok: false, error: r.error }
+  }
   return { ok: true }
 }
 
@@ -369,9 +437,13 @@ export async function listLabelsBySlug(
   args: ListLabelsBySlugArgs
 ): Promise<ListLabelsBySlugResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const guard = rateLimitGuard('core')
-  if (guard.blocked) {return { ok: false, error: rateLimitedError(guard) }}
+  if (guard.blocked) {
+    return { ok: false, error: rateLimitedError(guard) }
+  }
   await acquire()
   // Why: `--paginate` may fan out to multiple pages; we can only reasonably
   // estimate a 1-call spend up front. The next probe will reconcile.
@@ -400,12 +472,16 @@ export async function listAssignableUsersBySlug(
   args: ListAssignableUsersBySlugArgs
 ): Promise<ListAssignableUsersBySlugResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   // Seed logins merge after the fetch so callers can include currently-visible
   // assignees even if the repo participant search is sparse.
   const result: GitHubAssignableUser[] = []
   const guard = rateLimitGuard('core')
-  if (guard.blocked) {return { ok: false, error: rateLimitedError(guard) }}
+  if (guard.blocked) {
+    return { ok: false, error: rateLimitedError(guard) }
+  }
   await acquire()
   noteRateLimitSpend('core')
   try {
@@ -419,7 +495,10 @@ export async function listAssignableUsersBySlug(
       ],
       { encoding: 'utf-8' }
     )
-    for (const line of stdout.trim().split('\n').filter((l) => l.length > 0)) {
+    for (const line of stdout
+      .trim()
+      .split('\n')
+      .filter((l) => l.length > 0)) {
       try {
         const u = JSON.parse(line) as { login?: string; avatarUrl?: string; name?: string | null }
         if (typeof u.login === 'string') {
@@ -455,7 +534,9 @@ export async function listIssueTypesBySlug(
   args: ListIssueTypesBySlugArgs
 ): Promise<ListIssueTypesBySlugResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const query = `
     query($owner:String!, $repo:String!) {
       repository(owner:$owner, name:$repo) {
@@ -488,7 +569,10 @@ export async function listIssueTypesBySlug(
   }
   const nodes = res.data.repository?.issueTypes?.nodes ?? []
   const types = nodes
-    .filter((n): n is NonNullable<typeof n> => n !== null && typeof n.id === 'string' && typeof n.name === 'string')
+    .filter(
+      (n): n is NonNullable<typeof n> =>
+        n !== null && typeof n.id === 'string' && typeof n.name === 'string'
+    )
     .map((n) => ({
       id: n.id as string,
       name: n.name as string,
@@ -502,9 +586,13 @@ export async function updateIssueTypeBySlug(
   args: UpdateIssueTypeBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const n = assertPositiveInt(args.number, 'number')
-  if (!n.ok) {return { ok: false, error: n.error }}
+  if (!n.ok) {
+    return { ok: false, error: n.error }
+  }
   // Why: `updateIssueIssueType` is the dedicated mutation; passing null for
   // `issueTypeId` clears the type. We resolve the issue id via a lightweight
   // GraphQL lookup because the REST endpoint doesn't accept issue types.
@@ -516,7 +604,9 @@ export async function updateIssueTypeBySlug(
      }`,
     { owner: args.owner, repo: args.repo, num: args.number }
   )
-  if (!lookup.ok) {return { ok: false, error: lookup.error }}
+  if (!lookup.ok) {
+    return { ok: false, error: lookup.error }
+  }
   const issueId = lookup.data.repository?.issue?.id
   if (!issueId) {
     return { ok: false, error: { type: 'not_found', message: 'Issue not found.' } }
@@ -543,7 +633,9 @@ export async function updateIssueTypeBySlug(
     ? { issueId, issueTypeId: args.issueTypeId }
     : { issueId }
   const res = await runGraphql<unknown>(query, vars)
-  if (!res.ok) {return { ok: false, error: res.error }}
+  if (!res.ok) {
+    return { ok: false, error: res.error }
+  }
   return { ok: true }
 }
 
@@ -567,9 +659,13 @@ export async function getWorkItemDetailsBySlug(
   args: ProjectWorkItemDetailsBySlugArgs
 ): Promise<ProjectWorkItemDetailsBySlugResult> {
   const v = validateSlugArgs(args.owner, args.repo)
-  if (!v.ok) {return v}
+  if (!v.ok) {
+    return v
+  }
   const n = assertPositiveInt(args.number, 'number')
-  if (!n.ok) {return { ok: false, error: n.error }}
+  if (!n.ok) {
+    return { ok: false, error: n.error }
+  }
   if (args.type !== 'issue' && args.type !== 'pr') {
     return { ok: false, error: { type: 'validation_error', message: 'Invalid type.' } }
   }
@@ -620,41 +716,47 @@ export async function getWorkItemDetailsBySlug(
   `
   const res = await runGraphql<{
     repository?: {
-      issue?: RawWorkItemContent & {
-        updatedAt?: string
-        body?: string
-        author?: { login?: string } | null
-        participants?: { nodes?: RawUser[] }
-        comments?: {
-          nodes?: ({
-            databaseId?: number
-            author?: { login?: string; avatarUrl?: string; __typename?: string } | null
+      issue?:
+        | (RawWorkItemContent & {
+            updatedAt?: string
             body?: string
-            createdAt?: string
-            url?: string
-          } | null)[]
-        }
-      } | null
-      pullRequest?: RawWorkItemContent & {
-        updatedAt?: string
-        body?: string
-        headRefName?: string
-        baseRefName?: string
-        author?: { login?: string } | null
-        participants?: { nodes?: RawUser[] }
-        comments?: {
-          nodes?: ({
-            databaseId?: number
-            author?: { login?: string; avatarUrl?: string; __typename?: string } | null
+            author?: { login?: string } | null
+            participants?: { nodes?: RawUser[] }
+            comments?: {
+              nodes?: ({
+                databaseId?: number
+                author?: { login?: string; avatarUrl?: string; __typename?: string } | null
+                body?: string
+                createdAt?: string
+                url?: string
+              } | null)[]
+            }
+          })
+        | null
+      pullRequest?:
+        | (RawWorkItemContent & {
+            updatedAt?: string
             body?: string
-            createdAt?: string
-            url?: string
-          } | null)[]
-        }
-      } | null
+            headRefName?: string
+            baseRefName?: string
+            author?: { login?: string } | null
+            participants?: { nodes?: RawUser[] }
+            comments?: {
+              nodes?: ({
+                databaseId?: number
+                author?: { login?: string; avatarUrl?: string; __typename?: string } | null
+                body?: string
+                createdAt?: string
+                url?: string
+              } | null)[]
+            }
+          })
+        | null
     } | null
   }>(query, { owner: args.owner, repo: args.repo, num: args.number })
-  if (!res.ok) {return { ok: false, error: res.error }}
+  if (!res.ok) {
+    return { ok: false, error: res.error }
+  }
   const raw = args.type === 'issue' ? res.data.repository?.issue : res.data.repository?.pullRequest
   if (!raw) {
     return { ok: false, error: { type: 'not_found', message: 'Item not found.' } }
@@ -668,7 +770,9 @@ export async function getWorkItemDetailsBySlug(
     .filter((l): l is string => typeof l === 'string')
   const comments: PRComment[] = []
   for (const c of raw.comments?.nodes ?? []) {
-    if (!c || typeof c.body !== 'string') {continue}
+    if (!c || typeof c.body !== 'string') {
+      continue
+    }
     comments.push({
       id: typeof c.databaseId === 'number' ? c.databaseId : Date.now(),
       author: c.author?.login ?? '',
@@ -735,4 +839,3 @@ export async function getWorkItemDetailsBySlug(
   }
   return { ok: true, details }
 }
-

@@ -74,8 +74,16 @@ export class RateLimitService {
   private inactiveCodexFetching = new Set<string>()
   private lastInactiveClaudeFetchAt = 0
   private lastInactiveCodexFetchAt = 0
+  private stateListeners = new Set<(state: RateLimitState) => void>()
 
   constructor() {}
+
+  onStateChange(listener: (state: RateLimitState) => void): () => void {
+    this.stateListeners.add(listener)
+    return () => {
+      this.stateListeners.delete(listener)
+    }
+  }
 
   setCodexHomePathResolver(resolver: () => string | null): void {
     this.codexHomePathResolver = resolver
@@ -757,9 +765,17 @@ export class RateLimitService {
   }
 
   private pushToRenderer(): void {
+    const state = this.getState()
+    for (const listener of this.stateListeners) {
+      try {
+        listener(state)
+      } catch {
+        // ignore — one bad listener must not break the others
+      }
+    }
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return
     }
-    this.mainWindow.webContents.send('rateLimits:update', this.getState())
+    this.mainWindow.webContents.send('rateLimits:update', state)
   }
 }

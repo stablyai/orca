@@ -27,10 +27,16 @@ export function SlugDialogBody({
   // patches applied by the table (e.g. inline assignee edits).
   const row = useMemo(() => {
     const table = projectViewCache[cacheKey]?.data
-    if (!table) {return null}
-    return table.rows.find(
-      (r) => r.content.number === number && r.content.repository?.toLowerCase() === `${owner}/${repo}`.toLowerCase()
-    ) ?? null
+    if (!table) {
+      return null
+    }
+    return (
+      table.rows.find(
+        (r) =>
+          r.content.number === number &&
+          r.content.repository?.toLowerCase() === `${owner}/${repo}`.toLowerCase()
+      ) ?? null
+    )
   }, [projectViewCache, cacheKey, owner, repo, number])
 
   const [details, setDetails] = useState<GitHubWorkItemDetails | null>(null)
@@ -47,7 +53,9 @@ export function SlugDialogBody({
     window.api.gh
       .projectWorkItemDetailsBySlug({ owner, repo, number, type })
       .then((res) => {
-        if (rid !== requestIdRef.current) {return}
+        if (rid !== requestIdRef.current) {
+          return
+        }
         if (res.ok) {
           setDetails(res.details)
         } else {
@@ -55,11 +63,15 @@ export function SlugDialogBody({
         }
       })
       .catch((err) => {
-        if (rid !== requestIdRef.current) {return}
+        if (rid !== requestIdRef.current) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to load details')
       })
       .finally(() => {
-        if (rid !== requestIdRef.current) {return}
+        if (rid !== requestIdRef.current) {
+          return
+        }
         setLoading(false)
       })
   }, [owner, repo, number, type])
@@ -74,13 +86,19 @@ export function SlugDialogBody({
   const commitTitle = useCallback(async () => {
     const next = titleDraft.trim()
     setEditingTitle(false)
-    if (!next || next === title) {return}
+    if (!next || next === title) {
+      return
+    }
     // Why: without a row id we can't address the project item — the helper
     // would just return "Row not found" and toast-spam the user. The title
     // button is also disabled in this case (see render below).
-    if (!row) {return}
+    if (!row) {
+      return
+    }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { title: next })
-    if (!res.ok) {toast.error(res.error.message)}
+    if (!res.ok) {
+      toast.error(res.error.message)
+    }
   }, [titleDraft, title, patchProjectIssueOrPr, cacheKey, row])
 
   const [editingBody, setEditingBody] = useState(false)
@@ -88,10 +106,14 @@ export function SlugDialogBody({
   const body = details?.body ?? ''
   const commitBody = useCallback(async () => {
     setEditingBody(false)
-    if (bodyDraft === body) {return}
+    if (bodyDraft === body) {
+      return
+    }
     // Why: same reason as commitTitle — bail rather than ask the helper to
     // patch a missing row. The body button is also disabled when row is null.
-    if (!row) {return}
+    if (!row) {
+      return
+    }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { body: bodyDraft })
     if (!res.ok) {
       toast.error(res.error.message)
@@ -177,12 +199,16 @@ export function SlugDialogBody({
             onChange={async (add, remove) => {
               // Why: bail rather than call the helper with an empty id —
               // see commitTitle above. Trigger is also disabled when !row.
-              if (!row) {return}
+              if (!row) {
+                return
+              }
               const res = await patchProjectIssueOrPr(cacheKey, row.id, {
                 ...(add.length ? { addLabels: add } : {}),
                 ...(remove.length ? { removeLabels: remove } : {})
               })
-              if (!res.ok) {toast.error(res.error.message)}
+              if (!res.ok) {
+                toast.error(res.error.message)
+              }
             }}
           />
           <AssigneesEditor
@@ -191,12 +217,16 @@ export function SlugDialogBody({
             selected={assignees}
             disabled={!row}
             onChange={async (add, remove) => {
-              if (!row) {return}
+              if (!row) {
+                return
+              }
               const res = await patchProjectIssueOrPr(cacheKey, row.id, {
                 ...(add.length ? { addAssignees: add } : {}),
                 ...(remove.length ? { removeAssignees: remove } : {})
               })
-              if (!res.ok) {toast.error(res.error.message)}
+              if (!res.ok) {
+                toast.error(res.error.message)
+              }
             }}
           />
         </div>
@@ -269,9 +299,7 @@ export function SlugDialogBody({
                 owner={owner}
                 repo={repo}
                 number={number}
-                onAdded={(c) =>
-                  setDetails((d) => (d ? { ...d, comments: [...d.comments, c] } : d))
-                }
+                onAdded={(c) => setDetails((d) => (d ? { ...d, comments: [...d.comments, c] } : d))}
               />
             </section>
           </div>

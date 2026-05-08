@@ -59,9 +59,7 @@ export type GitHubProjectField =
       kind: 'field'
       id: string
       name: string
-      dataType:
-        | Exclude<GitHubProjectFieldDataType, 'SINGLE_SELECT' | 'ITERATION'>
-        | (string & {})
+      dataType: Exclude<GitHubProjectFieldDataType, 'SINGLE_SELECT' | 'ITERATION'> | (string & {})
     }
   | {
       kind: 'single-select'

@@ -16,6 +16,7 @@ export type WellKnownAgentType =
   | 'opencode'
   | 'cursor'
   | 'aider'
+  | 'pi'
   | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 

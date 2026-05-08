@@ -20,7 +20,7 @@ const {
   readdirMock,
   rmMock,
   gitExecFileAsyncMock,
-  rebuildAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCacheMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -36,7 +36,7 @@ const {
   readdirMock: vi.fn(),
   rmMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
-  rebuildAuthorizedRootsCacheMock: vi.fn().mockResolvedValue(undefined)
+  invalidateAuthorizedRootsCacheMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -68,7 +68,7 @@ vi.mock('../git/repo', () => ({
 }))
 
 vi.mock('./filesystem-auth', () => ({
-  rebuildAuthorizedRootsCache: rebuildAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -111,7 +111,7 @@ describe('repos:create', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     mockWindow.webContents.send.mockReset()
-    rebuildAuthorizedRootsCacheMock.mockReset().mockResolvedValue(undefined)
+    invalidateAuthorizedRootsCacheMock.mockReset()
 
     // Default baseline: target does NOT exist yet, mkdir succeeds, git OK.
     accessMock.mockReset().mockRejectedValue(new Error('ENOENT'))
@@ -340,17 +340,17 @@ describe('repos:create', () => {
 
   // ── authorized-roots cache refresh ────────────────────────────────
 
-  it('rebuilds the authorized-roots cache after a successful folder create', async () => {
-    // Roots cache must be refreshed so the renderer can read the new path
-    // without waiting for the next full reconciliation.
+  it('invalidates the authorized-roots cache after a successful folder create', async () => {
+    // Direct repo roots come from store state; invalidation clears stale linked
+    // roots without scanning every existing repo during creation.
     await callCreate({ parentPath: '/tmp', name: 'rooted', kind: 'folder' })
-    expect(rebuildAuthorizedRootsCacheMock).toHaveBeenCalledTimes(1)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledTimes(1)
   })
 
   it('does NOT rebuild the authorized-roots cache on a validation failure', async () => {
     const result = await callCreate({ parentPath: '/tmp', name: '   ', kind: 'git' })
     expect(result).toEqual({ error: 'Name cannot be empty' })
-    expect(rebuildAuthorizedRootsCacheMock).not.toHaveBeenCalled()
+    expect(invalidateAuthorizedRootsCacheMock).not.toHaveBeenCalled()
   })
 
   it('does NOT rebuild the authorized-roots cache when dedup short-circuits', async () => {
@@ -359,7 +359,7 @@ describe('repos:create', () => {
 
     await callCreate({ parentPath: '/tmp', name: 'dupe2', kind: 'git' })
 
-    expect(rebuildAuthorizedRootsCacheMock).not.toHaveBeenCalled()
+    expect(invalidateAuthorizedRootsCacheMock).not.toHaveBeenCalled()
   })
 
   // ── dedup-by-path ─────────────────────────────────────────────────

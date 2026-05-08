@@ -16,13 +16,15 @@ const {
   trackMock,
   setOptInMock,
   persistBannerAcknowledgeMock,
-  consumeConsentMutationTokenMock
+  consumeConsentMutationTokenMock,
+  getCohortAtEmitMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   trackMock: vi.fn(),
   setOptInMock: vi.fn(),
   persistBannerAcknowledgeMock: vi.fn(),
-  consumeConsentMutationTokenMock: vi.fn()
+  consumeConsentMutationTokenMock: vi.fn(),
+  getCohortAtEmitMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
@@ -33,6 +35,9 @@ vi.mock('../telemetry/client', () => ({
 }))
 vi.mock('../telemetry/burst-cap', () => ({
   consumeConsentMutationToken: consumeConsentMutationTokenMock
+}))
+vi.mock('../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: getCohortAtEmitMock
 }))
 
 import { _resetStoreForTests, registerTelemetryHandlers } from './telemetry'
@@ -82,6 +87,8 @@ describe('telemetry IPC handlers', () => {
     persistBannerAcknowledgeMock.mockReset()
     consumeConsentMutationTokenMock.mockReset()
     consumeConsentMutationTokenMock.mockReturnValue(true)
+    getCohortAtEmitMock.mockReset()
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 0 })
     _resetStoreForTests()
   })
   afterEach(() => {
@@ -102,12 +109,53 @@ describe('telemetry IPC handlers', () => {
 
   // ── telemetry:track ──────────────────────────────────────────────────
 
-  it('forwards a well-typed track call to track()', () => {
+  it('forwards a well-typed track call to track() and injects cohort for COHORT_EXTENDED events', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', {})
     expect(trackMock).toHaveBeenCalledTimes(1)
-    expect(trackMock).toHaveBeenCalledWith('app_opened', {})
+    expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: 2 })
+  })
+
+  // The IPC handler's selectivity is load-bearing: schemas are `.strict()`,
+  // so injecting `nth_repo_added` on a non-cohort event would silently
+  // drop the entire event at the validator. Events outside `COHORT_EXTENDED`
+  // must reach `track()` unmodified.
+  it('does NOT inject cohort on events outside COHORT_EXTENDED', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'settings_changed', { setting_key: 'editorAutoSave', value_kind: 'bool' })
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('settings_changed', {
+      setting_key: 'editorAutoSave',
+      value_kind: 'bool'
+    })
+    expect(getCohortAtEmitMock).not.toHaveBeenCalled()
+  })
+
+  // The renderer-only Setup-step events fire from React `onClick` and
+  // depend on the IPC handler injecting cohort — call sites stay
+  // synchronous and pass only their own props.
+  it('injects cohort for add_repo_setup_step_action (renderer-only event)', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 1 })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'add_repo_setup_step_action', { action: 'skip' })
+    expect(trackMock).toHaveBeenCalledWith('add_repo_setup_step_action', {
+      action: 'skip',
+      nth_repo_added: 1
+    })
+  })
+
+  // Fail-soft: a degraded classifier returns `{ nth_repo_added: undefined }`.
+  // The schemas declare the field optional, so the event still validates.
+  it('forwards undefined cohort when the classifier returns undefined', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: undefined })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'app_opened', {})
+    expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: undefined })
   })
 
   it('drops track calls with a non-string name', () => {
@@ -129,12 +177,13 @@ describe('telemetry IPC handlers', () => {
 
   it('treats null/undefined props as an empty object', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 0 })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', null)
     handler({}, 'app_opened', undefined)
     expect(trackMock).toHaveBeenCalledTimes(2)
-    expect(trackMock).toHaveBeenNthCalledWith(1, 'app_opened', {})
-    expect(trackMock).toHaveBeenNthCalledWith(2, 'app_opened', {})
+    expect(trackMock).toHaveBeenNthCalledWith(1, 'app_opened', { nth_repo_added: 0 })
+    expect(trackMock).toHaveBeenNthCalledWith(2, 'app_opened', { nth_repo_added: 0 })
   })
 
   // ── telemetry:setOptIn — input narrowing ─────────────────────────────
@@ -245,9 +294,8 @@ describe('telemetry IPC handlers', () => {
   it('routes banner ✕ through persistBannerAcknowledgeWithoutEmitting without invoking setOptIn', () => {
     // This is the whole point of the separate channel: the silent-persist
     // path MUST NOT reach setOptIn, which would derive a `via` and fire
-    // `telemetry_opted_in`. The ✕-as-silent-acknowledge semantics are
-    // explicit: the user did not opt in, they declined to intervene, so
-    // no event transmits.
+    // `telemetry_opted_in`. The client primitive may unlock `app_opened`,
+    // but the acknowledge channel itself must not emit an opt-in event.
     registerWith({
       installId: 'x',
       existedBeforeTelemetryRelease: true,
