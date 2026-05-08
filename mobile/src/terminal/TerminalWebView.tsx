@@ -1377,9 +1377,17 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       init(cols: number, rows: number, initialData?: string) {
         // Why: arm a fresh ready promise BEFORE posting init. The WebView
         // resolves it via the 'ready' notify at the end of its rAF chain.
-        // Re-init supersedes any prior in-flight ready (we don't bridge
-        // generations; the older promise just never resolves, and its
-        // callers have moved on by then).
+        // Resolve any prior in-flight ready first so awaiters from the
+        // previous generation don't sit on the 3s setTimeout fallback —
+        // each leaked timer + closure pinned an awaiting measure caller
+        // for the full 3s under rapid re-init (orientation change,
+        // multiple resubscribes), delaying cold-start fit chains.
+        const priorResolve = readyResolveRef.current
+        if (priorResolve) {
+          readyResolveRef.current = null
+          readyPromiseRef.current = null
+          priorResolve()
+        }
         readyPromiseRef.current = new Promise<void>((resolve) => {
           readyResolveRef.current = resolve
         })

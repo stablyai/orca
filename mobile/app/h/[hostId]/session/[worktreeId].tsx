@@ -383,9 +383,18 @@ export default function SessionScreen() {
                 // phone dims. See log dump 2026-05-06 confirming the
                 // race + measure-result null pattern.
                 await getTerminalRef(handle)?.awaitReady()
+                if (subscribeSeqRef.current.get(handle) !== seq) return
                 const dims = await getTerminalRef(handle)?.measureFitDimensions(
                   terminalFrameHeightRef.current || undefined
                 )
+                // Why: re-check seq after the awaits — awaitReady (up to
+                // 3s) and measureFitDimensions can take hundreds of ms,
+                // during which a newer subscribe cycle may have armed
+                // its own subscription. Tearing it down here would reset
+                // the freshly-armed initialized flag and re-subscribe a
+                // stale generation.
+                if (subscribeSeqRef.current.get(handle) !== seq) return
+                if (!getTerminalRef(handle)) return
                 // Why: we just got `scrollback` with cols=80 (server's
                 // default fallback for null viewport). That means the
                 // server-side subscriber record was registered before we
