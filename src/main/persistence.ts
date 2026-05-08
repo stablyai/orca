@@ -671,6 +671,46 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    // Why: closes the second half of the SIGKILL race (Issue #217). The
+    // renderer's debounced session writer captures its state BEFORE pty:spawn
+    // returns, so the snapshot it later flushes via session:set has no
+    // tab.ptyId / ptyIdsByLeafId for the just-spawned PTY. If that stale
+    // snapshot lands AFTER persistPtyBinding's sync flush, it would overwrite
+    // the durable binding and re-open the orphan window. Merge in any
+    // existing bindings whenever the incoming snapshot's binding is empty.
+    const prior = this.state.workspaceSession
+    if (session && prior) {
+      const priorTabs = prior.tabsByWorktree ?? {}
+      const nextTabs = session.tabsByWorktree ?? {}
+      for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
+        const priorList = priorTabs[worktreeId]
+        if (!priorList) {
+          continue
+        }
+        for (const tab of tabs) {
+          if (tab.ptyId) {
+            continue
+          }
+          const priorTab = priorList.find((t) => t.id === tab.id)
+          if (priorTab?.ptyId) {
+            tab.ptyId = priorTab.ptyId
+          }
+        }
+      }
+      const priorLayouts = prior.terminalLayoutsByTabId ?? {}
+      const nextLayouts = session.terminalLayoutsByTabId ?? {}
+      for (const [tabId, layout] of Object.entries(nextLayouts)) {
+        const priorLayout = priorLayouts[tabId]
+        if (!priorLayout?.ptyIdsByLeafId) {
+          continue
+        }
+        const incoming = layout.ptyIdsByLeafId
+        if (incoming && Object.keys(incoming).length > 0) {
+          continue
+        }
+        layout.ptyIdsByLeafId = { ...priorLayout.ptyIdsByLeafId }
+      }
+    }
     this.state.workspaceSession = session
     this.scheduleSave()
   }
