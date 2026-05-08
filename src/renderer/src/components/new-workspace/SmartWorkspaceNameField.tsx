@@ -457,11 +457,13 @@ export default function SmartWorkspaceNameField({
     }
   }, [mode, onGitLabItemSelect, parsedGlLink, selectedRepo, shouldQueryGitlab])
 
-  // Why: when the user is on the GitLab tab and hasn't pasted a URL,
-  // surface the project's MRs filtered by the current state chip.
-  // Default 'opened' matches gitlab.com's default MR list view.
+  // Why: when the user is on the GitLab tab (or in 'smart' mix) and
+  // hasn't pasted a URL, surface the project's MRs filtered by the
+  // current state chip. Default 'opened' matches gitlab.com's default
+  // MR list view. Smart mode includes GitLab MRs alongside GitHub
+  // items so the unified picker actually surfaces both providers.
   useEffect(() => {
-    if (mode !== 'gitlab' || !onGitLabItemSelect) {
+    if ((mode !== 'gitlab' && mode !== 'smart') || !onGitLabItemSelect) {
       return
     }
     if (!selectedRepo?.path || selectedRepo.connectionId) {

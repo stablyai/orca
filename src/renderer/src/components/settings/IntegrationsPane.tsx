@@ -1,6 +1,12 @@
+/* eslint-disable max-lines -- Why: this pane co-locates GitHub, GitLab,
+   and Linear integration cards so the preflight-check + status-badge +
+   install/auth-prompt scaffolding lives in one place rather than fanning
+   out across per-integration files that would each repeat the same
+   pattern. Splitting buys nothing while the surface stays this narrow. */
 import { useEffect, useState } from 'react'
 import {
   Github,
+  Gitlab,
   ExternalLink,
   LoaderCircle,
   Lock,
@@ -37,6 +43,11 @@ export const INTEGRATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['github', 'gh', 'integration']
   },
   {
+    title: 'GitLab Integration',
+    description: 'GitLab authentication via the glab CLI.',
+    keywords: ['gitlab', 'glab', 'integration', 'mr', 'merge request']
+  },
+  {
     title: 'Linear Integration',
     description: 'Connect Linear to browse and link issues.',
     keywords: ['linear', 'integration', 'api key', 'connect', 'disconnect']
@@ -44,6 +55,9 @@ export const INTEGRATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 ]
 
 type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
+// Why: parallel to GhStatus — GitLab uses glab and the same three failure
+// modes (probe in-flight / installed-but-unauth / missing entirely).
+type GlabStatus = GhStatus
 
 export function IntegrationsPane(): React.JSX.Element {
   const linearStatus = useAppStore((s) => s.linearStatus)
@@ -53,6 +67,7 @@ export function IntegrationsPane(): React.JSX.Element {
   const testLinearConnection = useAppStore((s) => s.testLinearConnection)
 
   const [ghStatus, setGhStatus] = useState<GhStatus>('checking')
+  const [glabStatus, setGlabStatus] = useState<GlabStatus>('checking')
   const [linearDialogOpen, setLinearDialogOpen] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
   const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
@@ -73,6 +88,17 @@ export function IntegrationsPane(): React.JSX.Element {
         setGhStatus('not-authenticated')
       } else {
         setGhStatus('connected')
+      }
+      // Why: glab is optional on PreflightStatus — older preload payloads
+      // may not carry it. Fall through to 'not-installed' in that case so
+      // the card still renders something actionable.
+      const glab = status.glab
+      if (!glab || !glab.installed) {
+        setGlabStatus('not-installed')
+      } else if (!glab.authenticated) {
+        setGlabStatus('not-authenticated')
+      } else {
+        setGlabStatus('connected')
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount check
@@ -122,6 +148,20 @@ export function IntegrationsPane(): React.JSX.Element {
       setLinearTestState('error')
       setLinearTestError(result.error)
     }
+  }
+
+  const handleRefreshGlab = (): void => {
+    setGlabStatus('checking')
+    void window.api.preflight.check({ force: true }).then((status) => {
+      const glab = status.glab
+      if (!glab || !glab.installed) {
+        setGlabStatus('not-installed')
+      } else if (!glab.authenticated) {
+        setGlabStatus('not-authenticated')
+      } else {
+        setGlabStatus('connected')
+      }
+    })
   }
 
   const handleRefreshGh = (): void => {
@@ -205,6 +245,85 @@ export function IntegrationsPane(): React.JSX.Element {
                     Learn more
                   </Button>
                   <Button variant="ghost" size="sm" onClick={handleRefreshGh}>
+                    Re-check
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* GitLab */}
+      <div className="rounded-md border border-border/50 bg-muted/30 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Gitlab className="size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="text-sm font-medium">GitLab</p>
+            <p className="text-xs text-muted-foreground">
+              Merge requests, issues, todos, and pipelines via the{' '}
+              <span className="font-mono text-[11px]">glab</span> CLI.
+            </p>
+          </div>
+          {glabStatus === 'checking' ? (
+            <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : glabStatus === 'connected' ? (
+            <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+              Connected
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              {glabStatus === 'not-installed' ? 'Not installed' : 'Not authenticated'}
+            </span>
+          )}
+        </div>
+
+        {glabStatus !== 'checking' && glabStatus !== 'connected' && (
+          <div className="mt-3 rounded-md border border-border/30 bg-background/50 px-3 py-2.5 space-y-2">
+            {glabStatus === 'not-installed' ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Install the GitLab CLI to enable merge requests, issues, and pipelines.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      window.api.shell.openUrl('https://gitlab.com/gitlab-org/cli#installation')
+                    }
+                  >
+                    <ExternalLink className="size-3.5 mr-1.5" />
+                    Install GitLab CLI
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleRefreshGlab}>
+                    Re-check
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  The GitLab CLI is installed but not authenticated. Run this command in a terminal:
+                </p>
+                <div className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 font-mono text-xs">
+                  <Terminal className="size-3.5 shrink-0 text-muted-foreground" />
+                  glab auth login
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      window.api.shell.openUrl(
+                        'https://gitlab.com/gitlab-org/cli/-/blob/main/docs/source/auth/login.md'
+                      )
+                    }
+                  >
+                    <ExternalLink className="size-3.5 mr-1.5" />
+                    Learn more
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleRefreshGlab}>
                     Re-check
                   </Button>
                 </div>

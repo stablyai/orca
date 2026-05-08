@@ -1,5 +1,5 @@
 import React from 'react'
-import { Github, List, Search } from 'lucide-react'
+import { Github, Gitlab, List, Search } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -98,6 +98,21 @@ const SidebarNav = React.memo(function SidebarNav() {
               className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
             >
               <Github className="size-3.5" aria-hidden />
+            </span>
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!canBrowseTasks) {
+                  return
+                }
+                openTaskPage({ taskSource: 'gitlab' })
+              }}
+              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+              aria-label="Open GitLab tasks"
+            >
+              <Gitlab className="size-3.5" aria-hidden />
             </span>
             <span
               role="button"

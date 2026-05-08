@@ -2367,7 +2367,7 @@ export default function TaskPage(): React.JSX.Element {
                     <div className="mb-2 flex items-center gap-2">
                       {(['project', 'todos'] as const).map((view) => {
                         const active = gitlabView === view
-                        const label = view === 'project' ? 'Project' : 'My Todos'
+                        const label = view === 'project' ? 'Project MRs' : 'My Todos'
                         return (
                           <button
                             key={view}
