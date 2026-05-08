@@ -1125,16 +1125,28 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
 
-    // Why: under remove-worktree, sweep agent-status rows so a tab killed in
-    // the 'done' state doesn't leave the WorktreeCard dot blue. Under sleep,
-    // the agent-status describes the live agent process which the user
-    // expects to survive sleep — skip the drop so wake renders the prior
-    // status until the next event arrives. (Mirror of the pattern in
-    // closeTab / pane-close, which drop their own rows explicitly.)
-    if (!keepIdentifiers) {
-      for (const tab of tabs) {
-        get().dropAgentStatusByTabPrefix(tab.id)
-      }
+    // Why: drop live agent-status rows on every shutdown. The agent process
+    // is dead the instant pty.kill fires (which already ran above), so any
+    // preserved working/blocked/waiting entry is a lie. useWorktreeAgentRows
+    // emits a row per agentStatusByPaneKey entry, so without this drop those
+    // dead-process rows would persist inside the card body as "working" even
+    // though the worktree dot is correctly grey under the live-pty
+    // precondition.
+    //
+    // Why preserveRetained under sleep: a `done` agent is signaling
+    // completion to the user ("Claude finished while you were away"); that
+    // signal outlives sleep until the user dismisses it. preserveRetained
+    // skips wiping retainedAgentsByPaneKey, skips planting retention
+    // suppressors (so a previously-live `done` can flow into retained on
+    // the next sync), and preserves the user's prior ack so wake doesn't
+    // resurface an agent the user already dismissed.
+    //
+    // Under remove-worktree (default), wipe everything — the user is
+    // tearing down the whole worktree, so any retained row would point at
+    // a worktree that no longer exists. (Mirror of the pattern in closeTab
+    // / pane-close, which drop their own rows explicitly.)
+    for (const tab of tabs) {
+      get().dropAgentStatusByTabPrefix(tab.id, { preserveRetained: keepIdentifiers })
     }
 
     if (ptyIds.length === 0) {
@@ -1686,13 +1698,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const tabLevelPtyId = pendingReconnectPtyIdByTabId[tabId]
         const hasLeafMappings = Object.keys(leafPtyMap).length > 0
 
-        // Why: restore ptyId on the tab so getWorktreeStatus() sees it as
-        // active (green dot) even before the terminal pane mounts — including
-        // deferred SSH worktrees whose connection isn't established yet. Without
-        // this, the sidebar "show active only" filter hides SSH worktrees and
-        // the user must manually search for them. The actual PTY reattach is
-        // handled later by pty-connection.ts when the terminal pane mounts;
-        // this block only sets the visual state.
+        // Why: populate the wake-hint and the live-pty map so the worktree
+        // dot lights up green even before the terminal pane mounts —
+        // including deferred SSH worktrees whose connection isn't established
+        // yet. tab.ptyId carries the wake-hint sessionId (consumed by
+        // pty-connection.ts on remount); ptyIdsByTabId is the source of
+        // truth getWorktreeStatus reads for liveness. Without the live-pty
+        // population, the sidebar "show active only" filter hides SSH
+        // worktrees and the user must manually search for them. The actual
+        // PTY reattach is handled later by pty-connection.ts when the
+        // terminal pane mounts; this block only sets the visual state.
         console.warn(
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )

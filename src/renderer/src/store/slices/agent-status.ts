@@ -68,8 +68,14 @@ export type AgentStatusSlice = {
 
   /** Remove all entries under a tab AND suppress re-retention for each.
    *  Used on tab close — the user is tearing down the whole tab, so any
-   *  remaining agent rows (live or retained) must not reappear. */
-  dropAgentStatusByTabPrefix: (tabIdPrefix: string) => void
+   *  remaining agent rows (live or retained) must not reappear.
+   *
+   *  Pass `{ preserveRetained: true }` for sleep, where the agent process is
+   *  dead but a retained `done` snapshot should stay visible inside the card
+   *  ("Claude finished while you were away"). In that mode we also skip
+   *  planting retention suppressors so a previously-live `done` entry can
+   *  flow into retainedAgentsByPaneKey naturally on the next sync. */
+  dropAgentStatusByTabPrefix: (tabIdPrefix: string, opts?: { preserveRetained?: boolean }) => void
 
   /** Retain agent snapshots (called by the top-level retention sync effect).
    *  Accepts an array so multiple agents disappearing in the same frame
@@ -420,23 +426,33 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
     },
 
-    dropAgentStatusByTabPrefix: (tabIdPrefix) => {
+    dropAgentStatusByTabPrefix: (tabIdPrefix, opts) => {
       const prefix = `${tabIdPrefix}:`
+      const preserveRetained = opts?.preserveRetained === true
       let hadLive = false
       set((s) => {
         const liveKeys = Object.keys(s.agentStatusByPaneKey).filter((k) => k.startsWith(prefix))
-        const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter((k) =>
-          k.startsWith(prefix)
-        )
+        const retainedKeys = preserveRetained
+          ? []
+          : Object.keys(s.retainedAgentsByPaneKey).filter((k) => k.startsWith(prefix))
         // See removeAgentStatus for rationale on ack cleanup. Apply this
         // regardless of live/retained presence — ack entries are owned by
         // the pane lifecycle independently of live/retained state.
+        //
+        // Why skip when preserveRetained: sleep keeps the same tabId+paneId
+        // so the same paneKey reappears on wake. Wiping the ack would flip a
+        // previously-acknowledged agent back to "unvisited" the moment the
+        // user wakes, surprising them with a notification dot they already
+        // dismissed. The reused-paneKey leak this cleanup guards against
+        // does not apply when the pane lifecycle is intentionally suspended.
         let nextAck = s.acknowledgedAgentsByPaneKey
-        const ackKeys = Object.keys(nextAck).filter((k) => k.startsWith(prefix))
-        if (ackKeys.length > 0) {
-          nextAck = { ...nextAck }
-          for (const k of ackKeys) {
-            delete nextAck[k]
+        if (!preserveRetained) {
+          const ackKeys = Object.keys(nextAck).filter((k) => k.startsWith(prefix))
+          if (ackKeys.length > 0) {
+            nextAck = { ...nextAck }
+            for (const k of ackKeys) {
+              delete nextAck[k]
+            }
           }
         }
         if (liveKeys.length === 0 && retainedKeys.length === 0) {
@@ -466,7 +482,26 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // would leak because no such transition will ever fire. Also skip
         // keys that are already suppressed so we don't spuriously reallocate
         // the suppressor map for subscribers that select on its identity.
-        const suppressorAdds = liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
+        //
+        // Why skip when preserveRetained: under sleep we *want* a previously
+        // live `done` entry to flow into retainedAgentsByPaneKey on the next
+        // sync ("Claude finished while you were away"). Suppressors would
+        // block that retention. Non-done live entries don't need suppression
+        // either — collectRetainedAgentsOnDisappear already filters out
+        // anything that wasn't `done` & uninterrupted.
+        //
+        // Same-frame race: if a hook ping promotes working→done in the same
+        // render frame as sleep, the next retention-sync run sees the entry
+        // as `done` in prevAgents and surfaces it in retained — even though
+        // the user just slept the worktree. We accept this: it is the
+        // mirror of the same-frame race acknowledged in dropAgentStatus
+        // (which accepts a suppressor-leak for symmetric reasons), and
+        // surfacing a "Claude finished while you were away" row is the
+        // intended UX outcome of this design even at the moment-of-sleep
+        // boundary.
+        const suppressorAdds = preserveRetained
+          ? []
+          : liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
         let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
         if (suppressorAdds.length > 0) {
           nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }

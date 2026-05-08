@@ -183,6 +183,10 @@ function App(): React.JSX.Element {
     useShallow((s) => ({
       tabsByWorktree: s.tabsByWorktree,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+      // Why: ptyIdsByTabId gates title-scraped agent activity on actual PTY
+      // liveness so slept worktrees (whose pane titles are preserved as wake
+      // hints) cannot inflate the title-bar count or dock badge.
+      ptyIdsByTabId: s.ptyIdsByTabId,
       worktreesByRepo: s.worktreesByRepo
     }))
   )

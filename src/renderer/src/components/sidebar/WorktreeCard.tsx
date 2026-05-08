@@ -13,8 +13,8 @@ import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
-  getWorktreeStatus,
   getWorktreeStatusLabel,
+  resolveWorktreeStatus,
   type WorktreeStatus
 } from '@/lib/worktree-status'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
@@ -131,6 +131,24 @@ const WorktreeCard = React.memo(function WorktreeCard({
       return out
     })
   )
+  // Why: the live-PTY map is the source of truth for "is this tab alive?".
+  // tab.ptyId is the wake-hint sessionId preserved across sleep, not a
+  // liveness signal — sleep-then-card-render would lie the dot green if we
+  // read tab.ptyId. Mirror the runtimePaneTitlesForWorktree pattern: narrow
+  // the subscription to *this* worktree's tabs via useShallow so unrelated
+  // PTY spawns/kills do not re-render every sidebar card.
+  const ptyIdsForWorktree = useAppStore(
+    useShallow((s) => {
+      const out: Record<string, string[]> = {}
+      for (const tab of s.tabsByWorktree[worktree.id] ?? []) {
+        const ids = s.ptyIdsByTabId[tab.id]
+        if (ids && ids.length > 0) {
+          out[tab.id] = ids
+        }
+      }
+      return out
+    })
+  )
 
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
@@ -224,21 +242,33 @@ const WorktreeCard = React.memo(function WorktreeCard({
     })
   )
 
-  const status: WorktreeStatus = useMemo(() => {
-    if (hasPermission) {
-      return 'permission'
-    }
-    // Compute the heuristic once so we can let 'working' beat done without
-    // letting quieter heuristic states ('active'/'inactive') erase a done.
-    const heuristic = getWorktreeStatus(tabs, browserTabs, runtimePaneTitlesForWorktree)
-    if (heuristic === 'working') {
-      return 'working'
-    }
-    if (hasLiveDone || hasRetainedDone) {
-      return 'done'
-    }
-    return heuristic
-  }, [tabs, browserTabs, runtimePaneTitlesForWorktree, hasPermission, hasLiveDone, hasRetainedDone])
+  // Why: resolveWorktreeStatus enforces the runtime-liveness precondition —
+  // when no tab in this worktree has a live PTY (and no browser tab exists)
+  // it short-circuits to 'inactive' before consulting hook-reported state or
+  // retained-done snapshots. That keeps the dot honest across sleep, crash,
+  // and slept-with-retained-done while preserving the row data used by the
+  // inline agents list (retained 'done' rows still render inside the card).
+  const status: WorktreeStatus = useMemo(
+    () =>
+      resolveWorktreeStatus({
+        tabs,
+        browserTabs,
+        ptyIdsByTabId: ptyIdsForWorktree,
+        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
+        hasPermission,
+        hasLiveDone,
+        hasRetainedDone
+      }),
+    [
+      tabs,
+      browserTabs,
+      ptyIdsForWorktree,
+      runtimePaneTitlesForWorktree,
+      hasPermission,
+      hasLiveDone,
+      hasRetainedDone
+    ]
+  )
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')
