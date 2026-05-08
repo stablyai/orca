@@ -23,6 +23,7 @@ import {
   GitPullRequestArrow,
   MessageSquare,
   Pencil,
+  Send,
   Trash,
   TriangleAlert,
   CircleCheck,
@@ -79,6 +80,8 @@ import {
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
+import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
@@ -180,6 +183,9 @@ function SourceControlInner(): React.JSX.Element {
   const commitInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeGroupId = useAppStore((s) =>
+    activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
+  )
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
@@ -229,6 +235,10 @@ function SourceControlInner(): React.JSX.Element {
     }
     return map
   }, [diffCommentsForActive])
+  const diffCommentsPrompt = useMemo(
+    () => formatDiffComments(diffCommentsForActive),
+    [diffCommentsForActive]
+  )
   const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
   const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
 
@@ -236,15 +246,14 @@ function SourceControlInner(): React.JSX.Element {
     if (diffCommentsForActive.length === 0) {
       return
     }
-    const text = formatDiffComments(diffCommentsForActive)
     try {
-      await window.api.ui.writeClipboardText(text)
+      await window.api.ui.writeClipboardText(diffCommentsPrompt)
       setDiffCommentsCopied(true)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
       // No dedicated error surface is warranted for a best-effort copy action.
     }
-  }, [diffCommentsForActive])
+  }, [diffCommentsForActive, diffCommentsPrompt])
 
   // Why: auto-dismiss the "copied" indicator so the button returns to its
   // default icon after a brief confirmation window.
@@ -1268,6 +1277,35 @@ function SourceControlInner(): React.JSX.Element {
                   </span>
                 )}
               </button>
+              <DropdownMenu>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          aria-label="Send notes to a new agent"
+                        >
+                          <Send className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Send notes to a new agent
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <DropdownMenuContent align="end" className="min-w-[180px]">
+                  <QuickLaunchAgentMenuItems
+                    worktreeId={activeWorktreeId}
+                    groupId={activeGroupId ?? activeWorktreeId}
+                    onFocusTerminal={focusTerminalTabSurface}
+                    prompt={diffCommentsPrompt}
+                    launchSource="diff_notes_send"
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
               {diffCommentCount > 0 && (
                 <TooltipProvider delayDuration={400}>
                   <Tooltip>

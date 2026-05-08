@@ -55,20 +55,23 @@ export const AGENT_KIND_VALUES = [
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
-// Trimmed to the two values Orca's PTY-typed-command launch architecture can
-// actually emit:
+// Trimmed to a small set of values Orca's PTY-typed-command launch architecture
+// can emit:
 //   - `binary_not_found` — `provider.spawn` ENOENT (the *shell* binary is
 //     missing). The agent CLI being missing is invisible: Orca spawns a
 //     healthy shell and types the command, and bash/zsh's "command not found"
 //     surfaces only as terminal output.
-//   - `unknown` — every other thrown error (paste-readiness timeout, env-build
-//     failures, unclassifiable shell-spawn errors).
+//   - `paste_readiness_timeout` — bracketed-paste readiness wait timed out.
+//     The agent process spawned but its TUI input box didn't reach a ready
+//     state before the watchdog deadline, so the queued draft was dropped.
+//   - `unknown` — every other thrown error (env-build failures,
+//     unclassifiable shell-spawn errors).
 // Provider-side errors (`auth_expired`, `rate_limited`, `network_timeout`,
 // `provider_*`) happen inside the agent CLI subprocess and are not observable
 // to Orca — see telemetry-plan.md §Decision: Defer per-incident error fields.
 // Adding a new value is additive-safe; do it when the call site lands, not in
 // anticipation.
-export const errorClassSchema = z.enum(['binary_not_found', 'unknown'])
+export const errorClassSchema = z.enum(['binary_not_found', 'paste_readiness_timeout', 'unknown'])
 export type ErrorClass = z.infer<typeof errorClassSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
@@ -120,6 +123,7 @@ export const launchSourceSchema = z.enum([
   'workspace_jump_palette',
   'shortcut',
   'onboarding',
+  'diff_notes_send',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>

@@ -445,7 +445,9 @@
   border: none;
   color: var(--muted-foreground);
   cursor: pointer;
-  transition: background 100ms, color 100ms;
+  transition:
+    background 100ms,
+    color 100ms;
 }
 
 .window-controls-btn:hover {

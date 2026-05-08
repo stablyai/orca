@@ -2631,11 +2631,7 @@ export class OrcaRuntimeService {
     // hidden tab on desktop, container went 0×0 → 1782×1195) reports
     // different dims and is the right baseline to remember.
     const activeOverride = this.terminalFitOverrides.get(ptyId)
-    if (
-      activeOverride &&
-      activeOverride.cols === cols &&
-      activeOverride.rows === rows
-    ) {
+    if (activeOverride && activeOverride.cols === cols && activeOverride.rows === rows) {
       return
     }
     this.refreshRendererGeometry(ptyId, cols, rows)

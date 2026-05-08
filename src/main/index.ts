@@ -263,14 +263,13 @@ function openMainWindow(): BrowserWindow {
     // replay-loop through lastStatusByPaneKey runs only on deliberate
     // window recreations instead of stacking on top of stale listeners.
     agentHookServer.setListener(null)
-    // Why: any running cursor spinner intervals would fire into a destroyed
-    // webContents; stop them all here instead of deferring to per-pane
-    // teardown, which may never run for restored-but-never-torn-down panes
-    // when the window goes away.
-    // Why: stopCursorSpinner deletes only the current entry, which the Map
-    // iterator handles safely — no snapshot copy needed.
-    for (const paneKey of cursorSpinnerByPaneKey.keys()) {
-      stopCursorSpinner(paneKey)
+    // Why: any running synthesized-title spinner intervals would fire into a
+    // destroyed webContents; stop them all here instead of deferring to
+    // per-pane teardown, which may never run for restored-but-never-torn-down
+    // panes when the window goes away. stopSyntheticTitleSpinner deletes only
+    // the current entry, which the Map iterator handles safely.
+    for (const paneKey of syntheticTitleSpinnerByPaneKey.keys()) {
+      stopSyntheticTitleSpinner(paneKey)
     }
   })
   mainWindow = window
@@ -284,15 +283,17 @@ function openMainWindow(): BrowserWindow {
       worktreeId,
       ...payload
     })
-    // Why: cursor-agent emits no title-based working/idle signal — its OSC
-    // title stays "Cursor Agent" for the whole turn. Synthesize an OSC title
-    // update from the hook state and inject it into the pane's data stream so
-    // the existing renderer-side title tracker (the one that drives the
-    // sidebar spinner, unread badge, and Claude prompt-cache timer for every
-    // other agent) lights up for cursor panes too. Braille prefix ⠋ → working
-    // keyword path; "action required" keyword → permission; bare label → idle.
-    if (payload.agentType === 'cursor') {
-      driveCursorPaneFromHook(paneKey, payload.state)
+    // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
+    // and opencode's stays bare "OpenCode" — neither carries a working/idle
+    // signal the title heuristic can read. Synthesize an OSC title update
+    // from the hook state and inject it into the pane's data stream so the
+    // existing renderer-side title tracker (which drives the sidebar
+    // spinner, unread badge, and worktree status dot for every other agent)
+    // lights up for these panes too. Braille prefix → working keyword path;
+    // "action required" → permission; bare label → idle.
+    const profile = SYNTHETIC_TITLE_PROFILES[payload.agentType ?? '']
+    if (profile) {
+      driveSyntheticTitleFromHook(paneKey, payload.state, profile)
     }
   })
   return window
@@ -305,36 +306,68 @@ function openMainWindow(): BrowserWindow {
 // fresh working frame on an interval until the hook reports a non-working
 // state. Interval matches Pi's 80ms cadence — fast enough for a smooth
 // spinner, slow enough to stay well under the per-flush IPC budget.
-const CURSOR_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const CURSOR_SPINNER_INTERVAL_MS = 80
-const cursorSpinnerByPaneKey = new Map<
+// Why: opencode emits a single literal "OpenCode" title at startup and
+// nothing thereafter, so a one-shot working frame would suffice for it. We
+// reuse the same persistent-spinner mechanism rather than branching because
+// the animated spinner is also nicer UX (matches every other working agent).
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const SPINNER_INTERVAL_MS = 80
+
+// Why: per-agent labels for the synthesized titles. The detector classifies
+// these labels via `containsAgentName` + spinner/keyword rules, so the chosen
+// strings must round-trip through detectAgentStatusFromTitle to the right
+// status. See agent-status.test.ts for the pinned classifications.
+type SyntheticTitleProfile = {
+  workingLabel: string
+  permissionLabel: string
+  idleLabel: string
+}
+const SYNTHETIC_TITLE_PROFILES: Record<string, SyntheticTitleProfile> = {
+  cursor: {
+    workingLabel: 'Cursor Agent',
+    permissionLabel: 'Cursor - action required',
+    idleLabel: 'Cursor ready'
+  },
+  opencode: {
+    workingLabel: 'OpenCode',
+    permissionLabel: 'OpenCode - action required',
+    idleLabel: 'OpenCode ready'
+  }
+}
+
+const syntheticTitleSpinnerByPaneKey = new Map<
   string,
-  { timer: ReturnType<typeof setInterval>; frame: number }
+  { timer: ReturnType<typeof setInterval>; frame: number; profile: SyntheticTitleProfile }
 >()
 
 // Why: on PTY teardown the paneKey→ptyId mapping is dropped, so the spinner
-// interval would keep firing but sendCursorTitle would no-op forever. Stop
-// the interval explicitly so the process doesn't carry a timer per dead pane.
+// interval would keep firing but sendSyntheticTitle would no-op forever.
+// Stop the interval explicitly so the process doesn't carry a timer per dead
+// pane.
 registerPaneKeyTeardownListener((paneKey) => {
-  stopCursorSpinner(paneKey)
+  stopSyntheticTitleSpinner(paneKey)
 })
 
-function sendCursorTitle(ptyId: string, data: string): void {
+function sendSyntheticTitle(ptyId: string, data: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
   }
   mainWindow.webContents.send('pty:data', { id: ptyId, data })
 }
 
-function stopCursorSpinner(paneKey: string): void {
-  const entry = cursorSpinnerByPaneKey.get(paneKey)
+function stopSyntheticTitleSpinner(paneKey: string): void {
+  const entry = syntheticTitleSpinnerByPaneKey.get(paneKey)
   if (entry) {
     clearInterval(entry.timer)
-    cursorSpinnerByPaneKey.delete(paneKey)
+    syntheticTitleSpinnerByPaneKey.delete(paneKey)
   }
 }
 
-function driveCursorPaneFromHook(paneKey: string, state: string): void {
+function driveSyntheticTitleFromHook(
+  paneKey: string,
+  state: string,
+  profile: SyntheticTitleProfile
+): void {
   const ptyId = getPtyIdForPaneKey(paneKey)
   if (!ptyId) {
     return
@@ -343,44 +376,49 @@ function driveCursorPaneFromHook(paneKey: string, state: string): void {
     // Why: immediately emit the first frame so the spinner starts visible at
     // this hook event even if the interval's next tick is 80ms away. Subsequent
     // frames come from the interval below.
-    const existing = cursorSpinnerByPaneKey.get(paneKey)
+    const existing = syntheticTitleSpinnerByPaneKey.get(paneKey)
     const frame = existing ? existing.frame : 0
-    sendCursorTitle(ptyId, `\x1b]0;${CURSOR_SPINNER_FRAMES[frame]} Cursor Agent\x07`)
+    sendSyntheticTitle(ptyId, `\x1b]0;${SPINNER_FRAMES[frame]} ${profile.workingLabel}\x07`)
     if (existing) {
+      // Why: refresh the profile so an agent-type change mid-pane (rare, but
+      // possible if a hook reports a different agentType than the previous
+      // event) lands on the right idle/permission labels at terminal state.
+      existing.profile = profile
       return
     }
     const timer = setInterval(() => {
       const ptyIdNow = getPtyIdForPaneKey(paneKey)
       if (!ptyIdNow) {
-        stopCursorSpinner(paneKey)
+        stopSyntheticTitleSpinner(paneKey)
         return
       }
-      const cur = cursorSpinnerByPaneKey.get(paneKey)
+      const cur = syntheticTitleSpinnerByPaneKey.get(paneKey)
       if (!cur) {
         return
       }
-      cur.frame = (cur.frame + 1) % CURSOR_SPINNER_FRAMES.length
-      sendCursorTitle(ptyIdNow, `\x1b]0;${CURSOR_SPINNER_FRAMES[cur.frame]} Cursor Agent\x07`)
-    }, CURSOR_SPINNER_INTERVAL_MS)
-    cursorSpinnerByPaneKey.set(paneKey, { timer, frame })
+      cur.frame = (cur.frame + 1) % SPINNER_FRAMES.length
+      sendSyntheticTitle(
+        ptyIdNow,
+        `\x1b]0;${SPINNER_FRAMES[cur.frame]} ${cur.profile.workingLabel}\x07`
+      )
+    }, SPINNER_INTERVAL_MS)
+    syntheticTitleSpinnerByPaneKey.set(paneKey, { timer, frame, profile })
     return
   }
   // Why: leaving the spinner running after a `blocked`/`waiting`/`done` event
   // would immediately race the terminal state back to "working" on the next
   // tick. Stop first, then inject the terminal frame. Idle/done uses a
-  // decorated "Cursor ready" label rather than the bare native "Cursor Agent"
-  // — which the detector deliberately treats as a no-op so cursor's own
+  // decorated "<Agent> ready" label rather than the bare native title — which
+  // for cursor the detector deliberately treats as a no-op so cursor's own
   // per-turn re-emissions cannot clobber our synthesized state. The
   // done/permission frames also carry a trailing BEL (0x07 outside of any OSC
-  // sequence) because cursor-agent does not emit one on its own — and the
-  // tab-level unread badge + notification dispatch in pty-connection keys off
-  // BEL, not the working→idle title transition.
-  stopCursorSpinner(paneKey)
-  const synthetic =
-    state === 'blocked' || state === 'waiting'
-      ? '\x1b]0;Cursor - action required\x07\x07'
-      : '\x1b]0;Cursor ready\x07\x07'
-  sendCursorTitle(ptyId, synthetic)
+  // sequence) so the tab-level unread badge + notification dispatch in
+  // pty-connection lights up — those key off BEL, not the working→idle title
+  // transition.
+  stopSyntheticTitleSpinner(paneKey)
+  const label =
+    state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
+  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07\x07`)
 }
 
 app.whenReady().then(async () => {

@@ -309,9 +309,9 @@ export function MobilePane(): React.JSX.Element {
         </div>
         <p className="text-muted-foreground mb-3 text-xs">
           While you&apos;re using a terminal on your phone, Orca shrinks it to fit your phone
-          screen. When you close the app or switch away, this controls whether it stays at
-          phone size (so interactive CLI tools don&apos;t reflow) or resizes back to your
-          desktop. You can always click Restore on the terminal banner to resize it manually.
+          screen. When you close the app or switch away, this controls whether it stays at phone
+          size (so interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can
+          always click Restore on the terminal banner to resize it manually.
         </p>
         <Select
           value={autoRestoreValueFromMs(autoRestoreFitMs)}
