@@ -431,17 +431,32 @@ export function useDiffCommentDecorator({
   // Why: scroll the diff editor to the requested note when the sidebar asks
   // for it. The decorator is the right place: it already filters comments to
   // this surface, so we know the line exists in this editor's modified model.
-  // We ack immediately to clear the global so the same id can be requested
-  // again later (e.g. clicking the same row twice).
+  // Defer the reveal to the next animation frame because callers (e.g.
+  // DiffViewer) may schedule `restoreViewState` via rAF in their own onMount;
+  // running synchronously here would let that rAF overwrite our scroll. The
+  // ack also runs inside the rAF so the global isn't cleared until the reveal
+  // actually lands.
   useEffect(() => {
     if (!editor || !pendingScrollCommentId) {
       return
     }
-    const target = comments.find((c) => c.id === pendingScrollCommentId)
+    const target = comments.find(
+      (c) =>
+        c.id === pendingScrollCommentId && c.filePath === filePath && c.worktreeId === worktreeId
+    )
     if (!target) {
       return
     }
-    editor.revealLineInCenter(target.lineNumber)
-    onPendingScrollConsumedRef.current?.()
-  }, [editor, comments, pendingScrollCommentId])
+    const handle = requestAnimationFrame(() => {
+      // Why: the editor may have been disposed between scheduling and firing.
+      if (!editor.getModel()) {
+        return
+      }
+      editor.revealLineInCenter(target.lineNumber)
+      onPendingScrollConsumedRef.current?.()
+    })
+    return () => {
+      cancelAnimationFrame(handle)
+    }
+  }, [editor, comments, pendingScrollCommentId, filePath, worktreeId])
 }
