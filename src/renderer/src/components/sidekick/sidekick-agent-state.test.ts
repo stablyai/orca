@@ -58,8 +58,8 @@ describe('selectSidekickAnimationName', () => {
     expect(select([], { retainedCount: 1 })).toBe('review')
   })
 
-  it('maps interrupted completion to failed when no work is currently running', () => {
-    expect(select([entry('done', { interrupted: true })])).toBe('failed')
+  it('maps interrupted completion to review because Orca does not expose failure as a state', () => {
+    expect(select([entry('done', { interrupted: true })])).toBe('review')
     expect(select([entry('working'), entry('done', { interrupted: true })])).toBe('running')
   })
 

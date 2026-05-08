@@ -80,6 +80,18 @@ describe('applyCodexPetDefaults', () => {
       animations: { blink: { row: 0, frames: 2 } }
     })
   })
+
+  it('defaults only spritesheetPath when explicit sprite metadata is present', () => {
+    const manifest = applyCodexPetDefaults({
+      frame: { width: 64, height: 64 },
+      animations: { blink: { row: 0, frames: 2 } }
+    })
+
+    expect(manifest.spritesheetPath).toBe(CODEX_PET_SPRITESHEET_PATH)
+    expect(manifest.frame).toEqual({ width: 64, height: 64 })
+    expect(manifest.animations).toEqual({ blink: { row: 0, frames: 2 } })
+    expect(manifest.defaultAnimation).toBeUndefined()
+  })
 })
 
 describe('readWebpDimensionsFromBuffer', () => {

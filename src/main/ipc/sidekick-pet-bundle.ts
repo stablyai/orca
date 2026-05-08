@@ -49,7 +49,10 @@ export function applyCodexPetDefaults<T extends PetManifestLike>(
     manifest.animations === undefined
 
   if (!shouldApplyCodexLayout) {
-    return manifest as ResolvedPetManifest<T>
+    return {
+      ...manifest,
+      spritesheetPath: manifest.spritesheetPath ?? CODEX_PET_SPRITESHEET_PATH
+    } as ResolvedPetManifest<T>
   }
 
   return {
