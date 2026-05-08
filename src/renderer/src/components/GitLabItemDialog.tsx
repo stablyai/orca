@@ -10,14 +10,7 @@
    inline review-comment positioning / approvals are deferred to v1.5
    since they mirror substantial GitHub-side surface area. */
 import React, { useCallback, useEffect, useState } from 'react'
-import {
-  CircleDot,
-  ExternalLink,
-  GitPullRequest,
-  LoaderCircle,
-  RefreshCw,
-  Send
-} from 'lucide-react'
+import { CircleDot, ExternalLink, GitMerge, LoaderCircle, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
@@ -290,7 +283,9 @@ export default function GitLabItemDialog({
     }
   }, [commentDraft, item, repoPath, handleRefresh])
 
-  const Icon = item?.type === 'mr' ? GitPullRequest : CircleDot
+  // Why: GitMerge for MRs visually disambiguates from GitBranch (and
+  // matches gitlab.com's MR iconography); CircleDot stays on issues.
+  const Icon = item?.type === 'mr' ? GitMerge : CircleDot
   const prefix = item?.type === 'mr' ? '!' : '#'
   const isMR = item?.type === 'mr'
   const canClose = isMR && item?.state === 'opened'

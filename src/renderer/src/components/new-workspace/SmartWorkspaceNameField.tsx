@@ -7,6 +7,7 @@ import {
   CircleDot,
   ExternalLink,
   GitBranch,
+  GitMerge,
   GitPullRequest,
   Github,
   Gitlab,
@@ -933,11 +934,14 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
     )
   }
   if (row.kind === 'gitlab') {
-    // Why: MRs and PRs use the same conceptual icon (a PR/MR), and issues
-    // share CircleDot with GitHub issues — no need to invent GitLab-only
-    // glyphs at this scope; provider attribution lives in the row text.
+    // Why: GitLab MRs use GitMerge (arrow-merge-into-line) rather than
+    // GitPullRequest so the row visually disambiguates from branches
+    // (GitBranch's fork shape reads similar to GitPullRequest at this
+    // size). GitMerge also matches gitlab.com's own MR iconography,
+    // so users coming from the web UI find it familiar. Issues stay
+    // on CircleDot — the shape is provider-agnostic.
     return row.item.type === 'mr' ? (
-      <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
+      <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
     ) : (
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
     )
@@ -953,8 +957,13 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
 }
 
 function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }): React.JSX.Element {
-  if (kind === 'github-pr' || kind === 'gitlab-mr') {
+  if (kind === 'github-pr') {
     return <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'gitlab-mr') {
+    // Why: see RowIcon — GitMerge keeps MRs distinct from PRs and
+    // branches.
+    return <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
   }
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
     return <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
