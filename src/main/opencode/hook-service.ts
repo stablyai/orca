@@ -4,10 +4,22 @@
    runtime artifact and scatter tightly coupled string-template logic. */
 import { app } from 'electron'
 import { join } from 'path'
-import { mkdirSync, writeFileSync, rmSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'fs'
 import { createHash } from 'crypto'
+import { mirrorEntry, safeRemoveOverlay } from '../pty/overlay-mirror'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
+const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
+const OPENCODE_OVERLAY_DIR = 'opencode-config-overlays'
 
 // Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
 // "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
@@ -331,44 +343,169 @@ export class OpenCodeHookService {
     if (!isUsableId(ptyId)) {
       return
     }
-    // Why: writePluginConfig creates a directory per PTY under userData.
-    // Without cleanup these accumulate across sessions. Using getConfigDir
-    // keeps cleanup aligned with the path writePluginConfig created.
-    const configDir = this.getConfigDir(ptyId)
+    // Why: a PTY with this id may have been spawned under either regime —
+    // overlay (user had OPENCODE_CONFIG_DIR set) or legacy per-PTY (no user
+    // value). Both roots use the same hashed name, so try the overlay first
+    // via the safe-descend teardown that never follows symlinks/junctions
+    // into the user's source dir, then sweep any legacy directory left over
+    // from a prior code path.
+    safeRemoveOverlay(this.getOverlayDir(ptyId), this.getOverlayRoot())
     try {
-      rmSync(configDir, { recursive: true, force: true })
+      rmSync(this.getLegacyConfigDir(ptyId), { recursive: true, force: true })
     } catch {
-      // Why: best-effort cleanup. The directory may already be gone if the user
-      // manually purged userData, or the OS may hold a lock briefly.
+      // Why: best-effort cleanup of the no-OPENCODE_CONFIG_DIR-set regime;
+      // there are no symlinks/junctions in this tree (Orca-only files), so
+      // rmSync recursive is safe here.
     }
   }
 
-  buildPtyEnv(ptyId: string): Record<string, string> {
-    const configDir = this.writePluginConfig(ptyId)
-    if (!configDir) {
-      // Why: plugin config is best-effort. Returning an empty object lets the
-      // PTY spawn without the OpenCode plugin when the filesystem is locked;
-      // the agent-hooks env (ORCA_AGENT_HOOK_PORT/TOKEN/ORCA_PANE_KEY) is
-      // still injected separately by ipc/pty.ts so other agents keep working.
-      return {}
-    }
-
-    // Why: OPENCODE_CONFIG_DIR points OpenCode at a plugin directory we own.
-    // Injecting it into every Orca PTY means manually launched `opencode`
-    // sessions automatically pick up the status plugin too, not just sessions
-    // started from a hardcoded command template.
-    return { OPENCODE_CONFIG_DIR: configDir }
-  }
-
-  private getConfigDir(ptyId: string): string {
-    return join(app.getPath('userData'), 'opencode-hooks', toSafeDirName(ptyId))
-  }
-
-  private writePluginConfig(ptyId: string): string | null {
+  buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
     if (!isUsableId(ptyId)) {
-      return null
+      // Why: defense-in-depth. If the id fails the bounds guard, a user-set
+      // OPENCODE_CONFIG_DIR should still be preserved so OpenCode loads the
+      // user's own config — only the Orca status plugin is forfeited.
+      return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
-    const configDir = this.getConfigDir(ptyId)
+
+    if (!existingConfigDir) {
+      // Why: no user value to mirror — keep the original per-PTY behavior so
+      // a manually launched `opencode` outside Orca's command templates picks
+      // up the status plugin via OPENCODE_CONFIG_DIR injection alone.
+      const configDir = this.writeLegacyPluginConfig(ptyId)
+      if (!configDir) {
+        return {}
+      }
+      return { OPENCODE_CONFIG_DIR: configDir }
+    }
+
+    // Why: do NOT `mkdir -p` the user's typoed path — overriding it with an
+    // Orca-owned dir is the exact failure mode we reject Superset's wrapper
+    // for in docs/opencode-config-dir-collision.md. Let OpenCode surface the
+    // typo on its own; we only forfeit our status plugin for this pane.
+    if (!existsSync(existingConfigDir)) {
+      return { OPENCODE_CONFIG_DIR: existingConfigDir }
+    }
+
+    const overlayDir = this.getOverlayDir(ptyId)
+    safeRemoveOverlay(overlayDir, this.getOverlayRoot())
+
+    try {
+      mkdirSync(overlayDir, { recursive: true })
+      this.mirrorUserConfig(existingConfigDir, overlayDir)
+      this.writePluginIntoOverlay(overlayDir)
+    } catch {
+      // Why: overlay creation is best-effort. Symlink-creation can fail on
+      // Windows without developer mode (EPERM), userData can be read-only on
+      // locked-down corporate machines, etc. In every case, preserve the
+      // user's OPENCODE_CONFIG_DIR — a missing status plugin is a vastly
+      // smaller harm than silently dropping the user's auth/models/keymap.
+      this.clearPty(ptyId)
+      return { OPENCODE_CONFIG_DIR: existingConfigDir }
+    }
+
+    return { OPENCODE_CONFIG_DIR: overlayDir }
+  }
+
+  private getOverlayRoot(): string {
+    return join(app.getPath('userData'), OPENCODE_OVERLAY_DIR)
+  }
+
+  private getOverlayDir(ptyId: string): string {
+    // Why: the overlay root is distinct from the legacy hooks root so the
+    // two regimes are easy to tell apart on disk during debugging.
+    return join(this.getOverlayRoot(), toSafeDirName(ptyId))
+  }
+
+  private getLegacyConfigDir(ptyId: string): string {
+    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, toSafeDirName(ptyId))
+  }
+
+  // Why: walks the user's OPENCODE_CONFIG_DIR top-level entries. The
+  // `plugins/` subdirectory gets created as a real directory in the overlay
+  // so Orca can drop a sibling file alongside the user's plugins; everything
+  // else (opencode.json, auth.json, themes/, etc.) is mirrored as a single
+  // top-level entry via symlink/junction so user edits propagate live on
+  // POSIX (and on Windows-with-developer-mode) without copying files.
+  private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
+    for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+      const sourcePath = join(sourceDir, entry.name)
+
+      if (entry.name === 'plugins') {
+        // Why: check isSymbolicLink BEFORE isDirectory — a Windows junction
+        // can report both as true on a Dirent, and we must take the symlink
+        // branch so the per-entry mirroring (not a single mirrorEntry call
+        // that would create a symlink at <overlay>/plugins) handles it.
+        const isSymlink = entry.isSymbolicLink()
+        let isLinkPointingToDir = false
+        if (isSymlink) {
+          try {
+            isLinkPointingToDir = statSync(sourcePath).isDirectory()
+          } catch {
+            // Why: broken symlink (target missing) or permission error — fall
+            // through to the default mirrorEntry path so the dangling link is
+            // mirrored verbatim rather than write-through-resolved.
+            isLinkPointingToDir = false
+          }
+        }
+
+        if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
+          // Why: when the user's plugins/ is a symlink-to-dir, resolve to the
+          // real target so readdir returns the actual entries and child paths
+          // join against the resolved root. mirrorEntry then creates symlinks
+          // pointing into the resolved real plugins (not back through the
+          // user's link), and <overlay>/plugins itself stays a real dir so
+          // writePluginIntoOverlay can never write through to the user's FS.
+          const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
+          const overlayPluginsDir = join(overlayDir, 'plugins')
+          mkdirSync(overlayPluginsDir, { recursive: true })
+          for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
+            // Why: skip a user file with the same filename as Orca's plugin —
+            // mirroring it here would either resolve a same-named target via
+            // symlink (writePluginIntoOverlay then clobbers the user's file
+            // through the link) or collide on Windows with the directory entry
+            // about to be created by writePluginIntoOverlay. Either way the
+            // user's plugin would be lost. Skipping yields the desired
+            // semantics: Orca's status plugin runs and the user's same-named
+            // plugin is shadowed for this PTY only — their source file on disk
+            // is untouched.
+            if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
+              continue
+            }
+            mirrorEntry(
+              join(resolvedSource, pluginEntry.name),
+              join(overlayPluginsDir, pluginEntry.name)
+            )
+          }
+          continue
+        }
+      }
+
+      mirrorEntry(sourcePath, join(overlayDir, entry.name))
+    }
+  }
+
+  // Why: write Orca's status plugin into the overlay's plugins/ dir. The
+  // pre-write unlink is the load-bearing part — POSIX writeFileSync over a
+  // symlink writes through to the link target, so without it a user-owned
+  // plugin with this filename would be clobbered through a mirrored link.
+  // Skipping the same-named user file in mirrorUserConfig already prevents
+  // the link from being created, but the unlink keeps this function safe
+  // even if a stale overlay slips through with the link still in place.
+  private writePluginIntoOverlay(overlayDir: string): void {
+    const pluginsDir = join(overlayDir, 'plugins')
+    mkdirSync(pluginsDir, { recursive: true })
+    const pluginPath = join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE)
+    try {
+      unlinkSync(pluginPath)
+    } catch {
+      // No-op: file may not exist on a fresh overlay. Any persistent failure
+      // (e.g. permissions) will surface on the writeFileSync below.
+    }
+    writeFileSync(pluginPath, getOpenCodePluginSource())
+  }
+
+  private writeLegacyPluginConfig(ptyId: string): string | null {
+    const configDir = this.getLegacyConfigDir(ptyId)
     const pluginsDir = join(configDir, 'plugins')
     try {
       mkdirSync(pluginsDir, { recursive: true })

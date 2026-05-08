@@ -183,16 +183,13 @@ export function buildPtyHostEnv(
     baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
   const preexistingPiAgentDir = baseEnv.PI_CODING_AGENT_DIR ?? process.env.PI_CODING_AGENT_DIR
 
-  const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
-  if (preexistingOpenCodeConfigDir) {
-    // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
-    // user-provided directory would silently hide their custom OpenCode
-    // config, so preserve it. The Orca status plugin will not load, so the
-    // dashboard falls back to a blank status for that pane until the user
-    // unsets their override.
-    delete openCodeHookEnv.OPENCODE_CONFIG_DIR
-  }
-  Object.assign(baseEnv, openCodeHookEnv)
+  // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
+  // value cannot coexist with an Orca-only injection. Hand the user's value
+  // (when present) to the hook service and let it materialize a per-PTY
+  // mirror overlay that lets the user's plugins and Orca's status plugin
+  // load together — same pattern Pi uses below for PI_CODING_AGENT_DIR. See
+  // docs/opencode-config-dir-collision.md.
+  Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
 
   // Why: Claude/Codex native hooks run inside the shell process, so Orca
   // must inject the loopback receiver coordinates before the agent starts.
@@ -1163,12 +1160,9 @@ export function registerPtyHandlers(
   // driver gate; pty:reportGeometry never resizes the PTY, only refreshes
   // the restore-target cache. See docs/mobile-fit-hold.md.
   ipcMain.removeAllListeners('pty:reportGeometry')
-  ipcMain.on(
-    'pty:reportGeometry',
-    (_event, args: { id: string; cols: number; rows: number }) => {
-      runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
-    }
-  )
+  ipcMain.on('pty:reportGeometry', (_event, args: { id: string; cols: number; rows: number }) => {
+    runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
+  })
 
   // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold restore
   // cache after the renderer has consumed the data. No-op for non-daemon providers.
