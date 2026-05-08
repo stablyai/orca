@@ -33,6 +33,7 @@ import type {
   GitLabIssueInfo,
   GitLabIssueUpdate,
   GitLabProjectRef,
+  GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
   ListMergeRequestsResult,
@@ -677,6 +678,8 @@ export type PreloadApi = {
     }) => Promise<GitLabCommentResult>
     listLabels: (args: { repoPath: string }) => Promise<string[]>
     listAssignableUsers: (args: { repoPath: string }) => Promise<GitLabAssignableUser[]>
+    /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
+    todos: (args: { repoPath: string }) => Promise<GitLabTodo[]>
     workItemByPath: (args: {
       repoPath: string
       host: string

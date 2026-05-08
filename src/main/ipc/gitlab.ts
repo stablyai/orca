@@ -18,6 +18,7 @@ import {
   listIssues,
   listLabels,
   listMergeRequests,
+  listTodos,
   updateIssue
 } from '../gitlab/client'
 import type { ProjectRef } from '../gitlab/gl-utils'
@@ -127,6 +128,14 @@ export function registerGitLabHandlers(store: Store): void {
   ipcMain.handle('gitlab:listAssignableUsers', async (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
     return listAssignableUsers(repo.path)
+  })
+
+  // Why: My Todos surface — cross-project, user-scoped. The repoPath is
+  // only used for the registered-repo guard; `glab api todos` doesn't
+  // care about cwd because the endpoint is user-scoped.
+  ipcMain.handle('gitlab:todos', async (_event, args: { repoPath: string }) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return listTodos(repo.path)
   })
 
   // Why: paste-URL flow in the picker. The user pastes a GitLab URL that

@@ -766,6 +766,9 @@ const api = {
     listAssignableUsers: (args: { repoPath: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('gitlab:listAssignableUsers', args),
 
+    todos: (args: { repoPath: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('gitlab:todos', args),
+
     workItemByPath: (args: {
       repoPath: string
       host: string

@@ -2,6 +2,7 @@
 co-locating GitLab MR/issue/work-item operations keeps the concurrency
 acquire/release pattern obvious across operations. */
 import type {
+  GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
   IssueSourcePreference,
@@ -240,6 +241,69 @@ export async function getWorkItemByProjectRef(
     return mapIssueToWorkItem(data, projectRef.path)
   } catch {
     return null
+  } finally {
+    release()
+  }
+}
+
+/**
+ * List the authenticated user's GitLab todos (gitlab.com/dashboard/todos).
+ * Cross-project — `glab api todos` is user-scoped so the cwd doesn't
+ * affect the result; callers may pass any registered repo path so the
+ * IPC handler's path-validation guard has something to check.
+ *
+ * Why: GitLab's todos surface is the closest GitLab-native analogue of
+ * GitHub's notifications/inbox. Surfacing it in Orca lets users start
+ * work directly from a mention/assignment without going to gitlab.com
+ * first.
+ */
+export async function listTodos(repoPath: string): Promise<GitLabTodo[]> {
+  await acquire()
+  try {
+    // Why: per_page=50 keeps the first-page round-trip small. Pagination
+    // is left for a follow-up — most users have <50 pending todos in
+    // practice and the UI shows the highest-priority ones first.
+    const { stdout } = await glabExecFileAsync(
+      ['api', '--paginate', 'todos?state=pending&per_page=50'],
+      { cwd: repoPath }
+    )
+    type RESTTodo = {
+      id?: number
+      action_name?: string
+      target_type?: string
+      target?: {
+        iid?: number
+        title?: string
+        web_url?: string
+      } | null
+      target_url?: string
+      author?: { username?: string | null; avatar_url?: string | null } | null
+      project?: { path_with_namespace?: string } | null
+      updated_at?: string
+      state?: string
+    }
+    // Why: --paginate concatenates JSON arrays (one per page) into a
+    // single stream. glab's behavior is to emit them as one JSON array
+    // when the endpoint returns arrays — we trust that contract here.
+    const data = JSON.parse(stdout) as RESTTodo[]
+    return data.map<GitLabTodo>((t) => ({
+      id: t.id ?? 0,
+      actionName: t.action_name ?? '',
+      targetType: t.target_type ?? '',
+      targetIid: typeof t.target?.iid === 'number' ? t.target.iid : null,
+      targetTitle: t.target?.title ?? '',
+      targetUrl: t.target_url ?? t.target?.web_url ?? '',
+      projectPath: t.project?.path_with_namespace ?? '',
+      authorUsername: t.author?.username ?? '',
+      authorAvatarUrl: t.author?.avatar_url ?? '',
+      updatedAt: t.updated_at ?? '',
+      state: t.state === 'done' ? 'done' : 'pending'
+    }))
+  } catch {
+    // Why: silent empty-list on auth/network failures matches the rest
+    // of the read-side surface (`listLabels`, `listAssignableUsers`).
+    // The caller's banner / loading-state UI signals connectivity issues.
+    return []
   } finally {
     release()
   }
