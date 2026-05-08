@@ -101,6 +101,8 @@ function AgentButton({
 }) {
   return (
     <button
+      type="button"
+      aria-pressed={selected}
       className={cn(
         'group relative overflow-hidden rounded-xl border p-3.5 text-left transition-all',
         selected

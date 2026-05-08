@@ -970,8 +970,11 @@ const api = {
 
   onboarding: {
     get: (): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:get'),
-    update: (updates: Partial<OnboardingState>): Promise<OnboardingState> =>
-      ipcRenderer.invoke('onboarding:update', updates)
+    update: (
+      updates: Partial<Omit<OnboardingState, 'checklist'>> & {
+        checklist?: Partial<OnboardingState['checklist']>
+      }
+    ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates)
   },
 
   developerPermissions: {

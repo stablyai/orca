@@ -80,9 +80,27 @@ export function useOnboardingFlow(
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const startTimeRef = useRef<number>(Date.now())
 
+  // Why: track the latest persisted theme in a ref so the unmount-only revert
+  // below uses the freshest value without retriggering on each settings change.
+  const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
+  useEffect(() => {
+    persistedThemeRef.current = settings?.theme ?? 'dark'
+  }, [settings?.theme])
+
+  // Apply preview when local theme changes.
   useEffect(() => {
     applyDocumentTheme(theme)
   }, [theme])
+
+  // Why: the theme step previews on the document before persistence. Revert to
+  // the persisted theme only on wizard unmount so saving (which updates
+  // settings.theme) doesn't trigger a one-frame revert/reapply flicker.
+  useEffect(() => {
+    return () => {
+      applyDocumentTheme(persistedThemeRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     // Why: `resumed_from_step` is the step the user finished (1..3), not the
@@ -117,18 +135,26 @@ export function useOnboardingFlow(
       checklist: Partial<OnboardingState['checklist']>,
       lastStepReached: StepNumber,
       completedPath?: 'open_folder' | 'clone_url'
-    ) => {
-      const next = await window.api.onboarding.update({
-        closedAt: Date.now(),
-        outcome,
-        lastCompletedStep: outcome === 'completed' ? 4 : -1,
-        checklist: {
-          ...onboarding.checklist,
-          ...checklist,
-          dismissed: outcome === 'dismissed'
-        }
-      })
-      onOnboardingChange(next)
+    ): Promise<boolean> => {
+      let nextState: OnboardingState
+      try {
+        // Why: main-process updateOnboarding already merges with current state,
+        // so spreading the local (potentially stale) onboarding.checklist would
+        // overwrite concurrent updates.
+        nextState = await window.api.onboarding.update({
+          closedAt: Date.now(),
+          outcome,
+          lastCompletedStep: outcome === 'completed' ? 4 : -1,
+          checklist: {
+            ...checklist,
+            dismissed: outcome === 'dismissed'
+          }
+        })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return false
+      }
+      onOnboardingChange(nextState)
       if (outcome === 'completed' && completedPath) {
         const total = Math.max(0, Date.now() - startTimeRef.current)
         track('onboarding_completed', {
@@ -155,6 +181,7 @@ export function useOnboardingFlow(
       } else if (outcome === 'dismissed') {
         track('onboarding_dismissed', { last_step: lastStepReached })
       }
+      return true
     },
     [onOnboardingChange, onboarding.checklist]
   )
@@ -167,7 +194,17 @@ export function useOnboardingFlow(
       if (worktree) {
         activateAndRevealWorktree(worktree.id)
       }
-      await closeWith('completed', isGit ? { addedRepo: true } : { addedFolder: true }, 4, path)
+      // Why: next() short-circuits step 4, so emit step_completed here once the
+      // repo is successfully added to keep the funnel consistent. Gate on
+      // closeWith's success so a persistence failure doesn't double-count.
+      const closed = await closeWith(
+        'completed',
+        isGit ? { addedRepo: true } : { addedFolder: true },
+        4,
+        path
+      )
+      if (!closed) return
+      track('onboarding_step_completed', { step: 4, value_kind: 'repo' })
       if (isGit) {
         openModal('new-workspace-composer', {
           initialRepoId: repoId,
@@ -183,50 +220,55 @@ export function useOnboardingFlow(
     if (!settings) {
       return false
     }
-    if (currentStep.id === 'agent') {
-      const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
-      await updateSettings({ defaultTuiAgent })
-      const choseAgent = defaultTuiAgent !== 'blank'
-      const wasAlreadyChosen = onboarding.checklist.choseAgent
-      onOnboardingChange(
-        await persistStep(1, {
-          checklist: { ...onboarding.checklist, choseAgent }
-        })
-      )
-      if (choseAgent && !wasAlreadyChosen) {
-        track('activation_checklist_item_completed', {
-          item: 'choseAgent',
-          time_since_completed_ms: 0
-        })
-      }
-      return true
-    }
-    if (currentStep.id === 'theme') {
-      await updateSettings({ theme })
-      onOnboardingChange(await persistStep(2))
-      return true
-    }
-    if (currentStep.id === 'notifications') {
-      const enabled = notifications.agentTaskComplete || notifications.terminalBell
-      if (enabled) {
-        // Why: triggers macOS first-prompt notification on first call. Only fire
-        // on Continue; Skip uses the persistence-only path below.
-        await window.api.notifications.requestPermission()
-      }
-      await updateSettings({
-        notifications: {
-          ...settings.notifications,
-          enabled,
-          agentTaskComplete: notifications.agentTaskComplete,
-          terminalBell: notifications.terminalBell,
-          // Why: invert positive UX framing back to persisted negative field.
-          suppressWhenFocused: !notifications.notifyWhenFocused
+    try {
+      if (currentStep.id === 'agent') {
+        const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
+        await updateSettings({ defaultTuiAgent })
+        const choseAgent = defaultTuiAgent !== 'blank'
+        const wasAlreadyChosen = onboarding.checklist.choseAgent
+        onOnboardingChange(
+          await persistStep(1, {
+            checklist: { ...onboarding.checklist, choseAgent }
+          })
+        )
+        if (choseAgent && !wasAlreadyChosen) {
+          track('activation_checklist_item_completed', {
+            item: 'choseAgent',
+            time_since_completed_ms: 0
+          })
         }
-      })
-      onOnboardingChange(await persistStep(3))
-      return true
+        return true
+      }
+      if (currentStep.id === 'theme') {
+        await updateSettings({ theme })
+        onOnboardingChange(await persistStep(2))
+        return true
+      }
+      if (currentStep.id === 'notifications') {
+        const enabled = notifications.agentTaskComplete || notifications.terminalBell
+        if (enabled) {
+          // Why: triggers macOS first-prompt notification on first call. Only fire
+          // on Continue; Skip uses the persistence-only path below.
+          await window.api.notifications.requestPermission()
+        }
+        await updateSettings({
+          notifications: {
+            ...settings.notifications,
+            enabled,
+            agentTaskComplete: notifications.agentTaskComplete,
+            terminalBell: notifications.terminalBell,
+            // Why: invert positive UX framing back to persisted negative field.
+            suppressWhenFocused: !notifications.notifyWhenFocused
+          }
+        })
+        onOnboardingChange(await persistStep(3))
+        return true
+      }
+      return false
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      return false
     }
-    return false
   }, [
     currentStep.id,
     notifications,
@@ -305,15 +347,26 @@ export function useOnboardingFlow(
       return
     }
     track('onboarding_step_skipped', { step: currentStep.stepNumber })
+    // Why: theme step previews on the document without persisting. On skip,
+    // revert to the saved theme before advancing so the preview doesn't leak.
+    if (currentStep.id === 'theme' && settings) {
+      setTheme(settings.theme)
+      applyDocumentTheme(settings.theme)
+    }
     if (currentStep.id === 'repo') {
       await closeWith('dismissed', {}, currentStep.stepNumber)
       return
     }
     // Why: persistence-only path — does NOT trigger requestPermission, so
     // skipping step 3 never fires the OS permission prompt.
-    onOnboardingChange(await persistStep(currentStep.stepNumber))
+    try {
+      onOnboardingChange(await persistStep(currentStep.stepNumber))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      return
+    }
     setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
-  }, [busyLabel, closeWith, currentStep.id, currentStep.stepNumber, onOnboardingChange])
+  }, [busyLabel, closeWith, currentStep.id, currentStep.stepNumber, onOnboardingChange, settings])
 
   const back = useCallback(() => {
     setStepIndex((idx) => Math.max(idx - 1, 0))

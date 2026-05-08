@@ -37,6 +37,9 @@ export function NotificationStep({ value, onChange }: NotificationStepProps) {
         {rows.map((row, idx) => (
           <button
             key={row.key}
+            type="button"
+            role="switch"
+            aria-checked={value[row.key]}
             className={cn(
               'flex w-full items-center justify-between gap-6 px-5 py-4 text-left transition-colors hover:bg-muted/50',
               idx > 0 && 'border-t border-border'

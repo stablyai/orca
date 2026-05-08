@@ -78,6 +78,11 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
             }
           : {})
       })
+      // Why: parent controller holds local `theme` state that overwrites
+      // settings.theme on Continue; sync it so the import isn't clobbered.
+      if (resolved.diff.theme) {
+        onThemeChange(resolved.diff.theme)
+      }
       setDiscovery({ status: 'imported', fields: humanFields(resolved.diff) })
     } catch (err) {
       toast.error('Failed to import Ghostty settings', {

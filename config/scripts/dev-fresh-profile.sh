@@ -10,15 +10,26 @@
 set -euo pipefail
 
 KEEP=0
-if [[ "${1:-}" == "--keep" ]]; then
-  KEEP=1
-fi
+for arg in "$@"; do
+  case "$arg" in
+    --keep) KEEP=1 ;;
+    -h|--help)
+      sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *)
+      echo "Unknown argument: $arg" >&2
+      echo "Usage: $0 [--keep] [--help]" >&2
+      exit 2 ;;
+  esac
+done
 
-PROFILE_DIR="${ORCA_FRESH_PROFILE_DIR:-$(mktemp -d -t orca-fresh-profile)}"
+PROFILE_DIR="${ORCA_FRESH_PROFILE_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/orca-fresh-profile.XXXXXXXX")}"
 mkdir -p "$PROFILE_DIR"
 
 cleanup() {
   if [[ "$KEEP" -eq 0 && -z "${ORCA_FRESH_PROFILE_DIR:-}" ]]; then
+    # Guard rm -rf against accidental empty/unrelated PROFILE_DIR.
+    [[ -n "${PROFILE_DIR:-}" && -d "$PROFILE_DIR" && "$PROFILE_DIR" == */orca-fresh-profile* ]] || return 0
     rm -rf "$PROFILE_DIR"
     echo "[dev-fresh-profile] removed $PROFILE_DIR"
   else
@@ -28,4 +39,5 @@ cleanup() {
 trap cleanup EXIT
 
 echo "[dev-fresh-profile] using userData=$PROFILE_DIR"
-ORCA_DEV_USER_DATA_PATH="$PROFILE_DIR" exec pnpm dev
+# Don't exec — we need the EXIT trap to fire so the temp profile gets cleaned up.
+ORCA_DEV_USER_DATA_PATH="$PROFILE_DIR" pnpm dev

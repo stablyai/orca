@@ -2,7 +2,7 @@
  * E2E tests for the first-launch Onboarding flow.
  *
  * The onboarding overlay is gated by `OnboardingState.closedAt === null` (see
- * `shouldShowOnboarding` in `OnboardingFlow.tsx`). Each test gets a fresh
+ * `shouldShowOnboarding` in `should-show-onboarding.ts`). Each test gets a fresh
  * Electron instance + isolated userData dir, so persistence starts clean and
  * the overlay renders on first paint without any setup.
  */

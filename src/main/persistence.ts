@@ -12,7 +12,8 @@ import type {
   Repo,
   SparsePreset,
   WorktreeMeta,
-  GlobalSettings
+  GlobalSettings,
+  OnboardingState
 } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -234,11 +235,13 @@ export class Store {
           })(),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
           onboarding: (() => {
-            // Why: profiles with persisted repos predate onboarding — established
-            // users must not be dropped into the first-run wizard after upgrade.
-            // Backfill as completed (not dismissed) so analytics distinguish
-            // upgrade-cohort users from people who explicitly bailed mid-funnel.
-            if (!parsed.onboarding && (parsed.repos?.length ?? 0) > 0) {
+            // Why: if we successfully parsed an existing orca-data.json that
+            // lacks an onboarding block, this is an upgrade-cohort user —
+            // backfill as completed (not dismissed) so they don't get dropped
+            // into the wizard regardless of whether they currently have repos,
+            // SSH targets, or just non-default settings. Analytics still
+            // distinguish this from users who explicitly bailed mid-funnel.
+            if (!parsed.onboarding) {
               return {
                 ...defaults.onboarding,
                 closedAt: Date.now(),
@@ -246,12 +249,27 @@ export class Store {
                 lastCompletedStep: 4
               }
             }
+            // Why: guard parsed.onboarding/checklist to plain objects before
+            // spreading — a string or other primitive would inject garbage
+            // keys. Mirrors the workspaceSession defensive pattern above.
+            const rawOnboarding =
+              parsed.onboarding &&
+              typeof parsed.onboarding === 'object' &&
+              !Array.isArray(parsed.onboarding)
+                ? (parsed.onboarding as Partial<OnboardingState>)
+                : {}
+            const rawChecklist =
+              rawOnboarding.checklist &&
+              typeof rawOnboarding.checklist === 'object' &&
+              !Array.isArray(rawOnboarding.checklist)
+                ? rawOnboarding.checklist
+                : {}
             return {
               ...defaults.onboarding,
-              ...parsed.onboarding,
+              ...rawOnboarding,
               checklist: {
                 ...defaults.onboarding.checklist,
-                ...parsed.onboarding?.checklist
+                ...rawChecklist
               }
             }
           })()

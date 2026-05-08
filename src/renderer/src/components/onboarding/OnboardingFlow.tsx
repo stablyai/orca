@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isEditableTarget } from '@/lib/editable-target'
 import type { OnboardingState } from '../../../../shared/types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
@@ -10,7 +11,8 @@ import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
 import logo from '../../../../../resources/logo.svg'
 
 const isMac = navigator.userAgent.includes('Mac')
-const modLabel = isMac ? '⌘' : 'Ctrl'
+// Why: AGENTS.md mandates `Ctrl+Enter` style on non-Mac; bare `Ctrl↵` reads as one glyph.
+const enterLabel = isMac ? '⌘↵' : 'Ctrl+Enter'
 
 const stepCopy = {
   agent: {
@@ -37,10 +39,6 @@ type OnboardingFlowProps = {
   onOnboardingChange: (state: OnboardingState) => void
 }
 
-export function shouldShowOnboarding(onboarding: OnboardingState | null): boolean {
-  return onboarding !== null && onboarding.closedAt === null
-}
-
 export default function OnboardingFlow({
   onboarding,
   onOnboardingChange
@@ -53,6 +51,11 @@ export default function OnboardingFlow({
   // never closes over a stale `next` / `openFolder` callback.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
+      // clone-URL input or any other editable field on a step.
+      if (isEditableTarget(event.target)) {
+        return
+      }
       const mod = isMac ? event.metaKey : event.ctrlKey
       if (!mod || event.key !== 'Enter') {
         return
@@ -83,7 +86,7 @@ export default function OnboardingFlow({
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[720px] flex-col px-8 pb-10 pt-16">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-[820px] flex-col px-8 pb-10 pt-16">
         <div className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
           <img src={logo} alt="Orca logo" className="size-7" />
           <span>Orca</span>
@@ -161,7 +164,7 @@ export default function OnboardingFlow({
         <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <kbd className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground">
-              {modLabel}↵
+              {enterLabel}
             </kbd>
             <span>{currentStep.id === 'repo' ? 'open folder' : 'continue'}</span>
           </div>
@@ -172,14 +175,16 @@ export default function OnboardingFlow({
             >
               {currentStep.id === 'repo' ? "I'll add one later" : 'Skip'}
             </button>
-            <button
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:invisible"
-              disabled={stepIndex === 0 || Boolean(busyLabel)}
-              onClick={flow.back}
-            >
-              <ChevronLeft className="size-4" />
-              Back
-            </button>
+            {stepIndex > 0 && (
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
+                disabled={Boolean(busyLabel)}
+                onClick={flow.back}
+              >
+                <ChevronLeft className="size-4" />
+                Back
+              </button>
+            )}
             {currentStep.id !== 'repo' && (
               <button
                 className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"

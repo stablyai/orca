@@ -19,54 +19,71 @@ export function RepoStep({
   busyLabel,
   error
 }: RepoStepProps) {
+  const disabled = Boolean(busyLabel)
   return (
-    <div className="relative space-y-4 rounded-2xl border border-border p-5">
-      <div className="grid gap-3 md:grid-cols-2">
-        <button
-          className="group flex flex-col rounded-xl border border-foreground/30 bg-muted/50 p-5 text-left transition hover:border-foreground/50 hover:bg-muted"
-          disabled={Boolean(busyLabel)}
-          onClick={onOpenFolder}
-        >
-          <div className="grid size-10 place-items-center rounded-lg bg-muted text-foreground">
-            <FolderOpen className="size-5" />
-          </div>
-          <div className="mt-4 text-base font-semibold text-foreground">Open a folder</div>
-          <div className="mt-1 text-[13px] text-muted-foreground">
+    <div className="space-y-3">
+      <button
+        type="button"
+        className="group flex w-full items-center gap-4 rounded-xl border border-border bg-muted/30 p-5 text-left transition hover:border-foreground/40 hover:bg-muted/60 disabled:opacity-60"
+        disabled={disabled}
+        onClick={onOpenFolder}
+      >
+        <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
+          <FolderOpen className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-semibold text-foreground">Open a folder</div>
+          <div className="mt-0.5 text-[13px] text-muted-foreground">
             Choose any local directory — git repo or not.
           </div>
-        </button>
+        </div>
+        <span className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition group-hover:border-foreground/40">
+          Browse…
+        </span>
+      </button>
 
-        <div className="flex flex-col rounded-xl border border-border bg-muted/30 p-5">
-          <div className="grid size-10 place-items-center rounded-lg bg-muted text-foreground">
+      <form
+        className="rounded-xl border border-border bg-muted/30 p-5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          onClone()
+        }}
+      >
+        <div className="flex items-center gap-4">
+          <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
             <GitBranch className="size-5" />
           </div>
-          <div className="mt-4 text-base font-semibold text-foreground">Clone a repo</div>
-          <div className="mt-1 text-[13px] text-muted-foreground">Paste an HTTPS or SSH URL.</div>
-          <div className="mt-3 flex gap-2">
-            <input
-              className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs text-foreground outline-none focus:border-foreground/40 focus:ring-1 focus:ring-foreground/20"
-              placeholder="git@github.com:org/repo.git"
-              value={cloneUrl}
-              disabled={Boolean(busyLabel)}
-              onChange={(event) => onCloneUrlChange(event.target.value)}
-            />
-            <button
-              className="shrink-0 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-              disabled={!cloneUrl.trim() || Boolean(busyLabel)}
-              onClick={onClone}
-            >
-              Clone
-            </button>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-semibold text-foreground">Clone a repo</div>
+            <div className="mt-0.5 text-[13px] text-muted-foreground">
+              Paste an HTTPS or SSH URL.
+            </div>
           </div>
         </div>
-      </div>
+        <div className="mt-4 flex gap-2">
+          <input
+            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
+            placeholder="git@github.com:org/repo.git"
+            value={cloneUrl}
+            disabled={disabled}
+            onChange={(event) => onCloneUrlChange(event.target.value)}
+          />
+          <button
+            type="submit"
+            className="shrink-0 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+            disabled={!cloneUrl.trim() || disabled}
+          >
+            Clone
+          </button>
+        </div>
+      </form>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3.5 py-2.5 text-xs">
-        <div className="flex items-center gap-2 text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2">
           <span>Workspace</span>
           <span className="truncate font-mono text-foreground">{workspaceDir}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground">
+        <div className="flex items-center gap-1.5">
           <Server className="size-3.5" />
           <span>SSH? Set hosts up in Settings</span>
         </div>

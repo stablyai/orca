@@ -759,7 +759,14 @@ export type PreloadApi = {
   }
   onboarding: {
     get: () => Promise<OnboardingState>
-    update: (updates: Partial<OnboardingState>) => Promise<OnboardingState>
+    // Why: main-process `updateOnboarding` merges checklist field-by-field, so
+    // callers can pass a partial checklist (e.g. just `{ addedRepo: true }`)
+    // without re-supplying every flag.
+    update: (
+      updates: Partial<Omit<OnboardingState, 'checklist'>> & {
+        checklist?: Partial<OnboardingState['checklist']>
+      }
+    ) => Promise<OnboardingState>
   }
   developerPermissions: {
     getStatus: () => Promise<DeveloperPermissionState[]>
