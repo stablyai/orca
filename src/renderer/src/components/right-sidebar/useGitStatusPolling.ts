@@ -11,6 +11,7 @@ export function useGitStatusPolling(): void {
   const activeWorktree = useActiveWorktree()
   const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
@@ -96,6 +97,31 @@ export function useGitStatusPolling(): void {
       window.removeEventListener('focus', onFocus)
     }
   }, [fetchStatus])
+
+  // Why: terminal-driven `git checkout` in a non-active worktree of the active
+  // repo would otherwise leave its previously-attached merged PR key in the
+  // sidebar indefinitely (the active-worktree git status poll only refreshes
+  // identity for activeWorktreeId). Poll the active repo's worktree list while
+  // the window is focused so branch switches in any of its worktrees update the
+  // sidebar's PR key. Gated on focus to avoid background permission probes.
+  useEffect(() => {
+    if (!activeRepoId || !activeRepoSupportsGit) {
+      return
+    }
+
+    void fetchWorktrees(activeRepoId)
+    const intervalId = setInterval(() => {
+      if (document.hasFocus()) {
+        void fetchWorktrees(activeRepoId)
+      }
+    }, POLL_INTERVAL_MS)
+    const onFocus = (): void => void fetchWorktrees(activeRepoId)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [activeRepoId, activeRepoSupportsGit, fetchWorktrees])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)

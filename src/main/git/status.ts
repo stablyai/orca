@@ -56,7 +56,10 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
 
       if (line.startsWith('# branch.head ')) {
         const branchHead = line.slice('# branch.head '.length).trim()
-        branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
+        // Why: undefined (not '') for detached/empty so renderer's
+        // `identity.branch ?? worktree.branch` preserves the prior branch
+        // value when git can't report one, instead of overwriting it with ''.
+        branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
         continue
       }
 

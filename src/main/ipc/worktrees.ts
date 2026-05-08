@@ -152,7 +152,13 @@ export function registerWorktreeHandlers(
             `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
             err
           )
-          rememberLocalWorktreeRoots(store, repo, [])
+          // Why: do NOT seed an empty success here. registerWorktreeRootsForRepo
+          // would mark this repo as registered and flip
+          // registeredWorktreeRootsDirty to false, which causes
+          // resolveRegisteredWorktreePath to permanently deny access to
+          // legitimate linked worktrees of this repo until something invalidates
+          // the cache. Leaving it unregistered keeps the cache dirty so the
+          // next access path can rebuild.
           return []
         }
       })
@@ -206,7 +212,8 @@ export function registerWorktreeHandlers(
         `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
         err
       )
-      rememberLocalWorktreeRoots(store, repo, [])
+      // Why: see worktrees:listAll catch — seeding an empty-success result
+      // would poison the auth cache and block linked worktrees.
       return []
     }
   })
