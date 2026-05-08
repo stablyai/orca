@@ -197,7 +197,6 @@ function GhosttyDiscoveryRow({
   }
 
   const { preview, fields } = discovery
-  const path = preview.configPath ?? '~/.config/ghostty/config'
   return (
     <div className="flex items-center gap-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.06] px-3.5 py-2.5">
       <img src={ghosttyIcon} alt="" className="size-4 shrink-0" />
@@ -209,9 +208,14 @@ function GhosttyDiscoveryRow({
             ?
           </span>
         </div>
-        <div className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground" title={path}>
-          {path}
-        </div>
+        {preview.configPath && (
+          <div
+            className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground"
+            title={preview.configPath}
+          >
+            {preview.configPath}
+          </div>
+        )}
       </div>
       <button
         className="shrink-0 rounded-md bg-foreground px-3 py-1.5 text-[11.5px] font-semibold text-background hover:bg-foreground/90 disabled:opacity-50"
