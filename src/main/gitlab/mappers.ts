@@ -94,6 +94,8 @@ export function mapGitLabIssueInfo(data: {
   web_url?: string
   url?: string
   labels?: { name: string }[] | string[]
+  description?: string | null
+  author?: { username?: string | null; avatar_url?: string | null } | null
 }): GitLabIssueInfo {
   // Why: glab CLI flips between exposing `iid` and `number` depending on
   // command + --output flag combination. Accept both.
@@ -104,7 +106,12 @@ export function mapGitLabIssueInfo(data: {
     title: data.title,
     state: data.state?.toLowerCase() === 'opened' ? 'opened' : 'closed',
     url: data.web_url ?? data.url ?? '',
-    labels
+    labels,
+    // Why: same description / author optional plumbing as mapMRInfo —
+    // list payloads strip these so callers can tell "absent" from "blank".
+    ...(typeof data.description === 'string' ? { description: data.description } : {}),
+    ...(data.author?.username ? { author: data.author.username } : {}),
+    ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
 }
 
@@ -125,6 +132,8 @@ type GitLabMRRaw = {
   sha?: string
   has_conflicts?: boolean
   detailed_merge_status?: string
+  description?: string | null
+  author?: { username?: string | null; avatar_url?: string | null } | null
 }
 
 export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
@@ -136,7 +145,14 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     pipelineStatus,
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
     mergeable: deriveMergeable(data),
-    headSha: data.sha
+    headSha: data.sha,
+    // Why: detail-endpoint payloads include `description`; list endpoints
+    // strip it. Pass through what's present rather than coercing missing
+    // values to '' so downstream UIs can distinguish "no body authored"
+    // from "this came from a list and the body is unknown".
+    ...(typeof data.description === 'string' ? { description: data.description } : {}),
+    ...(data.author?.username ? { author: data.author.username } : {}),
+    ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
 }
 

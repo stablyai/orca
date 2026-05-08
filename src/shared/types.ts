@@ -745,6 +745,12 @@ export type MRInfo = {
   pipelineStatus: CheckStatus
   updatedAt: string
   mergeable: MRMergeableState
+  /** Full markdown description as authored on the MR. Optional because
+   *  list endpoints omit it; populated on single-MR fetch (`getMR`). */
+  description?: string
+  /** Author username (GitLab `username`). Optional for the same reason. */
+  author?: string | null
+  authorAvatarUrl?: string | null
   /** GitLab MR head SHA — pipeline status is keyed off the head commit. */
   headSha?: string
   conflictSummary?: PRConflictSummary
@@ -788,6 +794,12 @@ export type GitLabIssueInfo = {
   state: GitLabIssueState
   url: string
   labels: string[]
+  /** Full markdown description as authored on the issue. Optional because
+   *  list endpoints omit it; populated on single-issue fetch (`getIssue`). */
+  description?: string
+  /** Author username — populated on single-issue fetch. */
+  author?: string | null
+  authorAvatarUrl?: string | null
 }
 
 export type GitLabViewer = {

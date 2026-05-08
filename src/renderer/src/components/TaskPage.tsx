@@ -63,6 +63,7 @@ import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/I
 import GitHubRateLimitPill from '@/components/github/GitHubRateLimitPill'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
+import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
@@ -825,6 +826,11 @@ export default function TaskPage(): React.JSX.Element {
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
   const [gitlabRefreshNonce, setGitlabRefreshNonce] = useState(0)
+  // Why: opens GitLabItemDialog when a row is clicked. Separate state from
+  // gitlabItems so the dialog target survives a list refresh that might
+  // remove the item from the visible filter (e.g. closing an MR while
+  // it's open in the dialog).
+  const [gitlabDialogItem, setGitlabDialogItem] = useState<GitLabWorkItem | null>(null)
 
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
@@ -2708,11 +2714,23 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
                 <div className="divide-y divide-border/50">
                   {gitlabItems.map((item) => (
-                    <button
-                      type="button"
+                    // Why: row uses a <div role="button"> rather than a
+                    // <button> because it nests an inner button for
+                    // open-in-browser. Native <button> nesting is invalid
+                    // HTML and React warns; the role + tabIndex + keyDown
+                    // handler preserve a11y semantics.
+                    <div
+                      role="button"
+                      tabIndex={0}
                       key={item.id}
-                      onClick={() => void window.api.shell.openUrl(item.url)}
-                      className="grid w-full gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
+                      onClick={() => setGitlabDialogItem(item)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setGitlabDialogItem(item)
+                        }
+                      }}
+                      className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
                     >
                       <span className="font-mono text-xs text-muted-foreground">
                         {/* Why: GitLab's user-facing convention is `!N` for MRs
@@ -2728,10 +2746,18 @@ export default function TaskPage(): React.JSX.Element {
                       <span className="text-xs text-muted-foreground">
                         {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
                       </span>
-                      <span className="flex justify-end">
-                        <ExternalLink className="size-3.5 text-muted-foreground" />
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void window.api.shell.openUrl(item.url)
+                        }}
+                        aria-label="Open in browser"
+                        className="flex justify-end text-muted-foreground hover:text-foreground"
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -3239,6 +3265,12 @@ export default function TaskPage(): React.JSX.Element {
           handleUseLinearItem(issue)
         }}
         onClose={() => setDrawerLinearIssue(null)}
+      />
+
+      <GitLabItemDialog
+        item={gitlabDialogItem}
+        repoPath={primaryRepo?.path ?? null}
+        onClose={() => setGitlabDialogItem(null)}
       />
 
       <Dialog
