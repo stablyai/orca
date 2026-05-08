@@ -90,6 +90,9 @@ describe('ensureHooksConfirmed', () => {
 
     expect(pending).toHaveLength(1)
     expect(pending[0].data.scriptContent).toBe('new script')
+    // The dialog uses this flag to tell the user we're re-prompting *because*
+    // orca.yaml changed, not because they've never approved this hook.
+    expect(pending[0].data.previouslyApproved).toBe(true)
 
     pending[0].resolve('run')
     await expect(promise).resolves.toBe('run')
@@ -156,7 +159,8 @@ describe('ensureHooksConfirmed', () => {
       repoName: 'Repo One',
       scriptKind: 'setup',
       scriptContent: 'pnpm install',
-      contentHash: await hashOrcaHookScript('pnpm install')
+      contentHash: await hashOrcaHookScript('pnpm install'),
+      previouslyApproved: false
     })
 
     pending[0].resolve('run')
