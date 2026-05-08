@@ -178,14 +178,17 @@ export function useOnboardingFlow(
       return
     }
     didAutoSelectRef.current = true
-    void ensureDetectedAgents().then((ids) => {
+    // Why: re-read PATH on wizard mount instead of reusing the session cache.
+    // The cache can be poisoned if a prior caller ran before shell PATH
+    // hydration finished, leaving the wizard with a false "no agents" state.
+    void refreshDetectedAgents().then((ids) => {
       if (selectedAgentRef.current !== null) {
         return
       }
       const preferred = AGENT_CATALOG.find((agent) => ids.includes(agent.id))?.id ?? null
       setSelectedAgent(preferred)
     })
-  }, [ensureDetectedAgents])
+  }, [refreshDetectedAgents])
 
   const closeWith = useCallback(
     async (
@@ -454,6 +457,7 @@ export function useOnboardingFlow(
     busyLabel,
     error,
     detectedSet,
+    isDetectingAgents,
     next,
     skip,
     back,

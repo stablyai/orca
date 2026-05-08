@@ -8,9 +8,15 @@ type AgentStepProps = {
   selectedAgent: TuiAgent | null
   onSelect: (agent: TuiAgent) => void
   detectedSet: Set<TuiAgent>
+  isDetecting: boolean
 }
 
-export function AgentStep({ selectedAgent, onSelect, detectedSet }: AgentStepProps) {
+export function AgentStep({
+  selectedAgent,
+  onSelect,
+  detectedSet,
+  isDetecting
+}: AgentStepProps) {
   const detected = AGENT_CATALOG.filter((agent) => detectedSet.has(agent.id))
   const rest = AGENT_CATALOG.filter((agent) => !detectedSet.has(agent.id))
   const hasDetected = detected.length > 0
@@ -36,7 +42,7 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet }: AgentStepPro
   }, [selectedEntryIsCollapsed])
   return (
     <div className="space-y-5">
-      {!hasDetected && (
+      {!hasDetected && !isDetecting && (
         <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-200/90">
           No agents detected on your PATH. Pick one to install later, or continue with a blank
           terminal.

@@ -141,6 +141,7 @@ export default function OnboardingFlow({
               selectedAgent={flow.selectedAgent}
               onSelect={flow.setSelectedAgent}
               detectedSet={flow.detectedSet}
+              isDetecting={flow.isDetectingAgents}
             />
           )}
           {currentStep.id === 'theme' && (
