@@ -578,7 +578,9 @@ app.whenReady().then(async () => {
   win.once('show', () => {
     // Why: store can be null if init failed earlier; bail rather than risk a
     // throw inside an Electron event listener.
-    if (!store) return
+    if (!store) {
+      return
+    }
     const onboarding = store.getOnboarding()
     if (onboarding.closedAt !== null) {
       triggerStartupNotificationRegistration(store)

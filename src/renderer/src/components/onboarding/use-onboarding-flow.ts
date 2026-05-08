@@ -6,37 +6,17 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
+import { STEPS, type StepNumber } from './use-onboarding-flow-types'
+import {
+  persistStep,
+  useCloseWith,
+  usePersistCurrentStep
+} from './use-onboarding-flow-persistence'
 
-export type StepNumber = 1 | 2 | 3 | 4
-export type StepId = 'agent' | 'theme' | 'notifications' | 'repo'
-
-export const STEPS: readonly {
-  id: StepId
-  stepNumber: StepNumber
-  valueKind: 'agent' | 'theme' | 'notifications' | 'repo'
-}[] = [
-  { id: 'agent', stepNumber: 1, valueKind: 'agent' },
-  { id: 'theme', stepNumber: 2, valueKind: 'theme' },
-  { id: 'notifications', stepNumber: 3, valueKind: 'notifications' },
-  { id: 'repo', stepNumber: 4, valueKind: 'repo' }
-]
-
-function selectedAgentOrBlank(agent: TuiAgent | null): TuiAgent | 'blank' {
-  return agent ?? 'blank'
-}
-
-async function persistStep(
-  stepNumber: number,
-  updates: Partial<OnboardingState> = {}
-): Promise<OnboardingState> {
-  return window.api.onboarding.update({
-    lastCompletedStep: Math.max(stepNumber, -1),
-    ...updates
-  })
-}
+export { STEPS } from './use-onboarding-flow-types'
+export type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export type OnboardingFlowController = ReturnType<typeof useOnboardingFlow>
 
@@ -190,62 +170,12 @@ export function useOnboardingFlow(
     })
   }, [refreshDetectedAgents])
 
-  const closeWith = useCallback(
-    async (
-      outcome: 'completed' | 'dismissed',
-      checklist: Partial<OnboardingState['checklist']>,
-      lastStepReached: StepNumber,
-      completedPath?: 'open_folder' | 'clone_url'
-    ): Promise<boolean> => {
-      let nextState: OnboardingState
-      try {
-        // Why: main-process updateOnboarding already merges with current state,
-        // so spreading the local (potentially stale) onboarding.checklist would
-        // overwrite concurrent updates.
-        nextState = await window.api.onboarding.update({
-          closedAt: Date.now(),
-          outcome,
-          lastCompletedStep: outcome === 'completed' ? ONBOARDING_FINAL_STEP : -1,
-          checklist: {
-            ...checklist,
-            dismissed: outcome === 'dismissed'
-          }
-        })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-        return false
-      }
-      onOnboardingChange(nextState)
-      if (outcome === 'completed' && completedPath) {
-        const total = Math.max(0, Date.now() - startTimeRef.current)
-        track('onboarding_completed', {
-          path: completedPath,
-          is_git_repo: checklist.addedRepo === true,
-          total_duration_ms: total
-        })
-        // Why: checklist items completed by the wizard itself must fire
-        // `activation_checklist_item_completed` so the post-wizard panel and
-        // analytics agree. Other items (ranFirstAgent, triedCmdJ, …) emit
-        // from their own product surfaces.
-        if (checklist.addedRepo && !onboarding.checklist.addedRepo) {
-          track('activation_checklist_item_completed', {
-            item: 'addedRepo',
-            time_since_completed_ms: 0
-          })
-        }
-        if (checklist.addedFolder && !onboarding.checklist.addedFolder) {
-          track('activation_checklist_item_completed', {
-            item: 'addedFolder',
-            time_since_completed_ms: 0
-          })
-        }
-      } else if (outcome === 'dismissed') {
-        track('onboarding_dismissed', { last_step: lastStepReached })
-      }
-      return true
-    },
-    [onOnboardingChange, onboarding.checklist]
-  )
+  const closeWith = useCloseWith({
+    onOnboardingChange,
+    onboardingChecklist: onboarding.checklist,
+    startTimeRef,
+    setError
+  })
 
   const completeRepo = useCallback(
     async (repoId: string, isGit: boolean, path: 'open_folder' | 'clone_url') => {
@@ -264,7 +194,9 @@ export function useOnboardingFlow(
         4,
         path
       )
-      if (!closed) return
+      if (!closed) {
+        return
+      }
       track('onboarding_step_completed', { step: 4, value_kind: 'repo' })
       if (isGit) {
         openModal('new-workspace-composer', {
@@ -277,69 +209,17 @@ export function useOnboardingFlow(
     [closeWith, fetchRepos, fetchWorktrees, openModal]
   )
 
-  const persistCurrentStep = useCallback(async (): Promise<boolean> => {
-    if (!settings) {
-      return false
-    }
-    try {
-      if (currentStep.id === 'agent') {
-        const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
-        await updateSettings({ defaultTuiAgent })
-        const choseAgent = defaultTuiAgent !== 'blank'
-        const wasAlreadyChosen = onboarding.checklist.choseAgent
-        onOnboardingChange(
-          await persistStep(1, {
-            checklist: { ...onboarding.checklist, choseAgent }
-          })
-        )
-        if (choseAgent && !wasAlreadyChosen) {
-          track('activation_checklist_item_completed', {
-            item: 'choseAgent',
-            time_since_completed_ms: 0
-          })
-        }
-        return true
-      }
-      if (currentStep.id === 'theme') {
-        await updateSettings({ theme })
-        onOnboardingChange(await persistStep(2))
-        return true
-      }
-      if (currentStep.id === 'notifications') {
-        const enabled = notifications.agentTaskComplete || notifications.terminalBell
-        if (enabled) {
-          // Why: triggers macOS first-prompt notification on first call. Only fire
-          // on Continue; Skip uses the persistence-only path below.
-          await window.api.notifications.requestPermission()
-        }
-        await updateSettings({
-          notifications: {
-            ...settings.notifications,
-            enabled,
-            agentTaskComplete: notifications.agentTaskComplete,
-            terminalBell: notifications.terminalBell,
-            // Why: invert positive UX framing back to persisted negative field.
-            suppressWhenFocused: !notifications.notifyWhenFocused
-          }
-        })
-        onOnboardingChange(await persistStep(3))
-        return true
-      }
-      return false
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      return false
-    }
-  }, [
-    currentStep.id,
-    notifications,
-    onboarding.checklist,
-    onOnboardingChange,
+  const persistCurrentStep = usePersistCurrentStep({
+    currentStepId: currentStep.id,
     selectedAgent,
-    settings,
     theme,
-    updateSettings
-  ])
+    notifications,
+    settings,
+    updateSettings,
+    onboardingChecklist: onboarding.checklist,
+    onOnboardingChange,
+    setError
+  })
 
   const next = useCallback(async () => {
     if (busyLabel || currentStep.id === 'repo') {

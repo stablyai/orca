@@ -41,7 +41,9 @@ type OrcaWorkerFixtures = {
 // per worker instead of once per test (otherwise hundreds of lines per CI run).
 const ORCA_E2E_SLOWMO_MS_RAW = process.env.ORCA_E2E_SLOWMO_MS
 const ORCA_E2E_SLOWMO_MS = ((): number => {
-  if (ORCA_E2E_SLOWMO_MS_RAW === undefined) return 0
+  if (ORCA_E2E_SLOWMO_MS_RAW === undefined) {
+    return 0
+  }
   const parsed = Number(ORCA_E2E_SLOWMO_MS_RAW)
   if (!Number.isFinite(parsed)) {
     console.warn(
@@ -49,7 +51,7 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
     )
     return 0
   }
-  return parsed > 0 ? parsed : 0
+  return Math.max(parsed, 0)
 })()
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
