@@ -12,18 +12,16 @@ import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
-import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
+import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
 import {
   paneLeafId,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_FOCUS_REPORTING_RESET
 } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
-import { detectDeveloperPermissionHint } from './developer-permission-hints'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
-const developerPermissionHintKeys = new Set<string>()
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -90,38 +88,6 @@ function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolea
   return sessionId.slice(0, separatorIdx) === worktreeId
 }
 
-function maybeShowDeveloperPermissionHint(worktreeId: string, data: string): void {
-  if (!navigator.userAgent.includes('Mac')) {
-    return
-  }
-
-  const hint = detectDeveloperPermissionHint(data)
-  if (!hint) {
-    return
-  }
-  const key = `${worktreeId}:${hint.permissionId}`
-  if (developerPermissionHintKeys.has(key)) {
-    return
-  }
-  developerPermissionHintKeys.add(key)
-
-  toast.message(hint.title, {
-    description: hint.description,
-    duration: 12000,
-    action: {
-      label: 'Open Permissions',
-      onClick: () => {
-        useAppStore.getState().openSettingsTarget({
-          pane: 'developer-permissions',
-          repoId: null,
-          sectionId: 'developer-permissions'
-        })
-        useAppStore.getState().openSettingsPage()
-      }
-    }
-  })
-}
-
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -130,6 +96,12 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: passphrase-gate waits register a teardown here so dispose() can
+  // actively unsubscribe + resolve them. Without this, a pane disposed
+  // mid-wait leaks its zustand subscriber and the surrounding async IIFE
+  // forever, since the subscriber's `disposed` check only fires when the
+  // store next emits — which may never happen after disconnect.
+  const waitTeardowns: (() => void)[] = []
   // Why: startup commands must only run once — in the pane they were
   // targeted at. Capture `deps.startup` into a local and clear the field on
   // the (already spread-copied) `deps` so nothing else inside this function
@@ -356,14 +328,8 @@ export function connectPanePty(
       // setAgentStatus call observe the same state. Re-reading getState()
       // between the two lines opens a brief window where the title could
       // shift (OSC title update landing in between) and the status would be
-      // stored against a title that was never paired with it. The same
-      // snapshot also gates on the experimental dashboard setting — without
-      // the opt-in, OSC 9999 status payloads are dropped before they reach
-      // the store.
+      // stored against a title that was never paired with it.
       const currentState = useAppStore.getState()
-      if (currentState.settings?.experimentalAgentDashboard !== true) {
-        return
-      }
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
     }
@@ -428,9 +394,59 @@ export function connectPanePty(
     transport.resize(cols, rows)
   })
 
+  // Why: while a mobile-fit override is active, the onResize listener above
+  // and the matching server-side gate both correctly drop pty:resize so the
+  // PTY stays parked at phone dims. But the server still needs to learn the
+  // real desktop pane geometry — otherwise resolveDesktopRestoreTarget falls
+  // back to the PTY's spawn default (e.g. 80×24 for a hidden tab) and Take
+  // Back leaves the terminal partially restored. This observer measures the
+  // pane container as a side-channel, computes proposed cols/rows the way
+  // safeFit would, and reports it via pty:reportGeometry — a measurement-
+  // only IPC that updates lastRendererSizes and non-null subscriber
+  // baselines without resizing the PTY. We only fire while an override is
+  // active because the normal pty:resize path covers all other cases. See
+  // docs/mobile-fit-hold.md.
+  let pendingGeometryReportRaf: number | null = null
+  const reportPaneGeometry = (): void => {
+    pendingGeometryReportRaf = null
+    const currentPtyId = transport.getPtyId()
+    if (!currentPtyId) {
+      return
+    }
+    if (!getFitOverrideForPty(currentPtyId)) {
+      return
+    }
+    let proposed: { cols: number; rows: number } | undefined
+    try {
+      proposed = pane.fitAddon.proposeDimensions()
+    } catch {
+      proposed = undefined
+    }
+    if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
+      return
+    }
+    window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
+  }
+  const geometryReportObserver =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          if (pendingGeometryReportRaf !== null) {
+            return
+          }
+          pendingGeometryReportRaf = requestAnimationFrame(reportPaneGeometry)
+        })
+  // Why: pane.xtermContainer is created later in pane-lifecycle's
+  // attachWebgl/initial-fit path; pane.container is always present at the
+  // moment connectPanePty runs (it's the .pane element). Both report the
+  // same layout signal — when the outer pane resizes, the inner xterm
+  // container resizes too — so this is the safe element to observe.
+  if (geometryReportObserver && pane.container instanceof Element) {
+    geometryReportObserver.observe(pane.container)
+  }
+
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
-  deps.pendingWritesRef.current.set(pane.id, '')
   connectFrame = requestAnimationFrame(() => {
     connectFrame = null
     if (disposed) {
@@ -454,13 +470,6 @@ export function connectPanePty(
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
 
-    // Why: 512 KB cap keeps the pending buffer from growing without bound
-    // when an agent runs for minutes in a background worktree.  When the
-    // cap is reached, the oldest output is trimmed so the most recent
-    // terminal state is preserved.  This matches the MAX_BUFFER_BYTES
-    // constant used for serialized scrollback capture.
-    const MAX_PENDING_BYTES = 512 * 1024
-
     // Why: shared registration so both fresh-spawn and reattach paths install
     // the same SerializeAddon-backed serializer plus the onTitleChange wrapper
     // that drives lastTitle parity for mobile subscribers. Wires the resulting
@@ -477,14 +486,6 @@ export function connectPanePty(
       }
       const unregisterSerializer = registerPtySerializer(ptyId, async (opts) => {
         try {
-          const pending = deps.pendingWritesRef.current.get(pane.id)
-          if (pending) {
-            deps.pendingWritesRef.current.set(pane.id, '')
-            // Why: hidden/background panes buffer PTY output instead of writing
-            // to xterm. Mobile snapshots must include that pending output, and
-            // replay guard prevents xterm query auto-replies from hitting stdin.
-            await replayIntoTerminalAsync(pane, deps.replayingPanesRef, pending)
-          }
           // Why: alt-screen TUIs (vim, claude-code) hold transient state in
           // the alternate screen. The hydration path requests
           // altScreenForcesZeroRows so normal-buffer scrollback isn't bled
@@ -575,49 +576,26 @@ export function connectPanePty(
       pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
     }
 
-    // Why: replay bytes (eager-buffer flush, attach-time screen clear) must
-    // always go through the replay guard so xterm's auto-replies to embedded
-    // query sequences don't leak to the shell. Unlike dataCallback we do not
-    // honor isVisibleRef — the visibility branch is a perf batching strategy
-    // for live output that defers parsing until the worktree is foregrounded,
-    // but deferring replay parsing drops the bytes into pendingWritesRef,
-    // which later flushes through plain pane.terminal.write (in
-    // use-terminal-pane-global-effects) with no guard engaged. xterm's
-    // write() buffers internally regardless of DOM visibility, and the guard
-    // stays engaged via the write-completion callback until xterm finishes
-    // parsing — so writing directly here is both correct and safe.
+    // The replay path uses the guard so xterm auto-replies to embedded query
+    // sequences don't leak into the shell. xterm.write() buffers internally
+    // regardless of DOM visibility and the guard stays engaged via the
+    // write-completion callback until xterm finishes parsing.
     const replayDataCallback = (data: string): void => {
-      // Why: the relay's replay buffer holds the full last 100 KB of output,
-      // including data already rendered in xterm before the disconnect.
-      // Clearing before writing prevents duplication on SSH reconnect.
+      // Relay replay buffer holds the last 100 KB of output, which may
+      // overlap with content already rendered in xterm before the
+      // disconnect. Clear first to prevent duplication on SSH reconnect.
       replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
     }
 
     const dataCallback = (data: string): void => {
-      maybeShowDeveloperPermissionHint(deps.worktreeId, data)
-
-      if (deps.isVisibleRef.current) {
-        pane.terminal.write(data)
-      } else {
-        const pending = deps.pendingWritesRef.current
-        let buf = (pending.get(pane.id) ?? '') + data
-        if (buf.length > MAX_PENDING_BYTES) {
-          // Why: slicing at an arbitrary offset can bisect a multi-byte
-          // character or an ANSI escape sequence (e.g. \x1b[38;2;255;0m),
-          // producing garbled output when the buffer is later flushed.
-          // Snapping forward to the next newline ensures the cut lands on
-          // a line boundary where escape state is far less likely to be
-          // mid-sequence.
-          let cutAt = buf.length - MAX_PENDING_BYTES
-          const nl = buf.indexOf('\n', cutAt)
-          if (nl !== -1 && nl < cutAt + 256) {
-            cutAt = nl + 1
-          }
-          buf = buf.slice(cutAt)
-        }
-        pending.set(pane.id, buf)
-      }
+      // Always-live writes: PTY output goes straight into xterm regardless
+      // of visibility. xterm's internal write queue handles batching, and
+      // suspending WebGL while hidden (use-terminal-pane-global-effects)
+      // keeps GPU resources from leaking. Visibility-gated buffering used
+      // to feed bytes into xterm at stale dimensions on resume, which was
+      // the root of the cursor-on-strange-line and broken-wide-char bugs.
+      pane.terminal.write(data)
 
       if (pendingStartupCommand) {
         if (startupInjectTimer !== null) {
@@ -674,13 +652,45 @@ export function connectPanePty(
       // main-process hydration path has full status parity.
       registerPaneSerializerFor(ptyId)
 
-      if (connectResult?.coldRestore) {
-        // Why: restoreScrollbackBuffers() already wrote the saved xterm
-        // buffer before this rAF ran. The cold-restore scrollback from
-        // disk history overlaps with that content. Without clearing first,
-        // the terminal shows duplicated output.
-        // Why replayIntoTerminal: the recorded scrollback is raw PTY output
-        // that may contain query sequences the previous agent CLI emitted;
+      // Strict precedence: snapshot > replay > coldRestore. Paint exactly
+      // one source per reattach. Painting snapshot AND replay produced the
+      // duplicated TUI output users saw on worktree switch (the relay replay
+      // buffer's tail typically overlaps with the daemon snapshot's tail, so
+      // both writing into xterm doubles the same lines). Snapshot wins
+      // because the daemon's authoritative buffer is freshest when present;
+      // replay wins over coldRestore because the relay's last 100 KB is
+      // newer than disk-recorded scrollback. If we ever return all three,
+      // the daemon and relay are by definition tracking the same session
+      // and only the freshest source belongs on screen.
+      if (connectResult?.snapshot) {
+        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
+        // Snapshot reattach keeps a live session, so avoid the broader mode
+        // reset. Focus reporting is the unsafe exception: preserving `?1004h`
+        // can make restored shells ring BEL on pane focus/blur.
+        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
+        if (connectResult.coldRestore) {
+          // Snapshot superseded the cold-restore payload — ack it so the
+          // daemon does not redeliver it on the next reattach.
+          window.api.pty.ackColdRestore(ptyId)
+        }
+      } else if (connectResult?.replay) {
+        // Relay replay holds the last 100 KB of raw output. The xterm may
+        // already hold pre-disconnect content; clear first to avoid
+        // duplication. Focus-reporting reset prevents BEL from stale mode
+        // bits in the replayed data.
+        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.replay)
+        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
+        if (connectResult.coldRestore) {
+          window.api.pty.ackColdRestore(ptyId)
+        }
+      } else if (connectResult?.coldRestore) {
+        // restoreScrollbackBuffers() already wrote the saved xterm buffer
+        // before this rAF ran. The cold-restore scrollback overlaps with
+        // that content; clear first.
+        // replayIntoTerminal: the recorded scrollback is raw PTY output that
+        // may contain query sequences the previous agent CLI emitted;
         // writing them through xterm.write would trigger auto-replies that
         // land in the new shell's stdin. See replay-guard.ts.
         replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
@@ -690,39 +700,12 @@ export function connectPanePty(
           deps.replayingPanesRef,
           '\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n'
         )
-        // Why: the cold-restore scrollback is raw PTY output from the prior
-        // session, so mode-setting bytes emitted by a crashed TUI (e.g.
-        // Claude's \e[?1004h) come through verbatim and re-enable those modes
-        // in xterm. Cold-restore means the daemon lost the session and spawned
-        // a fresh shell — there is no TUI consuming these modes anymore, so
-        // reset them to match the fresh shell's expectations. Not applied to
-        // the snapshot branch below: that branch reattaches to a live daemon
-        // session where a running TUI may still depend on these modes.
+        // Cold-restore means the daemon lost the session and spawned a
+        // fresh shell — no TUI is consuming the mode-setting bytes that a
+        // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
+        // reset them to match the fresh shell's expectations.
         replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_MODE_RESET)
         window.api.pty.ackColdRestore(ptyId)
-      } else if (connectResult?.snapshot) {
-        // Why: always clear before writing the daemon/SSH snapshot to prevent
-        // duplication with scrollback restored earlier. The replay guard also
-        // prevents terminal auto-replies from leaking into the live shell.
-        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
-        // Why: snapshot restore keeps a live session, so avoid the broader mode
-        // reset. Focus reporting is the unsafe exception: preserving `?1004h`
-        // can make restored shells ring BEL on pane focus/blur.
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
-      }
-      if (connectResult?.replay) {
-        // Why: the relay's replay buffer is the authoritative terminal state
-        // (last 100 KB of raw output). On SSH reattach the local xterm may
-        // already hold pre-disconnect content that overlaps with the buffer.
-        // Clearing before writing prevents duplication — same approach the
-        // snapshot path uses above. Focus-reporting reset prevents BEL on
-        // pane focus/blur from stale mode bits in the replayed data.
-        if (!connectResult.snapshot && !connectResult.coldRestore) {
-          replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-        }
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.replay)
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
       }
       if (connectResult?.sessionExpired) {
         toast.info('Previous SSH session expired.', {
@@ -798,32 +781,76 @@ export function connectPanePty(
               // waitForSshConnection below has its own error path that will
               // surface the failure via reportError.
               await new Promise<void>((resolve) => {
-                const isTerminalStatus = (status: string | undefined): boolean =>
-                  status === 'connected' ||
-                  status === 'auth-failed' ||
-                  status === 'error' ||
-                  status === 'reconnection-failed'
-                const unsub = useAppStore.subscribe((state) => {
-                  if (disposed) {
-                    unsub()
-                    resolve()
+                // Why: 'disconnected' counts as terminal only after we've
+                // observed a non-disconnected status — i.e. the user actually
+                // initiated a connect attempt that returned to 'disconnected'
+                // (cancel/dismiss). Treating the entry-time 'disconnected'
+                // as terminal would skip the gate entirely, defeating the
+                // passphrase-prompt deferral.
+                let sawNonDisconnected =
+                  useAppStore.getState().sshConnectionStates.get(connectionId)?.status !==
+                    'disconnected' &&
+                  useAppStore.getState().sshConnectionStates.get(connectionId)?.status !== undefined
+                const isTerminalStatus = (status: string | undefined): boolean => {
+                  if (
+                    status === 'connected' ||
+                    status === 'auth-failed' ||
+                    status === 'error' ||
+                    status === 'reconnection-failed'
+                  ) {
+                    return true
+                  }
+                  // Why: a return to 'disconnected' after a connect attempt
+                  // means the user cancelled or the dialog was dismissed —
+                  // resolve so the gate doesn't hang forever.
+                  return sawNonDisconnected && status === 'disconnected'
+                }
+                let settled = false
+                const finish = (): void => {
+                  if (settled) {
                     return
                   }
-                  if (isTerminalStatus(state.sshConnectionStates.get(connectionId)?.status)) {
-                    unsub()
-                    resolve()
+                  settled = true
+                  unsub()
+                  const idx = waitTeardowns.indexOf(finish)
+                  if (idx !== -1) {
+                    waitTeardowns.splice(idx, 1)
+                  }
+                  resolve()
+                }
+                // Why: registering a teardown lets dispose() actively
+                // unsubscribe + resolve if the pane is torn down while the
+                // wait is in flight. Without this the zustand subscriber and
+                // the surrounding async IIFE leak for the rest of the app
+                // session because the callback only checks `disposed` when
+                // it next fires — and it may never fire again.
+                waitTeardowns.push(finish)
+                const unsub = useAppStore.subscribe((state) => {
+                  if (disposed) {
+                    finish()
+                    return
+                  }
+                  const status = state.sshConnectionStates.get(connectionId)?.status
+                  if (status && status !== 'disconnected') {
+                    sawNonDisconnected = true
+                  }
+                  if (isTerminalStatus(status)) {
+                    finish()
                   }
                 })
                 // Why: re-read state immediately after subscribing to close the
                 // race where status transitioned between the alreadyConnected
                 // check above and the subscribe registration — otherwise we'd
                 // wait forever for a state change that already happened.
+                if (disposed) {
+                  finish()
+                  return
+                }
                 const currentStatus = useAppStore
                   .getState()
                   .sshConnectionStates.get(connectionId)?.status
                 if (isTerminalStatus(currentStatus)) {
-                  unsub()
-                  resolve()
+                  finish()
                 }
               })
               if (disposed) {
@@ -1103,6 +1130,13 @@ export function connectPanePty(
   return {
     dispose() {
       disposed = true
+      // Why: actively resolve any in-flight passphrase-gate waits so their
+      // zustand subscribers + async IIFEs don't hang for the rest of the
+      // session when the pane is torn down before SSH state changes.
+      while (waitTeardowns.length > 0) {
+        const teardown = waitTeardowns.pop()
+        teardown?.()
+      }
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
@@ -1117,6 +1151,11 @@ export function connectPanePty(
       }
       onDataDisposable.dispose()
       onResizeDisposable.dispose()
+      geometryReportObserver?.disconnect()
+      if (pendingGeometryReportRaf !== null) {
+        cancelAnimationFrame(pendingGeometryReportRaf)
+        pendingGeometryReportRaf = null
+      }
     }
   }
 }

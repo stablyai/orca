@@ -19,7 +19,6 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
-import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -102,21 +101,18 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onToggleLeftSidebar(() => {
-        dispatchClearModifierHints()
         useAppStore.getState().toggleSidebar()
       })
     )
 
     unsubs.push(
       window.api.ui.onToggleRightSidebar(() => {
-        dispatchClearModifierHints()
         useAppStore.getState().toggleRightSidebar()
       })
     )
 
     unsubs.push(
       window.api.ui.onToggleWorktreePalette(() => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         if (store.activeModal === 'worktree-palette') {
           store.closeModal()
@@ -128,7 +124,6 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onOpenQuickOpen(() => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         if (store.activeView === 'terminal' && store.activeWorktreeId !== null) {
           store.openModal('quick-open')
@@ -145,7 +140,6 @@ export function useIpcEvents(): void {
         if (!store.repos.some((repo) => isGitRepoKind(repo))) {
           return
         }
-        dispatchClearModifierHints()
         if (store.activeModal === 'new-workspace-composer') {
           return
         }
@@ -155,7 +149,6 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onJumpToWorktreeIndex((index) => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         if (store.activeView !== 'terminal') {
           return
@@ -169,7 +162,6 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onWorktreeHistoryNavigate((direction) => {
-        dispatchClearModifierHints()
         const store = useAppStore.getState()
         // Why: mirror the button-visibility rule — worktree history navigation
         // is only meaningful in the terminal (worktree) view. Settings/Tasks
@@ -382,6 +374,31 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: `orca tab switch --focus` lands here after the bridge's state-only
+    // `tabSwitch`. We deliberately DO NOT call `setActiveWorktree` — multiple
+    // agents drive browsers in parallel worktrees, so a global focus call from
+    // one agent's tab switch would steal the user's view from whichever
+    // worktree they're actually reading. Instead `focusBrowserTabInWorktree`
+    // updates the targeted worktree's per-worktree state in place; globals
+    // (activeBrowserTabId, activeTabType) only flip when the user is already
+    // on the targeted worktree. Cross-worktree --focus calls are silent
+    // pre-staging for whenever the user next visits that worktree.
+    unsubs.push(
+      window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
+        const store = useAppStore.getState()
+        // Why: main sends `worktreeId: null` if the tab closed between the
+        // bridge resolving tabSwitch and getWorktreeIdForTab running. Falling
+        // back to activeWorktreeId means a stale page id in another worktree
+        // is silently ignored by focusBrowserTabInWorktree (page not found
+        // in its tabsForWorktree.find), which is the intended no-op.
+        const targetWt = worktreeId ?? store.activeWorktreeId
+        if (!targetWt) {
+          return
+        }
+        store.focusBrowserTabInWorktree(targetWt, browserPageId)
+      })
+    )
+
     unsubs.push(
       window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
         const store = useAppStore.getState()
@@ -476,7 +493,16 @@ export function useIpcEvents(): void {
             })
             return
           }
-          destroyPersistentWebview(data.browserPageId)
+          // Why: a workspace can host multiple browser pages; profile switch must
+          // tear down every sibling webview, not just the one referenced by the IPC.
+          const workspacePages = store.browserPagesByWorkspace[owningWorkspace.id] ?? []
+          if (workspacePages.length > 0) {
+            for (const page of workspacePages) {
+              destroyPersistentWebview(page.id)
+            }
+          } else {
+            destroyPersistentWebview(data.browserPageId)
+          }
           store.switchBrowserTabProfile(owningWorkspace.id, data.profileId)
           window.api.ui.replyTabSetProfile({ requestId: data.requestId })
         } catch (err) {
@@ -808,16 +834,10 @@ export function useIpcEvents(): void {
     // Why: agent status arrives from native hook receivers in the main process.
     // Re-parse it here so the renderer enforces the same normalization rules
     // (state enum, field truncation) regardless of whether the source was a
-    // hook callback or an OSC fallback path. The subscription itself is
-    // unconditional so flipping the experimental dashboard setting takes
-    // effect without re-running this App-mount effect; the per-event guard
-    // inside the handler drops payloads when the setting is off.
+    // hook callback or an OSC fallback path.
     unsubs.push(
       window.api.agentStatus.onSet((data) => {
         const store = useAppStore.getState()
-        if (store.settings?.experimentalAgentDashboard !== true) {
-          return
-        }
         // Why: the IPC payload is already a structured object — pass it
         // straight to the object-input normalizer instead of round-tripping
         // through JSON.stringify/JSON.parse. Hook events can fire many times

@@ -29,7 +29,11 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
-import { getPaneIdsForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  getFitOverrideForPty,
+  getPaneIdsForPty,
+  onOverrideChange
+} from '@/lib/pane-manager/mobile-fit-overrides'
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
@@ -76,7 +80,6 @@ export default function TerminalPane({
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
-  const pendingWritesRef = useRef<Map<number, string>>(new Map())
   // Why: tracks panes currently replaying recorded PTY bytes into xterm
   // (cold-restore, daemon snapshot, scrollback restore, eager-buffer flush).
   // While non-zero, pty-connection.ts drops xterm onData so auto-replies to
@@ -153,6 +156,17 @@ export default function TerminalPane({
             for (const paneId of paneIds) {
               const pane = manager.getPanes().find((p) => p.id === paneId)
               if (!pane) {
+                continue
+              }
+              // Why: skip the fallback for hidden/unmounted panes whose
+              // container is 0×0. Force-resizing xterm to the server's
+              // desktop dims while the DOM has no geometry leaves xterm
+              // with cols/rows that won't match when the tab is later
+              // activated (the activation refit will correct it). The
+              // fallback is for the *visible* pane that legitimately
+              // failed to refit via the rAF safeFit.
+              const rect = pane.container.getBoundingClientRect()
+              if (rect.width === 0 || rect.height === 0) {
                 continue
               }
               safeFit(pane)
@@ -468,7 +482,6 @@ export default function TerminalPane({
     paneMode2031Ref,
     paneLastThemeModeRef,
     panePtyBindingsRef,
-    pendingWritesRef,
     replayingPanesRef,
     isActiveRef,
     isVisibleRef,
@@ -534,7 +547,6 @@ export default function TerminalPane({
         cwd,
         startup: { command: 'codex' },
         paneTransportsRef,
-        pendingWritesRef,
         replayingPanesRef,
         isActiveRef,
         isVisibleRef,
@@ -634,7 +646,6 @@ export default function TerminalPane({
     managerRef,
     containerRef,
     paneTransportsRef,
-    pendingWritesRef,
     isActiveRef,
     isVisibleRef,
     toggleExpandPane
@@ -823,15 +834,9 @@ export default function TerminalPane({
       if (panes.length === 0) {
         return
       }
-      // Flush pending background PTY output into terminals before serializing.
-      // terminal.write() is async so some trailing bytes may be lost — best effort.
-      for (const pane of panes) {
-        const pending = pendingWritesRef.current.get(pane.id)
-        if (pending) {
-          pane.terminal.write(pending)
-          pendingWritesRef.current.set(pane.id, '')
-        }
-      }
+      // No renderer-side pending writes to flush — PTY output writes live
+      // into xterm regardless of visibility, so the SerializeAddon already
+      // sees the freshest possible state at this point.
       const buffers: Record<string, string> = {}
       for (const pane of panes) {
         try {
@@ -1167,14 +1172,16 @@ export default function TerminalPane({
         if (!ptyId) {
           return null
         }
-        // Why: presence-lock — banner is gated on driver state, not on
-        // fit-override. The banner now communicates "input is paused"
-        // (the load-bearing fact) instead of dimensional state. The
-        // dimensional override may still be active and is reflected in
-        // the PTY but not in the banner copy. See
-        // docs/mobile-presence-lock.md.
+        // Why: two-state banner. (1) Driver is mobile → presence-lock,
+        // input paused (docs/mobile-presence-lock.md). (2) No mobile
+        // driver but a phone-fit override is still in place → indefinite
+        // hold (docs/mobile-fit-hold.md): the user left mobile, the PTY
+        // is held at phone dims, and the banner is the explicit
+        // return-to-desktop-size escape hatch.
         const driver = getDriverForPty(ptyId)
-        if (driver.kind !== 'mobile') {
+        const isMobileDriving = driver.kind === 'mobile'
+        const isHeldAtPhoneFit = !isMobileDriving && getFitOverrideForPty(ptyId) !== null
+        if (!isMobileDriving && !isHeldAtPhoneFit) {
           return null
         }
         return createPortal(
@@ -1197,7 +1204,9 @@ export default function TerminalPane({
             }}
           >
             <span>
-              Mobile is driving this terminal — your input is paused. Click Take back to resume.
+              {isMobileDriving
+                ? 'Mobile is driving this terminal — your input is paused. Click Take back to resume.'
+                : 'This terminal is held at phone size for the mobile app. Click Restore to return it to desktop size.'}
             </span>
             <button
               style={{
@@ -1212,15 +1221,15 @@ export default function TerminalPane({
               onClick={() => {
                 const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
                 if (ptyId) {
-                  // Why: same IPC route — handler now also reclaims the
-                  // input floor for the desktop via the driver state
-                  // machine, so the banner unmounts and input is unblocked
-                  // until the next mobile interaction.
+                  // Why: same IPC route — handler resolves both the
+                  // active-mobile-subscriber path and the held-no-subscriber
+                  // path (docs/mobile-fit-hold.md), so the banner unmounts
+                  // and the PTY returns to desktop dims in either case.
                   void window.api.runtime.restoreTerminalFit(ptyId)
                 }
               }}
             >
-              Take back
+              {isMobileDriving ? 'Take back' : 'Restore'}
             </button>
           </div>,
           pane.container,

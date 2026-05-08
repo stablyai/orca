@@ -430,6 +430,11 @@ function unsubscribe(worktreePath: string, senderId: number): void {
 const remoteWatchers = new Map<string, () => void>()
 const loggedUnavailableRemoteWatchers = new Set<string>()
 const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout>>()
+// Why: track in-flight `provider.watch()` calls so an unwatch/shutdown that
+// arrives while a watch is still resolving can mark the install cancelled.
+// Without this, the awaited unwatch handle would be installed after the
+// renderer thinks the watch is gone, leaking a native watcher.
+const inFlightRemoteInstalls = new Map<string, { cancelled: boolean }>()
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
@@ -456,14 +461,31 @@ async function installRemoteWatcher(
   }
 
   const key = `${connectionId}:${worktreePath}`
-  const unwatch = await provider.watch(worktreePath, (events) => {
-    if (!sender.isDestroyed()) {
-      sender.send('fs:changed', {
-        worktreePath,
-        events
-      } satisfies FsChangedPayload)
+  const cancelToken = { cancelled: false }
+  inFlightRemoteInstalls.set(key, cancelToken)
+  let unwatch: () => void
+  try {
+    unwatch = await provider.watch(worktreePath, (events) => {
+      if (!sender.isDestroyed()) {
+        sender.send('fs:changed', {
+          worktreePath,
+          events
+        } satisfies FsChangedPayload)
+      }
+    })
+  } finally {
+    if (inFlightRemoteInstalls.get(key) === cancelToken) {
+      inFlightRemoteInstalls.delete(key)
     }
-  })
+  }
+  if (cancelToken.cancelled || sender.isDestroyed()) {
+    try {
+      unwatch()
+    } catch (err) {
+      console.error(`[filesystem-watcher] remote unwatch (post-cancel) error for ${key}:`, err)
+    }
+    return false
+  }
   replaceRemoteWatcher(key, unwatch)
   loggedUnavailableRemoteWatchers.delete(key)
 
@@ -496,6 +518,19 @@ function scheduleRemoteWatcherRetry(
   if (Date.now() - startedAt >= REMOTE_WATCH_RETRY_TIMEOUT_MS || sender.isDestroyed()) {
     pendingRemoteWatcherRetries.delete(key)
     loggedUnavailableRemoteWatchers.delete(key)
+    // Why: the original `fs:watchWorktree` handler resolved successfully
+    // when the retry was first scheduled, so the renderer believes the
+    // watch is live. After giving up, emit a one-shot overflow so the
+    // renderer falls back to a manual refresh instead of waiting forever.
+    if (!sender.isDestroyed()) {
+      console.warn(
+        `[filesystem-watcher] giving up SSH watch retry for ${worktreePath} on connection ${connectionId} after ${REMOTE_WATCH_RETRY_TIMEOUT_MS}ms`
+      )
+      sender.send('fs:changed', {
+        worktreePath,
+        events: [{ kind: 'overflow', absolutePath: worktreePath }]
+      } satisfies FsChangedPayload)
+    }
     return
   }
 
@@ -553,6 +588,14 @@ export function registerFilesystemWatcherHandlers(): void {
           clearTimeout(retryTimer)
           pendingRemoteWatcherRetries.delete(key)
         }
+        // Why: a `provider.watch()` call may still be in flight from a
+        // retry tick. Mark it cancelled so installRemoteWatcher discards
+        // the unwatch handle when the promise finally resolves, instead
+        // of leaving the renderer with a watcher it asked to stop.
+        const inFlight = inFlightRemoteInstalls.get(key)
+        if (inFlight) {
+          inFlight.cancelled = true
+        }
         loggedUnavailableRemoteWatchers.delete(key)
         const unwatchFn = remoteWatchers.get(key)
         if (unwatchFn) {
@@ -580,6 +623,11 @@ export async function closeAllWatchers(): Promise<void> {
   }
   pendingRemoteWatcherRetries.clear()
   loggedUnavailableRemoteWatchers.clear()
+  // Why: cancel any in-flight provider.watch() calls so their resolved
+  // unwatch handles are discarded instead of being installed after shutdown.
+  for (const token of inFlightRemoteInstalls.values()) {
+    token.cancelled = true
+  }
 
   for (const [rootKey, root] of watchedRoots) {
     if (root.batch.timer) {

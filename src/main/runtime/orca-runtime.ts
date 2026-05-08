@@ -16,6 +16,7 @@ import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   CreateWorktreeResult,
+  GlobalSettings,
   Repo,
   StatsSummary,
   WorktreeStartupLaunch
@@ -173,7 +174,12 @@ type RuntimeStore = {
     refreshLocalBaseRefOnWorktreeCreate: boolean
     branchPrefix: string
     branchPrefixCustom: string
+    mobileAutoRestoreFitMs?: number | null
   }
+  // Why: narrow to `unknown` return so test mocks can return void without
+  // a cast. The runtime never reads the return value — the persisted value
+  // is read back via getSettings() on the next access.
+  updateSettings?: (updates: Partial<GlobalSettings>) => unknown
 }
 
 type RuntimeLeafRecord = RuntimeSyncedLeaf & {
@@ -344,6 +350,39 @@ export type DriverState =
   | { kind: 'desktop' }
   | { kind: 'mobile'; clientId: string }
 
+// Why: per-PTY layout target — what the PTY *should* be at right now.
+// `desktop` ⇒ runs at the desktop renderer's pane geometry; mobile passive
+// watchers (mode='desktop') still receive scrollback. `phone` ⇒ runs at
+// `ownerClientId`'s viewport; the desktop renderer's auto-fit is suppressed.
+// See docs/mobile-terminal-layout-state-machine.md.
+export type PtyLayoutTarget =
+  | { kind: 'desktop'; cols: number; rows: number }
+  | { kind: 'phone'; cols: number; rows: number; ownerClientId: string }
+
+// Why: authoritative layout state with monotonic seq. Bumped on every
+// applyLayout success; emitted on mobile subscribe-stream events so clients
+// drop stale events that arrive after a newer transition.
+export type PtyLayoutState = PtyLayoutTarget & {
+  seq: number
+  appliedAt: number
+}
+
+// Why: applyLayout result discriminator. Callers (especially RPC handlers)
+// need to distinguish "shipped a new state at seq N" from "no-op — caller
+// should not claim a seq it didn't produce." `pty-exited` is terminal;
+// `resize-failed` is transient and the caller may retry.
+export type ApplyLayoutResult =
+  | { ok: true; state: PtyLayoutState }
+  | { ok: false; reason: 'pty-exited' | 'resize-failed' }
+
+type LayoutQueueEntry = {
+  running: Promise<ApplyLayoutResult> | null
+  pending: {
+    target: PtyLayoutTarget
+    waiters: ((r: ApplyLayoutResult) => void)[]
+  }[]
+}
+
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
@@ -413,10 +452,13 @@ export class OrcaRuntimeService {
     }
   >()
 
-  // Why: server-authoritative display mode per terminal. 'auto' (default) means
-  // phone-fit when mobile subscribes, desktop otherwise. 'phone'/'desktop' lock
-  // the mode regardless of subscriber state. In-memory only — modes reset on restart.
-  private mobileDisplayModes = new Map<string, 'auto' | 'phone' | 'desktop'>()
+  // Why: server-authoritative display mode per terminal. 'auto' (default)
+  // means phone-fit when mobile subscribes, desktop otherwise. 'desktop'
+  // locks to no-resize regardless of subscriber state. The third historical
+  // value ('phone' = sticky phone-fit after unsubscribe) was removed since
+  // the toggle UI never produced it and nothing in product depended on it.
+  // In-memory only — modes reset on restart.
+  private mobileDisplayModes = new Map<string, 'desktop'>()
 
   // Why: tracks active mobile subscribers per PTY so the runtime can restore
   // desktop dimensions on unsubscribe and prevent orphaned overrides during
@@ -514,10 +556,45 @@ export class OrcaRuntimeService {
   // Why: inline resize events replace the unsubscribe→resubscribe pattern.
   // Listeners are notified when mode changes or desktop restores, allowing
   // the subscribe stream to emit a 'resized' event with fresh scrollback.
+  // `seq` is the layout state-machine sequence number bumped on every
+  // applyLayout success; mobile clients use it to drop stale events that
+  // arrive after a newer transition. See docs/mobile-terminal-layout-state-machine.md.
   private resizeListeners = new Map<
     string,
-    Set<(event: { cols: number; rows: number; displayMode: string; reason: string }) => void>
+    Set<
+      (event: {
+        cols: number
+        rows: number
+        displayMode: string
+        reason: string
+        seq?: number
+      }) => void
+    >
   >()
+
+  // Why: per-PTY layout state machine. `applyLayout` is the sole writer of
+  // `layouts`, `terminalFitOverrides`, and `ptyController.resize`; every
+  // trigger method routes through `enqueueLayout`. The monotonic `seq` is
+  // emitted on the mobile subscribe stream so clients can drop stale events.
+  // See docs/mobile-terminal-layout-state-machine.md.
+  private layouts = new Map<string, PtyLayoutState>()
+
+  // Why: per-PTY async serialization queue for applyLayout. Without
+  // serialization, two concurrent triggers can interleave around the
+  // ptyController.resize await and bump seq in the wrong order, defeating
+  // seq-as-truth. Coalesces same-kind same-owner viewport ticks so the
+  // keyboard-show/hide animation doesn't queue 10+ resizes; mode flips,
+  // take-floor, and different-owner targets always append (preserves
+  // multi-mobile fairness). See docs/mobile-terminal-layout-state-machine.md
+  // "enqueueLayout coalescing".
+  private layoutQueues = new Map<string, LayoutQueueEntry>()
+
+  // Why: gate so enqueueLayout's "no layouts entry" short-circuit doesn't
+  // fire on the very first transition for a PTY (where the entry doesn't
+  // exist yet *because* we're about to create it). `handleMobileSubscribe`
+  // adds the ptyId before calling enqueueLayout and removes it after the
+  // call resolves.
+  private freshSubscribeGuard = new Set<string>()
 
   private stats: StatsCollector | null = null
   // Why (§3.3 + §7.1): the renderer-create path and coordinator
@@ -1312,19 +1389,23 @@ export class OrcaRuntimeService {
 
   // ─── Mobile Fit Override Management ─────────────────────────
 
-  resizeForClient(
+  // Why: legacy mobile RPC entrypoint. After the state-machine rewrite this
+  // is a thin shim that computes a `PtyLayoutTarget` and routes through
+  // `enqueueLayout`. Keeps the same observable return shape so older mobile
+  // builds continue to work. See docs/mobile-terminal-layout-state-machine.md.
+  async resizeForClient(
     ptyId: string,
     mode: 'mobile-fit' | 'restore',
     clientId: string,
     cols?: number,
     rows?: number
-  ): {
+  ): Promise<{
     cols: number
     rows: number
     previousCols: number | null
     previousRows: number | null
     mode: 'mobile-fit' | 'desktop-fit'
-  } {
+  }> {
     if (mode === 'mobile-fit') {
       if (cols == null || rows == null || !Number.isFinite(cols) || !Number.isFinite(rows)) {
         throw new Error('invalid_dimensions')
@@ -1334,34 +1415,44 @@ export class OrcaRuntimeService {
 
       const currentSize = this.getTerminalSize(ptyId)
       const existing = this.terminalFitOverrides.get(ptyId)
-      // Why: preserve the original desktop size from before any mobile-fit,
-      // so restore returns to the right dimensions even after multiple re-fits.
+      // Capture baseline cols/rows for the return value (existing override's
+      // baseline wins over current size to preserve original desktop dims
+      // across multiple re-fits).
       const previousCols = existing?.previousCols ?? currentSize?.cols ?? null
       const previousRows = existing?.previousRows ?? currentSize?.rows ?? null
 
-      this.terminalFitOverrides.set(ptyId, {
-        mode: 'mobile-fit',
-        cols: clampedCols,
-        rows: clampedRows,
-        previousCols,
-        previousRows,
-        updatedAt: Date.now(),
-        clientId
-      })
+      // Why: legacy resizeForClient callers bypass handleMobileSubscribe, so
+      // mobileSubscribers stays empty and resolveDesktopRestoreTarget's step-1
+      // (per-subscriber baseline) never matches. Stash the pre-fit PTY size
+      // into lastRendererSizes so restore lands on step 2 (renderer geometry)
+      // instead of step 3 (current phone-fit dims = no-op restore).
+      if (currentSize && !existing) {
+        this.lastRendererSizes.set(ptyId, {
+          cols: currentSize.cols,
+          rows: currentSize.rows
+        })
+      }
 
-      const resized = this.ptyController?.resize?.(ptyId, clampedCols, clampedRows)
-      if (!resized) {
-        this.terminalFitOverrides.delete(ptyId)
+      this.freshSubscribeGuard.add(ptyId)
+      let result: ApplyLayoutResult
+      try {
+        result = await this.enqueueLayout(ptyId, {
+          kind: 'phone',
+          cols: clampedCols,
+          rows: clampedRows,
+          ownerClientId: clientId
+        })
+      } finally {
+        this.freshSubscribeGuard.delete(ptyId)
+      }
+      if (!result.ok) {
         throw new Error('resize_failed')
       }
-      this.resizeHeadlessTerminal(ptyId, clampedCols, clampedRows)
-
-      this.notifier?.terminalFitOverrideChanged(ptyId, 'mobile-fit', clampedCols, clampedRows)
 
       // Why: mobile-fit via resizeForClient is a deliberate mobile action;
-      // the actor takes the floor. mobileTookFloor updates the actor's
-      // lastActedAt and re-applies phone-fit if previously in desktop mode.
-      this.mobileTookFloor(ptyId, clientId)
+      // the actor takes the floor (updates lastActedAt; mode-flip case is
+      // already handled by enqueueLayout above).
+      await this.mobileTookFloor(ptyId, clientId)
 
       return {
         cols: clampedCols,
@@ -1377,39 +1468,30 @@ export class OrcaRuntimeService {
     if (!override) {
       throw new Error('no_active_override')
     }
-    // Why: only the owning client can restore, preventing one phone from
-    // undoing another phone's active fit.
+    // Only the owning client can restore — prevents one phone from undoing
+    // another phone's active fit.
     if (override.clientId !== clientId) {
       throw new Error('not_override_owner')
     }
 
-    const { previousCols: prevCols, previousRows: prevRows } = override
-    this.terminalFitOverrides.delete(ptyId)
-
-    // Why: always resize the PTY back to pre-fit dimensions immediately,
-    // even for mounted leaves. Relying solely on the renderer chain
-    // (IPC notification → safeFit → fitAddon.fit → onResize → transport.resize)
-    // is fragile — any async gap leaves the PTY at phone dims while xterm
-    // looks correct, causing text to wrap at the wrong column. The renderer
-    // will still run safeFit and may send a second resize with the exact
-    // current pane geometry, which is harmless (SIGWINCH is idempotent).
-    if (prevCols != null && prevRows != null) {
-      this.ptyController?.resize?.(ptyId, prevCols, prevRows)
-      this.resizeHeadlessTerminal(ptyId, prevCols, prevRows)
+    const restore = this.resolveDesktopRestoreTarget(ptyId)
+    const result = await this.enqueueLayout(ptyId, {
+      kind: 'desktop',
+      cols: restore.cols,
+      rows: restore.rows
+    })
+    if (!result.ok) {
+      throw new Error('resize_failed')
     }
 
-    // Why: send the restored dimensions so the renderer can fall back to a
-    // direct terminal.resize() if fitAddon.fit() silently fails. The renderer
-    // normally computes desktop dims from the container, but passing them here
-    // provides a guaranteed fallback to avoid leaving xterm at phone dims.
-    this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', prevCols ?? 0, prevRows ?? 0)
-    // Why: mobile clients subscribed to this terminal need to know the desktop
-    // restored, so they can update their UI (clear fitted state, resubscribe).
-    this.notifyFitOverrideListeners(ptyId, 'desktop-fit', prevCols ?? 0, prevRows ?? 0)
+    // Why: legacy mobile clients on the resizeForClient path also need a
+    // fit-override-listener notification (the renderer-side terminalFitOverrideChanged
+    // is already emitted by applyLayout's mode-flip path).
+    this.notifyFitOverrideListeners(ptyId, 'desktop-fit', restore.cols, restore.rows)
 
     return {
-      cols: prevCols ?? 0,
-      rows: prevRows ?? 0,
+      cols: restore.cols,
+      rows: restore.rows,
       previousCols: null,
       previousRows: null,
       mode: 'desktop-fit'
@@ -1429,23 +1511,24 @@ export class OrcaRuntimeService {
   }
 
   onClientDisconnected(clientId: string): void {
-    // Cancel all pending restore timers for this client — the client is gone,
-    // so the debounce is meaningless and could fire against a stale PTY state.
+    // (1) Cancel pending restore-debounce timers owned by this client.
     for (const [ptyId, entry] of this.pendingRestoreTimers) {
       if (entry.clientId === clientId) {
         clearTimeout(entry.timer)
         this.pendingRestoreTimers.delete(ptyId)
       }
     }
-    // Why: if the disconnecting client was in soft-leave grace, the grace
-    // is meaningless now (the client is gone for real). Promote each
-    // matching grace into immediate finalization: restore PTY dims to the
-    // captured baseline, drop driver to idle, and clear fit overrides.
-    // Without this, a phone that exited the screen (router.back → WS
-    // close) would leave the PTY stuck at phone dims forever — the soft
-    // grace held the inner-map empty so the mobileSubscribers loop below
-    // can't see it, and the 300ms restore timer could mis-fire after the
-    // grace if the PTY had already been mutated.
+
+    // (2) Promote any soft-leave grace owned by this client into immediate
+    // finalization. Grace existed to absorb a quick re-subscribe; a real
+    // disconnect kills any chance of re-subscribe.
+    //
+    // Note: this is mode-decoupled (matches docs/mobile-terminal-layout-state-machine.md
+    // sub-case 2). Today's pre-rewrite code only restored when
+    // `mode === 'auto' && wasResizedToPhone`; the new design restores
+    // whenever the layout is currently `phone`. This is an intentional
+    // behavior fix — `mode === 'phone'` with no subscribers is a degenerate
+    // state nothing in product depends on.
     for (const [ptyId, soft] of this.pendingSoftLeavers) {
       if (soft.clientId !== clientId) {
         continue
@@ -1453,94 +1536,122 @@ export class OrcaRuntimeService {
       clearTimeout(soft.timer)
       this.pendingSoftLeavers.delete(ptyId)
 
-      // Cancel any in-flight 300ms restore timer too — we'll do it now.
+      // Cancel any in-flight 300ms restore timer too — we'll handle it inline.
       const pending = this.pendingRestoreTimers.get(ptyId)
       if (pending) {
         clearTimeout(pending.timer)
         this.pendingRestoreTimers.delete(ptyId)
       }
 
-      const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
-      const { previousCols, previousRows, wasResizedToPhone } = soft.record
-      if (mode === 'auto' && wasResizedToPhone) {
-        const fallback = this.lastRendererSizes.get(ptyId)
-        const cols = previousCols ?? fallback?.cols ?? null
-        const rows = previousRows ?? fallback?.rows ?? null
-        if (cols != null && rows != null) {
-          this.ptyController?.resize?.(ptyId, cols, rows)
-          this.resizeHeadlessTerminal(ptyId, cols, rows)
-        }
-        this.lastRendererSizes.delete(ptyId)
-        this.suppressResizesForMs(500)
-        this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', cols ?? 0, rows ?? 0)
-        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', cols ?? 0, rows ?? 0)
+      const cur = this.layouts.get(ptyId)
+      // Why: Indefinite hold (mobileAutoRestoreFitMs == null) keeps the PTY
+      // at phone dims after the phone disconnects; the desktop banner's
+      // Restore button is the explicit return path. See
+      // docs/mobile-fit-hold.md.
+      if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
+        // Use the soft-leaver's snapshot baseline as a hint, falling
+        // through to resolveDesktopRestoreTarget for missing values.
+        const fallback = this.resolveDesktopRestoreTarget(ptyId)
+        const cols = soft.record.previousCols ?? fallback.cols
+        const rows = soft.record.previousRows ?? fallback.rows
+        void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       }
       this.setDriver(ptyId, { kind: 'idle' })
     }
 
-    // Immediately restore PTYs that this client had phone-fitted (no debounce —
-    // client is gone, no point waiting for a re-subscribe that won't come).
-    // With the multi-mobile rekey, only the disconnecting client's record is
-    // removed from the inner map; peer mobile clients keep the floor and the
-    // banner stays mounted.
+    // (3) Immediate restore for PTYs where this client was the last
+    // mobile subscriber. With multi-mobile, peer subscribers keep the
+    // floor; only when the inner map empties do we transition to desktop.
     const ptysWithSurvivingPeers: string[] = []
+    const ptysToRestore: { ptyId: string; baseline: { cols: number; rows: number } | null }[] = []
     for (const [ptyId, inner] of this.mobileSubscribers) {
       const subscriber = inner.get(clientId)
       if (!subscriber) {
         continue
       }
-      const wasResizedToPhone = subscriber.wasResizedToPhone
-      const { previousCols, previousRows } = subscriber
+      // Snapshot baseline before deleting — needed once mobileSubscribers
+      // entry is gone for the resolveDesktopRestoreTarget chain.
+      const baseline =
+        subscriber.previousCols != null && subscriber.previousRows != null
+          ? { cols: subscriber.previousCols, rows: subscriber.previousRows }
+          : null
       inner.delete(clientId)
       if (inner.size > 0) {
         ptysWithSurvivingPeers.push(ptyId)
-        continue
+      } else {
+        this.mobileSubscribers.delete(ptyId)
+        ptysToRestore.push({ ptyId, baseline })
       }
-      this.mobileSubscribers.delete(ptyId)
-      if (wasResizedToPhone) {
-        if (previousCols != null && previousRows != null) {
-          this.ptyController?.resize?.(ptyId, previousCols, previousRows)
-          this.resizeHeadlessTerminal(ptyId, previousCols, previousRows)
-        }
-        this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(
-          ptyId,
-          'desktop-fit',
-          previousCols ?? 0,
-          previousRows ?? 0
-        )
-        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', previousCols ?? 0, previousRows ?? 0)
+    }
+    for (const { ptyId, baseline } of ptysToRestore) {
+      const cur = this.layouts.get(ptyId)
+      // Why: Indefinite hold gate — see soft-leaver branch above.
+      if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
+        const fallback = this.resolveDesktopRestoreTarget(ptyId)
+        const cols = baseline?.cols ?? fallback.cols
+        const rows = baseline?.rows ?? fallback.rows
+        void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       }
       this.setDriver(ptyId, { kind: 'idle' })
     }
-    // Why: if peers survived but the disconnecting client was the active
-    // driver, re-elect the most-recent surviving subscriber as the driver
-    // and re-fit if needed. This keeps the lock/dim-selection invariant.
+
+    // (4) Driver re-election where peers survived. If the disconnecting
+    // client was the active driver, the most-recent surviving actor takes
+    // the floor.
     for (const ptyId of ptysWithSurvivingPeers) {
       const driver = this.getDriver(ptyId)
-      if (driver.kind === 'mobile' && driver.clientId === clientId) {
-        const inner = this.mobileSubscribers.get(ptyId)
-        const next = inner ? this.pickMostRecentActor(inner) : null
-        if (next) {
-          this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
-          this.applyMobileDisplayMode(ptyId)
-        }
+      if (driver.kind !== 'mobile' || driver.clientId !== clientId) {
+        continue
       }
+      const inner = this.mobileSubscribers.get(ptyId)
+      const next = inner ? this.pickMostRecentActor(inner) : null
+      if (!next) {
+        continue
+      }
+      this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
+
+      const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+      if (mode === 'desktop') {
+        continue
+      }
+      const nextSub = inner!.get(next.clientId)
+      const nextViewport = nextSub?.viewport
+      if (!nextViewport) {
+        continue
+      }
+      void this.enqueueLayout(ptyId, {
+        kind: 'phone',
+        cols: nextViewport.cols,
+        rows: nextViewport.rows,
+        ownerClientId: next.clientId
+      })
     }
 
-    // Legacy cleanup for any terminalFitOverrides not covered by mobileSubscribers
+    // (5) Legacy-callers fallback. Older mobile builds use resizeForClient
+    // directly and never populate mobileSubscribers. For those PTYs the
+    // override carries the owning clientId; restore the layout when the
+    // owner disconnects. resolveDesktopRestoreTarget reads lastRendererSizes
+    // (which the legacy mobile-fit branch stashes the pre-fit size into).
     for (const [ptyId, override] of this.terminalFitOverrides) {
       if (override.clientId !== clientId) {
         continue
       }
-      try {
-        this.resizeForClient(ptyId, 'restore', clientId)
-      } catch {
-        this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
-        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
+      if (this.mobileSubscribers.has(ptyId)) {
+        continue
       }
+      const cur = this.layouts.get(ptyId)
+      if (cur?.kind !== 'phone') {
+        continue
+      }
+      // Why: Indefinite hold gate — see soft-leaver branch above. Legacy
+      // mobile clients (resizeForClient path) honor the same setting.
+      if (this.getAutoRestoreFitMs() == null) {
+        continue
+      }
+      const fallback = this.resolveDesktopRestoreTarget(ptyId)
+      const cols = override.previousCols ?? fallback.cols
+      const rows = override.previousRows ?? fallback.rows
+      void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
     }
   }
 
@@ -1550,6 +1661,13 @@ export class OrcaRuntimeService {
     this.mobileDisplayModes.delete(ptyId)
     this.resizeListeners.delete(ptyId)
     this.lastRendererSizes.delete(ptyId)
+    // Layout state machine: clear `layouts` and `layoutQueues`. Any
+    // already-queued applyLayout work for this ptyId will run, but every
+    // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
+    // short-circuits with `pty-exited`.
+    this.layouts.delete(ptyId)
+    this.layoutQueues.delete(ptyId)
+    this.freshSubscribeGuard.delete(ptyId)
     const pendingRestore = this.pendingRestoreTimers.get(ptyId)
     if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
@@ -1621,11 +1739,11 @@ export class OrcaRuntimeService {
   }
 
   // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
-  // resizeForClient / fresh subscribe with auto/phone). Records the actor as
-  // the most recent mobile driver and re-applies phone-fit if we were previously
+  // resizeForClient / fresh subscribe with auto). Records the actor as the
+  // most recent mobile driver and re-applies phone-fit if we were previously
   // in `desktop` mode (mobile reclaims a take-back). Mobile-to-mobile hand-offs
   // are no-ops for resize.
-  mobileTookFloor(ptyId: string, clientId: string): void {
+  async mobileTookFloor(ptyId: string, clientId: string): Promise<void> {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
     if (sub) {
@@ -1635,17 +1753,13 @@ export class OrcaRuntimeService {
     const currentMode = this.mobileDisplayModes.get(ptyId)
     // Why: a deliberate mobile action implies mobile is resuming control.
     // If the display mode is currently 'desktop' (set by an earlier
-    // take-back), flip it back to 'auto' and re-apply so phone-fit takes
-    // hold again. Without flipping the mode, applyMobileDisplayMode would
-    // take the desktop branch and leave the PTY at desktop dims while the
-    // driver says `mobile`. The same path also covers the case where the
-    // driver flipped to `desktop` and we're returning to mobile control.
-    // See docs/mobile-presence-lock.md.
+    // take-back), flip it back to 'auto' (= map absence) and re-apply so
+    // phone-fit takes hold again. See docs/mobile-presence-lock.md.
     if (prev.kind === 'desktop' || currentMode === 'desktop') {
-      if (currentMode === 'desktop' || currentMode === undefined) {
-        this.mobileDisplayModes.set(ptyId, 'auto')
+      if (currentMode === 'desktop') {
+        this.mobileDisplayModes.delete(ptyId)
       }
-      this.applyMobileDisplayMode(ptyId)
+      await this.applyMobileDisplayMode(ptyId)
     }
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
@@ -1660,11 +1774,11 @@ export class OrcaRuntimeService {
   // subscribe to capture the already-phone-fitted PTY size as its
   // restore baseline (stuck-dim bug on later disconnect).
   // No-op when the client isn't actually subscribed to this PTY.
-  updateMobileViewport(
+  async updateMobileViewport(
     ptyId: string,
     clientId: string,
     viewport: { cols: number; rows: number }
-  ): boolean {
+  ): Promise<boolean> {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
     if (!sub) {
@@ -1688,54 +1802,133 @@ export class OrcaRuntimeService {
     const clampedCols = Math.max(20, Math.min(240, Math.round(driveViewport.cols)))
     const clampedRows = Math.max(8, Math.min(120, Math.round(driveViewport.rows)))
 
-    const currentSize = this.getTerminalSize(ptyId)
-    const alreadyAtTarget = currentSize?.cols === clampedCols && currentSize?.rows === clampedRows
-    if (!alreadyAtTarget) {
-      this.ptyController?.resize?.(ptyId, clampedCols, clampedRows)
-      this.resizeHeadlessTerminal(ptyId, clampedCols, clampedRows)
-    }
-
     sub.wasResizedToPhone = true
-    this.terminalFitOverrides.set(ptyId, {
-      mode: 'mobile-fit',
-      cols: clampedCols,
-      rows: clampedRows,
-      previousCols: sub.previousCols,
-      previousRows: sub.previousRows,
-      updatedAt: Date.now(),
-      clientId
-    })
-    this.notifier?.terminalFitOverrideChanged(ptyId, 'mobile-fit', clampedCols, clampedRows)
-
-    // Why: emit a 'resized' event on the mobile subscription stream so the
-    // mobile xterm reinits inline at the new dims — same shape as a
-    // setDisplayMode-triggered resize, so the existing client-side handler
-    // path applies without changes.
-    this.notifyTerminalResize(ptyId, {
-      cols: clampedCols,
-      rows: clampedRows,
-      displayMode: mode,
-      reason: 'viewport-update'
-    })
-
-    // The driver is already mobile{this client} when we got here; refresh it
+    // The driver is already mobile{this client} when we got here; refresh
     // to update lastActedAt-based ordering on later actor selection.
     this.setDriver(ptyId, { kind: 'mobile', clientId })
+
+    await this.enqueueLayout(ptyId, {
+      kind: 'phone',
+      cols: clampedCols,
+      rows: clampedRows,
+      ownerClientId: winner.clientId
+    })
     return true
   }
 
   // Why: invoked from `runtime:restoreTerminalFit` IPC (the desktop "Take
-  // back" button). Forces the PTY back to desktop dims and flips the driver
-  // to `desktop`, suppressing further mobile-driven dim changes until a
-  // mobile actor takes the floor again.
-  reclaimTerminalForDesktop(ptyId: string): boolean {
-    if (!this.isMobileSubscriberActive(ptyId)) {
-      return false
+  // back" / "Restore" button). Forces the PTY back to desktop dims and
+  // flips the driver to `desktop`, suppressing further mobile-driven dim
+  // changes until a mobile actor takes the floor again. Two cases:
+  //   1. Active mobile subscriber: route through applyMobileDisplayMode so
+  //      the existing 'resized' event reaches the phone.
+  //   2. Held with no mobile subscriber (post-indefinite-hold): no inner
+  //      subscriber to notify; resolve restore target and enqueueLayout
+  //      directly. applyLayout is the SOLE writer of terminalFitOverrides;
+  //      the held branch must not duplicate that mutation. See
+  //      docs/mobile-fit-hold.md.
+  async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
+    if (this.isMobileSubscriberActive(ptyId)) {
+      this.setMobileDisplayMode(ptyId, 'desktop')
+      await this.applyMobileDisplayMode(ptyId)
+      this.setDriver(ptyId, { kind: 'desktop' })
+      // Why: a desktop-initiated reclaim is "I'm taking over right now",
+      // not a sticky preference. The next mobile subscribe (e.g. user
+      // switches back to the terminal tab on the phone) must default to
+      // phone-fit again, not stay in passive desktop-watch mode.
+      this.setMobileDisplayMode(ptyId, 'auto')
+      return true
     }
-    this.setMobileDisplayMode(ptyId, 'desktop')
-    this.applyMobileDisplayMode(ptyId)
-    this.setDriver(ptyId, { kind: 'desktop' })
-    return true
+    const heldOverride = this.terminalFitOverrides.get(ptyId)
+    if (heldOverride) {
+      const pending = this.pendingRestoreTimers.get(ptyId)
+      if (pending) {
+        clearTimeout(pending.timer)
+        this.pendingRestoreTimers.delete(ptyId)
+      }
+      // Why: with no subscribers, resolveDesktopRestoreTarget falls through
+      // to current PTY size — which is at phone dims (wrong). Prefer the
+      // baseline captured on the override at first phone-fit; this is the
+      // last desktop geometry the layout machine knew about. Then chain
+      // to the standard resolver for the residual fallbacks.
+      const fallback = this.resolveDesktopRestoreTarget(ptyId)
+      const cols = heldOverride.previousCols ?? fallback.cols
+      const rows = heldOverride.previousRows ?? fallback.rows
+      await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
+      this.setDriver(ptyId, { kind: 'desktop' })
+      // Why: a desktop-initiated reclaim is "I'm taking over right now",
+      // not a sticky preference. Reset to auto so the next mobile subscribe
+      // re-enters phone-fit. (Held-PTY branch may not have an entry, but
+      // calling setMobileDisplayMode('auto') is a no-op deletion in that
+      // case — safe and idempotent.)
+      this.setMobileDisplayMode(ptyId, 'auto')
+      return true
+    }
+    return false
+  }
+
+  // Why: read-side clamp for mobileAutoRestoreFitMs. `null` means
+  // indefinite hold (no auto-restore timer). A finite value is clamped
+  // to [MIN, MAX] to defend against bad config — the smallest useful
+  // value is a few seconds, the largest is one hour. See
+  // docs/mobile-fit-hold.md.
+  private getAutoRestoreFitMs(): number | null {
+    const raw = this.store?.getSettings().mobileAutoRestoreFitMs ?? null
+    if (raw == null) {
+      return null
+    }
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      return null
+    }
+    return Math.min(Math.max(raw, MOBILE_AUTO_RESTORE_FIT_MIN_MS), MOBILE_AUTO_RESTORE_FIT_MAX_MS)
+  }
+
+  // Why: invoked when the user changes mobileAutoRestoreFitMs to `null`
+  // (Indefinite). Clears every pending restore timer so the just-expressed
+  // preference "do not auto-restore" is honored for ALL currently-pending
+  // PTYs, not just one. See docs/mobile-fit-hold.md.
+  cancelAllPendingFitRestoreTimers(): void {
+    for (const [, entry] of this.pendingRestoreTimers) {
+      clearTimeout(entry.timer)
+    }
+    this.pendingRestoreTimers.clear()
+  }
+
+  // Why: read the persisted user preference (clamped) for surfacing to UI
+  // callers (mobile RPC, desktop preferences). Returns null when the
+  // setting is unset or `null` ("Indefinite").
+  getMobileAutoRestoreFitMs(): number | null {
+    return this.getAutoRestoreFitMs()
+  }
+
+  // Why: persisted-preference setter routed through the same `Store` the
+  // desktop preferences UI writes to. Transitions to `null` (Indefinite)
+  // clear every pending restore timer to honor the preference change for
+  // already-held PTYs. Transitions to a finite value do NOT retroactively
+  // schedule timers for PTYs that are currently held — those PTYs were
+  // already-not-restored under the old preference, and silently scheduling
+  // a restore on a settings change would be surprising. The new value
+  // takes effect on the next unsubscribe. See docs/mobile-fit-hold.md.
+  setMobileAutoRestoreFitMs(ms: number | null): number | null {
+    if (!this.store?.updateSettings) {
+      return this.getAutoRestoreFitMs()
+    }
+    let normalized: number | null
+    if (ms == null) {
+      normalized = null
+    } else if (typeof ms !== 'number' || !Number.isFinite(ms)) {
+      normalized = null
+    } else {
+      normalized = Math.min(
+        Math.max(ms, MOBILE_AUTO_RESTORE_FIT_MIN_MS),
+        MOBILE_AUTO_RESTORE_FIT_MAX_MS
+      )
+    }
+    this.store.updateSettings({ mobileAutoRestoreFitMs: normalized })
+    if (normalized == null) {
+      this.cancelAllPendingFitRestoreTimers()
+    }
+    return normalized
   }
 
   // Why: with multiple subscribers, the active phone-fit dims follow the
@@ -1779,9 +1972,249 @@ export class OrcaRuntimeService {
     return best ? { previousCols: best.previousCols, previousRows: best.previousRows } : null
   }
 
+  // ─── Layout state machine ─────────────────────────────────────────
+  //
+  // See docs/mobile-terminal-layout-state-machine.md.
+  //
+  // applyLayout is the SOLE writer of:
+  //   - this.layouts
+  //   - this.terminalFitOverrides
+  //   - this.ptyController.resize (i.e. the actual PTY dims)
+  //
+  // Every trigger that wants to change PTY dims or flip mode goes through
+  // enqueueLayout, which serializes calls behind a per-PTY async queue
+  // (the await on ptyController.resize would otherwise let seq bumps reach
+  // the wire out of order).
+
+  getLayout(ptyId: string): PtyLayoutState | null {
+    return this.layouts.get(ptyId) ?? null
+  }
+
+  // Why: `enqueueLayout`'s "no layouts entry" short-circuit must not fire
+  // on the very first transition for a PTY (where the entry doesn't exist
+  // yet *because* we're about to create it). handleMobileSubscribe adds
+  // the ptyId to `freshSubscribeGuard` before calling enqueueLayout and
+  // removes it in a finally block.
+  private isFreshSubscribe(ptyId: string): boolean {
+    return this.freshSubscribeGuard.has(ptyId)
+  }
+
+  // Why: four-step fallback chain for desktop-restore targets. Always
+  // returns a value; the terminal {80,24} branch is reached only under
+  // bug. Wrapping the chain as a single helper prevents callsite drift.
+  private resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number } {
+    // 1. Earliest-by-subscribedAt subscriber with non-null baseline.
+    const inner = this.mobileSubscribers.get(ptyId)
+    if (inner) {
+      const earliest = this.pickEarliestRestoreTarget(inner)
+      if (earliest) {
+        return { cols: earliest.previousCols, rows: earliest.previousRows }
+      }
+    }
+    // 2. Most-recent desktop renderer geometry report.
+    const renderer = this.lastRendererSizes.get(ptyId)
+    if (renderer) {
+      return { cols: renderer.cols, rows: renderer.rows }
+    }
+    // 3. Current PTY size.
+    const size = this.getTerminalSize(ptyId)
+    if (size) {
+      return { cols: size.cols, rows: size.rows }
+    }
+    // 4. Hard default.
+    return { cols: 80, rows: 24 }
+  }
+
+  // Why: a new viewport-only update from the same owner supersedes a
+  // queued same-shape tail. Mode flips, owner changes, and take-back
+  // append (losing a take-floor to a viewport tick would be a fairness
+  // hole — see "enqueueLayout coalescing" in the design doc).
+  private coalescesWith(prev: PtyLayoutTarget, next: PtyLayoutTarget): boolean {
+    if (prev.kind !== next.kind) {
+      return false
+    }
+    if (prev.kind === 'phone' && next.kind === 'phone') {
+      return prev.ownerClientId === next.ownerClientId
+    }
+    return true
+  }
+
+  private enqueueLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
+    // Why: PTY-exit short-circuit. Fresh-subscribe gate lets the very first
+    // transition through even though `layouts` has no entry yet.
+    if (!this.layouts.has(ptyId) && !this.isFreshSubscribe(ptyId)) {
+      return Promise.resolve({ ok: false, reason: 'pty-exited' })
+    }
+
+    let entry = this.layoutQueues.get(ptyId)
+    if (!entry) {
+      entry = { running: null, pending: [] }
+      this.layoutQueues.set(ptyId, entry)
+    }
+    const queue = entry
+
+    return new Promise<ApplyLayoutResult>((resolve) => {
+      if (!queue.running) {
+        queue.running = this.runLayoutSlot(ptyId, target, [resolve])
+        return
+      }
+      const tail = queue.pending.at(-1)
+      if (tail && this.coalescesWith(tail.target, target)) {
+        tail.target = target
+        tail.waiters.push(resolve)
+        return
+      }
+      queue.pending.push({ target, waiters: [resolve] })
+    })
+  }
+
+  private async runLayoutSlot(
+    ptyId: string,
+    target: PtyLayoutTarget,
+    waiters: ((r: ApplyLayoutResult) => void)[]
+  ): Promise<ApplyLayoutResult> {
+    let result: ApplyLayoutResult
+    try {
+      result = await this.applyLayout(ptyId, target)
+    } catch (err) {
+      // Why: defensive — applyLayout itself catches resize errors, but a
+      // throw from one of the synchronous map writes (e.g. notifier hook)
+      // must not jam the queue forever.
+      console.error('[layout] applyLayout threw', { ptyId, err })
+      result = { ok: false, reason: 'resize-failed' }
+    }
+    for (const w of waiters) {
+      w(result)
+    }
+
+    const queue = this.layoutQueues.get(ptyId)
+    if (!queue) {
+      return result
+    }
+    const next = queue.pending.shift()
+    if (next) {
+      queue.running = this.runLayoutSlot(ptyId, next.target, next.waiters)
+    } else {
+      queue.running = null
+      // Why: drop the entry once empty so the map doesn't grow without bound
+      // across short-lived PTYs.
+      this.layoutQueues.delete(ptyId)
+    }
+    return result
+  }
+
+  private async applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
+    // Why: re-check pty-exit at the head of the slot — the queue may have
+    // accepted this target before onPtyExit ran.
+    if (!this.layouts.has(ptyId) && !this.isFreshSubscribe(ptyId)) {
+      return { ok: false, reason: 'pty-exited' }
+    }
+
+    const prev = this.layouts.get(ptyId) ?? null
+    const seq = (prev?.seq ?? 0) + 1
+    const next: PtyLayoutState = { ...target, seq, appliedAt: Date.now() }
+
+    const currentSize = this.getTerminalSize(ptyId)
+    const dimsChanged = currentSize?.cols !== target.cols || currentSize?.rows !== target.rows
+    const modeChanged = (prev?.kind ?? 'desktop') !== target.kind
+
+    // Snapshot for rollback.
+    const prevFitOverride = this.terminalFitOverrides.get(ptyId) ?? null
+
+    // Tentative writes — the resize is the point of no return.
+    this.layouts.set(ptyId, next)
+    if (target.kind === 'phone') {
+      // Why: pull baseline cols+rows atomically from the same subscriber so
+      // they can't desync.
+      const baseline = (() => {
+        const inner = this.mobileSubscribers.get(ptyId)
+        if (!inner) {
+          return null
+        }
+        return this.pickEarliestRestoreTarget(inner)
+      })()
+      this.terminalFitOverrides.set(ptyId, {
+        mode: 'mobile-fit',
+        cols: target.cols,
+        rows: target.rows,
+        previousCols: baseline?.previousCols ?? null,
+        previousRows: baseline?.previousRows ?? null,
+        updatedAt: next.appliedAt,
+        clientId: target.ownerClientId
+      })
+    } else {
+      this.terminalFitOverrides.delete(ptyId)
+    }
+
+    if (dimsChanged) {
+      let ok = false
+      try {
+        const r = this.ptyController?.resize?.(ptyId, target.cols, target.rows)
+        ok = r ?? true
+      } catch (err) {
+        console.error('[layout] ptyController.resize threw', { ptyId, err })
+        ok = false
+      }
+      if (!ok) {
+        // Roll back to pre-call snapshot. seq is NOT bumped on the wire
+        // because we never emit below.
+        if (prev) {
+          this.layouts.set(ptyId, prev)
+        } else {
+          this.layouts.delete(ptyId)
+        }
+        if (prevFitOverride) {
+          this.terminalFitOverrides.set(ptyId, prevFitOverride)
+        } else {
+          this.terminalFitOverrides.delete(ptyId)
+        }
+        return { ok: false, reason: 'resize-failed' }
+      }
+      this.resizeHeadlessTerminal(ptyId, target.cols, target.rows)
+    }
+
+    // Why: emit fit-override-changed only when the *mode* flips. Layouts
+    // can change dims without flipping mode (keyboard show/hide while
+    // phone), and waking the renderer on every viewport tick is wasteful
+    // churn.
+    if (modeChanged) {
+      // Why: phone→desktop arms the renderer-cascade suppress window
+      // before the collateral safeFit IPCs arrive. See "Renderer cascade
+      // suppression".
+      if (target.kind === 'desktop') {
+        this.lastRendererSizes.delete(ptyId)
+        this.suppressResizesForMs(500)
+      }
+      this.notifier?.terminalFitOverrideChanged(
+        ptyId,
+        target.kind === 'phone' ? 'mobile-fit' : 'desktop-fit',
+        target.cols,
+        target.rows
+      )
+      this.notifyFitOverrideListeners(
+        ptyId,
+        target.kind === 'phone' ? 'mobile-fit' : 'desktop-fit',
+        target.cols,
+        target.rows
+      )
+    }
+
+    // Mobile-facing event always fires (phone clients need to re-fit on
+    // every dim change, not just mode flips).
+    this.notifyTerminalResize(ptyId, {
+      cols: target.cols,
+      rows: target.rows,
+      displayMode: target.kind === 'phone' ? 'phone' : 'desktop',
+      reason: 'apply-layout',
+      seq
+    })
+
+    return { ok: true, state: next }
+  }
+
   // ─── Server-Authoritative Mobile Display Mode ─────────────────────
 
-  setMobileDisplayMode(ptyId: string, mode: 'auto' | 'phone' | 'desktop'): void {
+  setMobileDisplayMode(ptyId: string, mode: 'auto' | 'desktop'): void {
     if (mode === 'auto') {
       this.mobileDisplayModes.delete(ptyId)
     } else {
@@ -1789,13 +2222,32 @@ export class OrcaRuntimeService {
     }
   }
 
-  getMobileDisplayMode(ptyId: string): 'auto' | 'phone' | 'desktop' {
+  getMobileDisplayMode(ptyId: string): 'auto' | 'desktop' {
     return this.mobileDisplayModes.get(ptyId) ?? 'auto'
   }
 
   isMobileSubscriberActive(ptyId: string): boolean {
     const inner = this.mobileSubscribers.get(ptyId)
     return inner !== undefined && inner.size > 0
+  }
+
+  // Why: late-bind viewport on an existing subscriber record. Subscribers
+  // that registered before the mobile side measured (e.g. terminal first
+  // mounted while the WebView was still loading) have null viewport, and
+  // applyMobileDisplayMode's auto branch needs a viewport to phone-fit.
+  // The setDisplayMode RPC carries the latest viewport so we can patch it
+  // here just before applyMobileDisplayMode runs.
+  updateMobileSubscriberViewport(
+    ptyId: string,
+    clientId: string,
+    viewport: { cols: number; rows: number }
+  ): void {
+    const inner = this.mobileSubscribers.get(ptyId)
+    const record = inner?.get(clientId)
+    if (!record) {
+      return
+    }
+    record.viewport = viewport
   }
 
   // Why: server-side auto-fit on mobile subscribe. The runtime is the single
@@ -1811,32 +2263,30 @@ export class OrcaRuntimeService {
   // a passive watch; it does NOT take the floor. The driver remains
   // `idle`/`desktop`. The lock banner is reserved for actual mobile
   // interaction (input/resize/setDisplayMode/auto-or-phone subscribe).
-  handleMobileSubscribe(
+  async handleMobileSubscribe(
     ptyId: string,
     clientId: string,
     viewport?: { cols: number; rows: number }
-  ): boolean {
+  ): Promise<boolean> {
     const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
     if (!viewport) {
       return false
     }
 
-    // Why: cancel ALL pending restore timers for this ptyId on any new
-    // subscribe — the timer is keyed by ptyId+old-clientId but with the
-    // multi-mobile rekey, "any new subscriber" supersedes "any old client's
-    // restore". Without this, A unsub → B sub within 300ms could fire A's
-    // timer and snap PTY to desktop dims while B is meant to drive.
+    // Cancel pending restore timer for this ptyId — any new subscriber
+    // supersedes any old client's pending restore.
     const pendingRestore = this.pendingRestoreTimers.get(ptyId)
     if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
     }
 
-    // Why: resubscribe-grace honor. If the same client just unsubscribed
-    // within the soft-leave window, restore its prior record (preserving
-    // previousCols/Rows so we don't capture an already-phone-fitted PTY
-    // size as the new baseline). The driver state was kept at
-    // mobile{clientId} during the window, so no banner flash occurred.
+    const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
+    const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+
+    // Resubscribe-grace honor: same client returning within soft-leave
+    // window restores prior record (preserving baseline so we don't capture
+    // phone-fitted dims as the new baseline).
     const softLeaver = this.pendingSoftLeavers.get(ptyId)
     if (softLeaver && softLeaver.clientId === clientId) {
       clearTimeout(softLeaver.timer)
@@ -1848,20 +2298,22 @@ export class OrcaRuntimeService {
       }
       inner.set(clientId, {
         ...softLeaver.record,
-        // Refresh viewport from the new subscribe payload — the keyboard
-        // state may have changed during the window.
         viewport,
         lastActedAt: Date.now()
       })
-      // The driver was already mobile{clientId}; refresh to update
-      // listener wiring (and re-emit, harmless if unchanged).
       this.setDriver(ptyId, { kind: 'mobile', clientId })
-      // If display-mode is auto/phone, reapply the fit at the new viewport
-      // so a keyboard show/hide that resubscribes (older clients) still
-      // updates dims correctly. updateMobileViewport is the preferred path
-      // and avoids the unsubscribe → subscribe cycle entirely.
       if (mode !== 'desktop') {
-        this.applyMobileDisplayMode(ptyId)
+        this.freshSubscribeGuard.add(ptyId)
+        try {
+          await this.enqueueLayout(ptyId, {
+            kind: 'phone',
+            cols: clampedCols,
+            rows: clampedRows,
+            ownerClientId: clientId
+          })
+        } finally {
+          this.freshSubscribeGuard.delete(ptyId)
+        }
       }
       return true
     }
@@ -1872,38 +2324,36 @@ export class OrcaRuntimeService {
       this.mobileSubscribers.set(ptyId, inner)
     }
 
-    // Why: prefer lastRendererSizes (the actual pane geometry reported by the
-    // desktop renderer's safeFit via pty:resize IPC) over getTerminalSize (the
-    // server-side PTY size, which may be stale — e.g. 214 full-width when the
-    // pane is actually in a split at ~105). Fall back to existing subscriber's
-    // previousCols (re-subscribe case) then currentSize (first subscribe).
-    //
-    // Multi-mobile: if an existing subscriber on this PTY is already
-    // phone-fitted, the current PTY size is NOT a valid restore baseline for
-    // a *new* subscriber — it would point to a phone-fit dim, not the
-    // pre-mobile desktop size. Set previousCols/Rows to null so the new
-    // joiner is skipped from earliest-restore selection; the original
-    // subscriber's captured baseline remains the source of truth. See
+    // Capture restore baseline BEFORE applyLayout writes the override.
+    // Multi-mobile: peer joiner against an already-fitted PTY captures null
+    // — the existing baseline-holder's snapshot remains canonical. See
     // docs/mobile-presence-lock.md.
+    //
+    // Resubscribe-after-indefinite-hold: the held override carries the only
+    // authoritative pre-fit dims across the no-subscriber gap. Inherit it
+    // first; otherwise rendererSize/currentSize would be the held phone dims
+    // and applyLayout would clobber the override's previousCols with phone
+    // dims, making any subsequent Restore a no-op.
+    const heldOverride = this.terminalFitOverrides.get(ptyId)
     const existing = inner.get(clientId)
     const someoneAlreadyFitted = [...inner.values()].some((s) => s.wasResizedToPhone)
     const currentSize = this.getTerminalSize(ptyId)
     const rendererSize = this.lastRendererSizes.get(ptyId)
     const previousCols =
       existing?.previousCols ??
+      heldOverride?.previousCols ??
       (someoneAlreadyFitted ? null : (rendererSize?.cols ?? currentSize?.cols ?? null))
     const previousRows =
       existing?.previousRows ??
+      heldOverride?.previousRows ??
       (someoneAlreadyFitted ? null : (rendererSize?.rows ?? currentSize?.rows ?? null))
     const now = Date.now()
     const subscribedAt = existing?.subscribedAt ?? now
 
     if (mode === 'desktop') {
-      // Why: set previousCols/Rows to null so we don't capture a stale PTY
-      // size that may not match the actual pane geometry (e.g. 214 when the
-      // pane is in a split at 105). When the user later toggles to auto/phone,
-      // handleMobileSubscribe will capture currentSize at that point, which
-      // will be correct because safeFit has had time to adjust the PTY.
+      // Passive watch — null baseline (we'll capture later if user toggles
+      // to auto/phone, since safeFit will have converged by then). Do not
+      // flip driver.
       inner.set(clientId, {
         clientId,
         viewport,
@@ -1913,8 +2363,6 @@ export class OrcaRuntimeService {
         subscribedAt,
         lastActedAt: now
       })
-      // Subscribe-in-desktop-mode is passive: leave driver at idle/desktop.
-      // Do not transition to mobile{clientId}.
       return false
     }
 
@@ -1928,32 +2376,23 @@ export class OrcaRuntimeService {
       lastActedAt: now
     })
 
-    const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
-    const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
-
-    // Why: skip the PTY resize if already at the target dims. Re-subscribing
-    // to a terminal that was left at phone dims (no restore on tab switch)
-    // should not trigger another SIGWINCH → shell prompt redraw.
-    const alreadyAtTarget = currentSize?.cols === clampedCols && currentSize?.rows === clampedRows
-    if (!alreadyAtTarget) {
-      this.ptyController?.resize?.(ptyId, clampedCols, clampedRows)
-      this.resizeHeadlessTerminal(ptyId, clampedCols, clampedRows)
-    }
-    this.notifier?.terminalFitOverrideChanged(ptyId, 'mobile-fit', clampedCols, clampedRows)
-
-    // Update terminalFitOverrides for desktop safeFit compatibility
-    this.terminalFitOverrides.set(ptyId, {
-      mode: 'mobile-fit',
-      cols: clampedCols,
-      rows: clampedRows,
-      previousCols,
-      previousRows,
-      updatedAt: Date.now(),
-      clientId
-    })
-
-    // Subscribe-fresh with auto/phone mode counts as "take the floor".
+    // Subscribe-fresh with auto/phone counts as "take the floor".
     this.setDriver(ptyId, { kind: 'mobile', clientId })
+
+    // Route the actual resize through the state machine. The fresh-subscribe
+    // gate lets enqueueLayout's "no layouts entry" short-circuit pass on
+    // the very first transition for this PTY.
+    this.freshSubscribeGuard.add(ptyId)
+    try {
+      await this.enqueueLayout(ptyId, {
+        kind: 'phone',
+        cols: clampedCols,
+        rows: clampedRows,
+        ownerClientId: clientId
+      })
+    } finally {
+      this.freshSubscribeGuard.delete(ptyId)
+    }
 
     return true
   }
@@ -1977,12 +2416,6 @@ export class OrcaRuntimeService {
     }
     const wasResizedToPhone = subscriber.wasResizedToPhone
 
-    // Why: snapshot the earliest-by-subscribe-time restore target BEFORE
-    // mutating the inner map. If the disconnecting client is the original
-    // baseline-holder, that information must survive into the last-leaver
-    // restore path even after their record is deleted. See
-    // docs/mobile-presence-lock.md "Restore-target selection".
-    const restoreTargetSnapshot = this.pickEarliestRestoreTarget(inner)
     inner.delete(clientId)
 
     if (inner.size > 0) {
@@ -1990,9 +2423,7 @@ export class OrcaRuntimeService {
       // baseline (typical when peer joiners subscribed against an
       // already-phone-fitted PTY and got null prevCols), donate the baseline
       // to the earliest surviving subscriber so a future last-leaver can
-      // still restore correctly. Without this, A leaves first, B leaves
-      // last with null prevCols → no restore fires. See
-      // docs/mobile-presence-lock.md.
+      // still restore correctly. See docs/mobile-presence-lock.md.
       if (
         subscriber.previousCols != null &&
         subscriber.previousRows != null &&
@@ -2020,7 +2451,9 @@ export class OrcaRuntimeService {
         const next = this.pickMostRecentActor(inner)
         if (next) {
           this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
-          this.applyMobileDisplayMode(ptyId)
+          // Fire-and-forget — handleMobileUnsubscribe stays sync; applyLayout
+          // failures self-recover on the next gesture.
+          void this.applyMobileDisplayMode(ptyId)
         }
       }
       return
@@ -2030,13 +2463,9 @@ export class OrcaRuntimeService {
     this.mobileSubscribers.delete(ptyId)
     const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
 
-    // Why: resubscribe-grace. Hold the driver=mobile{clientId} state and
-    // the leaving subscriber's record for ~250ms. If the same client
-    // re-subscribes in that window, handleMobileSubscribe cancels the
-    // pending-soft-leaver and re-inserts the record (preserving
-    // previousCols and avoiding a desktop-banner flash). Otherwise the
-    // grace timer fires, sets driver=idle, and lets the existing 300ms
-    // restore debounce (kept below) run as before.
+    // Resubscribe-grace: hold driver=mobile{clientId} for ~250ms so a quick
+    // re-subscribe (older clients without updateViewport) doesn't flash the
+    // desktop banner. See docs/mobile-presence-lock.md.
     const SOFT_LEAVE_GRACE_MS = 250
     const existingSoft = this.pendingSoftLeavers.get(ptyId)
     if (existingSoft) {
@@ -2045,7 +2474,6 @@ export class OrcaRuntimeService {
     }
     const softTimer = setTimeout(() => {
       this.pendingSoftLeavers.delete(ptyId)
-      // Why: only flip to idle if no peer has reclaimed in the meantime.
       if (!this.mobileSubscribers.has(ptyId)) {
         this.setDriver(ptyId, { kind: 'idle' })
       }
@@ -2065,45 +2493,49 @@ export class OrcaRuntimeService {
     })
 
     if (mode === 'auto' && wasResizedToPhone) {
-      const existing = this.pendingRestoreTimers.get(ptyId)
-      if (existing) {
-        clearTimeout(existing.timer)
-      }
-
-      // Restore target: earliest-by-subscribe-time among non-null
-      // previousCols/Rows captured BEFORE deletion. Falls back to the
-      // disconnecting subscriber's own dims and finally lastRendererSizes
-      // (matches the existing first-insert capture path).
-      const fallback = this.lastRendererSizes.get(ptyId)
-      const previousCols =
-        restoreTargetSnapshot?.previousCols ?? subscriber.previousCols ?? fallback?.cols ?? null
-      const previousRows =
-        restoreTargetSnapshot?.previousRows ?? subscriber.previousRows ?? fallback?.rows ?? null
-      const timer = setTimeout(() => {
+      const existingTimer = this.pendingRestoreTimers.get(ptyId)
+      if (existingTimer) {
+        clearTimeout(existingTimer.timer)
         this.pendingRestoreTimers.delete(ptyId)
-        if (this.isMobileSubscriberActive(ptyId)) {
-          return
-        }
-        if (previousCols != null && previousRows != null) {
-          this.ptyController?.resize?.(ptyId, previousCols, previousRows)
-          this.resizeHeadlessTerminal(ptyId, previousCols, previousRows)
-        }
-        this.lastRendererSizes.delete(ptyId)
-        this.suppressResizesForMs(500)
-        this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(
-          ptyId,
-          'desktop-fit',
-          previousCols ?? 0,
-          previousRows ?? 0
-        )
-        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', previousCols ?? 0, previousRows ?? 0)
-      }, 300)
+      }
+      // Why: scheduling is conditional on the user's mobileAutoRestoreFitMs
+      // preference. `null` (default, "Indefinite") leaves the PTY at phone
+      // dims until the user clicks Restore on the desktop banner — the
+      // central UX promise of docs/mobile-fit-hold.md. A finite value runs
+      // the restore that long after the last unsubscribe.
+      const autoRestoreMs = this.getAutoRestoreFitMs()
+      if (autoRestoreMs == null) {
+        // Indefinite hold: the fit override persists, the SOFT_LEAVE_GRACE
+        // driver-state grace above still releases the input lock, and the
+        // banner's Restore button is the explicit return path.
+      } else {
+        // Snapshot the disconnecting subscriber's baseline NOW, before the
+        // timer fires. By the time the timer runs, the subscriber map has
+        // been deleted; resolveDesktopRestoreTarget would fall through to
+        // lastRendererSizes → current PTY size (which is at phone dims,
+        // wrong). The disconnecting subscriber's baseline is the correct
+        // restore target.
+        const fallback = this.lastRendererSizes.get(ptyId)
+        const restoreCols =
+          subscriber.previousCols ?? fallback?.cols ?? this.getTerminalSize(ptyId)?.cols ?? 80
+        const restoreRows =
+          subscriber.previousRows ?? fallback?.rows ?? this.getTerminalSize(ptyId)?.rows ?? 24
+        const timer = setTimeout(() => {
+          this.pendingRestoreTimers.delete(ptyId)
+          if (this.isMobileSubscriberActive(ptyId)) {
+            return
+          }
+          void this.enqueueLayout(ptyId, {
+            kind: 'desktop',
+            cols: restoreCols,
+            rows: restoreRows
+          })
+        }, autoRestoreMs)
 
-      this.pendingRestoreTimers.set(ptyId, { timer, clientId })
+        this.pendingRestoreTimers.set(ptyId, { timer, clientId })
+      }
     }
-    // 'phone' mode: keep phone dims (no restore needed)
-    // 'desktop' mode: was never resized, nothing to restore
+    // 'desktop' mode: was never resized, nothing to restore.
   }
 
   // Why: called when mode changes via terminal.setDisplayMode. Applies the
@@ -2113,70 +2545,66 @@ export class OrcaRuntimeService {
   // Multi-mobile: the most recent mobile actor's viewport drives the active
   // phone-fit dims. The earliest-by-subscribe-time subscriber's
   // previousCols/Rows drive the desktop-restore target.
-  applyMobileDisplayMode(ptyId: string): void {
+  async applyMobileDisplayMode(ptyId: string): Promise<void> {
     const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
     const inner = this.mobileSubscribers.get(ptyId)
     const subscriber = inner ? this.pickMostRecentActor(inner) : null
     const subscriberRecord = subscriber && inner ? inner.get(subscriber.clientId) : null
 
     if (mode === 'desktop') {
-      // Find the first subscriber (any clientId) that was previously
-      // phone-fitted, and reset its flag. The desktop-restore target uses
-      // earliest-by-subscribe-time among non-null prevCols/Rows.
+      // Reset wasResizedToPhone on every fitted subscriber so a future
+      // toggle back to auto re-issues the resize. applyLayout owns the
+      // actual PTY resize + override delete + renderer notify.
+      let anyWasResized = false
       if (inner) {
-        const restore = this.pickEarliestRestoreTarget(inner)
-        let anyWasResized = false
         for (const sub of inner.values()) {
           if (sub.wasResizedToPhone) {
             anyWasResized = true
             sub.wasResizedToPhone = false
           }
         }
-        if (anyWasResized && restore) {
-          this.ptyController?.resize?.(ptyId, restore.previousCols, restore.previousRows)
-          this.resizeHeadlessTerminal(ptyId, restore.previousCols, restore.previousRows)
-          // Why: clear stale renderer size so the next mobile subscribe falls
-          // through to currentSize (which is correct after the server restore).
-          // Without this, a polluted 214 from a prior collateral safeFit cascade
-          // persists in lastRendererSizes and gets used as previousCols.
-          this.lastRendererSizes.delete(ptyId)
-          // Why: 500ms not 200ms — the desktop renderer's collateral safeFit
-          // cascade (IPC → React re-render → rAF → DOM measure → IPC back)
-          // takes ~360ms to propagate to background-tab terminals.
-          this.suppressResizesForMs(500)
-          this.terminalFitOverrides.delete(ptyId)
-          this.notifier?.terminalFitOverrideChanged(
-            ptyId,
-            'desktop-fit',
-            restore.previousCols,
-            restore.previousRows
-          )
-        }
       }
-      const size = this.getTerminalSize(ptyId)
-      this.notifyTerminalResize(ptyId, {
-        cols: size?.cols ?? 0,
-        rows: size?.rows ?? 0,
-        displayMode: 'desktop',
-        reason: 'mode-change'
-      })
-    } else if (mode === 'phone' || mode === 'auto') {
+      if (anyWasResized) {
+        const restore = this.resolveDesktopRestoreTarget(ptyId)
+        await this.enqueueLayout(ptyId, {
+          kind: 'desktop',
+          cols: restore.cols,
+          rows: restore.rows
+        })
+      } else {
+        // No subscriber was fitted — emit a mode-change resize event so
+        // the mobile client still learns the toggle landed.
+        const size = this.getTerminalSize(ptyId)
+        this.notifyTerminalResize(ptyId, {
+          cols: size?.cols ?? 0,
+          rows: size?.rows ?? 0,
+          displayMode: 'desktop',
+          reason: 'mode-change',
+          seq: this.layouts.get(ptyId)?.seq
+        })
+      }
+    } else {
+      // mode === 'auto' — the only non-desktop mode after the 'phone'
+      // (sticky-fit) collapse. Phone-fit if the active subscriber has a
+      // viewport and we haven't already applied it.
       if (subscriberRecord && !subscriberRecord.wasResizedToPhone) {
         const viewport = subscriberRecord.viewport
         if (viewport) {
-          this.handleMobileSubscribe(ptyId, subscriberRecord.clientId, viewport)
+          await this.handleMobileSubscribe(ptyId, subscriberRecord.clientId, viewport)
+          return
         }
       }
-      // Why: always emit the mode change even when no resize occurred (e.g.
-      // subscriber missing, wasResizedToPhone already true, or no viewport).
-      // Without this the mobile client never learns the mode changed and its
-      // toggle button gets stuck showing the old state.
+      // Why: always emit the mode change even when no resize occurred — the
+      // mobile client needs to learn the toggle landed even if dims didn't
+      // actually change. Carry the current seq (or undefined if no layout
+      // entry yet) so the mobile-side stale-event filter behaves correctly.
       const size = this.getTerminalSize(ptyId)
       this.notifyTerminalResize(ptyId, {
         cols: size?.cols ?? 0,
         rows: size?.rows ?? 0,
-        displayMode: mode,
-        reason: 'mode-change'
+        displayMode: 'auto',
+        reason: 'mode-change',
+        seq: this.layouts.get(ptyId)?.seq
       })
     }
   }
@@ -2185,18 +2613,71 @@ export class OrcaRuntimeService {
   // resizes a PTY (e.g. via safeFit after window resize, split, or desktop-mode
   // restore). Stores the renderer-reported size so handleMobileSubscribe can use
   // the actual pane geometry instead of a stale PTY size for previousCols.
+  // This is a passive geometry report — it does NOT call applyLayout; the
+  // PTY is already at the reported size.
   onExternalPtyResize(ptyId: string, cols: number, rows: number): void {
-    this.lastRendererSizes.set(ptyId, { cols, rows })
+    // The pty:resize IPC handler is supposed to gate via `isResizeSuppressed`
+    // before calling here, but defend against callers that don't.
+    if (this.isResizeSuppressed()) {
+      return
+    }
+    // Why: while a mobile-fit override is in place, the desktop renderer's
+    // safeFit echoes pty:resize(override.cols, override.rows). Treating that
+    // echo as legitimate geometry would overwrite each subscriber's
+    // previousCols/Rows baseline with phone dims, so the next take-back
+    // enqueues a no-op {kind:'desktop', cols:49, rows:40} and leaves xterm
+    // stuck. Only filter reports that EXACTLY match the override — a fresh
+    // measurement from a now-visible pane (e.g. user activated a previously
+    // hidden tab on desktop, container went 0×0 → 1782×1195) reports
+    // different dims and is the right baseline to remember.
+    const activeOverride = this.terminalFitOverrides.get(ptyId)
+    if (
+      activeOverride &&
+      activeOverride.cols === cols &&
+      activeOverride.rows === rows
+    ) {
+      return
+    }
+    this.refreshRendererGeometry(ptyId, cols, rows)
+  }
 
+  // Why: pty:reportGeometry IPC sibling. The renderer calls this when a
+  // desktop pane container goes from 0×0 to a real size while a mobile-fit
+  // override is active (e.g. user activates a previously-hidden tab on
+  // desktop after the phone has already taken the floor). We need the
+  // restore-target baseline to track real desktop dims even during the
+  // fit period — otherwise resolveDesktopRestoreTarget falls back to the
+  // PTY's spawn default (typically 80×24) and Take Back leaves the
+  // terminal partially restored. This is a measurement-only channel: it
+  // refreshes lastRendererSizes and non-null subscriber baselines, never
+  // resizes the PTY, and bypasses both isResizeSuppressed and the
+  // override-echo gate by design — the renderer only fires it when it
+  // has just measured fresh real geometry. See docs/mobile-fit-hold.md.
+  recordRendererGeometry(ptyId: string, cols: number, rows: number): void {
+    if (cols <= 0 || rows <= 0) {
+      return
+    }
+    this.refreshRendererGeometry(ptyId, cols, rows)
+  }
+
+  // Why: test seam — exposes lastRendererSizes for assertions about
+  // pty:reportGeometry / onExternalPtyResize side effects without making
+  // the underlying Map writable from the outside.
+  getLastRendererSize(ptyId: string): { cols: number; rows: number } | null {
+    return this.lastRendererSizes.get(ptyId) ?? null
+  }
+
+  private refreshRendererGeometry(ptyId: string, cols: number, rows: number): void {
+    this.lastRendererSizes.set(ptyId, { cols, rows })
     const inner = this.mobileSubscribers.get(ptyId)
     if (!inner) {
       return
     }
-    // Capture the renderer-reported size as the next-restore target on any
-    // subscriber that hasn't yet been phone-fitted. Subscribers in
-    // wasResizedToPhone state already have a captured pre-fit baseline.
+    // Refresh the renderer-current size as the next-restore target on every
+    // subscriber that already has a non-null baseline. Subscribers with null
+    // baselines (joined while a peer had already phone-fitted) stay null.
     for (const sub of inner.values()) {
-      if (!sub.wasResizedToPhone) {
+      if (sub.previousCols != null && sub.previousRows != null) {
         sub.previousCols = cols
         sub.previousRows = rows
       }
@@ -2216,7 +2697,13 @@ export class OrcaRuntimeService {
 
   subscribeToTerminalResize(
     ptyId: string,
-    listener: (event: { cols: number; rows: number; displayMode: string; reason: string }) => void
+    listener: (event: {
+      cols: number
+      rows: number
+      displayMode: string
+      reason: string
+      seq?: number
+    }) => void
   ): () => void {
     let listeners = this.resizeListeners.get(ptyId)
     if (!listeners) {
@@ -2234,7 +2721,7 @@ export class OrcaRuntimeService {
 
   private notifyTerminalResize(
     ptyId: string,
-    event: { cols: number; rows: number; displayMode: string; reason: string }
+    event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
   ): void {
     const listeners = this.resizeListeners.get(ptyId)
     if (!listeners) {
@@ -4489,6 +4976,33 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: `tabSwitch` only flips the bridge's `activeWebContentsId` — it
+  // does not surface the browser pane in the renderer. Without --focus, the
+  // switch is invisible to the user. With --focus, we send a dedicated IPC
+  // so the renderer can update its per-worktree active-tab state.
+  //
+  // Why this IPC carries `worktreeId` instead of letting the renderer
+  // dispatch `setActiveWorktree`: multiple agents drive browsers in parallel
+  // worktrees. A global focus call from agent X would steal the user's
+  // screen from agent Y's worktree. The renderer-side handler
+  // (focusBrowserTabInWorktree) updates per-worktree state unconditionally
+  // and only flips globals when the user is already on the targeted
+  // worktree. Cross-worktree --focus calls pre-stage silently.
+  private notifyRendererBrowserPaneFocus(
+    worktreeId: string | undefined,
+    browserPageId: string
+  ): void {
+    try {
+      const win = this.getAuthoritativeWindow()
+      win.webContents.send('browser:pane-focus', {
+        worktreeId: worktreeId ?? null,
+        browserPageId
+      })
+    } catch {
+      // Window may not exist during shutdown
+    }
+  }
+
   async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
@@ -4647,14 +5161,23 @@ export class OrcaRuntimeService {
   async browserTabSwitch(
     params: {
       index?: number
+      focus?: boolean
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSwitchResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().tabSwitch(
-      params.index,
-      target.worktreeId,
-      target.browserPageId
-    )
+    const bridge = this.requireAgentBrowserBridge()
+    const result = await bridge.tabSwitch(params.index, target.worktreeId, target.browserPageId)
+    if (params.focus) {
+      // Why: prefer the explicit --worktree the caller passed; fall back to
+      // the bridge's owning-worktree map for the just-switched tab. The
+      // owning worktree is what the renderer needs to scope the focus to.
+      // The renderer NEVER yanks the user across worktrees on this signal
+      // (see focusBrowserTabInWorktree).
+      const worktreeId =
+        target.worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
+      this.notifyRendererBrowserPaneFocus(worktreeId, result.browserPageId)
+    }
+    return result
   }
 
   async browserHover(
@@ -5355,7 +5878,10 @@ export class OrcaRuntimeService {
     if (!browserPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
-    const profile = browserSessionRegistry.getProfile(params.profileId)
+    // Why: 'default' is a synthetic id; fall back to the registry's default profile when not registered.
+    const profile =
+      browserSessionRegistry.getProfile(params.profileId) ??
+      (params.profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
     if (!profile) {
       throw new BrowserError(
         'invalid_argument',
@@ -5779,6 +6305,14 @@ const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const TUI_IDLE_POLL_INTERVAL_MS = 2000
 const TUI_IDLE_QUIESCENCE_MS = 3000
 const MESSAGE_WAIT_DEFAULT_TIMEOUT_MS = 2 * 60 * 1000
+
+// Clamp range for the user-facing mobileAutoRestoreFitMs preference.
+// MIN floor: a couple of seconds is the smallest useful auto-restore
+// (anything tighter is the legacy 300ms debounce).
+// MAX ceiling: one hour — a held PTY beyond that is almost certainly
+// "I forgot" rather than intentional.
+const MOBILE_AUTO_RESTORE_FIT_MIN_MS = 5_000
+const MOBILE_AUTO_RESTORE_FIT_MAX_MS = 60 * 60 * 1000
 
 function buildTerminalWaitResult(
   handle: string,

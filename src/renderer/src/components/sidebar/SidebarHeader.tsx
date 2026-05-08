@@ -58,15 +58,6 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
-  // Why: hide the 'Agents in card' checkbox entirely when the experimental
-  // live-agent-activity feature is off — toggling it is a no-op otherwise
-  // (WorktreeCard gates rendering on the same flag), so surfacing a dead
-  // checkbox is just misleading chrome.
-  const liveAgentsEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
-  const visiblePropertyOptions = liveAgentsEnabled
-    ? PROPERTY_OPTIONS
-    : PROPERTY_OPTIONS.filter((opt) => opt.id !== 'inline-agents')
-
   return (
     <div className="flex h-8 items-center justify-between px-2 gap-2">
       <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
@@ -140,7 +131,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
 
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Show properties</DropdownMenuLabel>
-            {visiblePropertyOptions.map((opt) => (
+            {PROPERTY_OPTIONS.map((opt) => (
               <DropdownMenuCheckboxItem
                 key={opt.id}
                 checked={worktreeCardProperties.includes(opt.id)}

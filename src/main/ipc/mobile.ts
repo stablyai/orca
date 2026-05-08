@@ -59,7 +59,11 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     }
     const endpoint = rawEndpoint.replace('0.0.0.0', ip)
 
-    const device = registry.addDevice(`Mobile ${new Date().toLocaleDateString()}`)
+    // Why: coalesce repeated QR regenerations onto a single never-scanned
+    // pending token so the copy-button flow doesn't accumulate orphaned
+    // device credentials forever. The token graduates to a real entry when
+    // a phone actually connects (lastSeenAt > 0).
+    const device = registry.getOrCreatePendingDevice(`Mobile ${new Date().toLocaleDateString()}`)
 
     const publicKeyB64 = rpcServer.getE2EEPublicKey()
     if (!publicKeyB64) {

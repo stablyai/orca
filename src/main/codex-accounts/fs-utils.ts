@@ -39,26 +39,31 @@ export function writeFileAtomically(
   }
 }
 
-// Why: on Windows, renameSync can fail with EPERM/EACCES if another process
-// (antivirus, Codex CLI) holds the target file open. A short retry avoids
-// transient failures without masking real permission errors.
+// Why: on Windows, renameSync can fail with EPERM/EACCES/EBUSY if another
+// process (antivirus, Claude CLI, Codex CLI) holds the target file open.
+// A short retry avoids transient failures without masking real permission
+// errors. Total backoff (~750ms) covers typical AV scan windows seen in
+// issue #1507.
 function renameWithRetry(source: string, target: string): void {
-  const maxAttempts = process.platform === 'win32' ? 3 : 1
+  const maxAttempts = process.platform === 'win32' ? 6 : 1
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       renameSync(source, target)
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
-      if (attempt < maxAttempts && (code === 'EPERM' || code === 'EACCES')) {
-        const delayMs = attempt * 50
-        const until = Date.now() + delayMs
-        while (Date.now() < until) {
-          /* busy-wait: setTimeout is async and callers must stay sync */
-        }
+      if (attempt < maxAttempts && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) {
+        sleepSync(attempt * 50)
         continue
       }
       throw error
     }
   }
+}
+
+// Why: writeFileAtomically is a sync API called from sync paths, so the retry
+// backoff must park the thread instead of burning CPU in a Date.now() loop.
+const sleepBuffer = new Int32Array(new SharedArrayBuffer(4))
+function sleepSync(ms: number): void {
+  Atomics.wait(sleepBuffer, 0, 0, ms)
 }

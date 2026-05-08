@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
 import { SetupStep } from './AddRepoSetupStep'
@@ -193,6 +194,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   const handleOpenWorktree = useCallback(
     (worktree: Worktree) => {
+      track('add_repo_setup_step_action', { action: 'open_existing' })
       activateAndRevealWorktree(worktree.id)
       closeModal()
     },
@@ -200,6 +202,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   )
 
   const handleCreateWorktree = useCallback(() => {
+    // Why: Setup-step "Create" affordance — fires on click intent, not on IPC arrival, mirroring the other 4 actions in this dialog.
+    track('add_repo_setup_step_action', { action: 'create_worktree' })
     // Why: small delay so the Add Project dialog close animation finishes before
     // the composer modal takes focus; otherwise the dialog teardown can steal
     // the first focus frame from the composer's prompt textarea.
@@ -210,6 +214,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   }, [closeModal, openModal, repoId])
 
   const handleConfigureRepo = useCallback(() => {
+    track('add_repo_setup_step_action', { action: 'configure' })
     closeModal()
     openSettingsTarget({ pane: 'repo', repoId })
     openSettingsPage()
@@ -218,11 +223,33 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = resetState
 
+  const handleSkip = useCallback(() => {
+    track('add_repo_setup_step_action', { action: 'skip' })
+    closeModal()
+    resetState()
+  }, [closeModal, resetState])
+
+  // Why: only the Setup step's "Add another project" back arrow counts as a
+  // funnel event — the in-flight Back arrows on clone/remote/create are not
+  // a Setup-step affordance. Keeping the emit scoped to this handler avoids
+  // also tagging mid-clone backs.
+  const handleSetupStepBack = useCallback(() => {
+    track('add_repo_setup_step_action', { action: 'back' })
+    handleBack()
+  }, [handleBack])
+
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
+          // Why: Radix only fires onOpenChange for internal triggers (X icon, ESC,
+          // outside-click), so this branch only runs for implicit closes — explicit
+          // Skip is handled on its own renderer-side click handler. Implicit closes
+          // on the Setup step are funnel-equivalent to Skip.
+          if (step === 'setup') {
+            track('add_repo_setup_step_action', { action: 'skip' })
+          }
           closeModal()
           resetState()
         }
@@ -243,7 +270,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           {step === 'setup' && (
             <button
               className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              onClick={handleBack}
+              onClick={handleSetupStepBack}
             >
               <ArrowLeft className="size-3" />
               Add another project
@@ -396,10 +423,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             onOpenWorktree={handleOpenWorktree}
             onCreateWorktree={handleCreateWorktree}
             onConfigureRepo={handleConfigureRepo}
-            onSkip={() => {
-              closeModal()
-              resetState()
-            }}
+            onSkip={handleSkip}
           />
         )}
       </DialogContent>

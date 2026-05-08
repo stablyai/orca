@@ -2,7 +2,6 @@
 import { app } from 'electron'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
-import type { Repo } from '../../shared/types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -13,11 +12,10 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
-import { listRepoWorktrees } from '../repo-worktrees'
 import type { Store } from '../persistence'
-import { mergeWorktree } from '../ipc/worktree-logic'
+import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
-import { createWorktreeRefs, getDefaultWorktreeLabel, scanCodexUsageFiles } from './scanner'
+import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
 
 const SCHEMA_VERSION = 2
 const STALE_MS = 5 * 60_000
@@ -141,12 +139,6 @@ function getLocalDay(timestamp: string): string | null {
   return `${year}-${month}-${day}`
 }
 
-type CodexUsageWorktree = {
-  worktreeId: string
-  path: string
-  displayName: string
-}
-
 type ScopedCodexUsageModelRow = {
   modelKey: string
   modelLabel: string
@@ -159,7 +151,7 @@ type ScopedCodexUsageModelRow = {
   totalTokens: number
 }
 
-function getWorktreeFingerprint(worktreesByRepo: Map<string, CodexUsageWorktree[]>): string {
+function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
   const rows = [...worktreesByRepo.entries()]
     .flatMap(([repoId, worktrees]) =>
       worktrees.map((worktree) =>
@@ -259,7 +251,7 @@ export class CodexUsageStore {
     this.scanPromise = (async () => {
       try {
         const repos = this.store.getRepos()
-        const worktreesByRepo = await this.loadWorktreesByRepo(repos)
+        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
         const result = await scanCodexUsageFiles(
           createWorktreeRefs(repos, worktreesByRepo),
@@ -591,28 +583,7 @@ export class CodexUsageStore {
 
   private async getCurrentWorktreeFingerprint(): Promise<string> {
     const repos = this.store.getRepos()
-    const worktreesByRepo = await this.loadWorktreesByRepo(repos)
+    const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
     return getWorktreeFingerprint(worktreesByRepo)
-  }
-
-  private async loadWorktreesByRepo(repos: Repo[]): Promise<Map<string, CodexUsageWorktree[]>> {
-    const worktreesByRepo = new Map<string, CodexUsageWorktree[]>()
-
-    for (const repo of repos) {
-      const gitWorktrees = await listRepoWorktrees(repo)
-      const mapped = gitWorktrees.map((worktree) => {
-        const worktreeId = `${repo.id}::${worktree.path}`
-        const meta = this.store.getWorktreeMeta(worktreeId)
-        const merged = mergeWorktree(repo.id, worktree, meta, repo.displayName)
-        return {
-          worktreeId,
-          path: worktree.path,
-          displayName: merged.displayName || getDefaultWorktreeLabel(worktree.path)
-        }
-      })
-      worktreesByRepo.set(repo.id, mapped)
-    }
-
-    return worktreesByRepo
   }
 }

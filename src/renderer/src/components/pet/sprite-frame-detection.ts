@@ -1,6 +1,6 @@
 // Why: pet bundles often ship a sprite sheet without manifest frame data, so
 // we can't grid-step it. The sheets we see in the wild leave magenta (chroma
-// keyed in sidekick-blob-cache) or transparent gutters between sprites.
+// keyed in pet-blob-cache) or transparent gutters between sprites.
 // After keying, find connected non-empty rows → bands; within the best band,
 // split on empty columns to get one frame per sprite. The result drives the
 // canvas-based animation in the overlay.

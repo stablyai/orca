@@ -105,14 +105,14 @@ Invariants:
 
 | Current driver | Trigger | Next driver | Side effect |
 |---|---|---|---|
-| `idle` | mobile subscribes with `displayMode='auto'\|'phone'` (first client for this ptyId) | `mobile{clientId}` | banner mounts on desktop; PTY resizes to phone dims |
+| `idle` | mobile subscribes with `displayMode='auto'` (first client for this ptyId) | `mobile{clientId}` | banner mounts on desktop; PTY resizes to phone dims |
 | `idle` | mobile subscribes with `displayMode='desktop'` (first client for this ptyId) | `desktop` | inner subscriber map populated; **no** banner; PTY stays at desktop dims |
 | `idle` | desktop input or first PTY data after no subscribers | `idle` (no transition) | — |
 | `mobile{A}` | desktop clicks **Take back** | `desktop` | banner unmounts; PTY snaps to desktop dims if at phone dims |
 | `mobile{A}` | mobile A sends input/resize/setDisplayMode | `mobile{A}` (no transition) | — |
 | `mobile{A}` | mobile B sends input | `mobile{B}` | (no banner change; both are "mobile") |
 | `mobile{A}` | last mobile client unsubscribes | `idle` | banner unmounts |
-| `desktop` | any mobile client sends input/resize | `mobile{thatClient}` | banner mounts; PTY snaps to phone dims if that client's mode is auto/phone |
+| `desktop` | any mobile client sends input/resize | `mobile{thatClient}` | banner mounts; PTY snaps to phone dims if that client's mode is auto |
 | `desktop` | mobile sets `displayMode` to `auto` or `phone` | `mobile{thatClient}` | banner mounts; PTY snaps to phone dims (deliberate "I want to drive" gesture) |
 | `desktop` | mobile sets `displayMode` to `desktop` | `desktop` (no transition) | — (already desktop-mode watching) |
 | `desktop` | mobile subscribes-fresh with `auto`/`phone` | `mobile{thatClient}` | banner mounts; PTY snaps to phone dims |
@@ -174,7 +174,7 @@ connected; mobile sees the desktop-sized terminal because PTY snapped back
 
 **Mobile types something while you're reclaimed.** Banner reappears. Your
 next keystroke is blocked. PTY may snap back to phone dims (if mobile is in
-auto/phone mode).
+auto mode).
 
 **Mobile disconnects.** Banner gone permanently. Driver returns to `idle`.
 
@@ -207,7 +207,7 @@ This is asymmetric and we are accepting it deliberately:
 - **Mobile reclaim is naturally signaled.** When a mobile user types
   while desktop drives, the runtime flips the driver to
   `mobile{thatClient}`, the desktop banner remounts, and (if mobile is in
-  auto/phone mode) the PTY snaps back to phone dims. The mobile user sees
+  auto mode) the PTY snaps back to phone dims. The mobile user sees
   the pane reflow and their keystrokes appear in the output stream. There
   is no silent black-hole condition on mobile that a banner would
   resolve.
@@ -255,7 +255,7 @@ listener. The `TerminalPane` banner mounts when
 ### Why not reuse `getFitOverrideForPty`?
 
 The fit override only fires when the PTY was actually resized
-(`mode='auto'|'phone'` and `wasResizedToPhone=true`). It misses the
+(`mode='auto'` and `wasResizedToPhone=true`). It misses the
 desktop-mode case where mobile is subscribed but no resize happened. The
 driver state is broader than the fit override.
 

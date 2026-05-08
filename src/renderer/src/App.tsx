@@ -1,8 +1,16 @@
 /* eslint-disable max-lines */
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
+import { getDefaultUIState } from '../../shared/constants'
 
-import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Minimize2,
+  MoreHorizontal,
+  PanelLeft,
+  PanelRight
+} from 'lucide-react'
+import logo from '../../../resources/logo.svg'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { buildAppFontFamily } from '@/lib/app-font-family'
@@ -45,10 +53,64 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
-import { dispatchClearModifierHints } from './hooks/useModifierHint'
 import type { OnboardingState } from '../../shared/types'
 
 const isMac = navigator.userAgent.includes('Mac')
+const isWindows = !isMac && navigator.userAgent.includes('Windows')
+
+// Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
+// so we render our own minimize/maximize/close buttons.  These SVG icons match
+// the Fluent/Win11 style: thin 10×10 paths on a 40×30 hit area.
+function WindowControls(): React.JSX.Element {
+  const [maximized, setMaximized] = useState(false)
+  useEffect(() => {
+    return window.api.ui.onMaximizeChanged(setMaximized)
+  }, [])
+  return (
+    <div className="window-controls">
+      <button
+        className="window-controls-btn"
+        aria-label="Minimize"
+        onClick={() => window.api.ui.minimize()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+          <path d="M0 5h10v1H0z" fill="currentColor" />
+        </svg>
+      </button>
+      <button
+        className="window-controls-btn"
+        aria-label={maximized ? 'Restore' : 'Maximize'}
+        onClick={() => window.api.ui.maximize()}
+      >
+        {maximized ? (
+          // Restore icon (two overlapping squares)
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+            <path d="M2 0v2H0v8h8V8h2V0H2zm6 9H1V3h7v6zM9 7H8V2H3V1h6v6z" fill="currentColor" />
+          </svg>
+        ) : (
+          // Maximize icon (single square outline)
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+            <path d="M0 0v10h10V0H0zm9 9H1V1h8v8z" fill="currentColor" />
+          </svg>
+        )}
+      </button>
+      <button
+        className="window-controls-btn window-controls-close"
+        aria-label="Close"
+        // Why: IPC to main so the BrowserWindow 'close' event fires, which
+        // sends 'window:close-requested' back to the renderer and keeps the
+        // terminal-running confirmation guard active. window.close() is
+        // unreliable in sandboxed renderers.
+        onClick={() => window.api.ui.requestClose()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+          <path d="M1 0L0 1l4 4-4 4 1 1 4-4 4 4 1-1-4-4 4-4-1-1-4 4-4-4z" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 const Landing = lazy(() => import('./components/Landing'))
 const TaskPage = lazy(() => import('./components/TaskPage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
@@ -57,7 +119,7 @@ const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'
 const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
-const SidekickOverlay = lazy(() => import('./components/sidekick/SidekickOverlay'))
+const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
 // Why: lazy so onboarding's step modules + assets aren't fetched for users
 // past first-launch. The gate `shouldShowOnboarding` lives in its own tiny
 // module so no eager import path pulls OnboardingFlow into the main chunk.
@@ -129,15 +191,8 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
-  // Why: render-level gate for the experimental agent dashboard retention
-  // sync. Reading the flag here (rather than only inside useDashboardData /
-  // useRetainedAgentsSync) lets us skip mounting RetainedAgentsSyncGate
-  // entirely for non-toggled users, which drops all feature-tied
-  // subscriptions (agentStatusByPaneKey, agentStatusEpoch, etc.) instead of
-  // keeping them alive behind an early-return inside the hook bodies.
-  const agentDashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
-  const sidekickEnabled = useAppStore((s) => s.settings?.experimentalSidekick === true)
-  const sidekickVisible = useAppStore((s) => s.sidekickVisible)
+  const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
+  const petVisible = useAppStore((s) => s.petVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
@@ -150,26 +205,11 @@ function App(): React.JSX.Element {
   // Why: retention must run at App level so the inline per-card agents list
   // always sees retained entries. If retention ran inside the sidebar-card
   // subtree, "done" agents would vanish any time the user collapsed a card's
-  // inline agents section.
-  //
-  // The retention hooks are hosted inside <RetainedAgentsSyncGate /> (a leaf
-  // component that renders null) rather than being called inline here.
-  // Calling useDashboardData() from App.tsx would subscribe the root component
-  // to high-churn slices (agentStatusByPaneKey + agentStatusEpoch tick at PTY
-  // event frequency), re-rendering the entire app tree on every agent status
-  // update. Hosting the subscriptions in a leaf isolates that churn.
-  //
-  // The render-level gate on <RetainedAgentsSyncGate /> (see
-  // agentDashboardEnabled above) keeps the experimental feature fully dark
-  // for non-toggled users: without the gate mounted, none of its feature-tied
-  // zustand selectors (agentStatusByPaneKey / agentStatusEpoch / etc.) are
-  // ever subscribed, so PTY agent-status events cause zero work for them.
-  //
-  // The inner hook guards (useDashboardData early-returns [] from its memo;
-  // useRetainedAgentsSync early-returns from its effect) remain as
-  // defense-in-depth: they keep both hooks safe to call from any future
-  // callsite, and they handle the in-session off→on toggle transition
-  // cleanly without relying on a remount race when the setting flips.
+  // inline agents section. The retention hooks are hosted inside
+  // <RetainedAgentsSyncGate /> (a leaf component that renders null) rather
+  // than being called inline here so its high-churn store subscriptions
+  // (agentStatusByPaneKey + agentStatusEpoch tick at PTY event frequency)
+  // do not re-render the App tree on every agent status update.
   // Why: git conflict-operation state also drives the worktree cards. Polling
   // cannot live under RightSidebar because App unmounts that subtree when the
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
@@ -325,25 +365,7 @@ function App(): React.JSX.Element {
       } catch (error) {
         console.error('Failed to hydrate workspace session:', error)
         if (!cancelled) {
-          actions.hydratePersistedUI({
-            lastActiveRepoId: null,
-            lastActiveWorktreeId: null,
-            sidebarWidth: 280,
-            rightSidebarWidth: 350,
-            groupBy: 'none',
-            sortBy: 'recent',
-            showActiveOnly: false,
-            hideDefaultBranchWorkspace: false,
-            filterRepoIds: [],
-            collapsedGroups: [],
-            uiZoomLevel: 0,
-            editorFontZoomLevel: 0,
-            worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
-            statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
-            statusBarVisible: true,
-            dismissedUpdateVersion: null,
-            lastUpdateCheckAt: null
-          })
+          actions.hydratePersistedUI(getDefaultUIState())
           actions.hydrateWorkspaceSession({
             activeRepoId: null,
             activeWorktreeId: null,
@@ -600,7 +622,6 @@ function App(): React.JSX.Element {
         if (activeView !== 'terminal' && activeView !== 'tasks') {
           return
         }
-        dispatchClearModifierHints()
         e.preventDefault()
         const store = useAppStore.getState()
         if (e.code === 'ArrowLeft') {
@@ -617,7 +638,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+B — toggle left sidebar
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.toggleSidebar()
         return
@@ -637,7 +657,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+L — toggle right sidebar
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.toggleRightSidebar()
         return
@@ -645,7 +664,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('explorer')
         actions.setRightSidebarOpen(true)
@@ -654,7 +672,6 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('search')
         actions.setRightSidebarOpen(true)
@@ -670,7 +687,6 @@ function App(): React.JSX.Element {
         if (document.querySelector('[data-terminal-search-root]')) {
           return
         }
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
@@ -681,7 +697,6 @@ function App(): React.JSX.Element {
       // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
       // intercepting it would break an essential developer tool.
       if (isMac && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
-        dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)
@@ -749,7 +764,33 @@ function App(): React.JSX.Element {
     // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
     <div ref={titlebarLeftControlsRef} className="flex h-full w-full shrink-0 items-center">
       <div className="flex h-full items-center">
-        <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
+        {isMac && !isFullScreen ? (
+          <div className="titlebar-traffic-light-pad" />
+        ) : isWindows ? (
+          /* Why: on Windows the native title bar is hidden, so we render the
+             Orca logo as a non-interactive identity anchor and a ··· button
+             that pops up the application menu (the same menu revealed by Alt
+             on the default autoHideMenuBar). */
+          <>
+            <img src={logo} alt="" aria-hidden className="titlebar-logo" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="titlebar-icon-button"
+                  aria-label="Application menu"
+                  onClick={() => window.api.ui.popupMenu()}
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Application menu
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : (
+          <div className="pl-2" />
+        )}
         {showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -937,16 +978,10 @@ function App(): React.JSX.Element {
       }
     >
       <TooltipProvider delayDuration={400}>
-        {/* Why: leaf-mounted retention sync, gated at the render level by
-            agentDashboardEnabled. Hosting useDashboardData() +
+        {/* Why: leaf-mounted retention sync — hosting useDashboardData() +
             useRetainedAgentsSync() inside a null-rendering leaf keeps their
-            high-churn store subscriptions from re-rendering the App tree;
-            the outer conditional drops those subscriptions entirely for
-            users who have not toggled the experimental agent dashboard on,
-            so PTY agent-status events do no feature-tied work for them.
-            The hooks' internal early-returns remain as defense-in-depth
-            (see the comment above useIpcEvents()). */}
-        {agentDashboardEnabled ? <RetainedAgentsSyncGate /> : null}
+            high-churn store subscriptions from re-rendering the App tree. */}
+        <RetainedAgentsSyncGate />
         <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
           {/* Why: the non-workspace titlebar lives inside this left+center
               wrapper so it does not span over the right-sidebar column —
@@ -991,6 +1026,9 @@ function App(): React.JSX.Element {
                     an identical close button — hide this copy so only one is
                     visible at a time. */}
                 {!rightSidebarOpen && rightSidebarToggle}
+                {/* Why: reserve space so content is not obscured by the
+                    fixed-position window-controls overlay on Windows. */}
+                {isWindows && <div className="window-controls-titlebar-spacer" />}
               </div>
             ) : null}
             <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
@@ -1093,13 +1131,13 @@ function App(): React.JSX.Element {
         {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
         {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
       </Suspense>
-      {/* Why: mount SidekickOverlay only when the experimental flag is on AND
-          the user hasn't hit "Hide sidekick" in the status-bar menu. Both
-          conditions must be true — see design doc (sidekick-overlay.md) on why
+      {/* Why: mount PetOverlay only when the experimental flag is on AND
+          the user hasn't hit "Hide pet" in the status-bar menu. Both
+          conditions must be true — see design doc (pet-overlay.md) on why
           the two toggles are kept independent. */}
-      {sidekickEnabled && sidekickVisible ? (
+      {petEnabled && petVisible ? (
         <Suspense fallback={null}>
-          <SidekickOverlay />
+          <PetOverlay />
         </Suspense>
       ) : null}
       <UpdateCard />
@@ -1120,6 +1158,11 @@ function App(): React.JSX.Element {
         </Suspense>
       ) : null}
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+      {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
+          in DOM order. Electron's hit-test for drag regions is DOM-order-based and
+          ignores z-index — placing WindowControls earlier caused the drag region to
+          win, making the buttons unclickable. */}
+      {isWindows && <WindowControls />}
     </div>
   )
 }

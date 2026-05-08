@@ -77,6 +77,9 @@ export function DiffSectionItem({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const updateDiffComment = useAppStore((s) => s.updateDiffComment)
+  const editingDiffCommentId = useAppStore((s) => s.editingDiffCommentId)
+  const setEditingDiffCommentId = useAppStore((s) => s.setEditingDiffCommentId)
   // Why: subscribe to the raw comments array on the worktree (reference-
   // stable across unrelated store updates) and filter by filePath inside a
   // memo. Selecting a fresh `.filter(...)` result would invalidate on every
@@ -125,13 +128,26 @@ export function DiffSectionItem({
 
   useEffect(() => () => disposeDiffModels(), [disposeDiffModels])
 
+  // Why: only forward the pending edit id when it matches a comment in this
+  // section so unrelated sections don't keep re-rendering their decorator
+  // every time the sidebar requests an edit elsewhere.
+  const pendingEditForThisSection = useMemo(() => {
+    if (!editingDiffCommentId) {
+      return null
+    }
+    return diffComments.some((c) => c.id === editingDiffCommentId) ? editingDiffCommentId : null
+  }, [editingDiffCommentId, diffComments])
+
   useDiffCommentDecorator({
     editor: modifiedEditor,
     filePath: section.path,
     worktreeId,
     comments: diffComments,
     onAddCommentClick: ({ lineNumber, top }) => setPopover({ lineNumber, top }),
-    onDeleteComment: (id) => void deleteDiffComment(worktreeId, id)
+    onDeleteComment: (id) => void deleteDiffComment(worktreeId, id),
+    onUpdateComment: (id, body) => updateDiffComment(worktreeId, id, body),
+    pendingEditCommentId: pendingEditForThisSection,
+    onPendingEditConsumed: () => setEditingDiffCommentId(null)
   })
 
   useEffect(() => {

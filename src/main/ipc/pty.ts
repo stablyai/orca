@@ -17,6 +17,7 @@ import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
+import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
 import {
@@ -28,6 +29,7 @@ import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 import { track } from '../telemetry/client'
 import { classifyError } from '../telemetry/classify-error'
+import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import {
   agentKindSchema,
   launchSourceSchema,
@@ -183,16 +185,13 @@ export function buildPtyHostEnv(
     baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
   const preexistingPiAgentDir = baseEnv.PI_CODING_AGENT_DIR ?? process.env.PI_CODING_AGENT_DIR
 
-  const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
-  if (preexistingOpenCodeConfigDir) {
-    // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
-    // user-provided directory would silently hide their custom OpenCode
-    // config, so preserve it. The Orca status plugin will not load, so the
-    // dashboard falls back to a blank status for that pane until the user
-    // unsets their override.
-    delete openCodeHookEnv.OPENCODE_CONFIG_DIR
-  }
-  Object.assign(baseEnv, openCodeHookEnv)
+  // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
+  // value cannot coexist with an Orca-only injection. Hand the user's value
+  // (when present) to the hook service and let it materialize a per-PTY
+  // mirror overlay that lets the user's plugins and Orca's status plugin
+  // load together — same pattern Pi uses below for PI_CODING_AGENT_DIR. See
+  // docs/opencode-config-dir-collision.md.
+  Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
 
   // Why: Claude/Codex native hooks run inside the shell process, so Orca
   // must inject the loopback receiver coordinates before the agent starts.
@@ -916,6 +915,19 @@ export function registerPtyHandlers(
       try {
         result = await provider.spawn(spawnOptions)
       } catch (err) {
+        const rawMessage = err instanceof Error ? err.message : String(err)
+        const hintedMessage = addNodePtyRecoveryHint(rawMessage)
+        let spawnError: Error
+        if (hintedMessage === rawMessage && err instanceof Error) {
+          spawnError = err
+        } else if (err instanceof Error) {
+          // Why: rewrite the message in place so the original stack trace,
+          // name, and any custom fields survive into telemetry and logs.
+          err.message = hintedMessage
+          spawnError = err
+        } else {
+          spawnError = new Error(hintedMessage)
+        }
         if (effectiveSessionId !== undefined) {
           ptySizes.delete(effectiveSessionId)
         }
@@ -942,13 +954,14 @@ export function registerPtyHandlers(
             ? ('claude-code' as const)
             : null
         if (errorAgentKind) {
-          const classified = classifyError(err)
+          const classified = classifyError(spawnError)
           track('agent_error', {
             agent_kind: errorAgentKind,
-            error_class: classified.error_class
+            error_class: classified.error_class,
+            ...getCohortAtEmit()
           })
         }
-        throw err
+        throw spawnError
       }
       ptyOwnership.set(result.id, args.connectionId ?? null)
       if (preAllocatedHandle) {
@@ -1101,7 +1114,8 @@ export function registerPtyHandlers(
           track('agent_started', {
             agent_kind: agentKindParse.data,
             launch_source: launchSourceParse.data,
-            request_kind: requestKindParse.data
+            request_kind: requestKindParse.data,
+            ...getCohortAtEmit()
           })
         }
       }
@@ -1148,6 +1162,23 @@ export function registerPtyHandlers(
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
     getProviderForPty(args.id).resize(args.id, args.cols, args.rows)
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
+  })
+
+  // Why: pty:reportGeometry is a measurement-only sibling of pty:resize.
+  // pty:resize means "I want the PTY at this size" (a write/intent — gated
+  // by mobile-driver and cascade suppress). pty:reportGeometry means "the
+  // desktop pane I'm rendering currently measures this many cells" (a
+  // read/observation). Mobile-fit hold needs the latter even while the
+  // former is intentionally blocked: when a previously-hidden desktop
+  // tab becomes visible while a phone is driving, the server has no way
+  // to learn the real desktop dims, and resolveDesktopRestoreTarget
+  // returns the stale spawn default (e.g. 80×24) on Take Back. Splitting
+  // the channels keeps each guard simple — pty:resize keeps its mobile-
+  // driver gate; pty:reportGeometry never resizes the PTY, only refreshes
+  // the restore-target cache. See docs/mobile-fit-hold.md.
+  ipcMain.removeAllListeners('pty:reportGeometry')
+  ipcMain.on('pty:reportGeometry', (_event, args: { id: string; cols: number; rows: number }) => {
+    runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
   })
 
   // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold restore

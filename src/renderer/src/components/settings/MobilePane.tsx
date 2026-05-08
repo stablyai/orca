@@ -1,10 +1,30 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Copy, Maximize2, RefreshCw, Trash2, Wifi } from 'lucide-react'
+import { Check, Copy, Maximize2, RefreshCw, Smartphone, Trash2, Wifi } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import type { SettingsSearchEntry } from './settings-search'
+import { useAppStore } from '../../store'
+
+// Why: the section heading "When you leave the mobile app" carries the
+// "what happens" framing so the option labels only need to vary on the
+// duration knob. Indefinite hold (`null`) is the default. Server clamps
+// anything outside [5_000ms, 60min]. See docs/mobile-fit-hold.md.
+const AUTO_RESTORE_FIT_OPTIONS: { value: string; label: string; ms: number | null }[] = [
+  { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
+  { value: '60s', label: 'After 1 minute', ms: 60_000 },
+  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
+  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
+]
+
+function autoRestoreValueFromMs(ms: number | null | undefined): string {
+  if (ms == null) {
+    return 'indefinite'
+  }
+  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+  return exact ? exact.value : 'indefinite'
+}
 
 export const MOBILE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -21,6 +41,24 @@ export const MOBILE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Network Interface',
     description: 'Choose which network address to use for mobile pairing.',
     keywords: ['network', 'interface', 'tailscale', 'vpn', 'overlay', 'ip', 'address', 'wifi']
+  },
+  {
+    title: 'When you leave the mobile app',
+    description:
+      'Choose what happens to terminals you were viewing on mobile after you close the app or switch away.',
+    keywords: [
+      'mobile',
+      'terminal',
+      'restore',
+      'phone',
+      'fit',
+      'width',
+      'resize',
+      'hold',
+      'leave',
+      'background',
+      'close'
+    ]
   }
 ]
 
@@ -37,6 +75,8 @@ type NetworkInterface = {
 }
 
 export function MobilePane(): React.JSX.Element {
+  const autoRestoreFitMs = useAppStore((s) => s.settings?.mobileAutoRestoreFitMs ?? null)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [endpoint, setEndpoint] = useState<string | null>(null)
@@ -259,6 +299,41 @@ export function MobilePane(): React.JSX.Element {
             Revoking a device disconnects it immediately.
           </p>
         )}
+      </div>
+
+      {/* Mobile behavior — terminal sizing when leaving the app */}
+      <div className="rounded-lg border border-border/60 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Smartphone className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium">When you leave the mobile app</span>
+        </div>
+        <p className="text-muted-foreground mb-3 text-xs">
+          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your phone
+          screen. When you close the app or switch away, this controls whether it stays at
+          phone size (so interactive CLI tools don&apos;t reflow) or resizes back to your
+          desktop. You can always click Restore on the terminal banner to resize it manually.
+        </p>
+        <Select
+          value={autoRestoreValueFromMs(autoRestoreFitMs)}
+          onValueChange={(v) => {
+            const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === v)
+            if (!opt) {
+              return
+            }
+            void updateSettings({ mobileAutoRestoreFitMs: opt.ms })
+          }}
+        >
+          <SelectTrigger size="sm" className="min-w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {AUTO_RESTORE_FIT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Enlarged QR dialog */}

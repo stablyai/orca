@@ -216,7 +216,7 @@ function TitleCell({
     <button
       type="button"
       onClick={onOpenDialog}
-      className="min-w-0 cursor-pointer text-left hover:underline"
+      className="block w-full min-w-0 cursor-pointer text-left hover:underline"
     >
       {content}
     </button>

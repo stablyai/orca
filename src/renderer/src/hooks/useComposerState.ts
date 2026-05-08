@@ -1179,20 +1179,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
-      const details = [
-        `[${issue.identifier}] ${issue.title}`,
-        `Status: ${issue.state.name} · Team: ${issue.team.name}`,
-        issue.assignee ? `Assignee: ${issue.assignee.displayName}` : null,
-        issue.labels.length > 0 ? `Labels: ${issue.labels.join(', ')}` : null,
-        `URL: ${issue.url}`,
-        issue.description ? `\n${issue.description}` : null
-      ]
-        .filter(Boolean)
-        .join('\n')
-      if (!noteRef.current.trim() || noteRef.current === lastAutoNoteRef.current) {
-        setNote(details)
-        lastAutoNoteRef.current = details
-      }
+      // Why: match the GitHub issue/PR flow — paste only the URL as a draft
+      // into the agent's input (no auto-submit). The launch path already
+      // drafts `linkedWorkItem.url` when the note is empty; auto-filling the
+      // note here would flip Linear into the `isLinearTypedOnly` branch and
+      // auto-submit the full details block.
     },
     [name]
   )

@@ -165,12 +165,14 @@ describe('registerPtyHandlers', () => {
     getPathMock.mockReturnValue('/tmp/orca-user-data')
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
-    openCodeBuildPtyEnvMock.mockReturnValue({
+    openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
       ORCA_OPENCODE_HOOK_PORT: '4567',
       ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
       ORCA_OPENCODE_PTY_ID: 'test-pty',
-      OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config'
-    })
+      OPENCODE_CONFIG_DIR: existingConfigDir
+        ? '/tmp/orca-opencode-overlay'
+        : '/tmp/orca-opencode-config'
+    }))
     buildAgentHookEnvMock.mockReturnValue({
       ORCA_AGENT_HOOK_PORT: '5678',
       ORCA_AGENT_HOOK_TOKEN: 'agent-token'
@@ -513,9 +515,15 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
       })
 
-      it('preserves a user-provided OPENCODE_CONFIG_DIR on the daemon path', async () => {
+      it('mirrors a user-provided OPENCODE_CONFIG_DIR into a per-PTY overlay on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({ OPENCODE_CONFIG_DIR: '/user/custom/opencode' })
-        expect(env.OPENCODE_CONFIG_DIR).toBe('/user/custom/opencode')
+        // Why: OpenCode loads config from a single dir, so the user's path is
+        // mirrored into a per-PTY overlay rather than passed through literally.
+        expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/user/custom/opencode'
+        )
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
       })
 
       it('injects Pi overlay env (PI_CODING_AGENT_DIR) on the daemon path', async () => {

@@ -34,7 +34,6 @@ import {
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
-import { useModifierHint } from '@/hooks/useModifierHint'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
@@ -74,7 +73,6 @@ type VirtualizedWorktreeViewportProps = {
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
-  hintByWorktreeId: Map<string, number> | null
   activeModal: string
   pendingRevealWorktreeId: string | null
   clearPendingRevealWorktreeId: () => void
@@ -97,7 +95,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   toggleGroup,
   collapsedGroups,
   handleCreateForRepo,
-  hintByWorktreeId,
   activeModal,
   pendingRevealWorktreeId,
   clearPendingRevealWorktreeId,
@@ -363,9 +360,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-orientation="vertical"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
-      className="worktree-sidebar-scrollbar flex-1 overflow-auto pl-1 pr-px scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
-      // Why: reserve scrollbar space so non-overlay scrollbars do not nudge worktree cards.
-      style={{ scrollbarGutter: 'stable' }}
+      className="worktree-sidebar-scrollbar flex-1 overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
     >
       <div
         role="presentation"
@@ -484,7 +479,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 repo={row.repo}
                 isActive={activeWorktreeId === row.worktree.id}
                 hideRepoBadge={groupBy === 'repo'}
-                hintNumber={hintByWorktreeId?.get(row.worktree.id)}
               />
             </div>
           )
@@ -635,15 +629,8 @@ const WorktreeList = React.memo(function WorktreeList() {
     // Combined: O(E) index + O(N×T) scoring + O(N log N) sort, instead of
     // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
     // other modes ignore it.
-    // Why: smart-sort only weighs live agent status when the experimental
-    // agent-activity feature is opted in — that's what populates
-    // agentStatusByPaneKey via hooks. With the setting off, pass undefined
-    // so the comparator falls back to the persisted-sortOrder + title
-    // heuristics instead of scoring against an empty map.
-    const agentStatusForSort =
-      state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
     const explicitByTabId =
-      sortBy === 'smart' ? buildExplicitEntriesByTabId(agentStatusForSort) : undefined
+      sortBy === 'smart' ? buildExplicitEntriesByTabId(state.agentStatusByPaneKey) : undefined
     const precomputedScores =
       sortBy === 'smart'
         ? new Map<string, number>(
@@ -655,7 +642,7 @@ const WorktreeList = React.memo(function WorktreeList() {
                 repoMap,
                 state.prCache,
                 now,
-                agentStatusForSort,
+                state.agentStatusByPaneKey,
                 explicitByTabId
               )
             ])
@@ -669,7 +656,7 @@ const WorktreeList = React.memo(function WorktreeList() {
         state.prCache,
         now,
         null,
-        agentStatusForSort,
+        state.agentStatusByPaneKey,
         precomputedScores,
         explicitByTabId
       )
@@ -719,14 +706,6 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   const worktrees = visibleWorktrees
 
-  // Cmd+1–9 hint overlay: map worktree ID → hint number (1–9) for the first
-  // 9 visible worktrees. Only populated while the user holds the modifier key.
-  // Why suppress during modals: shortcuts like Cmd+J can open overlays via IPC
-  // before the renderer observes the second key in the combo, which leaves the
-  // bare-modifier timer armed. Hint badges are only useful while the sidebar is
-  // the active navigation surface, so any modal should clear and disable them.
-  const { showHints } = useModifierHint(activeModal === 'none')
-
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
 
@@ -755,8 +734,8 @@ const WorktreeList = React.memo(function WorktreeList() {
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
   // 'pr-status') can reorder cards into grouped sections. Using the flat
-  // order would cause badge numbers and Cmd+1–9 shortcuts to not match
-  // the visual card positions when grouping is active.
+  // order would cause Cmd+1–9 shortcuts to not match the visual card
+  // positions when grouping is active.
   const renderedWorktrees = useMemo(
     () =>
       rows
@@ -775,18 +754,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   useLayoutEffect(() => {
     setVisibleWorktreeIds(renderedWorktrees.map((w) => w.id))
   }, [renderedWorktrees])
-
-  const hintByWorktreeId = useMemo(() => {
-    if (!showHints) {
-      return null
-    }
-    const map = new Map<string, number>()
-    const limit = Math.min(renderedWorktrees.length, 9)
-    for (let i = 0; i < limit; i++) {
-      map.set(renderedWorktrees[i].id, i + 1)
-    }
-    return map
-  }, [showHints, renderedWorktrees])
 
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
@@ -824,7 +791,7 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   if (worktrees.length === 0) {
     return (
-      <div className="flex flex-col">
+      <div className="worktree-sidebar-scrollbar flex flex-1 flex-col overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek pt-px">
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
           <span>No worktrees found</span>
           {hasFilters && (
@@ -850,7 +817,6 @@ const WorktreeList = React.memo(function WorktreeList() {
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}
       handleCreateForRepo={handleCreateForRepo}
-      hintByWorktreeId={hintByWorktreeId}
       activeModal={activeModal}
       pendingRevealWorktreeId={pendingRevealWorktreeId}
       clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}

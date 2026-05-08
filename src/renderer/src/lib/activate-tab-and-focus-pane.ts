@@ -11,7 +11,7 @@ export function activateTabAndFocusPane(tabId: string, paneId: number | null): v
   requestAnimationFrame(() => {
     window.dispatchEvent(
       new CustomEvent<FocusTerminalPaneDetail>(FOCUS_TERMINAL_PANE_EVENT, {
-        detail: { tabId, paneId },
+        detail: { tabId, paneId }
       })
     )
   })

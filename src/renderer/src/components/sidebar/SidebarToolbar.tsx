@@ -103,6 +103,7 @@ function FeedbackDialog({
       // and prod.
       const result = await window.api.feedback.submit({
         feedback: trimmed,
+        submitAnonymously,
         githubLogin: identity.githubLogin,
         githubEmail: identity.githubEmail
       })
@@ -216,7 +217,6 @@ function FeedbackDialog({
             </div>
           )}
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel

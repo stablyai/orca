@@ -36,8 +36,6 @@ type WorktreeCardProps = {
   repo: Repo | undefined
   isActive: boolean
   hideRepoBadge?: boolean
-  /** 1-9 hint badge shown when the user holds the platform modifier key. */
-  hintNumber?: number
 }
 
 function formatSparseDirectoryPreview(directories: string[]): string {
@@ -49,17 +47,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
-  hideRepoBadge,
-  hintNumber
+  hideRepoBadge
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
-  const dashboardExperimentEnabled = useAppStore(
-    (s) => s.settings?.experimentalAgentDashboard === true
-  )
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -369,22 +363,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
         </div>
       )}
 
-      {/* Cmd+N hint badge — decorative only, shown when the user holds the
-            platform modifier key for discoverability of Cmd+1–9 shortcuts.
-            Why centered on the left edge: placing it at the top clipped the
-            glyph against the card bounds on some sizes, while mid-card keeps
-            the badge fully visible without competing with the title row. */}
-      {hintNumber != null && (
-        <div
-          aria-hidden="true"
-          className="absolute -left-1 top-1/2 z-20 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded bg-zinc-500/85 text-white shadow-sm animate-in fade-in zoom-in-75 duration-150"
-        >
-          <span className="relative block pt-px text-[9px] leading-none font-medium [font-variant-numeric:tabular-nums]">
-            {hintNumber}
-          </span>
-        </div>
-      )}
-
       {/* Status indicator on the left */}
       {(cardProps.includes('status') || cardProps.includes('unread')) && (
         <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
@@ -590,15 +568,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
         )}
 
-        {/* Why: inline agent list. Gated on the experimental setting so
-             managed hook data is only surfaced where the cockpit is enabled,
-             and on the 'inline-agents' card property so users can hide it.
-             Layout coupling: this block grows the card height dynamically —
-             WorktreeList uses measureElement on each row, so the virtualizer
-             re-measures naturally when agents appear/disappear. */}
-        {dashboardExperimentEnabled && cardProps.includes('inline-agents') && (
-          <WorktreeCardAgents worktreeId={worktree.id} />
-        )}
+        {/* Why: inline agent list. Gated on the 'inline-agents' card
+             property so users can hide it. Layout coupling: this block
+             grows the card height dynamically — WorktreeList uses
+             measureElement on each row, so the virtualizer re-measures
+             naturally when agents appear/disappear. */}
+        {cardProps.includes('inline-agents') && <WorktreeCardAgents worktreeId={worktree.id} />}
       </div>
     </div>
   )

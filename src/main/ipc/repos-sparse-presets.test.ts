@@ -44,7 +44,7 @@ vi.mock('../git/repo', () => ({
 }))
 
 vi.mock('./filesystem-auth', () => ({
-  rebuildAuthorizedRootsCache: vi.fn().mockResolvedValue(undefined)
+  invalidateAuthorizedRootsCache: vi.fn()
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({

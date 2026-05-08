@@ -49,19 +49,39 @@ export async function getStatusOp(
   git: GitExec,
   validatePath: (p: string) => void,
   params: Record<string, unknown>
-): Promise<{ entries: Record<string, unknown>[]; conflictOperation: string }> {
+): Promise<{
+  entries: Record<string, unknown>[]
+  conflictOperation: string
+  head?: string
+  branch?: string
+}> {
   const worktreePath = params.worktreePath as string
   validatePath(worktreePath)
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
+  let head: string | undefined
+  let branch: string | undefined
 
   try {
+    // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8 in
+    // git's stdout instead of C-style octal escapes; without it the parsed
+    // entry.path renders as gibberish in the source-control sidebar and
+    // downstream blob lookups miss.
     const { stdout } = await git(
-      ['status', '--porcelain=v2', '--untracked-files=all'],
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all'
+      ],
       worktreePath
     )
     const parsed = parseStatusOutput(stdout)
     entries.push(...parsed.entries)
+    head = parsed.head
+    branch = parsed.branch
 
     for (const uLine of parsed.unmergedLines) {
       const entry = parseUnmergedEntry(worktreePath, uLine)
@@ -73,5 +93,5 @@ export async function getStatusOp(
     // not a git repo or git not available
   }
 
-  return { entries, conflictOperation }
+  return { entries, conflictOperation, head, branch }
 }

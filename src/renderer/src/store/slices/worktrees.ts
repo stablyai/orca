@@ -114,24 +114,24 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // (design §2c), which means the user would still need a second restart
     // post-upgrade to reclaim memory.
     //
-    // Safety gate: fetchWorktrees swallows IPC errors (catch at :93-95)
-    // and short-circuits on empty-replace when cached data exists
-    // (empty-guard at :82-84). Neither signal bubbles up to the caller, so
-    // we can't distinguish "threw" from "returned []" from "returned ≥1"
-    // by inspecting post-state alone. If we declared the union of
-    // worktreesByRepo authoritative without confirming every repo
-    // succeeded, a single transient git error at launch would wipe every
-    // tabsByWorktree entry for the affected repo — the exact data-loss
-    // class the empty-guard exists to prevent. Probe the IPC directly to
-    // get the precise per-repo result, and defer the purge until every
-    // repo returns success AND at least one has >0 worktrees. In steady
-    // state this fires on the first fully-successful launch; in the
-    // degraded state it simply waits.
+    // Safety gate: fetchWorktrees swallows IPC errors and short-circuits on
+    // empty-replace when cached data exists. Neither signal bubbles up to the
+    // caller, so we probe the IPC directly to get the per-repo success signal,
+    // then apply that same payload to state instead of listing each repo again.
     const results = await Promise.all(
       repos.map(async (r) => {
         try {
           const list = await window.api.worktrees.list({ repoId: r.id })
-          await get().fetchWorktrees(r.id)
+          const current = get().worktreesByRepo[r.id]
+          if (
+            !areWorktreesEqual(current, list) &&
+            !(list.length === 0 && current && current.length > 0)
+          ) {
+            set((s) => ({
+              worktreesByRepo: { ...s.worktreesByRepo, [r.id]: list },
+              sortEpoch: s.sortEpoch + 1
+            }))
+          }
           return { repoId: r.id, ok: list.length > 0 }
         } catch (err) {
           console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
@@ -160,6 +160,39 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       get().purgeWorktreeTerminalState(stale)
     }
     set({ hasHydratedWorktreePurge: true })
+  },
+
+  updateWorktreeGitIdentity: (worktreeId, identity) => {
+    set((s) => {
+      const repoId = getRepoIdFromWorktreeId(worktreeId)
+      const current = s.worktreesByRepo[repoId]
+      if (!current) {
+        return {}
+      }
+
+      let changed = false
+      const next = current.map((worktree) => {
+        if (worktree.id !== worktreeId) {
+          return worktree
+        }
+        const nextHead = identity.head ?? worktree.head
+        const nextBranch = identity.branch ?? worktree.branch
+        if (nextHead === worktree.head && nextBranch === worktree.branch) {
+          return worktree
+        }
+        changed = true
+        return { ...worktree, head: nextHead, branch: nextBranch }
+      })
+
+      if (!changed) {
+        return {}
+      }
+
+      return {
+        worktreesByRepo: { ...s.worktreesByRepo, [repoId]: next },
+        sortEpoch: s.sortEpoch + 1
+      }
+    })
   },
 
   createWorktree: async (

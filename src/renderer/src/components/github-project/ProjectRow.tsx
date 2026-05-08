@@ -3,6 +3,8 @@ import { ExternalLink, Play } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import ColumnResizeHandle from './ColumnResizeHandle'
+import { resolveWidth } from './column-widths'
 import ProjectCell from './ProjectCell'
 import type {
   GitHubIssueType,
@@ -14,6 +16,9 @@ import type {
 type Props = {
   row: GitHubProjectRowType
   fields: GitHubProjectField[]
+  gridTemplate: string
+  widths: Readonly<Record<string, number>>
+  onResizeColumn: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
   editable: boolean
   onOpenDialog?: () => void
   onEditField?: (fieldId: string, value: GitHubProjectFieldMutationValue | null) => void
@@ -27,6 +32,9 @@ type Props = {
 export default function ProjectRow({
   row,
   fields,
+  gridTemplate,
+  widths,
+  onResizeColumn,
   editable,
   onOpenDialog,
   onEditField,
@@ -50,21 +58,36 @@ export default function ProjectRow({
         'group grid items-center gap-3 border-b border-border/30 px-3 py-2 hover:bg-muted/30',
         disabled && 'opacity-60'
       )}
-      style={{ gridTemplateColumns: buildGridTemplate(fields) }}
+      style={{ gridTemplateColumns: gridTemplate }}
     >
-      {fields.map((f) => (
-        <ProjectCell
-          key={f.id}
-          row={row}
-          field={f}
-          editable={editable}
-          onEditField={onEditField}
-          onEditAssignees={onEditAssignees}
-          onEditLabels={onEditLabels}
-          onEditIssueType={onEditIssueType}
-          onOpenDialog={f.dataType === 'TITLE' ? onOpenDialog : undefined}
-        />
-      ))}
+      {fields.map((f, idx) => {
+        const next = fields[idx + 1]
+        return (
+          <div key={f.id} className="relative flex min-w-0 items-center overflow-hidden">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <ProjectCell
+                row={row}
+                field={f}
+                editable={editable}
+                onEditField={onEditField}
+                onEditAssignees={onEditAssignees}
+                onEditLabels={onEditLabels}
+                onEditIssueType={onEditIssueType}
+                onOpenDialog={f.dataType === 'TITLE' ? onOpenDialog : undefined}
+              />
+            </div>
+            {next ? (
+              <ColumnResizeHandle
+                fieldId={f.id}
+                nextFieldId={next.id}
+                currentWidth={resolveWidth(f, widths)}
+                nextWidth={resolveWidth(next, widths)}
+                onResize={onResizeColumn}
+              />
+            ) : null}
+          </div>
+        )
+      })}
       <div className="flex items-center justify-end gap-1 opacity-0 transition group-hover:opacity-100">
         {row.content.url ? (
           <Tooltip>
@@ -115,14 +138,4 @@ export default function ProjectRow({
     )
   }
   return rowInner
-}
-
-export function buildGridTemplate(fields: GitHubProjectField[]): string {
-  // Why: TITLE gets the most space; other columns share equally. The extra
-  // trailing column is for row-hover action icons.
-  const cols: string[] = fields.map((f) =>
-    f.dataType === 'TITLE' ? 'minmax(0,3fr)' : 'minmax(80px,1fr)'
-  )
-  cols.push('80px')
-  return cols.join(' ')
 }

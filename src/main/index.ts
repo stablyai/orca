@@ -12,11 +12,11 @@ import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
-import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
+import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
@@ -278,18 +278,12 @@ function openMainWindow(): BrowserWindow {
     if (mainWindow?.isDestroyed()) {
       return
     }
-    // Why: only forward status events to the renderer when the user has
-    // opted into the experimental dashboard. Reading the current setting
-    // here (rather than a module-level snapshot) lets the gate flip live
-    // for the renderer-side surfaces — the hook server itself always runs.
-    if (store?.getSettings().experimentalAgentDashboard === true) {
-      mainWindow?.webContents.send('agentStatus:set', {
-        paneKey,
-        tabId,
-        worktreeId,
-        ...payload
-      })
-    }
+    mainWindow?.webContents.send('agentStatus:set', {
+      paneKey,
+      tabId,
+      worktreeId,
+      ...payload
+    })
     // Why: cursor-agent emits no title-based working/idle signal — its OSC
     // title stays "Cursor Agent" for the whole turn. Synthesize an OSC title
     // update from the hook state and inject it into the pane's data stream so
@@ -297,8 +291,6 @@ function openMainWindow(): BrowserWindow {
     // sidebar spinner, unread badge, and Claude prompt-cache timer for every
     // other agent) lights up for cursor panes too. Braille prefix ⠋ → working
     // keyword path; "action required" keyword → permission; bare label → idle.
-    // This runs regardless of the dashboard setting because cursor has no
-    // pre-dashboard title heuristic to fall back to.
     if (payload.agentType === 'cursor') {
       driveCursorPaneFromHook(paneKey, payload.state)
     }
@@ -408,6 +400,13 @@ app.whenReady().then(async () => {
   // the Store reference, seeds common props, and resets per-session burst
   // caps. Actual transport initialization is still gated by both flags.
   initTelemetry(store)
+  // Why: cohort-classifier reads the repo count synchronously at every emit
+  // for cohort-extended events. The Store has been sync-loaded above, and
+  // this init runs before any IPC handler is registered and before any
+  // window loads — so the classifier is hydrated before any `track()` call,
+  // regardless of whether it originates from the renderer, an IPC handler,
+  // or `trackAppOpenedOnce` / `did-finish-load`.
+  initCohortClassifier(store)
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
@@ -445,29 +444,18 @@ app.whenReady().then(async () => {
   starNag.registerIpcHandlers()
   runtime.setAgentBrowserBridge(new AgentBrowserBridge(browserManager))
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Why: managed hook installation mutates user-global agent config.
-  // Startup must fail open so a malformed local config never bricks Orca.
-  // Claude/Codex/Gemini installs are gated behind the experimentalAgentDashboard
-  // setting because the feature they feed (the inline agent-activity list) is
-  // still in preview. Cursor installs unconditionally because cursor-agent
-  // emits no title-based working/idle signal at all (its terminal title stays
-  // literally "Cursor Agent" across a turn), so the hook channel is the only
-  // way to drive the sidebar spinner + unread path for it — there is no
-  // title-based fallback the way Claude/Codex have. Toggling the setting
-  // takes effect on next launch because the hook scripts are installed once
-  // per boot.
-  const agentDashboardEnabled = store.getSettings().experimentalAgentDashboard === true
-  if (agentDashboardEnabled) {
-    for (const installManagedHooks of [
-      () => claudeHookService.install(),
-      () => codexHookService.install(),
-      () => geminiHookService.install()
-    ]) {
-      try {
-        installManagedHooks()
-      } catch (error) {
-        console.error('[agent-hooks] Failed to install managed hooks:', error)
-      }
+  // Why: managed hook installation mutates user-global agent config. Each
+  // installer runs inside its own try/catch so a malformed local config
+  // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
+  for (const installManagedHooks of [
+    () => claudeHookService.install(),
+    () => codexHookService.install(),
+    () => geminiHookService.install()
+  ]) {
+    try {
+      installManagedHooks()
+    } catch (error) {
+      console.error('[agent-hooks] Failed to install managed hooks:', error)
     }
   }
   try {
@@ -531,11 +519,19 @@ app.whenReady().then(async () => {
   // assign a random available port per instance while still exercising the
   // full WebSocket startup path.
   const isE2E = Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
+  // Why: a developer running `pnpm dev` while the packaged Orca is also open
+  // would otherwise race the packaged app for 6768 and silently fall back to
+  // a random OS-assigned port — breaking deterministic mobile pairing/repro
+  // scripts against the dev instance. Pin the first dev instance to 6769 so
+  // ws://127.0.0.1:6769 is stable; a second dev instance still falls back via
+  // ws-transport's EADDRINUSE handler.
+  const devWsPort = is.dev && !isE2E ? 6769 : undefined
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: app.getPath('userData'),
     enableWebSocket: true,
-    ...(isE2E ? { wsPort: 0 } : {})
+    ...(isE2E ? { wsPort: 0 } : {}),
+    ...(devWsPort !== undefined ? { wsPort: devWsPort } : {})
   })
   registerMobileHandlers(runtimeRpc)
 
@@ -547,16 +543,9 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
   }
-  setAppRuntimeFlags({
-    agentDashboardEnabledAtStartup: agentDashboardEnabled
-  })
-
-  // Why: the hook server runs unconditionally so cursor-agent panes can reach
-  // it. Claude/Codex/Gemini hook scripts stay uninstalled while the
-  // experimentalAgentDashboard setting is off, so only cursor events flow
-  // in by default. PTY spawn env reads ORCA_AGENT_HOOK_* from the live
-  // server state, so the server must start before the window opens —
-  // otherwise restored terminals race ahead without the env on first launch.
+  // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
+  // so the hook server must start before the window opens — otherwise
+  // restored terminals race ahead without the env on first launch.
   try {
     await agentHookServer.start({
       env: app.isPackaged ? 'production' : 'development',

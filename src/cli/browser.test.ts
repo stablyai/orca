@@ -128,6 +128,35 @@ describe('orca cli browser page targeting', () => {
     })
   })
 
+  it('passes focus: true through to browser.tabSwitch when --focus is set', async () => {
+    queueFixtures(callMock, okFixture('req_switch', { switched: 1, browserPageId: 'page-1' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'switch', '--page', 'page-1', '--focus', '--json'],
+      '/tmp/repo/feature/src'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('browser.tabSwitch', {
+      index: undefined,
+      page: 'page-1',
+      focus: true
+    })
+  })
+
+  it('omits focus from the payload when --focus is absent', async () => {
+    queueFixtures(callMock, okFixture('req_switch', { switched: 1, browserPageId: 'page-1' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'switch', '--page', 'page-1', '--json'], '/tmp/repo/feature/src')
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    const call = callMock.mock.calls[0]
+    expect(call[0]).toBe('browser.tabSwitch')
+    expect(call[1]).not.toHaveProperty('focus')
+  })
+
   it('passes explicit profile ids to tab create', async () => {
     queueFixtures(callMock, okFixture('req_create', { browserPageId: 'page-3' }))
     vi.spyOn(console, 'log').mockImplementation(() => {})

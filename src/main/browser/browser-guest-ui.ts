@@ -1,7 +1,8 @@
 import { screen, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl
+  normalizeExternalBrowserUrl,
+  redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
   isWindowShortcutModifierChord,
@@ -31,7 +32,10 @@ export function setupGuestContextMenu(args: {
     if (!renderer) {
       return
     }
-    const pageUrl = guest.getURL()
+    // Why: redact Kagi session tokens before the URL leaves main; the renderer
+    // pipes pageUrl into clipboard writes and shell.openExternal, both of which
+    // would otherwise expose the bearer token outside Orca.
+    const pageUrl = redactKagiSessionToken(guest.getURL())
     // Why: params.linkURL is empty when the user right-clicks non-link
     // content. Normalizing an empty string through normalizeBrowserNavigationUrl
     // produces the blank-page constant (a truthy string), which would trick the

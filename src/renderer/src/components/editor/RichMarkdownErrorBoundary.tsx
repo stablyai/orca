@@ -7,6 +7,7 @@ type Props = {
 
 type State = {
   error: Error | null
+  fileId: string
 }
 
 // Why: a thrown exception inside the TipTap/ProseMirror render or in the
@@ -19,20 +20,22 @@ type State = {
 // switches tabs so a transient failure doesn't permanently disable the
 // rich editor for that pane.
 export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
-  state: State = { error: null }
+  state: State = { error: null, fileId: this.props.fileId }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
+    if (props.fileId !== state.fileId) {
+      return { error: null, fileId: props.fileId }
+    }
+
+    return null
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { error }
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     console.error('[RichMarkdownEditor] render crash contained by boundary', error, info)
-  }
-
-  componentDidUpdate(prevProps: Props): void {
-    if (prevProps.fileId !== this.props.fileId && this.state.error) {
-      this.setState({ error: null })
-    }
   }
 
   handleReset = (): void => {

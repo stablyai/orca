@@ -177,7 +177,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     restoredLeafId: null,
     restoredPtyIdByLeafId: {},
     paneTransportsRef: { current: new Map() },
-    pendingWritesRef: { current: new Map() },
     replayingPanesRef: { current: new Map() },
     isActiveRef: { current: true },
     isVisibleRef: { current: true },
@@ -657,6 +656,115 @@ describe('connectPanePty', () => {
       POST_REPLAY_MODE_RESET,
       expect.any(Function)
     )
+  })
+
+  // Why: when a reattach result carries both snapshot and replay (the daemon
+  // host serves the snapshot, the relay replay buffer covers the same tail),
+  // painting both into xterm doubles the same lines. This is the duplicated-
+  // TUI-output symptom users saw on worktree switch. Snapshot is the freshest
+  // authoritative source and wins by precedence.
+  it('paints only the daemon snapshot when reattach result includes both snapshot and replay', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          snapshot: 'snapshot-payload',
+          replay: 'replay-payload'
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'pane:1',
+      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('snapshot-payload', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('replay-payload', expect.any(Function))
+  })
+
+  it('paints only relay replay when reattach result has replay and coldRestore but no snapshot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          replay: 'replay-payload',
+          coldRestore: { scrollback: 'cold-payload' }
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'pane:1',
+      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('replay-payload', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('cold-payload', expect.any(Function))
+    // Why: the replay branch supersedes cold-restore but must still ack so
+    // the daemon does not redeliver the cold-restore payload on the next
+    // reattach.
+    expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('tab-pty')
+  })
+
+  // Regression for the dim-mismatch bug — guarantees that we never
+  // reintroduce visibility-gated buffering. Bytes go straight to xterm,
+  // which lets the WebGL/DOM-fallback renderer parse them at live cols.
+  // Hidden panes still get writes; the visibility prop only controls
+  // WebGL suspend/resume in use-terminal-pane-global-effects.
+  it('writes PTY bytes straight to xterm regardless of visibility', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    capturedDataCallback.current?.('hello\r\n')
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('hello\r\n')
   })
 
   it('reattaches via daemon sessionId when an in-session PTY is live', async () => {

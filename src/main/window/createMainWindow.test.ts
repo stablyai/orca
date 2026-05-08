@@ -97,6 +97,10 @@ describe('createMainWindow', () => {
       expect(browserWindowOptions).toMatchObject({
         titleBarStyle: 'hiddenInset'
       })
+    } else if (process.platform === 'win32') {
+      expect(browserWindowOptions).toMatchObject({
+        titleBarStyle: 'hidden'
+      })
     } else {
       expect(browserWindowOptions.titleBarStyle).toBeUndefined()
     }

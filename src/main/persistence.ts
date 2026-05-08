@@ -60,6 +60,14 @@ function decrypt(ciphertext: string): string {
   }
 }
 
+function encryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? encrypt(value) : null
+}
+
+function decryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? decrypt(value) : null
+}
+
 // Why: the data-file path must not be a module-level constant. Module-level
 // code runs at import time — before configureDevUserDataPath() redirects the
 // userData path in index.ts — so a constant would capture the default (non-dev)
@@ -162,6 +170,22 @@ export function sanitizeOnboardingUpdate(
   return out
 }
 
+// Why: read a settings field that was removed from the GlobalSettings type
+// but still round-trips on disk via the ...parsed.settings spread. One-shot
+// use only — for the inline-agents default-on migration's Case B discriminator.
+// Delete with the migration in the cleanup release (2+ stable releases after
+// _inlineAgentsDefaultedForAllUsers ships).
+function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
+  return (
+    (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
+      ?.experimentalAgentDashboard === true
+  )
+}
+
+function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | undefined {
+  return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -195,6 +219,9 @@ export class Store {
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
         }
+        if (parsed.ui?.browserKagiSessionLink) {
+          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
+        }
 
         // Merge with defaults in case new fields were added
         const defaults = getDefaultPersistedState(homedir())
@@ -224,6 +251,10 @@ export class Store {
           settings: {
             ...defaults.settings,
             ...parsed.settings,
+            // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
+            // the old persisted flag forward once so enabled users don't lose it.
+            experimentalPet:
+              parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             notifications: {
@@ -242,24 +273,42 @@ export class Store {
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
             // Why: the 'inline-agents' card property was added after the
-            // experimentalAgentDashboard toggle. Users who had the toggle on
-            // in a prior rc already had worktreeCardProperties persisted
-            // without the new entry, so a simple defaults merge wouldn't
-            // reach them and the inline agent list stayed hidden after
-            // upgrade. One-shot append 'inline-agents' to their persisted
-            // array when the experimental toggle is true; the flag prevents
-            // re-firing so a deliberate uncheck from the Workspaces view
-            // options menu sticks across restarts.
-            // The flag is stamped on every successful load — including when
-            // the experiment is off — so that a later flip-on is handled by
-            // the renderer's ExperimentalPane handler rather than re-firing
-            // this migration.
+            // feature shipped behind an experimental toggle. Now that the
+            // feature is default-on for everyone, every existing user needs
+            // 'inline-agents' appended to their persisted
+            // worktreeCardProperties on first load after upgrade so the
+            // inline agent rows render without further opt-in. A flag
+            // prevents re-firing so a deliberate uncheck from the Workspaces
+            // view options menu sticks across restarts.
+            //
+            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
+            // That legacy flag was stamped unconditionally on every successful
+            // load() in prior builds, regardless of whether the experiment was
+            // toggled on. Every prior-RC user therefore already has it set to
+            // true on disk, including the opt-out cohort this widened
+            // migration was specifically written to reach. Gating on the
+            // legacy flag would silently skip exactly those users. The
+            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
+            // the new default-on migration can distinguish "already migrated
+            // under the new rules" from "happened to launch a prior build".
+            //
+            // Case B preservation: a user who turned the experiment on and then
+            // deliberately unchecked 'inline-agents' from the sidebar options
+            // menu has the same on-disk shape as a never-touched user. The
+            // discriminator below reads the deprecated `experimentalAgentDashboard`
+            // value as a one-shot signal. Both branches of the migration stamp
+            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
+            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
-            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForExperiment === true
-            const experimentOn = parsed.settings?.experimentalAgentDashboard === true
+            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
+            const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
+            const deliberateUncheck =
+              hadExperimentOn &&
+              Array.isArray(rawCardProps) &&
+              !rawCardProps.includes('inline-agents')
             const needsInlineAgentsMigration =
               !inlineAgentsMigrated &&
-              experimentOn &&
+              !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
             const migratedCardProps =
@@ -274,7 +323,11 @@ export class Store {
               ...(migratedCardProps !== undefined
                 ? { worktreeCardProperties: migratedCardProps }
                 : {}),
-              _inlineAgentsDefaultedForExperiment: true
+              // Why: keep stamping the legacy flag for forward-compat with
+              // a rollback to a pre-default-on build that still reads it.
+              // The new flag is the one that actually gates the migration.
+              _inlineAgentsDefaultedForExperiment: true,
+              _inlineAgentsDefaultedForAllUsers: true
             }
           })(),
           // Why: the workspace session is the most volatile persisted surface
@@ -445,6 +498,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -486,6 +543,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -512,6 +573,16 @@ export class Store {
 
   getRepos(): Repo[] {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
+  }
+
+  /**
+   * O(1) read of the persisted repo count. Use this when you only need the
+   * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
+   * may run a synchronous git subprocess via `getGitUsername()`, which is
+   * wasteful when the caller only reads `.length`.
+   */
+  getRepoCount(): number {
+    return this.state.repos.length
   }
 
   getRepo(id: string): Repo | undefined {
@@ -747,6 +818,46 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    // Why: closes the second half of the SIGKILL race (Issue #217). The
+    // renderer's debounced session writer captures its state BEFORE pty:spawn
+    // returns, so the snapshot it later flushes via session:set has no
+    // tab.ptyId / ptyIdsByLeafId for the just-spawned PTY. If that stale
+    // snapshot lands AFTER persistPtyBinding's sync flush, it would overwrite
+    // the durable binding and re-open the orphan window. Merge in any
+    // existing bindings whenever the incoming snapshot's binding is empty.
+    const prior = this.state.workspaceSession
+    if (session && prior) {
+      const priorTabs = prior.tabsByWorktree ?? {}
+      const nextTabs = session.tabsByWorktree ?? {}
+      for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
+        const priorList = priorTabs[worktreeId]
+        if (!priorList) {
+          continue
+        }
+        for (const tab of tabs) {
+          if (tab.ptyId) {
+            continue
+          }
+          const priorTab = priorList.find((t) => t.id === tab.id)
+          if (priorTab?.ptyId) {
+            tab.ptyId = priorTab.ptyId
+          }
+        }
+      }
+      const priorLayouts = prior.terminalLayoutsByTabId ?? {}
+      const nextLayouts = session.terminalLayoutsByTabId ?? {}
+      for (const [tabId, layout] of Object.entries(nextLayouts)) {
+        const priorLayout = priorLayouts[tabId]
+        if (!priorLayout?.ptyIdsByLeafId) {
+          continue
+        }
+        const incoming = layout.ptyIdsByLeafId
+        if (incoming && Object.keys(incoming).length > 0) {
+          continue
+        }
+        layout.ptyIdsByLeafId = { ...priorLayout.ptyIdsByLeafId }
+      }
+    }
     this.state.workspaceSession = session
     this.scheduleSave()
   }

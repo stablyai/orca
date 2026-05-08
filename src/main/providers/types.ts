@@ -5,6 +5,7 @@ import type {
   GitDiffResult,
   GitBranchCompareResult,
   GitConflictOperation,
+  GitUpstreamStatus,
   GitWorktreeInfo,
   SearchOptions,
   SearchResult
@@ -146,6 +147,10 @@ export type IGitProvider = {
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
+  getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus>
+  pushBranch(worktreePath: string, publish?: boolean): Promise<void>
+  pullBranch(worktreePath: string): Promise<void>
+  fetchRemote(worktreePath: string): Promise<void>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,

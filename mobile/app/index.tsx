@@ -32,6 +32,7 @@ import {
   useForceReconnect,
   usePrimeHosts
 } from '../src/transport/client-context'
+import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
@@ -51,32 +52,6 @@ function endpointLabel(endpoint: string): string {
   } catch {
     return endpoint
   }
-}
-
-const STATUS_LABELS: Record<ConnectionState, string> = {
-  connected: 'Connected',
-  connecting: 'Connecting…',
-  disconnected: 'Disconnected',
-  reconnecting: 'Reconnecting…',
-  handshaking: 'Connecting…',
-  'auth-failed': 'Auth failed'
-}
-
-// Why: a few quick reconnects are normal (laptop wake, brief network blip).
-// After this many failed attempts in a row, the user almost certainly has
-// a real problem (wrong port, server down, network change), so escalate
-// the label and color so it's obvious something's wrong.
-const RECONNECT_FAILURE_THRESHOLD = 3
-
-function getStatusDisplay(
-  state: ConnectionState,
-  attempts: number
-): { label: string; isError: boolean } {
-  if (state === 'auth-failed') return { label: 'Auth failed', isError: true }
-  if (state === 'reconnecting' && attempts >= RECONNECT_FAILURE_THRESHOLD) {
-    return { label: "Can't connect", isError: true }
-  }
-  return { label: STATUS_LABELS[state], isError: false }
 }
 
 type StatsSummary = {
@@ -111,6 +86,21 @@ function formatDuration(ms: number): string {
   const minutes = totalMinutes % 60
   if (totalHours > 0) return `${totalHours}h ${minutes}m`
   return `${totalMinutes}m`
+}
+
+// Why: derive a stable per-instance identity for RpcClient so the wireUp
+// effect's dep key changes when forceReconnect swaps the underlying client
+// for a host (without this, listeners stay attached to the closed client
+// and notifications/accounts subs never re-attach).
+const clientIdentities = new WeakMap<RpcClient, number>()
+let nextClientIdentity = 1
+function clientKey(client: RpcClient): number {
+  let id = clientIdentities.get(client)
+  if (id == null) {
+    id = nextClientIdentity++
+    clientIdentities.set(client, id)
+  }
+  return id
 }
 
 function fetchStats(
@@ -226,6 +216,7 @@ export default function HomeScreen() {
   const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
+  const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
@@ -342,6 +333,18 @@ export default function HomeScreen() {
       }
       return changed ? next : prev
     })
+    setHostLastConnected((prev) => {
+      const next: Record<string, number | null> = { ...prev }
+      let changed = false
+      for (const entry of allClients) {
+        const t = entry.client.getLastConnectedAt()
+        if (next[entry.hostId] !== t) {
+          next[entry.hostId] = t
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
     setHostStates((prev) => {
       const next: Record<string, ConnectionState> = { ...prev }
       let changed = false
@@ -435,14 +438,16 @@ export default function HomeScreen() {
     return () => {
       for (const c of cleanups) c()
     }
-    // Why: depend on the host-id set, not the whole allClients array, so
+    // Why: depend on the host-id set AND each entry's client identity, so
     // resubscriptions don't fire on every render that produces a new
-    // array reference. Client identity is stable per hostId for the
-    // lifetime of the underlying transport.
+    // array reference, but DO fire when forceReconnect swaps the
+    // underlying client for a host (otherwise wireUp would keep firing
+    // on a closed client and never re-attach to the fresh one, leaving
+    // notifications/accounts subs broken until the user navigates).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allClients
-      .map((e) => e.hostId)
+      .map((e) => `${e.hostId}:${clientKey(e.client)}`)
       .sort()
       .join(',')
   ])
@@ -458,22 +463,18 @@ export default function HomeScreen() {
   // tap target is still the same and a fresher snapshot from the live RPC
   // overwrites the card's contents in place when it lands.
   const resumeWorktree = useMemo(() => {
-    if (lastVisited && sortedHosts.some((h) => h.id === lastVisited.hostId)) {
+    // Why: only surface Resume for hosts that are currently connected.
+    // Showing a stale cached worktree for a disconnected host is
+    // misleading — the user would tap into a session route that can't
+    // load anything until the host reconnects. Once the host reconnects,
+    // the card reappears with fresh data.
+    if (lastVisited && hostStates[lastVisited.hostId] === 'connected') {
       const cached = getCachedWorktrees(lastVisited.hostId) as WorktreeSummary[] | null
       const match = cached?.find((w) => w.worktreeId === lastVisited.worktreeId)
       if (match) return { hostId: lastVisited.hostId, worktree: match }
     }
-    // Prefer a currently-connected host's data when we have it.
     for (const host of sortedHosts) {
       if (hostStates[host.id] !== 'connected') continue
-      const info = worktreeInfo[host.id]
-      if (info?.lastActiveWorktree) {
-        return { hostId: host.id, worktree: info.lastActiveWorktree }
-      }
-    }
-    // Fall back to whichever known host has cached data, regardless of
-    // current connection state.
-    for (const host of sortedHosts) {
       const info = worktreeInfo[host.id]
       if (info?.lastActiveWorktree) {
         return { hostId: host.id, worktree: info.lastActiveWorktree }
@@ -482,28 +483,13 @@ export default function HomeScreen() {
     return null
   }, [sortedHosts, hostStates, worktreeInfo, lastVisited])
 
-  const resumeLoading = useMemo(
-    () =>
-      sortedHosts.some((host) => {
-        const state = hostStates[host.id] ?? 'connecting'
-        return (
-          state === 'connecting' ||
-          state === 'handshaking' ||
-          state === 'reconnecting' ||
-          (state === 'connected' && !worktreeInfo[host.id])
-        )
-      }),
-    [sortedHosts, hostStates, worktreeInfo]
-  )
-
-  // Why: only show the Account usage section for hosts that have at least
-  // one Claude or Codex account configured. Render whenever cached data
-  // exists, regardless of current connection state, so the cards don't
-  // disappear for ~1s on resume while the WebSocket reconnects. Streamed
-  // updates from the live RPC overwrite the snapshot in place when ready.
+  // Why: only show the Account usage section for hosts that are currently
+  // connected. Showing stale cached usage for a disconnected host implies
+  // live data; better to hide until the host reconnects and we can refresh.
   const accountsHosts = useMemo(() => {
     const items: Array<{ host: HostProfile; snapshot: AccountsSnapshot }> = []
     for (const host of sortedHosts) {
+      if (hostStates[host.id] !== 'connected') continue
       const snap = accountsByHost[host.id]
       if (!snap) continue
       const hasClaude = snap.claude.accounts.length > 0
@@ -636,9 +622,18 @@ export default function HomeScreen() {
           renderItem={({ item }) => {
             const state = hostStates[item.id] ?? 'connecting'
             const attempts = hostAttempts[item.id] ?? 0
+            const lastConnectedAt = hostLastConnected[item.id] ?? null
             const connected = state === 'connected'
             const info = worktreeInfo[item.id]
-            const status = getStatusDisplay(state, attempts)
+            const verdict = classifyConnection({
+              state,
+              reconnectAttempts: attempts,
+              lastConnectedAt
+            })
+            const isError =
+              verdict.kind === 'warning' ||
+              verdict.kind === 'unreachable' ||
+              verdict.kind === 'auth-failed'
             return (
               <Pressable
                 style={({ pressed }) => [styles.hostCard, pressed && styles.hostCardPressed]}
@@ -663,11 +658,9 @@ export default function HomeScreen() {
                     {item.name}
                   </Text>
                   <View style={styles.hostMeta}>
-                    <StatusDot state={state} />
-                    <Text
-                      style={[styles.hostMetaItem, status.isError && { color: colors.statusRed }]}
-                    >
-                      {status.label}
+                    <StatusDot state={state} verdict={verdict} />
+                    <Text style={[styles.hostMetaItem, isError && { color: colors.statusRed }]}>
+                      {verdict.label}
                       {connected && info
                         ? ` · ${info.totalWorktrees} worktree${info.totalWorktrees !== 1 ? 's' : ''}${info.activeCount > 0 ? ` · ${info.activeCount} active` : ''}`
                         : ''}
@@ -715,17 +708,6 @@ export default function HomeScreen() {
                     </View>
                     <ChevronRight size={16} color={colors.textMuted} />
                   </Pressable>
-                </>
-              ) : hosts.length > 0 && resumeLoading ? (
-                <>
-                  <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Resume</Text>
-                  <View style={styles.resumeCard}>
-                    <View style={[styles.resumeIcon, styles.skeletonBlock]} />
-                    <View style={styles.resumeMain}>
-                      <View style={[styles.skeletonLine, { width: '55%' }]} />
-                      <View style={[styles.skeletonLine, { width: '35%', marginTop: 6 }]} />
-                    </View>
-                  </View>
                 </>
               ) : null}
 
@@ -854,9 +836,15 @@ export default function HomeScreen() {
             state === 'connecting' ||
             state === 'handshaking' ||
             state === 'reconnecting'
+          // Why: "Reconnect" implies "you were connected, try again". If
+          // the client has never reached 'connected' this session (cold
+          // start, unreachable host, or after Disconnect) the action is
+          // functionally a fresh Connect — using the right verb makes
+          // the affordance match what tapping it actually does.
+          const hasEverConnected = (hostLastConnected[host.id] ?? null) != null
           const items: ActionSheetAction[] = []
           items.push({
-            label: 'Reconnect',
+            label: hasEverConnected && isLive ? 'Reconnect' : 'Connect',
             icon: RefreshCw,
             onPress: () => {
               setActionTarget(null)
@@ -1195,18 +1183,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     marginTop: 4
-  },
-
-  /* ─── Skeleton ─── */
-  skeletonBlock: {
-    backgroundColor: colors.bgRaised,
-    opacity: 0.5
-  },
-  skeletonLine: {
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: colors.bgRaised,
-    opacity: 0.5
   },
 
   /* ─── Quick actions ─── */

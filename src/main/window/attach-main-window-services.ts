@@ -23,8 +23,8 @@ import {
   dismissNudge
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history'
-import { listRepoWorktrees } from '../repo-worktrees'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -50,19 +50,10 @@ export function attachMainWindowServices(
   // and ensures the handlers are re-installed on macOS app re-activation when
   // the main window is recreated.
   registerDaemonManagementHandlers()
-  // Why: GC runs on a 10s delay so live worktree enumeration completes first.
-  // Uses git worktree list (not store.getWorktreeMeta) because untouched
-  // worktrees have no metadata entries — see design doc §7.6.
+  // Why: do not enumerate repo paths from background GC. `git worktree list`
+  // can re-touch protected folders on macOS and trigger folder-access prompts.
   scheduleHistoryGc(async () => {
-    const repos = store.getRepos()
-    const ids = new Set<string>()
-    for (const repo of repos) {
-      const worktrees = await listRepoWorktrees(repo)
-      for (const wt of worktrees) {
-        ids.add(`${repo.id}::${wt.path}`)
-      }
-    }
-    return ids
+    return getKnownWorktreeIdsForHistoryGc(store)
   })
   registerSshHandlers(store, () => mainWindow, runtime)
   registerFileDropRelay(mainWindow)

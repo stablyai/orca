@@ -1,4 +1,10 @@
-import type { RpcResponse, RpcSuccess, ConnectionState } from './types'
+import type {
+  RpcResponse,
+  RpcSuccess,
+  ConnectionState,
+  ConnectionLogLevel,
+  ConnectionLogSink
+} from './types'
 import {
   generateKeyPair,
   deriveSharedKey,
@@ -28,18 +34,34 @@ export type RpcClient = {
   // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
   // a threshold. 0 means never failed; counter is reset on successful open.
   getReconnectAttempt: () => number
+  // Why: timestamp (ms epoch) of the last time we reached 'connected'.
+  // null = never connected since the client was created. Used by the UI
+  // to distinguish "host moved/never reachable" from "transient blip".
+  getLastConnectedAt: () => number | null
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   close: () => void
 }
 
-// Why: capped at 4s so the worst-case "stuck reconnecting" window the
-// user perceives is short. Prior 16s ceiling combined with Android's
-// suspended-timer behaviour during background → foreground transitions
-// often felt like the app would just sit on 'Reconnecting…' forever
-// (the timer was queued, the OS had simply not run it yet). Tapping the
-// manual Reconnect button bypassed the timer, which is why it felt
-// "magic". Shorter backoff makes the auto-recovery path feel as fast.
-const RECONNECT_DELAYS = [500, 1000, 2000, 4000]
+// Why: tiered backoff. The first four entries (500ms→4s) keep
+// auto-recovery snappy for the common case — a brief Wi-Fi blip,
+// laptop wake, or AP-isolation cycle. Beyond that we slow down
+// (8s→60s) so a phone whose desktop is genuinely unreachable doesn't
+// burn a TCP SYN every 4s indefinitely while still healing on its
+// own when the network recovers. With 12 total attempts, the last
+// four reuse the 60s cap (Math.min(idx, length-1)), so total elapsed
+// time across all 12 attempts is ≈ 6 minutes before the give-up cap
+// fires (0.5+1+2+4+8+15+30+60+60+60+60+60 ≈ 360s).
+const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
+// Why: cap auto-retry once we're clearly unreachable for a long time.
+// With the tiered backoff above this is ≈ 6 minutes of continuous
+// failure before we stop and surface the re-pair banner. The longer
+// runway tolerates flaky AP-isolation routers and laptop sleep cycles
+// that briefly drop the LAN path. MUST stay aligned with
+// connection-health.ts UNREACHABLE_ATTEMPTS so the "unreachable"
+// verdict matches the moment the loop actually pauses — if these
+// drift the user sees "Reconnecting…" while the loop is silently
+// parked.
+const GIVE_UP_AFTER_ATTEMPTS = 12
 const REQUEST_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
@@ -60,12 +82,38 @@ const WEBSOCKET_CONNECTING_STATE = 0
 // window and well below iOS's typical background-disconnect window.
 const ACTIVITY_PROBE_INTERVAL_MS = 20_000
 
+export type ConnectOptions = {
+  onStateChange?: (state: ConnectionState) => void
+  // Fires for every observable lifecycle event so the UI can render a
+  // detailed connection log. Useful when 'Connecting…' hangs forever
+  // (e.g. broken Tailscale route) and you need to see *where* it's stuck.
+  onLog?: ConnectionLogSink
+}
+
 export function connect(
   endpoint: string,
   deviceToken: string,
   serverPublicKeyB64: string,
-  onStateChange?: (state: ConnectionState) => void
+  optionsOrLegacy?: ConnectOptions | ((state: ConnectionState) => void)
 ): RpcClient {
+  // Why: keep backward-compat with callers that pass a bare onStateChange fn.
+  const options: ConnectOptions =
+    typeof optionsOrLegacy === 'function'
+      ? { onStateChange: optionsOrLegacy }
+      : (optionsOrLegacy ?? {})
+  const onStateChange = options.onStateChange
+  const onLog = options.onLog
+  let logCounter = 0
+  function emitLog(level: ConnectionLogLevel, message: string, detail?: string) {
+    if (!onLog) return
+    onLog({
+      id: `log-${++logCounter}-${Date.now()}`,
+      ts: Date.now(),
+      level,
+      message,
+      detail
+    })
+  }
   let ws: WebSocket | null = null
   let state: ConnectionState = 'disconnected'
   let requestCounter = 0
@@ -75,6 +123,19 @@ export function connect(
   let handshakeTimer: ReturnType<typeof setTimeout> | null = null
   let activityProbeTimer: ReturnType<typeof setInterval> | null = null
   let intentionallyClosed = false
+  let lastConnectedAt: number | null = null
+  // Why: diagnostic — when the rpc-client gets stuck in a state where every
+  // openConnection fails with code 1006 and only a force-quit recovers, we
+  // need to see whether (a) the new attempts even differ from the old ones,
+  // (b) anything is happening at the OS / RN-bridge layer between attempts,
+  // and (c) what the timing pattern is (instant 1006 = port closed / route
+  // dead, slow 1006 = packet drop / timeout). These three timestamps + the
+  // ws-construction counter are the cheapest visibility into RN/OkHttp
+  // process-state poisoning hypotheses.
+  let lastInboundAt: number | null = null
+  let lastWsClosedAt: number | null = null
+  let wsConstructionCounter = 0
+  let currentWsOpenedAt: number | null = null
 
   // Why: fresh ephemeral keypair per connection provides forward secrecy.
   // The shared key is derived from our ephemeral secret + server's static public key.
@@ -90,10 +151,26 @@ export function connect(
     stateListeners.add(onStateChange)
   }
 
+  // Diagnostic: tracks how long we've been in the current state. Useful
+  // for spotting "stuck in connecting" or "stuck in reconnecting" cases
+  // in the logs.
+  let stateEnteredAt = Date.now()
+
   function setState(next: ConnectionState) {
     if (state === next) return
+    const prev = state
+    const dwelt = Date.now() - stateEnteredAt
     state = next
+    stateEnteredAt = Date.now()
+    console.log('[net] state', {
+      from: prev,
+      to: next,
+      dweltMs: dwelt,
+      attempt: reconnectAttempt,
+      endpoint: redactedEndpoint(endpoint)
+    })
     if (next === 'connected') {
+      lastConnectedAt = Date.now()
       for (const w of connectWaiters.splice(0)) w.resolve()
     } else if (next === 'disconnected' || next === 'auth-failed') {
       const reason =
@@ -102,6 +179,17 @@ export function connect(
     }
     for (const listener of stateListeners) {
       listener(next)
+    }
+  }
+
+  // Why: don't dump device tokens / full URLs into log scrolls; truncate to
+  // the host:port so reconnect lifecycles are still readable.
+  function redactedEndpoint(ep: string): string {
+    try {
+      const m = ep.match(/^wss?:\/\/([^/]+)/i)
+      return m ? m[1] : 'unknown'
+    } catch {
+      return 'unknown'
     }
   }
 
@@ -120,8 +208,30 @@ export function connect(
   function openConnection() {
     if (intentionallyClosed) return
 
+    const now = Date.now()
+    wsConstructionCounter++
+    console.log('[net] openConnection', {
+      attempt: reconnectAttempt,
+      endpoint: redactedEndpoint(endpoint),
+      // Why: process-poisoning diagnostic. If wsCount is high (e.g. >50)
+      // and every recent open fails with 1006, suspect RN/OkHttp internal
+      // pool corruption that only force-quit clears. Compare msSinceLast*
+      // values to the failure cadence: instant repeated fails with no
+      // inbound traffic between them = process-state stuck.
+      wsCount: wsConstructionCounter,
+      msSinceLastConnected: lastConnectedAt != null ? now - lastConnectedAt : null,
+      msSinceLastClose: lastWsClosedAt != null ? now - lastWsClosedAt : null,
+      msSinceLastInbound: lastInboundAt != null ? now - lastInboundAt : null
+    })
     setState('connecting')
     sharedKey = null
+
+    currentWsOpenedAt = now
+    emitLog(
+      'info',
+      reconnectAttempt > 0 ? `Reconnecting (attempt ${reconnectAttempt + 1})` : 'Opening WebSocket',
+      endpoint
+    )
 
     ws = new WebSocket(endpoint)
     const openingWs = ws
@@ -132,17 +242,28 @@ export function connect(
     connectTimer = setTimeout(() => {
       connectTimer = null
       if (ws === openingWs && openingWs.readyState === WEBSOCKET_CONNECTING_STATE) {
+        console.log('[net] connect-timeout fired (onopen never arrived)', {
+          attempt: reconnectAttempt,
+          timeoutMs: CONNECT_TIMEOUT_MS
+        })
+        emitLog(
+          'error',
+          'WebSocket connect timeout',
+          `No TCP/WS handshake within ${CONNECT_TIMEOUT_MS / 1000}s — endpoint unreachable?`
+        )
         openingWs.close()
         if (ws === openingWs) {
-          handleSocketClosed(openingWs)
+          handleSocketClosed(openingWs, { timedOut: true })
         }
       }
     }, CONNECT_TIMEOUT_MS)
 
     ws.onopen = () => {
+      console.log('[net] ws.onopen', { attempt: reconnectAttempt })
       clearConnectTimer()
       reconnectAttempt = 0
       setState('handshaking')
+      emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
 
       // Why: generate a fresh ephemeral keypair for each connection.
       // This provides forward secrecy — compromising one session's key
@@ -153,16 +274,28 @@ export function connect(
         publicKeyB64: publicKeyToBase64(ephemeral.publicKey)
       })
       ws?.send(hello)
+      emitLog('info', 'Sent e2ee_hello', 'Awaiting server e2ee_ready')
 
       sharedKey = deriveSharedKey(ephemeral.secretKey, serverPublicKey)
 
       handshakeTimer = setTimeout(() => {
         handshakeTimer = null
+        console.log('[net] handshake-timeout fired (e2ee_authenticated never arrived)', {
+          timeoutMs: HANDSHAKE_TIMEOUT_MS
+        })
+        emitLog(
+          'error',
+          'Handshake timeout',
+          `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`
+        )
         ws?.close()
       }, HANDSHAKE_TIMEOUT_MS)
     }
 
     ws.onmessage = (event) => {
+      // Why: track last-inbound for the openConnection diagnostic. Server
+      // pongs and stream events both bump this — anything from the wire.
+      lastInboundAt = Date.now()
       const raw = typeof event.data === 'string' ? event.data : String(event.data)
 
       // Why: during handshaking, e2ee_ready is plaintext because it precedes
@@ -171,6 +304,7 @@ export function connect(
         try {
           const msg = JSON.parse(raw)
           if (msg.type === 'e2ee_ready') {
+            emitLog('success', 'Received e2ee_ready', 'Sending device token')
             sendEncrypted({ type: 'e2ee_auth', deviceToken })
             return
           }
@@ -194,12 +328,22 @@ export function connect(
               clearTimeout(handshakeTimer)
               handshakeTimer = null
             }
+            console.log('[net] e2ee_authenticated — connected', {
+              streamCount: streamListeners.size
+            })
             setState('connected')
+            emitLog('success', 'Authenticated', 'Channel ready for RPC')
             startActivityProbe()
             for (const [id, stream] of streamListeners) {
               sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
             }
           } else if (msg.type === 'e2ee_error' || (!msg.ok && msg.error?.code === 'unauthorized')) {
+            console.log('[net] e2ee auth FAILED', { msgType: msg.type, error: msg.error })
+            emitLog(
+              'error',
+              'Authentication rejected',
+              typeof msg.error?.message === 'string' ? msg.error.message : 'Unauthorized'
+            )
             intentionallyClosed = true
             ws?.close()
             ws = null
@@ -277,17 +421,112 @@ export function connect(
       }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      const e = event as { code?: number; reason?: string; wasClean?: boolean } | undefined
+      const closeAt = Date.now()
+      // Why: time-since-construct distinguishes failure modes. Instant
+      // close (<300ms) = TCP RST / port closed / route unreachable / RN
+      // synchronous reject. Mid (300ms–3s) = DNS/connect attempt + reset.
+      // Slow (>3s) = TCP SYN timeout / packet loss / NAT wedge. If an
+      // entire reconnect burst is all instant, the problem is local
+      // process state or routing, not packet loss.
+      const constructToCloseMs = currentWsOpenedAt != null ? closeAt - currentWsOpenedAt : null
+      const aliveMs =
+        currentWsOpenedAt != null && state === 'connected' ? closeAt - currentWsOpenedAt : null
+      const inboundIdleMs = lastInboundAt != null ? closeAt - lastInboundAt : null
+      // Why: inline the diagnostic dump. Earlier hot-reload tripped
+      // `Property 'enumKeys' doesn't exist` because a stale closure
+      // captured a half-loaded module. Inlining keeps the handler's
+      // behavior fully decided at construction time.
+      let closeEventKeys: string[] = []
+      let closeEventStr = ''
+      try {
+        closeEventKeys = event && typeof event === 'object' ? Object.keys(event as object) : []
+      } catch {
+        closeEventKeys = []
+      }
+      try {
+        const seen = new WeakSet<object>()
+        closeEventStr = JSON.stringify(
+          event,
+          (_k, v) => {
+            if (typeof v === 'object' && v !== null) {
+              if (seen.has(v as object)) return '[circular]'
+              seen.add(v as object)
+            }
+            if (typeof v === 'function') return '[fn]'
+            return v
+          },
+          0
+        ).slice(0, 500)
+      } catch {
+        closeEventStr = '[unstringifiable]'
+      }
+      console.log('[net] ws.onclose', {
+        code: e?.code,
+        reason: e?.reason,
+        wasClean: e?.wasClean,
+        state,
+        attempt: reconnectAttempt,
+        intentionallyClosed,
+        endpoint: redactedEndpoint(endpoint),
+        constructToCloseMs,
+        aliveMs,
+        inboundIdleMs,
+        eventKeys: closeEventKeys,
+        eventStr: closeEventStr
+      })
+      lastWsClosedAt = closeAt
+      currentWsOpenedAt = null
       handleSocketClosed(openingWs)
     }
 
-    ws.onerror = () => {
-      // onclose will fire after this
+    ws.onerror = (event) => {
+      // Why: RN surfaces network errors here (DNS failure, TCP RST, etc).
+      // onclose fires right after, but logging the error message gives us
+      // the original cause that the close code alone can hide.
+      const e = event as { message?: string } | undefined
+      // Why: inlined defensively — see ws.onclose comment.
+      let errEventKeys: string[] = []
+      let errEventStr = ''
+      try {
+        errEventKeys = event && typeof event === 'object' ? Object.keys(event as object) : []
+      } catch {
+        errEventKeys = []
+      }
+      try {
+        const seen = new WeakSet<object>()
+        errEventStr = JSON.stringify(
+          event,
+          (_k, v) => {
+            if (typeof v === 'object' && v !== null) {
+              if (seen.has(v as object)) return '[circular]'
+              seen.add(v as object)
+            }
+            if (typeof v === 'function') return '[fn]'
+            return v
+          },
+          0
+        ).slice(0, 500)
+      } catch {
+        errEventStr = '[unstringifiable]'
+      }
+      console.log('[net] ws.onerror', {
+        message: e?.message,
+        state,
+        attempt: reconnectAttempt,
+        eventKeys: errEventKeys,
+        eventStr: errEventStr
+      })
     }
   }
 
-  function handleSocketClosed(closedWs: WebSocket) {
+  function handleSocketClosed(closedWs: WebSocket, opts: { timedOut?: boolean } = {}) {
     if (ws !== closedWs) {
+      console.log('[net] handleSocketClosed STALE — ignoring (ws already swapped)', {
+        state,
+        attempt: reconnectAttempt
+      })
       return
     }
     clearConnectTimer()
@@ -299,18 +538,44 @@ export function connect(
     }
     stopActivityProbe()
     if (intentionallyClosed) {
+      console.log('[net] handleSocketClosed — intentional close')
       setState('disconnected')
       rejectAllPending('Connection closed')
       return
     }
+    console.log('[net] handleSocketClosed → reconnect', {
+      timedOut: !!opts.timedOut,
+      pendingCount: pending.size,
+      streamCount: streamListeners.size,
+      attempt: reconnectAttempt
+    })
+    emitLog('warn', 'WebSocket closed', 'Will attempt to reconnect')
     rejectAllPending('Connection interrupted')
     setState('reconnecting')
     scheduleReconnect()
   }
 
   function scheduleReconnect() {
+    // Why: spinning reconnect forever drains battery and floods logs
+    // when the host is genuinely unreachable (wrong IP, port closed,
+    // host moved). Cap at GIVE_UP_AFTER_ATTEMPTS — the UI surfaces a
+    // "Can't reach desktop, re-pair?" banner at this point and the
+    // user can tap Retry (forceReconnect creates a fresh client,
+    // resetting the counter) or Re-pair. Without an explicit cap the
+    // worst-case is a phone left on the home screen burning a socket
+    // open every 4s indefinitely.
+    if (reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS) {
+      console.log('[net] reconnect-paused', {
+        attempt: reconnectAttempt,
+        reason: 'give-up-cap',
+        endpoint: redactedEndpoint(endpoint)
+      })
+      return
+    }
     const delay = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)]!
     reconnectAttempt++
+    console.log('[net] scheduleReconnect', { delayMs: delay, attempt: reconnectAttempt })
+    emitLog('info', `Reconnect scheduled in ${delay}ms`, `Attempt ${reconnectAttempt}`)
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
       openConnection()
@@ -341,10 +606,15 @@ export function connect(
       // half-open. Using REQUEST_TIMEOUT_MS (30s) here would make the
       // user wait nearly a minute before reconnect kicks in.
       const id = nextId()
+      const probeStart = Date.now()
       let timedOut = false
       const timeout = setTimeout(() => {
         timedOut = true
         pending.delete(id)
+        console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
+          waitedMs: Date.now() - probeStart,
+          state
+        })
         // Why: only force-close if this is still the same socket the
         // probe was sent on; a normal close that already swapped `ws`
         // shouldn't trigger a redundant terminate.
@@ -389,6 +659,23 @@ export function connect(
       ws.send(encrypt(JSON.stringify(request), sharedKey))
       return true
     }
+    console.log('[net] sendEncrypted FAILED — channel not ready', {
+      hasWs: !!ws,
+      readyState: ws?.readyState,
+      hasKey: !!sharedKey,
+      state
+    })
+    // Why: if the state machine still thinks we're connected but the
+    // underlying WebSocket has flipped to CLOSING/CLOSED without onclose
+    // having fired (RN's WebSocket sometimes drops the event, or the
+    // server half-closed the stream), force a reconnect. Without this
+    // every send silently fails forever and the user sees a frozen UI.
+    if (state === 'connected' && ws && ws.readyState !== WebSocket.OPEN) {
+      console.log('[net] sendEncrypted detected ws desync — forcing reconnect', {
+        readyState: ws.readyState
+      })
+      handleSocketClosed(ws, { timedOut: false })
+    }
     return false
   }
 
@@ -396,12 +683,25 @@ export function connect(
 
   return {
     async sendRequest(method: string, params?: unknown): Promise<RpcResponse> {
+      const waitStart = Date.now()
+      const wasConnected = state === 'connected'
       await waitForConnected()
+      if (!wasConnected) {
+        console.log('[net] sendRequest waited for connect', {
+          method,
+          waitedMs: Date.now() - waitStart
+        })
+      }
 
       return new Promise((resolve, reject) => {
         const id = nextId()
         const timeout = setTimeout(() => {
           pending.delete(id)
+          console.log('[net] sendRequest TIMEOUT', {
+            method,
+            timeoutMs: REQUEST_TIMEOUT_MS,
+            state
+          })
           reject(new Error(`Request timed out: ${method}`))
         }, REQUEST_TIMEOUT_MS)
 
@@ -430,6 +730,11 @@ export function connect(
 
       if (state === 'connected') {
         sendEncrypted({ id, deviceToken, method, params })
+      } else {
+        // Stream is registered but the actual outbound subscribe will be
+        // sent (or re-sent) when the channel reaches 'connected'. Useful
+        // when terminals don't load — confirms the request is queued.
+        console.log('[net] subscribe queued — waiting for connected', { method, state })
       }
 
       return () => {
@@ -475,6 +780,10 @@ export function connect(
 
     getReconnectAttempt(): number {
       return reconnectAttempt
+    },
+
+    getLastConnectedAt(): number | null {
+      return lastConnectedAt
     },
 
     onStateChange(listener: (state: ConnectionState) => void): () => void {

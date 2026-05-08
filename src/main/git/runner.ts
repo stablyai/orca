@@ -240,13 +240,37 @@ const NON_IDEMPOTENT_GH_VERBS = new Set([
 ])
 
 function argsLookIdempotent(args: string[]): boolean {
+  let explicitMethodSeen = false
+  let hasApiBodyField = false
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a === '-X' || a === '--method') {
+      explicitMethodSeen = true
       const next = args[i + 1]
       if (typeof next === 'string' && NON_IDEMPOTENT_METHODS.has(next.toUpperCase())) {
         return false
       }
+    }
+    // Single-token form `--method=POST` (gh accepts this).
+    if (a.startsWith('--method=')) {
+      explicitMethodSeen = true
+      const value = a.slice('--method='.length)
+      if (NON_IDEMPOTENT_METHODS.has(value.toUpperCase())) {
+        return false
+      }
+    }
+    // `gh api` auto-switches GET→POST when -f/-F/--field/--raw-field body
+    // fields are supplied without an explicit -X. Track those to classify
+    // such calls as non-idempotent.
+    if (a === '-f' || a === '-F' || a === '--field' || a === '--raw-field') {
+      hasApiBodyField = true
+    } else if (
+      a.startsWith('-f=') ||
+      a.startsWith('-F=') ||
+      a.startsWith('--field=') ||
+      a.startsWith('--raw-field=')
+    ) {
+      hasApiBodyField = true
     }
     // `gh api graphql -f query=mutation(...){ ... }` — detect mutation queries
     // so writes via the GraphQL endpoint also fail fast on transient errors.
@@ -256,6 +280,12 @@ function argsLookIdempotent(args: string[]): boolean {
         return false
       }
     }
+  }
+  // `gh api ... -f foo=bar` with no explicit method: gh switches to POST.
+  // Treat as non-idempotent so a transient 5xx after the server applied
+  // the write doesn't retry and duplicate it.
+  if (args[0] === 'api' && hasApiBodyField && !explicitMethodSeen) {
+    return false
   }
   // `gh issue close`, `gh pr edit`, `gh pr merge`, etc. The first arg is the
   // noun (issue/pr/repo/label/...) and the second is the verb. Defaulting

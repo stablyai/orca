@@ -4,19 +4,19 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
-import type { AppRuntimeFlags } from './api-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
   BrowserViewportOverride,
   CreateWorktreeArgs,
-  CustomSidekick,
+  CustomPet,
   FsChangedPayload,
   GetRateLimitResult,
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
+  GitUpstreamStatus,
   GhosttyImportPreview,
   ListWorkItemsResult,
   MemorySnapshot,
@@ -239,7 +239,6 @@ document.addEventListener(
 // Custom APIs for renderer
 const api = {
   app: {
-    getRuntimeFlags: (): Promise<AppRuntimeFlags> => ipcRenderer.invoke('app:getRuntimeFlags'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
     // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
     // the renderer's keyboard-layout probe can distinguish Polish Pro / US
@@ -419,6 +418,15 @@ const api = {
       ipcRenderer.send('pty:resize', { id, cols, rows })
     },
 
+    /** Why: measurement-only sibling of resize. Fires when a desktop pane
+     * container measures real geometry (e.g. previously hidden tab becomes
+     * visible) so the runtime's restore-target baseline can stay fresh
+     * even while a mobile-fit override blocks pty:resize. Never resizes
+     * the PTY. See docs/mobile-fit-hold.md. */
+    reportGeometry: (id: string, cols: number, rows: number): void => {
+      ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
+    },
+
     signal: (id: string, signal: string): void => {
       ipcRenderer.send('pty:signal', { id, signal })
     },
@@ -518,6 +526,7 @@ const api = {
   feedback: {
     submit: (args: {
       feedback: string
+      submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
     }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
@@ -1009,14 +1018,13 @@ const api = {
       ipcRenderer.invoke('shell:copyFile', args)
   },
 
-  sidekick: {
-    import: (): Promise<CustomSidekick | null> => ipcRenderer.invoke('sidekick:import'),
-    importPetBundle: (): Promise<CustomSidekick | null> =>
-      ipcRenderer.invoke('sidekick:importPetBundle'),
+  pet: {
+    import: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:import'),
+    importPetBundle: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:importPetBundle'),
     read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('sidekick:read', id, fileName, kind),
+      ipcRenderer.invoke('pet:read', id, fileName, kind),
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
-      ipcRenderer.invoke('sidekick:delete', id, fileName, kind)
+      ipcRenderer.invoke('pet:delete', id, fileName, kind)
   },
 
   browser: {
@@ -1203,6 +1211,17 @@ const api = {
         callback(data)
       ipcRenderer.on('browser:activateView', listener)
       return () => ipcRenderer.removeListener('browser:activateView', listener)
+    },
+
+    onPaneFocus: (
+      callback: (data: { worktreeId: string | null; browserPageId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string | null; browserPageId: string }
+      ) => callback(data)
+      ipcRenderer.on('browser:pane-focus', listener)
+      return () => ipcRenderer.removeListener('browser:pane-focus', listener)
     },
 
     onOpenLinkInOrcaTab: (
@@ -1538,6 +1557,19 @@ const api = {
       baseRef: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
+    upstreamStatus: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+    fetch: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:fetch', args),
+    push: (args: {
+      worktreePath: string
+      publish?: boolean
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:push', args),
+    pull: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:pull', args),
     branchDiff: (args: {
       worktreePath: string
       compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
@@ -1895,6 +1927,35 @@ const api = {
         callback(isFullScreen)
       ipcRenderer.on('window:fullscreen-changed', listener)
       return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
+    },
+    /** Windows only: minimize the window via the renderer-drawn title bar. */
+    minimize: (): void => {
+      ipcRenderer.send('window:minimize')
+    },
+    /** Windows only: toggle maximize/restore via the renderer-drawn title bar. */
+    maximize: (): void => {
+      ipcRenderer.send('window:maximize')
+    },
+    /** Windows only: subscribe to maximize state changes so the renderer-drawn
+     *  maximize button can show the correct restore/maximize icon. */
+    onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>
+        callback(isMaximized)
+      ipcRenderer.on('window:maximize-changed', listener)
+      return () => ipcRenderer.removeListener('window:maximize-changed', listener)
+    },
+    /** Windows only: request a close from the renderer-drawn close button.
+     *  Routes through main so the BrowserWindow 'close' event fires and the
+     *  terminal-running confirmation guard in the renderer stays active.
+     *  window.close() is unreliable in sandboxed renderers. */
+    requestClose: (): void => {
+      ipcRenderer.send('window:request-close')
+    },
+    /** Windows only: pop up the application menu at the cursor position.
+     *  Replicates the Alt-key reveal that autoHideMenuBar normally provides,
+     *  triggered by the ··· button in the renderer-drawn title bar. */
+    popupMenu: (): void => {
+      ipcRenderer.send('menu:popup')
     },
     /** Fired by the main process when the user tries to close the window
      *  (X button, Cmd+Q, etc.). Renderer should show a confirmation dialog

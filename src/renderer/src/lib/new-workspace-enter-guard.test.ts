@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import { shouldSuppressEnterSubmit } from './new-workspace-enter-guard'
+import { afterEach, beforeEach, describe, it, expect } from 'vitest'
+import {
+  shouldAllowComposerEnterSubmitTarget,
+  shouldSuppressEnterSubmit
+} from './new-workspace-enter-guard'
 
 function makeEvent(overrides: Partial<{ isComposing: boolean; shiftKey: boolean }>): {
   isComposing: boolean
@@ -7,6 +10,21 @@ function makeEvent(overrides: Partial<{ isComposing: boolean; shiftKey: boolean 
 } {
   return { isComposing: false, shiftKey: false, ...overrides }
 }
+
+class FakeHTMLElement extends EventTarget {
+  private readonly children = new Set<FakeHTMLElement>()
+
+  append(child: FakeHTMLElement): void {
+    this.children.add(child)
+  }
+
+  contains(target: EventTarget): boolean {
+    return target === this || this.children.has(target as FakeHTMLElement)
+  }
+}
+
+let previousHTMLElement: typeof globalThis.HTMLElement | undefined
+let previousDocument: typeof globalThis.document | undefined
 
 describe('shouldSuppressEnterSubmit', () => {
   it('returns false for a plain Enter with no composition', () => {
@@ -28,6 +46,67 @@ describe('shouldSuppressEnterSubmit', () => {
   it('returns true when both isComposing and shiftKey are true (textarea)', () => {
     expect(shouldSuppressEnterSubmit(makeEvent({ isComposing: true, shiftKey: true }), true)).toBe(
       true
+    )
+  })
+})
+
+describe('shouldAllowComposerEnterSubmitTarget', () => {
+  beforeEach(() => {
+    previousHTMLElement = globalThis.HTMLElement
+    previousDocument = globalThis.document
+    const body = new FakeHTMLElement()
+    const documentElement = new FakeHTMLElement()
+    Object.defineProperty(globalThis, 'HTMLElement', {
+      configurable: true,
+      value: FakeHTMLElement
+    })
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { body, documentElement }
+    })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'HTMLElement', {
+      configurable: true,
+      value: previousHTMLElement
+    })
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: previousDocument
+    })
+  })
+
+  it('allows targets inside the composer', () => {
+    const composer = new FakeHTMLElement()
+    const input = new FakeHTMLElement()
+    composer.append(input)
+
+    expect(shouldAllowComposerEnterSubmitTarget(input, composer as unknown as HTMLElement)).toBe(
+      true
+    )
+  })
+
+  it('allows body/document targets after a source selection drops focus', () => {
+    const composer = new FakeHTMLElement()
+
+    expect(
+      shouldAllowComposerEnterSubmitTarget(document.body, composer as unknown as HTMLElement)
+    ).toBe(true)
+    expect(
+      shouldAllowComposerEnterSubmitTarget(
+        document.documentElement,
+        composer as unknown as HTMLElement
+      )
+    ).toBe(true)
+  })
+
+  it('rejects targets outside the composer', () => {
+    const composer = new FakeHTMLElement()
+    const outside = new FakeHTMLElement()
+
+    expect(shouldAllowComposerEnterSubmitTarget(outside, composer as unknown as HTMLElement)).toBe(
+      false
     )
   })
 })

@@ -1393,6 +1393,23 @@ describe('OrcaRuntimeService', () => {
       expect(captureStartMock).toHaveBeenCalledWith(undefined, 'page-2')
     })
 
+    it('accepts focus on tab switch without altering bridge args (focus is main-side concern)', async () => {
+      const runtime = createRuntime()
+      const tabSwitchMock = vi.fn().mockResolvedValue({
+        switched: 0,
+        browserPageId: 'page-1'
+      })
+
+      runtime.setAgentBrowserBridge({ tabSwitch: tabSwitchMock } as never)
+
+      await expect(
+        runtime.browserTabSwitch({ page: 'page-1', focus: true })
+      ).resolves.toEqual({ switched: 0, browserPageId: 'page-1' })
+      // Bridge is unchanged — focus is delivered to the renderer via IPC
+      // (notifyRendererBrowserPaneFocus), not threaded through bridge state.
+      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')
+    })
+
     it('does not silently drop invalid explicit worktree selectors for page-targeted commands', async () => {
       vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
       const runtime = createRuntime()

@@ -237,13 +237,9 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       isBare: false,
       isMainWorktree: false
     }
-    // Three calls: (1) worktrees:create finds the new worktree,
-    // (2) rebuildAuthorizedRootsCache enumerates worktrees for the repo,
-    // (3) worktrees:list enumerates worktrees again.
-    listWorktreesMock
-      .mockResolvedValueOnce([worktreeEntry])
-      .mockResolvedValueOnce([worktreeEntry])
-      .mockResolvedValueOnce([worktreeEntry])
+    // Two calls: (1) worktrees:create finds the new worktree,
+    // (2) worktrees:list enumerates worktrees again.
+    listWorktreesMock.mockResolvedValueOnce([worktreeEntry]).mockResolvedValueOnce([worktreeEntry])
     store.setWorktreeMeta.mockReturnValue({
       lastActivityAt: 123,
       displayName: 'Improve Dashboard'

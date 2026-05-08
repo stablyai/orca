@@ -74,6 +74,33 @@ export type ErrorClass = z.infer<typeof errorClassSchema>
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
 export type RepoMethod = z.infer<typeof repoMethodSchema>
 
+// Five Setup-step affordances the user can pick after `repo_added` fires (see
+// AddRepoSetupStep). One enum because every value lives on the same screen and
+// the funnel question is "which one did they pick" — adding a sixth value
+// later is additive-safe per the schema-evolution doctrine below.
+export const addRepoSetupStepActionSchema = z.enum([
+  'create_worktree',
+  'configure',
+  'skip',
+  'open_existing',
+  'back'
+])
+export type AddRepoSetupStepAction = z.infer<typeof addRepoSetupStepActionSchema>
+
+// Deliberately a separate enum from `errorClassSchema` (PTY-spawn taxonomy):
+// different domain — this one buckets git/filesystem failures thrown by
+// `createLocalWorktree` / `createRemoteWorktree`. Merging the two would lock
+// both domains to the union forever, which the schema-evolution comment
+// below warns against.
+export const workspaceCreateErrorClassSchema = z.enum([
+  'git_failed',
+  'path_collision',
+  'permission_denied',
+  'base_ref_missing',
+  'unknown'
+])
+export type WorkspaceCreateErrorClass = z.infer<typeof workspaceCreateErrorClassSchema>
+
 export const workspaceSourceSchema = z.enum([
   'command_palette',
   'sidebar',
@@ -133,9 +160,8 @@ type BooleanGlobalSettingsKey = {
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
-  'experimentalAgentDashboard',
   'experimentalMobile',
-  'experimentalSidekick',
+  'experimentalPet',
   'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
@@ -149,14 +175,25 @@ export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
 // unknown keys at parse time. This is the runtime counterpart to the
 // compile-time "unions of string literals, no raw `string`" rule.
 
-const emptySchema = z.object({}).strict()
+// Cohort signal — see docs/onboarding-funnel-cohort-addendum.md. One integer
+// shared across the events listed in `COHORT_EXTENDED` below: the count of
+// repos the user has at emit time, read from `store.getRepos().length`.
+// `.int().nonnegative()` constrains malformed values to the floor;
+// `.optional()` lets the classifier's fail-soft fallback (returning
+// `undefined`) validate cleanly so a read error never crashes a track call.
+const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 
-const repoAddedSchema = z.object({ method: repoMethodSchema }).strict()
+const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
+
+const repoAddedSchema = z
+  .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
+  .strict()
 
 const workspaceCreatedSchema = z
   .object({
     source: workspaceSourceSchema,
-    from_existing_branch: z.boolean()
+    from_existing_branch: z.boolean(),
+    nth_repo_added: nthRepoAddedSchema
   })
   .strict()
 
@@ -164,7 +201,8 @@ const agentStartedSchema = z
   .object({
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
-    request_kind: requestKindSchema
+    request_kind: requestKindSchema,
+    nth_repo_added: nthRepoAddedSchema
   })
   .strict()
 
@@ -176,7 +214,8 @@ const agentStartedSchema = z
 const agentErrorSchema = z
   .object({
     error_class: errorClassSchema,
-    agent_kind: agentKindSchema
+    agent_kind: agentKindSchema,
+    nth_repo_added: nthRepoAddedSchema
   })
   .strict()
 
@@ -189,6 +228,22 @@ const settingsChangedSchema = z
 
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
+
+const addRepoSetupStepActionEventSchema = z
+  .object({ action: addRepoSetupStepActionSchema, nth_repo_added: nthRepoAddedSchema })
+  .strict()
+
+// Why: same enum-only discipline as `agent_error` — `.strict()` rejects raw
+// error strings if a future call site tries to attach `error_message` /
+// `error_stack`. The classifier in worktrees.ts reads `error.message` to
+// bucket into the enum, but those strings never cross the wire.
+const workspaceCreateFailedSchema = z
+  .object({
+    source: workspaceSourceSchema,
+    error_class: workspaceCreateErrorClassSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 // ── Onboarding ──────────────────────────────────────────────────────────
 //
@@ -284,10 +339,12 @@ const activationChecklistItemCompletedSchema = z
 // change silently blends pre- and post-change rows under one event name,
 // which cannot be unmixed after the fact.
 export const eventSchemas = {
-  app_opened: emptySchema,
+  app_opened: appOpenedSchema,
 
   repo_added: repoAddedSchema,
+  add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
   workspace_created: workspaceCreatedSchema,
+  workspace_create_failed: workspaceCreateFailedSchema,
 
   agent_started: agentStartedSchema,
   agent_error: agentErrorSchema,
@@ -311,6 +368,29 @@ export const eventSchemas = {
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }
 export type EventName = keyof EventMap
 export type EventProps<N extends EventName> = EventMap[N]
+
+// Events whose schemas declare `nth_repo_added`. Derived from `eventSchemas`
+// at module load by probing each schema's `.shape` — there is no parallel
+// hand-maintained list to drift out of sync. The IPC `telemetry:track`
+// handler injects the cohort property only when the incoming event name is
+// in this set: the schemas are `.strict()`, so injecting `nth_repo_added`
+// on an event whose schema does not declare it would fail validation and
+// silently drop the entire event.
+//
+// Schema-additions checklist for adding a new cohort-extended event:
+//   add `nth_repo_added: nthRepoAddedSchema` to the event's schema above.
+//   That is the *only* step — this set updates automatically.
+const COHORT_EXTENDED_SET: ReadonlySet<EventName> = new Set(
+  (Object.entries(eventSchemas) as [EventName, z.ZodObject<z.ZodRawShape>][])
+    .filter(([, schema]) => 'nth_repo_added' in schema.shape)
+    .map(([name]) => name)
+)
+export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_SET)
+export type CohortExtendedEvent = EventName
+
+export function isCohortExtendedEvent(name: EventName): name is CohortExtendedEvent {
+  return COHORT_EXTENDED_SET.has(name)
+}
 
 // Common props attached by the client — declared here so the validator knows
 // which keys to allow on every outgoing event.

@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { app, BrowserWindow, ipcMain, nativeTheme, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../../resources/icon.png?asset'
@@ -155,7 +155,17 @@ export function createMainWindow(
     // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    // Why: on macOS 'hiddenInset' keeps the native traffic lights positioned
+    // inside our custom 42px titlebar. On Windows 'hidden' removes the default
+    // OS title bar (which would otherwise stack on top of our renderer titlebar
+    // and waste vertical space) while still allowing our renderer to draw its
+    // own drag region and window controls.
+    titleBarStyle:
+      process.platform === 'darwin'
+        ? 'hiddenInset'
+        : process.platform === 'win32'
+          ? 'hidden'
+          : undefined,
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
     // dynamically when the user changes UI zoom.
     ...(process.platform === 'darwin'
@@ -296,11 +306,13 @@ export function createMainWindow(
       return
     }
     store?.updateUI({ windowMaximized: true })
+    mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
     if (windowClosing) {
       return
     }
+    mainWindow.webContents.send('window:maximize-changed', false)
     const bounds = mainWindow.getBounds()
     // Why: mirror the saveBounds guard — unmaximize during teardown can land
     // at MIN_WIDTH × MIN_HEIGHT and we must not persist those as the user's
@@ -590,6 +602,51 @@ export function createMainWindow(
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
+  // Why: renderer-drawn window controls on Windows send these to replicate the
+  // native title bar buttons that 'hidden' titleBarStyle removes.
+  const minimizeChannel = 'window:minimize'
+  const onMinimize = (): void => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.minimize()
+    }
+  }
+  const maximizeChannel = 'window:maximize'
+  const onMaximize = (): void => {
+    if (mainWindow.isDestroyed()) {
+      return
+    }
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize()
+    } else {
+      mainWindow.maximize()
+    }
+  }
+  // Why: send window:close-requested directly rather than calling
+  // mainWindow.close() and letting the 'close' event re-send it. Calling
+  // mainWindow.close() from within an IPC message handler on Windows can cause
+  // the 'close' event to misfire (e.preventDefault() doesn't suppress the OS
+  // close in all Windows configurations). Going straight to the renderer's
+  // close guard (Terminal.tsx onWindowCloseRequested) keeps the flow identical
+  // to what happens when confirmWindowClose() ultimately calls mainWindow.close()
+  // with windowCloseConfirmed = true.
+  const requestCloseChannel = 'window:request-close'
+  const onRequestClose = (): void => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    }
+  }
+  // Why: the ··· button in the renderer-drawn title bar on Windows pops up
+  // the application menu at the cursor position, replicating the Alt-key
+  // reveal that autoHideMenuBar normally provides.
+  const popupMenuChannel = 'menu:popup'
+  const onPopupMenu = (): void => {
+    Menu.getApplicationMenu()?.popup({ window: mainWindow })
+  }
+  ipcMain.on(minimizeChannel, onMinimize)
+  ipcMain.on(maximizeChannel, onMaximize)
+  ipcMain.on(requestCloseChannel, onRequestClose)
+  ipcMain.on(popupMenuChannel, onPopupMenu)
+
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
     // Why: default-deny the Cmd+B carve-out after the window is gone so a
@@ -597,6 +654,10 @@ export function createMainWindow(
     // with the webContents lifecycle resets above.
     markdownEditorFocused = false
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
+    ipcMain.removeListener(minimizeChannel, onMinimize)
+    ipcMain.removeListener(maximizeChannel, onMaximize)
+    ipcMain.removeListener(requestCloseChannel, onRequestClose)
+    ipcMain.removeListener(popupMenuChannel, onPopupMenu)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     app.removeListener('before-quit', freezeBoundsOnQuit)

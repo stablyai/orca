@@ -21,14 +21,42 @@ type DecoratorArgs = {
   addButtonLabel?: string
   onAddCommentClick: (args: { lineNumber: number; startLine?: number; top: number }) => void
   onDeleteComment: (commentId: string) => void
+  // Why: present only on surfaces that allow editing the saved note (local
+  // diffs persisted to WorktreeMeta). GitHub PR review surfaces don't pass
+  // this — their notes are remote and can't be edited via this slice.
+  onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
+  // Why: pending-edit request from the SourceControl sidebar. When this id
+  // matches a card the card auto-enters its inline editor on the next render.
+  // The decorator forwards it through; the card calls the ack callback so we
+  // know to stop forcing the editor open on subsequent renders.
+  pendingEditCommentId?: string | null
+  onPendingEditConsumed?: () => void
 }
 
 type ZoneEntry = {
   zoneId: string
   domNode: HTMLElement
+  // Why: hold the IViewZone delegate so `layoutZone` re-reads our updated
+  // heightInPx during inline edits. Monaco's _layoutZone calls
+  // _computeWhitespaceProps(zone.delegate), which reads delegate.heightInPx —
+  // mutating the delegate is the supported way to grow a zone in place.
+  delegate: monacoEditor.IViewZone
   root: Root
   lastBody: string
+  // Why: track the last `pendingEdit` prop we rendered so the patch loop
+  // re-renders whenever it transitions. Without this, after the card acks the
+  // pending request (clearing the global to null), the decorator's next pass
+  // would skip the re-render — the card keeps `pendingEdit=true` in props, and
+  // a later `editing=false` toggle would re-trigger its open-editor effect.
+  lastPendingEdit: boolean
 }
+
+// Why: card chrome (header/meta/border/padding) plus per-line body height. Used
+// in two places — the initial heightInPx estimate and the live resize during
+// inline edit — so keep them in lockstep.
+const ZONE_CHROME_PX = 52
+const ZONE_LINE_PX = 18
+const ZONE_MIN_PX = 72
 
 export function useDiffCommentDecorator({
   editor,
@@ -37,7 +65,10 @@ export function useDiffCommentDecorator({
   comments,
   addButtonLabel = 'Add note for the AI',
   onAddCommentClick,
-  onDeleteComment
+  onDeleteComment,
+  onUpdateComment,
+  pendingEditCommentId,
+  onPendingEditConsumed
 }: DecoratorArgs): void {
   const hoverLineRef = useRef<number | null>(null)
   // Why: one React root per view zone. Body updates re-render into the
@@ -52,8 +83,12 @@ export function useDiffCommentDecorator({
   // the "+" button and all view zones, producing visible flicker.
   const onAddCommentClickRef = useRef(onAddCommentClick)
   const onDeleteCommentRef = useRef(onDeleteComment)
+  const onUpdateCommentRef = useRef(onUpdateComment)
+  const onPendingEditConsumedRef = useRef(onPendingEditConsumed)
   onAddCommentClickRef.current = onAddCommentClick
   onDeleteCommentRef.current = onDeleteComment
+  onUpdateCommentRef.current = onUpdateComment
+  onPendingEditConsumedRef.current = onPendingEditConsumed
 
   useEffect(() => {
     if (!editor) {
@@ -258,6 +293,59 @@ export function useDiffCommentDecorator({
     // the Monaco batch, then unmount afterwards.
     const rootsToUnmount: Root[] = []
 
+    // Why: re-measure the zone DOM and tell Monaco to grow/shrink the zone
+    // so the inline editor can expand without clipping the next editor line.
+    // Called from the card whenever it toggles edit mode or the textarea
+    // grows. Monaco's `_layoutZone` re-reads `delegate.heightInPx`, so we
+    // mutate the delegate first, then trigger a re-layout. Bails out if the
+    // zone has been removed since enqueuing. Defined outside changeViewZones
+    // so a future caller cannot mistakenly reach into the outer accessor —
+    // resizeZone always opens its own changeViewZones batch.
+    const resizeZone = (commentId: string): void => {
+      const entry = zones.get(commentId)
+      if (!entry) {
+        return
+      }
+      const measured = entry.domNode.scrollHeight
+      if (measured <= 0) {
+        return
+      }
+      if (entry.delegate.heightInPx === measured) {
+        return
+      }
+      entry.delegate.heightInPx = measured
+      editor.changeViewZones((acc) => {
+        acc.layoutZone(entry.zoneId)
+      })
+    }
+
+    // Why: render helper used by BOTH the new-zone branch and the patch-
+    // existing-zone branch so the card's prop wiring stays in lockstep — any
+    // future prop is added once.
+    const renderCard = (root: Root, comment: DiffComment): void => {
+      root.render(
+        <DiffCommentCard
+          lineNumber={comment.lineNumber}
+          body={comment.body}
+          onDelete={() => onDeleteCommentRef.current(comment.id)}
+          onSubmitEdit={
+            onUpdateCommentRef.current
+              ? async (body) => {
+                  const fn = onUpdateCommentRef.current
+                  if (!fn) {
+                    return false
+                  }
+                  return fn(comment.id, body)
+                }
+              : undefined
+          }
+          onContentResize={() => resizeZone(comment.id)}
+          pendingEdit={pendingEditCommentId === comment.id}
+          onPendingEditConsumed={() => onPendingEditConsumedRef.current?.()}
+        />
+      )
+    }
+
     editor.changeViewZones((accessor) => {
       // Why: remove only the zones whose comments are gone. Rebuilding all
       // zones on every change caused flicker and dropped focus/selection in
@@ -284,13 +372,7 @@ export function useDiffCommentDecorator({
         dom.addEventListener('mousedown', (ev) => ev.stopPropagation())
 
         const root = createRoot(dom)
-        root.render(
-          <DiffCommentCard
-            lineNumber={c.lineNumber}
-            body={c.body}
-            onDelete={() => onDeleteCommentRef.current(c.id)}
-          />
-        )
+        renderCard(root, c)
 
         // Why: estimate height from line count so the zone is close to the
         // right size on first paint. Monaco sets heightInPx authoritatively at
@@ -298,24 +380,30 @@ export function useDiffCommentDecorator({
         // lets the card bleed into the following editor line. The constant
         // covers fixed chrome (inline wrapper padding ~10, card border 2, card
         // padding 12, header+meta ~22, trailing breathing room) and the
-        // per-line factor matches the 12px/1.4 body line-height. If you tweak
-        // the card's padding/header sizing, re-tune these numbers in lockstep
-        // or the zone will clip again.
+        // per-line factor matches the 12px/1.4 body line-height.
         const lineCount = c.body.split('\n').length
-        const heightInPx = Math.max(72, 52 + lineCount * 18)
+        const heightInPx = Math.max(ZONE_MIN_PX, ZONE_CHROME_PX + lineCount * ZONE_LINE_PX)
 
         // Why: suppressMouseDown: false so clicks inside the zone (Delete
         // button) reach our DOM listeners. With true, Monaco intercepts the
         // mousedown and routes it to the editor, so the Delete button never
         // fires. The delete/body mousedown listeners stopPropagation so the
         // editor still doesn't steal focus on interaction.
-        const zoneId = accessor.addZone({
+        const delegate: monacoEditor.IViewZone = {
           afterLineNumber: c.lineNumber,
           heightInPx,
           domNode: dom,
           suppressMouseDown: false
+        }
+        const zoneId = accessor.addZone(delegate)
+        zones.set(c.id, {
+          zoneId,
+          domNode: dom,
+          delegate,
+          root,
+          lastBody: c.body,
+          lastPendingEdit: pendingEditCommentId === c.id
         })
-        zones.set(c.id, { zoneId, domNode: dom, root, lastBody: c.body })
       }
 
       // Patch existing zones whose body text changed in place — re-render the
@@ -325,17 +413,17 @@ export function useDiffCommentDecorator({
         if (!entry) {
           continue
         }
-        if (entry.lastBody === c.body) {
+        const nextPendingEdit = pendingEditCommentId === c.id
+        // Why: re-render when body OR pending-edit state changed. Skipping on
+        // the body alone left a stale `pendingEdit=true` in the card's props
+        // after ack, which then re-triggered the open-editor effect on the
+        // next `editing` toggle (Cancel re-entered edit mode).
+        if (entry.lastBody === c.body && entry.lastPendingEdit === nextPendingEdit) {
           continue
         }
-        entry.root.render(
-          <DiffCommentCard
-            lineNumber={c.lineNumber}
-            body={c.body}
-            onDelete={() => onDeleteCommentRef.current(c.id)}
-          />
-        )
+        renderCard(entry.root, c)
         entry.lastBody = c.body
+        entry.lastPendingEdit = nextPendingEdit
       }
     })
 
@@ -353,5 +441,5 @@ export function useDiffCommentDecorator({
     // forcing a full rebuild — exactly the flicker this diff-based pass is
     // meant to avoid. Zone teardown lives in the editor-scoped effect above,
     // which only fires when the editor itself is replaced/unmounted.
-  }, [editor, filePath, worktreeId, comments])
+  }, [editor, filePath, worktreeId, comments, pendingEditCommentId])
 }

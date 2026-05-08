@@ -18,11 +18,6 @@ const EMPTY_TABS: TerminalTab[] = []
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
 
-// Why: stable empty-array reference returned when the experimental
-// feature is off, so reference equality across ticks prevents
-// downstream re-renders on flag-disabled runs.
-const EMPTY_ROWS: DashboardAgentRow[] = []
-
 /**
  * Narrow per-worktree agent row hook used by the WorktreeCard inline agents
  * list. Produces live hook-reported agents plus retained "done" snapshots,
@@ -34,7 +29,6 @@ const EMPTY_ROWS: DashboardAgentRow[] = []
  * Scoped selectors keep the cost O(this-worktree-entries) per card.
  */
 export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
-  const dashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId])
   // Why: narrow the subscriptions to only THIS worktree's entries via
   // useShallow. Subscribing to the whole agentStatusByPaneKey map would make
@@ -81,14 +75,6 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
 
   return useMemo<DashboardAgentRow[]>(() => {
-    // Why: belt-and-suspenders gate. The only current caller
-    // (WorktreeCardAgents inside WorktreeCard) already gates on the
-    // experimental flag, but keeping the check here prevents a future
-    // caller from silently leaking per-worktree agent-status
-    // subscriptions to users who have the feature off.
-    if (!dashboardEnabled) {
-      return EMPTY_ROWS
-    }
     const rows: DashboardAgentRow[] = []
     const seenPaneKeys = new Set<string>()
     // Why: Date.now() is read inside the memo (not as a dep) so stale-decay
@@ -148,5 +134,5 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
     rows.sort((a, b) => a.startedAt - b.startedAt)
     return rows
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashboardEnabled, tabs, entries, retained, worktreeId, agentStatusEpoch])
+  }, [tabs, entries, retained, worktreeId, agentStatusEpoch])
 }
