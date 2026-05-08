@@ -43,7 +43,7 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 | `sidebar` (+ variants)             | The worktree sidebar and its children                         | Other panels                                  |
 | `editor-surface`                   | Background of Monaco / markdown editor panes                  | App chrome                                    |
 
-The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
+The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
 
 ### Git decoration colors
 
@@ -56,12 +56,23 @@ For diff status, file-tree decorations, and the changes view, use the git decora
 | `--git-decoration-deleted`     | Deleted                        |
 | `--git-decoration-renamed`     | Renamed                        |
 | `--git-decoration-untracked`   | Untracked                      |
+| `--git-decoration-copied`      | Copied                         |
 
 Use these *only* for git status. Don't reuse them for unrelated state colors — that breaks the convention.
 
 ### Cancel is not destructive
 
 `destructive` is for actions that lose data or can't be undone. **Cancel, Dismiss, Close, and Discard are not destructive** — they back the user out of an in-progress action and should stay quiet (default ghost button, no color, no keyboard chip). Save the visual weight for the affirmative action so the two don't compete. See *UX rules → 3. Don't overload the back-out path*.
+
+### List rows: hover, selected, current
+
+A common point of drift. Use these conventions for any list-style row (worktrees, command palette items, settings nav):
+
+- **Idle:** transparent background.
+- **Hover:** `bg-accent` (in the worktree sidebar, `bg-sidebar-accent`).
+- **Keyboard-selected (cmdk highlight):** `data-[selected=true]:bg-accent` plus a `border-border` outline so the active row stays visible while the user types. The `data-selected` attribute is set by `cmdk` automatically.
+- **Persistent "current" / "active" row** (e.g. the worktree the user is viewing): also `bg-accent`, *plus* a `data-current="true"` attribute so CSS or future styling can distinguish it from the cmdk highlight.
+- **Don't:** hardcode `bg-[#ededed]` / `bg-[#333333]` or invent a "selected" color. The accent token already adapts to light/dark and matches the rest of the app.
 
 ### Color mixing
 
@@ -88,7 +99,7 @@ This keeps light/dark parity automatic.
 ## Spacing & radius
 
 - **Spacing:** Tailwind default scale, 4px base. Don't introduce custom pixel values for gaps/padding when a `gap-*` / `p-*` utility exists.
-- **Radius:** `--radius: 0.625rem` (10px) is the base; the rest are computed (`--radius-sm` = 0.6×, `--radius-md` = 0.8×, `--radius-lg` = 1×, `--radius-xl` = 1.4×, etc.). The shadcn primitives default to `rounded-md` (8px). Use `rounded-md` for buttons and inputs, `rounded-lg` for cards, `rounded-full` (or `rounded-[999px]`) for badges.
+- **Radius:** `--radius: 0.625rem` (10px) is the base; the rest are computed (`--radius-sm` = 0.6×, `--radius-md` = 0.8×, `--radius-lg` = 1×, `--radius-xl` = 1.4×, etc.). Buttons and inputs use `rounded-md`; the `Card` primitive uses `rounded-xl`; badges use `rounded-full`. Match the existing primitive's radius rather than introducing a new one.
 
 ## Elevation & shadows
 
@@ -102,11 +113,11 @@ Don't add a fourth level. If something needs more emphasis than "floating," you'
 
 ## Components
 
-Use the shadcn primitives in `src/renderer/src/components/ui/` before writing anything custom. Every primitive in this folder:
+Use the shadcn primitives in `src/renderer/src/components/ui/` before writing anything custom. The shadcn-style wrappers in this folder follow a consistent pattern:
 
-- Carries a `data-slot="<name>"` attribute on its root for CSS targeting (do not strip it).
-- Uses `cn()` for class merging. Pass user `className` last so callers can override.
-- Uses `class-variance-authority` (CVA) for variants when there are multiple.
+- Most carry a `data-slot="<name>"` attribute on their root for CSS targeting — do not strip it. (The non-shadcn helpers in this folder — `sonner`, `repo-multi-combobox`, `team-multi-combobox` — don't follow this pattern and shouldn't be modeled when adding new primitives that should.)
+- Use `cn()` for class merging. Pass user `className` last so callers can override.
+- Use `class-variance-authority` (CVA) for variants when there are multiple.
 
 ### Buttons (`button.tsx`)
 
@@ -125,7 +136,51 @@ Sizes: `default` (36px), `sm` (32px), `xs` (24px), `lg` (40px), plus `icon`, `ic
 
 ### Other primitives in this repo
 
-`accordion`, `badge`, `button-group`, `card`, `command`, `context-menu`, `dialog`, `dropdown-menu`, `hover-card`, `input`, `label`, `popover`, `progress`, `scroll-area`, `select`, `separator`, `sheet`, `sonner` (toast), `tabs`, `toggle`, `toggle-group`, `tooltip`. All wrap a Radix UI primitive — never reimplement headless behavior; extend the existing wrapper.
+`accordion`, `badge`, `button-group`, `card`, `command`, `context-menu`, `dialog`, `dropdown-menu`, `hover-card`, `input`, `label`, `popover`, `progress`, `repo-multi-combobox`, `scroll-area`, `select`, `separator`, `sheet`, `sonner` (toast), `tabs`, `team-multi-combobox`, `toggle`, `toggle-group`, `tooltip`. Most wrap a Radix UI primitive — exceptions are `command` (wraps `cmdk`), `sonner` (wraps `sonner`), and the visual-only wrappers (`badge`, `button-group`, `card`, `input`) which apply tokens and Tailwind utilities directly. Never reimplement headless behavior; extend the existing wrapper.
+
+### Picking the right primitive
+
+When a control has multiple plausible primitives, use this fork:
+
+| You want…                                                | Reach for                  | Don't use                                |
+| -------------------------------------------------------- | -------------------------- | ---------------------------------------- |
+| Hover-only label on an icon-only button                  | `Tooltip`                  | `HoverCard` (too heavy), title attr      |
+| Hover preview of richer content (avatar + summary)       | `HoverCard`                | `Tooltip` (no rich content)              |
+| Click-revealed menu with actions                         | `DropdownMenu`             | `Popover` with hand-rolled list          |
+| Right-click contextual actions                           | `ContextMenu`              | `DropdownMenu` (different invocation)    |
+| Click-revealed surface with arbitrary content (form, picker) | `Popover`              | `Dialog` (it traps focus and dims)       |
+| Modal that demands a decision before you continue        | `Dialog`                   | `Popover`, inline overlay                |
+| Drawer / panel sliding in from an edge                   | `Sheet`                    | `Dialog` centered                        |
+| Single choice from a known list                          | `Select`                   | Custom listbox                           |
+| Single choice with search / fuzzy filtering              | `Command` inside `Popover` | `Select` (no search)                     |
+| Multi-select with search                                 | `repo-multi-combobox` / `team-multi-combobox` (mirror their pattern) | Roll a new one |
+| Transient confirmation ("Saved", "Copied")               | `sonner` toast             | `Dialog`, inline banner                  |
+| Persistent inline status ("3 errors")                    | inline text + `Badge`      | toast (toasts disappear)                 |
+
+If you find yourself styling around a primitive (`<Popover>` to act like a `<Dialog>`, or vice versa), stop and reconsider — the focus-management semantics differ and a future contributor will be misled by the mismatch.
+
+### Tooltips
+
+Tooltips exist to *name* a control whose meaning isn't obvious from its appearance. They are not the place to teach, persuade, or warn — anything users need to read while acting belongs in the visible UI.
+
+- **Use a tooltip when:** an icon-only button or compact chip needs a label. Toolbar icons, badges with abbreviations, truncated paths.
+- **Don't use a tooltip when:** the control already has a visible label, the content is interactive (links, buttons), or the message is critical (errors, blocking warnings — those go inline).
+- **Mounting:** the global `<TooltipProvider delayDuration={400}>` lives at the App root. Don't nest a second `TooltipProvider` unless you need a different delay for a tightly-scoped surface.
+- **Trigger pattern:** wrap the trigger element with `<TooltipTrigger asChild>` so the tooltip's accessibility props attach to the button (not a wrapper span). This is required for keyboard focus to surface the tooltip.
+- **Placement:** default `side="top" sideOffset={4}` — match the toolbar pattern in `sidebar/SidebarToolbar.tsx`. Pick a different side only when the default would clip against the viewport.
+- **Copy:** sentence case, no trailing period, ≤ 5 words. "Open folder picker", not "Click here to open the folder picker."
+- **Shortcut chips inside tooltips:** if the action has a keyboard shortcut, append it to the tooltip text using `<ShortcutKeyCombo />` rather than baking the keys into the label string. The chips render correctly per platform; baked-in strings drift.
+
+```tsx
+<Tooltip>
+  <TooltipTrigger asChild>
+    <Button variant="ghost" size="icon-sm" onClick={openSettings}>
+      <Settings />
+    </Button>
+  </TooltipTrigger>
+  <TooltipContent side="top" sideOffset={4}>Settings</TooltipContent>
+</Tooltip>
+```
 
 ### Icons
 
@@ -143,27 +198,45 @@ The canonical spinner is `<Loader2 className="size-4 animate-spin" />` from `luc
 
 ### Keyboard shortcut chips
 
-Use **`<ShortcutKeyCombo />`** from `src/renderer/src/components/ShortcutKeyCombo.tsx`. It handles platform-correct labels (`⌘` on Mac, `Ctrl` elsewhere) and renders a consistent key-cap style. Don't roll a one-off `<kbd>` — kbd chips drift in shape and color across the app fast if everyone styles their own.
+Use **`<ShortcutKeyCombo />`** from `src/renderer/src/components/ShortcutKeyCombo.tsx`. It renders a consistent key-cap style and inserts a `+` separator on Windows/Linux (Mac shows adjacent glyphs, no separator). It does **not** transform key strings — the *caller* picks the platform-appropriate labels and passes them in:
 
-Reminder: chips belong on the *affirmative* action, not on Cancel/Dismiss. See *UX rule 3*.
+```tsx
+const isMac = navigator.userAgent.includes('Mac')
+const mod = isMac ? '⌘' : 'Ctrl'
+const shift = isMac ? '⇧' : 'Shift'
+<ShortcutKeyCombo keys={[mod, shift, 'N']} />
+```
+
+See `Landing.tsx` for the canonical pattern. Don't roll a one-off `<kbd>` — kbd chips drift in shape and color across the app fast if everyone styles their own.
+
+**Where shortcuts surface in the UI:**
+
+- **Tooltips on icon buttons** — append the chip after the label so users discover the binding. Trailing, not leading.
+- **Dropdown / context-menu items** — use `<DropdownMenuShortcut>` (or its context-menu equivalent) for the right-aligned chip; don't add the chip yourself with absolute positioning.
+- **Affirmative buttons in modals** — chip on the primary action only ("Create ⌘↩"). Never on Cancel.
+- **Hint rows in empty / landing states** — vertical list of `action — chip` pairs (see `Landing.tsx`).
+- **Don't put chips next to inline text actions** (`link` variant) or on Cancel/Dismiss — see *UX rule 3*.
+
+**The label MUST match the actual binding for the platform.** If the keyboard handler reads `metaKey` on Mac and `ctrlKey` elsewhere, the chip must show `⌘` on Mac and `Ctrl` elsewhere. Mismatched chips are worse than no chip.
 
 ### Form anatomy
 
 The pattern in `src/renderer/src/components/settings/SettingsFormControls.tsx` is the house style for any label + control + helper text. Match it for new forms:
 
-- **Outer stack:** `space-y-3`.
+- **Outer stack:** `space-y-3` for full-section forms (`ThemePicker`); `space-y-2` for compact single-control fields (`ColorField`, `NumberField`). Pick by density, not preference.
 - **Label group:** `space-y-1` containing `<Label>` and a description in `text-xs text-muted-foreground`.
 - **Control:** the shadcn primitive (`<Input>`, `<Select>`, etc.). Errors surface via `aria-invalid`; the input primitive already maps that to a destructive ring — don't paint your own.
-- **Trailing metadata:** `text-[11px] text-muted-foreground` below the control (e.g., "Currently 14px"), not next to the label.
+- **Trailing metadata:** `text-[11px] text-muted-foreground` below the control (e.g., "Current: 14px · Default: 13px"), not next to the label.
 
 ### Scrollbars
 
-Two scrollbar classes are defined globally in `main.css`:
+Three scrollbar classes are defined globally in `main.css`:
 
-- **`.scrollbar-sleek`** — the default thin, neutral scrollbar for sidebars, lists, popovers.
+- **`.scrollbar-sleek`** — the default thin, neutral scrollbar for sidebars, lists, popovers. Pair with `.scrollbar-sleek-parent` on a hover-target ancestor if you want the thumb to fade in only on parent hover.
 - **`.scrollbar-editor`** — slightly heavier, used inside Monaco-adjacent surfaces.
+- **`.worktree-sidebar-scrollbar`** — reserves the gutter but keeps the thumb invisible until the parent (`.scrollbar-sleek-parent`) is hovered. Used only in the worktree sidebar so the chrome stays still.
 
-Apply one of these to overflow containers; don't write a third style.
+Apply one of these to overflow containers; don't write a fourth style.
 
 ## UX rules
 
@@ -226,7 +299,9 @@ Orca runs on macOS, Linux, and Windows. Every UI change must hold up on all thre
 - Don't put accent color, keyboard chips, or animated affordances on Cancel.
 - Don't use `destructive` for "secondary action" — it's for irreversible actions only.
 - Don't hardcode `e.metaKey` or `⌘` strings — pick by platform.
-- Don't strip `data-slot` attributes from primitive wrappers — they're load-bearing.
+- Don't strip `data-slot` attributes from a primitive that has one — they're load-bearing for CSS targeting.
+- Don't put critical messaging in a tooltip — errors and blocking warnings go inline, where they're visible without hover.
+- Don't ship a chip whose label doesn't match the actual platform binding — wrong is worse than absent.
 - Don't add a new shadow tier; use the three documented levels.
 - Don't import `Inter` or any other sans — `Geist` is the family.
 
