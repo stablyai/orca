@@ -46,8 +46,11 @@ export function useOnboardingFlow(
 ) {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
+  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+  const isDetectingAgents = useAppStore(
+    (s) => s.isDetectingAgents || s.isRefreshingAgents
+  )
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const openModal = useAppStore((s) => s.openModal)

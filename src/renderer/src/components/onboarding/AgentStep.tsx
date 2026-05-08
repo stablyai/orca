@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,16 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet }: AgentStepPro
   // the active card is visible without forcing the user to expand the disclosure.
   const selectedEntryIsCollapsed =
     selectedAgent != null && fallbackRest.some((a) => a.id === selectedAgent)
+  // Why: one-way latch — auto-open when selection lands in the fallback bucket,
+  // but never force-close. The user can freely toggle via the native <details>
+  // disclosure once it's open; controlling `open` directly off the prop would
+  // slam it shut as soon as `selectedEntryIsCollapsed` flips back to false.
+  const [openState, setOpenState] = useState(selectedEntryIsCollapsed)
+  useEffect(() => {
+    if (selectedEntryIsCollapsed) {
+      setOpenState(true)
+    }
+  }, [selectedEntryIsCollapsed])
   return (
     <div className="space-y-5">
       {!hasDetected && (
@@ -64,7 +75,11 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet }: AgentStepPro
         </div>
       </section>
       {fallbackRest.length > 0 && (
-        <details className="group space-y-3" open={selectedEntryIsCollapsed}>
+        <details
+          className="group space-y-3"
+          open={openState}
+          onToggle={(e) => setOpenState(e.currentTarget.open)}
+        >
           <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground hover:text-foreground group-open:mb-3">
             Show {fallbackRest.length} more {hasDetected ? 'agents' : ''}→
           </summary>

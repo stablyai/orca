@@ -104,36 +104,56 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
 // strict whitelist guards every entry into onboarding state — arbitrary
 // renderer/disk input cannot inject unknown keys or wrong-typed values.
 // Returns only validated fields; unknown keys are dropped silently.
-export function sanitizeOnboardingUpdate(input: unknown): Partial<OnboardingState> {
+// Why: returns Partial<...> with a partial checklist so the IPC update path
+// merges over current state without wiping previously-true keys. Invalid
+// top-level fields are OMITTED (not coerced to fallbacks) so partial updates
+// don't clobber valid persisted state; the load-path caller spreads defaults.
+export function sanitizeOnboardingUpdate(
+  input: unknown
+): Partial<Omit<OnboardingState, 'checklist'>> & { checklist?: Partial<OnboardingChecklistState> } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return {}
   }
   const raw = input as Record<string, unknown>
-  const out: Partial<OnboardingState> = {}
+  const out: Partial<Omit<OnboardingState, 'checklist'>> & {
+    checklist?: Partial<OnboardingChecklistState>
+  } = {}
 
   if ('closedAt' in raw) {
-    out.closedAt = typeof raw.closedAt === 'number' ? raw.closedAt : null
+    if (typeof raw.closedAt === 'number') {
+      out.closedAt = raw.closedAt
+    } else if (raw.closedAt === null) {
+      out.closedAt = null
+    }
+    // else: omit — preserve existing persisted value on merge.
   }
   if ('outcome' in raw) {
     const v = raw.outcome
-    out.outcome = v === 'completed' || v === 'dismissed' ? (v as OnboardingOutcome) : null
+    if (v === 'completed' || v === 'dismissed') {
+      out.outcome = v as OnboardingOutcome
+    } else if (v === null) {
+      out.outcome = null
+    }
+    // else: omit.
   }
   if ('lastCompletedStep' in raw) {
     const v = raw.lastCompletedStep
-    out.lastCompletedStep =
-      typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP
-        ? v
-        : -1
+    if (typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP) {
+      out.lastCompletedStep = v
+    }
+    // else: omit.
   }
   if ('checklist' in raw) {
     const rawChecklist = raw.checklist
     if (rawChecklist && typeof rawChecklist === 'object' && !Array.isArray(rawChecklist)) {
+      // Why: copy ONLY caller-sent boolean keys so partial updates (e.g.
+      // `{ addedRepo: true }`) don't reset other checklist items to false.
       const defaults = getDefaultOnboardingState().checklist
-      const checklist = { ...defaults }
       const rc = rawChecklist as Record<string, unknown>
+      const checklist: Partial<OnboardingChecklistState> = {}
       for (const key of Object.keys(defaults) as (keyof OnboardingChecklistState)[]) {
-        if (key in rc) {
-          checklist[key] = typeof rc[key] === 'boolean' ? (rc[key] as boolean) : defaults[key]
+        if (key in rc && typeof rc[key] === 'boolean') {
+          checklist[key] = rc[key] as boolean
         }
       }
       out.checklist = checklist
@@ -691,7 +711,11 @@ export class Store {
     }
   }
 
-  updateOnboarding(updates: Partial<PersistedState['onboarding']>): PersistedState['onboarding'] {
+  updateOnboarding(
+    updates: Partial<Omit<PersistedState['onboarding'], 'checklist'>> & {
+      checklist?: Partial<OnboardingChecklistState>
+    }
+  ): PersistedState['onboarding'] {
     const current = this.getOnboarding()
     this.state.onboarding = {
       ...current,
