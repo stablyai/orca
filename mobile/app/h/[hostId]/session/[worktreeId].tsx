@@ -578,10 +578,18 @@ export default function SessionScreen() {
   // (clientRef.current.sendRequest...) keep working without churn.
   useEffect(() => {
     clientRef.current = client
+  }, [client])
+
+  // Why: only clear terminal cache on actual unmount. Running it whenever
+  // `client` changes — including the initial null → real-client transition
+  // from useHostClient's async open path — would unsubscribe terminals and
+  // wipe xterm state mid-subscribe on a normal session-screen mount.
+  useEffect(() => {
     return () => {
       clearTerminalCache()
     }
-  }, [client, clearTerminalCache])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Why: deviceToken is read from host record so feature code can pass
   // `client.id` on subscribe/send for driver-state-machine identity.
