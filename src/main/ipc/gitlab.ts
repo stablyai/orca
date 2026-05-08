@@ -21,6 +21,7 @@ import {
   listTodos,
   updateIssue
 } from '../gitlab/client'
+import { computeNextGitLabRecents } from '../../shared/gitlab-projects'
 import type { ProjectRef } from '../gitlab/gl-utils'
 
 // Why: mirror github.ts assertRegisteredRepo — main-process handlers
@@ -156,7 +157,25 @@ export function registerGitLabHandlers(store: Store): void {
     ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
       const projectRef: ProjectRef = { host: args.host, path: args.path }
-      return getWorkItemByProjectRef(repo.path, projectRef, args.iid, args.type)
+      const result = await getWorkItemByProjectRef(repo.path, projectRef, args.iid, args.type)
+      // Why: only persist a recent entry when the lookup actually
+      // produced an item. A 404 / auth failure shouldn't pollute the
+      // user's recents list with project paths they can't read.
+      if (result) {
+        addGitLabProjectToRecent(store, args.host, args.path)
+      }
+      return result
     }
   )
+}
+
+function addGitLabProjectToRecent(store: Store, host: string, path: string): void {
+  const settings = store.getSettings()
+  const existing = settings.gitlabProjects ?? { pinned: [], recent: [] }
+  store.updateSettings({
+    gitlabProjects: {
+      pinned: existing.pinned,
+      recent: computeNextGitLabRecents(existing.recent, host, path)
+    }
+  })
 }

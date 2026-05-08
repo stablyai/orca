@@ -845,6 +845,17 @@ export type GitLabMRFile = {
   isBinary: boolean
 }
 
+// Why: parallel of GitHubProjectSettings, scoped to plain GitLab
+// projects since v1 doesn't ship Projects-v2-style boards. Recent is
+// auto-tracked from the picker's paste-URL flow so users coming back to
+// projects they've recently visited don't have to re-paste the URL.
+// Pinned is reserved for a future UI affordance — defining the field
+// now keeps settings migrations simple later.
+export type GitLabProjectSettings = {
+  pinned: { host: string; path: string }[]
+  recent: { host: string; path: string; lastOpenedAt: string }[]
+}
+
 // Why: GitLab Todos (gitlab.com/dashboard/todos) are cross-project
 // notifications — assigned items, mentions, build failures, review
 // requests, etc. The action_name field is open-ended in the API; we
@@ -1439,6 +1450,10 @@ export type GlobalSettings = {
    *  landed won't have the key; `getDefaultSettings()` hydrates the empty
    *  default via the persistence merge. */
   githubProjects?: GitHubProjectSettings
+  /** GitLab project preferences — pinned + recent project paths.
+   *  Optional for backward compatibility with profiles saved before
+   *  GitLab support; the persistence merge fills the empty default. */
+  gitlabProjects?: GitLabProjectSettings
   /** Anonymous product-telemetry state. Optional because the one-shot
    *  migration in `Store.load()` is what populates it on first boot of the
    *  telemetry release; before migration runs, the field is absent. After
