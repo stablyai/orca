@@ -1033,13 +1033,17 @@ function SourceControlInner(): React.JSX.Element {
   // file as a normal editor tab so the user still gets navigation when
   // neither side has the path anymore. When `commentId` is supplied and the
   // route lands on a diff surface, also stamp scrollToDiffCommentId so the
-  // diff decorator scrolls that note into view; the editor-tab fallback has
-  // no diff editor to consume it, so we skip the stamp on that branch.
+  // diff decorator scrolls that note into view; we clear any prior request
+  // first, so the editor-tab fallback then leaves the global null and a
+  // future DiffViewer mount can't accidentally consume a stale id.
   const handleOpenComment = useCallback(
     (filePath: string, commentId?: string) => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+      // Defensively clear any dangling prior scroll request before routing
+      // this click; only the diff branches below will re-stamp it.
+      setScrollToDiffCommentId(null)
       const matches = entries.filter((e) => e.path === filePath)
       const uncommitted =
         matches.find((e) => e.area === 'unstaged') ??
@@ -2125,13 +2129,14 @@ function DiffCommentsInlineList({
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
                   onClick={() => onOpen(c.filePath, c.id)}
                   title={`Open ${c.filePath} (line ${c.lineNumber})`}
+                  aria-label={`Open note on line ${c.lineNumber}`}
                 >
                   <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
                     L{c.lineNumber}
                   </span>
-                  <div className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
+                  <span className="block min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
                     {c.body}
-                  </div>
+                  </span>
                 </button>
                 <button
                   type="button"

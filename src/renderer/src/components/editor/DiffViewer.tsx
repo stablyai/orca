@@ -228,9 +228,14 @@ export default function DiffViewer({
         diffEditor.focus()
       }
 
+      // Why: clear modifiedEditor on dispose so decorator effects (scroll-to-note,
+      // popover position) don't invoke methods on a disposed Monaco editor.
       diffEditor.onDidDispose(() => {
         lineNumberOptionsSubRef.current?.dispose()
         lineNumberOptionsSubRef.current = null
+        diffEditorRef.current = null
+        setModifiedEditor(null)
+        setPopover(null)
       })
     },
     [editable, setupCopy, modelKey, filePath, sideBySide]
