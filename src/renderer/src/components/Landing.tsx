@@ -82,9 +82,13 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
   }, [])
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen) {
+      return
+    }
     const onDocClick = (e: MouseEvent): void => {
-      if (!wrapperRef.current?.contains(e.target as Node)) setMenuOpen(false)
+      if (!wrapperRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
