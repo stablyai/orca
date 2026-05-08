@@ -74,7 +74,7 @@ index 1ec12f79..cec8b67a 100644
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f..0544b86d 100644
+index 7b4b9e1f..9e6c7476 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -245,7 +245,7 @@ index 7b4b9e1f..0544b86d 100644
        return;
      }
    }
-@@ -751,35 +828,41 @@ pty_posix_spawn(char** argv, char** env,
+@@ -751,35 +828,42 @@ pty_posix_spawn(char** argv, char** env,
 
    posix_spawnattr_t attrs;
    posix_spawnattr_init(&attrs);
@@ -289,6 +289,7 @@ index 7b4b9e1f..0544b86d 100644
  done:
    posix_spawn_file_actions_destroy(&acts);
    posix_spawnattr_destroy(&attrs);
++  close(slave);
 
 -  for (; count > 0; count--) {
 -    close(low_fds[count]);

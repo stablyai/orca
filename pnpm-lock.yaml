@@ -9,7 +9,7 @@ patchedDependencies:
     hash: df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634
     path: config/patches/@xterm__addon-ligatures@0.11.0-beta.198.patch
   node-pty@1.1.0:
-    hash: de322b71e83f8e3f26a341144dbd1159a10d79d8a492e06d4bc9d10d7aa84bf4
+    hash: 6f428c4bd2f9a991b1af62f426af92862ba50860a729da63f49eddca08f0c1a3
     path: config/patches/node-pty@1.1.0.patch
 
 importers:
@@ -159,7 +159,7 @@ importers:
         version: 0.55.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=de322b71e83f8e3f26a341144dbd1159a10d79d8a492e06d4bc9d10d7aa84bf4)
+        version: 1.1.0(patch_hash=6f428c4bd2f9a991b1af62f426af92862ba50860a729da63f49eddca08f0c1a3)
       pdfjs-dist:
         specifier: ^5.7.284
         version: 5.7.284
@@ -11368,7 +11368,7 @@ snapshots:
       undici: 6.25.0
       which: 6.0.1
 
-  node-pty@1.1.0(patch_hash=de322b71e83f8e3f26a341144dbd1159a10d79d8a492e06d4bc9d10d7aa84bf4):
+  node-pty@1.1.0(patch_hash=6f428c4bd2f9a991b1af62f426af92862ba50860a729da63f49eddca08f0c1a3):
     dependencies:
       node-addon-api: 7.1.1
 
