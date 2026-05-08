@@ -26,7 +26,9 @@ import type {
   NotificationSoundPathResult,
   NotificationSoundResult,
   OnboardingState,
-  SearchResult
+  SearchResult,
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
@@ -372,6 +374,24 @@ const api = {
         callback(data)
       ipcRenderer.on('worktrees:changed', listener)
       return () => ipcRenderer.removeListener('worktrees:changed', listener)
+    },
+
+    onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: WorktreeBaseStatusEvent) =>
+        callback(data)
+      ipcRenderer.on('worktree:baseStatus', listener)
+      return () => ipcRenderer.removeListener('worktree:baseStatus', listener)
+    },
+
+    onRemoteBranchConflict: (
+      callback: (data: WorktreeRemoteBranchConflictEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: WorktreeRemoteBranchConflictEvent
+      ) => callback(data)
+      ipcRenderer.on('worktree:remoteBranchConflict', listener)
+      return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
     }
   },
 

@@ -4,7 +4,17 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Server, ServerOff } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  Copy,
+  GitMerge,
+  LoaderCircle,
+  CircleCheck,
+  CircleX,
+  Server,
+  ServerOff
+} from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
@@ -84,6 +94,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
+  const baseStatus = useAppStore((s) => s.baseStatusByWorktreeId[worktree.id])
+  const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
 
   // SSH disconnected state
   const sshStatus = useAppStore((s) => {
@@ -334,6 +346,24 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
+  const handleCopyRebaseCommand = useCallback(
+    async (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!baseStatus || baseStatus.status === 'base_changed') {
+        return
+      }
+      // Why: design §3.2 forbids splitting blindly on the first slash —
+      // remote names may contain slashes (e.g. `foo/bar`). Trust the remote
+      // parsed by the main process and fall back only when the event predates
+      // that field.
+      const remote =
+        baseStatus.remote ??
+        (baseStatus.base.includes('/') ? baseStatus.base.split('/')[0] : 'origin')
+      await window.api.ui.writeClipboardText(`git fetch ${remote} && git rebase ${baseStatus.base}`)
+    },
+    [baseStatus]
+  )
 
   // Why: the 'unread' card property is the user's opt-out. When off, we render
   // as if the workspace is read so bold emphasis never appears. The persisted
@@ -565,6 +595,68 @@ const WorktreeCard = React.memo(function WorktreeCard({
             {cardProps.includes('comment') && worktree.comment && (
               <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />
             )}
+          </div>
+        )}
+
+        {baseStatus && baseStatus.status !== 'current' && (
+          <div
+            className={cn(
+              'mt-0.5 flex items-start gap-1.5 rounded border px-1.5 py-1 text-[10.5px] leading-snug',
+              baseStatus.status === 'drift' || baseStatus.status === 'base_changed'
+                ? 'border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-300'
+                : 'border-border bg-muted/35 text-muted-foreground'
+            )}
+          >
+            {baseStatus.status === 'checking' ? (
+              <LoaderCircle className="mt-[1px] size-3 shrink-0 animate-spin" />
+            ) : (
+              <AlertTriangle className="mt-[1px] size-3 shrink-0" />
+            )}
+            <div className="min-w-0 flex-1">
+              {baseStatus.status === 'checking' && <span>Checking base…</span>}
+              {baseStatus.status === 'unknown' && <span>Base could not be checked.</span>}
+              {baseStatus.status === 'base_changed' && (
+                <span>Base changed upstream. Review before rebasing.</span>
+              )}
+              {baseStatus.status === 'drift' && (
+                <>
+                  <span>
+                    Base updated: {baseStatus.base} advanced by {baseStatus.behind ?? 0} commits.
+                  </span>
+                  {baseStatus.recentSubjects?.[0] && (
+                    <span className="block truncate opacity-80">
+                      Most recent: {baseStatus.recentSubjects[0]}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+            {baseStatus.status === 'drift' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleCopyRebaseCommand}
+                    className="mt-[-1px] inline-flex size-5 shrink-0 items-center justify-center rounded hover:bg-amber-500/10"
+                    aria-label="Copy rebase command"
+                  >
+                    <Copy className="size-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Copy rebase command
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        )}
+
+        {remoteBranchConflict && (
+          <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="mt-[1px] size-3 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {remoteBranchConflict.remote}/{remoteBranchConflict.branchName} already exists.
+            </span>
           </div>
         )}
 

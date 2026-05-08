@@ -19,6 +19,8 @@ import type {
   GlobalSettings,
   Repo,
   StatsSummary,
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch
 } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -151,6 +153,15 @@ type RuntimeAccountServices = {
   rateLimits: RateLimitService
 }
 
+export type RemoteFetchResult = { ok: true } | { ok: false; errorKind: 'git_error' }
+
+export type RemoteTrackingBase = {
+  remote: string
+  branch: string
+  ref: string
+  base: string
+}
+
 export type AccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
@@ -238,6 +249,8 @@ type RuntimePtyController = {
 
 type RuntimeNotifier = {
   worktreesChanged(repoId: string): void
+  worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
+  worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
   activateWorktree(
     repoId: string,
@@ -612,8 +625,9 @@ export class OrcaRuntimeService {
   // A literal "insert before await / read-back after await" without these
   // three rules wedges all future creates on the same repo after a single
   // DNS hiccup until process restart (see §3.3 Lifecycle).
-  private fetchInflight = new Map<string, Promise<void>>()
+  private fetchInflight = new Map<string, Promise<RemoteFetchResult>>()
   private fetchLastCompletedAt = new Map<string, number>()
+  private optimisticReconcileTokens = new Map<string, string>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
 
@@ -3464,6 +3478,7 @@ export class OrcaRuntimeService {
       ...(shouldSetDisplayName(requestedName, branchName, sanitizedName)
         ? { displayName: requestedName }
         : {}),
+      baseRef: baseBranch,
       ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {})
     })
@@ -3544,14 +3559,37 @@ export class OrcaRuntimeService {
    * primary telemetry target; splitting the cache by call-site would double
    * the fetch load on warm repos.
    */
-  async fetchRemoteWithCache(repoPath: string, remote: string): Promise<void> {
-    const key = `${repoPath}::${remote}`
+  async getCanonicalFetchKey(repoPath: string, remote: string): Promise<string> {
+    try {
+      const { stdout } = await gitExecFileAsync(
+        ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+        { cwd: repoPath }
+      )
+      const commonDir = stdout.trim()
+      if (commonDir) {
+        return `${commonDir}::${remote}`
+      }
+    } catch {
+      // Fall through to the caller-provided path. The fetch still runs from
+      // repoPath; this key only controls cache sharing.
+    }
+    return `${repoPath}::${remote}`
+  }
+
+  async isRemoteFetchFresh(repoPath: string, remote: string): Promise<boolean> {
+    const key = await this.getCanonicalFetchKey(repoPath, remote)
+    const lastAt = this.fetchLastCompletedAt.get(key)
+    return lastAt !== undefined && Date.now() - lastAt < FETCH_FRESHNESS_MS
+  }
+
+  async getOrStartRemoteFetch(repoPath: string, remote: string): Promise<RemoteFetchResult> {
+    const key = await this.getCanonicalFetchKey(repoPath, remote)
     const lastAt = this.fetchLastCompletedAt.get(key)
     if (lastAt !== undefined && Date.now() - lastAt < FETCH_FRESHNESS_MS) {
       // Why: freshness window hit — skip the fetch entirely. Do NOT reuse any
       // in-flight promise here; the timestamp is only written on success, so
       // hitting this branch means a previous fetch did succeed recently.
-      return
+      return { ok: true }
     }
 
     const existing = this.fetchInflight.get(key)
@@ -3562,16 +3600,18 @@ export class OrcaRuntimeService {
     }
 
     const promise = gitExecFileAsync(['fetch', remote], { cwd: repoPath })
-      .then(() => {
+      .then((): RemoteFetchResult => {
         // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
         // would make the freshness cache lie about the last known remote state.
         this.fetchLastCompletedAt.set(key, Date.now())
+        return { ok: true }
       })
-      .catch((err) => {
+      .catch((err): RemoteFetchResult => {
         // Why: swallow here so awaiters don't throw at the await site. Outer
         // create/dispatch paths are already tolerant of offline fetch failure;
         // this is the behavioral contract of this helper.
         console.warn(`[fetchRemoteWithCache] ${remote} fetch failed for ${repoPath}:`, err)
+        return { ok: false, errorKind: 'git_error' }
       })
       .finally(() => {
         // Why (§3.3 Lifecycle): evict on BOTH success and rejection. A
@@ -3582,6 +3622,173 @@ export class OrcaRuntimeService {
 
     this.fetchInflight.set(key, promise)
     return promise
+  }
+
+  async fetchRemoteWithCache(repoPath: string, remote: string): Promise<void> {
+    await this.getOrStartRemoteFetch(repoPath, remote)
+  }
+
+  async resolveRemoteTrackingBase(
+    repoPath: string,
+    baseBranch: string
+  ): Promise<RemoteTrackingBase | null> {
+    let remotes: string[]
+    try {
+      const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath })
+      remotes = stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    } catch {
+      return null
+    }
+
+    const remote = remotes
+      .filter((candidate) => baseBranch.startsWith(`${candidate}/`))
+      .sort((a, b) => b.length - a.length)[0]
+    if (!remote) {
+      return null
+    }
+    const branch = baseBranch.slice(remote.length + 1)
+    if (!branch) {
+      return null
+    }
+    return {
+      remote,
+      branch,
+      ref: `refs/remotes/${remote}/${branch}`,
+      base: baseBranch
+    }
+  }
+
+  async hasRemoteTrackingRef(repoPath: string, base: RemoteTrackingBase): Promise<boolean> {
+    try {
+      await gitExecFileAsync(['rev-parse', '--verify', `${base.ref}^{commit}`], { cwd: repoPath })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  recordOptimisticReconcileToken(worktreeId: string): string {
+    const token = randomUUID()
+    this.optimisticReconcileTokens.set(worktreeId, token)
+    return token
+  }
+
+  clearOptimisticReconcileToken(worktreeId: string): void {
+    this.optimisticReconcileTokens.delete(worktreeId)
+  }
+
+  emitWorktreeBaseStatus(event: WorktreeBaseStatusEvent): void {
+    this.notifier?.worktreeBaseStatus?.(event)
+  }
+
+  async reconcileWorktreeBaseStatus(args: {
+    repoId: string
+    repoPath: string
+    worktreeId: string
+    base: RemoteTrackingBase
+    branchName: string
+    createdBaseSha: string
+    token: string
+    fetchPromise: Promise<RemoteFetchResult>
+  }): Promise<void> {
+    const stillCurrent = (): boolean =>
+      this.optimisticReconcileTokens.get(args.worktreeId) === args.token
+    const emit = (event: Omit<WorktreeBaseStatusEvent, 'repoId' | 'worktreeId' | 'base'>): void => {
+      if (!stillCurrent()) {
+        return
+      }
+      this.notifier?.worktreeBaseStatus?.({
+        repoId: args.repoId,
+        worktreeId: args.worktreeId,
+        base: args.base.base,
+        remote: args.base.remote,
+        ...event
+      })
+    }
+    const checkPublishRemoteConflict = async (): Promise<void> => {
+      const publishRemote = 'origin'
+      try {
+        if (publishRemote !== args.base.remote) {
+          const result = await this.getOrStartRemoteFetch(args.repoPath, publishRemote)
+          if (!result.ok) {
+            return
+          }
+        }
+        await gitExecFileAsync(
+          ['rev-parse', '--verify', `refs/remotes/${publishRemote}/${args.branchName}^{commit}`],
+          { cwd: args.repoPath }
+        )
+        if (stillCurrent()) {
+          this.notifier?.worktreeRemoteBranchConflict?.({
+            repoId: args.repoId,
+            worktreeId: args.worktreeId,
+            remote: publishRemote,
+            branchName: args.branchName
+          })
+        }
+      } catch {
+        // No publish-remote conflict is the common case; stay quiet.
+      }
+    }
+
+    const fetchResult = await args.fetchPromise
+    if (!stillCurrent()) {
+      return
+    }
+    if (!fetchResult.ok) {
+      emit({ status: 'unknown' })
+      return
+    }
+
+    try {
+      const { stdout } = await gitExecFileAsync(
+        ['rev-parse', '--verify', `${args.base.ref}^{commit}`],
+        { cwd: args.repoPath }
+      )
+      const postFetchSha = stdout.trim()
+      if (postFetchSha === args.createdBaseSha) {
+        emit({ status: 'current' })
+        await checkPublishRemoteConflict()
+        return
+      }
+
+      try {
+        await gitExecFileAsync(['merge-base', '--is-ancestor', args.createdBaseSha, postFetchSha], {
+          cwd: args.repoPath
+        })
+      } catch {
+        emit({ status: 'base_changed' })
+        await checkPublishRemoteConflict()
+        return
+      }
+
+      const { stdout: countStdout } = await gitExecFileAsync(
+        ['rev-list', '--count', `${args.createdBaseSha}..${postFetchSha}`],
+        { cwd: args.repoPath }
+      )
+      const behind = Number(countStdout.trim())
+      if (!Number.isFinite(behind) || behind <= 0) {
+        emit({ status: 'current' })
+        await checkPublishRemoteConflict()
+        return
+      }
+      const { stdout: logStdout } = await gitExecFileAsync(
+        ['log', '--format=%s', '-n', '5', `${args.createdBaseSha}..${postFetchSha}`],
+        { cwd: args.repoPath }
+      )
+      emit({
+        status: 'drift',
+        behind,
+        recentSubjects: logStdout.split('\n').filter((line) => line.trim().length > 0)
+      })
+      await checkPublishRemoteConflict()
+    } catch (err) {
+      console.warn(`[worktree-base-status] reconcile failed for ${args.worktreeId}:`, err)
+      emit({ status: 'unknown' })
+    }
   }
 
   /**
@@ -3603,17 +3810,23 @@ export class OrcaRuntimeService {
     if (!repo) {
       return null
     }
-    const base = getDefaultBaseRef(repo.path)
+    const meta = this.store.getWorktreeMeta(wt.id)
+    const base =
+      meta?.baseRef || meta?.sparseBaseRef || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
     if (!base) {
       // Why: brand-new repo with no remote primary — nothing to compare
       // against, so there's no meaningful drift to report. Dispatch should
       // not block on a probe that cannot form an opinion.
       return null
     }
-    const remote = base.includes('/') ? base.split('/')[0] : 'origin'
+    const remoteTrackingBase = await this.resolveRemoteTrackingBase(repo.path, base)
+    if (!remoteTrackingBase) {
+      return null
+    }
+    const remote = remoteTrackingBase.remote
     // Why: fetch failures are non-fatal; we proceed with whatever the
     // last-known remote ref points at. `fetchRemoteWithCache` never throws.
-    await this.fetchRemoteWithCache(wt.path, remote)
+    await this.fetchRemoteWithCache(repo.path, remote)
     const drift = getRemoteDrift(wt.path, 'HEAD', base)
     if (!drift) {
       return null
@@ -3719,6 +3932,7 @@ export class OrcaRuntimeService {
         // list` continues to show the stale entry and the branch it had checked out
         // remains locked — other worktrees cannot check it out.
         await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
+        this.clearOptimisticReconcileToken(worktree.id)
         this.store.removeWorktreeMeta(worktree.id)
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
@@ -3730,6 +3944,7 @@ export class OrcaRuntimeService {
       throw new Error(formatWorktreeRemovalError(error, worktree.path, force))
     }
 
+    this.clearOptimisticReconcileToken(worktree.id)
     this.store.removeWorktreeMeta(worktree.id)
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()

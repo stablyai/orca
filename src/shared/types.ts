@@ -111,6 +111,8 @@ export type Worktree = {
   /** ID of the saved preset this worktree was created from, if any. Cleared
    *  when the worktree is no longer sparse on refresh. */
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
@@ -131,6 +133,8 @@ export type WorktreeMeta = {
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 }
 
@@ -859,6 +863,28 @@ export type CreateWorktreeResult = {
   worktree: Worktree
   setup?: WorktreeSetupLaunch
   warning?: string
+  initialBaseStatus?: WorktreeBaseStatusEvent
+}
+
+export type WorktreeBaseStatusKind = 'checking' | 'current' | 'drift' | 'base_changed' | 'unknown'
+
+export type WorktreeBaseStatusEvent = {
+  repoId: string
+  worktreeId: string
+  status: WorktreeBaseStatusKind
+  base: string
+  /** Configured remote name parsed from `base` (longest-prefix match). Absent
+   *  when classification skipped optimistic reconcile (e.g. legacy fallback). */
+  remote?: string
+  behind?: number
+  recentSubjects?: string[]
+}
+
+export type WorktreeRemoteBranchConflictEvent = {
+  repoId: string
+  worktreeId: string
+  remote: string
+  branchName: string
 }
 
 // ─── Updater ─────────────────────────────────────────────────────────

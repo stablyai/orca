@@ -22,6 +22,23 @@ vi.mock('../git/runner', async (importOriginal) => {
 // normally — none of them trigger IO until a runtime method is called.
 import { OrcaRuntimeService } from './orca-runtime'
 
+function fetchCallCount(): number {
+  return gitExecFileAsyncMock.mock.calls.filter(
+    ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
+  ).length
+}
+
+function mockFetchResults(results: (Promise<unknown> | unknown)[]): void {
+  let fetchIndex = 0
+  gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
+    if (argv[0] === 'rev-parse') {
+      return Promise.reject(new Error('not a repo in cache-key test'))
+    }
+    const result = results[fetchIndex++]
+    return result instanceof Promise ? result : Promise.resolve(result)
+  })
+}
+
 describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -36,25 +53,21 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     // `.finally()` eviction, the second caller would await the rejected
     // promise forever (or throw the same error) — the regression pattern
     // described in §3.3.
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+    mockFetchResults([Promise.reject(new Error('network down')), { stdout: '', stderr: '' }])
 
     const runtime = new OrcaRuntimeService(null)
 
     await runtime.fetchRemoteWithCache('/repo/a', 'origin')
     await runtime.fetchRemoteWithCache('/repo/a', 'origin')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(fetchCallCount()).toBe(2)
   })
 
   it('does not advance the freshness timestamp when the fetch rejects', async () => {
     // A rejected fetch that wrote the timestamp would make the 30s freshness
     // cache "lie" — the next caller would skip the fetch on a repo whose
     // last real sync is unknown. §3.3 mandates success-only writes.
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+    mockFetchResults([Promise.reject(new Error('boom')), { stdout: '', stderr: '' }])
 
     const runtime = new OrcaRuntimeService(null)
 
@@ -63,7 +76,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     // short-circuit and skip the fetch. It must still dispatch a real fetch.
     await runtime.fetchRemoteWithCache('/repo/b', 'origin')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(fetchCallCount()).toBe(2)
   })
 
   it('serializes two concurrent callers onto a single git fetch', async () => {
@@ -75,7 +88,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     const pending = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveFetch = () => resolve({ stdout: '', stderr: '' })
     })
-    gitExecFileAsyncMock.mockReturnValueOnce(pending)
+    mockFetchResults([pending])
 
     const runtime = new OrcaRuntimeService(null)
 
@@ -84,16 +97,17 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
 
     // Allow both callers to register before we resolve.
     await Promise.resolve()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    await Promise.resolve()
+    expect(fetchCallCount()).toBe(1)
 
     resolveFetch()
     await Promise.all([first, second])
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(fetchCallCount()).toBe(1)
   })
 
   it('skips the fetch inside the 30s freshness window after a successful fetch', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    mockFetchResults([{ stdout: '', stderr: '' }])
 
     const runtime = new OrcaRuntimeService(null)
 
@@ -101,6 +115,18 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     await runtime.fetchRemoteWithCache('/repo/d', 'origin')
 
     // Second call must short-circuit on the freshness window (no new exec).
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(fetchCallCount()).toBe(1)
+  })
+
+  it('resolves remote-tracking bases with longest configured remote matching', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'foo\nfoo/bar\norigin\n', stderr: '' })
+    const runtime = new OrcaRuntimeService(null)
+
+    await expect(runtime.resolveRemoteTrackingBase('/repo/e', 'foo/bar/main')).resolves.toEqual({
+      remote: 'foo/bar',
+      branch: 'main',
+      ref: 'refs/remotes/foo/bar/main',
+      base: 'foo/bar/main'
+    })
   })
 })

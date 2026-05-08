@@ -22,6 +22,7 @@ import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -39,6 +40,13 @@ import {
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import { createWorktreeSymlinks } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
+
+async function readCommitSha(repoPath: string, ref: string): Promise<string> {
+  const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', `${ref}^{commit}`], {
+    cwd: repoPath
+  })
+  return stdout.trim()
+}
 
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
@@ -260,30 +268,35 @@ export async function createLocalWorktree(
     )
   }
 
-  // Why (§3.3 Lifecycle): fire fetch via the shared 30s-window cache on the
-  // runtime so repeat creates on the same repo reuse the in-flight promise
-  // and dispatch probes benefit from the freshness window. Kicked off BEFORE
-  // the suffix loop / PR probe / path resolution so those operations overlap
-  // the network round-trip — the `await` right before `addWorktree` is the
-  // only point that actually requires fetch completion.
-  //
-  // Why `runtime` is optional: a handful of legacy IPC test harnesses still
-  // call createLocalWorktree without the runtime. In that case we fall back
-  // to the old fire-and-forget behavior (which those tests already expect).
-  // Production `worktrees.ts` always passes runtime, so the happy path
-  // always gets the cache.
-  const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-  const fetchPromise: Promise<void> = runtime
-    ? runtime.fetchRemoteWithCache(repo.path, remote)
-    : gitExecFileAsync(['fetch', remote], { cwd: repo.path })
-        .then(() => undefined)
-        .catch(() => undefined)
+  let optimisticBase: RemoteTrackingBase | null = null
+  let optimisticFetchPromise: Promise<RemoteFetchResult> | null = null
+  let initialBaseStatus: CreateWorktreeResult['initialBaseStatus']
+  let legacyFetchPromise: Promise<void> | null = null
 
-  // Why: emit a progress event so the renderer dialog can switch its spinner
-  // label to "Checking for updates..." while the fetch is in flight, then
-  // "Creating worktree..." after we await it. Renderer falls back to the
-  // static "Creating worktree..." label if no event arrives.
-  emitCreateWorktreeProgress(mainWindow, 'fetching')
+  if (runtime) {
+    optimisticBase = await runtime.resolveRemoteTrackingBase(repo.path, baseBranch)
+    if (optimisticBase) {
+      const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(repo.path, optimisticBase)
+      if (hasLocalBaseRef) {
+        const isFresh = await runtime.isRemoteFetchFresh(repo.path, optimisticBase.remote)
+        if (!isFresh) {
+          optimisticFetchPromise = runtime.getOrStartRemoteFetch(repo.path, optimisticBase.remote)
+        }
+      } else {
+        emitCreateWorktreeProgress(mainWindow, 'fetching')
+        await runtime.fetchRemoteWithCache(repo.path, optimisticBase.remote)
+        if (!(await runtime.hasRemoteTrackingRef(repo.path, optimisticBase))) {
+          throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
+        }
+      }
+    }
+  } else {
+    const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+    legacyFetchPromise = gitExecFileAsync(['fetch', remote], { cwd: repo.path })
+      .then(() => undefined)
+      .catch(() => undefined)
+    emitCreateWorktreeProgress(mainWindow, 'fetching')
+  }
   // Why: WSL worktrees live under ~/orca/workspaces inside the WSL
   // filesystem. Validate against that root, not the Windows workspace dir.
   // If WSL home lookup fails, keep using the configured workspace root so
@@ -406,15 +419,9 @@ export async function createLocalWorktree(
     }
   }
 
-  // Why (§3.3): gate on the fetch we fired at the top of this function.
-  // Pre-create probes (branch-conflict, PR probe, path resolution, sparse
-  // prep) already ran concurrently with the fetch; in the warm case this
-  // await is a no-op. In the cold case the spinner has already shown
-  // "Checking for updates..." so the user sees the wait is legible.
-  //
-  // `fetchRemoteWithCache` never rejects (log-and-proceed on offline
-  // failure), so the bare `await` does not need a try/catch here.
-  await fetchPromise
+  if (legacyFetchPromise) {
+    await legacyFetchPromise
+  }
   emitCreateWorktreeProgress(mainWindow, 'creating')
 
   await (sparseDirectories.length > 0
@@ -451,6 +458,7 @@ export async function createLocalWorktree(
     // See createRemoteWorktree above: createdAt protects the newly-created
     // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
     createdAt: now,
+    baseRef: baseBranch,
     ...(shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
       ? { displayName: effectiveRequestedName }
       : {}),
@@ -520,9 +528,48 @@ export async function createLocalWorktree(
     }
   }
 
+  if (runtime && optimisticBase && optimisticFetchPromise) {
+    initialBaseStatus = {
+      repoId: repo.id,
+      worktreeId,
+      status: 'checking',
+      base: optimisticBase.base,
+      remote: optimisticBase.remote
+    }
+    runtime.emitWorktreeBaseStatus(initialBaseStatus)
+    try {
+      const createdBaseSha = await readCommitSha(created.path, 'HEAD')
+      const token = runtime.recordOptimisticReconcileToken(worktreeId)
+      void runtime
+        .reconcileWorktreeBaseStatus({
+          repoId: repo.id,
+          repoPath: repo.path,
+          worktreeId,
+          base: optimisticBase,
+          branchName,
+          createdBaseSha,
+          token,
+          fetchPromise: optimisticFetchPromise
+        })
+        .catch((error) => {
+          console.warn(`[worktree-base-status] reconcile failed for ${worktreeId}:`, error)
+        })
+    } catch (error) {
+      console.warn(`[worktree-base-status] failed to read created base for ${worktreeId}:`, error)
+      runtime.emitWorktreeBaseStatus({
+        repoId: repo.id,
+        worktreeId,
+        status: 'unknown',
+        base: optimisticBase.base,
+        remote: optimisticBase.remote
+      })
+    }
+  }
+
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree,
-    ...(setup ? { setup } : {})
+    ...(setup ? { setup } : {}),
+    ...(initialBaseStatus ? { initialBaseStatus } : {})
   }
 }

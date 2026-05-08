@@ -135,6 +135,17 @@ describe('registerWorktreeHandlers', () => {
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn()
   }
+  let runtimeStub: {
+    resolveRemoteTrackingBase: ReturnType<typeof vi.fn>
+    hasRemoteTrackingRef: ReturnType<typeof vi.fn>
+    isRemoteFetchFresh: ReturnType<typeof vi.fn>
+    getOrStartRemoteFetch: ReturnType<typeof vi.fn>
+    fetchRemoteWithCache: ReturnType<typeof vi.fn>
+    emitWorktreeBaseStatus: ReturnType<typeof vi.fn>
+    recordOptimisticReconcileToken: ReturnType<typeof vi.fn>
+    reconcileWorktreeBaseStatus: ReturnType<typeof vi.fn>
+    clearOptimisticReconcileToken: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     for (const m of [
@@ -208,9 +219,9 @@ describe('registerWorktreeHandlers', () => {
     getDefaultBaseRefMock.mockReturnValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
-    // Why: createLocalWorktree now fires `git fetch` in the background via
-    // gitExecFileAsync. The default mock must return a resolved promise so
-    // the fire-and-forget `.catch()` chain doesn't trip on undefined.
+    // Why: createLocalWorktree can still hit legacy git fetch fallback in
+    // narrow unit harnesses. Return a resolved promise so catch/then chains
+    // don't trip on undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getEffectiveHooksMock.mockReturnValue(null)
     shouldRunSetupForCreateMock.mockReturnValue(false)
@@ -252,10 +263,16 @@ describe('registerWorktreeHandlers', () => {
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). A minimal stub
     // keeps these tests focused on create-flow semantics; the full
     // cache behavior is covered by fetch-remote-cache.test.ts.
-    const runtimeStub = {
-      fetchRemoteWithCache: async () => {
-        /* noop — fetch mocked at gitExecFileAsync level via gitExecFileAsyncMock */
-      }
+    runtimeStub = {
+      resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
+      hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
+      isRemoteFetchFresh: vi.fn().mockResolvedValue(false),
+      getOrStartRemoteFetch: vi.fn().mockResolvedValue({ ok: true }),
+      fetchRemoteWithCache: vi.fn().mockResolvedValue(undefined),
+      emitWorktreeBaseStatus: vi.fn(),
+      recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
+      reconcileWorktreeBaseStatus: vi.fn(),
+      clearOptimisticReconcileToken: vi.fn()
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -294,6 +311,65 @@ describe('registerWorktreeHandlers', () => {
         branch: 'improve-dashboard-2'
       })
     })
+  })
+
+  it('does not await a cold fetch when the remote-tracking base exists locally', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    let resolveFetch!: () => void
+    const pendingFetch = new Promise<{ ok: true }>((resolve) => {
+      resolveFetch = () => resolve({ ok: true })
+    })
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    runtimeStub.getOrStartRemoteFetch.mockReturnValue(pendingFetch)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'created-sha',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
+
+    const createPromise = handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    }) as Promise<unknown>
+
+    const result = await Promise.race([
+      createPromise,
+      new Promise((resolve) => setTimeout(() => resolve('timed-out'), 0))
+    ])
+    expect(result).not.toBe('timed-out')
+
+    expect(runtimeStub.getOrStartRemoteFetch).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
+    expect(runtimeStub.emitWorktreeBaseStatus).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      worktreeId: 'repo-1::/workspace/improve-dashboard',
+      status: 'checking',
+      base: 'origin/main',
+      remote: 'origin'
+    })
+    expect(runtimeStub.reconcileWorktreeBaseStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdBaseSha: 'created-sha',
+        fetchPromise: pendingFetch
+      })
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        initialBaseStatus: expect.objectContaining({ status: 'checking', base: 'origin/main' })
+      })
+    )
+    resolveFetch()
   })
 
   it('throws a clear error when no default base ref can be resolved', async () => {
