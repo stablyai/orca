@@ -282,12 +282,12 @@ export type UISlice = {
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
-  // Why: lets the SourceControl sidebar request that a specific diff-comment
-  // card open its inline editor. Cleared by the card after it consumes the
-  // request (or when the user cancels), so the same id can be requested again
-  // later without the card seeing a stale value.
-  editingDiffCommentId: string | null
-  setEditingDiffCommentId: (id: string | null) => void
+  // Why: lets the SourceControl sidebar request that the diff editor scroll
+  // to a specific note. Cleared by the diff decorator after it reveals the
+  // line, so the same id can be requested again later without the surface
+  // seeing a stale value.
+  scrollToDiffCommentId: string | null
+  setScrollToDiffCommentId: (id: string | null) => void
   persistedUIReady: boolean
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
@@ -656,8 +656,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   pendingRevealWorktreeId: null,
   revealWorktreeInSidebar: (worktreeId) => set({ pendingRevealWorktreeId: worktreeId }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktreeId: null }),
-  editingDiffCommentId: null,
-  setEditingDiffCommentId: (id) => set({ editingDiffCommentId: id }),
+  scrollToDiffCommentId: null,
+  setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
   uiZoomLevel: 0,
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),

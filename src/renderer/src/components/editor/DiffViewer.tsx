@@ -61,8 +61,8 @@ export default function DiffViewer({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const editingDiffCommentId = useAppStore((s) => s.editingDiffCommentId)
-  const setEditingDiffCommentId = useAppStore((s) => s.setEditingDiffCommentId)
+  const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
+  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   // Why: subscribe to the raw comments array on the worktree so selector
   // identity only changes when diffComments actually changes on this worktree.
   // Filtering by relativePath happens in a memo below.
@@ -92,15 +92,15 @@ export default function DiffViewer({
 
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
-  // Why: only forward the pending edit id when this viewer owns the matching
+  // Why: only forward the pending scroll id when this viewer owns the matching
   // comment (worktree+path). Otherwise unrelated viewers would also try to
-  // open the editor and ack the request first, racing the intended viewer.
-  const pendingEditForThisViewer = useMemo(() => {
-    if (!worktreeId || !editingDiffCommentId) {
+  // scroll and ack the request first, racing the intended viewer.
+  const pendingScrollForThisViewer = useMemo(() => {
+    if (!worktreeId || !scrollToDiffCommentId) {
       return null
     }
-    return diffComments.some((c) => c.id === editingDiffCommentId) ? editingDiffCommentId : null
-  }, [editingDiffCommentId, diffComments, worktreeId])
+    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
+  }, [scrollToDiffCommentId, diffComments, worktreeId])
 
   // Why: gate the decorator on having a comment target. Local diffs persist
   // notes to worktree metadata; GitHub PR diffs post line comments remotely.
@@ -119,8 +119,8 @@ export default function DiffViewer({
       }
     },
     onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
-    pendingEditCommentId: pendingEditForThisViewer,
-    onPendingEditConsumed: () => setEditingDiffCommentId(null)
+    pendingScrollCommentId: pendingScrollForThisViewer,
+    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
 
   useEffect(() => {

@@ -78,8 +78,8 @@ export function DiffSectionItem({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const editingDiffCommentId = useAppStore((s) => s.editingDiffCommentId)
-  const setEditingDiffCommentId = useAppStore((s) => s.setEditingDiffCommentId)
+  const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
+  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   // Why: subscribe to the raw comments array on the worktree (reference-
   // stable across unrelated store updates) and filter by filePath inside a
   // memo. Selecting a fresh `.filter(...)` result would invalidate on every
@@ -128,15 +128,15 @@ export function DiffSectionItem({
 
   useEffect(() => () => disposeDiffModels(), [disposeDiffModels])
 
-  // Why: only forward the pending edit id when it matches a comment in this
+  // Why: only forward the pending scroll id when it matches a comment in this
   // section so unrelated sections don't keep re-rendering their decorator
-  // every time the sidebar requests an edit elsewhere.
-  const pendingEditForThisSection = useMemo(() => {
-    if (!editingDiffCommentId) {
+  // every time the sidebar requests a scroll elsewhere.
+  const pendingScrollForThisSection = useMemo(() => {
+    if (!scrollToDiffCommentId) {
       return null
     }
-    return diffComments.some((c) => c.id === editingDiffCommentId) ? editingDiffCommentId : null
-  }, [editingDiffCommentId, diffComments])
+    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
+  }, [scrollToDiffCommentId, diffComments])
 
   useDiffCommentDecorator({
     editor: modifiedEditor,
@@ -146,8 +146,8 @@ export function DiffSectionItem({
     onAddCommentClick: ({ lineNumber, top }) => setPopover({ lineNumber, top }),
     onDeleteComment: (id) => void deleteDiffComment(worktreeId, id),
     onUpdateComment: (id, body) => updateDiffComment(worktreeId, id, body),
-    pendingEditCommentId: pendingEditForThisSection,
-    onPendingEditConsumed: () => setEditingDiffCommentId(null)
+    pendingScrollCommentId: pendingScrollForThisSection,
+    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
 
   useEffect(() => {

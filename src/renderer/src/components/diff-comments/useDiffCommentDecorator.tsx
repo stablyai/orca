@@ -25,12 +25,12 @@ type DecoratorArgs = {
   // diffs persisted to WorktreeMeta). GitHub PR review surfaces don't pass
   // this — their notes are remote and can't be edited via this slice.
   onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
-  // Why: pending-edit request from the SourceControl sidebar. When this id
-  // matches a card the card auto-enters its inline editor on the next render.
-  // The decorator forwards it through; the card calls the ack callback so we
-  // know to stop forcing the editor open on subsequent renders.
-  pendingEditCommentId?: string | null
-  onPendingEditConsumed?: () => void
+  // Why: pending-scroll request from the SourceControl sidebar. When this id
+  // matches a comment in this surface the decorator reveals that line in the
+  // editor and calls the ack callback so the same id can be requested again
+  // later without the surface seeing a stale value.
+  pendingScrollCommentId?: string | null
+  onPendingScrollConsumed?: () => void
 }
 
 type ZoneEntry = {
@@ -43,12 +43,6 @@ type ZoneEntry = {
   delegate: monacoEditor.IViewZone
   root: Root
   lastBody: string
-  // Why: track the last `pendingEdit` prop we rendered so the patch loop
-  // re-renders whenever it transitions. Without this, after the card acks the
-  // pending request (clearing the global to null), the decorator's next pass
-  // would skip the re-render — the card keeps `pendingEdit=true` in props, and
-  // a later `editing=false` toggle would re-trigger its open-editor effect.
-  lastPendingEdit: boolean
 }
 
 // Why: card chrome (header/meta/border/padding) plus per-line body height. Used
@@ -67,8 +61,8 @@ export function useDiffCommentDecorator({
   onAddCommentClick,
   onDeleteComment,
   onUpdateComment,
-  pendingEditCommentId,
-  onPendingEditConsumed
+  pendingScrollCommentId,
+  onPendingScrollConsumed
 }: DecoratorArgs): void {
   const hoverLineRef = useRef<number | null>(null)
   // Why: one React root per view zone. Body updates re-render into the
@@ -84,11 +78,11 @@ export function useDiffCommentDecorator({
   const onAddCommentClickRef = useRef(onAddCommentClick)
   const onDeleteCommentRef = useRef(onDeleteComment)
   const onUpdateCommentRef = useRef(onUpdateComment)
-  const onPendingEditConsumedRef = useRef(onPendingEditConsumed)
+  const onPendingScrollConsumedRef = useRef(onPendingScrollConsumed)
   onAddCommentClickRef.current = onAddCommentClick
   onDeleteCommentRef.current = onDeleteComment
   onUpdateCommentRef.current = onUpdateComment
-  onPendingEditConsumedRef.current = onPendingEditConsumed
+  onPendingScrollConsumedRef.current = onPendingScrollConsumed
 
   useEffect(() => {
     if (!editor) {
@@ -340,8 +334,6 @@ export function useDiffCommentDecorator({
               : undefined
           }
           onContentResize={() => resizeZone(comment.id)}
-          pendingEdit={pendingEditCommentId === comment.id}
-          onPendingEditConsumed={() => onPendingEditConsumedRef.current?.()}
         />
       )
     }
@@ -401,8 +393,7 @@ export function useDiffCommentDecorator({
           domNode: dom,
           delegate,
           root,
-          lastBody: c.body,
-          lastPendingEdit: pendingEditCommentId === c.id
+          lastBody: c.body
         })
       }
 
@@ -413,17 +404,11 @@ export function useDiffCommentDecorator({
         if (!entry) {
           continue
         }
-        const nextPendingEdit = pendingEditCommentId === c.id
-        // Why: re-render when body OR pending-edit state changed. Skipping on
-        // the body alone left a stale `pendingEdit=true` in the card's props
-        // after ack, which then re-triggered the open-editor effect on the
-        // next `editing` toggle (Cancel re-entered edit mode).
-        if (entry.lastBody === c.body && entry.lastPendingEdit === nextPendingEdit) {
+        if (entry.lastBody === c.body) {
           continue
         }
         renderCard(entry.root, c)
         entry.lastBody = c.body
-        entry.lastPendingEdit = nextPendingEdit
       }
     })
 
@@ -441,5 +426,22 @@ export function useDiffCommentDecorator({
     // forcing a full rebuild — exactly the flicker this diff-based pass is
     // meant to avoid. Zone teardown lives in the editor-scoped effect above,
     // which only fires when the editor itself is replaced/unmounted.
-  }, [editor, filePath, worktreeId, comments, pendingEditCommentId])
+  }, [editor, filePath, worktreeId, comments])
+
+  // Why: scroll the diff editor to the requested note when the sidebar asks
+  // for it. The decorator is the right place: it already filters comments to
+  // this surface, so we know the line exists in this editor's modified model.
+  // We ack immediately to clear the global so the same id can be requested
+  // again later (e.g. clicking the same row twice).
+  useEffect(() => {
+    if (!editor || !pendingScrollCommentId) {
+      return
+    }
+    const target = comments.find((c) => c.id === pendingScrollCommentId)
+    if (!target) {
+      return
+    }
+    editor.revealLineInCenter(target.lineNumber)
+    onPendingScrollConsumedRef.current?.()
+  }, [editor, comments, pendingScrollCommentId])
 }
