@@ -197,7 +197,11 @@ export async function resolveAuthorizedPath(
     // (delete/rename) act on the link itself.
     const realParent = await realpath(dirname(resolvedTarget))
     const candidateTarget = resolve(realParent, basename(resolvedTarget))
-    if (!(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store))) {
+    if (
+      !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
+        canonicalSourcePath: resolvedTarget
+      }))
+    ) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
     }
     return candidateTarget
@@ -205,7 +209,11 @@ export async function resolveAuthorizedPath(
 
   try {
     const realTarget = await realpath(resolvedTarget)
-    if (!(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store))) {
+    if (
+      !(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store, {
+        canonicalSourcePath: resolvedTarget
+      }))
+    ) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
     }
     return realTarget
@@ -216,7 +224,11 @@ export async function resolveAuthorizedPath(
 
     const realParent = await realpath(dirname(resolvedTarget))
     const candidateTarget = resolve(realParent, basename(resolvedTarget))
-    if (!(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store))) {
+    if (
+      !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
+        canonicalSourcePath: resolvedTarget
+      }))
+    ) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
     }
     return candidateTarget
@@ -225,7 +237,8 @@ export async function resolveAuthorizedPath(
 
 async function isPathAllowedIncludingRegisteredWorktrees(
   targetPath: string,
-  store: Store
+  store: Store,
+  options: { canonicalSourcePath?: string } = {}
 ): Promise<boolean> {
   if (isPathAllowed(targetPath, store)) {
     return true
@@ -235,12 +248,19 @@ async function isPathAllowedIncludingRegisteredWorktrees(
     return true
   }
 
+  if (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath)) {
+    return true
+  }
+
   await ensureAuthorizedRootsCache(store)
 
   // Why: external linked worktrees are already trusted for git operations.
   // Cache their normalized roots once and reuse that index so quick-open and
   // file explorer do not spawn `git worktree list` on every filesystem read.
-  return isRegisteredWorktreePath(targetPath)
+  return (
+    isRegisteredWorktreePath(targetPath) ||
+    (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath))
+  )
 }
 
 /**
@@ -312,6 +332,41 @@ function isRegisteredWorktreePath(targetPath: string): boolean {
     }
   }
   return false
+}
+
+async function isPathAllowedByCanonicalRegisteredRoot(
+  targetPath: string,
+  sourcePath: string | undefined
+): Promise<boolean> {
+  if (!sourcePath) {
+    return false
+  }
+  const textualRoot = findRegisteredWorktreeRoot(sourcePath)
+  if (!textualRoot) {
+    return false
+  }
+  const canonicalRoot = await normalizeExistingPath(textualRoot)
+  if (!isDescendantOrEqual(targetPath, canonicalRoot)) {
+    return false
+  }
+  // Why: #1524 stopped realpath'ing every worktree root during background
+  // refreshes to avoid macOS privacy prompts. Cache only the root the user is
+  // actively accessing so /var→/private/var aliases work without broad probes.
+  registeredWorktreeRoots.add(canonicalRoot)
+  return true
+}
+
+function findRegisteredWorktreeRoot(targetPath: string): string | null {
+  let bestRoot: string | null = null
+  for (const root of registeredWorktreeRoots) {
+    if (!isDescendantOrEqual(targetPath, root)) {
+      continue
+    }
+    if (!bestRoot || root.length > bestRoot.length) {
+      bestRoot = root
+    }
+  }
+  return bestRoot
 }
 
 async function normalizeExistingPath(resolvedPath: string): Promise<string> {
