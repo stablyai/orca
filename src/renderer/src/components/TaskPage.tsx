@@ -1097,17 +1097,20 @@ export default function TaskPage(): React.JSX.Element {
   }, [taskSource, linearStatus.connected])
 
   // Why: GitLab task-source data fetch. Pulls MRs (filtered by state)
-  // and issues for the primary selected repo in parallel; merges and
-  // sorts by updatedAt desc so the rendered list reflects whichever
-  // resource the user touched last. v1 keeps the surface single-repo —
-  // the cross-repo aggregation that powers the GitHub list lives in a
-  // dedicated store slice and isn't worth porting until the GitLab side
-  // graduates beyond paste-URL + tab-list demos.
+  // Why: fetch in parallel across every selected non-remote repo and
+  // merge the results, mirroring the GitHub side's cross-repo
+  // aggregation. Each repo's project is resolved from its git remote
+  // by the main process — non-GitLab remotes return an error envelope
+  // which we silently drop (filter chips on a GitHub-only repo
+  // shouldn't surface "no GitLab project" banners).
   useEffect(() => {
     if (taskSource !== 'gitlab') {
       return
     }
-    if (!primaryRepo?.path || primaryRepo.connectionId) {
+    // Why: GitLab queries don't work over SSH-relay (yet) and folder-
+    // mode repos have no remotes to derive a project from. Filter both.
+    const eligibleRepos = selectedRepos.filter((r) => !r.connectionId)
+    if (eligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
       setGitlabError(null)
@@ -1116,35 +1119,54 @@ export default function TaskPage(): React.JSX.Element {
     let stale = false
     setGitlabLoading(true)
     setGitlabError(null)
-    // Why: previously TaskPage merged listMRs + listIssues inline. The
-    // merge logic is now centralized in `gitlab:listWorkItems` so the
-    // 'merged'-skip-issues / sort-by-updated rule lives in one place
-    // and benefits any future caller (the picker, future widgets).
-    void window.api.gl
-      .listWorkItems({
-        repoPath: primaryRepo.path,
-        state: gitlabFilter,
-        page: 1,
-        perPage: 50
-      })
-      .then((result) => {
+    void Promise.allSettled(
+      eligibleRepos.map((repo) =>
+        window.api.gl
+          .listWorkItems({
+            repoPath: repo.path,
+            state: gitlabFilter,
+            page: 1,
+            perPage: 50
+          })
+          .then((result) => ({
+            repoId: repo.id,
+            items: (result as { items: GitLabWorkItem[] }).items,
+            // Why: not_found just means "this repo isn't a GitLab project"
+            // (e.g. a GitHub-only repo in a mixed selection). Drop it
+            // silently so the GitLab list doesn't show false errors.
+            error:
+              (result as { error?: { type?: string; message: string } }).error?.type === 'not_found'
+                ? undefined
+                : (result as { error?: { message: string } }).error
+          }))
+      )
+    )
+      .then((results) => {
         if (stale) {
           return
         }
-        const items = (result as { items: GitLabWorkItem[] }).items.map((it) => ({
-          ...it,
-          repoId: primaryRepo.id
-        }))
-        setGitlabItems(items)
-        const err = (result as { error?: { message: string } }).error
-        if (err) {
-          setGitlabError(err.message)
+        const merged: GitLabWorkItem[] = []
+        const errs: string[] = []
+        for (const r of results) {
+          if (r.status !== 'fulfilled') {
+            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            continue
+          }
+          for (const item of r.value.items) {
+            merged.push({ ...item, repoId: r.value.repoId })
+          }
+          if (r.value.error) {
+            errs.push(r.value.error.message)
+          }
         }
-      })
-      .catch((err) => {
-        if (!stale) {
-          setGitlabError(err instanceof Error ? err.message : String(err))
-          setGitlabItems([])
+        merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+        setGitlabItems(merged)
+        // Why: only surface an error banner when EVERY eligible repo
+        // failed — partial failure (one of three GitLab projects has
+        // a permission issue) is better signaled by the bare row count
+        // than a banner that overshadows the working repos.
+        if (errs.length > 0 && merged.length === 0) {
+          setGitlabError(errs[0])
         }
       })
       .finally(() => {
@@ -1159,9 +1181,10 @@ export default function TaskPage(): React.JSX.Element {
     taskSource,
     gitlabFilter,
     gitlabRefreshNonce,
-    primaryRepo?.id,
-    primaryRepo?.path,
-    primaryRepo?.connectionId
+    // Why: depend on the joined ids string rather than the array
+    // reference so the effect doesn't re-run on every render even when
+    // selectedRepos hasn't changed shape.
+    selectedRepos.map((r) => `${r.id}|${r.path}|${r.connectionId ?? ''}`).join(',')
   ])
 
   // Why: Todos fetch lives in its own effect — different trigger
@@ -3415,7 +3438,16 @@ export default function TaskPage(): React.JSX.Element {
 
       <GitLabItemDialog
         item={gitlabDialogItem}
-        repoPath={primaryRepo?.path ?? null}
+        // Why: dialog's repoPath has to come from the clicked item's
+        // own repo, not primaryRepo — items may originate in any of
+        // the selected repos now that the GitLab fetch is multi-repo.
+        repoPath={
+          gitlabDialogItem
+            ? (selectedRepos.find((r) => r.id === gitlabDialogItem.repoId)?.path ??
+              primaryRepo?.path ??
+              null)
+            : null
+        }
         onClose={() => setGitlabDialogItem(null)}
       />
 
