@@ -737,6 +737,13 @@ const api = {
       perPage?: number
     }): Promise<unknown> => ipcRenderer.invoke('gitlab:listMRs', args),
 
+    listWorkItems: (args: {
+      repoPath: string
+      state?: 'opened' | 'merged' | 'closed' | 'all'
+      page?: number
+      perPage?: number
+    }): Promise<unknown> => ipcRenderer.invoke('gitlab:listWorkItems', args),
+
     issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gitlab:issue', args),
 

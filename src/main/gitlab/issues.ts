@@ -74,20 +74,26 @@ export async function getIssue(
  * Mirrors github/listIssues — returns a structured IssueListResult so
  * permission errors surface in the UI instead of collapsing to "No issues".
  */
+// Why: GitLab issues only have 'opened' / 'closed' lifecycle states.
+// 'all' maps to no state param so the API returns both.
+export type IssueListState = 'opened' | 'closed' | 'all'
+
 export async function listIssues(
   repoPath: string,
   limit = 20,
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  state: IssueListState = 'opened'
 ): Promise<IssueListResult> {
   const knownHosts = await getGlabKnownHosts()
   const { source: projectRef } = await resolveIssueSource(repoPath, preference, knownHosts)
   await acquire()
   try {
     if (projectRef) {
+      const stateParam = state === 'all' ? '' : `&state=${state}`
       const { stdout } = await glabExecFileAsync(
         [
           'api',
-          `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&state=opened&order_by=updated_at&sort=desc`
+          `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&order_by=updated_at&sort=desc${stateParam}`
         ],
         { cwd: repoPath }
       )
@@ -99,9 +105,12 @@ export async function listIssues(
         items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
       }
     }
-    // Fallback — let glab infer project from cwd.
+    // Fallback — let glab infer project from cwd. The CLI flag for
+    // state varies per glab version (--opened, --closed, --all);
+    // pass through only when targeting a specific state.
+    const stateFlag = state === 'closed' ? ['--closed'] : state === 'all' ? ['--all'] : ['--opened']
     const { stdout } = await glabExecFileAsync(
-      ['issue', 'list', '--output', 'json', '--per-page', String(limit), '--opened'],
+      ['issue', 'list', '--output', 'json', '--per-page', String(limit), ...stateFlag],
       { cwd: repoPath }
     )
     const data = JSON.parse(stdout) as unknown[]

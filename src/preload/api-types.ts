@@ -659,6 +659,14 @@ export type PreloadApi = {
       page?: number
       perPage?: number
     }) => Promise<ListMergeRequestsResult>
+    /** Combined MR + issue list filtered by state. Issues are skipped
+     *  when state is 'merged' (issues don't merge). */
+    listWorkItems: (args: {
+      repoPath: string
+      state?: MRListState
+      page?: number
+      perPage?: number
+    }) => Promise<ListMergeRequestsResult>
     issue: (args: { repoPath: string; number: number }) => Promise<GitLabIssueInfo | null>
     listIssues: (args: { repoPath: string; limit?: number }) => Promise<GitLabIssueInfo[]>
     createIssue: (args: {

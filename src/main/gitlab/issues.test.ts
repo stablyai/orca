@@ -92,7 +92,7 @@ describe('gitlab issue operations', () => {
     expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'api',
-        'projects/stablyai%2Forca/issues?per_page=5&state=opened&order_by=updated_at&sort=desc'
+        'projects/stablyai%2Forca/issues?per_page=5&order_by=updated_at&sort=desc&state=opened'
       ],
       { cwd: '/repo-root' }
     )

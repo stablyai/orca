@@ -19,6 +19,7 @@ import {
   listLabels,
   listMergeRequests,
   listTodos,
+  listWorkItems,
   updateIssue
 } from '../gitlab/client'
 import { computeNextGitLabRecents } from '../../shared/gitlab-projects'
@@ -130,6 +131,25 @@ export function registerGitLabHandlers(store: Store): void {
     const repo = assertRegisteredRepo(args.repoPath, store)
     return listAssignableUsers(repo.path)
   })
+
+  // Why: combined MR + issue list — Tasks screen and any future picker
+  // that wants a unified view. Centralizes the merge / sort logic so
+  // callers don't have to re-implement it.
+  ipcMain.handle(
+    'gitlab:listWorkItems',
+    async (
+      _event,
+      args: {
+        repoPath: string
+        state?: 'opened' | 'merged' | 'closed' | 'all'
+        page?: number
+        perPage?: number
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return listWorkItems(repo.path, args.state ?? 'opened', args.page ?? 1, args.perPage ?? 20)
+    }
+  )
 
   // Why: My Todos surface — cross-project, user-scoped. The repoPath is
   // only used for the registered-repo guard; `glab api todos` doesn't

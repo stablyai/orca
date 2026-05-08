@@ -2,6 +2,8 @@
 co-locating GitLab MR/issue/work-item operations keeps the concurrency
 acquire/release pattern obvious across operations. */
 import type {
+  ClassifiedError,
+  GitLabPagedResult,
   GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
@@ -23,6 +25,7 @@ import {
   resolveIssueSource,
   type ProjectRef
 } from './gl-utils'
+import type { IssueListState } from './issues'
 
 // Why: glab REST API addresses projects by URL-encoded path. Centralized
 // so call sites don't forget the slash escapes for nested groups.
@@ -241,6 +244,126 @@ export async function getWorkItemByProjectRef(
     return mapIssueToWorkItem(data, projectRef.path)
   } catch {
     return null
+  } finally {
+    release()
+  }
+}
+
+// Why: combined MR + issue list for the Tasks-screen and picker
+// surfaces. Centralizes the merge logic that TaskPage previously did
+// inline so the IPC layer has a single function to call. Pagination is
+// approximate — the v1 contract is "page 1 of perPage MRs + perPage
+// issues, mixed by updatedAt desc" which is good enough for a typical
+// project's <100 active items.
+export type ListWorkItemsState = MRListState
+
+function mrStateToIssueState(state: MRListState): IssueListState | null {
+  // Why: GitLab issues don't have a 'merged' state. When the user is
+  // filtering MRs to merged, return null so listWorkItems can skip the
+  // issues fetch entirely instead of mis-mapping to opened/closed.
+  switch (state) {
+    case 'opened':
+      return 'opened'
+    case 'closed':
+      return 'closed'
+    case 'all':
+      return 'all'
+    case 'merged':
+      return null
+  }
+}
+
+export async function listWorkItems(
+  repoPath: string,
+  state: MRListState = 'opened',
+  page = 1,
+  perPage = 20,
+  preference?: IssueSourcePreference
+): Promise<GitLabPagedResult<GitLabWorkItem>> {
+  const issueState = mrStateToIssueState(state)
+  const knownHosts = await getGlabKnownHosts()
+  const { source: projectRef } = await resolveIssueSource(repoPath, preference, knownHosts)
+  if (!projectRef) {
+    return {
+      items: [],
+      page,
+      perPage,
+      totalCount: 0,
+      totalPages: 0,
+      error: {
+        type: 'not_found',
+        message: 'No GitLab project found for this repository.'
+      }
+    }
+  }
+  // Why: fan out the two read calls so the response time is the slower
+  // of the two, not their sum. Errors classify per-side; an MR-side
+  // failure with a successful issues fetch still surfaces issues with
+  // an error envelope.
+  //
+  // Why we don't go through `listIssues` here: that function returns
+  // IssueInfo, which deliberately strips the raw glab fields (notably
+  // `updated_at`). The combined sort needs updatedAt, so we read the
+  // raw issues API directly and run mapIssueToWorkItem against the
+  // raw payload instead.
+  const [mrs, issues] = await Promise.all([
+    listMergeRequests(repoPath, state, page, perPage, preference),
+    issueState === null
+      ? Promise.resolve({
+          items: [] as GitLabWorkItem[],
+          error: undefined as ClassifiedError | undefined
+        })
+      : fetchIssuesAsWorkItems(repoPath, projectRef, issueState, perPage)
+  ])
+  const merged = [...mrs.items, ...issues.items].sort((a, b) =>
+    (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+  )
+  // Why: combine error envelopes — the renderer's banner cares about
+  // any failed fetch, not which one. MR-side error wins because it's
+  // strictly more informative than an issues-side error in most
+  // permission scenarios (issues can be disabled per project).
+  const error: ClassifiedError | undefined = mrs.error ?? issues.error
+  return {
+    items: merged,
+    page,
+    perPage,
+    // Why: approximate totals — an exact combined-pagination total would
+    // require a server-side ordering primitive across two distinct
+    // resources, which the GitLab API doesn't offer. MR total is the
+    // right direction; the UI's "Page X of Y" reads as a hint, not a
+    // strict count.
+    totalCount: mrs.totalCount,
+    totalPages: mrs.totalPages,
+    ...(error ? { error } : {})
+  }
+}
+
+async function fetchIssuesAsWorkItems(
+  repoPath: string,
+  projectRef: ProjectRef,
+  state: IssueListState,
+  perPage: number
+): Promise<{ items: GitLabWorkItem[]; error: ClassifiedError | undefined }> {
+  await acquire()
+  try {
+    const stateParam = state === 'all' ? '' : `&state=${state}`
+    const { stdout } = await glabExecFileAsync(
+      [
+        'api',
+        `projects/${encodedProject(projectRef.path)}/issues?per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}`
+      ],
+      { cwd: repoPath }
+    )
+    const data = JSON.parse(stdout) as Parameters<typeof mapIssueToWorkItem>[0][]
+    return {
+      items: data.map((d) => mapIssueToWorkItem(d, projectRef.path)),
+      error: undefined
+    }
+  } catch (err) {
+    return {
+      items: [],
+      error: classifyListIssuesError(err instanceof Error ? err.message : String(err))
+    }
   } finally {
     release()
   }

@@ -1116,47 +1116,30 @@ export default function TaskPage(): React.JSX.Element {
     let stale = false
     setGitlabLoading(true)
     setGitlabError(null)
-    void Promise.all([
-      window.api.gl.listMRs({
+    // Why: previously TaskPage merged listMRs + listIssues inline. The
+    // merge logic is now centralized in `gitlab:listWorkItems` so the
+    // 'merged'-skip-issues / sort-by-updated rule lives in one place
+    // and benefits any future caller (the picker, future widgets).
+    void window.api.gl
+      .listWorkItems({
         repoPath: primaryRepo.path,
         state: gitlabFilter,
         page: 1,
         perPage: 50
-      }),
-      // Why: GitLab issues only have 'opened' / 'closed' states; the
-      // filter chip values 'merged' and 'all' don't apply to issues.
-      // Map 'merged' to 'opened' (no merged issues exist) and 'all' to
-      // a no-state pass-through so the issues list still surfaces
-      // alongside MRs in those modes.
-      gitlabFilter === 'merged'
-        ? Promise.resolve([])
-        : window.api.gl.listIssues({
-            repoPath: primaryRepo.path,
-            limit: 50
-          })
-    ])
-      .then(([mrs, issues]) => {
+      })
+      .then((result) => {
         if (stale) {
           return
         }
-        const mrItems = (mrs as { items: GitLabWorkItem[]; error?: { message: string } }).items
-        const mrErr = (mrs as { error?: { message: string } }).error
-        if (mrErr) {
-          setGitlabError(mrErr.message)
-        }
-        // Why: listIssues returns the bare items array (the IPC unwraps
-        // the structured envelope, matching gh:listIssues); listMRs
-        // returns the envelope with items + error. Stamp repoId on both
-        // so row attribution works after the merge.
-        const issueItems = (issues as GitLabWorkItem[]).map((it) => ({
+        const items = (result as { items: GitLabWorkItem[] }).items.map((it) => ({
           ...it,
           repoId: primaryRepo.id
         }))
-        const merged = [
-          ...mrItems.map((m) => ({ ...m, repoId: primaryRepo.id })),
-          ...issueItems
-        ].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
-        setGitlabItems(merged)
+        setGitlabItems(items)
+        const err = (result as { error?: { message: string } }).error
+        if (err) {
+          setGitlabError(err.message)
+        }
       })
       .catch((err) => {
         if (!stale) {
