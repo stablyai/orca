@@ -1013,6 +1013,7 @@ export default function SessionScreen() {
       // malicious copy containing `\x1b[201~` can't terminate paste mode early
       // and have the trailing bytes interpreted as shell commands. Matches
       // xterm.js / iTerm2 behavior.
+      // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
       const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
       const payload = wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
       const wrappedBytes = new TextEncoder().encode(payload).byteLength
