@@ -7,6 +7,8 @@ import type { GitLabIssueUpdate, Repo } from '../../shared/types'
 import type { Store } from '../persistence'
 import {
   addIssueComment,
+  addMRComment,
+  closeMR,
   createIssue,
   getAuthenticatedViewer,
   getIssue,
@@ -20,8 +22,11 @@ import {
   listMergeRequests,
   listTodos,
   listWorkItems,
+  mergeMR,
+  reopenMR,
   updateIssue
 } from '../gitlab/client'
+import { getWorkItemDetails } from '../gitlab/work-item-details'
 import { computeNextGitLabRecents } from '../../shared/gitlab-projects'
 import type { ProjectRef } from '../gitlab/gl-utils'
 
@@ -148,6 +153,45 @@ export function registerGitLabHandlers(store: Store): void {
     ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
       return listWorkItems(repo.path, args.state ?? 'opened', args.page ?? 1, args.perPage ?? 20)
+    }
+  )
+
+  // Why: aggregated dialog payload — body + discussions + pipeline jobs.
+  // Powers GitLabItemDialog's tabs.
+  ipcMain.handle(
+    'gitlab:workItemDetails',
+    async (_event, args: { repoPath: string; iid: number; type: 'issue' | 'mr' }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return getWorkItemDetails(repo.path, args.iid, args.type)
+    }
+  )
+
+  ipcMain.handle('gitlab:closeMR', async (_event, args: { repoPath: string; iid: number }) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return closeMR(repo.path, args.iid)
+  })
+
+  ipcMain.handle('gitlab:reopenMR', async (_event, args: { repoPath: string; iid: number }) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return reopenMR(repo.path, args.iid)
+  })
+
+  ipcMain.handle(
+    'gitlab:mergeMR',
+    async (
+      _event,
+      args: { repoPath: string; iid: number; method?: 'merge' | 'squash' | 'rebase' }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return mergeMR(repo.path, args.iid, args.method ?? 'merge')
+    }
+  )
+
+  ipcMain.handle(
+    'gitlab:addMRComment',
+    async (_event, args: { repoPath: string; iid: number; body: string }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return addMRComment(repo.path, args.iid, args.body)
     }
   )
 

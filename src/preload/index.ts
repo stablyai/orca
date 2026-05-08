@@ -776,6 +776,34 @@ const api = {
     todos: (args: { repoPath: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('gitlab:todos', args),
 
+    workItemDetails: (args: {
+      repoPath: string
+      iid: number
+      type: 'issue' | 'mr'
+    }): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemDetails', args),
+
+    closeMR: (args: {
+      repoPath: string
+      iid: number
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitlab:closeMR', args),
+
+    reopenMR: (args: {
+      repoPath: string
+      iid: number
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitlab:reopenMR', args),
+
+    mergeMR: (args: {
+      repoPath: string
+      iid: number
+      method?: 'merge' | 'squash' | 'rebase'
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitlab:mergeMR', args),
+
+    addMRComment: (args: { repoPath: string; iid: number; body: string }): Promise<unknown> =>
+      ipcRenderer.invoke('gitlab:addMRComment', args),
+
     workItemByPath: (args: {
       repoPath: string
       host: string

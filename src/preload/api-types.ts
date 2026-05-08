@@ -36,6 +36,7 @@ import type {
   GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
+  GitLabWorkItemDetails,
   ListMergeRequestsResult,
   MRInfo,
   MRListState,
@@ -688,6 +689,30 @@ export type PreloadApi = {
     listAssignableUsers: (args: { repoPath: string }) => Promise<GitLabAssignableUser[]>
     /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
     todos: (args: { repoPath: string }) => Promise<GitLabTodo[]>
+    /** Aggregated dialog payload — body + discussions + pipeline jobs. */
+    workItemDetails: (args: {
+      repoPath: string
+      iid: number
+      type: 'issue' | 'mr'
+    }) => Promise<GitLabWorkItemDetails | null>
+    closeMR: (args: {
+      repoPath: string
+      iid: number
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    reopenMR: (args: {
+      repoPath: string
+      iid: number
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    mergeMR: (args: {
+      repoPath: string
+      iid: number
+      method?: 'merge' | 'squash' | 'rebase'
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addMRComment: (args: {
+      repoPath: string
+      iid: number
+      body: string
+    }) => Promise<GitLabCommentResult>
     workItemByPath: (args: {
       repoPath: string
       host: string

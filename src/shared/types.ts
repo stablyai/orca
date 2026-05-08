@@ -890,6 +890,45 @@ export type GitLabTodo = {
   state: 'pending' | 'done'
 }
 
+// Why: per-job pipeline status — surfaces in the GitLab dialog Pipeline
+// tab so users can see which job failed and where without leaving Orca.
+// Mirrors PRCheckDetail's "single row per check" shape so the rendering
+// component is reusable.
+export type GitLabPipelineJob = {
+  id: number
+  name: string
+  /** GitLab stage name, e.g. 'build' / 'test' / 'deploy'. */
+  stage: string
+  /** Raw GitLab job status — 'success' / 'failed' / 'running' / 'pending'
+   *  / 'canceled' / 'skipped' / 'manual' / 'created' / 'preparing'. The
+   *  renderer maps to a colored pill via the existing status helpers. */
+  status: string
+  webUrl: string
+  /** Duration in seconds. null when the job hasn't finished. */
+  duration: number | null
+}
+
+// Why: aggregated detail payload for GitLabItemDialog. Parallel to
+// GitHubWorkItemDetails. Flattens discussion notes into a single comments
+// list — inline review-comment positioning is v1.5 work; this surface is
+// "read description + conversation + pipeline + act on it".
+export type GitLabWorkItemDetails = {
+  /** repoId is stamped by the renderer from the dialog's caller (TaskPage,
+   *  picker) — main-process doesn't know Orca's Repo.id. */
+  item: Omit<GitLabWorkItem, 'repoId'>
+  body: string
+  comments: MRComment[]
+  /** MR head/base SHAs — populated for MRs only. Reserved for a future
+   *  Files tab; the dialog reads `body` for now. */
+  headSha?: string
+  baseSha?: string
+  /** MR-only — populated when the MR's head_pipeline exists. */
+  pipelineJobs?: GitLabPipelineJob[]
+  participants?: GitLabAssignableUser[]
+  /** Issue-only — usernames of current assignees. */
+  assignees?: string[]
+}
+
 export type GitLabIssueUpdate = {
   state?: 'opened' | 'closed'
   title?: string
