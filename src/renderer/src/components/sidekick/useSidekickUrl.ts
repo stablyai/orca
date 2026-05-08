@@ -50,6 +50,14 @@ export function useSidekickUrl(): ResolvedSidekick {
   // Why: prefer manifest fps captured at import time; sprite-with-frame entries
   // store fps on `sprite`, frame-less bundles carry it on `spriteFps`.
   const customSpriteFps = customMeta?.sprite?.fps ?? customMeta?.spriteFps
+  // Why: when the manifest already declares a valid sprite layout, the
+  // overlay reads the `sprite` branch and never touches detectedSpriteCache,
+  // so we skip auto-detection in the cache loader to avoid leaking ImageBitmaps.
+  const customHasManifestSprite =
+    !!customMeta?.sprite &&
+    customMeta.sprite.frameWidth > 0 &&
+    customMeta.sprite.frameHeight > 0 &&
+    customMeta.sprite.fps > 0
   useEffect(() => {
     if (!customId || !customFileName) {
       setCustomUrl(null)
@@ -65,18 +73,23 @@ export function useSidekickUrl(): ResolvedSidekick {
     setCustomUrl(null)
     pendingRef.current = customId
     let cancelled = false
-    void loadCustomBlobUrl(customId, customFileName, customMime, customKind, customSpriteFps).then(
-      (url) => {
-        if (cancelled || pendingRef.current !== customId) {
-          return
-        }
-        setCustomUrl(url)
+    void loadCustomBlobUrl(
+      customId,
+      customFileName,
+      customMime,
+      customKind,
+      customSpriteFps,
+      customHasManifestSprite
+    ).then((url) => {
+      if (cancelled || pendingRef.current !== customId) {
+        return
       }
-    )
+      setCustomUrl(url)
+    })
     return () => {
       cancelled = true
     }
-  }, [customId, customFileName, customMime, customKind, customSpriteFps])
+  }, [customId, customFileName, customMime, customKind, customSpriteFps, customHasManifestSprite])
 
   if (bundled) {
     const sidekick = findBundledSidekick(sidekickId) ?? BUNDLED_SIDEKICK

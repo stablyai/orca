@@ -28,7 +28,8 @@ export async function loadCustomBlobUrl(
   fileName: string,
   mimeType: string,
   kind?: 'image' | 'bundle',
-  spriteFps?: number
+  spriteFps?: number,
+  hasManifestSprite?: boolean
 ): Promise<string | null> {
   const cached = blobUrlCache.get(id)
   if (cached) {
@@ -51,7 +52,11 @@ export async function loadCustomBlobUrl(
   // Strip it once at load and replace the cached URL with a transparent PNG
   // so the overlay just sees a normal blob URL.
   if (kind === 'bundle' && mimeType !== 'image/svg+xml') {
-    const processed = await processBundleSheet(url, spriteFps)
+    // Why: when the manifest already provides a valid sprite layout, the
+    // renderer reads the `sprite` branch of useSidekickUrl and never touches
+    // detectedSpriteCache — so skipping detection (and the per-frame
+    // ImageBitmap allocations) avoids a per-bundle memory leak.
+    const processed = await processBundleSheet(url, spriteFps, hasManifestSprite === true)
     if (processed) {
       URL.revokeObjectURL(url)
       url = processed.url
@@ -66,7 +71,8 @@ export async function loadCustomBlobUrl(
 
 async function processBundleSheet(
   srcUrl: string,
-  spriteFps?: number
+  spriteFps?: number,
+  skipDetection?: boolean
 ): Promise<{ url: string; detected: DetectedSpriteCacheEntry | null } | null> {
   try {
     const img = await loadImage(srcUrl)
@@ -85,7 +91,7 @@ async function processBundleSheet(
     // sprites are visible to the band/column scanner. Without this the whole
     // sheet collapses into one giant frame.
     let detected: DetectedSpriteCacheEntry | null = null
-    const sprite = detectFramesFromImageData(data)
+    const sprite = skipDetection ? null : detectFramesFromImageData(data)
     if (sprite && sprite.frames.length >= 1) {
       // Why: allSettled so a single failed crop doesn't leak the bitmaps that
       // did succeed — close fulfilled ones before bailing out.
@@ -94,15 +100,18 @@ async function processBundleSheet(
       )
       const rejected = results.some((r) => r.status === 'rejected')
       if (rejected) {
+        // Why: don't discard the keyed canvas when only the per-frame crops
+        // failed — fall through to emit the keyed PNG so the caller still gets
+        // the chroma-keyed sheet instead of falling back to the un-keyed url.
         for (const r of results) {
           if (r.status === 'fulfilled') {
             r.value.close()
           }
         }
-        return null
+      } else {
+        const bitmaps = results.map((r) => (r as PromiseFulfilledResult<ImageBitmap>).value)
+        detected = { frames: sprite.frames, bitmaps, fps: spriteFps ?? 8 }
       }
-      const bitmaps = results.map((r) => (r as PromiseFulfilledResult<ImageBitmap>).value)
-      detected = { frames: sprite.frames, bitmaps, fps: spriteFps ?? 8 }
     }
     const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
     if (!out) {
@@ -120,14 +129,11 @@ async function processBundleSheet(
 // G. Anything matching gets fully cleared; anything close gets proportional
 // alpha so antialiased edges fade smoothly.
 function magentaScore(r: number, g: number, b: number): number {
-  // 0 = not magenta, 1 = pure magenta key. Requires both red and blue to
-  // dominate green (the signature of any magenta shade), and rejects greys
-  // / dark pixels which can otherwise have low-but-equal channels.
-  if (r < 100 || b < 100) {
-    return 0
-  }
+  // 0 = not magenta, 1 = pure magenta key. Restricted to near-pure magenta
+  // (saturated R+B, very low G) so legitimate purples and pinks (e.g.
+  // 128,0,128 or 255,128,200) aren't keyed out of imported sprite art.
   const minRB = Math.min(r, b)
-  if (g >= minRB) {
+  if (minRB <= 200 || g >= 60) {
     return 0
   }
   const dom = (minRB - g) / 255 // how much R and B dominate green

@@ -1,6 +1,8 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron'
-import { copyFile, mkdir, readFile, rename, rm, stat, lstat } from 'node:fs/promises'
+import { copyFile, mkdir, open, readFile, rename, rm, stat, lstat } from 'node:fs/promises'
+import { constants as fsConstants, createWriteStream } from 'node:fs'
+import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -143,6 +145,26 @@ async function readSheetDimensions(
     return null
   }
   return { width: size.width, height: size.height }
+}
+
+// Why: TOCTOU defense — between the `isSymlink` check and `copyFile`, a local
+// attacker with write access to the bundle dir could swap the file with a
+// symlink (copyFile follows symlinks). Open with O_NOFOLLOW so the open fails
+// outright if the path is a symlink at the moment of open, then stream from
+// the fd. On platforms without O_NOFOLLOW (Windows), the constant is undefined
+// and we fall back to copyFile — symlinks aren't a meaningful threat there.
+async function copyFileNoFollow(src: string, dest: string): Promise<void> {
+  const noFollow = typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0
+  if (noFollow === 0) {
+    await copyFile(src, dest)
+    return
+  }
+  const fh = await open(src, fsConstants.O_RDONLY | noFollow)
+  try {
+    await pipeline(fh.createReadStream({ autoClose: false }), createWriteStream(dest))
+  } finally {
+    await fh.close()
+  }
 }
 
 async function isSymlink(path: string): Promise<boolean> {
@@ -387,8 +409,8 @@ export function registerSidekickHandlers(): void {
     try {
       await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
       await mkdir(tmpDir, { recursive: true })
-      await copyFile(sheetSrc, join(tmpDir, sheetFileName))
-      await copyFile(manifestPath, join(tmpDir, 'pet.json'))
+      await copyFileNoFollow(sheetSrc, join(tmpDir, sheetFileName))
+      await copyFileNoFollow(manifestPath, join(tmpDir, 'pet.json'))
       await rename(tmpDir, destDir)
     } catch {
       await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
