@@ -47,11 +47,13 @@ export type RpcClient = {
 // laptop wake, or AP-isolation cycle. Beyond that we slow down
 // (8s→60s) so a phone whose desktop is genuinely unreachable doesn't
 // burn a TCP SYN every 4s indefinitely while still healing on its
-// own when the network recovers. Total time across all 12 attempts
-// is ≈ 2m 5s before the give-up cap fires.
+// own when the network recovers. With 12 total attempts, the last
+// four reuse the 60s cap (Math.min(idx, length-1)), so total elapsed
+// time across all 12 attempts is ≈ 6 minutes before the give-up cap
+// fires (0.5+1+2+4+8+15+30+60+60+60+60+60 ≈ 360s).
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
 // Why: cap auto-retry once we're clearly unreachable for a long time.
-// With the tiered backoff above this is ≈ 2 minutes of continuous
+// With the tiered backoff above this is ≈ 6 minutes of continuous
 // failure before we stop and surface the re-pair banner. The longer
 // runway tolerates flaky AP-isolation routers and laptop sleep cycles
 // that briefly drop the LAN path. MUST stay aligned with

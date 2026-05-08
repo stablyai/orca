@@ -7,10 +7,11 @@ import type { ConnectionState } from './types'
 //   behavior). Calibrated to absorb a normal laptop wake / brief
 //   network blip without alarming the user.
 // - UNREACHABLE_ATTEMPTS: 12 → with the tiered 0.5s→60s backoff this
-//   is ≈ 2 minutes of continuous failure. Combined with the
-//   never-connected / stale-since-last-connect heuristic below, this
-//   is the trigger to surface a "re-pair?" affordance. MUST stay
-//   aligned with rpc-client.ts GIVE_UP_AFTER_ATTEMPTS.
+//   is ≈ 6 minutes of continuous failure (the last four attempts all
+//   reuse the 60s cap). Combined with the never-connected /
+//   stale-since-last-connect heuristic below, this is the trigger to
+//   surface a "re-pair?" affordance. MUST stay aligned with
+//   rpc-client.ts GIVE_UP_AFTER_ATTEMPTS.
 // - STALE_SINCE_LAST_CONNECT_MS: 60s → if we WERE connected this
 //   session but haven't been for ≥ 1 minute despite the retry loop
 //   spinning, treat the same as never-connected. Catches the case

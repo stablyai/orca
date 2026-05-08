@@ -22,7 +22,22 @@ const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | nul
 function valueFromMs(ms: number | null | undefined): RestoreValue {
   if (ms == null) return 'indefinite'
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  return exact ? exact.value : 'indefinite'
+  if (exact) return exact.value
+  // Why: server may return a non-preset ms (custom value, future preset,
+  // or server-side clamp). Snap to the closest finite preset so the
+  // picker's selected radio agrees with the row sublabel rendered by
+  // autoRestoreSummary ("After Xs").
+  let closest: (typeof AUTO_RESTORE_FIT_OPTIONS)[number] | null = null
+  let bestDelta = Infinity
+  for (const opt of AUTO_RESTORE_FIT_OPTIONS) {
+    if (opt.ms == null) continue
+    const delta = Math.abs(opt.ms - ms)
+    if (delta < bestDelta) {
+      bestDelta = delta
+      closest = opt
+    }
+  }
+  return closest ? closest.value : 'indefinite'
 }
 
 function autoRestoreSummary(ms: number | null | undefined): string {
