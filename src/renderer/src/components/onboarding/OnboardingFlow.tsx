@@ -88,7 +88,12 @@ export default function OnboardingFlow({
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-[820px] flex-col px-8 pb-10 pt-16">
         <div className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
-          <img src={logo} alt="Orca logo" className="size-7" />
+          <div
+            className="flex size-7 items-center justify-center rounded-md"
+            style={{ backgroundColor: '#12181e' }}
+          >
+            <img src={logo} alt="Orca logo" className="size-5" />
+          </div>
           <span>Orca</span>
         </div>
 

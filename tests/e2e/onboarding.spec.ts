@@ -48,6 +48,12 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByText('1 of 4')).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Continue' })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Skip' })).toBeVisible()
+    // Why: Back is not rendered on the first step (was previously rendered-but-
+    // disabled with `disabled:invisible`, now conditionally mounted).
+    await expect(orcaPage.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
+    // Footer hint shows the platform-correct continue shortcut (⌘↵ on Mac,
+    // Ctrl+Enter elsewhere). Match either form so the test runs cross-platform.
+    await expect(orcaPage.getByText(/⌘↵|Ctrl\+Enter/)).toBeVisible()
   })
 
   test('Continue advances steps, persists progress, and applies user-visible settings', async ({
@@ -164,6 +170,119 @@ test.describe('Onboarding flow', () => {
         suppressWhenFocused: false,
         enabled: true
       })
+  })
+
+  test('Cmd/Ctrl+Enter advances steps like Continue', async ({ orcaPage }) => {
+    await expect(
+      orcaPage.getByRole('heading', { name: /Pick your default agent/i })
+    ).toBeVisible({ timeout: 15_000 })
+
+    // Why: the OS the renderer reports drives whether Cmd or Ctrl is the
+    // accelerator (OnboardingFlow.tsx checks navigator.userAgent).
+    const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
+    const accelerator = isMac ? 'Meta+Enter' : 'Control+Enter'
+
+    await orcaPage.keyboard.press(accelerator)
+    await expect(
+      orcaPage.getByRole('heading', { name: /Make it feel like home/i })
+    ).toBeVisible()
+    await expect
+      .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
+        timeout: 5_000
+      })
+      .toBe(1)
+  })
+
+  test('selected agent button reports aria-pressed=true', async ({ orcaPage }) => {
+    await expect(
+      orcaPage.getByRole('heading', { name: /Pick your default agent/i })
+    ).toBeVisible({ timeout: 15_000 })
+
+    const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+    const codexVisible = await codexButton
+      .first()
+      .waitFor({ state: 'visible', timeout: 1_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (!codexVisible) {
+      await orcaPage.getByText(/Show \d+ more agents/).click()
+    }
+    await codexButton.click()
+    // Why: AgentButton now sets aria-pressed so screen readers and assistive
+    // tech can announce the selection. Verify the attribute reflects state.
+    await expect(codexButton).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('notification toggles flip independently and persist on Continue', async ({ orcaPage }) => {
+    await expect(
+      orcaPage.getByRole('heading', { name: /Pick your default agent/i })
+    ).toBeVisible({ timeout: 15_000 })
+    await orcaPage.getByRole('button', { name: 'Skip' }).click()
+    await expect(
+      orcaPage.getByRole('heading', { name: /Make it feel like home/i })
+    ).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Skip' }).click()
+    await expect(
+      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
+    ).toBeVisible()
+
+    // Why: NotificationStep buttons expose role="switch" + aria-checked. Flip
+    // terminalBell off and verify the toggle reflects + persists. The other
+    // two toggles stay at their wizard-default ON state.
+    const bellSwitch = orcaPage.getByRole('switch', { name: /Terminal bell/i })
+    await expect(bellSwitch).toHaveAttribute('aria-checked', 'true')
+    await bellSwitch.click()
+    await expect(bellSwitch).toHaveAttribute('aria-checked', 'false')
+
+    await orcaPage.getByRole('button', { name: 'Continue' }).click()
+    await expect(
+      orcaPage.getByRole('heading', { name: /Point Orca at some code/i })
+    ).toBeVisible()
+    await expect
+      .poll(
+        async () => {
+          const s = await getSettings(orcaPage)
+          return {
+            agentTaskComplete: s.notifications.agentTaskComplete,
+            terminalBell: s.notifications.terminalBell
+          }
+        },
+        { timeout: 5_000 }
+      )
+      .toEqual({ agentTaskComplete: true, terminalBell: false })
+  })
+
+  test('typing in the clone-url input does not hijack Enter as a global shortcut', async ({
+    orcaPage
+  }) => {
+    await expect(
+      orcaPage.getByRole('heading', { name: /Pick your default agent/i })
+    ).toBeVisible({ timeout: 15_000 })
+    // Skip to the repo step.
+    await orcaPage.getByRole('button', { name: 'Skip' }).click()
+    await orcaPage.getByRole('button', { name: 'Skip' }).click()
+    await orcaPage.getByRole('button', { name: 'Skip' }).click()
+    await expect(
+      orcaPage.getByRole('heading', { name: /Point Orca at some code/i })
+    ).toBeVisible()
+
+    // Why: focus the clone-url input and press Cmd/Ctrl+Enter. The capture-
+    // phase keydown handler should bail via isEditableTarget, so the folder
+    // picker IPC must NOT fire (the heading should remain visible — no
+    // navigation, no opened OS dialog). A bare Enter press also must not
+    // submit the empty form (the Clone button is disabled when blank).
+    const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
+    const accelerator = isMac ? 'Meta+Enter' : 'Control+Enter'
+    const input = orcaPage.getByPlaceholder('git@github.com:org/repo.git')
+    await input.click()
+    await input.press(accelerator)
+    // Brief wait so any (incorrect) handler firing would have already happened.
+    await orcaPage.waitForTimeout(250)
+    await expect(
+      orcaPage.getByRole('heading', { name: /Point Orca at some code/i })
+    ).toBeVisible()
+    // Onboarding must still be open (closedAt remains null).
+    expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
   })
 
   test('Back returns to the previous step without losing progress', async ({ orcaPage }) => {
