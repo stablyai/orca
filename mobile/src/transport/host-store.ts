@@ -132,8 +132,13 @@ export async function saveHost(host: HostProfile): Promise<void> {
   } else {
     hosts.push(stored)
   }
-  await SecureStore.setItemAsync(tokenKey(stored.id), validated.deviceToken, KEYCHAIN_OPTIONS)
+  // Why: write metadata BEFORE the keychain token so a crash between the two
+  // leaves orphaned metadata (which loadHosts skips and removeHost can clean
+  // up) rather than an orphaned keychain token with no metadata pointer —
+  // the latter would persist forever since removeHost only deletes by hostId
+  // from current metadata.
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
+  await SecureStore.setItemAsync(tokenKey(stored.id), validated.deviceToken, KEYCHAIN_OPTIONS)
   tokenCache.set(stored.id, validated.deviceToken)
 }
 
