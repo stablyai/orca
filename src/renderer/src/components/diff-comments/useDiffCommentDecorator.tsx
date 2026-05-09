@@ -43,6 +43,13 @@ type ZoneEntry = {
   delegate: monacoEditor.IViewZone
   root: Root
   lastBody: string
+  // Why: Monaco invokes IViewZone.onDomNodeTop on every render once the zone
+  // is in the layout. The first invocation is our deterministic "this zone is
+  // now part of the editor's vertical layout" signal — equivalent in role to
+  // VS Code's commentsController._computeAndSetPromise resolving before
+  // revealCommentThread runs. We use it to gate scroll-to-note instead of
+  // polling getTopForLineNumber until the value changes.
+  laidOut: boolean
 }
 
 // Why: card chrome (header/meta/border/padding) plus per-line body height. Used
@@ -71,6 +78,21 @@ export function useDiffCommentDecorator({
   // hand-built DOM implementation.
   const zonesRef = useRef<Map<string, ZoneEntry>>(new Map())
   const disposablesRef = useRef<IDisposable[]>([])
+  // Why: holds the comment id the sidebar last asked us to scroll to. We
+  // resolve it in two places — when the zone is created and Monaco's
+  // onDomNodeTop fires, and when the request arrives after the zone is
+  // already laid out — and clear it both times via the resolver. Using a
+  // ref (instead of a state-driven effect that re-runs) means the request
+  // survives across the renders that happen while we wait for layout, and
+  // the resolver is the only place that produces the scroll + ack.
+  const pendingScrollRef = useRef<string | null>(null)
+  // Why: the diff-zones effect builds a `scrollToZone(commentId)` closure
+  // that has access to `editor` and the live zones Map. The request-effect
+  // (further below) needs to invoke it when a request arrives after the
+  // zone is already laid out. Stashing the closure in a ref lets the
+  // request-effect call the latest version without restructuring the
+  // diff-zones effect into a hook-level helper.
+  const scrollToZoneRef = useRef<((commentId: string) => void) | null>(null)
   // Why: stash the consumer callbacks in refs so the decorator effect's
   // cleanup does not run on every parent render. The parent passes inline
   // arrow functions; without this, each render would tear down and re-attach
@@ -269,6 +291,10 @@ export function useDiffCommentDecorator({
         entry.root.unmount()
       }
       zones.clear()
+      // Why: editor went away — drop both the in-flight scroll request and
+      // the resolver closure (which captured the now-disposed editor).
+      pendingScrollRef.current = null
+      scrollToZoneRef.current = null
     }
   }, [addButtonLabel, editor])
 
@@ -313,6 +339,39 @@ export function useDiffCommentDecorator({
       })
     }
 
+    // Why: one-shot scroll resolver. Called by both the request-arrives-late
+    // path and the layout-settles-late path, so the math + ack live in one
+    // place. Reads `getTopForLineNumber(line, /* includeZones */ true)` so the
+    // viewport centers on the line+card pair (the card sits in a view zone
+    // above the line). VS Code's commentThreadZoneWidget._goToComment uses
+    // `false` because it then adds (commentCoords.top - threadCoords.top) to
+    // pick a specific comment within a multi-comment thread; our notes are
+    // single-comment threads and we want the card visible, so centering on
+    // the zones-aware offset is the correct equivalent.
+    //
+    // The rAF defer is intentional: DiffViewer.handleMount schedules
+    // `restoreViewState` via rAF on a fresh mount, and that runs in the same
+    // frame this resolver could fire from onDomNodeTop. Deferring one frame
+    // guarantees we run after restoreViewState, so its cached scroll doesn't
+    // snap the editor back from the requested note.
+    const scrollToZone = (commentId: string): void => {
+      requestAnimationFrame(() => {
+        const entry = zones.get(commentId)
+        if (!entry || !editor.getModel()) {
+          return
+        }
+        if (pendingScrollRef.current !== commentId) {
+          return
+        }
+        const top = editor.getTopForLineNumber(entry.delegate.afterLineNumber, true)
+        const editorHeight = editor.getLayoutInfo().height
+        editor.setScrollTop(Math.max(0, top - editorHeight / 2))
+        pendingScrollRef.current = null
+        onPendingScrollConsumedRef.current?.()
+      })
+    }
+    scrollToZoneRef.current = scrollToZone
+
     // Why: render helper used by BOTH the new-zone branch and the patch-
     // existing-zone branch so the card's prop wiring stays in lockstep — any
     // future prop is added once.
@@ -347,6 +406,12 @@ export function useDiffCommentDecorator({
           accessor.removeZone(entry.zoneId)
           rootsToUnmount.push(entry.root)
           zones.delete(commentId)
+          // Why: if the user requested a scroll-to-note on a comment that
+          // was just deleted, drop the request so a future zone with the
+          // same id (unlikely but possible) doesn't pick up a stale request.
+          if (pendingScrollRef.current === commentId) {
+            pendingScrollRef.current = null
+          }
         }
       }
 
@@ -381,11 +446,30 @@ export function useDiffCommentDecorator({
         // mousedown and routes it to the editor, so the Delete button never
         // fires. The delete/body mousedown listeners stopPropagation so the
         // editor still doesn't steal focus on interaction.
+        const commentId = c.id
         const delegate: monacoEditor.IViewZone = {
           afterLineNumber: c.lineNumber,
           heightInPx,
           domNode: dom,
-          suppressMouseDown: false
+          suppressMouseDown: false,
+          // Why: Monaco invokes onDomNodeTop on every render once the zone is
+          // part of the layout (see vscode viewZones.ts render()). The first
+          // call is our deterministic "this zone is now placed" signal. If a
+          // sidebar scroll-to-note request was waiting on this comment, we
+          // resolve it here. We also flip `laidOut` so the request-effect
+          // path can scroll synchronously when the request arrives after the
+          // zone is already laid out.
+          onDomNodeTop: () => {
+            const entry = zones.get(commentId)
+            if (!entry) {
+              return
+            }
+            const wasLaidOut = entry.laidOut
+            entry.laidOut = true
+            if (!wasLaidOut && pendingScrollRef.current === commentId) {
+              scrollToZone(commentId)
+            }
+          }
         }
         const zoneId = accessor.addZone(delegate)
         zones.set(c.id, {
@@ -393,7 +477,8 @@ export function useDiffCommentDecorator({
           domNode: dom,
           delegate,
           root,
-          lastBody: c.body
+          lastBody: c.body,
+          laidOut: false
         })
       }
 
@@ -428,33 +513,22 @@ export function useDiffCommentDecorator({
     // which only fires when the editor itself is replaced/unmounted.
   }, [editor, filePath, worktreeId, comments])
 
-  // Why: scroll the diff editor to the requested note when the sidebar asks
-  // for it. The decorator is the right place: it already filters comments to
-  // this surface, so we know the line exists in this editor's modified model.
-  //
-  // Robustness pattern (mirrors VS Code's commentsController.revealCommentThread,
-  // which awaits `_computeAndSetPromise` before revealing): on a freshly-mounted
-  // editor the diff-pass effect above has called `editor.changeViewZones` to
-  // register the note's zone, but Monaco's whitespace layout may not have
-  // absorbed that change by the time we'd otherwise try to scroll. Calling
-  // `getTopForLineNumber(line, true)` before the layout settles returns a Y
-  // value that doesn't include the zone above the line, so the resulting
-  // scrollTop centers the line instead of the card — visible to the user as a
-  // top-of-viewport placement on the first click after a fresh mount (e.g.
-  // close + reopen), then a centered placement on the second click once
-  // layout settled.
-  //
-  // We poll on `requestAnimationFrame` until the target line's zone shows up
-  // in the layout (signal: `getTopForLineNumber(line, /* includeZones */ true)`
-  // exceeds the no-zones value, meaning at least one zone above or at the
-  // line has measurable height). Once it does, we compute scrollTop from the
-  // zones-aware Y so the math is in the same coordinate space as
-  // setScrollTop, and the line+card pair lands centered identically on every
-  // click. We cap the polling at ~1s so a layout that never settles (zone
-  // permanently height-0, comment for a line not in the model, etc.) doesn't
-  // leave the global pending forever.
+  // Why: route a sidebar scroll-to-note request into the decorator. We mirror
+  // VS Code's commentsController.revealCommentThread (which awaits
+  // `_computeAndSetPromise` before scrolling) by splitting resolution between
+  // two places: this effect for requests that arrive after the zone is laid
+  // out, and the zone's `onDomNodeTop` callback for requests that arrive
+  // before. `pendingScrollRef` carries the id between them; whoever resolves
+  // first scrolls and clears the ref via `scrollToZoneRef.current(id)`.
   useEffect(() => {
-    if (!editor || !pendingScrollCommentId) {
+    if (!editor) {
+      return
+    }
+    // Why: a null request (parent cleared the global, or routed away from
+    // diff) must drop any in-flight pending id so a late onDomNodeTop on a
+    // previously-requested zone doesn't snap-scroll the user.
+    if (!pendingScrollCommentId) {
+      pendingScrollRef.current = null
       return
     }
     const target = comments.find(
@@ -464,45 +538,12 @@ export function useDiffCommentDecorator({
     if (!target) {
       return
     }
-
-    let cancelled = false
-    let rafHandle = 0
-    const startedAt = performance.now()
-    // Why: ~1s @ 60Hz is comfortably more than the longest layout flush we
-    // observed (single-digit frames), and short enough that a stuck request
-    // self-clears rather than blocking a future scroll request indefinitely.
-    const MAX_WAIT_MS = 1000
-
-    const tryScroll = (): void => {
-      if (cancelled) {
-        return
-      }
-      // Why: the editor may have been disposed between scheduling and firing.
-      if (!editor.getModel()) {
-        return
-      }
-      const topWithZones = editor.getTopForLineNumber(target.lineNumber, true)
-      const topNoZones = editor.getTopForLineNumber(target.lineNumber, false)
-      const layoutSettled = topWithZones > topNoZones
-      const elapsed = performance.now() - startedAt
-      // Why: keep polling while the zone hasn't been absorbed yet, up to the
-      // safety cap. If the cap trips, fall through and scroll anyway — the
-      // line still gets revealed, just not perfectly centered relative to the
-      // card. Better than leaving the request stuck.
-      if (!layoutSettled && elapsed < MAX_WAIT_MS) {
-        rafHandle = requestAnimationFrame(tryScroll)
-        return
-      }
-      const editorHeight = editor.getLayoutInfo().height
-      editor.setScrollTop(Math.max(0, topWithZones - editorHeight / 2))
-      onPendingScrollConsumedRef.current?.()
+    pendingScrollRef.current = pendingScrollCommentId
+    const entry = zonesRef.current.get(pendingScrollCommentId)
+    if (entry?.laidOut) {
+      scrollToZoneRef.current?.(pendingScrollCommentId)
     }
-
-    rafHandle = requestAnimationFrame(tryScroll)
-
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(rafHandle)
-    }
+    // If !laidOut we wait — onDomNodeTop on the zone will pick the request
+    // up and call scrollToZone once Monaco's render pass places the zone.
   }, [editor, comments, pendingScrollCommentId, filePath, worktreeId])
 }
