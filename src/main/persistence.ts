@@ -128,7 +128,11 @@ export function sanitizeOnboardingUpdate(
   } = {}
 
   if ('closedAt' in raw) {
-    if (typeof raw.closedAt === 'number') {
+    // Why: `typeof raw.closedAt === 'number'` would let NaN/Infinity through;
+    // JSON.stringify writes those as `null` on save, which silently reverts
+    // closedAt and re-opens the wizard on next load. Require a finite,
+    // non-negative timestamp so live state matches what disk can persist.
+    if (typeof raw.closedAt === 'number' && Number.isFinite(raw.closedAt) && raw.closedAt >= 0) {
       out.closedAt = raw.closedAt
     } else if (raw.closedAt === null) {
       out.closedAt = null

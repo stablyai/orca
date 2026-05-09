@@ -272,20 +272,31 @@ export function useOnboardingFlow(
     setError
   })
 
+  // Why: synchronous re-entry latch. `busyLabel` is React state and only
+  // commits after the awaited persistCurrentStep round-trip resolves, so a
+  // second Cmd+Enter (auto-repeat fires every ~30ms) re-enters next() before
+  // the first call's setStepIndex has run, advancing twice and skipping a
+  // step. A ref flips synchronously so re-entries bail immediately.
+  const nextInFlightRef = useRef(false)
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
-      if (busyLabel || currentStep.id === 'repo') {
+      if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
         return
       }
-      const ok = await persistCurrentStep()
-      if (ok) {
-        track('onboarding_step_completed', {
-          step: currentStep.stepNumber,
-          value_kind: currentStep.valueKind,
-          duration_ms: consumeStepDurationMs(),
-          advanced_via: advancedVia
-        })
-        setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+      nextInFlightRef.current = true
+      try {
+        const ok = await persistCurrentStep()
+        if (ok) {
+          track('onboarding_step_completed', {
+            step: currentStep.stepNumber,
+            value_kind: currentStep.valueKind,
+            duration_ms: consumeStepDurationMs(),
+            advanced_via: advancedVia
+          })
+          setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+        }
+      } finally {
+        nextInFlightRef.current = false
       }
     },
     [
