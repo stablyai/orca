@@ -78,6 +78,24 @@ export function commitEmptyOrderedListMarkerAsText(editor: Editor): boolean {
   return true
 }
 
+export function isSingleEmptyTopLevelOrderedList(editor: Editor): boolean {
+  const context = getEmptyListItemContext(editor)
+  if (!context) {
+    return false
+  }
+
+  const { $from } = editor.state.selection
+  const list = $from.node(context.listDepth)
+  const listItem = $from.node(context.listItemDepth)
+  const parentDepth = context.listDepth - 1
+  return (
+    list.type.name === 'orderedList' &&
+    list.childCount === 1 &&
+    listItem.childCount === 1 &&
+    !(parentDepth >= 0 && $from.node(parentDepth).type.name === 'listItem')
+  )
+}
+
 export function collapseEmptyListContinuationParagraph(editor: Editor): boolean {
   const context = getEmptyListItemContext(editor)
   if (!context) {

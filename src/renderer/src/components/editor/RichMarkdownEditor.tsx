@@ -35,12 +35,16 @@ import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { toast } from 'sonner'
+import { isSingleEmptyTopLevelOrderedList } from './rich-markdown-list-continuation'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
 } from './markdown-internal-links'
 import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
-import type { RichMarkdownContextMenuCommand } from '../../../../shared/rich-markdown-context-menu'
+import type {
+  RichMarkdownContextMenuCommand,
+  RichMarkdownContextMenuCommandPayload
+} from '../../../../shared/rich-markdown-context-menu'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -134,6 +138,22 @@ function shouldFocusEmptyEditorFromSurfaceClick(
   return !target.closest('.rich-markdown-editor-shell button, .rich-markdown-editor-shell input')
 }
 
+function isRichMarkdownContextCommandTarget(
+  payload: RichMarkdownContextMenuCommandPayload,
+  root: HTMLElement | null
+): boolean {
+  if (!root) {
+    return false
+  }
+  const rect = root.getBoundingClientRect()
+  return (
+    payload.x >= rect.left &&
+    payload.x <= rect.right &&
+    payload.y >= rect.top &&
+    payload.y <= rect.bottom
+  )
+}
+
 export default function RichMarkdownEditor({
   fileId,
   content,
@@ -181,7 +201,6 @@ export default function RichMarkdownEditor({
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
-  const richEditorFocusedRef = useRef(false)
   const serializeTimerRef = useRef<number | null>(null)
   // Why: normalizeSoftBreaks dispatches a ProseMirror transaction inside onCreate
   // which triggers onUpdate. Without this guard the editor immediately marks the
@@ -195,6 +214,7 @@ export default function RichMarkdownEditor({
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
   const isEditingLinkRef = useRef(false)
+  const typedEmptyOrderedListMarkerRef = useRef(false)
 
   // Why: assigning callback refs during render keeps them current before any
   // ProseMirror handler reads them, avoiding the one-render stale window that
@@ -243,6 +263,18 @@ export default function RichMarkdownEditor({
       handleDOMEvents: {
         cut: handleRichMarkdownCut
       },
+      handleTextInput: (view, from, to, text) => {
+        typedEmptyOrderedListMarkerRef.current = false
+        if (text !== ' ' || from !== to || !view.state.selection.empty) {
+          return false
+        }
+        const { $from } = view.state.selection
+        const beforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
+        // Why: only a typed ordered-list shortcut should preserve `1.` on
+        // Enter; toolbar/slash/context-created empty lists should exit normally.
+        typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
+        return false
+      },
       handleKeyDown: createRichMarkdownKeyHandler({
         isMac,
         editorRef,
@@ -258,6 +290,7 @@ export default function RichMarkdownEditor({
         filteredDocLinkRowsRef,
         selectedDocLinkIndexRef,
         handleLocalImagePickRef,
+        typedEmptyOrderedListMarkerRef,
         flushPendingSerialization,
         openSearchRef,
         setIsEditingLink,
@@ -328,7 +361,6 @@ export default function RichMarkdownEditor({
       }
     },
     onFocus: () => {
-      richEditorFocusedRef.current = true
       // Why: mirror TipTap focus into the main process so the before-input-event
       // Cmd+B carve-out in createMainWindow.ts lets the bold keymap run instead
       // of intercepting the chord for sidebar toggle.
@@ -336,7 +368,6 @@ export default function RichMarkdownEditor({
       window.api.ui.setMarkdownEditorFocused(true)
     },
     onBlur: () => {
-      richEditorFocusedRef.current = false
       window.api.ui.setMarkdownEditorFocused(false)
     },
     onCreate: ({ editor: nextEditor }) => {
@@ -361,6 +392,9 @@ export default function RichMarkdownEditor({
     onUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
       syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
+      if (!isSingleEmptyTopLevelOrderedList(nextEditor)) {
+        typedEmptyOrderedListMarkerRef.current = false
+      }
 
       // Why: bail out during normalizeSoftBreaks's onCreate transaction so the
       // structural housekeeping doesn't mark the file dirty before the user
@@ -489,13 +523,18 @@ export default function RichMarkdownEditor({
   })
 
   useEffect(() => {
-    return window.api.ui.onRichMarkdownContextCommand((command) => {
+    return window.api.ui.onRichMarkdownContextCommand((payload) => {
       const ed = editorRef.current
-      if (!ed || (!richEditorFocusedRef.current && !ed.isFocused)) {
+      if (!ed || !isRichMarkdownContextCommandTarget(payload, rootRef.current)) {
         return
       }
 
-      runRichMarkdownContextCommand(command, ed, toggleLinkFromToolbar, handleLocalImagePick)
+      runRichMarkdownContextCommand(
+        payload.command,
+        ed,
+        toggleLinkFromToolbar,
+        handleLocalImagePick
+      )
     })
   }, [handleLocalImagePick, toggleLinkFromToolbar])
 

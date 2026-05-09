@@ -1,6 +1,7 @@
 import {
   richMarkdownContextMenuCommandChannel,
-  type RichMarkdownContextMenuCommand
+  type RichMarkdownContextMenuCommand,
+  type RichMarkdownContextMenuCommandPayload
 } from '../../shared/rich-markdown-context-menu'
 
 type EditableContextMenuWebContents = Pick<
@@ -11,53 +12,56 @@ type EditableContextMenuWebContents = Pick<
 function markdownCommandItem(
   label: string,
   command: RichMarkdownContextMenuCommand,
-  webContents: EditableContextMenuWebContents
+  webContents: EditableContextMenuWebContents,
+  point: { x: number; y: number }
 ): Electron.MenuItemConstructorOptions {
   return {
     label,
     click: () => {
-      webContents.send(richMarkdownContextMenuCommandChannel, command)
+      const payload: RichMarkdownContextMenuCommandPayload = { command, ...point }
+      webContents.send(richMarkdownContextMenuCommandChannel, payload)
     }
   }
 }
 
 function buildMarkdownMenuTemplate(
-  webContents: EditableContextMenuWebContents
+  webContents: EditableContextMenuWebContents,
+  point: { x: number; y: number }
 ): Electron.MenuItemConstructorOptions[] {
   return [
-    markdownCommandItem('Add link', 'add-link', webContents),
+    markdownCommandItem('Add link', 'add-link', webContents, point),
     { type: 'separator' },
     {
       label: 'Format',
       submenu: [
-        markdownCommandItem('Bold', 'bold', webContents),
-        markdownCommandItem('Italic', 'italic', webContents),
-        markdownCommandItem('Strike', 'strike', webContents),
-        markdownCommandItem('Inline code', 'inline-code', webContents),
-        markdownCommandItem('Code block', 'code-block', webContents),
-        markdownCommandItem('Quote', 'blockquote', webContents)
+        markdownCommandItem('Bold', 'bold', webContents, point),
+        markdownCommandItem('Italic', 'italic', webContents, point),
+        markdownCommandItem('Strike', 'strike', webContents, point),
+        markdownCommandItem('Inline code', 'inline-code', webContents, point),
+        markdownCommandItem('Code block', 'code-block', webContents, point),
+        markdownCommandItem('Quote', 'blockquote', webContents, point)
       ]
     },
     {
       label: 'Paragraph',
       submenu: [
-        markdownCommandItem('Body text', 'paragraph', webContents),
-        markdownCommandItem('Heading 1', 'heading-1', webContents),
-        markdownCommandItem('Heading 2', 'heading-2', webContents),
-        markdownCommandItem('Heading 3', 'heading-3', webContents),
+        markdownCommandItem('Body text', 'paragraph', webContents, point),
+        markdownCommandItem('Heading 1', 'heading-1', webContents, point),
+        markdownCommandItem('Heading 2', 'heading-2', webContents, point),
+        markdownCommandItem('Heading 3', 'heading-3', webContents, point),
         { type: 'separator' },
-        markdownCommandItem('Bullet list', 'bullet-list', webContents),
-        markdownCommandItem('Numbered list', 'ordered-list', webContents),
-        markdownCommandItem('Checklist', 'task-list', webContents)
+        markdownCommandItem('Bullet list', 'bullet-list', webContents, point),
+        markdownCommandItem('Numbered list', 'ordered-list', webContents, point),
+        markdownCommandItem('Checklist', 'task-list', webContents, point)
       ]
     },
     {
       label: 'Insert',
       submenu: [
-        markdownCommandItem('Link', 'add-link', webContents),
-        markdownCommandItem('Image', 'image', webContents),
-        markdownCommandItem('Divider', 'divider', webContents),
-        markdownCommandItem('Code block', 'code-block', webContents)
+        markdownCommandItem('Link', 'add-link', webContents, point),
+        markdownCommandItem('Image', 'image', webContents, point),
+        markdownCommandItem('Divider', 'divider', webContents, point),
+        markdownCommandItem('Code block', 'code-block', webContents, point)
       ]
     },
     { type: 'separator' },
@@ -115,7 +119,7 @@ export function buildEditableContextMenuTemplate(
   }
   template.push(
     ...(isRichMarkdownSurface
-      ? buildMarkdownMenuTemplate(webContents)
+      ? buildMarkdownMenuTemplate(webContents, { x: params.x, y: params.y })
       : buildNativeEditMenuTemplate())
   )
 

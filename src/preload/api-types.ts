@@ -95,7 +95,7 @@ import type {
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
 } from '../shared/github-project-types'
-import type { RichMarkdownContextMenuCommand } from '../shared/rich-markdown-context-menu'
+import type { RichMarkdownContextMenuCommandPayload } from '../shared/rich-markdown-context-menu'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -1096,7 +1096,7 @@ export type PreloadApi = {
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
-      callback: (command: RichMarkdownContextMenuCommand) => void
+      callback: (payload: RichMarkdownContextMenuCommandPayload) => void
     ) => () => void
     onFullscreenChanged: (callback: (isFullScreen: boolean) => void) => () => void
     minimize: () => void

@@ -16,4 +16,10 @@ export type RichMarkdownContextMenuCommand =
   | 'image'
   | 'divider'
 
+export type RichMarkdownContextMenuCommandPayload = {
+  command: RichMarkdownContextMenuCommand
+  x: number
+  y: number
+}
+
 export const richMarkdownContextMenuCommandChannel = 'rich-markdown:context-command'

@@ -75,7 +75,7 @@ describe('buildEditableContextMenuTemplate', () => {
   it('adds useful markdown and native edit actions for rich markdown text', () => {
     const send = vi.fn()
     const template = buildEditableContextMenuTemplate(
-      contextParams({ misspelledWord: '', dictionarySuggestions: [] }),
+      contextParams({ x: 12, y: 34, misspelledWord: '', dictionarySuggestions: [] }),
       {
         replaceMisspelling: vi.fn(),
         send,
@@ -98,7 +98,11 @@ describe('buildEditableContextMenuTemplate', () => {
     ])
 
     template[0].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
-    expect(send).toHaveBeenCalledWith(richMarkdownContextMenuCommandChannel, 'add-link')
+    expect(send).toHaveBeenCalledWith(richMarkdownContextMenuCommandChannel, {
+      command: 'add-link',
+      x: 12,
+      y: 34
+    })
 
     const formatMenu = template[2].submenu as Electron.MenuItemConstructorOptions[]
     formatMenu[0].click?.(
@@ -106,7 +110,11 @@ describe('buildEditableContextMenuTemplate', () => {
       {} as Electron.BrowserWindow,
       {} as KeyboardEvent
     )
-    expect(send).toHaveBeenLastCalledWith(richMarkdownContextMenuCommandChannel, 'bold')
+    expect(send).toHaveBeenLastCalledWith(richMarkdownContextMenuCommandChannel, {
+      command: 'bold',
+      x: 12,
+      y: 34
+    })
   })
 
   it('does not build a menu outside editable misspelled text', () => {

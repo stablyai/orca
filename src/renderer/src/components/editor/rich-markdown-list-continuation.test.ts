@@ -5,7 +5,8 @@ import { Markdown } from '@tiptap/markdown'
 import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,
-  convertEmptyNestedOrderedItemToContinuation
+  convertEmptyNestedOrderedItemToContinuation,
+  isSingleEmptyTopLevelOrderedList
 } from './rich-markdown-list-continuation'
 
 const extensions = [StarterKit, Markdown.configure({ markedOptions: { gfm: true } })]
@@ -34,6 +35,7 @@ describe('rich markdown list continuation', () => {
     try {
       editor.commands.setTextSelection(3)
 
+      expect(isSingleEmptyTopLevelOrderedList(editor)).toBe(true)
       expect(commitEmptyOrderedListMarkerAsText(editor)).toBe(true)
       expect(editor.state.doc.toJSON()).toEqual({
         type: 'doc',
@@ -134,6 +136,7 @@ describe('rich markdown list continuation', () => {
     try {
       editor.commands.setTextSelection(8)
 
+      expect(isSingleEmptyTopLevelOrderedList(editor)).toBe(false)
       expect(commitEmptyOrderedListMarkerAsText(editor)).toBe(false)
       expect(editor.getMarkdown()).toBe('1. Parent')
     } finally {

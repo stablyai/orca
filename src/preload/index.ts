@@ -62,7 +62,7 @@ import type {
 } from '../shared/github-project-types'
 import {
   richMarkdownContextMenuCommandChannel,
-  type RichMarkdownContextMenuCommand
+  type RichMarkdownContextMenuCommandPayload
 } from '../shared/rich-markdown-context-menu'
 import type {
   SshConnectionState,
@@ -1947,12 +1947,12 @@ const api = {
       ipcRenderer.send('ui:setMarkdownEditorFocused', focused)
     },
     onRichMarkdownContextCommand: (
-      callback: (command: RichMarkdownContextMenuCommand) => void
+      callback: (payload: RichMarkdownContextMenuCommandPayload) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        command: RichMarkdownContextMenuCommand
-      ) => callback(command)
+        payload: RichMarkdownContextMenuCommandPayload
+      ) => callback(payload)
       ipcRenderer.on(richMarkdownContextMenuCommandChannel, listener)
       return () => ipcRenderer.removeListener(richMarkdownContextMenuCommandChannel, listener)
     },
