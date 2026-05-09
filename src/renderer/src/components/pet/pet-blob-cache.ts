@@ -133,10 +133,16 @@ function magentaScore(r: number, g: number, b: number): number {
   // (saturated R+B, very low G) so legitimate purples and pinks (e.g.
   // 128,0,128 or 255,128,200) aren't keyed out of imported sprite art.
   const minRB = Math.min(r, b)
-  if (minRB <= 200 || g >= 60) {
+  if (g >= minRB) {
     return 0
   }
   const dom = (minRB - g) / 255 // how much R and B dominate green
+  // Why: require a strong R+B dominance over G so purples/pinks (e.g.
+  // 128,0,128 or 255,128,200) aren't keyed, while still letting antialiased
+  // edge pixels (e.g. 255,128,255 → dom≈0.5) fade with proportional alpha.
+  if (dom <= 0.4) {
+    return 0
+  }
   return Math.max(0, Math.min(1, dom * 1.4))
 }
 
