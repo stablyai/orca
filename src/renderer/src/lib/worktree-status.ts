@@ -79,8 +79,24 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  * heuristic) on top of the title-heuristic base. The live-pty precondition is
  * inherited via getWorktreeStatus: when no tab in this worktree has a live
  * PTY and no browser tab exists, getWorktreeStatus returns 'inactive' and
- * none of the promotion paths fire — so retained 'done' rows survive in the
- * card body but the worktree dot is correctly grey on slept/crashed worktrees.
+ * none of the promotion paths fire — so the worktree dot stays grey across
+ * sleep, renderer crash + rehydration, and any other path where wake-hint
+ * sessionIds outlive the actual PTY. On sleep specifically,
+ * `dropAgentStatusByWorktree` also clears retained rows for the worktree, so
+ * this precondition is the second line of defense; the rehydration-from-disk
+ * path is where retained 'done' rows can outlive the live PTY and the
+ * precondition does the load-bearing work.
+ *
+ * Argument semantics (sourced by the WorktreeCard caller from the store):
+ * - `tabs`, `browserTabs`: the worktree's terminal and browser tabs.
+ * - `ptyIdsByTabId`: live-PTY map narrowed to this worktree (the liveness
+ *   gate; see tabHasLivePty).
+ * - `runtimePaneTitlesByTabId`: per-tab pane title map narrowed to this
+ *   worktree (used by the title-heuristic for split-pane spinners).
+ * - `hasPermission`: any fresh hook entry in {blocked, waiting} for a tab in
+ *   this worktree.
+ * - `hasLiveDone`: any fresh hook entry in {done} for a tab in this worktree.
+ * - `hasRetainedDone`: any retained-agent snapshot scoped to this worktreeId.
  */
 export function resolveWorktreeStatus(args: {
   tabs: Pick<TerminalTab, 'id' | 'title'>[]
@@ -106,9 +122,11 @@ export function resolveWorktreeStatus(args: {
   if (args.hasPermission) {
     return 'permission'
   }
-  // Why: title-heuristic permission must outrank a stale done overlay; doc
-  // comment promises priority "permission > working > done > heuristic" and
-  // hasPermission can lag the per-pane title detection by a render.
+  // Why: heuristic 'permission' must outrank heuristic 'working' (a tab can
+  // be "working" while another pane in the same tab is blocked on permission;
+  // the user-actionable signal wins). Both this branch and the args.hasPermission
+  // branch above return 'permission' — they're separated only because
+  // args.hasPermission must also outrank heuristic 'working' below.
   if (heuristic === 'permission') {
     return 'permission'
   }

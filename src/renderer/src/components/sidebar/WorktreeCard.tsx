@@ -30,6 +30,10 @@ import {
   FilledBellIcon
 } from './WorktreeCardHelpers'
 import { IssueSection, PrSection, CommentSection } from './WorktreeCardMeta'
+import {
+  selectLivePtyIdsForWorktree,
+  selectRuntimePaneTitlesForWorktree
+} from './worktree-card-status-inputs'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -113,41 +117,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
-  // Why: split-pane tabs expose per-pane titles that the aggregate
-  // `tab.title` does not preserve (onActivePaneChange overwrites it with the
-  // focused pane's title). getWorktreeStatus needs those pane titles to keep
-  // the sidebar spinner reflecting *any* working pane, not just the focused
-  // one. Narrow the subscription to this worktree's tabs via useShallow so
-  // unrelated pane-title updates do not re-render every sidebar card.
-  const runtimePaneTitlesForWorktree = useAppStore(
-    useShallow((s) => {
-      const out: Record<string, Record<number, string>> = {}
-      for (const tab of s.tabsByWorktree[worktree.id] ?? []) {
-        const paneTitles = s.runtimePaneTitlesByTabId[tab.id]
-        if (paneTitles) {
-          out[tab.id] = paneTitles
-        }
-      }
-      return out
-    })
-  )
-  // Why: the live-PTY map is the source of truth for "is this tab alive?".
+  // Why: keep these as separate shallow selectors. Combining them into one
+  // returned object nests freshly-created maps under fresh keys, so Zustand's
+  // shallow memoization sees every unrelated store write as a change and
+  // re-renders every mounted card.
   // tab.ptyId is the wake-hint sessionId preserved across sleep, not a
-  // liveness signal — sleep-then-card-render would lie the dot green if we
-  // read tab.ptyId. Mirror the runtimePaneTitlesForWorktree pattern: narrow
-  // the subscription to *this* worktree's tabs via useShallow so unrelated
-  // PTY spawns/kills do not re-render every sidebar card.
+  // liveness signal; sleep-then-card-render would lie the dot green if we
+  // read tab.ptyId; ptyIdsByTabId is the source of truth.
+  // tab.title is the focused-pane title (onActivePaneChange overwrites it),
+  // so the per-pane title map is needed to keep the sidebar spinner
+  // reflecting *any* working pane, not just the focused one.
+  const runtimePaneTitlesForWorktree = useAppStore(
+    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktree.id))
+  )
   const ptyIdsForWorktree = useAppStore(
-    useShallow((s) => {
-      const out: Record<string, string[]> = {}
-      for (const tab of s.tabsByWorktree[worktree.id] ?? []) {
-        const ids = s.ptyIdsByTabId[tab.id]
-        if (ids && ids.length > 0) {
-          out[tab.id] = ids
-        }
-      }
-      return out
-    })
+    useShallow((s) => selectLivePtyIdsForWorktree(s, worktree.id))
   )
 
   const branch = branchDisplayName(worktree.branch)

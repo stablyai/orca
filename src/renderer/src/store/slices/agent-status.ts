@@ -73,7 +73,17 @@ export type AgentStatusSlice = {
 
   /** Remove all entries for a worktree AND suppress re-retention for live rows.
    *  Used on worktree sleep/remove — the whole worktree surface is folding, so
-   *  retained rows must drop even if their original tab is no longer present. */
+   *  retained rows must drop even if their original tab is no longer present.
+   *
+   *  Note on orphan-live asymmetry: liveKeys are matched against tab prefixes
+   *  derived from `tabsByWorktree[worktreeId]`. Live entries belonging to the
+   *  same worktree but whose tab has already been pruned from `tabsByWorktree`
+   *  (an orphan-live race) are not swept here. The retained side has a
+   *  fallback (`retained.worktreeId === worktreeId`); the live side does not,
+   *  because live entries do not carry a worktreeId. In practice the gap is
+   *  bounded — `removeAgentStatus` is called on PTY exit — and dropping an
+   *  orphan-live entry on shutdown is best-effort, so accepting the asymmetry
+   *  is the simpler tradeoff. */
   dropAgentStatusByWorktree: (worktreeId: string) => void
 
   /** Retain agent snapshots (called by the top-level retention sync effect).
@@ -531,10 +541,24 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const retainedKeySet = new Set(retainedKeys)
         // See removeAgentStatus for rationale on ack cleanup. Current tabs are
         // swept by prefix; orphan retained rows are swept by their retained key.
-        const ackKeys = Object.keys(s.acknowledgedAgentsByPaneKey).filter(
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        const ackKeys = Object.keys(nextAck).filter(
           (k) => paneKeyMatchesAnyTabPrefix(k, tabPrefixes) || retainedKeySet.has(k)
         )
-        if (liveKeys.length === 0 && retainedKeys.length === 0 && ackKeys.length === 0) {
+        if (ackKeys.length > 0) {
+          nextAck = { ...nextAck }
+          for (const key of ackKeys) {
+            delete nextAck[key]
+          }
+        }
+        // Mirror dropAgentStatusByTabPrefix: when nothing live or retained
+        // changed, narrow the return to just the ack delta (or s) so we don't
+        // emit a new top-level state object that re-renders full-state
+        // subscribers for nothing.
+        if (liveKeys.length === 0 && retainedKeys.length === 0) {
+          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+            return { acknowledgedAgentsByPaneKey: nextAck }
+          }
           return s
         }
         hadLive = liveKeys.length > 0
@@ -549,14 +573,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
         for (const key of retainedKeys) {
           delete nextRetained[key]
-        }
-
-        let nextAck = s.acknowledgedAgentsByPaneKey
-        if (ackKeys.length > 0) {
-          nextAck = { ...nextAck }
-          for (const key of ackKeys) {
-            delete nextAck[key]
-          }
         }
 
         // Why: a worktree-level teardown folds the whole surface. Current live

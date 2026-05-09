@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { buildWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -17,7 +20,11 @@ function makeTab(id: string): TerminalTab {
   }
 }
 
-function makeEntry(paneKey: string, startedAt: number): AgentStatusEntry {
+function makeEntry(
+  paneKey: string,
+  startedAt: number,
+  overrides?: Partial<AgentStatusEntry>
+): AgentStatusEntry {
   return {
     paneKey,
     state: 'done',
@@ -27,7 +34,8 @@ function makeEntry(paneKey: string, startedAt: number): AgentStatusEntry {
     prompt: 'finished prompt',
     agentType: 'claude',
     terminalTitle: undefined,
-    interrupted: false
+    interrupted: false,
+    ...overrides
   }
 }
 
@@ -69,5 +77,29 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].entry).toBe(liveEntry)
     expect(rows[0].startedAt).toBe(2000)
+  })
+
+  it('decays a stale working entry to idle but leaves a stale done entry alone', () => {
+    // Why: the freshness scheduler ticks agentStatusEpoch when an entry crosses
+    // the stale boundary; the row state machine must collapse working/blocked/
+    // waiting to idle but preserve done. Sleep is the most common path that
+    // freezes hook entries past their TTL.
+    const staleAt = 1000
+    const freshDoneAt = 2000
+    const now = staleAt + AGENT_STATUS_STALE_AFTER_MS + 1
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1'), makeTab('tab-2')],
+      entries: [
+        makeEntry('tab-1:0', staleAt, { state: 'working', updatedAt: staleAt }),
+        makeEntry('tab-2:0', freshDoneAt, { state: 'done', updatedAt: freshDoneAt })
+      ],
+      retained: [],
+      now
+    })
+
+    const working = rows.find((r) => r.paneKey === 'tab-1:0')
+    const done = rows.find((r) => r.paneKey === 'tab-2:0')
+    expect(working?.state).toBe('idle')
+    expect(done?.state).toBe('done')
   })
 })
