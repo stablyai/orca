@@ -1125,29 +1125,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
 
-    // Why: drop live agent-status rows on every shutdown. The agent process
-    // is dead the instant pty.kill fires (which already ran above), so any
-    // preserved working/blocked/waiting entry is a lie. useWorktreeAgentRows
-    // emits a row per agentStatusByPaneKey entry, so without this drop those
-    // dead-process rows would persist inside the card body as "working" even
-    // though the worktree dot is correctly grey under the live-pty
-    // precondition.
-    //
-    // Why preserveRetained under sleep: a `done` agent is signaling
-    // completion to the user ("Claude finished while you were away"); that
-    // signal outlives sleep until the user dismisses it. preserveRetained
-    // skips wiping retainedAgentsByPaneKey, skips planting retention
-    // suppressors (so a previously-live `done` can flow into retained on
-    // the next sync), and preserves the user's prior ack so wake doesn't
-    // resurface an agent the user already dismissed.
-    //
-    // Under remove-worktree (default), wipe everything — the user is
-    // tearing down the whole worktree, so any retained row would point at
-    // a worktree that no longer exists. (Mirror of the pattern in closeTab
-    // / pane-close, which drop their own rows explicitly.)
-    for (const tab of tabs) {
-      get().dropAgentStatusByTabPrefix(tab.id, { preserveRetained: keepIdentifiers })
-    }
+    // Why: sleep/remove fold the whole worktree surface. The live PTY bindings
+    // were cleared above and kill is about to run, so live rows are stale;
+    // retained rows are folded too so a grey slept card does not keep a green
+    // "done" row. Sweep by worktreeId because retained snapshots can outlive
+    // their original tab.
+    get().dropAgentStatusByWorktree(worktreeId)
 
     if (ptyIds.length === 0) {
       return
