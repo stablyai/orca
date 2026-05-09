@@ -452,7 +452,17 @@ export function useDiffCommentDecorator({
       if (!editor.getModel()) {
         return
       }
-      editor.revealLineInCenter(target.lineNumber)
+      // Why: mirror VS Code's commentThreadZoneWidget._goToComment — compute
+      // scrollTop ourselves from `getTopForLineNumber(line)` (which excludes
+      // view zones) minus half the editor height, then setScrollTop. Monaco's
+      // `revealLineInCenter` shorthand is layout-pass-sensitive: on the first
+      // click the note's view zone above the line is freshly mounted and the
+      // shorthand lands the line near the top instead of center. The manual
+      // computation is self-correcting because Monaco's setScrollTop honours
+      // current zone offsets regardless of when the zone was added.
+      const top = editor.getTopForLineNumber(target.lineNumber)
+      const editorHeight = editor.getLayoutInfo().height
+      editor.setScrollTop(Math.max(0, top - editorHeight / 2))
       onPendingScrollConsumedRef.current?.()
     })
     return () => {
