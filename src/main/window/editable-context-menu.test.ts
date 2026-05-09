@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import { richMarkdownContextMenuCommandChannel } from '../../shared/rich-markdown-context-menu'
 
 function contextParams(
   overrides: Partial<Electron.ContextMenuParams> = {}
@@ -39,16 +40,19 @@ describe('buildEditableContextMenuTemplate', () => {
   it('builds spelling suggestion actions for editable markdown text', () => {
     const replaceMisspelling = vi.fn()
     const addWordToSpellCheckerDictionary = vi.fn()
+    const send = vi.fn()
     const template = buildEditableContextMenuTemplate(contextParams(), {
       replaceMisspelling,
+      send,
       session: { addWordToSpellCheckerDictionary } as unknown as Electron.Session
     })
 
-    expect(template.map((item) => item.label ?? item.type)).toEqual([
+    expect(template.slice(0, 5).map((item) => item.label ?? item.type)).toEqual([
       'reference',
       'reverence',
       'separator',
-      'Add to dictionary'
+      'Add to dictionary',
+      'separator'
     ])
 
     template[0].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
@@ -58,9 +62,57 @@ describe('buildEditableContextMenuTemplate', () => {
     expect(addWordToSpellCheckerDictionary).toHaveBeenCalledWith('refrence')
   })
 
-  it('does not build a menu outside editable spellchecked text', () => {
+  it('builds a menu when Chromium reports suggestions even if spellcheckEnabled is false', () => {
+    const template = buildEditableContextMenuTemplate(contextParams({ spellcheckEnabled: false }), {
+      replaceMisspelling: vi.fn(),
+      send: vi.fn(),
+      session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+    })
+
+    expect(template.map((item) => item.label ?? item.type)).toContain('reference')
+  })
+
+  it('adds useful markdown and native edit actions for rich markdown text', () => {
+    const send = vi.fn()
+    const template = buildEditableContextMenuTemplate(
+      contextParams({ misspelledWord: '', dictionarySuggestions: [] }),
+      {
+        replaceMisspelling: vi.fn(),
+        send,
+        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+      }
+    )
+
+    expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
+      'Add link',
+      'separator',
+      'Format',
+      'Paragraph',
+      'Insert',
+      'separator',
+      'cut',
+      'copy',
+      'paste',
+      'Paste as plain text',
+      'selectAll'
+    ])
+
+    template[0].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+    expect(send).toHaveBeenCalledWith(richMarkdownContextMenuCommandChannel, 'add-link')
+
+    const formatMenu = template[2].submenu as Electron.MenuItemConstructorOptions[]
+    formatMenu[0].click?.(
+      {} as Electron.MenuItem,
+      {} as Electron.BrowserWindow,
+      {} as KeyboardEvent
+    )
+    expect(send).toHaveBeenLastCalledWith(richMarkdownContextMenuCommandChannel, 'bold')
+  })
+
+  it('does not build a menu outside editable misspelled text', () => {
     const webContents = {
       replaceMisspelling: vi.fn(),
+      send: vi.fn(),
       session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
     }
 
@@ -68,13 +120,38 @@ describe('buildEditableContextMenuTemplate', () => {
       buildEditableContextMenuTemplate(contextParams({ isEditable: false }), webContents)
     ).toEqual([])
     expect(
-      buildEditableContextMenuTemplate(contextParams({ spellcheckEnabled: false }), webContents)
-    ).toEqual([])
-    expect(
       buildEditableContextMenuTemplate(
-        contextParams({ misspelledWord: '', dictionarySuggestions: [] }),
+        contextParams({
+          formControlType: 'input-text',
+          misspelledWord: '',
+          dictionarySuggestions: []
+        }),
         webContents
       )
     ).toEqual([])
+  })
+
+  it('keeps regular text inputs to spelling and native edit actions', () => {
+    const template = buildEditableContextMenuTemplate(
+      contextParams({ formControlType: 'input-text' }),
+      {
+        replaceMisspelling: vi.fn(),
+        send: vi.fn(),
+        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+      }
+    )
+
+    expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
+      'reference',
+      'reverence',
+      'separator',
+      'Add to dictionary',
+      'separator',
+      'cut',
+      'copy',
+      'paste',
+      'Paste as plain text',
+      'selectAll'
+    ])
   })
 })

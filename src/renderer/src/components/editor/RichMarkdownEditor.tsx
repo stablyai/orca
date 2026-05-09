@@ -40,6 +40,7 @@ import {
   resolveMarkdownLinkTarget
 } from './markdown-internal-links'
 import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
+import type { RichMarkdownContextMenuCommand } from '../../../../shared/rich-markdown-context-menu'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -61,6 +62,63 @@ type RichMarkdownEditorProps = {
 const richMarkdownExtensions = createRichMarkdownExtensions({
   includePlaceholder: true
 })
+
+function runRichMarkdownContextCommand(
+  command: RichMarkdownContextMenuCommand,
+  editor: Editor,
+  toggleLink: () => void,
+  pickImage: () => void
+): void {
+  switch (command) {
+    case 'add-link':
+      toggleLink()
+      return
+    case 'bold':
+      editor.chain().focus().toggleBold().run()
+      return
+    case 'italic':
+      editor.chain().focus().toggleItalic().run()
+      return
+    case 'strike':
+      editor.chain().focus().toggleStrike().run()
+      return
+    case 'inline-code':
+      editor.chain().focus().toggleCode().run()
+      return
+    case 'code-block':
+      editor.chain().focus().toggleCodeBlock().run()
+      return
+    case 'blockquote':
+      editor.chain().focus().toggleBlockquote().run()
+      return
+    case 'paragraph':
+      editor.chain().focus().setParagraph().run()
+      return
+    case 'heading-1':
+      editor.chain().focus().setHeading({ level: 1 }).run()
+      return
+    case 'heading-2':
+      editor.chain().focus().setHeading({ level: 2 }).run()
+      return
+    case 'heading-3':
+      editor.chain().focus().setHeading({ level: 3 }).run()
+      return
+    case 'bullet-list':
+      editor.chain().focus().toggleBulletList().run()
+      return
+    case 'ordered-list':
+      editor.chain().focus().toggleOrderedList().run()
+      return
+    case 'task-list':
+      editor.chain().focus().toggleTaskList().run()
+      return
+    case 'image':
+      pickImage()
+      return
+    case 'divider':
+      editor.chain().focus().setHorizontalRule().run()
+  }
+}
 
 export default function RichMarkdownEditor({
   fileId,
@@ -109,6 +167,7 @@ export default function RichMarkdownEditor({
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
+  const richEditorFocusedRef = useRef(false)
   const serializeTimerRef = useRef<number | null>(null)
   // Why: normalizeSoftBreaks dispatches a ProseMirror transaction inside onCreate
   // which triggers onUpdate. Without this guard the editor immediately marks the
@@ -255,6 +314,7 @@ export default function RichMarkdownEditor({
       }
     },
     onFocus: () => {
+      richEditorFocusedRef.current = true
       // Why: mirror TipTap focus into the main process so the before-input-event
       // Cmd+B carve-out in createMainWindow.ts lets the bold keymap run instead
       // of intercepting the chord for sidebar toggle.
@@ -262,6 +322,7 @@ export default function RichMarkdownEditor({
       window.api.ui.setMarkdownEditorFocused(true)
     },
     onBlur: () => {
+      richEditorFocusedRef.current = false
       window.api.ui.setMarkdownEditorFocused(false)
     },
     onCreate: ({ editor: nextEditor }) => {
@@ -412,6 +473,17 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
+
+  useEffect(() => {
+    return window.api.ui.onRichMarkdownContextCommand((command) => {
+      const ed = editorRef.current
+      if (!ed || (!richEditorFocusedRef.current && !ed.isFocused)) {
+        return
+      }
+
+      runRichMarkdownContextCommand(command, ed, toggleLinkFromToolbar, handleLocalImagePick)
+    })
+  }, [handleLocalImagePick, toggleLinkFromToolbar])
 
   const {
     activeMatchIndex,

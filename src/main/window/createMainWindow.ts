@@ -443,7 +443,7 @@ export function createMainWindow(
     // Why: right-click can produce a Chromium context-menu event before our
     // renderer focus mirror updates, so trust Electron's editable/spellcheck
     // params here instead of gating on markdownEditorFocused.
-    Menu.buildFromTemplate(template).popup({ window: mainWindow })
+    Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
   }
   mainWindow.webContents.on('context-menu', onMainContextMenu)
 

@@ -810,6 +810,8 @@ describe('createMainWindow', () => {
     windowHandlers['context-menu'](
       {} as never,
       {
+        x: 42,
+        y: 84,
         isEditable: true,
         spellcheckEnabled: true,
         dictionarySuggestions: ['reference'],
@@ -820,7 +822,7 @@ describe('createMainWindow', () => {
     expect(buildFromTemplateMock).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ label: 'reference' })])
     )
-    expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance })
+    expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
   })
 
   it('resets the markdown editor focus flag on renderer crash, navigation, and destroy', () => {

@@ -60,6 +60,10 @@ import type {
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
 } from '../shared/github-project-types'
+import {
+  richMarkdownContextMenuCommandChannel,
+  type RichMarkdownContextMenuCommand
+} from '../shared/rich-markdown-context-menu'
 import type {
   SshConnectionState,
   SshTarget,
@@ -1941,6 +1945,16 @@ const api = {
     // while the markdown editor owns focus, letting TipTap apply bold instead.
     setMarkdownEditorFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setMarkdownEditorFocused', focused)
+    },
+    onRichMarkdownContextCommand: (
+      callback: (command: RichMarkdownContextMenuCommand) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        command: RichMarkdownContextMenuCommand
+      ) => callback(command)
+      ipcRenderer.on(richMarkdownContextMenuCommandChannel, listener)
+      return () => ipcRenderer.removeListener(richMarkdownContextMenuCommandChannel, listener)
     },
     onFullscreenChanged: (callback: (isFullScreen: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isFullScreen: boolean) =>
