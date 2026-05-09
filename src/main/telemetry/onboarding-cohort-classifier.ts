@@ -51,12 +51,11 @@ export function getOnboardingCohortAtEmit(): { cohort: OnboardingCohort | undefi
     return { cohort: undefined }
   }
   try {
-    // Snapshot both reads atomically up front so the classification can't
-    // straddle a mutation between the settings and onboarding reads. The
-    // extra getOnboarding() on the existedBefore === false branch is a
-    // synchronous main-process read; cost is negligible.
+    // Why: fresh_install classification depends only on the settings flag,
+    // so we read settings first and skip getOnboarding() entirely on that
+    // branch — a failing onboarding read must not demote a fresh-install
+    // user to `{ cohort: undefined }`.
     const settings = storeRef.getSettings()
-    const onboarding = storeRef.getOnboarding()
     const existedBefore = settings.telemetry?.existedBeforeTelemetryRelease
     if (existedBefore === false) {
       return { cohort: 'fresh_install' }
@@ -75,6 +74,7 @@ export function getOnboardingCohortAtEmit(): { cohort: OnboardingCohort | undefi
       // `upgrade_backfill` on the next event after completion is
       // persisted. See the top-of-file "Known limitation" block for the
       // dashboard-side workaround and the proposed sentinel-field fix.
+      const onboarding = storeRef.getOnboarding()
       if (
         onboarding.outcome === 'completed' &&
         onboarding.lastCompletedStep === ONBOARDING_FINAL_STEP

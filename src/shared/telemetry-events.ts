@@ -487,12 +487,15 @@ export type EventName = keyof EventMap
 export type EventProps<N extends EventName> = EventMap[N]
 
 // Why: events whose schemas declare a given property name. Extracted so the
-// cast (Object.entries → [EventName, ZodObject]) stays in one place; if the
+// cast (Object.entries → [EventName, ZodTypeAny]) stays in one place; if the
 // schema-registry shape ever changes, only one site needs to update.
+// Safely skips non-`ZodObject` schemas (e.g. a future `z.discriminatedUnion`
+// or `z.union`) — those have no `.shape`, and probing `key in undefined`
+// would throw at module load and take the telemetry module down on import.
 function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
   return new Set(
-    (Object.entries(eventSchemas) as [EventName, z.ZodObject<z.ZodRawShape>][])
-      .filter(([, schema]) => key in schema.shape)
+    (Object.entries(eventSchemas) as [EventName, z.ZodTypeAny][])
+      .filter(([, schema]) => schema instanceof z.ZodObject && key in schema.shape)
       .map(([name]) => name)
   )
 }
@@ -510,9 +513,31 @@ function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
 //   That is the *only* step — this set updates automatically.
 const COHORT_EXTENDED_SET = eventsWithShapeKey('nth_repo_added')
 export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_SET)
-export type CohortExtendedEvent = EventName
 
-export function isCohortExtendedEvent(name: EventName): name is CohortExtendedEvent {
+// Compile-time roster of events that must declare `nth_repo_added`. Same
+// rationale as `_OnboardingCohortRosterSync` below — guards the runtime
+// injection set against silent schema drift.
+type _CohortExtendedRoster =
+  | 'app_opened'
+  | 'repo_added'
+  | 'add_repo_setup_step_action'
+  | 'workspace_created'
+  | 'workspace_create_failed'
+  | 'agent_started'
+  | 'agent_error'
+type _DerivedCohortExtendedEvents = {
+  [N in EventName]: 'nth_repo_added' extends keyof EventMap[N] ? N : never
+}[EventName]
+type _CohortExtendedRosterSync =
+  _CohortExtendedRoster extends _DerivedCohortExtendedEvents
+    ? _DerivedCohortExtendedEvents extends _CohortExtendedRoster
+      ? true
+      : never
+    : never
+const _cohortExtendedRosterSyncCheck: _CohortExtendedRosterSync = true
+void _cohortExtendedRosterSyncCheck
+
+export function isCohortExtendedEvent(name: EventName): boolean {
   return COHORT_EXTENDED_SET.has(name)
 }
 
@@ -528,8 +553,40 @@ export function isCohortExtendedEvent(name: EventName): name is CohortExtendedEv
 const ONBOARDING_COHORT_SET = eventsWithShapeKey('cohort')
 // `NonNullable` strips `undefined` introduced by `cohortSchema`'s `.optional()`.
 export type OnboardingCohort = NonNullable<z.infer<typeof cohortSchema>>
-export type OnboardingCohortExtendedEvent = EventName
-export function isOnboardingEvent(name: EventName): name is OnboardingCohortExtendedEvent {
+
+// Compile-time roster of events that must declare `cohort`. If a schema
+// refactor drops the field from one of these, this fails tsc rather than
+// silently dropping the event from the runtime injection set above (which
+// the `.optional()` schema would tolerate without any test failure).
+//
+// Adding a new onboarding event: add its name here AND declare
+// `cohort: cohortSchema` on its schema. Both are required.
+type _OnboardingCohortRoster =
+  | 'onboarding_started'
+  | 'onboarding_step_viewed'
+  | 'onboarding_step_completed'
+  | 'onboarding_step_skipped'
+  | 'onboarding_step4_path_clicked'
+  | 'onboarding_step4_path_failed'
+  | 'onboarding_completed'
+  | 'onboarding_dismissed'
+  | 'onboarding_agent_picked'
+  | 'onboarding_ghostty_discovered'
+  | 'onboarding_ghostty_import_clicked'
+  | 'onboarding_ghostty_import_failed'
+type _DerivedOnboardingCohortEvents = {
+  [N in EventName]: 'cohort' extends keyof EventMap[N] ? N : never
+}[EventName]
+type _OnboardingCohortRosterSync =
+  _OnboardingCohortRoster extends _DerivedOnboardingCohortEvents
+    ? _DerivedOnboardingCohortEvents extends _OnboardingCohortRoster
+      ? true
+      : never
+    : never
+const _onboardingCohortRosterSyncCheck: _OnboardingCohortRosterSync = true
+void _onboardingCohortRosterSyncCheck
+
+export function isOnboardingEvent(name: EventName): boolean {
   return ONBOARDING_COHORT_SET.has(name)
 }
 

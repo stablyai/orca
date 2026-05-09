@@ -166,6 +166,19 @@ describe('telemetry IPC handlers', () => {
     expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: undefined })
   })
 
+  // Threat-model parity with the cohort override test: a compromised
+  // renderer must NOT be able to forge `nth_repo_added` either. The same
+  // spread-order invariant applies — `{ ...baseProps, ...getCohortAtEmit() }`
+  // — and the same future-refactor regression risk exists. Pinning both
+  // fields keeps the threat model symmetric.
+  it('main-derived nth_repo_added overrides renderer-supplied value', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'app_opened', { nth_repo_added: 99 })
+    expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: 2 })
+  })
+
   // ── Onboarding cohort injection (mirrors the nth_repo_added pattern) ──
 
   it('injects onboarding cohort on events whose schema declares cohort', () => {
@@ -207,6 +220,26 @@ describe('telemetry IPC handlers', () => {
     handler({}, 'onboarding_started', { cohort: 'upgrade_backfill' })
     expect(trackMock).toHaveBeenCalledWith('onboarding_started', {
       cohort: 'fresh_install'
+    })
+  })
+
+  // Threat-model invariant under degraded classifier: a compromised
+  // renderer must NOT be able to forge `cohort` even when the classifier
+  // fails soft to `{ cohort: undefined }`. The IPC handler spreads the
+  // classifier output AFTER the caller-supplied props, so an explicit
+  // `undefined` from the classifier still overwrites a forged value. A
+  // future refactor that switches the spread to a conditional assign
+  // (`if (c.cohort !== undefined) baseProps.cohort = c.cohort`) would
+  // silently regress this — pinning it here.
+  it('main-derived undefined cohort overrides renderer-supplied cohort (degraded classifier)', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: true, optedIn: true })
+    getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
+    const handler = handlers.get('telemetry:track')!
+    // Compromised renderer attempts to forge cohort='upgrade_backfill';
+    // main strips it via the explicit-undefined spread.
+    handler({}, 'onboarding_started', { cohort: 'upgrade_backfill' })
+    expect(trackMock).toHaveBeenCalledWith('onboarding_started', {
+      cohort: undefined
     })
   })
 

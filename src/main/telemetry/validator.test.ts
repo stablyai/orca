@@ -271,6 +271,17 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('accepts onboarding_started with cohort: undefined (classifier fail-soft)', () => {
+    // The IPC handler injects `getOnboardingCohortAtEmit()` even when it
+    // returns `{ cohort: undefined }` — the spread `{ ...withRepoCohort,
+    // ...{ cohort: undefined } }` produces an explicit-undefined key, not a
+    // missing key. Zod's `.optional()` treats those as the same; this test
+    // pins the behavior so the load-bearing fail-soft path is not silently
+    // broken by a future zod or schema change.
+    const result = validate('onboarding_started', { cohort: undefined })
+    expect(result.ok).toBe(true)
+  })
+
   // Rate-limit: at most one warn per event name per 60s. We cannot easily
   // control Date.now() without mocking time, so the coarse assertion is
   // that repeat-dropping the same event name does not emit a warn on every

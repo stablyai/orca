@@ -10,14 +10,6 @@ import type {
 } from '../../../../shared/types'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 
-// Re-exported so the `_GhosttyDiscoveryStateSync` guard in
-// `src/shared/telemetry-events.ts` keeps this file as the named source of
-// truth for the wire-emitted discovery states. The canonical type lives in
-// `shared/types.ts` because `shared/` is the only module visible from both
-// the web and node tsconfigs; `'idle'` and `'detecting'` are UI-only states
-// that never fire telemetry, hence excluded.
-export type { DiscoveryStatusEmitted } from '../../../../shared/types'
-
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
   onThemeChange: (theme: GlobalSettings['theme']) => void

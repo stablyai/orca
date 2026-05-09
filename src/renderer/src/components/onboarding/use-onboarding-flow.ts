@@ -88,8 +88,8 @@ export function useOnboardingFlow(
   // agent lived under the `<details>` disclosure in AgentStep. AgentStep is
   // the only call site that has the real answer; main-side detected_count /
   // detection_state are merged in here from the store.
-  const detectedAgentIdsRef = useRef<readonly TuiAgent[]>([])
-  const isDetectingRef = useRef<boolean>(false)
+  const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
+  const isDetectingRef = useRef<boolean>(isDetectingAgents)
   const selectedAgentRef = useRef(selectedAgent)
   useEffect(() => {
     selectedAgentRef.current = selectedAgent
