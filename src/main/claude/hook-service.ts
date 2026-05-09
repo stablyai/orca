@@ -231,61 +231,72 @@ export class ClaudeHookService {
   // install — except the hook server it posts to is the relay's, sourced
   // from $ORCA_AGENT_HOOK_ENDPOINT injected by the relay's pty-handler.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    if (process.platform === 'win32') {
-      // Why: this constraint applies to the *remote* host, not the local
-      // Orca process. Remote-Windows is out of scope for v1; we cannot use
-      // process.platform to detect that — the fact that we are using
-      // POSIX-shaped paths (`~/.claude/settings.json`) and the .sh managed
-      // script body is the contract. Still, refuse to ship Windows-shaped
-      // artifacts (the .cmd script + PowerShell launcher) to a target where
-      // they would not run. The relay's getCapabilities RPC will eventually
-      // gate this at a higher layer; for now this guard is defense-in-depth.
-    }
+    // Why: remote-Windows is out of scope for v1 — we ship POSIX-shaped paths
+    // (`~/.claude/settings.json`) and a `.sh` managed script body. The remote
+    // platform is gated by the relay's capability RPC at a higher layer; we
+    // cannot detect it from `process.platform` here (that's the local box).
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.claude/settings.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/claude-hook.sh`
-    const config = await readHooksJsonRemote(sftp, remoteConfigPath)
-    if (!config) {
+    // Why: SFTP reads/writes fail far more often than local fs (network drops,
+    // EACCES on remote dirs, disk full, channel closed). Wrap the entire
+    // install flow in try/catch so a transient I/O failure surfaces as a
+    // structured `state: 'error'` result for the UI, not an unstructured
+    // rejection the caller has to remember to handle. A `null` config
+    // specifically means "file present but unparseable" — keep that branch
+    // distinct so the user sees an actionable message.
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'claude',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Claude settings.json'
+        }
+      }
+
+      // Why: the POSIX wrapper is identical regardless of where the script
+      // lands; only the path differs. Reuse the same wrapper helper.
+      const command = wrapPosixHookCommand(remoteScriptPath)
+      const nextHooks = { ...config.hooks }
+      const isManagedCommand = createManagedCommandMatcher('claude-hook.sh')
+
+      for (const event of CLAUDE_EVENTS) {
+        const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
+        const cleaned = removeManagedCommands(current, isManagedCommand)
+        const definition: HookDefinition = {
+          ...event.definition,
+          hooks: [{ type: 'command', command }]
+        }
+        nextHooks[event.eventName] = [...cleaned, definition]
+      }
+      config.hooks = nextHooks
+
+      // Why: write the script first, then the settings — settings.json
+      // referencing a missing script body would fire `command not found` on
+      // every tool call until the user re-runs install. Doing it in this
+      // order means a partial-failure mid-install at worst leaves the user
+      // with a working script no settings.json points at (a no-op), instead
+      // of broken settings.json.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript())
+      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+
+      return {
+        agent: 'claude',
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
       return {
         agent: 'claude',
         state: 'error',
         configPath: remoteConfigPath,
         managedHooksPresent: false,
-        detail: 'Could not parse remote Claude settings.json'
+        detail: err instanceof Error ? err.message : String(err)
       }
-    }
-
-    // Why: the POSIX wrapper is identical regardless of where the script
-    // lands; only the path differs. Reuse the same wrapper helper.
-    const command = wrapPosixHookCommand(remoteScriptPath)
-    const nextHooks = { ...config.hooks }
-    const isManagedCommand = createManagedCommandMatcher('claude-hook.sh')
-
-    for (const event of CLAUDE_EVENTS) {
-      const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-      const cleaned = removeManagedCommands(current, isManagedCommand)
-      const definition: HookDefinition = {
-        ...event.definition,
-        hooks: [{ type: 'command', command }]
-      }
-      nextHooks[event.eventName] = [...cleaned, definition]
-    }
-    config.hooks = nextHooks
-
-    // Why: write the script first, then the settings — settings.json
-    // referencing a missing script body would fire `command not found` on
-    // every tool call until the user re-runs install. Doing it in this
-    // order means a partial-failure mid-install at worst leaves the user
-    // with a working script no settings.json points at (a no-op), instead
-    // of broken settings.json.
-    await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript())
-    await writeHooksJsonRemote(sftp, remoteConfigPath, config)
-
-    return {
-      agent: 'claude',
-      state: 'installed',
-      configPath: remoteConfigPath,
-      managedHooksPresent: true,
-      detail: null
     }
   }
 

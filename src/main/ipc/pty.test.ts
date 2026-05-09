@@ -1277,6 +1277,9 @@ describe('registerPtyHandlers', () => {
           expect(env.ORCA_TAB_ID).toBeUndefined()
           expect(env.ORCA_WORKTREE_ID).toBeUndefined()
           expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          // Why: the local hook server's userData-relative endpoint file path
+          // is meaningless on the remote box; assert it does not leak.
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
         } finally {
           if (prevFlag === undefined) {
             delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
@@ -1336,6 +1339,7 @@ describe('registerPtyHandlers', () => {
           // relay is the source of truth for those.
           expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
           expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
         } finally {
           if (prevFlag === undefined) {
             delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS

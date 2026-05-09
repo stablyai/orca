@@ -709,6 +709,14 @@ export class AgentHookServer {
       }
     }
   }
+
+  /** Test-only accessor for the per-instance listener state. The `_internals`
+   *  shim needs to reach this without exposing `state` on the public surface
+   *  to renderer/main callers. AGENTS.md disallows `as unknown as X` escapes,
+   *  so we expose a narrow getter rather than casting the private field. */
+  _getStateForTests(): HookListenerState {
+    return this.state
+  }
 }
 
 export const agentHookServer = new AgentHookServer()
@@ -722,19 +730,9 @@ export const _internals = {
     body: unknown,
     expectedEnv: string
   ): AgentHookEventPayload | null =>
-    normalizeHookPayload(_singletonState(), source, body, expectedEnv),
+    normalizeHookPayload(agentHookServer._getStateForTests(), source, body, expectedEnv),
   parseFormEncodedBody,
   resetCachesForTests: (): void => {
-    clearAllListenerCaches(_singletonState())
+    clearAllListenerCaches(agentHookServer._getStateForTests())
   }
-}
-
-// Why: ergonomic accessor so the `_internals` shim can reach the singleton's
-// per-instance state without exposing `state` on the public class surface.
-function _singletonState(): HookListenerState {
-  // The runtime field is private, but tests access this module exclusively
-  // through `_internals`, which only fires after the module-level
-  // `agentHookServer` is constructed. The cast keeps the compile-time
-  // private invariant intact.
-  return (agentHookServer as unknown as { state: HookListenerState }).state
 }

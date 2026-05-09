@@ -55,6 +55,11 @@ export class SshRelaySession {
   private mux: SshChannelMultiplexer | null = null
   private abortController: AbortController | null = null
   private muxDisposeCleanup: (() => void) | null = null
+  // Why: store the notification-handler disposer so teardownProviders can
+  // release it on reconnect/shutdown. Symmetric with muxDisposeCleanup; while
+  // the old mux's handler array is GC'd along with the mux today, holding the
+  // disposer is cheap insurance against future code that retains the old mux.
+  private muxNotificationCleanup: (() => void) | null = null
   // Why: when the relay exec channel closes but the SSH connection stays
   // up, the onStateChange reconnect path never fires. This callback lets
   // ssh.ts wire up relay-level reconnect from outside the session.
@@ -444,8 +449,16 @@ export class SshRelaySession {
         piExtensionSource: getPiAgentStatusExtensionSource()
       })
     } catch (err) {
+      // Why: -32601 = older relay without the handler (treat as soft skip).
+      // CONNECTION_LOST / DISPOSED come from the multiplexer when it tears
+      // down mid-flight (routine on session shutdown / reconnect race) — not
+      // a real failure to surface; suppress to avoid log spam on every clean
+      // disconnect.
       const code = (err as { code?: unknown })?.code
-      if (code === -32601) {
+      if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
+        return
+      }
+      if (mux.isDisposed()) {
         return
       }
       console.warn(
@@ -470,7 +483,13 @@ export class SshRelaySession {
     if (!isRemoteAgentHooksEnabled()) {
       return
     }
-    mux.onNotification((method, params) => {
+    // Why: capture the disposer so teardownProviders can release the
+    // notification handler symmetrically with muxDisposeCleanup. Even though
+    // the disposed mux's handler array is GC'd along with it today, retaining
+    // the disposer makes "registerProviders called twice on the same mux"
+    // safe by future-proofing against duplicate handler registration.
+    this.muxNotificationCleanup?.()
+    this.muxNotificationCleanup = mux.onNotification((method, params) => {
       if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
         return
       }
@@ -507,10 +526,14 @@ export class SshRelaySession {
     // *after* the handler is wired so the request-driven replay shape
     // strictly trails our subscription on the dispatcher's single write
     // callback. Best-effort: a relay that does not know the method
-    // (e.g. older relay binary) returns -32601, which we swallow.
+    // (e.g. older relay binary) returns -32601; CONNECTION_LOST / DISPOSED
+    // arise from mux teardown mid-flight on routine reconnect/shutdown.
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch((err) => {
       const code = (err as { code?: unknown })?.code
-      if (code === -32601) {
+      if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
+        return
+      }
+      if (mux.isDisposed()) {
         return
       }
       // Why: a normal disconnect/teardown rejects the in-flight request with
@@ -530,6 +553,8 @@ export class SshRelaySession {
   private teardownProviders(reason: 'shutdown' | 'connection_lost'): void {
     this.muxDisposeCleanup?.()
     this.muxDisposeCleanup = null
+    this.muxNotificationCleanup?.()
+    this.muxNotificationCleanup = null
     if (this.mux && !this.mux.isDisposed()) {
       this.mux.dispose(reason)
     }

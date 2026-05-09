@@ -42,7 +42,9 @@ const MAX_WARNED_KEYS = 32
 export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
 /** Bound paneKey size — `${tabId}:${paneId}` is well under 200 chars in
- *  practice; cap defends per-pane caches against pathological input. */
+ *  practice; cap defends per-pane caches against pathological input.
+ *  Exported so non-HTTP ingest paths (e.g. Orca's `ingestRemote`) can apply
+ *  the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
 
 /** Per-listener-instance state that holds caches needing per-PTY teardown

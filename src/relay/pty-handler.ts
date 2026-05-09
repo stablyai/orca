@@ -114,11 +114,13 @@ export class PtyHandler {
   private dispatcher: RelayDispatcher
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
-  // Why: external observers (the relay's hook-server cache) need to drop
-  // per-pane state when a PTY exits. Multiple listeners is unnecessary today
-  // — the hook server is the only consumer — so a single optional callback
-  // keeps the surface tight. A throw inside the listener is swallowed so it
-  // can never block disposeManagedPty / map cleanup.
+  // Why: external observers need to drop per-pane state when a PTY exits.
+  // Today the relay composes multiple consumers (hook-server cache eviction
+  // and plugin-overlay dir cleanup) into a single callback at the call site
+  // (see relay.ts setExitListener). A single optional slot is intentional —
+  // callers compose externally rather than us maintaining a listener list.
+  // A throw inside the listener is swallowed so it can never block
+  // disposeManagedPty / map cleanup.
   private exitListener: PtyExitListener | null = null
   // Why: env augmenters injected at relay boot (currently the relay-hook
   // server's ORCA_AGENT_HOOK_* coords). Run on every spawn so every PTY
@@ -268,10 +270,10 @@ export class PtyHandler {
     const shell = resolveDefaultShell()
     const id = `pty-${this.nextId++}`
 
-    // Why: server-side augmenter values (ORCA_AGENT_HOOK_*) override any
-    // renderer-supplied env so the live hook-server coords always reach the
-    // agent CLI — they come from the relay, not the renderer. The same helper
-    // also passes pane identity to overlay augmenters.
+    // Why: server-side augmenter values (ORCA_AGENT_HOOK_* and plugin overlay
+    // dirs) override renderer-supplied env so live remote paths and hook coords
+    // win over local userData paths. The helper also passes pane identity to
+    // overlay augmenters.
     const spawnEnv = this.buildSpawnEnv(id, env)
 
     // Why: SSH exec channels give the relay a minimal environment without

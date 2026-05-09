@@ -18,7 +18,10 @@ import { isPlainObject, type HooksConfig } from './installer-utils'
 
 /** Read+JSON-parse a remote file. Returns `null` on parse failure (caller
  *  surfaces "could not parse" status to the UI), `{}` on missing file
- *  (matches local behavior — first-install case). */
+ *  (matches local behavior — first-install case). Rethrows on other I/O
+ *  failures (permission denied, EIO, channel closed) so the caller can
+ *  distinguish transient SFTP errors from a malformed-JSON case rather
+ *  than collapsing both into a misleading "could not parse" diagnostic. */
 export async function readHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string
@@ -30,7 +33,7 @@ export async function readHooksJsonRemote(
     if (isNoEntryError(err)) {
       return {}
     }
-    return null
+    throw err
   }
   try {
     const parsed = JSON.parse(body)

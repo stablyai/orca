@@ -253,18 +253,26 @@ async function main(): Promise<void> {
       )
     }
   })
-  // Why: wait for hook-server startup before the readiness sentinel. A PTY
-  // spawned before the augmenter exists can never receive ORCA_AGENT_HOOK_*
-  // later, so success registers the augmenter first; failure is the deliberate
-  // fail-open path where agent status is disabled for this relay process.
+  // Why: await the hook-server bind before announcing readiness so the very
+  // first PTY spawn (which can land within milliseconds of the sentinel)
+  // already sees populated ORCA_AGENT_HOOK_* env. The bind is a local-loopback
+  // listen — measured in ms — so the latency cost is trivial and removes a
+  // class of "first agent invocation has no status" races. Bind failure is
+  // treated as soft: log and continue, the augmenter returns {} and agent
+  // status simply does not flow.
   try {
     await hookServer.start()
-    ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
   } catch (err) {
     process.stderr.write(
       `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
     )
   }
+
+  // Why: every relay-spawned PTY needs the live ORCA_AGENT_HOOK_* coords. The
+  // augmenter is read on every spawn so a hook-server bind that succeeded
+  // late (or after a stop/start) lands in the next PTY's env without a
+  // restart.
+  ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
 
   // Why: per-PTY plugin overlays for OpenCode and Pi. `OPENCODE_CONFIG_DIR`
   // and `PI_CODING_AGENT_DIR` only make sense on the relay's own filesystem
@@ -325,9 +333,20 @@ async function main(): Promise<void> {
   // would force a relay redeploy on every Orca update). Cache them so each
   // subsequent PTY spawn can materialize a per-PTY overlay rooted under
   // $HOME/.orca-relay/. See docs/design/agent-status-over-ssh.md §4.
+  // Why: bound the per-source size so a buggy/hostile Orca can't OOM the
+  // relay by pushing a giant string. The HTTP path has HOOK_REQUEST_MAX_BYTES
+  // = 1 MB; the JSON-RPC path needs an equivalent ceiling. Real plugin sources
+  // are <50 KB today; 256 KB leaves generous headroom.
+  const PLUGIN_SOURCE_MAX_BYTES = 256 * 1024
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
+    if (typeof opencode === 'string' && opencode.length > PLUGIN_SOURCE_MAX_BYTES) {
+      throw new Error(`opencodePluginSource exceeds ${PLUGIN_SOURCE_MAX_BYTES} byte cap`)
+    }
+    if (typeof pi === 'string' && pi.length > PLUGIN_SOURCE_MAX_BYTES) {
+      throw new Error(`piExtensionSource exceeds ${PLUGIN_SOURCE_MAX_BYTES} byte cap`)
+    }
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined
@@ -540,7 +559,7 @@ function cleanupSocket(sockPath: string): void {
 
 void main().catch((err) => {
   process.stderr.write(
-    `[relay] Fatal startup error: ${err instanceof Error ? err.message : String(err)}\n`
+    `[relay] Fatal startup error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`
   )
   process.exit(1)
 })

@@ -88,6 +88,19 @@ describe('installer-utils-remote', () => {
     expect(result).toBeNull()
   })
 
+  it('rethrows non-ENOENT read errors so callers can distinguish I/O failures from parse failures', async () => {
+    const sftp = {
+      readFile: (_path: string, _enc: string, cb: (err: unknown) => void): void => {
+        // Why: SSH_FX_PERMISSION_DENIED (3) is a real I/O failure that should
+        // not collapse into the same null result the parse-error path uses.
+        cb({ code: 3, message: 'permission denied' })
+      }
+    } as unknown as SFTPWrapper
+    await expect(readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')).rejects.toMatchObject({
+      code: 3
+    })
+  })
+
   it('atomically writes settings.json via tmp + rename', async () => {
     const { sftp, fs } = createFakeSftp()
     await writeHooksJsonRemote(sftp, '/home/u/.claude/settings.json', {

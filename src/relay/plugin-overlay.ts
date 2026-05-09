@@ -143,8 +143,14 @@ export class PluginOverlayManager {
     for (const root of [this.opencodeRoot, this.piRoot]) {
       try {
         rmSync(join(root, safe), { recursive: true, force: true })
-      } catch {
-        // best-effort cleanup
+      } catch (err) {
+        // Why: log the failed cleanup so a permission/IO error is observable.
+        // The leak is the failure mode the per-pane cache eviction exists to
+        // prevent — silent swallows would let it accumulate invisibly on
+        // long-running relays.
+        process.stderr.write(
+          `[plugin-overlay] failed to remove overlay dir ${join(root, safe)}: ${err instanceof Error ? err.message : String(err)}\n`
+        )
       }
     }
   }
