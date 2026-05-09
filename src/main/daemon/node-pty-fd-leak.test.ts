@@ -61,6 +61,12 @@ describeOnDarwin('node-pty macOS spawn fd handling', () => {
 
     const before = currentOpenFdCount()
     renameSync(helperPath, hiddenHelperPath)
+    const restoreHelper = (): void => {
+      if (existsSync(hiddenHelperPath) && !existsSync(helperPath)) {
+        renameSync(hiddenHelperPath, helperPath)
+      }
+    }
+    process.on('exit', restoreHelper)
     try {
       for (let i = 0; i < 20; i++) {
         expect(() =>
@@ -74,7 +80,8 @@ describeOnDarwin('node-pty macOS spawn fd handling', () => {
         ).toThrow(/node-pty: posix_spawn failed: ENOENT/)
       }
     } finally {
-      renameSync(hiddenHelperPath, helperPath)
+      restoreHelper()
+      process.off('exit', restoreHelper)
     }
 
     await delay(500)
