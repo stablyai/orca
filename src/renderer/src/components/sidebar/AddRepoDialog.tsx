@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the add-project dialog centralizes step routing, clone/remote/create state, and reset semantics across five steps so the modal flow stays in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { FolderOpen, ArrowLeft, Globe, Monitor } from 'lucide-react'
@@ -15,6 +16,7 @@ import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
 import { SetupStep } from './AddRepoSetupStep'
+import { getDefaultCloneParent } from './clone-defaults'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
 
@@ -28,6 +30,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const settings = useAppStore((s) => s.settings)
 
   const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'setup'>('add')
   const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
@@ -42,6 +45,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
+  // Why: track whether we've already auto-filled for this entry into the clone step,
+  // so a late settings hydration still gets a chance to set the default.
+  const cloneStepAutoFilledRef = useRef(false)
 
   const {
     sshTargets,
@@ -77,6 +83,24 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
     return window.api.repos.onCloneProgress(setCloneProgress)
   }, [isCloning])
+
+  useEffect(() => {
+    if (step !== 'clone') {
+      cloneStepAutoFilledRef.current = false
+      return
+    }
+    if (cloneStepAutoFilledRef.current) {
+      return
+    }
+    if (cloneDestination) {
+      return
+    }
+    if (!settings?.workspaceDir) {
+      return
+    }
+    cloneStepAutoFilledRef.current = true
+    setCloneDestination(getDefaultCloneParent(settings.workspaceDir))
+  }, [step, cloneDestination, settings?.workspaceDir])
 
   const isOpen = activeModal === 'add-repo'
   const repoId = addedRepo?.id ?? ''

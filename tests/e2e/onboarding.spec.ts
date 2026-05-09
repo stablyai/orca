@@ -34,6 +34,11 @@ async function getDocumentThemeClass(page: Page): Promise<'dark' | 'light'> {
 }
 
 test.describe('Onboarding flow', () => {
+  // Why: the shared fixture pre-seeds onboarding as closed so non-onboarding
+  // tests don't get blocked by the fullscreen overlay. Opt out here so this
+  // spec actually exercises the first-launch flow.
+  test.use({ dismissOnboarding: false })
+
   test.beforeEach(async ({ orcaPage }) => {
     // Per-test userData is freshly minted by the orcaPage fixture, so persisted
     // onboarding state defaults to `closedAt: null, lastCompletedStep: -1` and

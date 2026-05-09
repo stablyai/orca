@@ -27,7 +27,12 @@ import {
   PROTOCOL_VERSION,
   type ListSessionsResult
 } from './types'
-import { getProcessStartedAtMs, healthCheckDaemon, killStaleDaemon } from './daemon-health'
+import {
+  getDaemonLaunchIdentity,
+  getProcessStartedAtMs,
+  healthCheckDaemon,
+  killStaleDaemon
+} from './daemon-health'
 import {
   setLocalPtyProvider,
   unbindLocalProviderListeners,
@@ -91,13 +96,26 @@ function probeSocket(socketPath: string): Promise<boolean> {
 
 function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   return async (socketPath, tokenPath) => {
+    const entryPath = getDaemonEntryPath()
     const healthy = await healthCheckDaemon(socketPath, tokenPath)
     if (healthy) {
-      // Why: daemon is already running from a previous app session and
-      // responded to a protocol-level ping. Safe to reuse.
-      return {
-        shutdown: async () => {
-          await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+      // Why: dev worktrees share the same orca-dev userData, so a daemon from
+      // a deleted sibling checkout can pass protocol health checks while still
+      // pointing at missing native modules. Packaged app paths are stable and
+      // should preserve existing warm daemon reuse semantics.
+      const identity = app.isPackaged
+        ? 'match'
+        : getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+      if (identity === 'mismatch') {
+        console.warn('[daemon] Replacing daemon launched from a different app path')
+        await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+      } else {
+        // Why: daemon is already running from a previous app session and
+        // responded to a protocol-level ping. Safe to reuse.
+        return {
+          shutdown: async () => {
+            await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+          }
         }
       }
     }
@@ -106,7 +124,6 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     // before respawn so the new daemon does not race the stale process.
     await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
-    const entryPath = getDaemonEntryPath()
     const userDataPath = app.getPath('userData')
     const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
       // Why: detached + unref lets the daemon outlive the Electron process.
@@ -156,7 +173,8 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               getDaemonPidPath(runtimeDir),
               serializeDaemonPidFile({
                 pid: child.pid,
-                startedAtMs: getProcessStartedAtMs(child.pid)
+                startedAtMs: getProcessStartedAtMs(child.pid),
+                entryPath
               }),
               { mode: 0o600 }
             )
