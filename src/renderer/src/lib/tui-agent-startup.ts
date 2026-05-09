@@ -23,6 +23,14 @@ export type AgentStartupPlan = {
   env?: Record<string, string>
 }
 
+function isPowerShellLike(shell: string | undefined): boolean {
+  if (!shell) {
+    return false
+  }
+  const normalized = shell.toLowerCase().replace(/\\/g, '/').split('/').pop() ?? ''
+  return normalized === 'powershell.exe' || normalized === 'pwsh.exe' || normalized === 'pwsh'
+}
+
 function quoteStartupArg(value: string, platform: NodeJS.Platform): string {
   if (platform === 'win32') {
     return `"${value.replace(/"/g, '""')}"`
@@ -133,8 +141,15 @@ export function buildAgentDraftLaunchPlan(args: {
   draft: string
   cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
+  /** Why: the post-exit clear-var command differs per Windows shell. cmd.exe
+   *  uses `set "FOO="`, but PowerShell parses that as the `Set-Variable`
+   *  alias and never clears the env var — so re-running the agent re-prefills
+   *  with the stale URL. Callers on Windows pass the configured shell
+   *  (`terminalWindowsShell`) so we can emit `Remove-Item Env:FOO` for
+   *  PowerShell/pwsh. POSIX platforms ignore this. */
+  windowsShell?: string
 }): AgentDraftLaunchPlan | null {
-  const { agent, draft, cmdOverrides, platform } = args
+  const { agent, draft, cmdOverrides, platform, windowsShell } = args
   const config = TUI_AGENT_CONFIG[agent]
   const trimmed = draft.trim()
   if (!trimmed) {
@@ -158,7 +173,9 @@ export function buildAgentDraftLaunchPlan(args: {
     // terminal would inherit the stale value and re-prefill with the old URL.
     const clearVar =
       platform === 'win32'
-        ? `set "${config.draftPromptEnvVar}="`
+        ? isPowerShellLike(windowsShell)
+          ? `Remove-Item Env:${config.draftPromptEnvVar} -ErrorAction SilentlyContinue`
+          : `set "${config.draftPromptEnvVar}="`
         : `unset ${config.draftPromptEnvVar}`
     return {
       agent,

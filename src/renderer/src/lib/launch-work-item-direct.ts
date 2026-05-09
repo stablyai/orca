@@ -286,7 +286,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             agent: effectiveAgent,
             draft: draftContent,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
-            platform: CLIENT_PLATFORM
+            platform: CLIENT_PLATFORM,
+            windowsShell: settings?.terminalWindowsShell
           })
     if (draftLaunchPlan) {
       startupPlan = {

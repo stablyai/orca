@@ -1496,7 +1496,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agent,
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
-                platform: CLIENT_PLATFORM
+                platform: CLIENT_PLATFORM,
+                windowsShell: settings?.terminalWindowsShell
               })
 
         let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
@@ -1589,6 +1590,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvedSetupDecision,
       selectedRepo,
       settings?.agentCmdOverrides,
+      settings?.terminalWindowsShell,
       settings?.rightSidebarOpenByDefault,
       setRightSidebarOpen,
       setRightSidebarTab,

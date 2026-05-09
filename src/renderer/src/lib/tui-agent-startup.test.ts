@@ -194,6 +194,60 @@ describe('buildAgentDraftLaunchPlan', () => {
     })
   })
 
+  it('uses cmd.exe syntax to clear the pi prefill var when Windows shell is cmd', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'pi',
+        draft: 'https://github.com/acme/repo/issues/42',
+        cmdOverrides: {},
+        platform: 'win32',
+        windowsShell: 'cmd.exe'
+      })
+    ).toEqual({
+      agent: 'pi',
+      launchCommand: 'pi; set "ORCA_PI_PREFILL="',
+      expectedProcess: 'pi',
+      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' }
+    })
+  })
+
+  it('uses Remove-Item Env: to clear the pi prefill var on PowerShell', () => {
+    // Why: `set "FOO="` is cmd-only; PowerShell parses it as the Set-Variable
+    // alias and never clears the env var, so re-running pi re-prefills with
+    // the stale URL. Use the portable PowerShell form instead.
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'pi',
+        draft: 'https://github.com/acme/repo/issues/42',
+        cmdOverrides: {},
+        platform: 'win32',
+        windowsShell: 'powershell.exe'
+      })
+    ).toEqual({
+      agent: 'pi',
+      launchCommand: 'pi; Remove-Item Env:ORCA_PI_PREFILL -ErrorAction SilentlyContinue',
+      expectedProcess: 'pi',
+      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' }
+    })
+  })
+
+  it('treats pwsh.exe as PowerShell for the prefill clear-var', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'pi',
+        draft: 'https://github.com/acme/repo/issues/42',
+        cmdOverrides: {},
+        platform: 'win32',
+        windowsShell: 'pwsh.exe'
+      })
+    ).toEqual({
+      agent: 'pi',
+      launchCommand: 'pi; Remove-Item Env:ORCA_PI_PREFILL -ErrorAction SilentlyContinue',
+      expectedProcess: 'pi',
+      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' }
+    })
+  })
+
   it('returns null for an empty draft so callers fall back cleanly', () => {
     expect(
       buildAgentDraftLaunchPlan({
