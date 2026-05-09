@@ -240,7 +240,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       // Why: the Project direct-launch path activates the new workspace
       // immediately. Persist the link first so the first sidebar render can
       // show the issue/PR association instead of briefly looking unlinked.
-      await store.updateWorktreeMeta(worktreeId, meta)
+      // Best-effort: the worktree is already created on disk, so a meta
+      // write failure must not abort activation and orphan it.
+      void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
+        // Non-critical: continue into activation without the link metadata.
+      })
     }
 
     const detectedIds = new Set(await detectedAgentsPromise)
