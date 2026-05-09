@@ -51,6 +51,20 @@ describe('sanitizeWorktreeName', () => {
     expect(sanitizeWorktreeName('a..b...c')).toBe('a.b.c')
   })
 
+  it('preserves non-ASCII letters and numbers', () => {
+    // Why: users name workspaces in their own language (CJK, accented Latin,
+    // Cyrillic, etc.). Stripping these to ASCII left the name empty and threw
+    // "Invalid worktree name" on every non-Latin keyboard input.
+    expect(sanitizeWorktreeName('中文')).toBe('中文')
+    expect(sanitizeWorktreeName('日本語 テスト')).toBe('日本語-テスト')
+    expect(sanitizeWorktreeName('café-déjà')).toBe('café-déjà')
+    expect(sanitizeWorktreeName('Привет мир')).toBe('Привет-мир')
+  })
+
+  it('still strips git-unsafe punctuation around Unicode names', () => {
+    expect(sanitizeWorktreeName('feat: 中文 (v2)')).toBe('feat-中文-v2')
+  })
+
   it('throws for empty name', () => {
     expect(() => sanitizeWorktreeName('')).toThrow('Invalid worktree name')
   })
