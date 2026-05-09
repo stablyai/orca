@@ -23,7 +23,7 @@ const {
 vi.mock('electron', () => ({
   app: { on: vi.fn(), removeListener: vi.fn() },
   BrowserWindow: browserWindowMock,
-  ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+  ipcMain: { on: vi.fn(), removeListener: vi.fn(), handle: vi.fn(), removeHandler: vi.fn() },
   Menu: { buildFromTemplate: buildFromTemplateMock },
   nativeTheme: { shouldUseDarkColors: false },
   screen: {
@@ -63,6 +63,8 @@ describe('createMainWindow', () => {
     isMock.dev = false
     vi.mocked(ipcMain.on).mockReset()
     vi.mocked(ipcMain.removeListener).mockReset()
+    vi.mocked(ipcMain.handle).mockReset()
+    vi.mocked(ipcMain.removeHandler).mockReset()
     vi.useRealTimers()
   })
 
