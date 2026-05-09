@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/* oxlint-disable max-lines -- Why: the relay entry point centralizes process
+   lifecycle (stdio, --connect bridge, grace timer, signal handlers, socket
+   server) and handler registration in one file so the boot sequence stays in
+   topological order. Splitting by line count would scatter ordered side-
+   effects across modules and obscure the lifecycle. */
 
 // Orca Relay — lightweight daemon deployed to remote hosts.
 // Communicates over stdin/stdout using the framed JSON-RPC protocol.
@@ -24,6 +29,7 @@ import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
+import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -260,13 +266,46 @@ async function main(): Promise<void> {
     )
   }
 
-  // Why: evict the per-pane last-status cache when the backing PTY exits so
-  // a terminated pane's last working/done payload cannot resurface as a
-  // ghost event after a later reconnect — see §5 Path 3.
-  ptyHandler.setExitListener(({ paneKey }) => {
+  // Why: per-PTY plugin overlays for OpenCode and Pi. `OPENCODE_CONFIG_DIR`
+  // and `PI_CODING_AGENT_DIR` only make sense on the relay's own filesystem
+  // — paths the renderer would synthesize for the Orca host's userData are
+  // meaningless on the remote. The overlay manager materializes a per-PTY
+  // dir on the remote (rooted at $HOME/.orca-relay/) so the agent CLI inside
+  // the relay-spawned PTY loads the bundled status plugin and posts to the
+  // relay's hook server. Source bodies arrive over JSON-RPC (see
+  // `agent_hook.installPlugins` below) — not bundled with the relay binary.
+  const pluginOverlay = new PluginOverlayManager()
+  ptyHandler.addEnvAugmenter((ctx) => {
+    const env: Record<string, string> = {}
+    // Why: prefer paneKey for overlay identity so a renderer-side remount
+    // that reuses the paneKey lands in the same overlay dir. Falls back to
+    // the relay-internal pty-id when paneKey is absent (e.g. CLI-launched
+    // PTYs that don't go through the renderer).
+    const overlayId = ctx.paneKey ?? ctx.id
+    if (pluginOverlay.hasOpenCodeSource()) {
+      const dir = pluginOverlay.materializeOpenCode(overlayId)
+      if (dir) {
+        env.OPENCODE_CONFIG_DIR = dir
+      }
+    }
+    if (pluginOverlay.hasPiSource()) {
+      const dir = pluginOverlay.materializePi(overlayId)
+      if (dir) {
+        env.PI_CODING_AGENT_DIR = dir
+      }
+    }
+    return env
+  })
+
+  // Why: evict the per-pane last-status cache AND any plugin overlay dirs
+  // when the backing PTY exits so terminated panes do not (a) resurface as
+  // ghost events after a later reconnect (§5 Path 3) or (b) leak overlay
+  // dirs on a long-lived relay.
+  ptyHandler.setExitListener(({ paneKey, id }) => {
     if (paneKey) {
       hookServer.clearPaneState(paneKey)
     }
+    pluginOverlay.clearOverlay(paneKey ?? id)
   })
 
   // Why: request-driven replay. Orca issues this *after* it re-wires the
@@ -280,12 +319,25 @@ async function main(): Promise<void> {
     return { replayed }
   })
 
-  // Why: stub for the plugin-source sync handler used by OpenCode/Pi. The
-  // real implementation is wired in commit #7 (deferred to keep this commit
-  // tight). Stubbed out here as a method-found handler so a probing client
-  // can detect support without -32601 noise on first connect.
-  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => {
-    return { installed: false }
+  // Why: Orca ships the OpenCode plugin / Pi extension source bodies over
+  // the wire at session-ready (the renderer's bundled hook-service strings
+  // change as new agent events are added — pinning them to the relay binary
+  // would force a relay redeploy on every Orca update). Cache them so each
+  // subsequent PTY spawn can materialize a per-PTY overlay rooted under
+  // $HOME/.orca-relay/. See docs/design/agent-status-over-ssh.md §4.
+  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
+    const opencode = params.opencodePluginSource
+    const pi = params.piExtensionSource
+    pluginOverlay.setSources({
+      opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
+      piExtensionSource: typeof pi === 'string' ? pi : undefined
+    })
+    return {
+      installed: {
+        opencode: pluginOverlay.hasOpenCodeSource(),
+        pi: pluginOverlay.hasPiSource()
+      }
+    }
   })
 
   // ── Socket server for reconnection ──────────────────────────────────

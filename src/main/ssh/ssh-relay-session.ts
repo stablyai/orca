@@ -18,10 +18,13 @@ import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import {
+  AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
   isRemoteAgentHooksEnabled
 } from '../../shared/agent-hook-relay'
+import { _internals as openCodeInternals } from '../opencode/hook-service'
+import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
@@ -416,7 +419,41 @@ export class SshRelaySession {
 
     this.wireUpPtyEvents(ptyProvider)
     this.wireUpAgentHookEvents(mux)
+    void this.installPluginsOnRelay(mux)
     return true
+  }
+
+  // Why: ship the OpenCode plugin / Pi extension source bodies to the relay
+  // so it can materialize per-PTY overlay dirs and inject OPENCODE_CONFIG_DIR
+  // / PI_CODING_AGENT_DIR into spawn env. The strings change as we add agent
+  // events (recent additions: cursor, pi); pinning them to the relay binary
+  // would force a relay redeploy on every Orca update. See
+  // docs/design/agent-status-over-ssh.md §4 + §8 (commit #7).
+  //
+  // Best-effort: a -32601 from an older relay (no handler installed) is
+  // swallowed; the user just doesn't get OpenCode/Pi status reporting until
+  // they upgrade. Hook-script-based agents (Claude/Codex/Gemini/Cursor) are
+  // unaffected — their installer flow is commit #8.
+  private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
+    if (!isRemoteAgentHooksEnabled()) {
+      return
+    }
+    try {
+      await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
+        opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
+        piExtensionSource: getPiAgentStatusExtensionSource()
+      })
+    } catch (err) {
+      const code = (err as { code?: unknown })?.code
+      if (code === -32601) {
+        return
+      }
+      console.warn(
+        `[ssh-relay-session] agent_hook.installPlugins failed for ${this.targetId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      )
+    }
   }
 
   // Why: route the relay's `agent.hook` JSON-RPC notification into Orca's

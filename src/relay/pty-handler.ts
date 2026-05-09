@@ -102,7 +102,11 @@ type SerializedPtyEntry = {
 }
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
-export type PtyEnvAugmenter = () => Record<string, string>
+/** Returns env to merge into the PTY's spawn env. Receives spawn context so
+ *  augmenters that need a per-PTY identity (e.g. OPENCODE_CONFIG_DIR overlay
+ *  paths derived from the renderer's paneKey) can compute it without pulling
+ *  the renderer's env in twice. */
+export type PtyEnvAugmenter = (ctx: { id: string; paneKey?: string }) => Record<string, string>
 
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
@@ -156,11 +160,13 @@ export class PtyHandler {
    *  drift between the two paths — revived shells after a relay restart must
    *  see the fresh ORCA_AGENT_HOOK_* coords just like freshly-spawned ones,
    *  otherwise agent-status over SSH silently breaks on every revive. */
-  private buildSpawnEnv(rendererEnv?: Record<string, string>): Record<string, string> {
+  private buildSpawnEnv(id: string, rendererEnv?: Record<string, string>): Record<string, string> {
+    const paneKey = typeof rendererEnv?.ORCA_PANE_KEY === 'string' ? rendererEnv.ORCA_PANE_KEY : undefined
+    const augmenterCtx = { id, paneKey }
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
-        Object.assign(augmented, augmenter())
+        Object.assign(augmented, augmenter(augmenterCtx))
       } catch (err) {
         process.stderr.write(
           `[pty-handler] env augmenter threw: ${err instanceof Error ? err.message : String(err)}\n`
@@ -264,9 +270,9 @@ export class PtyHandler {
 
     // Why: server-side augmenter values (ORCA_AGENT_HOOK_*) override any
     // renderer-supplied env so the live hook-server coords always reach the
-    // agent CLI — they come from the relay, not the renderer. See
-    // buildSpawnEnv for the precedence contract.
-    const spawnEnv = this.buildSpawnEnv(env)
+    // agent CLI — they come from the relay, not the renderer. The same helper
+    // also passes pane identity to overlay augmenters.
+    const spawnEnv = this.buildSpawnEnv(id, env)
 
     // Why: SSH exec channels give the relay a minimal environment without
     // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
@@ -550,7 +556,7 @@ export class PtyHandler {
         cols: entry.cols,
         rows: entry.rows,
         cwd: entry.cwd,
-        env: this.buildSpawnEnv(revivedEnv)
+        env: this.buildSpawnEnv(entry.id, revivedEnv)
       })
       this.wireAndStore({
         id: entry.id,
