@@ -1,7 +1,6 @@
 /* eslint-disable max-lines */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowDown,
   ArrowDownUp,
   ArrowUp,
   ChevronDown,
@@ -114,17 +113,20 @@ const STATUS_ICONS: Record<
 }
 
 // Why: directional signifiers ahead of each primary action label. Commit
-// (✓) is affirmative; Push (↑) and Pull (↓) point in the direction data
-// flows; Sync (↕) is bidirectional; Publish gets a cloud-up to distinguish
-// the first-time publish from a subsequent push. Keeping the mapping
-// outside the render function avoids reallocating it on every render.
-const PRIMARY_ICONS: Record<
-  PrimaryAction['kind'],
-  React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
+// (✓) is affirmative; Push (↑) points in the direction data flows; Sync
+// (↕) is bidirectional; Publish gets a cloud-up to distinguish the
+// first-time publish from a subsequent push. Pull is intentionally
+// icon-less — the down-arrow read as a download/save affordance and was
+// removed. Keeping the mapping outside the render function avoids
+// reallocating it on every render.
+const PRIMARY_ICONS: Partial<
+  Record<
+    PrimaryAction['kind'],
+    React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
+  >
 > = {
   commit: Check,
   push: ArrowUp,
-  pull: ArrowDown,
   sync: ArrowDownUp,
   publish: CloudUpload
 }
@@ -1825,11 +1827,12 @@ export function CommitArea({
   // tooltips.
   const showChevronSpinner = (isCommitting || isRemoteOperationActive) && !showSpinner
 
-  // Why: each primary-kind label is anchored by a directional icon so the
-  // affirmative Commit (✓) reads distinctly from the remote-state labels
-  // sharing this slot — Push (↑), Pull (↓), Sync (↕), Publish (☁︎↑). The
-  // icon is decorative; the label and title attribute carry the meaning
-  // for assistive tech.
+  // Why: most primary-kind labels are anchored by a directional icon so
+  // the affirmative Commit (✓) reads distinctly from the remote-state
+  // labels sharing this slot — Push (↑), Sync (↕), Publish (☁︎↑). Pull is
+  // intentionally icon-less because the down-arrow read as a
+  // download/save affordance. The icon is decorative; the label and
+  // title attribute carry the meaning for assistive tech.
   const PrimaryIcon = PRIMARY_ICONS[primaryAction.kind]
 
   return (
@@ -1865,9 +1868,9 @@ export function CommitArea({
         >
           {showSpinner ? (
             <RefreshCw className="size-3.5 animate-spin" />
-          ) : (
+          ) : PrimaryIcon ? (
             <PrimaryIcon className="size-3.5" aria-hidden="true" />
-          )}
+          ) : null}
           {primaryAction.label}
         </Button>
         <DropdownMenu>

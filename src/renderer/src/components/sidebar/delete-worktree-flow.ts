@@ -4,6 +4,18 @@ import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 
+// Why: a failed delete almost always means the worktree still has changes
+// that need attention (uncommitted work, unpushed commits, conflicts). The
+// "View" affordance should surface those changes directly, not just bring
+// the worktree into focus, so the user lands on the diff panel where the
+// blocking work is visible.
+function viewWorktreeDiff(worktreeId: string): void {
+  activateAndRevealWorktree(worktreeId)
+  const state = useAppStore.getState()
+  state.setRightSidebarTab('source-control')
+  state.setRightSidebarOpen(true)
+}
+
 /**
  * Shared delete-with-toast flow used by both DeleteWorktreeDialog (confirm
  * path) and WorktreeContextMenu (skip-confirm path). Centralizes the error
@@ -34,7 +46,7 @@ export function runWorktreeDeleteWithToast(worktreeId: string, worktreeName: str
         duration: 10000,
         cancel: {
           label: 'View',
-          onClick: () => activateAndRevealWorktree(worktreeId)
+          onClick: () => viewWorktreeDiff(worktreeId)
         },
         action: canForceDelete
           ? {
@@ -49,7 +61,7 @@ export function runWorktreeDeleteWithToast(worktreeId: string, worktreeName: str
                         description: forceResult.error,
                         action: {
                           label: 'View',
-                          onClick: () => activateAndRevealWorktree(worktreeId)
+                          onClick: () => viewWorktreeDiff(worktreeId)
                         }
                       })
                     }
@@ -59,7 +71,7 @@ export function runWorktreeDeleteWithToast(worktreeId: string, worktreeName: str
                       description: err instanceof Error ? err.message : String(err),
                       action: {
                         label: 'View',
-                        onClick: () => activateAndRevealWorktree(worktreeId)
+                        onClick: () => viewWorktreeDiff(worktreeId)
                       }
                     })
                   })
