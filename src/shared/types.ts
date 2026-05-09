@@ -111,6 +111,8 @@ export type Worktree = {
   /** ID of the saved preset this worktree was created from, if any. Cleared
    *  when the worktree is no longer sparse on refresh. */
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
@@ -131,6 +133,8 @@ export type WorktreeMeta = {
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 }
 
@@ -859,6 +863,28 @@ export type CreateWorktreeResult = {
   worktree: Worktree
   setup?: WorktreeSetupLaunch
   warning?: string
+  initialBaseStatus?: WorktreeBaseStatusEvent
+}
+
+export type WorktreeBaseStatusKind = 'checking' | 'current' | 'drift' | 'base_changed' | 'unknown'
+
+export type WorktreeBaseStatusEvent = {
+  repoId: string
+  worktreeId: string
+  status: WorktreeBaseStatusKind
+  base: string
+  /** Configured remote name parsed from `base` (longest-prefix match). Absent
+   *  when classification skipped optimistic reconcile (e.g. legacy fallback). */
+  remote?: string
+  behind?: number
+  recentSubjects?: string[]
+}
+
+export type WorktreeRemoteBranchConflictEvent = {
+  repoId: string
+  worktreeId: string
+  remote: string
+  branchName: string
 }
 
 // ─── Updater ─────────────────────────────────────────────────────────
@@ -1316,6 +1342,41 @@ export type NotificationSoundPathResult =
   | { ok: true; path: string }
   | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
 
+export type OnboardingOutcome = 'completed' | 'dismissed'
+
+export type OnboardingChecklistState = {
+  addedRepo: boolean
+  choseAgent: boolean
+  ranFirstAgent: boolean
+  ranSecondAgentOnSameTask: boolean
+  triedCmdJ: boolean
+  shapedSidebar: boolean
+  reviewedDiff: boolean
+  openedPr: boolean
+  addedFolder: boolean
+  openedFile: boolean
+  ranAgentOnFile: boolean
+  // Why: UI state flag (panel visibility), not an activation event. The
+  // telemetry checklist enum in telemetry-events.ts intentionally omits this.
+  dismissed: boolean
+}
+
+export type OnboardingState = {
+  closedAt: number | null
+  outcome: OnboardingOutcome | null
+  // Sentinel `-1` = not started; `1..4` = highest wizard step the user
+  // finished. Kept as `number` (not a literal union) because callers clamp
+  // via `Math.max`/`Math.min` against arbitrary numerics.
+  lastCompletedStep: number
+  checklist: OnboardingChecklistState
+}
+
+export type NotificationPermissionStatusResult = {
+  supported: boolean
+  platform: NodeJS.Platform
+  requested: boolean
+}
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
@@ -1534,6 +1595,7 @@ export type PersistedState = {
   }
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
+  onboarding: OnboardingState
 }
 
 // ─── Filesystem ─────────────────────────────────────────────

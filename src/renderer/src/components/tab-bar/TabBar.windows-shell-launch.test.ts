@@ -117,6 +117,9 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }) {
     return { type: 'DropdownMenuItem', props }
   },
+  DropdownMenuSeparator: function DropdownMenuSeparator() {
+    return { type: 'DropdownMenuSeparator', props: {} }
+  },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
   },

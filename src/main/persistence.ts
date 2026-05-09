@@ -12,7 +12,10 @@ import type {
   Repo,
   SparsePreset,
   WorktreeMeta,
-  GlobalSettings
+  GlobalSettings,
+  OnboardingChecklistState,
+  OnboardingOutcome,
+  OnboardingState
 } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -20,9 +23,11 @@ import { getGitUsername } from './git/repo'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
+  getDefaultOnboardingState,
   getDefaultUIState,
   getDefaultRepoHookSettings,
-  getDefaultWorkspaceSession
+  getDefaultWorkspaceSession,
+  ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 
@@ -101,6 +106,68 @@ function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' 
 // so imported SSH aliases keep resolving through ssh -G after upgrade.
 function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
+}
+
+// Why: shared by load-time merge and the IPC update handler so the same
+// strict whitelist guards every entry into onboarding state — arbitrary
+// renderer/disk input cannot inject unknown keys or wrong-typed values.
+// Returns only validated fields; unknown keys are dropped silently.
+// Why: returns Partial<...> with a partial checklist so the IPC update path
+// merges over current state without wiping previously-true keys. Invalid
+// top-level fields are OMITTED (not coerced to fallbacks) so partial updates
+// don't clobber valid persisted state; the load-path caller spreads defaults.
+export function sanitizeOnboardingUpdate(
+  input: unknown
+): Partial<Omit<OnboardingState, 'checklist'>> & { checklist?: Partial<OnboardingChecklistState> } {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+  const raw = input as Record<string, unknown>
+  const out: Partial<Omit<OnboardingState, 'checklist'>> & {
+    checklist?: Partial<OnboardingChecklistState>
+  } = {}
+
+  if ('closedAt' in raw) {
+    if (typeof raw.closedAt === 'number') {
+      out.closedAt = raw.closedAt
+    } else if (raw.closedAt === null) {
+      out.closedAt = null
+    }
+    // else: omit — preserve existing persisted value on merge.
+  }
+  if ('outcome' in raw) {
+    const v = raw.outcome
+    if (v === 'completed' || v === 'dismissed') {
+      out.outcome = v as OnboardingOutcome
+    } else if (v === null) {
+      out.outcome = null
+    }
+    // else: omit.
+  }
+  if ('lastCompletedStep' in raw) {
+    const v = raw.lastCompletedStep
+    if (typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP) {
+      out.lastCompletedStep = v
+    }
+    // else: omit.
+  }
+  if ('checklist' in raw) {
+    const rawChecklist = raw.checklist
+    if (rawChecklist && typeof rawChecklist === 'object' && !Array.isArray(rawChecklist)) {
+      // Why: copy ONLY caller-sent boolean keys so partial updates (e.g.
+      // `{ addedRepo: true }`) don't reset other checklist items to false.
+      const defaults = getDefaultOnboardingState().checklist
+      const rc = rawChecklist as Record<string, unknown>
+      const checklist: Partial<OnboardingChecklistState> = {}
+      for (const key of Object.keys(defaults) as (keyof OnboardingChecklistState)[]) {
+        if (key in rc && typeof rc[key] === 'boolean') {
+          checklist[key] = rc[key] as boolean
+        }
+      }
+      out.checklist = checklist
+    }
+  }
+  return out
 }
 
 // Why: read a settings field that was removed from the GlobalSettings type
@@ -284,7 +351,37 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
-          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget)
+          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          onboarding: (() => {
+            // Why: if we successfully parsed an existing orca-data.json that
+            // lacks an onboarding block, this is an upgrade-cohort user —
+            // backfill as completed (not dismissed) so they don't get dropped
+            // into the wizard regardless of whether they currently have repos,
+            // SSH targets, or just non-default settings. Analytics still
+            // distinguish this from users who explicitly bailed mid-funnel.
+            if (!parsed.onboarding) {
+              return {
+                ...defaults.onboarding,
+                closedAt: Date.now(),
+                outcome: 'completed' as const,
+                lastCompletedStep: ONBOARDING_FINAL_STEP
+              }
+            }
+            // Why: validate every persisted onboarding key explicitly via the
+            // shared sanitizer instead of spreading raw values. A type-flipped
+            // field on disk (string where number expected, unknown checklist
+            // key) is dropped or coerced to the default rather than poisoning
+            // in-memory state.
+            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding)
+            return {
+              ...defaults.onboarding,
+              ...sanitized,
+              checklist: {
+                ...defaults.onboarding.checklist,
+                ...sanitized.checklist
+              }
+            }
+          })()
         }
       }
     } catch (err) {
@@ -669,6 +766,38 @@ export class Store {
         : normalizeSortBy(this.state.ui?.sortBy)
     }
     this.scheduleSave()
+  }
+
+  // ── Onboarding ────────────────────────────────────────────────────
+
+  getOnboarding(): PersistedState['onboarding'] {
+    const defaults = getDefaultOnboardingState()
+    return {
+      ...defaults,
+      ...this.state.onboarding,
+      checklist: {
+        ...defaults.checklist,
+        ...this.state.onboarding?.checklist
+      }
+    }
+  }
+
+  updateOnboarding(
+    updates: Partial<Omit<PersistedState['onboarding'], 'checklist'>> & {
+      checklist?: Partial<OnboardingChecklistState>
+    }
+  ): PersistedState['onboarding'] {
+    const current = this.getOnboarding()
+    this.state.onboarding = {
+      ...current,
+      ...updates,
+      checklist: {
+        ...current.checklist,
+        ...updates.checklist
+      }
+    }
+    this.scheduleSave()
+    return this.getOnboarding()
   }
 
   // ── GitHub Cache ──────────────────────────────────────────────────

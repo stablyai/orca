@@ -30,6 +30,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
@@ -557,6 +558,7 @@ function TabBarInner({
               <DropdownMenuShortcut>{NEW_FILE_SHORTCUT}</DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
+          <DropdownMenuSeparator />
           <QuickLaunchAgentMenuItems
             worktreeId={worktreeId}
             groupId={resolvedGroupId}

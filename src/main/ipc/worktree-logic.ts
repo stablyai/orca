@@ -180,6 +180,7 @@ export function mergeWorktree(
           sparsePresetId: meta?.sparsePresetId
         }
       : {}),
+    ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
     // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
     // shared/types) and forwarded verbatim so the renderer store mirrors
     // on-disk state. `undefined` here means the worktree has no comments yet.

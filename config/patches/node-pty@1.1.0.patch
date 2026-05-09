@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b..b3309a07 100644
+index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b3309a07ef99dea7967d7bdd04b9fc3500acacae 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -5,9 +5,6 @@
@@ -13,7 +13,7 @@ index 5f63978b..b3309a07 100644
              'VCCLCompilerTool': {
                'AdditionalOptions': [
 diff --git a/deps/winpty/src/winpty.gyp b/deps/winpty/src/winpty.gyp
-index 1ac5758b..e6198137 100644
+index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8360130ef 100644
 --- a/deps/winpty/src/winpty.gyp
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,7 +10,7 @@
@@ -55,7 +55,7 @@ index 1ac5758b..e6198137 100644
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f79..cec8b67a 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -74,7 +74,7 @@ index 1ec12f79..cec8b67a 100644
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f..9e6c7476 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca850564e6368d9 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -128,7 +128,7 @@ index 7b4b9e1f..9e6c7476 100644
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,13 +697,65 @@ pty_getproc(int fd, char *tty) {
+@@ -684,15 +697,73 @@ pty_getproc(int fd, char *tty) {
  #endif
 
  #if defined(__APPLE__)
@@ -191,66 +191,101 @@ index 7b4b9e1f..9e6c7476 100644
                  int* master,
                  pid_t* pid,
 -                int* err) {
+-  int low_fds[3];
 +                pty_spawn_error* err) {
-   int low_fds[3];
++  int low_fds[3] = {-1, -1, -1};
    size_t count = 0;
++  int res = -1;
++  int slave = -1;
++  posix_spawn_file_actions_t acts;
++  bool acts_initialized = false;
++  posix_spawnattr_t attrs;
++  bool attrs_initialized = false;
 
-@@ -706,11 +771,19 @@ pty_posix_spawn(char** argv, char** env,
+   for (; count < 3; count++) {
+     low_fds[count] = posix_openpt(O_RDWR);
+@@ -706,80 +777,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
+-    return;
 +    pty_set_spawn_error(err, "posix_openpt", errno);
-+    return;
++    goto done;
 +  }
 +
-+  int res = grantpt(*master);
++  res = grantpt(*master);
 +  if (res == -1) {
 +    pty_set_spawn_error(err, "grantpt", errno);
-     return;
++    goto done;
    }
 
 -  int res = grantpt(*master) || unlockpt(*master);
 +  res = unlockpt(*master);
    if (res == -1) {
+-    return;
 +    pty_set_spawn_error(err, "unlockpt", errno);
-     return;
++    goto done;
    }
 
-@@ -719,17 +792,20 @@ pty_posix_spawn(char** argv, char** env,
+   // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
+-  int slave;
    char slave_pty_name[128];
    res = ioctl(*master, TIOCPTYGNAME, slave_pty_name);
    if (res == -1) {
+-    return;
 +    pty_set_spawn_error(err, "ioctl_TIOCPTYGNAME", errno);
-     return;
++    goto done;
    }
 
    slave = open(slave_pty_name, O_RDWR | O_NOCTTY);
    if (slave == -1) {
+-    return;
 +    pty_set_spawn_error(err, "open_slave", errno, "slave", slave_pty_name);
-     return;
++    goto done;
    }
 
    if (termp) {
      res = tcsetattr(slave, TCSANOW, termp);
      if (res == -1) {
+-      return;
 +      pty_set_spawn_error(err, "tcsetattr", errno, "slave", slave_pty_name);
-       return;
++      goto done;
      };
    }
-@@ -737,6 +813,7 @@ pty_posix_spawn(char** argv, char** env,
+
    if (winp) {
      res = ioctl(slave, TIOCSWINSZ, winp);
      if (res == -1) {
+-      return;
 +      pty_set_spawn_error(err, "ioctl_TIOCSWINSZ", errno, "slave", slave_pty_name);
-       return;
++      goto done;
      }
    }
-@@ -751,35 +828,42 @@ pty_posix_spawn(char** argv, char** env,
 
-   posix_spawnattr_t attrs;
-   posix_spawnattr_init(&attrs);
+-  posix_spawn_file_actions_t acts;
+-  posix_spawn_file_actions_init(&acts);
++  res = posix_spawn_file_actions_init(&acts);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawn_file_actions_init", res);
++    goto done;
++  }
++  acts_initialized = true;
+   posix_spawn_file_actions_adddup2(&acts, slave, STDIN_FILENO);
+   posix_spawn_file_actions_adddup2(&acts, slave, STDOUT_FILENO);
+   posix_spawn_file_actions_adddup2(&acts, slave, STDERR_FILENO);
+   posix_spawn_file_actions_addclose(&acts, slave);
+   posix_spawn_file_actions_addclose(&acts, *master);
+
+-  posix_spawnattr_t attrs;
+-  posix_spawnattr_init(&attrs);
 -  *err = posix_spawnattr_setflags(&attrs, flags);
 -  if (*err != 0) {
++  res = posix_spawnattr_init(&attrs);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawnattr_init", res);
++    goto done;
++  }
++  attrs_initialized = true;
 +  res = posix_spawnattr_setflags(&attrs, flags);
 +  if (res != 0) {
 +    pty_set_spawn_error(err, "posix_spawnattr_setflags", res);
@@ -287,14 +322,28 @@ index 7b4b9e1f..9e6c7476 100644
 +    pty_set_spawn_error(err, "posix_spawn", res, "helper", argv[0]);
 +  }
  done:
-   posix_spawn_file_actions_destroy(&acts);
-   posix_spawnattr_destroy(&attrs);
-+  close(slave);
+-  posix_spawn_file_actions_destroy(&acts);
+-  posix_spawnattr_destroy(&attrs);
++  if (acts_initialized) {
++    posix_spawn_file_actions_destroy(&acts);
++  }
++  if (attrs_initialized) {
++    posix_spawnattr_destroy(&attrs);
++  }
++  if (slave != -1) {
++    close(slave);
++  }
++  if (err->errnum != 0 && *master != -1) {
++    close(*master);
++    *master = -1;
++  }
 
 -  for (; count > 0; count--) {
 -    close(low_fds[count]);
 +  for (size_t i = 0; i <= count && i < 3; i++) {
-+    close(low_fds[i]);
++    if (low_fds[i] != -1) {
++      close(low_fds[i]);
++    }
    }
  }
  #endif

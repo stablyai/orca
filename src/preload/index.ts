@@ -21,10 +21,14 @@ import type {
   ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
+  NotificationPermissionStatusResult,
   NotificationSoundDataResult,
   NotificationSoundPathResult,
   NotificationSoundResult,
-  SearchResult
+  OnboardingState,
+  SearchResult,
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
@@ -370,6 +374,24 @@ const api = {
         callback(data)
       ipcRenderer.on('worktrees:changed', listener)
       return () => ipcRenderer.removeListener('worktrees:changed', listener)
+    },
+
+    onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: WorktreeBaseStatusEvent) =>
+        callback(data)
+      ipcRenderer.on('worktree:baseStatus', listener)
+      return () => ipcRenderer.removeListener('worktree:baseStatus', listener)
+    },
+
+    onRemoteBranchConflict: (
+      callback: (data: WorktreeRemoteBranchConflictEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: WorktreeRemoteBranchConflictEvent
+      ) => callback(data)
+      ipcRenderer.on('worktree:remoteBranchConflict', listener)
+      return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
     }
   },
 
@@ -910,6 +932,10 @@ const api = {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
       ipcRenderer.invoke('notifications:dispatch', args),
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
+    getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
+      ipcRenderer.invoke('notifications:getPermissionStatus'),
+    requestPermission: (): Promise<NotificationPermissionStatusResult> =>
+      ipcRenderer.invoke('notifications:requestPermission'),
     playSound: async (options?: { force?: boolean }): Promise<NotificationSoundResult> => {
       try {
         // Why: drop replays while the sound is still ringing. The "test"
@@ -969,6 +995,15 @@ const api = {
         return { played: false, reason: 'playback-failed' }
       }
     }
+  },
+
+  onboarding: {
+    get: (): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:get'),
+    update: (
+      updates: Partial<Omit<OnboardingState, 'checklist'>> & {
+        checklist?: Partial<OnboardingState['checklist']>
+      }
+    ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates)
   },
 
   developerPermissions: {
