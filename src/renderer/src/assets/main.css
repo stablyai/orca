@@ -433,7 +433,7 @@
   z-index: 9999;
   display: flex;
   flex-direction: row;
-  height: 42px;
+  height: 36px;
   -webkit-app-region: no-drag;
 }
 
@@ -442,7 +442,7 @@
   align-items: center;
   justify-content: center;
   width: 46px;
-  height: 42px;
+  height: 36px;
   background: transparent;
   border: none;
   color: var(--muted-foreground);

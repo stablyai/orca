@@ -64,7 +64,20 @@ const isWindows = !isMac && navigator.userAgent.includes('Windows')
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
-    return window.api.ui.onMaximizeChanged(setMaximized)
+    // Why: window:maximize-changed only fires on transitions, so a window
+    // restored to a maximized state at startup would render the wrong icon
+    // until the user first clicks the button. Seed from main on mount.
+    let cancelled = false
+    void window.api.ui.isMaximized().then((value) => {
+      if (!cancelled) {
+        setMaximized(value)
+      }
+    })
+    const unsubscribe = window.api.ui.onMaximizeChanged(setMaximized)
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
   return (
     <div className="window-controls">
@@ -1091,12 +1104,18 @@ function App(): React.JSX.Element {
                 {workspaceActive && !rightSidebarOpen && (
                   <div
                     className="absolute top-0 z-10 flex items-center h-[36px]"
-                    style={{
-                      right: 'var(--window-controls-width)',
-                      WebkitAppRegion: 'no-drag'
-                    } as React.CSSProperties}
+                    style={
+                      {
+                        right: 'var(--window-controls-width)',
+                        WebkitAppRegion: 'no-drag'
+                      } as React.CSSProperties
+                    }
                   >
                     {rightSidebarToggle}
+                    {/* Why: the fixed-position window-controls overlay (138px,
+                        top-right) sits on top of this floating toggle on Windows.
+                        Reserve its width so the toggle stays clickable. */}
+                    {isWindows && <div className="window-controls-titlebar-spacer" />}
                   </div>
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">

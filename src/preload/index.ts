@@ -1970,6 +1970,10 @@ const api = {
     maximize: (): void => {
       ipcRenderer.send('window:maximize')
     },
+    /** Windows only: read the current maximize state on mount, since
+     *  window:maximize-changed only fires on transitions and a window that
+     *  starts maximized would otherwise show the wrong icon. */
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
     /** Windows only: subscribe to maximize state changes so the renderer-drawn
      *  maximize button can show the correct restore/maximize icon. */
     onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {

@@ -72,6 +72,7 @@ type ActivityBarItem = {
 }
 
 const isMac = navigator.userAgent.includes('Mac')
+const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const mod = isMac ? '\u2318' : 'Ctrl+'
 
 const ACTIVITY_ITEMS: ActivityBarItem[] = [
@@ -305,7 +306,10 @@ function RightSidebarInner(): React.JSX.Element {
               <div className="flex items-center justify-between border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset">
                 <TooltipProvider delayDuration={400}>
                   <div className="flex items-center">{activityBarIcons}</div>
-                  {closeButton}
+                  <div className="flex items-center">
+                    {closeButton}
+                    {isWindows && <div className="window-controls-titlebar-spacer" />}
+                  </div>
                 </TooltipProvider>
               </div>
             </ContextMenuTrigger>
@@ -320,7 +324,12 @@ function RightSidebarInner(): React.JSX.Element {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
-            <TooltipProvider delayDuration={400}>{closeButton}</TooltipProvider>
+            <TooltipProvider delayDuration={400}>
+              <div className="flex items-center">
+                {closeButton}
+                {isWindows && <div className="window-controls-titlebar-spacer" />}
+              </div>
+            </TooltipProvider>
           </div>
         )}
 

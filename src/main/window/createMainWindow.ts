@@ -655,10 +655,20 @@ export function createMainWindow(
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
   }
+  // Why: the renderer's WindowControls mounts after ready-to-show, which is
+  // also when savedMaximized is restored — so window:maximize-changed has
+  // already fired (or not fired, if maximize() was called pre-mount) before
+  // the listener attaches. Expose a synchronous getter so the button can
+  // initialize its icon to match the current state on mount.
+  const isMaximizedChannel = 'window:isMaximized'
+  const onIsMaximized = (): boolean => {
+    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
+  }
   ipcMain.on(minimizeChannel, onMinimize)
   ipcMain.on(maximizeChannel, onMaximize)
   ipcMain.on(requestCloseChannel, onRequestClose)
   ipcMain.on(popupMenuChannel, onPopupMenu)
+  ipcMain.handle(isMaximizedChannel, onIsMaximized)
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
@@ -671,6 +681,7 @@ export function createMainWindow(
     ipcMain.removeListener(maximizeChannel, onMaximize)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
+    ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     mainWindow.webContents.removeListener('context-menu', onMainContextMenu)
