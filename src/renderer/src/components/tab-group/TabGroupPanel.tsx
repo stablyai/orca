@@ -109,17 +109,20 @@ export default function TabGroupPanel({
           commands.closeItem(item.id)
         }
       }}
-      onCloseOthers={(terminalId) => {
+      onCloseOthers={(visibleId) => {
+        // Why: TabBar emits this with the entityId for terminals/browsers and
+        // the unifiedTabId for editors (see TabBar's per-type wiring). Match
+        // both so the menu works on every tab kind, not just terminals.
         const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
+          (candidate) => candidate.id === visibleId || candidate.entityId === visibleId
         )
         if (item) {
           commands.closeOthers(item.id)
         }
       }}
-      onCloseToRight={(terminalId) => {
+      onCloseToRight={(visibleId) => {
         const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
+          (candidate) => candidate.id === visibleId || candidate.entityId === visibleId
         )
         if (item) {
           commands.closeToRight(item.id)

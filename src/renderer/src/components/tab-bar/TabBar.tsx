@@ -384,7 +384,7 @@ function TabBarInner({
                 <SortableTab
                   key={item.id}
                   tab={item.data}
-                  tabCount={tabs.length}
+                  tabCount={orderedItems.length}
                   hasTabsToRight={index < orderedItems.length - 1}
                   isActive={activeTabType === 'terminal' && item.id === activeTabId}
                   isExpanded={expandedPaneByTabId[item.id] === true}
