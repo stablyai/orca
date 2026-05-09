@@ -1,8 +1,9 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
-  discoverActivePtyId,
   execInTerminal,
+  getTerminalContent,
+  waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
 import {
@@ -15,25 +16,44 @@ import { POST_REPLAY_MODE_RESET } from '../../src/renderer/src/components/termin
 
 test.describe.configure({ mode: 'serial' })
 
-async function createTerminalTab(page: Page, worktreeId: string): Promise<string> {
-  const tabId = await page.evaluate((targetWorktreeId) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('createTerminalTab: window.__store is unavailable')
-    }
+async function countRenderedTabs(page: Page): Promise<number> {
+  return page.locator('[data-testid="sortable-tab"]').count()
+}
 
-    const state = store.getState()
-    const newTab = state.createTab(targetWorktreeId)
-    state.setActiveTabType('terminal')
-    return newTab.id
-  }, worktreeId)
+async function createTerminalTab(page: Page): Promise<string> {
+  const tabsBefore = await countRenderedTabs(page)
+  const activeBefore = await getActiveTabId(page)
+
+  await page.getByRole('button', { name: 'New tab' }).click()
+  await page
+    .getByRole('menuitem', { name: /New Terminal/i })
+    .first()
+    .click()
 
   await expect
-    .poll(async () => getActiveTabId(page), {
+    .poll(() => countRenderedTabs(page), {
       timeout: 5_000,
-      message: `Terminal tab ${tabId} did not become active`
+      message: 'New Terminal did not render a new tab in the tab bar'
     })
-    .toBe(tabId)
+    .toBe(tabsBefore + 1)
+
+  let tabId: string | null = null
+  await expect
+    .poll(
+      async () => {
+        tabId = await getActiveTabId(page)
+        return Boolean(tabId && tabId !== activeBefore)
+      },
+      {
+        timeout: 5_000,
+        message: 'New Terminal did not become the active tab'
+      }
+    )
+    .toBe(true)
+
+  if (!tabId) {
+    throw new Error('createTerminalTab: active tab id was unavailable after creating terminal')
+  }
 
   return tabId
 }
@@ -65,6 +85,19 @@ async function emitBell(page: Page, ptyId: string): Promise<void> {
   await execInTerminal(page, ptyId, `tput bel`)
 }
 
+async function proveShellReadyWithSingleWrite(page: Page, ptyId: string): Promise<void> {
+  const marker = `__SHELL_READY_${Date.now()}__`
+  // Why: this is intentionally a single write after the pane has a concrete
+  // PTY binding. Retrying here would hide a real lost-write regression.
+  await execInTerminal(page, ptyId, `printf '${marker}\\n'`)
+  await expect
+    .poll(async () => (await getTerminalContent(page)).includes(marker), {
+      timeout: 10_000,
+      message: 'Terminal did not echo the single shell-ready marker write'
+    })
+    .toBe(true)
+}
+
 async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
@@ -81,7 +114,7 @@ test.describe('Terminal attention', () => {
   // auto-clears on focus/keystroke. This is the core attention contract.
   test('a BEL marks a background tab unread and clears on focus', async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
-    const worktreeId = await waitForActiveWorktree(orcaPage)
+    await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
@@ -90,9 +123,10 @@ test.describe('Terminal attention', () => {
       throw new Error('Expected an initial terminal tab')
     }
 
-    const secondTabId = await createTerminalTab(orcaPage, worktreeId)
+    const secondTabId = await createTerminalTab(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
-    const secondTabPtyId = await discoverActivePtyId(orcaPage)
+    const secondTabPtyId = await waitForActivePanePtyId(orcaPage)
+    await proveShellReadyWithSingleWrite(orcaPage, secondTabPtyId)
 
     // Focus the first tab so the second becomes a background tab; a BEL
     // arriving there should raise its indicator.
@@ -139,7 +173,8 @@ test.describe('Terminal attention', () => {
     if (!activeTabId) {
       throw new Error('Expected an active terminal tab')
     }
-    const activePtyId = await discoverActivePtyId(orcaPage)
+    const activePtyId = await waitForActivePanePtyId(orcaPage)
+    await proveShellReadyWithSingleWrite(orcaPage, activePtyId)
 
     // Emit the BEL, then a deterministic OSC title marker. When the marker
     // title lands, all prior PTY bytes (including the BEL) have been
@@ -228,7 +263,7 @@ test.describe('Terminal attention', () => {
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
-    const worktreeId = await waitForActiveWorktree(orcaPage)
+    await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
@@ -237,7 +272,7 @@ test.describe('Terminal attention', () => {
       throw new Error('Expected an initial terminal tab')
     }
 
-    const secondTabId = await createTerminalTab(orcaPage, worktreeId)
+    const secondTabId = await createTerminalTab(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     // secondTabId is already active after createTerminalTab. Simulate what
