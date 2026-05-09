@@ -1073,14 +1073,26 @@ function SourceControlInner(): React.JSX.Element {
         }
         return
       }
+      // Why: fall through to a normal editor tab when neither the working-tree
+      // nor branch-compare diff has the file (e.g. the change has since been
+      // committed and merged, but the note still references the file). Force
+      // the editor tab into 'changes' mode and stamp scrollToDiffCommentId so
+      // the DiffViewer that EditorContent renders in changes mode picks up
+      // the scroll request — same surface the user can flip into manually
+      // via the editor's Edit/Changes toggle.
+      const absPath = joinPath(worktreePath, filePath)
       const language = detectLanguage(filePath)
       openFile({
-        filePath: joinPath(worktreePath, filePath),
+        filePath: absPath,
         relativePath: filePath,
         worktreeId: activeWorktreeId,
         language,
         mode: 'edit'
       })
+      if (commentId) {
+        setEditorViewMode(absPath, 'changes')
+        setScrollToDiffCommentId(commentId)
+      }
     },
     [
       activeWorktreeId,
@@ -1090,6 +1102,7 @@ function SourceControlInner(): React.JSX.Element {
       handleOpenDiff,
       openCommittedDiff,
       openFile,
+      setEditorViewMode,
       setScrollToDiffCommentId,
       worktreePath
     ]
