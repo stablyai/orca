@@ -409,6 +409,47 @@ describe('PtyHandler', () => {
     })
   })
 
+  it('applies env augmenters after process.env and renderer-supplied env', async () => {
+    handler.addEnvAugmenter(() => ({
+      ORCA_AGENT_HOOK_PORT: '12345',
+      ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
+    }))
+
+    await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_PANE_KEY: 'tab-1:0', ORCA_TAB_ID: 'tab-1' }
+    })
+
+    expect(mockPtySpawn).toHaveBeenCalled()
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_PANE_KEY).toBe('tab-1:0')
+    expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
+    expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+  })
+
+  it('invokes the exit listener with the spawn-time paneKey', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
+
+    await dispatcher.callRequest('pty.spawn', {
+      env: { ORCA_PANE_KEY: 'tab-2:1' }
+    })
+    expect(onExitCb).toBeDefined()
+    onExitCb!({ exitCode: 0 })
+
+    expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-2:1' }])
+  })
+
   it('dispose kills all PTYs with SIGKILL', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
