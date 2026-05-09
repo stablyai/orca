@@ -1490,6 +1490,63 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
+  it('ingestRemote stamps connectionId and feeds the listener bypassing HTTP', () => {
+    const server = new AgentHookServer()
+    const events: { paneKey: string; connectionId: string | null; payload: unknown }[] = []
+    server.setListener((evt) => {
+      events.push({
+        paneKey: evt.paneKey,
+        connectionId: evt.connectionId,
+        payload: evt.payload
+      })
+    })
+    try {
+      server.ingestRemote(
+        {
+          paneKey: 'tab-3:0',
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          payload: {
+            state: 'working',
+            prompt: 'remote prompt',
+            agentType: 'claude'
+          }
+        },
+        'conn-42'
+      )
+      expect(events).toHaveLength(1)
+      expect(events[0].paneKey).toBe('tab-3:0')
+      expect(events[0].connectionId).toBe('conn-42')
+      expect(events[0].payload).toMatchObject({
+        state: 'working',
+        prompt: 'remote prompt',
+        agentType: 'claude'
+      })
+    } finally {
+      server.setListener(null)
+    }
+  })
+
+  it('ingestRemote ignores malformed envelopes (fail-open)', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    try {
+      // Missing paneKey
+      server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
+      // Missing payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { foo: 'bar' } }, 'conn-x')
+      // Wrong types
+      server.ingestRemote(
+        { paneKey: 'tab-1:0', payload: 'not-an-object' as unknown } as never,
+        'conn-x'
+      )
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.setListener(null)
+    }
+  })
+
   it('endpoint file contents are re-parseable by /bin/sh', async () => {
     if (process.platform === 'win32') {
       return
