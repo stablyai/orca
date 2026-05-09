@@ -2257,6 +2257,7 @@ const api = {
 
     getPairingQR: (args?: {
       address?: string
+      rotate?: boolean
     }): Promise<
       | { available: false }
       | {
