@@ -536,6 +536,11 @@ export function useDiffCommentDecorator({
         c.id === pendingScrollCommentId && c.filePath === filePath && c.worktreeId === worktreeId
     )
     if (!target) {
+      // Why: the request is for a comment this decorator doesn't own (different
+      // file/worktree). Drop any prior pending id so a late onDomNodeTop on a
+      // previously-requested zone in this decorator can't fire scrollToZone and
+      // ack — which would clear the global request meant for the owning surface.
+      pendingScrollRef.current = null
       return
     }
     pendingScrollRef.current = pendingScrollCommentId
