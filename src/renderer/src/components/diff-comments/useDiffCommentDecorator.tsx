@@ -431,11 +431,28 @@ export function useDiffCommentDecorator({
   // Why: scroll the diff editor to the requested note when the sidebar asks
   // for it. The decorator is the right place: it already filters comments to
   // this surface, so we know the line exists in this editor's modified model.
-  // Defer the reveal to the next animation frame because callers (e.g.
-  // DiffViewer) may schedule `restoreViewState` via rAF in their own onMount;
-  // running synchronously here would let that rAF overwrite our scroll. The
-  // ack also runs inside the rAF so the global isn't cleared until the reveal
-  // actually lands.
+  //
+  // Robustness pattern (mirrors VS Code's commentsController.revealCommentThread,
+  // which awaits `_computeAndSetPromise` before revealing): on a freshly-mounted
+  // editor the diff-pass effect above has called `editor.changeViewZones` to
+  // register the note's zone, but Monaco's whitespace layout may not have
+  // absorbed that change by the time we'd otherwise try to scroll. Calling
+  // `getTopForLineNumber(line, true)` before the layout settles returns a Y
+  // value that doesn't include the zone above the line, so the resulting
+  // scrollTop centers the line instead of the card — visible to the user as a
+  // top-of-viewport placement on the first click after a fresh mount (e.g.
+  // close + reopen), then a centered placement on the second click once
+  // layout settled.
+  //
+  // We poll on `requestAnimationFrame` until the target line's zone shows up
+  // in the layout (signal: `getTopForLineNumber(line, /* includeZones */ true)`
+  // exceeds the no-zones value, meaning at least one zone above or at the
+  // line has measurable height). Once it does, we compute scrollTop from the
+  // zones-aware Y so the math is in the same coordinate space as
+  // setScrollTop, and the line+card pair lands centered identically on every
+  // click. We cap the polling at ~1s so a layout that never settles (zone
+  // permanently height-0, comment for a line not in the model, etc.) doesn't
+  // leave the global pending forever.
   useEffect(() => {
     if (!editor || !pendingScrollCommentId) {
       return
@@ -447,26 +464,45 @@ export function useDiffCommentDecorator({
     if (!target) {
       return
     }
-    const handle = requestAnimationFrame(() => {
+
+    let cancelled = false
+    let rafHandle = 0
+    const startedAt = performance.now()
+    // Why: ~1s @ 60Hz is comfortably more than the longest layout flush we
+    // observed (single-digit frames), and short enough that a stuck request
+    // self-clears rather than blocking a future scroll request indefinitely.
+    const MAX_WAIT_MS = 1000
+
+    const tryScroll = (): void => {
+      if (cancelled) {
+        return
+      }
       // Why: the editor may have been disposed between scheduling and firing.
       if (!editor.getModel()) {
         return
       }
-      // Why: mirror VS Code's commentThreadZoneWidget._goToComment — compute
-      // scrollTop ourselves from `getTopForLineNumber(line)` (which excludes
-      // view zones) minus half the editor height, then setScrollTop. Monaco's
-      // `revealLineInCenter` shorthand is layout-pass-sensitive: on the first
-      // click the note's view zone above the line is freshly mounted and the
-      // shorthand lands the line near the top instead of center. The manual
-      // computation is self-correcting because Monaco's setScrollTop honours
-      // current zone offsets regardless of when the zone was added.
-      const top = editor.getTopForLineNumber(target.lineNumber)
+      const topWithZones = editor.getTopForLineNumber(target.lineNumber, true)
+      const topNoZones = editor.getTopForLineNumber(target.lineNumber, false)
+      const layoutSettled = topWithZones > topNoZones
+      const elapsed = performance.now() - startedAt
+      // Why: keep polling while the zone hasn't been absorbed yet, up to the
+      // safety cap. If the cap trips, fall through and scroll anyway — the
+      // line still gets revealed, just not perfectly centered relative to the
+      // card. Better than leaving the request stuck.
+      if (!layoutSettled && elapsed < MAX_WAIT_MS) {
+        rafHandle = requestAnimationFrame(tryScroll)
+        return
+      }
       const editorHeight = editor.getLayoutInfo().height
-      editor.setScrollTop(Math.max(0, top - editorHeight / 2))
+      editor.setScrollTop(Math.max(0, topWithZones - editorHeight / 2))
       onPendingScrollConsumedRef.current?.()
-    })
+    }
+
+    rafHandle = requestAnimationFrame(tryScroll)
+
     return () => {
-      cancelAnimationFrame(handle)
+      cancelled = true
+      cancelAnimationFrame(rafHandle)
     }
   }, [editor, comments, pendingScrollCommentId, filePath, worktreeId])
 }
