@@ -284,11 +284,28 @@ export async function createLocalWorktree(
         }
       } else {
         emitCreateWorktreeProgress(mainWindow, 'fetching')
-        await runtime.fetchRemoteWithCache(repo.path, optimisticBase.remote)
+        const result = await runtime.getOrStartRemoteFetch(repo.path, optimisticBase.remote)
         if (!(await runtime.hasRemoteTrackingRef(repo.path, optimisticBase))) {
+          if (!result.ok) {
+            throw new Error(
+              `Could not fetch base ref "${baseBranch}" from "${optimisticBase.remote}". Check your network and try again.`
+            )
+          }
           throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
         }
       }
+    } else {
+      // Why: when the base branch does not match a configured remote prefix
+      // (e.g. plain `main`, `master`, or any local branch), the legacy path
+      // still ran a best-effort `git fetch origin` so a local base could be
+      // built against fresher tracking refs. Preserve that behavior here so
+      // local-only bases don't silently skip the pre-create fetch.
+      const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+      legacyFetchPromise = runtime
+        .fetchRemoteWithCache(repo.path, fallbackRemote)
+        .then(() => undefined)
+        .catch(() => undefined)
+      emitCreateWorktreeProgress(mainWindow, 'fetching')
     }
   } else {
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
@@ -537,9 +554,14 @@ export async function createLocalWorktree(
       remote: optimisticBase.remote
     }
     runtime.emitWorktreeBaseStatus(initialBaseStatus)
+    // Why: record the reconcile token BEFORE the rev-parse await so a racing
+    // worktree remove during the await isn't a no-op (its
+    // clearOptimisticReconcileToken would then run before the token exists,
+    // letting the post-await record install a fresh token whose reconcile
+    // would re-populate base status for a worktree that no longer exists).
+    const token = runtime.recordOptimisticReconcileToken(worktreeId)
     try {
       const createdBaseSha = await readCommitSha(created.path, 'HEAD')
-      const token = runtime.recordOptimisticReconcileToken(worktreeId)
       void runtime
         .reconcileWorktreeBaseStatus({
           repoId: repo.id,

@@ -627,6 +627,12 @@ export class OrcaRuntimeService {
   // DNS hiccup until process restart (see §3.3 Lifecycle).
   private fetchInflight = new Map<string, Promise<RemoteFetchResult>>()
   private fetchLastCompletedAt = new Map<string, number>()
+  // Why: `getCanonicalFetchKey` is awaited from every freshness probe and
+  // every getOrStartRemoteFetch call. Without memoization the warm-cache hot
+  // path spawns a `git rev-parse --git-common-dir` subprocess per touch
+  // (twice in createLocalWorktree). Cache by `<repoPath>::<remote>` so the
+  // canonical key is resolved at most once per repo+remote in the process.
+  private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
@@ -3560,6 +3566,12 @@ export class OrcaRuntimeService {
    * the fetch load on warm repos.
    */
   async getCanonicalFetchKey(repoPath: string, remote: string): Promise<string> {
+    const cacheKey = `${repoPath}::${remote}`
+    const cached = this.canonicalFetchKeyCache.get(cacheKey)
+    if (cached !== undefined) {
+      return cached
+    }
+    let resolved = cacheKey
     try {
       const { stdout } = await gitExecFileAsync(
         ['rev-parse', '--path-format=absolute', '--git-common-dir'],
@@ -3567,13 +3579,14 @@ export class OrcaRuntimeService {
       )
       const commonDir = stdout.trim()
       if (commonDir) {
-        return `${commonDir}::${remote}`
+        resolved = `${commonDir}::${remote}`
       }
     } catch {
       // Fall through to the caller-provided path. The fetch still runs from
       // repoPath; this key only controls cache sharing.
     }
-    return `${repoPath}::${remote}`
+    this.canonicalFetchKeyCache.set(cacheKey, resolved)
+    return resolved
   }
 
   async isRemoteFetchFresh(repoPath: string, remote: string): Promise<boolean> {
@@ -3708,8 +3721,38 @@ export class OrcaRuntimeService {
         ...event
       })
     }
+    const resolvePublishRemote = async (): Promise<string> => {
+      // Why: repos whose canonical publish remote is named differently (e.g.
+      // `upstream`, a forked `myfork`, or any non-`origin` configuration —
+      // including multi-segment names like `foo/bar` that this PR's resolver
+      // explicitly supports) would otherwise silently skip the conflict
+      // signal. Resolve from git config in priority order:
+      //   1) branch.<name>.pushRemote (explicit per-branch override)
+      //   2) remote.pushDefault (workspace-wide override)
+      //   3) branch.<name>.remote (tracked remote)
+      //   4) the base ref's own remote (matches resolveRemoteTrackingBase)
+      //   5) `origin` as a final fallback.
+      const tryConfig = async (key: string): Promise<string | null> => {
+        try {
+          const { stdout } = await gitExecFileAsync(['config', '--get', key], {
+            cwd: args.repoPath
+          })
+          const value = stdout.trim()
+          return value || null
+        } catch {
+          return null
+        }
+      }
+      return (
+        (await tryConfig(`branch.${args.branchName}.pushRemote`)) ??
+        (await tryConfig('remote.pushDefault')) ??
+        (await tryConfig(`branch.${args.branchName}.remote`)) ??
+        args.base.remote ??
+        'origin'
+      )
+    }
     const checkPublishRemoteConflict = async (): Promise<void> => {
-      const publishRemote = 'origin'
+      const publishRemote = await resolvePublishRemote()
       try {
         if (publishRemote !== args.base.remote) {
           const result = await this.getOrStartRemoteFetch(args.repoPath, publishRemote)
@@ -3734,16 +3777,16 @@ export class OrcaRuntimeService {
       }
     }
 
-    const fetchResult = await args.fetchPromise
-    if (!stillCurrent()) {
-      return
-    }
-    if (!fetchResult.ok) {
-      emit({ status: 'unknown' })
-      return
-    }
-
     try {
+      const fetchResult = await args.fetchPromise
+      if (!stillCurrent()) {
+        return
+      }
+      if (!fetchResult.ok) {
+        emit({ status: 'unknown' })
+        return
+      }
+
       const { stdout } = await gitExecFileAsync(
         ['rev-parse', '--verify', `${args.base.ref}^{commit}`],
         { cwd: args.repoPath }
@@ -3788,6 +3831,14 @@ export class OrcaRuntimeService {
     } catch (err) {
       console.warn(`[worktree-base-status] reconcile failed for ${args.worktreeId}:`, err)
       emit({ status: 'unknown' })
+    } finally {
+      // Why: reconcile is one-shot; clear the token so long-lived sessions
+      // that create many worktrees without removing them don't grow the
+      // optimisticReconcileTokens map monotonically. Removal still no-ops
+      // because the entry is already gone.
+      if (this.optimisticReconcileTokens.get(args.worktreeId) === args.token) {
+        this.optimisticReconcileTokens.delete(args.worktreeId)
+      }
     }
   }
 
