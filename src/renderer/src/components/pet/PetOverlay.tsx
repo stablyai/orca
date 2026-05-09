@@ -199,6 +199,7 @@ function usePrefersReducedMotion(): boolean {
 // from the store so the user can resize from the status-bar menu.
 const SIZE = 180
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
+const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
 type Position = { x: number; y: number }
 
@@ -219,13 +220,25 @@ function loadStoredPosition(size: number = SIZE): Position | null {
     return null
   }
   try {
-    const raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
+    let raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
+    let migratedFromLegacy = false
     if (!raw) {
-      return null
+      raw = window.localStorage.getItem(LEGACY_POSITION_STORAGE_KEY)
+      if (!raw) {
+        return null
+      }
+      migratedFromLegacy = true
     }
     const parsed = JSON.parse(raw) as Partial<Position>
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') {
       return null
+    }
+    if (migratedFromLegacy) {
+      try {
+        window.localStorage.setItem(POSITION_STORAGE_KEY, raw)
+      } catch {
+        // ignore storage failures
+      }
     }
     // Why: clamp using the live overlay size so a persisted position from a
     // larger overlay doesn't slip off the bottom/right edge after a shrink.
