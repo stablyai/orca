@@ -26,6 +26,11 @@ type CloseWithDeps = {
   setError: (msg: string | null) => void
 }
 
+export type DismissedExtras = {
+  advancedVia: 'button' | 'keyboard'
+  durationMs: number
+}
+
 export function useCloseWith({
   onOnboardingChange,
   onboardingChecklist,
@@ -37,7 +42,8 @@ export function useCloseWith({
       outcome: 'completed' | 'dismissed',
       checklist: Partial<OnboardingState['checklist']>,
       lastStepReached: StepNumber,
-      completedPath?: 'open_folder' | 'clone_url'
+      completedPath?: 'open_folder' | 'clone_url',
+      dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
       let nextState: OnboardingState
       try {
@@ -82,7 +88,15 @@ export function useCloseWith({
           })
         }
       } else if (outcome === 'dismissed') {
-        track('onboarding_dismissed', { last_step: lastStepReached })
+        track('onboarding_dismissed', {
+          last_step: lastStepReached,
+          ...(dismissedExtras
+            ? {
+                duration_ms: dismissedExtras.durationMs,
+                advanced_via: dismissedExtras.advancedVia
+              }
+            : {})
+        })
       }
       return true
     },

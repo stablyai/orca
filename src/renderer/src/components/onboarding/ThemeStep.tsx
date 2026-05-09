@@ -2,8 +2,21 @@ import { useEffect, useState } from 'react'
 import { Check, Monitor, Moon, Settings2, Sun } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/types'
+import { track } from '@/lib/telemetry'
+import type {
+  DiscoveryStatusEmitted,
+  GhosttyImportPreview,
+  GlobalSettings
+} from '../../../../shared/types'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
+
+// Re-exported so the `_GhosttyDiscoveryStateSync` guard in
+// `src/shared/telemetry-events.ts` keeps this file as the named source of
+// truth for the wire-emitted discovery states. The canonical type lives in
+// `shared/types.ts` because `shared/` is the only module visible from both
+// the web and node tsconfigs; `'idle'` and `'detecting'` are UI-only states
+// that never fire telemetry, hence excluded.
+export type { DiscoveryStatusEmitted } from '../../../../shared/types'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
@@ -12,12 +25,37 @@ type ThemeStepProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
 
+// The two UI-only states (`'idle'`, `'detecting'`) never fire telemetry. The
+// remaining states are exactly `DiscoveryStatusEmitted`, which is the
+// schema-side enum the compile-time guard in
+// `src/shared/telemetry-events.ts` locks against.
 type DiscoveryState =
   | { status: 'idle' }
   | { status: 'detecting' }
   | { status: 'found'; preview: GhosttyImportPreview; fields: string[] }
   | { status: 'imported'; fields: string[] }
   | { status: 'absent' }
+type _DiscoveryStatusEmittedSync =
+  Exclude<DiscoveryState['status'], 'idle' | 'detecting'> extends DiscoveryStatusEmitted
+    ? DiscoveryStatusEmitted extends Exclude<DiscoveryState['status'], 'idle' | 'detecting'>
+      ? true
+      : never
+    : never
+const _discoveryStatusEmittedSyncCheck: _DiscoveryStatusEmittedSync = true
+void _discoveryStatusEmittedSyncCheck
+
+function fieldGroupCountBucket(count: number): '0' | '1-3' | '4-7' | '8+' {
+  if (count <= 0) {
+    return '0'
+  }
+  if (count <= 3) {
+    return '1-3'
+  }
+  if (count <= 7) {
+    return '4-7'
+  }
+  return '8+'
+}
 
 export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: ThemeStepProps) {
   const [importing, setImporting] = useState(false)
@@ -27,6 +65,13 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
   // "we found your Ghostty config" prompt instead of a buried Import button.
   // Settings are not applied until the user clicks Import (per design doc).
   useEffect(() => {
+    // Why: Ghostty config-import is darwin-only (see src/main/ghostty/discovery.ts).
+    // Skip the IPC + telemetry emission entirely on non-Mac so the
+    // `_discovered: absent` rate measured by the Mac-cohort dashboard isn't
+    // polluted by a population that cannot have a Ghostty config.
+    if (!navigator.userAgent.includes('Mac')) {
+      return
+    }
     let cancelled = false
     setDiscovery({ status: 'detecting' })
     void window.api.settings
@@ -41,15 +86,28 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         // tell, so don't make a claim either way.
         if (!preview.found || Object.keys(preview.diff).length === 0) {
           setDiscovery({ status: 'absent' })
+          track('onboarding_ghostty_discovered', {
+            state: 'absent',
+            field_group_count_bucket: '0'
+          })
           return
         }
-        setDiscovery({ status: 'found', preview, fields: humanFields(preview.diff) })
+        const fields = humanFields(preview.diff)
+        setDiscovery({ status: 'found', preview, fields })
+        track('onboarding_ghostty_discovered', {
+          state: 'found',
+          field_group_count_bucket: fieldGroupCountBucket(fields.length)
+        })
       })
       .catch(() => {
         if (cancelled) {
           return
         }
         setDiscovery({ status: 'absent' })
+        track('onboarding_ghostty_discovered', {
+          state: 'absent',
+          field_group_count_bucket: '0'
+        })
       })
     return () => {
       cancelled = true
@@ -60,11 +118,16 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     if (!settings || importing) {
       return
     }
+    // Why: track AFTER the busy guard so a double-click during an in-flight
+    // import doesn't inflate the click counter when no second import attempt
+    // actually proceeds.
+    track('onboarding_ghostty_import_clicked', {})
     setImporting(true)
     try {
       const resolved = preview.found ? preview : await window.api.settings.previewGhosttyImport()
       if (!resolved.found || Object.keys(resolved.diff).length === 0) {
         toast.info('No Ghostty settings found to import')
+        track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
       }
       await updateSettings({
@@ -83,11 +146,17 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       if (resolved.diff.theme) {
         onThemeChange(resolved.diff.theme)
       }
-      setDiscovery({ status: 'imported', fields: humanFields(resolved.diff) })
+      const importedFields = humanFields(resolved.diff)
+      setDiscovery({ status: 'imported', fields: importedFields })
+      track('onboarding_ghostty_discovered', {
+        state: 'imported',
+        field_group_count_bucket: fieldGroupCountBucket(importedFields.length)
+      })
     } catch (err) {
       toast.error('Failed to import Ghostty settings', {
         description: err instanceof Error ? err.message : String(err)
       })
+      track('onboarding_ghostty_import_failed', { reason: 'unknown' })
     } finally {
       setImporting(false)
     }
@@ -169,11 +238,14 @@ function GhosttyDiscoveryRow({
   disabled: boolean
   onImport: (preview: GhosttyImportPreview) => void
 }) {
-  if (discovery.status === 'absent') {
+  // Why: 'idle' is the pre-effect state that persists on non-Mac (the
+  // discovery effect short-circuits there), so render nothing instead of
+  // showing the dashed-border "Looking for a Ghostty config…" placeholder.
+  if (discovery.status === 'absent' || discovery.status === 'idle') {
     return null
   }
 
-  if (discovery.status === 'detecting' || discovery.status === 'idle') {
+  if (discovery.status === 'detecting') {
     return (
       <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-border bg-transparent px-3.5 py-2.5 text-[12px] text-muted-foreground">
         <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
@@ -204,8 +276,7 @@ function GhosttyDiscoveryRow({
         <div className="text-[12px] text-foreground">
           <span className="font-medium">Ghostty config detected.</span>{' '}
           <span className="text-muted-foreground">
-            Import {fields.length > 0 ? fields.map((f) => f.toLowerCase()).join(', ') : 'settings'}
-            ?
+            Import {fields.length > 0 ? fields.map((f) => f.toLowerCase()).join(', ') : 'settings'}?
           </span>
         </div>
         {preview.configPath && (
@@ -232,7 +303,10 @@ function ChromePreview({ variant }: { variant: GlobalSettings['theme'] }) {
   if (variant === 'system') {
     return (
       <div className="relative size-full">
-        <div className="absolute inset-0" style={{ clipPath: 'polygon(0 0, 50% 0, 50% 100%, 0 100%)' }}>
+        <div
+          className="absolute inset-0"
+          style={{ clipPath: 'polygon(0 0, 50% 0, 50% 100%, 0 100%)' }}
+        >
           <ChromeMock dark />
         </div>
         <div
@@ -322,7 +396,5 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     { label: 'Mouse', keys: ['terminalMouseHideWhileTyping', 'terminalFocusFollowsMouse'] },
     { label: 'macOS Option key', keys: ['terminalMacOptionAsAlt'] }
   ]
-  return groups
-    .filter(({ keys }) => keys.some((k) => k in diff))
-    .map(({ label }) => label)
+  return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
 }

@@ -6,17 +6,15 @@ import type { TuiAgent } from '../../../../shared/types'
 
 type AgentStepProps = {
   selectedAgent: TuiAgent | null
-  onSelect: (agent: TuiAgent) => void
+  // `fromCollapsedSection` tells the controller whether the click happened
+  // under the `<details>` disclosure so `onboarding_agent_picked` can carry
+  // it without re-deriving from props at the emit site.
+  onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
 }
 
-export function AgentStep({
-  selectedAgent,
-  onSelect,
-  detectedSet,
-  isDetecting
-}: AgentStepProps) {
+export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }: AgentStepProps) {
   const detected = AGENT_CATALOG.filter((agent) => detectedSet.has(agent.id))
   const rest = AGENT_CATALOG.filter((agent) => !detectedSet.has(agent.id))
   const hasDetected = detected.length > 0
@@ -75,7 +73,7 @@ export function AgentStep({
               key={agent.id}
               agent={agent}
               selected={selectedAgent === agent.id}
-              onClick={() => onSelect(agent.id)}
+              onClick={() => onSelect(agent.id, false)}
             />
           ))}
         </div>
@@ -95,7 +93,7 @@ export function AgentStep({
                 key={agent.id}
                 agent={agent}
                 selected={selectedAgent === agent.id}
-                onClick={() => onSelect(agent.id)}
+                onClick={() => onSelect(agent.id, true)}
               />
             ))}
           </div>

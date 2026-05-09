@@ -1,19 +1,16 @@
+/* eslint-disable max-lines -- Why: this hook is the single orchestrator for every onboarding-step transition (navigation, persistence, telemetry, ref-mirror, auto-select); splitting would force callers to coordinate ordering across multiple hooks and lose the controller-shape contract OnboardingFlow.tsx consumes. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
-import { track } from '@/lib/telemetry'
+import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
-import {
-  persistStep,
-  useCloseWith,
-  usePersistCurrentStep
-} from './use-onboarding-flow-persistence'
+import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -28,9 +25,7 @@ export function useOnboardingFlow(
   const updateSettings = useAppStore((s) => s.updateSettings)
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  const isDetectingAgents = useAppStore(
-    (s) => s.isDetectingAgents || s.isRefreshingAgents
-  )
+  const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const openModal = useAppStore((s) => s.openModal)
@@ -89,13 +84,54 @@ export function useOnboardingFlow(
     themeInteractedRef.current = true
     setTheme(value)
   }, [])
-  const setSelectedAgentInteractive = useCallback((value: TuiAgent | null) => {
-    agentInteractedRef.current = true
-    setSelectedAgent(value)
-  }, [])
+  // `fromCollapsedSection` is the click-site signal for whether the picked
+  // agent lived under the `<details>` disclosure in AgentStep. AgentStep is
+  // the only call site that has the real answer; main-side detected_count /
+  // detection_state are merged in here from the store.
+  const detectedAgentIdsRef = useRef<readonly TuiAgent[]>([])
+  const isDetectingRef = useRef<boolean>(false)
+  const selectedAgentRef = useRef(selectedAgent)
+  useEffect(() => {
+    selectedAgentRef.current = selectedAgent
+  }, [selectedAgent])
+  const setSelectedAgentInteractive = useCallback(
+    (value: TuiAgent | null, fromCollapsedSection = false) => {
+      agentInteractedRef.current = true
+      // Why: de-dup re-clicks on the current agent so dashboards count
+      // mind-changes only, not idle reselection of the same option.
+      const prev = selectedAgentRef.current
+      setSelectedAgent(value)
+      if (value === null || value === prev) {
+        return
+      }
+      // Why: emit at click time, not at step completion, so we capture
+      // mind-changes within the step. `tuiAgentToAgentKind` falls back to
+      // `'other'` for any string outside the union.
+      const detected = detectedAgentIdsRef.current
+      track('onboarding_agent_picked', {
+        agent_kind: tuiAgentToAgentKind(value),
+        on_path: detected.includes(value),
+        detected_count: detected.length,
+        detection_state: isDetectingRef.current ? 'pending' : 'complete',
+        from_collapsed_section: fromCollapsedSection
+      })
+    },
+    []
+  )
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
+
+  // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
+  // the freshest detection snapshot at click time without re-rebinding the
+  // handler whenever the store flips a flag. Mirrors the
+  // `selectedAgentRef` pattern above.
+  useEffect(() => {
+    detectedAgentIdsRef.current = detectedAgentIds ?? []
+  }, [detectedAgentIds])
+  useEffect(() => {
+    isDetectingRef.current = isDetectingAgents
+  }, [isDetectingAgents])
 
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const startTimeRef = useRef<number>(Date.now())
@@ -142,17 +178,24 @@ export function useOnboardingFlow(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Session-local step duration: re-pinned on every step view so a resumed
+  // user emits `duration_ms` for the visible step measuring only the
+  // post-resume time. Optional on the schema so a missing baseline (e.g. the
+  // _viewed effect was skipped or StrictMode double-mounted) fail-soft drops
+  // the field rather than the event. See docs/onboarding-telemetry-extensions.md.
+  const stepStartedAtRef = useRef<number>(Date.now())
   useEffect(() => {
+    stepStartedAtRef.current = Date.now()
     track('onboarding_step_viewed', { step: currentStep.stepNumber })
   }, [currentStep.stepNumber])
+
+  const consumeStepDurationMs = useCallback((): number => {
+    return Math.max(0, Date.now() - stepStartedAtRef.current)
+  }, [])
 
   // Why: only auto-pick on first mount when detection completes; otherwise
   // selecting an agent would re-trigger this effect and clobber/race user clicks.
   const didAutoSelectRef = useRef(false)
-  const selectedAgentRef = useRef(selectedAgent)
-  useEffect(() => {
-    selectedAgentRef.current = selectedAgent
-  }, [selectedAgent])
   useEffect(() => {
     if (didAutoSelectRef.current) {
       return
@@ -197,7 +240,15 @@ export function useOnboardingFlow(
       if (!closed) {
         return
       }
-      track('onboarding_step_completed', { step: 4, value_kind: 'repo' })
+      // Why: step 4 has no keyboard-vs-button advance — Cmd+Enter routes to
+      // `openFolder()` which collapses both into the path-clicked path. Emit
+      // `duration_ms` only; `advanced_via` is intentionally absent for step 4.
+      // See docs/onboarding-telemetry-extensions.md §3.
+      track('onboarding_step_completed', {
+        step: 4,
+        value_kind: 'repo',
+        duration_ms: consumeStepDurationMs()
+      })
       if (isGit) {
         openModal('new-workspace-composer', {
           initialRepoId: repoId,
@@ -206,7 +257,7 @@ export function useOnboardingFlow(
         })
       }
     },
-    [closeWith, fetchRepos, fetchWorktrees, openModal]
+    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal]
   )
 
   const persistCurrentStep = usePersistCurrentStep({
@@ -221,19 +272,31 @@ export function useOnboardingFlow(
     setError
   })
 
-  const next = useCallback(async () => {
-    if (busyLabel || currentStep.id === 'repo') {
-      return
-    }
-    const ok = await persistCurrentStep()
-    if (ok) {
-      track('onboarding_step_completed', {
-        step: currentStep.stepNumber,
-        value_kind: currentStep.valueKind
-      })
-      setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
-    }
-  }, [busyLabel, currentStep.id, currentStep.stepNumber, currentStep.valueKind, persistCurrentStep])
+  const next = useCallback(
+    async (advancedVia: 'button' | 'keyboard' = 'button') => {
+      if (busyLabel || currentStep.id === 'repo') {
+        return
+      }
+      const ok = await persistCurrentStep()
+      if (ok) {
+        track('onboarding_step_completed', {
+          step: currentStep.stepNumber,
+          value_kind: currentStep.valueKind,
+          duration_ms: consumeStepDurationMs(),
+          advanced_via: advancedVia
+        })
+        setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+      }
+    },
+    [
+      busyLabel,
+      consumeStepDurationMs,
+      currentStep.id,
+      currentStep.stepNumber,
+      currentStep.valueKind,
+      persistCurrentStep
+    ]
+  )
 
   const openFolder = useCallback(async () => {
     // Why: re-entry guard — rapid Cmd+Enter must not launch duplicate pickers.
@@ -278,7 +341,10 @@ export function useOnboardingFlow(
     track('onboarding_step4_path_clicked', { path: 'clone_url' })
     setBusyLabel('Cloning repo…')
     try {
-      const repo = await window.api.repos.clone({ url: trimmed, destination: settings.workspaceDir })
+      const repo = await window.api.repos.clone({
+        url: trimmed,
+        destination: settings.workspaceDir
+      })
       await completeRepo(repo.id, true, 'clone_url')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -295,7 +361,16 @@ export function useOnboardingFlow(
     if (busyLabel) {
       return
     }
-    track('onboarding_step_skipped', { step: currentStep.stepNumber })
+    // Why: skip has no keyboard path today, so `advanced_via` is always
+    // `'button'`. Including the field keeps the shape uniform with the
+    // completed/dismissed events and lets a future keyboard-skip arrive
+    // without a schema migration.
+    const durationMs = consumeStepDurationMs()
+    track('onboarding_step_skipped', {
+      step: currentStep.stepNumber,
+      duration_ms: durationMs,
+      advanced_via: 'button'
+    })
     // Why: theme step previews on the document without persisting. On skip,
     // revert to the saved theme before advancing so the preview doesn't leak.
     if (currentStep.id === 'theme' && settings) {
@@ -303,7 +378,10 @@ export function useOnboardingFlow(
       applyDocumentTheme(settings.theme)
     }
     if (currentStep.id === 'repo') {
-      await closeWith('dismissed', {}, currentStep.stepNumber)
+      await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
+        advancedVia: 'button',
+        durationMs
+      })
       return
     }
     // Why: persistence-only path — does NOT trigger requestPermission, so
@@ -315,7 +393,15 @@ export function useOnboardingFlow(
       return
     }
     setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
-  }, [busyLabel, closeWith, currentStep.id, currentStep.stepNumber, onOnboardingChange, settings])
+  }, [
+    busyLabel,
+    closeWith,
+    consumeStepDurationMs,
+    currentStep.id,
+    currentStep.stepNumber,
+    onOnboardingChange,
+    settings
+  ])
 
   const back = useCallback(() => {
     setStepIndex((idx) => Math.max(idx - 1, 0))

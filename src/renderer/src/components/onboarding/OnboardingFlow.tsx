@@ -65,7 +65,7 @@ export default function OnboardingFlow({
       if (currentStep.id === 'repo') {
         void flowOpenFolder()
       } else {
-        void flowNext()
+        void flowNext('keyboard')
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })

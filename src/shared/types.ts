@@ -1297,6 +1297,14 @@ export type GhosttyImportPreview = {
   error?: string
 }
 
+// Subset of the renderer's onboarding-step Ghostty `DiscoveryState['status']`
+// values that ever ship a telemetry event. The UI-only states (`'idle'`,
+// `'detecting'`) never fire `onboarding_ghostty_discovered`. Lives in
+// `shared/` because the schema in `telemetry-events.ts` (node-tsconfig) and
+// `ThemeStep.tsx` (web-tsconfig) both need it for the compile-time
+// schema-vs-renderer enum sync guard.
+export type DiscoveryStatusEmitted = 'found' | 'absent' | 'imported'
+
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
 
 export type NotificationDispatchRequest = {
