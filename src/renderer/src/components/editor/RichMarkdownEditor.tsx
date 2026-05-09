@@ -120,6 +120,20 @@ function runRichMarkdownContextCommand(
   }
 }
 
+function shouldFocusEmptyEditorFromSurfaceClick(
+  event: React.MouseEvent<HTMLDivElement>,
+  editor: Editor | null
+): boolean {
+  if (!editor?.isEmpty || event.button !== 0) {
+    return false
+  }
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return false
+  }
+  return !target.closest('.rich-markdown-editor-shell button, .rich-markdown-editor-shell input')
+}
+
 export default function RichMarkdownEditor({
   fileId,
   content,
@@ -666,7 +680,20 @@ export default function RichMarkdownEditor({
           search bar overlays the content (Monaco-style) instead of occupying
           layout space and shifting the document down when opened. */}
       <div className="relative min-h-0 flex-1">
-        <div ref={scrollContainerRef} className="h-full overflow-auto scrollbar-editor">
+        <div
+          ref={scrollContainerRef}
+          className="h-full overflow-auto scrollbar-editor"
+          onMouseDown={(event) => {
+            if (!shouldFocusEmptyEditorFromSurfaceClick(event, editorRef.current)) {
+              return
+            }
+            // Why: native contenteditable only places the caret on actual line
+            // boxes; an empty note should still focus when the user clicks any
+            // blank part of the document surface.
+            event.preventDefault()
+            editorRef.current?.commands.focus('start')
+          }}
+        >
           <EditorContent editor={editor} />
         </div>
         <RichMarkdownSearchBar
