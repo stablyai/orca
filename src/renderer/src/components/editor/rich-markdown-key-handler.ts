@@ -10,6 +10,11 @@ import {
   type SlashCommand,
   type SlashMenuState
 } from './rich-markdown-commands'
+import {
+  collapseEmptyListContinuationParagraph,
+  commitEmptyOrderedListMarkerAsText,
+  convertEmptyNestedOrderedItemToContinuation
+} from './rich-markdown-list-continuation'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -94,6 +99,26 @@ export function createRichMarkdownKeyHandler(
         ctx.setIsEditingLink(true)
       }
       return true
+    }
+
+    if (event.key === 'Backspace') {
+      const ed = ctx.editorRef.current
+      if (
+        ed &&
+        (convertEmptyNestedOrderedItemToContinuation(ed) ||
+          collapseEmptyListContinuationParagraph(ed))
+      ) {
+        event.preventDefault()
+        return true
+      }
+    }
+
+    if (event.key === 'Enter') {
+      const ed = ctx.editorRef.current
+      if (ed && commitEmptyOrderedListMarkerAsText(ed)) {
+        event.preventDefault()
+        return true
+      }
     }
 
     // Tab/Shift-Tab: indent/outdent lists, insert spaces in code blocks,

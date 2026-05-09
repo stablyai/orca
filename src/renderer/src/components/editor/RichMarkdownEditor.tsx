@@ -164,7 +164,8 @@ export default function RichMarkdownEditor({
     contentType: 'markdown',
     editorProps: {
       attributes: {
-        class: 'rich-markdown-editor'
+        class: 'rich-markdown-editor',
+        spellcheck: 'true'
       },
       handleDOMEvents: {
         cut: handleRichMarkdownCut

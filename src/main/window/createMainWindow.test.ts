@@ -1,17 +1,30 @@
 /* oxlint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { browserWindowMock, openExternalMock, attachGuestPoliciesMock, isMock } = vi.hoisted(() => ({
-  browserWindowMock: vi.fn(),
-  openExternalMock: vi.fn(),
-  attachGuestPoliciesMock: vi.fn(),
-  isMock: { dev: false }
-}))
+const {
+  browserWindowMock,
+  openExternalMock,
+  attachGuestPoliciesMock,
+  buildFromTemplateMock,
+  menuPopupMock,
+  isMock
+} = vi.hoisted(() => {
+  const menuPopupMock = vi.fn()
+  return {
+    browserWindowMock: vi.fn(),
+    openExternalMock: vi.fn(),
+    attachGuestPoliciesMock: vi.fn(),
+    buildFromTemplateMock: vi.fn(() => ({ popup: menuPopupMock })),
+    menuPopupMock,
+    isMock: { dev: false }
+  }
+})
 
 vi.mock('electron', () => ({
   app: { on: vi.fn(), removeListener: vi.fn() },
   BrowserWindow: browserWindowMock,
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+  Menu: { buildFromTemplate: buildFromTemplateMock },
   nativeTheme: { shouldUseDarkColors: false },
   screen: {
     getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } })
@@ -45,6 +58,8 @@ describe('createMainWindow', () => {
     browserWindowMock.mockReset()
     openExternalMock.mockReset()
     attachGuestPoliciesMock.mockReset()
+    buildFromTemplateMock.mockClear()
+    menuPopupMock.mockClear()
     isMock.dev = false
     vi.mocked(ipcMain.on).mockReset()
     vi.mocked(ipcMain.removeListener).mockReset()
@@ -754,6 +769,58 @@ describe('createMainWindow', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
+  })
+
+  it('shows spellcheck context menu for editable text without relying on markdown focus mirror', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn(),
+      replaceMisspelling: vi.fn(),
+      session: { addWordToSpellCheckerDictionary: vi.fn() }
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    windowHandlers['context-menu'](
+      {} as never,
+      {
+        isEditable: true,
+        spellcheckEnabled: true,
+        dictionarySuggestions: ['reference'],
+        misspelledWord: 'refrence'
+      } as Electron.ContextMenuParams
+    )
+
+    expect(buildFromTemplateMock).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ label: 'reference' })])
+    )
+    expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance })
   })
 
   it('resets the markdown editor focus flag on renderer crash, navigation, and destroy', () => {

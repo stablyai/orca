@@ -13,6 +13,7 @@ import {
 } from '../../shared/browser-url'
 import { resolveWindowShortcutAction } from '../../shared/window-shortcut-policy'
 import { getMainE2EConfig } from '../e2e-config'
+import { buildEditableContextMenuTemplate } from './editable-context-menu'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -434,6 +435,18 @@ export function createMainWindow(
   }
   ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
 
+  const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
+    if (template.length === 0) {
+      return
+    }
+    // Why: right-click can produce a Chromium context-menu event before our
+    // renderer focus mirror updates, so trust Electron's editable/spellcheck
+    // params here instead of gating on markdownEditorFocused.
+    Menu.buildFromTemplate(template).popup({ window: mainWindow })
+  }
+  mainWindow.webContents.on('context-menu', onMainContextMenu)
+
   // Why: renderer can't mirror focus state across a crash/reload/close.
   // Default-deny the carve-out so Cmd+B falls back to sidebar-toggle, which is
   // the safe behavior when focus context is unknown. Preserves the
@@ -660,6 +673,7 @@ export function createMainWindow(
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    mainWindow.webContents.removeListener('context-menu', onMainContextMenu)
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 
