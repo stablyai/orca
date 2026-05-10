@@ -95,6 +95,49 @@ export async function writeManagedScriptRemote(
   await chmod(sftp, remotePath, 0o755)
 }
 
+export async function readTextFileRemote(
+  sftp: SFTPWrapper,
+  remotePath: string
+): Promise<string | null> {
+  try {
+    return await readFile(sftp, remotePath)
+  } catch (err) {
+    if (isNoEntryError(err)) {
+      return null
+    }
+    throw err
+  }
+}
+
+export async function writeTextFileRemoteAtomic(
+  sftp: SFTPWrapper,
+  remotePath: string,
+  content: string
+): Promise<void> {
+  const dir = dirnamePosix(remotePath)
+  await mkdirpRemote(sftp, dir)
+  try {
+    const existing = await readFile(sftp, remotePath)
+    if (existing === content) {
+      return
+    }
+  } catch {
+    // ENOENT or read error — fall through to the atomic write below.
+  }
+
+  const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
+  try {
+    await writeFile(sftp, tmp, content)
+    await rename(sftp, tmp, remotePath)
+  } finally {
+    try {
+      await unlink(sftp, tmp)
+    } catch {
+      // already gone or never created
+    }
+  }
+}
+
 // ─── Private SFTP primitives ────────────────────────────────────────
 
 async function readFile(sftp: SFTPWrapper, remotePath: string): Promise<string> {

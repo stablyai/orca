@@ -6,6 +6,21 @@ import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
 import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
+import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
+
+const {
+  muxRequestMock,
+  claudeInstallRemoteMock,
+  codexInstallRemoteMock,
+  geminiInstallRemoteMock,
+  cursorInstallRemoteMock
+} = vi.hoisted(() => ({
+    muxRequestMock: vi.fn(),
+    claudeInstallRemoteMock: vi.fn(),
+    codexInstallRemoteMock: vi.fn(),
+    geminiInstallRemoteMock: vi.fn(),
+    cursorInstallRemoteMock: vi.fn()
+  }))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -15,7 +30,7 @@ vi.mock('./ssh-channel-multiplexer', () => {
   return {
     SshChannelMultiplexer: class MockSshChannelMultiplexer {
       notify = vi.fn()
-      request = vi.fn().mockResolvedValue([])
+      request = muxRequestMock
       onNotification = vi.fn().mockReturnValue(() => {})
       onDispose = vi.fn().mockReturnValue(() => {})
       dispose = vi.fn()
@@ -71,6 +86,30 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   unregisterSshGitProvider: vi.fn()
 }))
 
+vi.mock('../claude/hook-service', () => ({
+  claudeHookService: {
+    installRemote: claudeInstallRemoteMock
+  }
+}))
+
+vi.mock('../codex/hook-service', () => ({
+  codexHookService: {
+    installRemote: codexInstallRemoteMock
+  }
+}))
+
+vi.mock('../gemini/hook-service', () => ({
+  geminiHookService: {
+    installRemote: geminiInstallRemoteMock
+  }
+}))
+
+vi.mock('../cursor/hook-service', () => ({
+  cursorHookService: {
+    installRemote: cursorInstallRemoteMock
+  }
+}))
+
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
 const {
   registerSshPtyProvider,
@@ -119,6 +158,41 @@ function mockDeploySuccess() {
 describe('SshRelaySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+    muxRequestMock.mockReset()
+    muxRequestMock.mockResolvedValue([])
+    claudeInstallRemoteMock.mockReset()
+    claudeInstallRemoteMock.mockResolvedValue({
+      agent: 'claude',
+      state: 'installed',
+      configPath: '/home/dev/.claude/settings.json',
+      managedHooksPresent: true,
+      detail: null
+    })
+    codexInstallRemoteMock.mockReset()
+    codexInstallRemoteMock.mockResolvedValue({
+      agent: 'codex',
+      state: 'installed',
+      configPath: '/home/dev/.codex/hooks.json',
+      managedHooksPresent: true,
+      detail: null
+    })
+    geminiInstallRemoteMock.mockReset()
+    geminiInstallRemoteMock.mockResolvedValue({
+      agent: 'gemini',
+      state: 'installed',
+      configPath: '/home/dev/.gemini/settings.json',
+      managedHooksPresent: true,
+      detail: null
+    })
+    cursorInstallRemoteMock.mockReset()
+    cursorInstallRemoteMock.mockResolvedValue({
+      agent: 'cursor',
+      state: 'installed',
+      configPath: '/home/dev/.cursor/hooks.json',
+      managedHooksPresent: true,
+      detail: null
+    })
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
   })
@@ -141,6 +215,49 @@ describe('SshRelaySession', () => {
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshFilesystemProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
+  })
+
+  it('installs remote hook assets before registering the SSH PTY provider', async () => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'session.resolveHome') {
+        return { resolvedPath: '/home/dev' }
+      }
+      return { ok: true }
+    })
+    const sftp = { end: vi.fn() }
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = {
+      sftp: vi.fn().mockResolvedValue(sftp)
+    } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    const installPluginsCallIndex = muxRequestMock.mock.calls.findIndex(
+      ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
+    )
+    expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
+    expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
+      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
+    )
+    expect(claudeInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
+    expect(codexInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
+    expect(geminiInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
+    expect(cursorInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
+    expect(claudeInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
+    )
+    expect(codexInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
+    )
+    expect(geminiInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
+    )
+    expect(cursorInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
+    )
+    expect(sftp.end).toHaveBeenCalled()
   })
 
   it('rejects establish when not idle', async () => {
