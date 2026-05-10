@@ -751,17 +751,20 @@ function StatusBarInner(): React.JSX.Element | null {
     }
   }, [])
 
+  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) {
       return
     }
     setIsRefreshing(true)
     try {
-      await refreshRateLimits()
+      // Why: also re-run PATH detection so a freshly-installed CLI's bar
+      // appears (and a removed CLI's bar hides) without restarting Orca.
+      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
     } finally {
       setIsRefreshing(false)
     }
-  }, [isRefreshing, refreshRateLimits])
+  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
