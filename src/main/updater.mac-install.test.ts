@@ -46,11 +46,13 @@ const {
     autoUpdaterMock.checkForUpdates.mockReset()
     autoUpdaterMock.downloadUpdate.mockReset()
     autoUpdaterMock.quitAndInstall.mockReset()
+    autoUpdaterMock.autoRunAppAfterInstall = false
   }
 
   const autoUpdaterMock = {
     autoDownload: false,
     autoInstallOnAppQuit: false,
+    autoRunAppAfterInstall: false,
     on,
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(),
@@ -66,7 +68,8 @@ const {
       getVersion: vi.fn(() => '1.0.51'),
       on: appOn,
       emit: appEmit,
-      quit: vi.fn()
+      quit: vi.fn(),
+      releaseSingleInstanceLock: vi.fn()
     },
     browserWindowMock: {
       getAllWindows: vi.fn(() => [])
@@ -124,6 +127,7 @@ describe('updater mac install handoff', () => {
     appMock.getVersion.mockReset()
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
+    appMock.releaseSingleInstanceLock.mockReset()
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()

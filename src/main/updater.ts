@@ -191,6 +191,12 @@ function performQuitAndInstall(): void {
     win.removeAllListeners('close')
   }
 
+  // Why: Squirrel.Mac can launch the replacement app before our async
+  // will-quit cleanup has fully exited. If the old process still owns the
+  // single-instance lock, the replacement exits and the update appears to
+  // shut down without restarting.
+  app.releaseSingleInstanceLock()
+
   autoUpdater.quitAndInstall(false, true)
 }
 
@@ -511,6 +517,10 @@ export function setupAutoUpdater(
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+  // Why: MacUpdater ignores quitAndInstall's isForceRunAfter argument; this
+  // property is the switch that makes its ready-to-install path call the
+  // native relaunching updater instead of a plain app.quit().
+  autoUpdater.autoRunAppAfterInstall = true
 
   // Why: the only on-machine window we have into electron-updater. Without
   // this, an unexpected `update-not-available` (e.g. RC user not offered
