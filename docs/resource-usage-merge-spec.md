@@ -54,6 +54,8 @@ Out of scope:
 - `tabsByWorktree`, `ptyIdsByTabId`, `runtimePaneTitlesByTabId`,
   `workspaceSessionReady` — store-side context used to (a) compute
   bound/orphan and (b) resolve human labels.
+- `repoConnectionIdById` — renderer-side repo metadata used to decide
+  whether a row is SSH-backed. Missing or `null` means local.
 
 ### Output: a renderer-local view model
 
@@ -84,26 +86,28 @@ type UnifiedWorktreeRow = {
   memory: Metric
   history: number[]          // empty when hasLocalSamples is false
   hasLocalSamples: boolean
+  isRemote: boolean          // true iff repo.connectionId is non-null
   sessions: UnifiedSessionRow[]
 }
 
 type UnifiedRepoGroup = {
   repoId: string
   repoName: string
-  cpu: Metric                // null if every child has hasLocalSamples false
+  cpu: Metric                // null if every child has null metrics
   memory: Metric
-  hasRemoteChildren: boolean // drives the "· remote" badge on the row
+  hasRemoteChildren: boolean // true iff repo.connectionId is non-null
   worktrees: UnifiedWorktreeRow[]
 }
 ```
 
 A small adapter inside `mergeSnapshotAndSessions` converts each
 `WorktreeMemory` from the shared type into a `UnifiedWorktreeRow` with
-numeric metrics and `hasLocalSamples: true`. Synthetic remote rows are
-constructed directly with `null` metrics. The existing `MetricPair` and
-`Sparkline` callsites in the popover get a thin wrapper that renders
-`—` when its input is `null`; nothing in `src/shared/` or `src/main/`
-changes.
+numeric metrics, `hasLocalSamples: true`, and `isRemote` derived from
+`repoConnectionIdById`. Daemon-only rows are constructed directly with
+`null` metrics; they are remote only when the owning repo has a non-null
+`connectionId`. The existing `MetricPair` and `Sparkline` callsites in
+the popover get a thin wrapper that renders `—` when its input is
+`null`.
 
 ### Merge algorithm
 
@@ -148,14 +152,11 @@ snapshot, we need to bucket it under a worktree group. Try in order:
 1. **Tab-store walk** (existing logic in `SessionsTabPanel`): look up
    `ptyIdsByTabId` → `tabId` → `tabsByWorktree` → `worktreeId`. This
    resolves any session bound to a live tab in *this* renderer.
-2. **Session-id parse**: if the id contains `@@`, take
-   `id.slice(0, id.lastIndexOf('@@'))` as a candidate `worktreeId`.
-   This is the convention enforced by `mintPtySessionId` (see
-   `pty-session-id.ts:5-7` and the symmetric parser in
-   `daemon-pty-adapter.ts:328-331`). It correctly recovers the
-   worktreeId for SSH sessions that haven't been bound to a tab in
-   this Orca instance — which is the user's primary scenario
-   (`orca/Stingray`, `orca/Sawfish`, etc.).
+2. **Session-id parse**: use the shared `parsePtySessionId` helper to
+   recover the `${repoId}::${path}` worktree prefix from minted
+   `${worktreeId}@@${shortUuid}` ids. The parser rejects bare UUIDs and
+   ids without the canonical `::` worktree shape so the merge never
+   fabricates attribution for an opaque daemon id.
 3. **Unattributed**: if neither resolves, bucket under a synthetic
    `unattributed` repo group at the bottom of the list.
 
@@ -170,7 +171,8 @@ available; otherwise the bare `repoId` is used.
 1. Initialize `repos: Map<repoId, UnifiedRepoGroup>` empty.
 2. Insert all `snapshot.worktrees` (if any) into the map, grouped by
    their `repoId`. Each worktree carries `hasLocalSamples: true` and
-   numeric metrics; its sessions inherit numeric metrics.
+   numeric metrics; its sessions inherit numeric metrics. Set
+   `isRemote` from `repoConnectionIdById`.
 3. Build `seenSessionIds = new Set<string>(...all session ids in
    snapshot.worktrees[].sessions)`.
 4. For each `DaemonSession` in `sessions: DaemonSession[]`:
@@ -184,12 +186,12 @@ available; otherwise the bare `repoId` is used.
      worktree id — rare but possible.)
    - Otherwise, create a new worktree group with `cpu: null`,
      `memory: null`, `history: []`, `hasLocalSamples: false`, and
-     append the session.
+     `isRemote` derived from `repoConnectionIdById`, then append the
+     session.
 5. Compute per-repo aggregates: sum `cpu`/`memory` from worktrees with
-   `hasLocalSamples === true`. If the repo has *any* worktree with
-   `hasLocalSamples === false`, set `repoHasRemoteChildren: true` (used
-   by the UI to render a `· remote` badge on the repo header so the
-   user knows the displayed totals exclude remote worktrees).
+   numeric metrics. Set `hasRemoteChildren` from `repoConnectionIdById`
+   for that repo, not from missing metrics. Missing data is not itself
+   evidence of SSH remoteness.
 6. The Orca app section (Main / Renderer / Other) renders unchanged
    below the list.
 
@@ -250,9 +252,9 @@ The header keeps the icon-only **Restart daemon** (RotateCw) and
 | Remote PTY, orphan          | `—`            | always      | no-op        |
 
 `—` is rendered as `text-muted-foreground/50`. The worktree row carries
-a small `· remote` badge when `hasLocalSamples === false`; the repo row
-carries the same badge when `hasRemoteChildren === true` (so users
-know the displayed repo totals exclude remote worktrees).
+a small `· remote` badge when `worktree.isRemote === true`; the repo row
+carries the same badge when `hasRemoteChildren === true`. Both values
+come from the repo's SSH `connectionId`, not from missing local samples.
 
 **`bound` semantics are unchanged from today:** a session is bound iff
 `boundPtyIds.has(session.id)` evaluated against this renderer's
@@ -326,9 +328,9 @@ CPU and worktrees within a repo by their CPU.
   - **Tab walk wins over `@@` parse**: a session bound to a tab whose
     worktreeId differs from the `@@` prefix uses the tab's worktreeId
     (defensive against id-format drift).
-  - **Repo aggregate excludes remote children**: a repo with one
-    local (125 MB) and one remote (`null`) worktree reports
-    `cpu/memory = 125 MB` and `hasRemoteChildren = true`.
+  - **Repo aggregate uses connectionId for remote state**: a local repo
+    with a daemon-only `null` worktree does not set `hasRemoteChildren`;
+    an SSH-backed repo does set it and renders the `· remote` badge.
   - Edge cases: snapshot null, sessions empty, both empty, sessionId
     without `@@` and no tab match → falls into Unattributed.
 - Manual:
@@ -363,8 +365,10 @@ CPU and worktrees within a repo by their CPU.
   After killing an SSH session, the daemon-side `sessions` list can
   retain the dead row for up to 10s while the snapshot has already
   moved on; conversely a freshly-spawned local PTY shows up in
-  `sessions` first and is rendered as a remote placeholder for up to
-  2s before the next snapshot promotes it.
+  `sessions` first and is rendered as a daemon-only placeholder with
+  `—` metrics for up to 2s before the next snapshot promotes it. It
+  must not render `· remote` unless its repo has a non-null
+  `connectionId`.
   **Mitigation**: per-row kill optimistically removes the session id
   from the renderer's local `sessions` state immediately after the IPC
   resolves (in addition to calling `onSessionsChanged()`), so the
