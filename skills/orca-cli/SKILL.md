@@ -1,6 +1,6 @@
 ---
 name: orca-cli
-description: Use the Orca CLI to orchestrate worktrees, live terminals, and browser automation through a running Orca editor. Use when an agent needs to create, inspect, update, or remove Orca worktrees; inspect repo state known to Orca; read, send to, wait on, or stop Orca-managed terminals; or automate the built-in browser (navigate, snapshot, click, fill, screenshot). Coding agents should also keep the current worktree comment updated with the latest meaningful work-in-progress checkpoint whenever useful. Triggers include "use orca cli", "manage Orca worktrees", "read Orca terminal", "reply to Claude Code in Orca", "create a worktree in Orca", "update Orca worktree comment", "click on", "fill the form", "take a screenshot", "navigate to", "interact with the page", "snapshot the page", or any task where the agent should operate through Orca.
+description: Use the `orca` CLI to drive a running Orca editor — manage Orca worktrees; create, read, and run shell commands in Orca-managed terminals; and automate Orca's built-in browser (snapshot/click/fill/screenshot/tabs). Use this instead of raw `git worktree`, ad hoc shell PTYs, or Playwright whenever the task touches Orca state. Coding agents inside an Orca worktree should also use it to keep the worktree comment fresh at meaningful checkpoints. Boundary with `orchestration`: if the recipient of a terminal write is another AI agent (Claude Code, Gemini, Codex, a worker), use `orchestration` — it is the only correct way to send messages, nudges, replies, or task hand-offs to agents. orca-cli writes are for non-agent terminals (shells, build/test commands); reading or `wait`ing on any terminal — including agent terminals — stays in orca-cli.
 ---
 
 # Orca CLI
@@ -13,7 +13,7 @@ Use `orca` for:
 
 - worktree orchestration inside a running Orca app
 - updating the current worktree comment with meaningful progress checkpoints
-- reading and replying to Orca-managed terminals
+- reading Orca-managed terminals and sending input to non-agent terminals
 - stopping or waiting on Orca-managed terminals
 - accessing repos known to Orca
 Do not use `orca` when plain shell tools are simpler and Orca state does not matter.
@@ -22,7 +22,7 @@ Examples:
 
 - creating one Orca worktree per GitHub issue
 - updating the current worktree comment after a significant checkpoint, such as reproducing a bug, validating a fix, or handing off for review
-- finding the Claude Code terminal for a worktree and replying to it
+- finding the Claude Code terminal for a worktree and reading its status
 - checking which Orca worktrees have live terminal activity
 
 ## Preconditions
