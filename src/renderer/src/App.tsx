@@ -36,6 +36,7 @@ import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
+import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -139,6 +140,8 @@ const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
 const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
 
 function App(): React.JSX.Element {
+  useUnreadDockBadge()
+
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
   // must check on every store mutation. Consolidating 19 action refs into one

@@ -252,7 +252,9 @@ const api = {
     // src/renderer/src/lib/keyboard-layout/input-source-id.ts, issue #1205).
     // Returns null on non-Darwin or when the defaults read fails.
     getKeyboardInputSourceId: (): Promise<string | null> =>
-      ipcRenderer.invoke('app:getKeyboardInputSourceId')
+      ipcRenderer.invoke('app:getKeyboardInputSourceId'),
+    setUnreadDockBadgeCount: (count: number): Promise<void> =>
+      ipcRenderer.invoke('app:setUnreadDockBadgeCount', count)
   },
 
   wsl: {
