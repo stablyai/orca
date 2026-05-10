@@ -70,6 +70,18 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.worktrees.onBaseStatus((event) => {
+        useAppStore.getState().updateWorktreeBaseStatus(event)
+      })
+    )
+
+    unsubs.push(
+      window.api.worktrees.onRemoteBranchConflict((event) => {
+        useAppStore.getState().updateWorktreeRemoteBranchConflict(event)
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onOpenSettings(() => {
         useAppStore.getState().openSettingsPage()
       })

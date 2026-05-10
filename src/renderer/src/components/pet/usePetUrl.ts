@@ -1,45 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CustomSidekick } from '../../../../shared/types'
+import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
-import { BUNDLED_SIDEKICK, findBundledSidekick, isBundledSidekickId } from './sidekick-models'
+import { BUNDLED_PET, findBundledPet, isBundledPetId } from './pet-models'
 import {
   blobUrlCache,
   detectedSpriteCache,
   loadCustomBlobUrl,
   type DetectedSpriteCacheEntry
-} from './sidekick-blob-cache'
+} from './pet-blob-cache'
 
 // Re-export so existing callers (the store slice) that point at this module
 // keep working without knowing about the cache module split.
-export { revokeCustomSidekickBlobUrl } from './sidekick-blob-cache'
+export { revokeCustomPetBlobUrl } from './pet-blob-cache'
 
-export type ResolvedSidekick =
+export type ResolvedPet =
   | { url: string; ready: boolean; sprite: null; detected: null }
   | {
       url: string
       ready: boolean
-      sprite: NonNullable<CustomSidekick['sprite']>
+      sprite: NonNullable<CustomPet['sprite']>
       detected: null
     }
   | { url: string; ready: boolean; sprite: null; detected: DetectedSpriteCacheEntry }
 
-/** Resolve the active sidekick to a URL the overlay can render.
+/** Resolve the active pet to a URL the overlay can render.
  *
- *  For bundled sidekicks this is synchronous. For custom ones we issue an
+ *  For bundled pets this is synchronous. For custom ones we issue an
  *  IPC read and build a blob: URL with the correct MIME; until that resolves,
  *  we fall back to the bundled default so the overlay is never empty.
  */
-export function useSidekickUrl(): ResolvedSidekick {
-  const sidekickId = useAppStore((s) => s.sidekickId)
-  const customSidekicks = useAppStore((s) => s.customSidekicks)
-  const bundled = isBundledSidekickId(sidekickId)
-  const customMeta = bundled ? null : customSidekicks.find((m) => m.id === sidekickId)
+export function usePetUrl(): ResolvedPet {
+  const petId = useAppStore((s) => s.petId)
+  const customPets = useAppStore((s) => s.customPets)
+  const bundled = isBundledPetId(petId)
+  const customMeta = bundled ? null : customPets.find((m) => m.id === petId)
 
   const [customUrl, setCustomUrl] = useState<string | null>(() =>
     customMeta ? (blobUrlCache.get(customMeta.id) ?? null) : null
   )
   // Why: track the last id we started loading so a rapid switch between
-  // custom sidekicks doesn't let a slower earlier response clobber the newer
+  // custom pets doesn't let a slower earlier response clobber the newer
   // state.
   const pendingRef = useRef<string | null>(null)
 
@@ -92,8 +92,8 @@ export function useSidekickUrl(): ResolvedSidekick {
   }, [customId, customFileName, customMime, customKind, customSpriteFps, customHasManifestSprite])
 
   if (bundled) {
-    const sidekick = findBundledSidekick(sidekickId) ?? BUNDLED_SIDEKICK
-    return { url: sidekick.url, ready: true, sprite: null, detected: null }
+    const pet = findBundledPet(petId) ?? BUNDLED_PET
+    return { url: pet.url, ready: true, sprite: null, detected: null }
   }
   if (customMeta && customUrl) {
     // Why: guard against manifest entries with zero/negative dims or fps —
@@ -112,5 +112,5 @@ export function useSidekickUrl(): ResolvedSidekick {
     }
     return { url: customUrl, ready: true, sprite: null, detected: null }
   }
-  return { url: BUNDLED_SIDEKICK.url, ready: false, sprite: null, detected: null }
+  return { url: BUNDLED_PET.url, ready: false, sprite: null, detected: null }
 }

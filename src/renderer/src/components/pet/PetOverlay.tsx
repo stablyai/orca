@@ -1,23 +1,23 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { useSidekickUrl } from './useSidekickUrl'
-import type { DetectedSpriteCacheEntry } from './sidekick-blob-cache'
-import type { CustomSidekick } from '../../../../shared/types'
+import { usePetUrl } from './usePetUrl'
+import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
+import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
-import { selectSidekickAnimationName, type SidekickAnimationName } from './sidekick-agent-state'
+import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state'
 
-type Sprite = NonNullable<CustomSidekick['sprite']>
+type Sprite = NonNullable<CustomPet['sprite']>
 
-function useSidekickAnimationName(dragging: boolean): SidekickAnimationName {
+function usePetAnimationName(dragging: boolean): PetAnimationName {
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
 
   // Re-render when the freshness scheduler ticks so stale live states stop
-  // driving sidekick animations even if no other store value changes.
+  // driving pet animations even if no other store value changes.
   void agentStatusEpoch
 
-  return selectSidekickAnimationName({
+  return selectPetAnimationName({
     entries: Object.values(agentStatusByPaneKey),
     retainedCount: Object.keys(retainedAgentsByPaneKey).length,
     dragging,
@@ -27,7 +27,7 @@ function useSidekickAnimationName(dragging: boolean): SidekickAnimationName {
 }
 
 // Why: pet bundles ship a sprite sheet — animate by stepping a CSS background
-// across the cells of one row. We pick the row from the live sidekick state
+// across the cells of one row. We pick the row from the live pet state
 // when the manifest provides that animation, then fall back to the bundle's
 // default animation. imageRendering: 'pixelated' keeps edges crisp even when
 // scale is fractional (needed when frames exceed maxSize).
@@ -42,7 +42,7 @@ function SpriteFrame({
   sprite: Sprite
   animate: boolean
   maxSize: number
-  animationName: SidekickAnimationName
+  animationName: PetAnimationName
 }): React.JSX.Element {
   const animKeyframesId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const anim =
@@ -198,7 +198,8 @@ function usePrefersReducedMotion(): boolean {
 // Why: keep a default for the cached helpers below; the live size now comes
 // from the store so the user can resize from the status-bar menu.
 const SIZE = 180
-const POSITION_STORAGE_KEY = 'sidekick-overlay-position'
+const POSITION_STORAGE_KEY = 'pet-overlay-position'
+const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
 type Position = { x: number; y: number }
 
@@ -219,13 +220,25 @@ function loadStoredPosition(size: number = SIZE): Position | null {
     return null
   }
   try {
-    const raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
+    let raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
+    let migratedFromLegacy = false
     if (!raw) {
-      return null
+      raw = window.localStorage.getItem(LEGACY_POSITION_STORAGE_KEY)
+      if (!raw) {
+        return null
+      }
+      migratedFromLegacy = true
     }
     const parsed = JSON.parse(raw) as Partial<Position>
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') {
       return null
+    }
+    if (migratedFromLegacy) {
+      try {
+        window.localStorage.setItem(POSITION_STORAGE_KEY, raw)
+      } catch {
+        // ignore storage failures
+      }
     }
     // Why: clamp using the live overlay size so a persisted position from a
     // larger overlay doesn't slip off the bottom/right edge after a shrink.
@@ -249,18 +262,18 @@ function defaultPosition(size: number = SIZE): Position {
   )
 }
 
-export function SidekickOverlay(): React.JSX.Element {
+export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
-  const { url, sprite, detected } = useSidekickUrl()
-  const size = useAppStore((s) => s.sidekickSize)
+  const { url, sprite, detected } = usePetUrl()
+  const size = useAppStore((s) => s.petSize)
 
   const [position, setPosition] = useState<Position>(() => {
     // Why: read the persisted size eagerly via getState so the initial clamp
-    // uses the user's last sidekick size — useState's lazy initializer runs
+    // uses the user's last pet size — useState's lazy initializer runs
     // before the `size` prop binding settles, and `loadStoredPosition` would
     // otherwise default to SIZE and clip a previously-saved position.
-    const currentSize = useAppStore.getState().sidekickSize ?? SIZE
+    const currentSize = useAppStore.getState().petSize ?? SIZE
     return loadStoredPosition(currentSize) ?? defaultPosition(currentSize)
   })
   const [dragging, setDragging] = useState(false)
@@ -290,7 +303,7 @@ export function SidekickOverlay(): React.JSX.Element {
   }, [dragging, position])
 
   const animate = documentVisible && !reducedMotion && !dragging
-  const animationName = useSidekickAnimationName(dragging)
+  const animationName = usePetAnimationName(dragging)
 
   // Why: setPointerCapture routes subsequent pointer events to this element
   // even when the cursor leaves the OS window, so dragging can't get stuck in
@@ -332,7 +345,7 @@ export function SidekickOverlay(): React.JSX.Element {
 
   return (
     // Why: the wrapper is fixed-positioned and pointer-events-none so app
-    // chrome stays interactive; only the sidekick itself opts back in to
+    // chrome stays interactive; only the pet itself opts back in to
     // pointer events so the user can press and drag it around.
     <div
       aria-hidden
@@ -352,14 +365,14 @@ export function SidekickOverlay(): React.JSX.Element {
         className="pointer-events-auto flex size-full select-none items-center justify-end"
         style={{
           cursor: dragging ? 'grabbing' : 'grab',
-          animation: 'sidekick-bob 1.2s ease-in-out infinite',
+          animation: 'pet-bob 1.2s ease-in-out infinite',
           animationPlayState: animate ? 'running' : 'paused',
           touchAction: 'none'
         }}
       >
         <style>
           {
-            '@keyframes sidekick-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
+            '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
           }
         </style>
         {sprite ? (
@@ -385,4 +398,4 @@ export function SidekickOverlay(): React.JSX.Element {
   )
 }
 
-export default SidekickOverlay
+export default PetOverlay

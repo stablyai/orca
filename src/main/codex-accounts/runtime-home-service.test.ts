@@ -66,7 +66,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
-    showTitlebarAgentActivity: true,
+    showTitlebarAppName: true,
     showTasksButton: true,
     diffDefaultView: 'inline',
     notifications: {
@@ -97,7 +97,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalMacOptionAsAltMigrated: true,
     experimentalMobile: false,
     mobileAutoRestoreFitMs: null,
-    experimentalSidekick: false,
+    experimentalPet: false,
     experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',

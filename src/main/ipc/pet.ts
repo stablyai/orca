@@ -6,15 +6,15 @@ import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import type { CustomSidekick } from '../../shared/types'
+import type { CustomPet } from '../../shared/types'
 import {
   applyCodexPetDefaults,
   readWebpDimensionsFromBuffer,
   type PetManifestLike,
   type ResolvedPetManifest
-} from './sidekick-pet-bundle'
+} from './pet-bundle'
 
-// Why: image-only sidekick uploads. Static + animated variants render natively
+// Why: image-only pet uploads. Static + animated variants render natively
 // via <img>, so no 3D engine is needed. Main owns the accepted-format table as
 // the single source of truth for what the renderer will try to display.
 const IMAGE_FORMATS: Record<string, string> = {
@@ -36,11 +36,10 @@ function classifyFile(src: string): { mimeType: string; ext: string } | null {
   return { mimeType: mime, ext }
 }
 
-// Why: custom user-uploaded images live in a dedicated folder under userData
-// so they persist across updates but are scoped to the Orca install. We never
-// trust paths the renderer hands us — the renderer only ever knows the opaque
-// CustomSidekick.id; main resolves it to an absolute path inside this folder.
-function getSidekicksDir(): string {
+// Why: keep using the legacy sidekicks folder so existing user-uploaded pets
+// keep rendering after the product rename. The renderer only knows CustomPet.id;
+// main resolves it to an absolute path inside this folder.
+function getPetsDir(): string {
   return join(app.getPath('userData'), 'sidekicks', 'custom')
 }
 
@@ -54,16 +53,12 @@ function isSafeId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
 
-function resolveSidekickFile(
-  id: string,
-  fileName: string,
-  kind: 'image' | 'bundle'
-): string | null {
+function resolvePetFile(id: string, fileName: string, kind: 'image' | 'bundle'): string | null {
   if (!isSafeId(id)) {
     return null
   }
   const safeName = basename(fileName)
-  const root = normalize(getSidekicksDir())
+  const root = normalize(getPetsDir())
   let filePath: string
   if (kind === 'bundle') {
     // Bundle layout: custom/<id>/<fileName>. fileName is just the spritesheet
@@ -131,8 +126,8 @@ const PetManifestSchema = z
 type PetManifest = z.infer<typeof PetManifestSchema> & PetManifestLike
 
 // Why: renderer-supplied IPC inputs are untrusted — validate shape before any
-// path resolution. resolveSidekickFile still gates the actual filesystem path.
-const SidekickFileRequestSchema = z.object({
+// path resolution. resolvePetFile still gates the actual filesystem path.
+const PetFileRequestSchema = z.object({
   id: z.string(),
   fileName: z.string(),
   kind: z.enum(['image', 'bundle']).optional()
@@ -192,12 +187,12 @@ async function isSymlink(path: string): Promise<boolean> {
   }
 }
 
-export function registerSidekickHandlers(): void {
-  ipcMain.handle('sidekick:import', async (event): Promise<CustomSidekick | null> => {
+export function registerPetHandlers(): void {
+  ipcMain.handle('pet:import', async (event): Promise<CustomPet | null> => {
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
     const options: Electron.OpenDialogOptions = {
-      title: 'Pick sidekick',
+      title: 'Pick pet',
       properties: ['openFile'],
       // Why: single filter and no `apng` extension. macOS file dialogs map
       // filter extensions to UTIs; `apng` has no registered UTI, so including
@@ -206,7 +201,7 @@ export function registerSidekickHandlers(): void {
       // bytes by the browser.
       filters: [
         {
-          name: 'Sidekick image',
+          name: 'Pet image',
           extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
         }
       ]
@@ -237,11 +232,11 @@ export function registerSidekickHandlers(): void {
       )
     }
 
-    const dir = getSidekicksDir()
+    const dir = getPetsDir()
     await mkdir(dir, { recursive: true })
     const id = randomUUID()
-    // Why: preserve original extension in the on-disk name so sidekick:read can
-    // rebuild the right Blob MIME via resolveSidekickFile without a separate
+    // Why: preserve original extension in the on-disk name so pet:read can
+    // rebuild the right Blob MIME via resolvePetFile without a separate
     // lookup. The extension is only ever written by main (never the renderer).
     const fileName = `${id}${classified.ext}`
     const dest = join(dir, fileName)
@@ -249,11 +244,11 @@ export function registerSidekickHandlers(): void {
       await copyFile(src, dest)
     } catch {
       await rm(dest, { force: true }).catch(() => {})
-      throw new Error('Could not save the sidekick.')
+      throw new Error('Could not save the pet.')
     }
 
     const rawLabel = basename(src, extname(src)).trim()
-    const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Custom sidekick'
+    const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Custom pet'
     return {
       id,
       label,
@@ -263,7 +258,7 @@ export function registerSidekickHandlers(): void {
     }
   })
 
-  ipcMain.handle('sidekick:importPetBundle', async (event): Promise<CustomSidekick | null> => {
+  ipcMain.handle('pet:importPetBundle', async (event): Promise<CustomPet | null> => {
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
     // Why: the bundle is a folder. macOS users may also pick `pet.json` itself
@@ -359,7 +354,7 @@ export function registerSidekickHandlers(): void {
       )
     }
 
-    let sprite: NonNullable<CustomSidekick['sprite']> | undefined
+    let sprite: NonNullable<CustomPet['sprite']> | undefined
     if (manifest.frame) {
       // Why: only decode the sheet when we need to validate frame layout.
       // nativeImage may fail on some WebP variants in headless contexts, and
@@ -412,10 +407,10 @@ export function registerSidekickHandlers(): void {
 
     // Why: storage id is always a fresh UUID — the manifest's `id` is purely
     // a display hint. This guards against (a) collisions with bundled
-    // sidekick ids, (b) failing isSafeId, and (c) re-import clobbering an
+    // pet ids, (b) failing isSafeId, and (c) re-import clobbering an
     // earlier copy of the same bundle.
     const id = randomUUID()
-    const root = getSidekicksDir()
+    const root = getPetsDir()
     await mkdir(root, { recursive: true })
     const destDir = join(root, id)
     const sheetExt = sheetClass.ext
@@ -451,7 +446,7 @@ export function registerSidekickHandlers(): void {
   })
 
   ipcMain.handle(
-    'sidekick:read',
+    'pet:read',
     async (
       _event,
       id: string,
@@ -460,15 +455,15 @@ export function registerSidekickHandlers(): void {
     ): Promise<ArrayBuffer | null> => {
       // Why: validate IPC inputs before any path logic — renderer is not
       // trusted to send strings of the right shape.
-      let parsed: z.infer<typeof SidekickFileRequestSchema>
+      let parsed: z.infer<typeof PetFileRequestSchema>
       try {
-        parsed = SidekickFileRequestSchema.parse({ id, fileName, kind })
+        parsed = PetFileRequestSchema.parse({ id, fileName, kind })
       } catch {
-        throw new Error('Invalid sidekick:read arguments')
+        throw new Error('Invalid pet:read arguments')
       }
       // Why: missing kind defaults to 'image' for backwards compatibility with
       // pre-bundle persisted state.
-      const filePath = resolveSidekickFile(parsed.id, parsed.fileName, parsed.kind ?? 'image')
+      const filePath = resolvePetFile(parsed.id, parsed.fileName, parsed.kind ?? 'image')
       if (!filePath) {
         return null
       }
@@ -476,30 +471,30 @@ export function registerSidekickHandlers(): void {
         const buf = await readFile(filePath)
         return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
       } catch (error) {
-        console.warn('[sidekick-overlay] sidekick:read failed', error)
+        console.warn('[pet-overlay] pet:read failed', error)
         return null
       }
     }
   )
 
   ipcMain.handle(
-    'sidekick:delete',
+    'pet:delete',
     async (_event, id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> => {
       // Why: validate IPC inputs before any path logic.
-      let parsed: z.infer<typeof SidekickFileRequestSchema>
+      let parsed: z.infer<typeof PetFileRequestSchema>
       try {
-        parsed = SidekickFileRequestSchema.parse({ id, fileName, kind })
+        parsed = PetFileRequestSchema.parse({ id, fileName, kind })
       } catch {
-        throw new Error('Invalid sidekick:delete arguments')
+        throw new Error('Invalid pet:delete arguments')
       }
       if (!isSafeId(parsed.id)) {
         return
       }
       if ((parsed.kind ?? 'image') === 'bundle') {
         // Why: bundle imports own a whole directory. isSafeId already gates id;
-        // we still build the path under the sidekicks root and verify the
+        // we still build the path under the pets root and verify the
         // prefix before recursive removal as defense in depth.
-        const root = normalize(getSidekicksDir())
+        const root = normalize(getPetsDir())
         const target = normalize(join(root, parsed.id))
         if (!target.startsWith(root + sep)) {
           return
@@ -507,18 +502,18 @@ export function registerSidekickHandlers(): void {
         try {
           await rm(target, { recursive: true, force: true })
         } catch (error) {
-          console.warn('[sidekick-overlay] sidekick:delete (bundle) failed', error)
+          console.warn('[pet-overlay] pet:delete (bundle) failed', error)
         }
         return
       }
-      const filePath = resolveSidekickFile(parsed.id, parsed.fileName, 'image')
+      const filePath = resolvePetFile(parsed.id, parsed.fileName, 'image')
       if (!filePath) {
         return
       }
       try {
         await rm(filePath, { force: true })
       } catch (error) {
-        console.warn('[sidekick-overlay] sidekick:delete failed', error)
+        console.warn('[pet-overlay] pet:delete failed', error)
       }
     }
   )

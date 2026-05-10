@@ -19,12 +19,12 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Sidekick',
-    description: 'Floating animated sidekick in the bottom-right corner.',
+    title: 'Pet',
+    description: 'Floating animated pet in the bottom-right corner.',
     keywords: [
       'experimental',
-      'sidekick',
       'pet',
+      'sidekick',
       'mascot',
       'overlay',
       'animated',
@@ -82,7 +82,7 @@ function findEntry(title: string): SettingsSearchEntry {
 
 export const EXPERIMENTAL_SEARCH_ENTRY = {
   mobile: findEntry('Mobile Pairing'),
-  sidekick: findEntry('Sidekick'),
+  pet: findEntry('Pet'),
   orchestration: findEntry('Agent Orchestration'),
   symlinks: findEntry('Symlinks on worktrees')
 } as const

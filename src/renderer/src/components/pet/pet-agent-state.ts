@@ -1,9 +1,9 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 
-export type SidekickAnimationName = 'idle' | 'running' | 'waiting' | 'review' | 'jumping'
+export type PetAnimationName = 'idle' | 'running' | 'waiting' | 'review' | 'jumping'
 
-export type SidekickAnimationInput = {
+export type PetAnimationInput = {
   entries: AgentStatusEntry[]
   retainedCount: number
   dragging: boolean
@@ -11,13 +11,13 @@ export type SidekickAnimationInput = {
   staleAfterMs: number
 }
 
-export function selectSidekickAnimationName({
+export function selectPetAnimationName({
   entries,
   retainedCount,
   dragging,
   now,
   staleAfterMs
-}: SidekickAnimationInput): SidekickAnimationName {
+}: PetAnimationInput): PetAnimationName {
   if (dragging) {
     return 'jumping'
   }

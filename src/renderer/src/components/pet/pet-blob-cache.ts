@@ -1,11 +1,11 @@
-// Why: isolated module so the store slice can call revokeCustomSidekickBlobUrl
-// without importing useSidekickUrl (which itself imports the store). Keeps
+// Why: isolated module so the store slice can call revokeCustomPetBlobUrl
+// without importing usePetUrl (which itself imports the store). Keeps
 // the dependency graph acyclic.
 
 import { detectFramesFromImageData, type DetectedFrame } from './sprite-frame-detection'
 
 // Why: sandbox=true + webSecurity=true block the renderer from reading user
-// files directly. For custom sidekick images we fetch the bytes over IPC and
+// files directly. For custom pet images we fetch the bytes over IPC and
 // turn them into a `blob:` URL that an <img> tag can load. A small in-memory
 // cache means switching back and forth between images in the same session
 // doesn't re-fetch from main.
@@ -37,12 +37,12 @@ export async function loadCustomBlobUrl(
   }
   // Why: defensively clear any stale entry so we don't leak a prior blob URL
   // or ImageBitmap[] when re-populating after a cache miss.
-  revokeCustomSidekickBlobUrl(id)
-  const buffer = await window.api.sidekick.read(id, fileName, kind)
+  revokeCustomPetBlobUrl(id)
+  const buffer = await window.api.pet.read(id, fileName, kind)
   if (!buffer) {
     return null
   }
-  // Why: MIME comes from CustomSidekick.mimeType — required especially for
+  // Why: MIME comes from CustomPet.mimeType — required especially for
   // SVG, which browsers refuse to render from a blob URL with the wrong
   // Content-Type.
   const blob = new Blob([buffer], { type: mimeType })
@@ -53,7 +53,7 @@ export async function loadCustomBlobUrl(
   // so the overlay just sees a normal blob URL.
   if (kind === 'bundle' && mimeType !== 'image/svg+xml') {
     // Why: when the manifest already provides a valid sprite layout, the
-    // renderer reads the `sprite` branch of useSidekickUrl and never touches
+    // renderer reads the `sprite` branch of usePetUrl and never touches
     // detectedSpriteCache — so skipping detection (and the per-frame
     // ImageBitmap allocations) avoids a per-bundle memory leak.
     const processed = await processBundleSheet(url, spriteFps, hasManifestSprite === true)
@@ -133,10 +133,16 @@ function magentaScore(r: number, g: number, b: number): number {
   // (saturated R+B, very low G) so legitimate purples and pinks (e.g.
   // 128,0,128 or 255,128,200) aren't keyed out of imported sprite art.
   const minRB = Math.min(r, b)
-  if (minRB <= 200 || g >= 60) {
+  if (g >= minRB) {
     return 0
   }
   const dom = (minRB - g) / 255 // how much R and B dominate green
+  // Why: require a strong R+B dominance over G so purples/pinks (e.g.
+  // 128,0,128 or 255,128,200) aren't keyed, while still letting antialiased
+  // edge pixels (e.g. 255,128,255 → dom≈0.5) fade with proportional alpha.
+  if (dom <= 0.4) {
+    return 0
+  }
   return Math.max(0, Math.min(1, dom * 1.4))
 }
 
@@ -167,10 +173,10 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   })
 }
 
-// Why: the store invokes this on removeCustomSidekick so the underlying Blob
+// Why: the store invokes this on removeCustomPet so the underlying Blob
 // is released; otherwise the blob: URL keeps it alive for the rest of the
 // session, wasting memory per imported image.
-export function revokeCustomSidekickBlobUrl(id: string): void {
+export function revokeCustomPetBlobUrl(id: string): void {
   const url = blobUrlCache.get(id)
   if (url) {
     URL.revokeObjectURL(url)

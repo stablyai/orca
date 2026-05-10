@@ -46,6 +46,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt &&
+      worktree.baseRef === candidate.baseRef &&
       worktree.sparseBaseRef === candidate.sparseBaseRef &&
       arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories)
     )
@@ -60,6 +61,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   worktreesByRepo: {},
   activeWorktreeId: null,
   deleteStateByWorktreeId: {},
+  baseStatusByWorktreeId: {},
+  remoteBranchConflictByWorktreeId: {},
   sortEpoch: 0,
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
@@ -195,13 +198,32 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
+  updateWorktreeBaseStatus: (event) => {
+    set((s) => ({
+      baseStatusByWorktreeId: {
+        ...s.baseStatusByWorktreeId,
+        [event.worktreeId]: event
+      }
+    }))
+  },
+
+  updateWorktreeRemoteBranchConflict: (event) => {
+    set((s) => ({
+      remoteBranchConflictByWorktreeId: {
+        ...s.remoteBranchConflictByWorktreeId,
+        [event.worktreeId]: event
+      }
+    }))
+  },
+
   createWorktree: async (
     repoId,
     name,
     baseBranch,
     setupDecision = 'inherit',
     sparseCheckout,
-    telemetrySource
+    telemetrySource,
+    displayName
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -221,6 +243,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             baseBranch,
             setupDecision,
             sparseCheckout,
+            ...(displayName ? { displayName } : {}),
             ...(telemetrySource ? { telemetrySource } : {})
           })
           // Why: a file watcher (worktrees.onChanged) can fire between the
@@ -236,6 +259,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 ...s.worktreesByRepo,
                 [repoId]: alreadyPresent ? current : [...current, result.worktree]
               },
+              ...(result.initialBaseStatus
+                ? {
+                    baseStatusByWorktreeId: {
+                      ...s.baseStatusByWorktreeId,
+                      [result.worktree.id]:
+                        s.baseStatusByWorktreeId[result.worktree.id] ?? result.initialBaseStatus
+                    }
+                  }
+                : {}),
               sortEpoch: s.sortEpoch + 1
             }
           })
@@ -410,6 +442,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
+          baseStatusByWorktreeId: (() => {
+            const nextStatus = { ...s.baseStatusByWorktreeId }
+            delete nextStatus[worktreeId]
+            return nextStatus
+          })(),
+          remoteBranchConflictByWorktreeId: (() => {
+            const nextConflict = { ...s.remoteBranchConflictByWorktreeId }
+            delete nextConflict[worktreeId]
+            return nextConflict
+          })(),
           fileSearchStateByWorktree: (() => {
             const nextSearch = { ...s.fileSearchStateByWorktree }
             // Why: file search UI state is worktree-scoped. Removing the worktree
@@ -985,6 +1027,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
         // Delete state
         deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
+        baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
+        remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
         // File search
         fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
         // Browser state

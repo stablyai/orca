@@ -17,6 +17,7 @@ import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
+import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
 import {
@@ -914,6 +915,19 @@ export function registerPtyHandlers(
       try {
         result = await provider.spawn(spawnOptions)
       } catch (err) {
+        const rawMessage = err instanceof Error ? err.message : String(err)
+        const hintedMessage = addNodePtyRecoveryHint(rawMessage)
+        let spawnError: Error
+        if (hintedMessage === rawMessage && err instanceof Error) {
+          spawnError = err
+        } else if (err instanceof Error) {
+          // Why: rewrite the message in place so the original stack trace,
+          // name, and any custom fields survive into telemetry and logs.
+          err.message = hintedMessage
+          spawnError = err
+        } else {
+          spawnError = new Error(hintedMessage)
+        }
         if (effectiveSessionId !== undefined) {
           ptySizes.delete(effectiveSessionId)
         }
@@ -940,14 +954,14 @@ export function registerPtyHandlers(
             ? ('claude-code' as const)
             : null
         if (errorAgentKind) {
-          const classified = classifyError(err)
+          const classified = classifyError(spawnError)
           track('agent_error', {
             agent_kind: errorAgentKind,
             error_class: classified.error_class,
             ...getCohortAtEmit()
           })
         }
-        throw err
+        throw spawnError
       }
       ptyOwnership.set(result.id, args.connectionId ?? null)
       if (preAllocatedHandle) {

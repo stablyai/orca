@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import { selectSidekickAnimationName } from './sidekick-agent-state'
+import { selectPetAnimationName } from './pet-agent-state'
 
 const NOW = 1_000
 const STALE_AFTER_MS = 500
@@ -22,9 +22,9 @@ function entry(
 
 function select(
   entries: AgentStatusEntry[],
-  options: Partial<Parameters<typeof selectSidekickAnimationName>[0]> = {}
+  options: Partial<Parameters<typeof selectPetAnimationName>[0]> = {}
 ) {
-  return selectSidekickAnimationName({
+  return selectPetAnimationName({
     entries,
     retainedCount: 0,
     dragging: false,
@@ -34,7 +34,7 @@ function select(
   })
 }
 
-describe('selectSidekickAnimationName', () => {
+describe('selectPetAnimationName', () => {
   it('uses idle when no fresh agent state exists', () => {
     expect(select([])).toBe('idle')
     expect(select([entry('working', { updatedAt: NOW - STALE_AFTER_MS - 1 })])).toBe('idle')
@@ -63,7 +63,7 @@ describe('selectSidekickAnimationName', () => {
     expect(select([entry('working'), entry('done', { interrupted: true })])).toBe('running')
   })
 
-  it('uses jumping while the sidekick is being dragged', () => {
+  it('uses jumping while the pet is being dragged', () => {
     expect(select([entry('blocked')], { dragging: true })).toBe('jumping')
   })
 })

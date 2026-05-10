@@ -145,7 +145,11 @@ describe('useIpcEvents updater integration', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
-        worktrees: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
         ui: {
           onOpenSettings: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -345,7 +349,11 @@ describe('useIpcEvents updater integration', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
-        worktrees: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
         ui: {
           onOpenSettings: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -539,7 +547,11 @@ describe('useIpcEvents updater integration', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
-        worktrees: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
         ui: {
           onOpenSettings: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -745,7 +757,11 @@ describe('useIpcEvents browser tab close routing', () => {
       dispatchEvent: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
-        worktrees: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
         ui: {
           onOpenSettings: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -940,7 +956,11 @@ describe('useIpcEvents browser tab close routing', () => {
       dispatchEvent: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
-        worktrees: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
         ui: {
           onOpenSettings: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -1130,7 +1150,11 @@ describe('useIpcEvents browser tab close routing', () => {
       dispatchEvent: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
-        worktrees: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
         ui: {
           onOpenSettings: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -1329,7 +1353,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
-        worktrees: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
         ui: {
           onOpenSettings: () => () => {},
           onToggleLeftSidebar: () => () => {},

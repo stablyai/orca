@@ -14,7 +14,7 @@ const {
   registerSettingsHandlersMock,
   registerTelemetryHandlersMock,
   registerShellHandlersMock,
-  registerSidekickHandlersMock,
+  registerPetHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   registerFilesystemHandlersMock,
@@ -32,7 +32,8 @@ const {
   registerFilesystemWatcherHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
-  registerExportHandlersMock
+  registerExportHandlersMock,
+  registerOnboardingHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -47,7 +48,7 @@ const {
   registerSettingsHandlersMock: vi.fn(),
   registerTelemetryHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
-  registerSidekickHandlersMock: vi.fn(),
+  registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
@@ -65,7 +66,12 @@ const {
   registerFilesystemWatcherHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
-  registerExportHandlersMock: vi.fn()
+  registerExportHandlersMock: vi.fn(),
+  registerOnboardingHandlersMock: vi.fn()
+}))
+
+vi.mock('./onboarding', () => ({
+  registerOnboardingHandlers: registerOnboardingHandlersMock
 }))
 
 vi.mock('./cli', () => ({
@@ -124,8 +130,8 @@ vi.mock('./shell', () => ({
   registerShellHandlers: registerShellHandlersMock
 }))
 
-vi.mock('./sidekick', () => ({
-  registerSidekickHandlers: registerSidekickHandlersMock
+vi.mock('./pet', () => ({
+  registerPetHandlers: registerPetHandlersMock
 }))
 
 vi.mock('./session', () => ({
@@ -204,7 +210,7 @@ describe('registerCoreHandlers', () => {
     registerSettingsHandlersMock.mockReset()
     registerTelemetryHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
-    registerSidekickHandlersMock.mockReset()
+    registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
@@ -250,7 +256,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalled()
-    expect(registerSidekickHandlersMock).toHaveBeenCalled()
+    expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)

@@ -4,7 +4,7 @@ import type { AppState } from '../types'
 import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
-  CustomSidekick,
+  CustomPet,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
@@ -14,11 +14,7 @@ import type {
   UpdateStatus,
   WorktreeCardProperty
 } from '../../../../shared/types'
-import {
-  SIDEKICK_SIZE_DEFAULT,
-  SIDEKICK_SIZE_MAX,
-  SIDEKICK_SIZE_MIN
-} from '../../../../shared/types'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   DEFAULT_STATUS_BAR_ITEMS,
@@ -26,15 +22,15 @@ import {
 } from '../../../../shared/constants'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
-import { DEFAULT_SIDEKICK_ID, isBundledSidekickId } from '../../components/sidekick/sidekick-models'
-import { revokeCustomSidekickBlobUrl } from '../../components/sidekick/sidekick-blob-cache'
+import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
+import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 
-function clampSidekickSize(size: number): number {
+function clampPetSize(size: number): number {
   if (!Number.isFinite(size)) {
-    return SIDEKICK_SIZE_DEFAULT
+    return PET_SIZE_DEFAULT
   }
-  return Math.max(SIDEKICK_SIZE_MIN, Math.min(SIDEKICK_SIZE_MAX, Math.round(size)))
+  return Math.max(PET_SIZE_MIN, Math.min(PET_SIZE_MAX, Math.round(size)))
 }
 
 // Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
@@ -268,28 +264,34 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
-  /** Whether the experimental sidekick overlay is currently visible. Persisted
-   *  so "Hide sidekick" from the status-bar menu survives reload. Independent
-   *  of the experimentalSidekick settings flag — the feature flag gates
+  /** Whether the experimental pet overlay is currently visible. Persisted
+   *  so "Hide pet" from the status-bar menu survives reload. Independent
+   *  of the experimentalPet settings flag — the feature flag gates
    *  whether the overlay can ever render; this controls whether it does now. */
-  sidekickVisible: boolean
-  setSidekickVisible: (v: boolean) => void
-  /** Which sidekick is active — either a bundled id or a custom UUID.
-   *  Persisted alongside sidekickVisible via the PersistedUIState pipeline. */
-  sidekickId: string
-  setSidekickId: (id: string) => void
-  /** User-uploaded sidekick images. Metadata only — bytes live in main's userData. */
-  customSidekicks: CustomSidekick[]
-  addCustomSidekick: (model: CustomSidekick) => void
-  removeCustomSidekick: (id: string) => void
-  /** Sidekick overlay size in CSS pixels (square). User-adjustable from the
+  petVisible: boolean
+  setPetVisible: (v: boolean) => void
+  /** Which pet is active — either a bundled id or a custom UUID.
+   *  Persisted alongside petVisible via the PersistedUIState pipeline. */
+  petId: string
+  setPetId: (id: string) => void
+  /** User-uploaded pet images. Metadata only — bytes live in main's userData. */
+  customPets: CustomPet[]
+  addCustomPet: (model: CustomPet) => void
+  removeCustomPet: (id: string) => void
+  /** Pet overlay size in CSS pixels (square). User-adjustable from the
    *  status-bar menu so a too-big imported sprite isn't a stuck-on-screen
    *  problem. */
-  sidekickSize: number
-  setSidekickSize: (size: number) => void
+  petSize: number
+  setPetSize: (size: number) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
+  // Why: lets the SourceControl sidebar request that the diff editor scroll
+  // to a specific note. Cleared by the diff decorator after it reveals the
+  // line, so the same id can be requested again later without the surface
+  // seeing a stale value.
+  scrollToDiffCommentId: string | null
+  setScrollToDiffCommentId: (id: string | null) => void
   persistedUIReady: boolean
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
@@ -592,65 +594,65 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ statusBarVisible: v })
   },
 
-  // Why: default true so a user who enables experimentalSidekick sees the
-  // sidekick immediately. Hide sidekick from the status-bar menu flips this
+  // Why: default true so a user who enables experimentalPet sees the
+  // pet immediately. Hide pet from the status-bar menu flips this
   // to false; the value is persisted via the standard PersistedUIState pipeline.
-  sidekickVisible: true,
-  setSidekickVisible: (v) => {
-    window.api.ui.set({ sidekickVisible: v }).catch(console.error)
-    set({ sidekickVisible: v })
+  petVisible: true,
+  setPetVisible: (v) => {
+    window.api.ui.set({ petVisible: v }).catch(console.error)
+    set({ petVisible: v })
   },
 
-  sidekickId: DEFAULT_SIDEKICK_ID,
-  setSidekickId: (id) => {
-    window.api.ui.set({ sidekickId: id }).catch(console.error)
-    set({ sidekickId: id })
+  petId: DEFAULT_PET_ID,
+  setPetId: (id) => {
+    window.api.ui.set({ petId: id }).catch(console.error)
+    set({ petId: id })
   },
 
-  sidekickSize: SIDEKICK_SIZE_DEFAULT,
-  setSidekickSize: (size) => {
-    const clamped = clampSidekickSize(size)
-    window.api.ui.set({ sidekickSize: clamped }).catch(console.error)
-    set({ sidekickSize: clamped })
+  petSize: PET_SIZE_DEFAULT,
+  setPetSize: (size) => {
+    const clamped = clampPetSize(size)
+    window.api.ui.set({ petSize: clamped }).catch(console.error)
+    set({ petSize: clamped })
   },
 
-  customSidekicks: [],
-  addCustomSidekick: (model) =>
+  customPets: [],
+  addCustomPet: (model) =>
     set((s) => {
-      const next = [...s.customSidekicks.filter((m) => m.id !== model.id), model]
-      window.api.ui.set({ customSidekicks: next }).catch(console.error)
-      return { customSidekicks: next }
+      const next = [...s.customPets.filter((m) => m.id !== model.id), model]
+      window.api.ui.set({ customPets: next }).catch(console.error)
+      return { customPets: next }
     }),
-  removeCustomSidekick: (id) =>
+  removeCustomPet: (id) =>
     set((s) => {
-      const target = s.customSidekicks.find((m) => m.id === id)
+      const target = s.customPets.find((m) => m.id === id)
       if (!target) {
         return s
       }
-      const next = s.customSidekicks.filter((m) => m.id !== id)
-      // Why: if the user removes the currently-active custom sidekick, fall
+      const next = s.customPets.filter((m) => m.id !== id)
+      // Why: if the user removes the currently-active custom pet, fall
       // back to the bundled default so the overlay doesn't render nothing.
-      const fallback = s.sidekickId === id ? DEFAULT_SIDEKICK_ID : s.sidekickId
-      // Why: send a single combined IPC update so customSidekicks and
-      // sidekickId persist atomically when both change.
-      const ipcPayload: { customSidekicks: CustomSidekick[]; sidekickId?: string } = {
-        customSidekicks: next
+      const fallback = s.petId === id ? DEFAULT_PET_ID : s.petId
+      // Why: send a single combined IPC update so customPets and
+      // petId persist atomically when both change.
+      const ipcPayload: { customPets: CustomPet[]; petId?: string } = {
+        customPets: next
       }
-      if (fallback !== s.sidekickId) {
-        ipcPayload.sidekickId = fallback
+      if (fallback !== s.petId) {
+        ipcPayload.petId = fallback
       }
       window.api.ui.set(ipcPayload).catch(console.error)
       // Why: revoke the cached blob: URL so the underlying Blob is released;
       // otherwise it stays in memory for the rest of the session.
-      revokeCustomSidekickBlobUrl(id)
+      revokeCustomPetBlobUrl(id)
       // Why: best-effort — the bytes are owned by main. If the disk delete
       // fails, the orphaned image stays in userData; each import uses a fresh
       // UUID so the file won't be hit again, and the renderer's metadata
       // index no longer references it.
-      window.api.sidekick.delete(id, target.fileName, target.kind).catch(console.error)
-      const partial: Partial<UISlice> = { customSidekicks: next }
-      if (fallback !== s.sidekickId) {
-        partial.sidekickId = fallback
+      window.api.pet.delete(id, target.fileName, target.kind).catch(console.error)
+      const partial: Partial<UISlice> = { customPets: next }
+      if (fallback !== s.petId) {
+        partial.petId = fallback
       }
       return partial
     }),
@@ -658,6 +660,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   pendingRevealWorktreeId: null,
   revealWorktreeInSidebar: (worktreeId) => set({ pendingRevealWorktreeId: worktreeId }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktreeId: null }),
+  scrollToDiffCommentId: null,
+  setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
   uiZoomLevel: 0,
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
@@ -667,6 +671,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   hydratePersistedUI: (ui) =>
     set((s) => {
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+      // Why: persisted UI from pre-rename builds used sidekick* keys. Read
+      // those only as fallbacks so new pet* writes win immediately after upgrade.
+      const customPets = Array.isArray(ui.customPets)
+        ? ui.customPets
+        : Array.isArray(ui.customSidekicks)
+          ? ui.customSidekicks
+          : []
+      const petId = ui.petId ?? ui.sidekickId
       // Migration history:
       // v1: sort was called 'smart' internally
       // v2: renamed 'smart' → 'recent' (same weighted-score behavior)
@@ -706,28 +718,27 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
         statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
-        // Why: absent → true so existing users see the sidekick the first time
-        // they enable the experimental flag. Only an explicit Hide sidekick
+        // Why: absent → true so existing users see the pet the first time
+        // they enable the experimental flag. Only an explicit Hide pet
         // dismissal persists a `false` value.
-        sidekickVisible: ui.sidekickVisible ?? true,
-        sidekickSize: clampSidekickSize(ui.sidekickSize ?? SIDEKICK_SIZE_DEFAULT),
-        customSidekicks: Array.isArray(ui.customSidekicks) ? ui.customSidekicks : [],
-        // Why: accept the persisted id if it matches a bundled sidekick or a
+        petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
+        petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),
+        customPets,
+        // Why: accept the persisted id if it matches a bundled pet or a
         // known custom one; otherwise fall back so the overlay never renders
-        // nothing (e.g. custom sidekick was removed by another session).
-        sidekickId: ((): string => {
-          const id = ui.sidekickId
+        // nothing (e.g. custom pet was removed by another session).
+        petId: ((): string => {
+          const id = petId
           if (typeof id !== 'string') {
-            return DEFAULT_SIDEKICK_ID
+            return DEFAULT_PET_ID
           }
-          if (isBundledSidekickId(id)) {
+          if (isBundledPetId(id)) {
             return id
           }
-          const custom = Array.isArray(ui.customSidekicks) ? ui.customSidekicks : []
-          if (custom.some((m) => m.id === id)) {
+          if (customPets.some((m) => m.id === id)) {
             return id
           }
-          return DEFAULT_SIDEKICK_ID
+          return DEFAULT_PET_ID
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,

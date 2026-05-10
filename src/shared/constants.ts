@@ -1,6 +1,8 @@
 import type {
   GlobalSettings,
   NotificationSettings,
+  OnboardingChecklistState,
+  OnboardingState,
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
@@ -12,6 +14,10 @@ import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
+
+// Why: the onboarding wizard's last step index. Centralized so backfill,
+// clamps, and UI step references all agree on the same upper bound.
+export const ONBOARDING_FINAL_STEP = 4
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -111,6 +117,28 @@ export function getDefaultNotificationSettings(): NotificationSettings {
   }
 }
 
+export function getDefaultOnboardingState(): OnboardingState {
+  return {
+    closedAt: null,
+    outcome: null,
+    lastCompletedStep: -1,
+    checklist: {
+      addedRepo: false,
+      choseAgent: false,
+      ranFirstAgent: false,
+      ranSecondAgentOnSameTask: false,
+      triedCmdJ: false,
+      shapedSidebar: false,
+      reviewedDiff: false,
+      openedPr: false,
+      addedFolder: false,
+      openedFile: false,
+      ranAgentOnFile: false,
+      dismissed: false
+    } satisfies OnboardingChecklistState
+  }
+}
+
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: `${homedir}/orca/workspaces`,
@@ -168,7 +196,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: true,
     rightSidebarOpenByDefault: true,
-    showTitlebarAgentActivity: true,
+    showTitlebarAppName: true,
     showTasksButton: true,
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
@@ -204,7 +232,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     mobileAutoRestoreFitMs: null,
     // Why: off by default — opt-in cosmetic joke feature. Leaving the default
     // false keeps the overlay unmounted for users who never enable it.
-    experimentalSidekick: false,
+    experimentalPet: false,
     experimentalWorktreeSymlinks: false,
     // Why: hydrate an empty default so the renderer's optional-chained reads
     // (`settings?.githubProjects?.activeProject`) land on a stable shape
@@ -240,7 +268,8 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     ui: getDefaultUIState(),
     githubCache: { pr: {}, issue: {} },
     workspaceSession: getDefaultWorkspaceSession(),
-    sshTargets: []
+    sshTargets: [],
+    onboarding: getDefaultOnboardingState()
   }
 }
 

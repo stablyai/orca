@@ -525,6 +525,7 @@ export function registerWorktreeHandlers(
           throw new Error(`No git provider for connection "${repo.connectionId}"`)
         }
         await provider.removeWorktree(worktreePath, args.force)
+        runtime.clearOptimisticReconcileToken(args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
         deleteWorktreeHistoryDir(args.worktreeId)
         notifyWorktreesChanged(mainWindow, repoId)
@@ -561,6 +562,7 @@ export function registerWorktreeHandlers(
           // list` continues to show the stale entry and the branch it had checked out
           // remains locked — other worktrees cannot check it out.
           await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
+          runtime.clearOptimisticReconcileToken(args.worktreeId)
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
           invalidateAuthorizedRootsCache()
@@ -569,6 +571,7 @@ export function registerWorktreeHandlers(
         }
         throw new Error(formatWorktreeRemovalError(error, worktreePath, args.force ?? false))
       }
+      runtime.clearOptimisticReconcileToken(args.worktreeId)
       store.removeWorktreeMeta(args.worktreeId)
       deleteWorktreeHistoryDir(args.worktreeId)
       invalidateAuthorizedRootsCache()

@@ -5,7 +5,7 @@ import {
   CODEX_PET_SPRITESHEET_PATH,
   applyCodexPetDefaults,
   readWebpDimensionsFromBuffer
-} from './sidekick-pet-bundle'
+} from './pet-bundle'
 
 function u32(value: number): Buffer {
   const buffer = Buffer.alloc(4)

@@ -15,6 +15,7 @@ const START_TIME_TOLERANCE_MS = 1_500
 type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null
+  entryPath: string | null
 }
 
 function canConnectSocket(socketPath: string): Promise<boolean> {
@@ -139,14 +140,19 @@ function commandLineMatchesDaemon(
 export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   const trimmed = contents.trim()
   try {
-    const parsed = JSON.parse(trimmed) as { pid?: unknown; startedAtMs?: unknown }
+    const parsed = JSON.parse(trimmed) as {
+      pid?: unknown
+      startedAtMs?: unknown
+      entryPath?: unknown
+    }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
         pid: parsed.pid,
         startedAtMs:
           typeof parsed.startedAtMs === 'number' && Number.isFinite(parsed.startedAtMs)
             ? parsed.startedAtMs
-            : null
+            : null,
+        entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : null
       }
     }
   } catch {
@@ -154,7 +160,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   }
 
   const pid = Number(trimmed)
-  return Number.isFinite(pid) ? { pid, startedAtMs: null } : null
+  return Number.isFinite(pid) ? { pid, startedAtMs: null, entryPath: null } : null
 }
 
 function getLinuxProcessStartedAtMs(pid: number): number | null {
@@ -276,6 +282,78 @@ function isDaemonProcess(
       return false
     }
   }
+}
+
+function getDaemonCommandLine(pid: number): string | null {
+  if (process.platform === 'win32') {
+    try {
+      return execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CommandLine`
+        ],
+        {
+          encoding: 'utf8',
+          timeout: 3_000
+        }
+      )
+    } catch {
+      return null
+    }
+  }
+
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8')
+  } catch {
+    try {
+      return execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
+        encoding: 'utf8',
+        timeout: 2_000
+      })
+    } catch {
+      return null
+    }
+  }
+}
+
+export type DaemonLaunchIdentity = 'match' | 'mismatch' | 'unknown'
+
+export function getDaemonLaunchIdentity(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  expectedEntryPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): DaemonLaunchIdentity {
+  let parsedPid: ParsedDaemonPid | null
+  try {
+    parsedPid = parseDaemonPidFile(
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    )
+  } catch {
+    return 'unknown'
+  }
+
+  if (!parsedPid || !isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs)) {
+    return 'unknown'
+  }
+
+  if (parsedPid.entryPath) {
+    return parsedPid.entryPath === expectedEntryPath ? 'match' : 'mismatch'
+  }
+
+  // Why: older pid files did not persist entryPath. The command line still
+  // carries daemon-entry.js, so use it to stop dev worktrees from reusing a
+  // daemon forked from a deleted sibling checkout. If command-line probing is
+  // unavailable, fail open so we don't kill live sessions unnecessarily.
+  const commandLine = getDaemonCommandLine(parsedPid.pid)
+  if (!commandLine) {
+    return 'unknown'
+  }
+  return commandLine.includes(expectedEntryPath) ? 'match' : 'mismatch'
 }
 
 export async function killStaleDaemon(

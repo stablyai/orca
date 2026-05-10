@@ -74,17 +74,276 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..c17decbb7bc06f10d7b5d26317bd68fdc8c4e339 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca850564e6368d9 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
-@@ -778,8 +778,8 @@ done:
-   posix_spawn_file_actions_destroy(&acts);
-   posix_spawnattr_destroy(&attrs);
+@@ -23,7 +23,9 @@
+ #include <errno.h>
+ #include <string.h>
+ #include <stdlib.h>
++#include <stdio.h>
+ #include <unistd.h>
++#include <string>
+ #include <thread>
+
+ #include <sys/types.h>
+@@ -237,13 +239,23 @@ pty_getproc(int, char *);
+ #endif
+
+ #if defined(__APPLE__) || defined(__OpenBSD__)
++struct pty_spawn_error {
++  const char* step;
++  int errnum;
++  std::string detail_name;
++  std::string detail_value;
++};
++
++static std::string
++pty_format_spawn_error(const pty_spawn_error&);
++
+ static void
+ pty_posix_spawn(char** argv, char** env,
+                 const struct termios *termp,
+                 const struct winsize *winp,
+                 int* master,
+                 pid_t* pid,
+-                int* err);
++                pty_spawn_error* err);
+ #endif
+
+ struct DelBuf {
+@@ -367,10 +379,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+     argv[i + 3] = strdup(arg.c_str());
+   }
+
+-  int err = -1;
+-  pty_posix_spawn(argv, env, term, &winp, &master, &pid, &err);
+-  if (err != 0) {
+-    throw Napi::Error::New(napiEnv, "posix_spawnp failed.");
++  pty_spawn_error spawn_error = { NULL, 0, "", "" };
++  pty_posix_spawn(argv, env, term, &winp, &master, &pid, &spawn_error);
++  if (spawn_error.errnum != 0) {
++    std::string spawn_message = pty_format_spawn_error(spawn_error);
++    throw Napi::Error::New(napiEnv, spawn_message);
+   }
+   if (pty_nonblock(master) == -1) {
+     throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+@@ -684,15 +697,73 @@ pty_getproc(int fd, char *tty) {
+ #endif
+
+ #if defined(__APPLE__)
++static const char*
++pty_errno_name(int errnum) {
++  switch (errnum) {
++    case E2BIG: return "E2BIG";
++    case EACCES: return "EACCES";
++    case EAGAIN: return "EAGAIN";
++    case EMFILE: return "EMFILE";
++    case ENFILE: return "ENFILE";
++    case ENOENT: return "ENOENT";
++    case ENOMEM: return "ENOMEM";
++    default: return "errno";
++  }
++}
++
++static void
++pty_set_spawn_error(pty_spawn_error* err,
++                    const char* step,
++                    int errnum,
++                    const char* detail_name = NULL,
++                    const char* detail_value = NULL) {
++  err->step = step;
++  err->errnum = errnum;
++  err->detail_name = detail_name ? detail_name : "";
++  err->detail_value = detail_value ? detail_value : "";
++}
++
++static std::string
++pty_format_spawn_error(const pty_spawn_error& err) {
++  char errno_buf[64];
++  snprintf(errno_buf, sizeof(errno_buf), "%d", err.errnum);
++
++  std::string message = "node-pty: ";
++  message += err.step ? err.step : "unknown";
++  message += " failed: ";
++  message += pty_errno_name(err.errnum);
++  message += " (errno ";
++  message += errno_buf;
++  message += ", ";
++  message += strerror(err.errnum);
++  message += ")";
++
++  if (!err.detail_name.empty()) {
++    message += " - ";
++    message += err.detail_name;
++    message += "='";
++    message += err.detail_value;
++    message += "'";
++  }
++
++  return message;
++}
++
+ static void
+ pty_posix_spawn(char** argv, char** env,
+                 const struct termios *termp,
+                 const struct winsize *winp,
+                 int* master,
+                 pid_t* pid,
+-                int* err) {
+-  int low_fds[3];
++                pty_spawn_error* err) {
++  int low_fds[3] = {-1, -1, -1};
+   size_t count = 0;
++  int res = -1;
++  int slave = -1;
++  posix_spawn_file_actions_t acts;
++  bool acts_initialized = false;
++  posix_spawnattr_t attrs;
++  bool attrs_initialized = false;
+
+   for (; count < 3; count++) {
+     low_fds[count] = posix_openpt(O_RDWR);
+@@ -706,80 +777,118 @@ pty_posix_spawn(char** argv, char** env,
+               POSIX_SPAWN_SETSID;
+   *master = posix_openpt(O_RDWR);
+   if (*master == -1) {
+-    return;
++    pty_set_spawn_error(err, "posix_openpt", errno);
++    goto done;
++  }
++
++  res = grantpt(*master);
++  if (res == -1) {
++    pty_set_spawn_error(err, "grantpt", errno);
++    goto done;
+   }
+
+-  int res = grantpt(*master) || unlockpt(*master);
++  res = unlockpt(*master);
+   if (res == -1) {
+-    return;
++    pty_set_spawn_error(err, "unlockpt", errno);
++    goto done;
+   }
+
+   // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
+-  int slave;
+   char slave_pty_name[128];
+   res = ioctl(*master, TIOCPTYGNAME, slave_pty_name);
+   if (res == -1) {
+-    return;
++    pty_set_spawn_error(err, "ioctl_TIOCPTYGNAME", errno);
++    goto done;
+   }
+
+   slave = open(slave_pty_name, O_RDWR | O_NOCTTY);
+   if (slave == -1) {
+-    return;
++    pty_set_spawn_error(err, "open_slave", errno, "slave", slave_pty_name);
++    goto done;
+   }
+
+   if (termp) {
+     res = tcsetattr(slave, TCSANOW, termp);
+     if (res == -1) {
+-      return;
++      pty_set_spawn_error(err, "tcsetattr", errno, "slave", slave_pty_name);
++      goto done;
+     };
+   }
+
+   if (winp) {
+     res = ioctl(slave, TIOCSWINSZ, winp);
+     if (res == -1) {
+-      return;
++      pty_set_spawn_error(err, "ioctl_TIOCSWINSZ", errno, "slave", slave_pty_name);
++      goto done;
+     }
+   }
+
+-  posix_spawn_file_actions_t acts;
+-  posix_spawn_file_actions_init(&acts);
++  res = posix_spawn_file_actions_init(&acts);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawn_file_actions_init", res);
++    goto done;
++  }
++  acts_initialized = true;
+   posix_spawn_file_actions_adddup2(&acts, slave, STDIN_FILENO);
+   posix_spawn_file_actions_adddup2(&acts, slave, STDOUT_FILENO);
+   posix_spawn_file_actions_adddup2(&acts, slave, STDERR_FILENO);
+   posix_spawn_file_actions_addclose(&acts, slave);
+   posix_spawn_file_actions_addclose(&acts, *master);
+
+-  posix_spawnattr_t attrs;
+-  posix_spawnattr_init(&attrs);
+-  *err = posix_spawnattr_setflags(&attrs, flags);
+-  if (*err != 0) {
++  res = posix_spawnattr_init(&attrs);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawnattr_init", res);
++    goto done;
++  }
++  attrs_initialized = true;
++  res = posix_spawnattr_setflags(&attrs, flags);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawnattr_setflags", res);
+     goto done;
+   }
+
+   sigset_t signal_set;
+   /* Reset all signal the child to their default behavior */
+   sigfillset(&signal_set);
+-  *err = posix_spawnattr_setsigdefault(&attrs, &signal_set);
+-  if (*err != 0) {
++  res = posix_spawnattr_setsigdefault(&attrs, &signal_set);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawnattr_setsigdefault", res);
+     goto done;
+   }
+
+   /* Reset the signal mask for all signals */
+   sigemptyset(&signal_set);
+-  *err = posix_spawnattr_setsigmask(&attrs, &signal_set);
+-  if (*err != 0) {
++  res = posix_spawnattr_setsigmask(&attrs, &signal_set);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawnattr_setsigmask", res);
+     goto done;
+   }
+
+   do
+-    *err = posix_spawn(pid, argv[0], &acts, &attrs, argv, env);
+-  while (*err == EINTR);
++    res = posix_spawn(pid, argv[0], &acts, &attrs, argv, env);
++  while (res == EINTR);
++  if (res != 0) {
++    pty_set_spawn_error(err, "posix_spawn", res, "helper", argv[0]);
++  }
+ done:
+-  posix_spawn_file_actions_destroy(&acts);
+-  posix_spawnattr_destroy(&attrs);
++  if (acts_initialized) {
++    posix_spawn_file_actions_destroy(&acts);
++  }
++  if (attrs_initialized) {
++    posix_spawnattr_destroy(&attrs);
++  }
++  if (slave != -1) {
++    close(slave);
++  }
++  if (err->errnum != 0 && *master != -1) {
++    close(*master);
++    *master = -1;
++  }
 
 -  for (; count > 0; count--) {
 -    close(low_fds[count]);
 +  for (size_t i = 0; i <= count && i < 3; i++) {
-+    close(low_fds[i]);
++    if (low_fds[i] != -1) {
++      close(low_fds[i]);
++    }
    }
  }
  #endif

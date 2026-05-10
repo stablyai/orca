@@ -6,6 +6,7 @@ import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
+  updateDiffComment: (worktreeId: string, commentId: string, body: string) => Promise<boolean>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
 }
 
@@ -202,6 +203,61 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       // write is not possible here even though we queued in order.
       rollback(set, input.worktreeId, result.previous, result.next)
       return null
+    }
+  },
+
+  updateDiffComment: async (worktreeId, commentId, body) => {
+    // Why: trim trailing whitespace but reject an entirely-empty edit so we
+    // don't end up with a saved note that renders as a blank card. Callers
+    // should treat `false` as "edit not committed" and keep the editor open
+    // so the user can either type more or cancel explicitly.
+    const trimmed = body.trim()
+    if (!trimmed) {
+      return false
+    }
+
+    // Why: look up the current state OUTSIDE mutateComments so we can
+    // distinguish "comment missing" (return false — likely an edit-while-
+    // deleted race; the card should keep its draft and not silently close)
+    // from "body unchanged" (return true — benign no-op; the card can close
+    // the editor without surfacing an error).
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const repoList = get().worktreesByRepo[repoId]
+    const target = repoList?.find((w) => w.id === worktreeId)
+    const existing = target?.diffComments ?? []
+    const existingIdx = existing.findIndex((c) => c.id === commentId)
+    if (existingIdx === -1) {
+      return false
+    }
+    if (existing[existingIdx].body === trimmed) {
+      return true
+    }
+
+    const result = mutateComments(set, worktreeId, (current) => {
+      const idx = current.findIndex((c) => c.id === commentId)
+      if (idx === -1) {
+        return null
+      }
+      if (current[idx].body === trimmed) {
+        return null
+      }
+      const next = current.slice()
+      next[idx] = { ...current[idx], body: trimmed }
+      return next
+    })
+    if (!result) {
+      // Why: between the pre-check and the set updater, the comment vanished
+      // or another mutation already wrote the same body. Treat as success so
+      // the caller closes its editor.
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
     }
   },
 

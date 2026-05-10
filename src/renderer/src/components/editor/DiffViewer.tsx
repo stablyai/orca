@@ -60,6 +60,9 @@ export default function DiffViewer({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const updateDiffComment = useAppStore((s) => s.updateDiffComment)
+  const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
+  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   // Why: subscribe to the raw comments array on the worktree so selector
   // identity only changes when diffComments actually changes on this worktree.
   // Filtering by relativePath happens in a memo below.
@@ -89,8 +92,19 @@ export default function DiffViewer({
 
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
+  // Why: only forward the pending scroll id when this viewer owns the matching
+  // comment (worktree+path). Otherwise unrelated viewers would also try to
+  // scroll and ack the request first, racing the intended viewer.
+  const pendingScrollForThisViewer = useMemo(() => {
+    if (!worktreeId || !scrollToDiffCommentId) {
+      return null
+    }
+    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
+  }, [scrollToDiffCommentId, diffComments, worktreeId])
+
   // Why: gate the decorator on having a comment target. Local diffs persist
   // notes to worktree metadata; GitHub PR diffs post line comments remotely.
+  // updateDiffComment is only wired for local diffs (worktreeId present).
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     filePath: relativePath,
@@ -103,7 +117,10 @@ export default function DiffViewer({
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
       }
-    }
+    },
+    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    pendingScrollCommentId: pendingScrollForThisViewer,
+    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
 
   useEffect(() => {
@@ -211,9 +228,14 @@ export default function DiffViewer({
         diffEditor.focus()
       }
 
+      // Why: clear modifiedEditor on dispose so decorator effects (scroll-to-note,
+      // popover position) don't invoke methods on a disposed Monaco editor.
       diffEditor.onDidDispose(() => {
         lineNumberOptionsSubRef.current?.dispose()
         lineNumberOptionsSubRef.current = null
+        diffEditorRef.current = null
+        setModifiedEditor(null)
+        setPopover(null)
       })
     },
     [editable, setupCopy, modelKey, filePath, sideBySide]

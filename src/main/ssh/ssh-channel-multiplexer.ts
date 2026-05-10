@@ -201,7 +201,14 @@ export class SshChannelMultiplexer {
     const seq = this.nextOutgoingSeq++
     const frame = encodeJsonRpcFrame(msg, seq, this.highestReceivedSeq)
     this.unackedTimestamps.set(seq, Date.now())
-    this.transport.write(frame)
+    try {
+      this.transport.write(frame)
+    } catch (err) {
+      // Why: a remote reboot can make the SSH channel's stdin throw EPIPE
+      // from a timer/request path. Scope it to this mux instead of letting
+      // the Electron main process treat it as an uncaught exception.
+      this.handleProtocolError(err)
+    }
   }
 
   private sendKeepAlive(): void {
@@ -211,7 +218,13 @@ export class SshChannelMultiplexer {
     const seq = this.nextOutgoingSeq++
     const frame = encodeKeepAliveFrame(seq, this.highestReceivedSeq)
     this.unackedTimestamps.set(seq, Date.now())
-    this.transport.write(frame)
+    try {
+      this.transport.write(frame)
+    } catch (err) {
+      // Why: keepalive runs on an interval; without catching transport
+      // write failures here, a dead SSH host can terminate the whole app.
+      this.handleProtocolError(err)
+    }
   }
 
   private handleFrame(frame: DecodedFrame): void {

@@ -67,15 +67,13 @@ export default function ProjectCell({
   }
   if (field.dataType === 'REPOSITORY') {
     return (
-      <span className="truncate text-xs text-muted-foreground">
-        {row.content.repository ?? '—'}
-      </span>
+      <span className="truncate text-xs text-muted-foreground">{row.content.repository ?? ''}</span>
     )
   }
   if (field.dataType === 'PARENT_ISSUE') {
     return (
       <span className="truncate text-xs text-muted-foreground">
-        {row.content.parentIssue ? `#${row.content.parentIssue.number}` : '—'}
+        {row.content.parentIssue ? `#${row.content.parentIssue.number}` : ''}
       </span>
     )
   }
@@ -175,7 +173,7 @@ export default function ProjectCell({
       </div>
     )
   }
-  return <span className="text-xs italic text-muted-foreground">—</span>
+  return <span />
 }
 
 function TitleCell({
@@ -216,7 +214,7 @@ function TitleCell({
     <button
       type="button"
       onClick={onOpenDialog}
-      className="block w-full min-w-0 cursor-pointer text-left hover:underline"
+      className="flex h-full w-full min-w-0 cursor-pointer items-center text-left hover:underline"
     >
       {content}
     </button>
@@ -324,7 +322,8 @@ function IssueTypeCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="cursor-pointer rounded text-left hover:bg-muted/40 px-0.5 -mx-0.5"
+          aria-label="Issue type"
+          className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
           {trigger}
         </button>
@@ -400,21 +399,19 @@ function SingleSelectCell({
   // dark-mode mapping (translucent fill + brightened hue text) so status pills
   // stay readable across the same color palette.
   const label =
-    value?.kind === 'single-select' ? (
-      (() => {
-        const colors = singleSelectChipColors(value.color)
-        return (
-          <span
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
-            style={chipStyle(colors)}
-          >
-            {value.name}
-          </span>
-        )
-      })()
-    ) : (
-      <EmptyCellPlaceholder editable={editable} />
-    )
+    value?.kind === 'single-select'
+      ? (() => {
+          const colors = singleSelectChipColors(value.color)
+          return (
+            <span
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+              style={chipStyle(colors)}
+            >
+              {value.name}
+            </span>
+          )
+        })()
+      : null
   if (!editable) {
     return <div>{label}</div>
   }
@@ -423,7 +420,8 @@ function SingleSelectCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="cursor-pointer text-left rounded hover:bg-muted/40 px-0.5 -mx-0.5"
+          aria-label={field.name}
+          className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
           {label}
         </button>
@@ -482,9 +480,7 @@ function IterationCell({
       <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-xs">
         {value.title}
       </span>
-    ) : (
-      <EmptyCellPlaceholder editable={editable} />
-    )
+    ) : null
   if (!editable) {
     return <div>{label}</div>
   }
@@ -493,7 +489,8 @@ function IterationCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="cursor-pointer text-left rounded hover:bg-muted/40 px-0.5 -mx-0.5"
+          aria-label={field.name}
+          className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
           {label}
         </button>
@@ -579,7 +576,7 @@ function TextCell({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   if (!editable) {
-    return <span className="truncate text-xs">{value || '—'}</span>
+    return <span className="truncate text-xs">{value}</span>
   }
   if (!editing) {
     return (
@@ -589,9 +586,9 @@ function TextCell({
           setDraft(value)
           setEditing(true)
         }}
-        className="cursor-pointer text-left text-xs hover:underline"
+        className="flex h-full w-full cursor-pointer items-center px-1 text-left text-xs hover:underline"
       >
-        {value || <span className="italic text-muted-foreground">—</span>}
+        {value}
       </button>
     )
   }
@@ -642,7 +639,7 @@ function DateCell({
     setDraft(value ?? '')
   }, [value])
   if (!editable) {
-    return <span className="text-xs">{value || '—'}</span>
+    return <span className="text-xs">{value}</span>
   }
   return (
     <input
@@ -768,11 +765,7 @@ function AssigneesCell({
   }, [open, owner, repo, seedKey])
 
   const labelContent =
-    assignees.length === 0 ? (
-      <span className="italic">—</span>
-    ) : (
-      assignees.map((u) => <UserChip key={u.login} user={u} />)
-    )
+    assignees.length === 0 ? null : assignees.map((u) => <UserChip key={u.login} user={u} />)
 
   if (!editable) {
     return (
@@ -787,8 +780,9 @@ function AssigneesCell({
       <PopoverTrigger asChild>
         <button
           type="button"
+          aria-label="Assignees"
           className={cn(
-            'flex flex-wrap items-center gap-1 cursor-pointer text-xs text-muted-foreground hover:text-foreground'
+            'flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1 text-xs text-muted-foreground hover:text-foreground'
           )}
         >
           {labelContent}
@@ -879,11 +873,7 @@ function LabelsCell({
   }, [open, owner, repo])
 
   const labelContent =
-    labels.length === 0 ? (
-      <EmptyCellPlaceholder editable={editable} />
-    ) : (
-      labels.map((l) => <LabelChip key={l.name} label={l} />)
-    )
+    labels.length === 0 ? null : labels.map((l) => <LabelChip key={l.name} label={l} />)
 
   if (!editable) {
     return <div className="flex flex-wrap items-center gap-1">{labelContent}</div>
@@ -894,9 +884,8 @@ function LabelsCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn(
-            'flex flex-wrap items-center gap-1 cursor-pointer rounded px-0.5 -mx-0.5 hover:bg-muted/40'
-          )}
+          aria-label="Labels"
+          className={cn('flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1')}
         >
           {labelContent}
         </button>
@@ -937,23 +926,6 @@ function LabelsCell({
         )}
       </PopoverContent>
     </Popover>
-  )
-}
-
-function EmptyCellPlaceholder({ editable }: { editable: boolean }): React.JSX.Element {
-  // Why: an unset cell still needs to be a visible click target so users can
-  // assign a value from scratch. The em-dash is intentional — the wrapping
-  // PopoverTrigger button supplies the hover background that signals
-  // clickability, so we don't need a wordy "Set value" placeholder.
-  return (
-    <span
-      className={cn(
-        'text-xs italic',
-        editable ? 'text-muted-foreground/60' : 'text-muted-foreground'
-      )}
-    >
-      —
-    </span>
   )
 }
 

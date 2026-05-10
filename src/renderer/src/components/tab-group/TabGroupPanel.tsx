@@ -14,6 +14,7 @@ import TerminalPane from '../terminal-pane/TerminalPane'
 import { browserSlotAnchorName } from '../browser-pane/browser-pane-slots'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import TabGroupDropOverlay from './TabGroupDropOverlay'
+import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import {
   getTabPaneBodyDroppableId,
   type HoveredTabInsertion,
@@ -109,18 +110,17 @@ export default function TabGroupPanel({
           commands.closeItem(item.id)
         }
       }}
-      onCloseOthers={(terminalId) => {
-        const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
-        )
+      onCloseOthers={(visibleId) => {
+        // Why: TabBar emits this with the entityId for terminals/browsers and
+        // the unifiedTabId for editors (see TabBar's per-type wiring). Match
+        // both so the menu works on every tab kind, not just terminals.
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
         if (item) {
           commands.closeOthers(item.id)
         }
       }}
-      onCloseToRight={(terminalId) => {
-        const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
-        )
+      onCloseToRight={(visibleId) => {
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
         if (item) {
           commands.closeToRight(item.id)
         }

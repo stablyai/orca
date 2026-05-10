@@ -35,11 +35,16 @@ import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { toast } from 'sonner'
+import { isSingleEmptyTopLevelOrderedList } from './rich-markdown-list-continuation'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
 } from './markdown-internal-links'
 import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
+import type {
+  RichMarkdownContextMenuCommand,
+  RichMarkdownContextMenuCommandPayload
+} from '../../../../shared/rich-markdown-context-menu'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -61,6 +66,93 @@ type RichMarkdownEditorProps = {
 const richMarkdownExtensions = createRichMarkdownExtensions({
   includePlaceholder: true
 })
+
+function runRichMarkdownContextCommand(
+  command: RichMarkdownContextMenuCommand,
+  editor: Editor,
+  toggleLink: () => void,
+  pickImage: () => void
+): void {
+  switch (command) {
+    case 'add-link':
+      toggleLink()
+      return
+    case 'bold':
+      editor.chain().focus().toggleBold().run()
+      return
+    case 'italic':
+      editor.chain().focus().toggleItalic().run()
+      return
+    case 'strike':
+      editor.chain().focus().toggleStrike().run()
+      return
+    case 'inline-code':
+      editor.chain().focus().toggleCode().run()
+      return
+    case 'code-block':
+      editor.chain().focus().toggleCodeBlock().run()
+      return
+    case 'blockquote':
+      editor.chain().focus().toggleBlockquote().run()
+      return
+    case 'paragraph':
+      editor.chain().focus().setParagraph().run()
+      return
+    case 'heading-1':
+      editor.chain().focus().setHeading({ level: 1 }).run()
+      return
+    case 'heading-2':
+      editor.chain().focus().setHeading({ level: 2 }).run()
+      return
+    case 'heading-3':
+      editor.chain().focus().setHeading({ level: 3 }).run()
+      return
+    case 'bullet-list':
+      editor.chain().focus().toggleBulletList().run()
+      return
+    case 'ordered-list':
+      editor.chain().focus().toggleOrderedList().run()
+      return
+    case 'task-list':
+      editor.chain().focus().toggleTaskList().run()
+      return
+    case 'image':
+      pickImage()
+      return
+    case 'divider':
+      editor.chain().focus().setHorizontalRule().run()
+  }
+}
+
+function shouldFocusEmptyEditorFromSurfaceClick(
+  event: React.MouseEvent<HTMLDivElement>,
+  editor: Editor | null
+): boolean {
+  if (!editor?.isEmpty || event.button !== 0) {
+    return false
+  }
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return false
+  }
+  return !target.closest('.rich-markdown-editor-shell button, .rich-markdown-editor-shell input')
+}
+
+function isRichMarkdownContextCommandTarget(
+  payload: RichMarkdownContextMenuCommandPayload,
+  root: HTMLElement | null
+): boolean {
+  if (!root) {
+    return false
+  }
+  const rect = root.getBoundingClientRect()
+  return (
+    payload.x >= rect.left &&
+    payload.x <= rect.right &&
+    payload.y >= rect.top &&
+    payload.y <= rect.bottom
+  )
+}
 
 export default function RichMarkdownEditor({
   fileId,
@@ -122,6 +214,7 @@ export default function RichMarkdownEditor({
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
   const isEditingLinkRef = useRef(false)
+  const typedEmptyOrderedListMarkerRef = useRef(false)
 
   // Why: assigning callback refs during render keeps them current before any
   // ProseMirror handler reads them, avoiding the one-render stale window that
@@ -164,10 +257,23 @@ export default function RichMarkdownEditor({
     contentType: 'markdown',
     editorProps: {
       attributes: {
-        class: 'rich-markdown-editor'
+        class: 'rich-markdown-editor',
+        spellcheck: 'true'
       },
       handleDOMEvents: {
         cut: handleRichMarkdownCut
+      },
+      handleTextInput: (view, from, to, text) => {
+        typedEmptyOrderedListMarkerRef.current = false
+        if (text !== ' ' || from !== to || !view.state.selection.empty) {
+          return false
+        }
+        const { $from } = view.state.selection
+        const beforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
+        // Why: only a typed ordered-list shortcut should preserve `1.` on
+        // Enter; toolbar/slash/context-created empty lists should exit normally.
+        typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
+        return false
       },
       handleKeyDown: createRichMarkdownKeyHandler({
         isMac,
@@ -184,6 +290,7 @@ export default function RichMarkdownEditor({
         filteredDocLinkRowsRef,
         selectedDocLinkIndexRef,
         handleLocalImagePickRef,
+        typedEmptyOrderedListMarkerRef,
         flushPendingSerialization,
         openSearchRef,
         setIsEditingLink,
@@ -285,6 +392,9 @@ export default function RichMarkdownEditor({
     onUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
       syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
+      if (!isSingleEmptyTopLevelOrderedList(nextEditor)) {
+        typedEmptyOrderedListMarkerRef.current = false
+      }
 
       // Why: bail out during normalizeSoftBreaks's onCreate transaction so the
       // structural housekeeping doesn't mark the file dirty before the user
@@ -411,6 +521,22 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
+
+  useEffect(() => {
+    return window.api.ui.onRichMarkdownContextCommand((payload) => {
+      const ed = editorRef.current
+      if (!ed || !isRichMarkdownContextCommandTarget(payload, rootRef.current)) {
+        return
+      }
+
+      runRichMarkdownContextCommand(
+        payload.command,
+        ed,
+        toggleLinkFromToolbar,
+        handleLocalImagePick
+      )
+    })
+  }, [handleLocalImagePick, toggleLinkFromToolbar])
 
   const {
     activeMatchIndex,
@@ -593,7 +719,20 @@ export default function RichMarkdownEditor({
           search bar overlays the content (Monaco-style) instead of occupying
           layout space and shifting the document down when opened. */}
       <div className="relative min-h-0 flex-1">
-        <div ref={scrollContainerRef} className="h-full overflow-auto scrollbar-editor">
+        <div
+          ref={scrollContainerRef}
+          className="h-full overflow-auto scrollbar-editor"
+          onMouseDown={(event) => {
+            if (!shouldFocusEmptyEditorFromSurfaceClick(event, editorRef.current)) {
+              return
+            }
+            // Why: native contenteditable only places the caret on actual line
+            // boxes; an empty note should still focus when the user clicks any
+            // blank part of the document surface.
+            event.preventDefault()
+            editorRef.current?.commands.focus('start')
+          }}
+        >
           <EditorContent editor={editor} />
         </div>
         <RichMarkdownSearchBar

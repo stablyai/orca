@@ -139,6 +139,44 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().browserKagiSessionLink).toBeNull()
   })
 
+  it('hydrates legacy sidekick persisted keys into pet state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        petVisible: undefined,
+        petId: undefined,
+        petSize: undefined,
+        customPets: undefined,
+        sidekickVisible: false,
+        sidekickId: 'custom-pet',
+        sidekickSize: 240,
+        customSidekicks: [
+          {
+            id: 'custom-pet',
+            label: 'Legacy pet',
+            fileName: 'custom-pet.webp',
+            mimeType: 'image/webp',
+            kind: 'image'
+          }
+        ]
+      })
+    )
+
+    expect(store.getState().petVisible).toBe(false)
+    expect(store.getState().petId).toBe('custom-pet')
+    expect(store.getState().petSize).toBe(240)
+    expect(store.getState().customPets).toEqual([
+      {
+        id: 'custom-pet',
+        label: 'Legacy pet',
+        fileName: 'custom-pet.webp',
+        mimeType: 'image/webp',
+        kind: 'image'
+      }
+    ])
+  })
+
   it('sanitizes task resume state field-by-field during hydration', () => {
     const store = createUIStore()
 

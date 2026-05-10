@@ -650,6 +650,22 @@ describe('Store', () => {
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
   })
 
+  it('migrates the legacy experimentalSidekick setting to experimentalPet', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalSidekick: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalPet).toBe(true)
+  })
+
   // ── inline-agents card-property migration ──────────────────────────
   //
   // Why: 'inline-agents' was added to DEFAULT_WORKTREE_CARD_PROPERTIES after

@@ -4,7 +4,16 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Server, ServerOff } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  GitMerge,
+  LoaderCircle,
+  CircleCheck,
+  CircleX,
+  Server,
+  ServerOff
+} from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
@@ -84,6 +93,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
+  const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
 
   // SSH disconnected state
   const sshStatus = useAppStore((s) => {
@@ -147,6 +157,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ? issueEntry.data
       : undefined
     : null
+  const issueDisplay =
+    issue ??
+    (worktree.linkedIssue
+      ? {
+          number: worktree.linkedIssue,
+          // Why: linked metadata is persisted immediately, but GitHub details
+          // arrive asynchronously. Show the durable link number instead of
+          // making the worktree look unlinked while the cache warms.
+          title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
+        }
+      : null)
 
   const isDeleting = deleteState?.isDeleting ?? false
 
@@ -554,17 +575,26 @@ const WorktreeCard = React.memo(function WorktreeCard({
         {/* Meta section: Issue / PR Links / Comment
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
-        {((cardProps.includes('issue') && issue) ||
+        {((cardProps.includes('issue') && issueDisplay) ||
           (cardProps.includes('pr') && pr) ||
           (cardProps.includes('comment') && worktree.comment)) && (
           <div className="flex flex-col gap-[3px] mt-0.5">
-            {cardProps.includes('issue') && issue && (
-              <IssueSection issue={issue} onClick={handleEditIssue} />
+            {cardProps.includes('issue') && issueDisplay && (
+              <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
             )}
             {cardProps.includes('pr') && pr && <PrSection pr={pr} onClick={handleEditIssue} />}
             {cardProps.includes('comment') && worktree.comment && (
               <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />
             )}
+          </div>
+        )}
+
+        {remoteBranchConflict && (
+          <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="mt-[1px] size-3 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {remoteBranchConflict.remote}/{remoteBranchConflict.branchName} already exists.
+            </span>
           </div>
         )}
 

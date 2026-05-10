@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ArrowDown, ArrowDownUp, ArrowUp, CloudUpload } from 'lucide-react'
+import { ArrowDownUp, ArrowUp, CloudUpload } from 'lucide-react'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
@@ -83,9 +83,9 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   }
 }
 
-// Why: each remote primary kind is anchored by a directional icon — Push
-// ↑, Pull ↓, Sync ↕, Publish ☁︎↑ — so the verb's direction is visible at a
-// glance and the slot doesn't read as a row of identical pills.
+// Why: remote primaries other than Pull are anchored by a directional
+// icon — Push ↑, Sync ↕, Publish ☁︎↑. Pull is intentionally icon-less
+// because the down-arrow read as a download/save affordance.
 describe('CommitArea primary action icons', () => {
   it('renders an up-arrow on a Push primary', () => {
     const props = baseProps({
@@ -97,14 +97,16 @@ describe('CommitArea primary action icons', () => {
     expect(primaryHasIcon(element, ArrowUp)).toBe(true)
   })
 
-  it('renders a down-arrow on a Pull primary', () => {
+  it('renders no directional icon on a Pull primary', () => {
     const props = baseProps({
       stagedCount: 0,
       hasMessage: false,
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 1 }
     })
     const element = CommitArea(props)
-    expect(primaryHasIcon(element, ArrowDown)).toBe(true)
+    expect(primaryHasIcon(element, ArrowUp)).toBe(false)
+    expect(primaryHasIcon(element, ArrowDownUp)).toBe(false)
+    expect(primaryHasIcon(element, CloudUpload)).toBe(false)
   })
 
   it('renders a bidirectional arrow on a Sync primary', () => {
