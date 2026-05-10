@@ -549,7 +549,7 @@ app.whenReady().then(async () => {
       const ui = store?.getUI()
       return {
         showTasksButton: settings?.showTasksButton !== false,
-        showTitlebarAgentActivity: settings?.showTitlebarAgentActivity !== false,
+        showTitlebarAppName: settings?.showTitlebarAppName !== false,
         statusBarVisible: ui?.statusBarVisible !== false
       }
     }

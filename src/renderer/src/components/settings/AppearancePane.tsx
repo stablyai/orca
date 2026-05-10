@@ -114,9 +114,9 @@ const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
 
 const TITLEBAR_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Titlebar Agent Activity',
-    description: 'Show the number of active agents in the titlebar.',
-    keywords: ['titlebar', 'agent', 'badge', 'active', 'count', 'status']
+    title: 'Titlebar App Name',
+    description: 'Show Orca in the titlebar.',
+    keywords: ['titlebar', 'orca', 'app', 'name', 'brand']
   }
 ]
 
@@ -289,32 +289,30 @@ export function AppearancePane({
         </div>
 
         <SearchableSetting
-          title="Titlebar Agent Activity"
-          description="Show the number of active agents in the titlebar."
-          keywords={['titlebar', 'agent', 'badge', 'active', 'count', 'status']}
+          title="Titlebar App Name"
+          description="Show Orca in the titlebar."
+          keywords={['titlebar', 'orca', 'app', 'name', 'brand']}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">
-            <Label>Titlebar Agent Activity</Label>
-            <p className="text-xs text-muted-foreground">
-              Show the number of active agents in the titlebar.
-            </p>
+            <Label>Titlebar App Name</Label>
+            <p className="text-xs text-muted-foreground">Show Orca in the titlebar.</p>
           </div>
           <button
             role="switch"
-            aria-checked={settings.showTitlebarAgentActivity}
+            aria-checked={settings.showTitlebarAppName}
             onClick={() =>
               updateSettings({
-                showTitlebarAgentActivity: !settings.showTitlebarAgentActivity
+                showTitlebarAppName: !settings.showTitlebarAppName
               })
             }
             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.showTitlebarAgentActivity ? 'bg-foreground' : 'bg-muted-foreground/30'
+              settings.showTitlebarAppName ? 'bg-foreground' : 'bg-muted-foreground/30'
             }`}
           >
             <span
               className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.showTitlebarAgentActivity ? 'translate-x-4' : 'translate-x-0.5'
+                settings.showTitlebarAppName ? 'translate-x-4' : 'translate-x-0.5'
               }`}
             />
           </button>

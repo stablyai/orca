@@ -528,190 +528,21 @@
   color: var(--muted-foreground);
 }
 
-.titlebar-agent-badge {
+.titlebar-app-name {
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-left: 4px;
-  margin-right: 8px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  background: color-mix(in srgb, var(--accent) 80%, transparent);
-  color: var(--foreground);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-/* Why: the titlebar is a drag region, and descendant elements inherit that
-   region unless they opt out. Without this, hovering the dot/count spans
-   inside the badge showed the default cursor instead of pointer because the
-   drag region overrode the button's cursor. pointer-events: none forwards
-   hover/click hit-testing to the button, which already has no-drag set. */
-.titlebar-agent-badge > * {
-  pointer-events: none;
-}
-
-.titlebar-agent-badge:hover {
-  background: var(--accent);
-  border-color: var(--border);
-}
-
-.titlebar-agent-badge-idle {
-  opacity: 0.55;
-}
-
-.titlebar-agent-badge-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: #16a34a;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #16a34a 18%, transparent);
-}
-
-.titlebar-agent-badge-dot-idle {
-  background: var(--muted-foreground);
-  box-shadow: none;
-}
-
-.titlebar-agent-badge-count {
-  min-width: 1ch;
-}
-
-.titlebar-agent-badge-label {
+  height: 24px;
+  margin-left: 2px;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
   color: var(--muted-foreground);
-  font-weight: 500;
-}
-
-/* ─── Agent hover card (titlebar badge popover) ───────────────────── */
-
-.titlebar-agent-hovercard {
-  width: auto;
-  min-width: 180px;
-  max-width: 280px;
-  padding: 8px 0 0;
-}
-
-.titlebar-agent-hovercard-header {
-  padding: 0 12px 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-
-.titlebar-agent-hovercard-header-with-list {
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-}
-
-.titlebar-agent-hovercard-hide {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 5px 12px 8px;
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-  background: none;
-  border-left: none;
-  border-right: none;
-  border-bottom: none;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  cursor: pointer;
-  border-radius: 0;
-}
-
-.titlebar-agent-hovercard-hide:hover {
-  color: var(--foreground);
-  background: var(--accent);
-}
-
-.titlebar-agent-hovercard-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.titlebar-agent-hovercard-worktree {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  background: none;
-  border: none;
-  color: var(--foreground);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 0;
-  width: 100%;
-}
-
-.titlebar-agent-hovercard-worktree:hover {
-  background: var(--accent);
-}
-
-.titlebar-agent-hovercard-agent {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 12px 3px 24px;
   font-size: 12px;
-  color: var(--muted-foreground);
-  background: none;
-  border: none;
-  text-align: left;
-  width: 100%;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
   cursor: pointer;
-}
-
-.titlebar-agent-hovercard-agent:hover {
-  background: var(--accent);
-  color: var(--foreground);
-}
-
-.titlebar-agent-hovercard-agent-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.titlebar-agent-hovercard-agent-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: #16a34a;
-}
-
-.titlebar-agent-hovercard-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.titlebar-agent-hovercard-count {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-.titlebar-agent-hovercard-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #16a34a;
 }
 
 .titlebar-icon-button {
