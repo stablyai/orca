@@ -12,19 +12,18 @@ function makeEvent(overrides: Partial<{ isComposing: boolean; shiftKey: boolean 
 }
 
 class FakeHTMLElement extends EventTarget {
-  private readonly children = new Set<FakeHTMLElement>()
+  private readonly descendants = new Set<FakeHTMLElement>()
 
   append(child: FakeHTMLElement): void {
-    this.children.add(child)
+    this.descendants.add(child)
   }
 
   contains(target: EventTarget): boolean {
-    return target === this || this.children.has(target as FakeHTMLElement)
+    return target === this || this.descendants.has(target as FakeHTMLElement)
   }
 }
 
 let previousHTMLElement: typeof globalThis.HTMLElement | undefined
-let previousDocument: typeof globalThis.document | undefined
 
 describe('shouldSuppressEnterSubmit', () => {
   it('returns false for a plain Enter with no composition', () => {
@@ -53,16 +52,9 @@ describe('shouldSuppressEnterSubmit', () => {
 describe('shouldAllowComposerEnterSubmitTarget', () => {
   beforeEach(() => {
     previousHTMLElement = globalThis.HTMLElement
-    previousDocument = globalThis.document
-    const body = new FakeHTMLElement()
-    const documentElement = new FakeHTMLElement()
     Object.defineProperty(globalThis, 'HTMLElement', {
       configurable: true,
       value: FakeHTMLElement
-    })
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: { body, documentElement }
     })
   })
 
@@ -70,10 +62,6 @@ describe('shouldAllowComposerEnterSubmitTarget', () => {
     Object.defineProperty(globalThis, 'HTMLElement', {
       configurable: true,
       value: previousHTMLElement
-    })
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: previousDocument
     })
   })
 
@@ -87,21 +75,25 @@ describe('shouldAllowComposerEnterSubmitTarget', () => {
     )
   })
 
-  it('allows body/document targets after a source selection drops focus', () => {
+  it('allows ancestor targets after a source selection drops focus', () => {
+    // Why: post-selection focus can land on body, html, or the DialogContent
+    // root — any ancestor wrapping the composer is a legitimate fallback.
     const composer = new FakeHTMLElement()
+    const dialogContent = new FakeHTMLElement()
+    const body = new FakeHTMLElement()
+    dialogContent.append(composer)
+    body.append(composer)
+    body.append(dialogContent)
 
     expect(
-      shouldAllowComposerEnterSubmitTarget(document.body, composer as unknown as HTMLElement)
+      shouldAllowComposerEnterSubmitTarget(dialogContent, composer as unknown as HTMLElement)
     ).toBe(true)
-    expect(
-      shouldAllowComposerEnterSubmitTarget(
-        document.documentElement,
-        composer as unknown as HTMLElement
-      )
-    ).toBe(true)
+    expect(shouldAllowComposerEnterSubmitTarget(body, composer as unknown as HTMLElement)).toBe(
+      true
+    )
   })
 
-  it('rejects targets outside the composer', () => {
+  it('rejects sibling targets outside the composer', () => {
     const composer = new FakeHTMLElement()
     const outside = new FakeHTMLElement()
 
