@@ -72,6 +72,7 @@ import type {
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
@@ -941,11 +942,8 @@ const api = {
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),
-    refreshAgents: (): Promise<{
-      agents: string[]
-      addedPathSegments: string[]
-      shellHydrationOk: boolean
-    }> => ipcRenderer.invoke('preflight:refreshAgents'),
+    refreshAgents: (): Promise<RefreshAgentsResult> =>
+      ipcRenderer.invoke('preflight:refreshAgents'),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },

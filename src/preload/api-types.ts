@@ -49,11 +49,13 @@ import type {
   NotificationSoundResult,
   OnboardingState,
   OrcaHooks,
+  PathSource,
   PersistedUIState,
   PRCheckDetail,
   PRComment,
   PRInfo,
   Repo,
+  ShellHydrationFailureReason,
   SparsePreset,
   SearchOptions,
   SearchResult,
@@ -250,6 +252,15 @@ export type RefreshAgentsResult = {
   agents: string[]
   addedPathSegments: string[]
   shellHydrationOk: boolean
+  /** Why: drives the agent_picks `on_path:false` triage in dashboard 1562016
+   *  (insight A). `'shell_hydrate'` = detection saw the user's full shell PATH;
+   *  `'sync_seed_only'` = hydration failed and detection ran against the
+   *  seed list from `patchPackagedProcessPath`. */
+  pathSource: PathSource
+  /** Why: classified hydration outcome. `'none'` on success; one of the failure
+   *  modes when `shellHydrationOk` is false. Typed off the shared alias so
+   *  schema/main/preload/renderer stay in lockstep. */
+  pathFailureReason: ShellHydrationFailureReason
 }
 
 export type PreflightApi = {
