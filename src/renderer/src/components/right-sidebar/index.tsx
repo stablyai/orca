@@ -72,7 +72,6 @@ type ActivityBarItem = {
 }
 
 const isMac = navigator.userAgent.includes('Mac')
-const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const mod = isMac ? '\u2318' : 'Ctrl+'
 
 const ACTIVITY_ITEMS: ActivityBarItem[] = [
