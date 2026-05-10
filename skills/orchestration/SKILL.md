@@ -1,6 +1,20 @@
 ---
 name: orchestration
-description: Use `orca orchestration` when coordinating multiple AI agents through Orca: pass context, instructions, questions, findings, reviews, handoffs, or structured results between agents; delegate subtasks; dispatch work; track task DAGs; wait for worker_done/escalation; or run coordinator loops and decision gates. This is the right skill for semantic agent-to-agent communication. Boundary with `orca-cli`: do not use orchestration for ordinary terminal control, shell commands, browser automation, worktree management, or reading/waiting on terminals; use `orca-cli` for those. Triggers include "tell the other agent", "ask <agent>", "hand off to", "pass this to <agent>", "delegate to <agent>", "have <agent> do X", "let <agent> know", "share with the other AI", "coordinate agents", "what did <agent> find", "check orchestration inbox", "reply to <agent>", "dispatch task", "orchestrate agents", "multi-agent", "task DAG", "worker_done", "escalation", "decision gate", and "coordinator loop".
+description: >-
+  Use `orca orchestration` when coordinating multiple AI agents through Orca:
+  pass context, instructions, questions, findings, reviews, handoffs, or
+  structured results between agents; delegate subtasks; dispatch work; track task
+  DAGs; wait for worker_done/escalation; or run coordinator loops and decision
+  gates. This is the right skill for semantic agent-to-agent communication.
+  Boundary with `orca-cli`: do not use orchestration for ordinary terminal
+  control, shell commands, browser automation, worktree management, or
+  reading/waiting on terminals; use `orca-cli` for those. Triggers include "tell
+  the other agent", "ask <agent>", "hand off to", "pass this to <agent>",
+  "delegate to <agent>", "have <agent> do X", "let <agent> know", "share with the
+  other AI", "coordinate agents", "what did <agent> find", "check orchestration
+  inbox", "reply to <agent>", "dispatch task", "orchestrate agents",
+  "multi-agent", "task DAG", "worker_done", "escalation", "decision gate", and
+  "coordinator loop".
 ---
 
 # Orca Inter-Agent Orchestration

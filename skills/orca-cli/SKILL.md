@@ -1,6 +1,18 @@
 ---
 name: orca-cli
-description: Use the `orca` CLI to drive a running Orca editor — manage Orca worktrees; create, read, and run shell commands in Orca-managed terminals; and automate Orca's built-in browser (snapshot/click/fill/screenshot/tabs). Use this instead of raw `git worktree`, ad hoc shell PTYs, or Playwright whenever the task touches Orca state. Coding agents inside an Orca worktree should also use it to keep the worktree comment fresh at meaningful checkpoints. Boundary with `orchestration`: if the recipient of a terminal write is another AI agent (Claude Code, Gemini, Codex, a worker), use `orchestration` — it is the only correct way to send messages, nudges, replies, or task hand-offs to agents. orca-cli writes are for non-agent terminals (shells, build/test commands); reading or `wait`ing on any terminal — including agent terminals — stays in orca-cli.
+description: >-
+  Use the `orca` CLI to drive a running Orca editor — manage Orca worktrees;
+  create, read, and run shell commands in Orca-managed terminals; and automate
+  Orca's built-in browser (snapshot/click/fill/screenshot/tabs). Use this
+  instead of raw `git worktree`, ad hoc shell PTYs, or Playwright whenever the
+  task touches Orca state. Coding agents inside an Orca worktree should also use
+  it to keep the worktree comment fresh at meaningful checkpoints. Boundary with
+  `orchestration`: if the recipient of a terminal write is another AI agent
+  (Claude Code, Gemini, Codex, a worker), use `orchestration` — it is the only
+  correct way to send messages, nudges, replies, or task hand-offs to agents.
+  orca-cli writes are for non-agent terminals (shells, build/test commands);
+  reading or `wait`ing on any terminal — including agent terminals — stays in
+  orca-cli.
 ---
 
 # Orca CLI
