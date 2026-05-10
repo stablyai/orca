@@ -1128,6 +1128,15 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSource, linearStatus.connected, taskResumeApplied])
 
+  // Why: stable key for `selectedRepos` so the GitLab fetch effect below
+  // doesn't re-run on every parent re-render just because the array
+  // reference changed. The memoized string keys off id + path +
+  // connectionId — the only fields the effect actually reads.
+  const selectedReposKey = useMemo(
+    () => selectedRepos.map((r) => `${r.id}|${r.path}|${r.connectionId ?? ''}`).join(','),
+    [selectedRepos]
+  )
+
   // Why: GitLab task-source data fetch. Pulls MRs (filtered by state)
   // Why: fetch in parallel across every selected non-remote repo and
   // merge the results, mirroring the GitHub side's cross-repo
@@ -1209,15 +1218,8 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [
-    taskSource,
-    gitlabFilter,
-    gitlabRefreshNonce,
-    // Why: depend on the joined ids string rather than the array
-    // reference so the effect doesn't re-run on every render even when
-    // selectedRepos hasn't changed shape.
-    selectedRepos.map((r) => `${r.id}|${r.path}|${r.connectionId ?? ''}`).join(',')
-  ])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey encodes the only selectedRepos fields read above; keying off the array ref would re-run on every parent render.
+  }, [taskSource, gitlabFilter, gitlabRefreshNonce, selectedReposKey])
 
   // Why: Todos fetch lives in its own effect — different trigger
   // condition from the project view (no chip filter dependence) and a
