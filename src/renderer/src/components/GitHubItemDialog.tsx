@@ -492,6 +492,101 @@ function PRDiffTreeView({
   )
 }
 
+// Why: SWR cache for the work-item details fetch. Reopening the same drawer
+// pays full IPC + `gh` process startup latency without this; with it, cached
+// data paints immediately while a background refetch keeps the view honest.
+// Cache is keyed by repoPath + issueSourcePreference + type + number so
+// upstream/origin source toggles and issue#N vs pr#N never collide. Bounded
+// to ~50 entries to cap memory; entries older than FRESH_MS trigger a
+// background refetch on open. See docs/gh-work-item-drawer-cache.md.
+const WORK_ITEM_DETAILS_CACHE_MAX = 50
+const WORK_ITEM_DETAILS_FRESH_MS = 30_000
+type WorkItemDetailsCacheEntry = {
+  details: GitHubWorkItemDetails | null
+  fetchedAt: number
+  pending?: Promise<GitHubWorkItemDetails | null>
+  error?: string
+}
+const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
+
+function getWorkItemDetailsCacheKey(args: {
+  repoPath: string
+  issueSourcePreference: string | undefined
+  type: 'issue' | 'pr'
+  number: number
+}): string {
+  // Why: include all axes that change which (repo, item) the IPC resolves to.
+  // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
+  return [args.repoPath, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
+}
+
+function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
+  // Why: re-insert to move to MRU position; Map preserves insertion order so
+  // the oldest key is always first when evicting.
+  workItemDetailsCache.delete(key)
+  workItemDetailsCache.set(key, entry)
+  while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
+    const oldest = workItemDetailsCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    workItemDetailsCache.delete(oldest)
+  }
+}
+
+// Why: exposed so mutation handlers (in this file and elsewhere) can drop a
+// stale entry after a successful local mutation. Cross-window invalidation
+// arrives via the `gh:workItemMutated` event listener installed below.
+export function invalidateWorkItemDetailsCacheForKey(key: string): void {
+  workItemDetailsCache.delete(key)
+}
+
+// Why: monotonically increases on every invalidation so an in-flight refetch
+// that started before a mutation can detect that its result is stale and
+// must not be written back. Without this, a mutation that lands while a
+// refetch is in flight would have its invalidation silently undone when the
+// stale promise resolves and re-populates the entry.
+let workItemDetailsCacheGeneration = 0
+
+// Why: when we don't have the exact cache key (e.g. an event from another
+// window only carries repoPath + number + type), drop every entry that
+// matches the (repoPath, type, number) tuple regardless of source preference.
+function invalidateWorkItemDetailsCacheByMatch(args: {
+  repoPath: string
+  type: 'issue' | 'pr'
+  number: number
+}): void {
+  workItemDetailsCacheGeneration += 1
+  const suffix = `\0${args.type}\0${args.number}`
+  const prefix = `${args.repoPath}\0`
+  for (const key of Array.from(workItemDetailsCache.keys())) {
+    if (key.startsWith(prefix) && key.endsWith(suffix)) {
+      workItemDetailsCache.delete(key)
+    }
+  }
+}
+
+// Why: install once at module load — every dialog instance shares the cache,
+// so a single subscription is enough. The preload bridge re-emits the
+// main-process broadcast for every window, so each renderer invalidates its
+// own cache when any window's mutation lands. We track the unsubscribe so
+// Vite HMR doesn't accumulate listeners across module reloads in dev.
+let workItemMutatedUnsub: (() => void) | undefined
+if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
+  workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
+    invalidateWorkItemDetailsCacheByMatch({
+      repoPath: payload.repoPath,
+      type: payload.type,
+      number: payload.number
+    })
+  })
+}
+if (typeof import.meta !== 'undefined' && import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    workItemMutatedUnsub?.()
+  })
+}
+
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
@@ -1088,7 +1183,8 @@ function ConversationTab({
           : await window.api.gh.addIssueComment({
               repoPath,
               number: item.number,
-              body: `@${comment.author} ${replyBody}`
+              body: `@${comment.author} ${replyBody}`,
+              type: item.type
             })
 
       if (!result.ok) {
@@ -1351,6 +1447,7 @@ function ConversationTab({
             className="mt-1"
             repoPath={repoPath}
             issueNumber={item.number}
+            itemType={item.type}
             mentionOptions={mentionOptions}
             onCommentAdded={onCommentAdded}
           />
@@ -1698,6 +1795,7 @@ function GHEditSection({
   localLabels,
   onStateChange,
   onLabelsChange,
+  onMutated,
   assignees,
   onUse
 }: {
@@ -1708,6 +1806,10 @@ function GHEditSection({
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
+  /** Why: called after a successful issue mutation so the parent dialog can
+   *  invalidate its work-item-details cache entry. Without this, reopening the
+   *  drawer in the FRESH_MS window would paint pre-mutation data. */
+  onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
 }): React.JSX.Element | null {
@@ -1788,6 +1890,7 @@ function GHEditSection({
         onSuccess: () => {
           patchWorkItem(item.id, { state: newState })
           patchProjectRowIfNeeded({ state: newState })
+          onMutated()
         },
         onError: (err) => toast.error(err)
       })
@@ -1801,7 +1904,8 @@ function GHEditSection({
       patchWorkItem,
       patchProjectRowIfNeeded,
       run,
-      onStateChange
+      onStateChange,
+      onMutated
     ]
   )
 
@@ -1825,7 +1929,9 @@ function GHEditSection({
             patchWorkItem(item.id, { labels: newLabels })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
-          onSuccess: () => {},
+          onSuccess: () => {
+            onMutated()
+          },
           onRevert: () => {
             onLabelsChange(prevLabels)
             patchWorkItem(item.id, { labels: prevLabels })
@@ -1852,7 +1958,9 @@ function GHEditSection({
             patchWorkItem(item.id, { labels: prevLabels })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
-          onSuccess: () => {},
+          onSuccess: () => {
+            onMutated()
+          },
           onError: (err) => toast.error(err)
         })
       }
@@ -1866,7 +1974,8 @@ function GHEditSection({
       patchWorkItem,
       patchProjectRowIfNeeded,
       run,
-      onLabelsChange
+      onLabelsChange,
+      onMutated
     ]
   )
 
@@ -1896,7 +2005,9 @@ function GHEditSection({
             setLocalAssignees(prevAssignees)
             patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
-          onSuccess: () => {},
+          onSuccess: () => {
+            onMutated()
+          },
           onError: (err) => toast.error(err)
         })
       } else {
@@ -1912,7 +2023,9 @@ function GHEditSection({
             setLocalAssignees(newAssignees)
             patchProjectRowIfNeeded({ assignees: newAssignees })
           },
-          onSuccess: () => {},
+          onSuccess: () => {
+            onMutated()
+          },
           onRevert: () => {
             setLocalAssignees(prevAssignees)
             patchProjectRowIfNeeded({ assignees: prevAssignees })
@@ -1921,7 +2034,7 @@ function GHEditSection({
         })
       }
     },
-    [item.number, repoPath, projectOrigin, localAssignees, patchProjectRowIfNeeded, run]
+    [item.number, repoPath, projectOrigin, localAssignees, patchProjectRowIfNeeded, run, onMutated]
   )
 
   if (item.type === 'pr') {
@@ -2118,12 +2231,14 @@ function GHCommentComposer({
   className,
   repoPath,
   issueNumber,
+  itemType,
   mentionOptions,
   onCommentAdded
 }: {
   className?: string
   repoPath: string
   issueNumber: number
+  itemType: 'issue' | 'pr'
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
@@ -2150,7 +2265,8 @@ function GHCommentComposer({
       const result = await window.api.gh.addIssueComment({
         repoPath,
         number: issueNumber,
-        body: trimmed
+        body: trimmed,
+        type: itemType
       })
       if (result.ok) {
         setBody('')
@@ -2291,6 +2407,29 @@ export default function GitHubItemDialog({
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
 
+  // Why: the cache key has to include the issue source preference so a user
+  // toggling between origin/upstream for the same issue number doesn't read
+  // back the wrong repo's details. We pull it from the repos slice rather
+  // than threading it as a prop because every existing call site already has
+  // the repo registered in the store.
+  const issueSourcePreference = useAppStore((s) => {
+    if (!repoPath) {
+      return undefined
+    }
+    return s.repos.find((r) => r.path === repoPath)?.issueSourcePreference
+  })
+  const detailsCacheKey = useMemo(() => {
+    if (!workItem || !repoPath) {
+      return null
+    }
+    return getWorkItemDetailsCacheKey({
+      repoPath,
+      issueSourcePreference,
+      type: workItem.type,
+      number: workItem.number
+    })
+  }, [repoPath, workItem, issueSourcePreference])
+
   // Why: reset lifted edit state when the dialog switches items or when the
   // same item receives an optimistic cache patch from the surrounding table.
   useEffect(() => {
@@ -2339,7 +2478,7 @@ export default function GitHubItemDialog({
   }, [workItem])
 
   useEffect(() => {
-    if (!workItem || !repoPath) {
+    if (!workItem || !repoPath || !detailsCacheKey) {
       setDetails(null)
       setError(null)
       return
@@ -2358,34 +2497,124 @@ export default function GitHubItemDialog({
       optimisticCommentsRef.current = []
     }
     prevItemIdRef.current = workItem.id
-    setLoading(true)
-    setError(null)
-    setDetails(null)
     setTab('conversation')
 
-    window.api.gh
-      .workItemDetails({ repoPath, number: workItem.number, type: workItem.type })
+    const cached = workItemDetailsCache.get(detailsCacheKey)
+    const now = Date.now()
+    const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+
+    // Why: paint cached data immediately when we have it so reopen feels
+    // instant. Only fall back to a blocking spinner when there's nothing to
+    // show. Optimistic comments still merge below for both paths.
+    if (cached?.details) {
+      const opt = optimisticCommentsRef.current
+      let painted = cached.details
+      if (opt.length > 0) {
+        const ids = new Set(painted.comments.map((c) => c.id))
+        const missing = opt.filter((c) => !ids.has(c.id))
+        if (missing.length > 0) {
+          painted = { ...painted, comments: [...painted.comments, ...missing] }
+        }
+      }
+      setDetails(painted)
+      setError(null)
+      setLoading(false)
+    } else {
+      setDetails(null)
+      setError(null)
+      setLoading(true)
+    }
+
+    if (hasFreshData) {
+      return
+    }
+
+    // Why: dedupe concurrent opens for the same key — concurrent dialogs or
+    // a rapid close→reopen must share one in-flight promise instead of
+    // racing two `gh` subprocesses against each other.
+    const inflight: Promise<GitHubWorkItemDetails | null> =
+      cached?.pending ??
+      window.api.gh.workItemDetails({
+        repoPath,
+        number: workItem.number,
+        type: workItem.type
+      })
+
+    // Why: snapshot the invalidation generation at fetch start; if the
+    // generation advances before we resolve, a mutation invalidated the
+    // entry mid-flight and we must not write a stale result back.
+    const launchedAtGeneration = workItemDetailsCacheGeneration
+
+    if (!cached?.pending) {
+      touchWorkItemDetailsCache(detailsCacheKey, {
+        details: cached?.details ?? null,
+        fetchedAt: cached?.fetchedAt ?? 0,
+        pending: inflight,
+        error: cached?.error
+      })
+    }
+
+    inflight
       .then((result) => {
+        const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
+        // Why: 404/unauthorized must not overwrite valid cached data. When the
+        // IPC resolves to null and we already have cached details, keep the
+        // stale data — only blank entries get the null payload.
+        const prev = workItemDetailsCache.get(detailsCacheKey)
+        if (invalidatedMidFlight) {
+          // Skip cache write entirely — the entry was deliberately dropped.
+        } else if (result === null && prev?.details) {
+          touchWorkItemDetailsCache(detailsCacheKey, {
+            details: prev.details,
+            fetchedAt: prev.fetchedAt,
+            error: undefined
+          })
+        } else {
+          touchWorkItemDetailsCache(detailsCacheKey, {
+            details: result,
+            fetchedAt: Date.now(),
+            error: undefined
+          })
+        }
         if (requestId !== requestIdRef.current) {
           return
         }
         // Why: merge any comments the user posted optimistically while the
         // detail fetch was in-flight, using id to avoid duplicates.
         const opt = optimisticCommentsRef.current
-        if (opt.length > 0 && result) {
-          const fetchedIds = new Set(result.comments.map((c: PRComment) => c.id))
+        let merged = result
+        if (opt.length > 0 && merged) {
+          const fetchedIds = new Set(merged.comments.map((c: PRComment) => c.id))
           const missing = opt.filter((c) => !fetchedIds.has(c.id))
           if (missing.length > 0) {
-            result = { ...result, comments: [...result.comments, ...missing] }
+            merged = { ...merged, comments: [...merged.comments, ...missing] }
           }
         }
-        setDetails(result)
+        if (merged !== null || !cached?.details) {
+          setDetails(merged)
+        }
       })
       .catch((err) => {
+        const message = err instanceof Error ? err.message : 'Failed to load details'
+        const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
+        const prev = workItemDetailsCache.get(detailsCacheKey)
+        // Why: stale-on-error — keep cached data if we have it, drop the
+        // pending promise so the next open can retry. Only surface the
+        // blocking error when nothing is cached. If invalidated mid-flight,
+        // don't restore stale data into the now-empty entry.
+        if (!invalidatedMidFlight) {
+          touchWorkItemDetailsCache(detailsCacheKey, {
+            details: prev?.details ?? null,
+            fetchedAt: prev?.fetchedAt ?? 0,
+            error: message
+          })
+        }
         if (requestId !== requestIdRef.current) {
           return
         }
-        setError(err instanceof Error ? err.message : 'Failed to load details')
+        if (!prev?.details) {
+          setError(message)
+        }
       })
       .finally(() => {
         if (requestId !== requestIdRef.current) {
@@ -2393,7 +2622,7 @@ export default function GitHubItemDialog({
         }
         setLoading(false)
       })
-  }, [repoPath, workItem])
+  }, [repoPath, workItem, detailsCacheKey])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const body = details?.body ?? ''
@@ -2422,8 +2651,25 @@ export default function GitHubItemDialog({
           comments: [comment]
         }
       })
+      // Why: keep the module-level cache in sync so a reopen paints the new
+      // comment without waiting on a refetch. Mark fetchedAt as stale (0) so
+      // the next open still triggers a background refresh to pick up
+      // server-side fields like reaction groups or thread bindings.
+      if (detailsCacheKey) {
+        const prev = workItemDetailsCache.get(detailsCacheKey)
+        if (prev?.details) {
+          const ids = new Set(prev.details.comments.map((c) => c.id))
+          if (!ids.has(comment.id)) {
+            touchWorkItemDetailsCache(detailsCacheKey, {
+              details: { ...prev.details, comments: [...prev.details.comments, comment] },
+              fetchedAt: 0,
+              error: undefined
+            })
+          }
+        }
+      }
     },
-    [workItem]
+    [workItem, detailsCacheKey]
   )
 
   return (
@@ -2523,6 +2769,20 @@ export default function GitHubItemDialog({
                 localLabels={localLabels}
                 onStateChange={setLocalState}
                 onLabelsChange={setLocalLabels}
+                onMutated={() => {
+                  // Why: drop the cached details for this item so the next
+                  // open issues a fresh fetch instead of painting pre-edit
+                  // state. We invalidate by (repoPath, type, number) match
+                  // because a single mutation can affect entries across all
+                  // issueSourcePreference values for the same number.
+                  if (repoPath) {
+                    invalidateWorkItemDetailsCacheByMatch({
+                      repoPath,
+                      type: workItem.type,
+                      number: workItem.number
+                    })
+                  }
+                }}
                 assignees={details?.assignees ?? []}
                 onUse={onUse}
               />
