@@ -785,18 +785,14 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [pageData.taskSource])
 
-  // Why: when settings hydrate after Tasks mounts, seed taskSource from
-  // defaultTaskSource — but only once. Re-running on every defaultTaskSource
-  // change would clobber an in-session manual source pick (e.g. the user
-  // clicked the Linear icon and then changed the default in Settings).
-  const defaultTaskSourceSeededRef = useRef(false)
+  // Why: settings.defaultTaskSource can change while Tasks is open (Settings
+  // panel is reachable without unmounting Tasks). The one-shot resume effect
+  // only seeds taskSource on first mount, so without this sync a mid-session
+  // change to the default would not propagate when no explicit page-level
+  // taskSource was passed.
   useEffect(() => {
-    if (defaultTaskSourceSeededRef.current) {
-      return
-    }
     if (!pageData.taskSource && settings?.defaultTaskSource) {
       setTaskSource(settings.defaultTaskSource)
-      defaultTaskSourceSeededRef.current = true
     }
   }, [settings?.defaultTaskSource, pageData.taskSource])
 
