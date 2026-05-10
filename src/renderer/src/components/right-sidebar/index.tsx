@@ -308,7 +308,6 @@ function RightSidebarInner(): React.JSX.Element {
                   <div className="flex items-center">{activityBarIcons}</div>
                   <div className="flex items-center">
                     {closeButton}
-                    {isWindows && <div className="window-controls-titlebar-spacer" />}
                   </div>
                 </TooltipProvider>
               </div>
@@ -327,7 +326,6 @@ function RightSidebarInner(): React.JSX.Element {
             <TooltipProvider delayDuration={400}>
               <div className="flex items-center">
                 {closeButton}
-                {isWindows && <div className="window-controls-titlebar-spacer" />}
               </div>
             </TooltipProvider>
           </div>

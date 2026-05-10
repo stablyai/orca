@@ -1019,16 +1019,19 @@ function App(): React.JSX.Element {
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
                       {
+                        // Why: right: var(--window-controls-width) is the single
+                        // mechanism that keeps the toggle clear of the
+                        // fixed-position window-controls overlay on Windows (138px)
+                        // and sits at the right edge on non-Windows (0px). No
+                        // internal spacer needed — adding one would push the button
+                        // a further 138px to the left and cover the pane-actions
+                        // Ellipsis button with an un-clickable div.
                         right: 'var(--window-controls-width)',
                         WebkitAppRegion: 'no-drag'
                       } as React.CSSProperties
                     }
                   >
                     {rightSidebarToggle}
-                    {/* Why: the fixed-position window-controls overlay (138px,
-                        top-right) sits on top of this floating toggle on Windows.
-                        Reserve its width so the toggle stays clickable. */}
-                    {isWindows && <div className="window-controls-titlebar-spacer" />}
                   </div>
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">
