@@ -13,6 +13,7 @@ import {
 } from '../../shared/browser-url'
 import { resolveWindowShortcutAction } from '../../shared/window-shortcut-policy'
 import { getMainE2EConfig } from '../e2e-config'
+import { buildEditableContextMenuTemplate } from './editable-context-menu'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -434,6 +435,18 @@ export function createMainWindow(
   }
   ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
 
+  const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
+    if (template.length === 0) {
+      return
+    }
+    // Why: right-click can produce a Chromium context-menu event before our
+    // renderer focus mirror updates, so trust Electron's editable/spellcheck
+    // params here instead of gating on markdownEditorFocused.
+    Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
+  }
+  mainWindow.webContents.on('context-menu', onMainContextMenu)
+
   // Why: renderer can't mirror focus state across a crash/reload/close.
   // Default-deny the carve-out so Cmd+B falls back to sidebar-toggle, which is
   // the safe behavior when focus context is unknown. Preserves the
@@ -642,10 +655,20 @@ export function createMainWindow(
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
   }
+  // Why: the renderer's WindowControls mounts after ready-to-show, which is
+  // also when savedMaximized is restored — so window:maximize-changed has
+  // already fired (or not fired, if maximize() was called pre-mount) before
+  // the listener attaches. Expose a synchronous getter so the button can
+  // initialize its icon to match the current state on mount.
+  const isMaximizedChannel = 'window:isMaximized'
+  const onIsMaximized = (): boolean => {
+    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
+  }
   ipcMain.on(minimizeChannel, onMinimize)
   ipcMain.on(maximizeChannel, onMaximize)
   ipcMain.on(requestCloseChannel, onRequestClose)
   ipcMain.on(popupMenuChannel, onPopupMenu)
+  ipcMain.handle(isMaximizedChannel, onIsMaximized)
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
@@ -658,8 +681,13 @@ export function createMainWindow(
     ipcMain.removeListener(maximizeChannel, onMaximize)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
+    ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
+    // after its webContents has already been destroyed. The destroyed
+    // webContents owns its listeners, so do not touch `mainWindow.webContents`
+    // here or the quit path can crash before Squirrel.Mac relaunches Orca.
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 

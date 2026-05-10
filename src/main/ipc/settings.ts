@@ -18,7 +18,7 @@ const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIS
 // items when the backing state changes.
 const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTasksButton',
-  'showTitlebarAgentActivity'
+  'showTitlebarAppName'
 ]
 
 export function registerSettingsHandlers(store: Store): void {

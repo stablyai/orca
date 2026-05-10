@@ -26,6 +26,7 @@ import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
+import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { PetStatusSegment } from './PetStatusSegment'
 
 function getCodexAccountLabel(
@@ -697,6 +698,13 @@ function StatusBarInner(): React.JSX.Element | null {
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
+  // Why: usage bars exist to surface CLI rate limits — showing one for an
+  // agent that isn't on the user's PATH is just noise (e.g. a fresh Ubuntu
+  // install showing "Gemini Usage" with no Gemini CLI installed). We gate
+  // the per-CLI bars on detection so the surface stays self-pruning, and
+  // re-show automatically once the agent appears on PATH.
+  const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+  const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
   // Why: pet segment intentionally does NOT participate in statusBarItems
   // (see design doc — gating with both the experimental flag and a
   // statusBarItems checkbox would double-toggle the surface). It is driven
@@ -717,6 +725,14 @@ function StatusBarInner(): React.JSX.Element | null {
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
+  // Why: trigger PATH-based agent detection on mount so the per-CLI usage
+  // bars (Claude/Codex/Gemini) can hide themselves when the user doesn't
+  // have those CLIs installed. The slice deduplicates concurrent callers,
+  // so this is safe even if other surfaces also call it.
+  useEffect(() => {
+    void ensureDetectedAgents()
+  }, [ensureDetectedAgents])
+
   const containerRefCallback = useCallback((node: HTMLDivElement | null) => {
     if (resizeObserverRef.current) {
       resizeObserverRef.current.disconnect()
@@ -735,17 +751,20 @@ function StatusBarInner(): React.JSX.Element | null {
     }
   }, [])
 
+  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) {
       return
     }
     setIsRefreshing(true)
     try {
-      await refreshRateLimits()
+      // Why: also re-run PATH detection so a freshly-installed CLI's bar
+      // appears (and a removed CLI's bar hides) without restarting Orca.
+      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
     } finally {
       setIsRefreshing(false)
     }
-  }, [isRefreshing, refreshRateLimits])
+  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
@@ -756,13 +775,27 @@ function StatusBarInner(): React.JSX.Element | null {
   // Why: hiding `unavailable` providers makes the status bar appear to lose a
   // provider at random after refreshes or wake/resume. Keeping the slot visible
   // preserves layout stability and makes it obvious that the provider is still
-  // configured but currently unavailable.
-  const showClaude = claude && statusBarItems.includes('claude')
-  const showCodex = codex && statusBarItems.includes('codex')
+  // configured but currently unavailable. Detection-gating (see
+  // status-bar-agent-gating) hides the per-CLI bars when the agent isn't
+  // installed on PATH — this is what stops a fresh install from showing
+  // "Gemini Usage" when Gemini isn't installed.
+  const showClaude =
+    !!claude &&
+    statusBarItems.includes('claude') &&
+    isStatusBarItemAvailable('claude', detectedAgentIds)
+  const showCodex =
+    !!codex &&
+    statusBarItems.includes('codex') &&
+    isStatusBarItemAvailable('codex', detectedAgentIds)
   // Why: hide only when the state hasn't loaded yet (null), not when unavailable.
   // Gemini shows if credentials exist; OpenCode Go shows always so users can see
   // the provider and know to configure the cookie in Settings.
-  const showGemini = gemini !== null && statusBarItems.includes('gemini')
+  const showGemini =
+    gemini !== null &&
+    statusBarItems.includes('gemini') &&
+    isStatusBarItemAvailable('gemini', detectedAgentIds)
+  // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
+  // detection-gating doesn't apply.
   const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
@@ -854,27 +887,33 @@ function StatusBarInner(): React.JSX.Element | null {
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent className="min-w-0 w-fit" sideOffset={0} align="start">
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('claude')}
-            onCheckedChange={() => toggleStatusBarItem('claude')}
-          >
-            <ClaudeIcon size={14} />
-            Claude Usage
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('codex')}
-            onCheckedChange={() => toggleStatusBarItem('codex')}
-          >
-            <OpenAIIcon size={14} />
-            Codex Usage
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('gemini')}
-            onCheckedChange={() => toggleStatusBarItem('gemini')}
-          >
-            <GeminiIcon size={14} />
-            Gemini Usage
-          </DropdownMenuCheckboxItem>
+          {isStatusBarItemAvailable('claude', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('claude')}
+              onCheckedChange={() => toggleStatusBarItem('claude')}
+            >
+              <ClaudeIcon size={14} />
+              Claude Usage
+            </DropdownMenuCheckboxItem>
+          )}
+          {isStatusBarItemAvailable('codex', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('codex')}
+              onCheckedChange={() => toggleStatusBarItem('codex')}
+            >
+              <OpenAIIcon size={14} />
+              Codex Usage
+            </DropdownMenuCheckboxItem>
+          )}
+          {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('gemini')}
+              onCheckedChange={() => toggleStatusBarItem('gemini')}
+            >
+              <GeminiIcon size={14} />
+              Gemini Usage
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('opencode-go')}
             onCheckedChange={() => toggleStatusBarItem('opencode-go')}

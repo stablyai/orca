@@ -10,6 +10,11 @@ import {
   type SlashCommand,
   type SlashMenuState
 } from './rich-markdown-commands'
+import {
+  collapseEmptyListContinuationParagraph,
+  commitEmptyOrderedListMarkerAsText,
+  convertEmptyNestedOrderedItemToContinuation
+} from './rich-markdown-list-continuation'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -26,6 +31,7 @@ export type KeyHandlerContext = {
   filteredDocLinkRowsRef: MutableRefObject<DocLinkMenuRow[]>
   selectedDocLinkIndexRef: MutableRefObject<number>
   handleLocalImagePickRef: MutableRefObject<() => void>
+  typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
   setIsEditingLink: (editing: boolean) => void
@@ -34,6 +40,10 @@ export type KeyHandlerContext = {
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
   setSlashMenu: (menu: SlashMenuState | null) => void
   setDocLinkMenu: (menu: DocLinkMenuState | null) => void
+}
+
+function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
+  return event.isComposing || editor?.view.composing === true
 }
 
 /**
@@ -94,6 +104,33 @@ export function createRichMarkdownKeyHandler(
         ctx.setIsEditingLink(true)
       }
       return true
+    }
+
+    if (event.key === 'Backspace') {
+      const ed = ctx.editorRef.current
+      if (
+        ed &&
+        !isComposingMarkdownInput(event, ed) &&
+        (convertEmptyNestedOrderedItemToContinuation(ed) ||
+          collapseEmptyListContinuationParagraph(ed))
+      ) {
+        event.preventDefault()
+        return true
+      }
+    }
+
+    if (event.key === 'Enter') {
+      const ed = ctx.editorRef.current
+      if (
+        ed &&
+        !isComposingMarkdownInput(event, ed) &&
+        ctx.typedEmptyOrderedListMarkerRef.current &&
+        commitEmptyOrderedListMarkerAsText(ed)
+      ) {
+        ctx.typedEmptyOrderedListMarkerRef.current = false
+        event.preventDefault()
+        return true
+      }
     }
 
     // Tab/Shift-Tab: indent/outdent lists, insert spaces in code blocks,

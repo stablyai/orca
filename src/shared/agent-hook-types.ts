@@ -4,7 +4,8 @@
 // gemini/cursor/hook-service.ts). Lives in `shared/` to keep a single
 // source of truth for the version string and status contract.
 
-export type AgentHookTarget = 'claude' | 'codex' | 'gemini' | 'cursor'
+export const AGENT_HOOK_TARGETS = ['claude', 'codex', 'gemini', 'cursor'] as const
+export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 
 export type AgentHookInstallState = 'installed' | 'not_installed' | 'partial' | 'error'
 

@@ -579,6 +579,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!repoName) {
         throw new Error('Could not determine repository name from URL')
       }
+      // Why: gitSpawn uses args.destination as cwd, so it must exist before
+      // spawn — fresh installs may have a defaulted parent dir that does not
+      // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
+      await mkdir(args.destination, { recursive: true })
       const clonePath = join(args.destination, repoName)
 
       // Why: use spawn instead of execFile so there is no maxBuffer limit.

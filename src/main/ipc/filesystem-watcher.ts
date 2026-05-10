@@ -450,14 +450,16 @@ function replaceRemoteWatcher(key: string, unwatch: () => void): void {
   remoteWatchers.set(key, unwatch)
 }
 
+type RemoteWatcherInstallResult = 'installed' | 'unavailable' | 'cancelled'
+
 async function installRemoteWatcher(
   sender: WebContents,
   connectionId: string,
   worktreePath: string
-): Promise<boolean> {
+): Promise<RemoteWatcherInstallResult> {
   const provider = getSshFilesystemProvider(connectionId)
   if (!provider || sender.isDestroyed()) {
-    return false
+    return 'unavailable'
   }
 
   const key = `${connectionId}:${worktreePath}`
@@ -484,7 +486,7 @@ async function installRemoteWatcher(
     } catch (err) {
       console.error(`[filesystem-watcher] remote unwatch (post-cancel) error for ${key}:`, err)
     }
-    return false
+    return 'cancelled'
   }
   replaceRemoteWatcher(key, unwatch)
   loggedUnavailableRemoteWatchers.delete(key)
@@ -501,7 +503,7 @@ async function installRemoteWatcher(
       pendingRemoteWatcherRetries.delete(key)
     }
   })
-  return true
+  return 'installed'
 }
 
 function scheduleRemoteWatcherRetry(
@@ -537,8 +539,12 @@ function scheduleRemoteWatcherRetry(
   const retryTimer = setTimeout(() => {
     pendingRemoteWatcherRetries.delete(key)
     void installRemoteWatcher(sender, connectionId, worktreePath)
-      .then((installed) => {
-        if (!installed) {
+      .then((result) => {
+        // Why: 'cancelled' means an unwatch/shutdown raced with this install
+        // attempt. Re-arming the retry would reschedule for a worktree the
+        // renderer explicitly stopped watching, eventually firing a stale
+        // overflow when the 60s window expires.
+        if (result === 'unavailable') {
           scheduleRemoteWatcherRetry(sender, connectionId, worktreePath, startedAt)
         }
       })
@@ -557,12 +563,12 @@ export function registerFilesystemWatcherHandlers(): void {
     async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
         const key = `${args.connectionId}:${args.worktreePath}`
-        const installed = await installRemoteWatcher(
+        const result = await installRemoteWatcher(
           event.sender,
           args.connectionId,
           args.worktreePath
         )
-        if (!installed) {
+        if (result === 'unavailable') {
           if (!loggedUnavailableRemoteWatchers.has(key)) {
             loggedUnavailableRemoteWatchers.add(key)
             console.warn(

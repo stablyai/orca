@@ -16,7 +16,9 @@ import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
+import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
+import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
 import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
@@ -50,6 +52,7 @@ import { cursorHookService } from './cursor/hook-service'
 import { getPtyIdForPaneKey, registerPaneKeyTeardownListener, getLocalPtyProvider } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
+import { setUnreadDockBadgeCount } from './dock/unread-badge'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -445,6 +448,7 @@ app.whenReady().then(async () => {
   // regardless of whether it originates from the renderer, an IPC handler,
   // or `trackAppOpenedOnce` / `did-finish-load`.
   initCohortClassifier(store)
+  initOnboardingCohortClassifier(store)
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
@@ -485,22 +489,14 @@ app.whenReady().then(async () => {
   // Why: managed hook installation mutates user-global agent config. Each
   // installer runs inside its own try/catch so a malformed local config
   // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
-  for (const installManagedHooks of [
-    () => claudeHookService.install(),
-    () => codexHookService.install(),
-    () => geminiHookService.install()
-  ]) {
-    try {
-      installManagedHooks()
-    } catch (error) {
-      console.error('[agent-hooks] Failed to install managed hooks:', error)
-    }
-  }
-  try {
-    cursorHookService.install()
-  } catch (error) {
-    console.error('[agent-hooks] Failed to install Cursor managed hooks:', error)
-  }
+  // The agent label travels with each installer so the catch can attribute
+  // the failure in the `agent_hook_install_failed` telemetry event.
+  runManagedHookInstallers([
+    ['claude', () => claudeHookService.install()],
+    ['codex', () => codexHookService.install()],
+    ['gemini', () => geminiHookService.install()],
+    ['cursor', () => cursorHookService.install()]
+  ])
 
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
@@ -547,7 +543,7 @@ app.whenReady().then(async () => {
       const ui = store?.getUI()
       return {
         showTasksButton: settings?.showTasksButton !== false,
-        showTitlebarAgentActivity: settings?.showTitlebarAgentActivity !== false,
+        showTitlebarAppName: settings?.showTitlebarAppName !== false,
         statusBarVisible: ui?.statusBarVisible !== false
       }
     }
@@ -614,7 +610,15 @@ app.whenReady().then(async () => {
   // dialog either doesn't appear or gets immediately covered by the maximized
   // window, making it impossible for the user to click "Allow".
   win.once('show', () => {
-    triggerStartupNotificationRegistration(store!)
+    // Why: store can be null if init failed earlier; bail rather than risk a
+    // throw inside an Electron event listener.
+    if (!store) {
+      return
+    }
+    const onboarding = store.getOnboarding()
+    if (onboarding.closedAt !== null) {
+      triggerStartupNotificationRegistration(store)
+    }
   })
 
   app.on('activate', () => {
@@ -649,6 +653,7 @@ app.on('will-quit', (e) => {
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
   starNag?.stop()
+  setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   stats?.flush()
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,

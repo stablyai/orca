@@ -742,10 +742,7 @@ describe('mobile subscribe integration', () => {
           rows: 20
         })
         expect(runtime.isMobileSubscriberActive('pty-1'), `iter ${i}: no subscribers`).toBe(false)
-        expect(
-          runtime.getTerminalFitOverride('pty-1'),
-          `iter ${i}: override held`
-        ).not.toBeNull()
+        expect(runtime.getTerminalFitOverride('pty-1'), `iter ${i}: override held`).not.toBeNull()
 
         // Desktop clicks Restore — held-override branch.
         const ok = await runtime.reclaimTerminalForDesktop('pty-1')
@@ -754,10 +751,7 @@ describe('mobile subscribe integration', () => {
           cols: 150,
           rows: 40
         })
-        expect(
-          runtime.getTerminalFitOverride('pty-1'),
-          `iter ${i}: override cleared`
-        ).toBeNull()
+        expect(runtime.getTerminalFitOverride('pty-1'), `iter ${i}: override cleared`).toBeNull()
       }
     })
 
@@ -778,10 +772,7 @@ describe('mobile subscribe integration', () => {
           cols: 150,
           rows: 40
         })
-        expect(
-          runtime.getTerminalFitOverride('pty-1'),
-          `iter ${i}: override cleared`
-        ).toBeNull()
+        expect(runtime.getTerminalFitOverride('pty-1'), `iter ${i}: override cleared`).toBeNull()
       }
     })
 

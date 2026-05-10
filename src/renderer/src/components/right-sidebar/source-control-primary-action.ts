@@ -14,7 +14,7 @@ import type { GitUpstreamStatus } from '../../../../shared/types'
 // `handlePrimaryClick` switch exhaustively over only the kinds the
 // primary can actually emit, and it kills the compound-commit branch in
 // the isRemoteOperationActive tooltip below at compile time.
-export type PrimaryActionKind = 'commit' | 'push' | 'pull' | 'sync' | 'publish'
+export type PrimaryActionKind = 'commit' | 'stage' | 'push' | 'pull' | 'sync' | 'publish'
 
 // Why: the in-flight remote op tracker stores which action the user actually
 // triggered, so the primary button can mirror that label/spinner instead of
@@ -47,6 +47,7 @@ export type PrimaryActionInputs = {
 }
 
 const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
+  stage: 'Stage Files',
   push: 'Push',
   pull: 'Pull',
   sync: 'Sync',
@@ -185,6 +186,20 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
       label: 'Commit',
       title: 'Enter a commit message to commit',
       disabled: true
+    }
+  }
+
+  // 5b. Nothing staged but local changes exist — surface staging as the
+  //     primary so dirty trees don't invite a remote op (pull/sync would fail
+  //     with uncommitted changes; push/publish skips the actual user need).
+  //     Sits before the upstream-status checks so it works regardless of
+  //     whether upstream has resolved yet.
+  if (!hasStaged && hasUnstagedChanges) {
+    return {
+      kind: 'stage',
+      label: 'Stage Files',
+      title: 'Stage all changes',
+      disabled: false
     }
   }
 

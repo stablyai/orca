@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
-import { waitForSentinel } from './ssh-relay-deploy-helpers'
+import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { RELAY_SENTINEL } from './relay-protocol'
 
 function createMockChannel(): ClientChannel {
@@ -38,5 +38,40 @@ describe('waitForSentinel', () => {
     transport.onData((chunk) => chunks.push(chunk.toString('utf-8')))
 
     expect(chunks).toEqual(['same-chunk-frame'])
+  })
+
+  it('rejects on relay channel errors before the sentinel instead of emitting uncaught errors', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    expect(() => channel.emit('error', new Error('remote host rebooted'))).not.toThrow()
+    await expect(transportPromise).rejects.toThrow('remote host rebooted')
+  })
+
+  it('notifies transport close subscribers on relay channel errors after the sentinel', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.emit('data', Buffer.from(RELAY_SENTINEL))
+    const transport = await transportPromise
+    const onClose = vi.fn()
+    transport.onClose(onClose)
+
+    expect(() => channel.emit('error', new Error('remote host rebooted'))).not.toThrow()
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('execCommand', () => {
+  it('rejects on command channel errors instead of emitting uncaught errors', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'uname -sm')
+
+    await Promise.resolve()
+    expect(() => channel.emit('error', new Error('remote host rebooted'))).not.toThrow()
+    await expect(commandPromise).rejects.toThrow('remote host rebooted')
   })
 })

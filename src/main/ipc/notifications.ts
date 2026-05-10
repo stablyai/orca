@@ -5,6 +5,7 @@ import type { Store } from '../persistence'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationPermissionStatusResult,
   NotificationSoundDataResult
 } from '../../shared/types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -31,6 +32,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   const recentNotifications = new Map<string, number>()
 
   ipcMain.removeHandler('notifications:openSystemSettings')
+  ipcMain.removeHandler('notifications:getPermissionStatus')
+  ipcMain.removeHandler('notifications:requestPermission')
   ipcMain.handle('notifications:openSystemSettings', (): void => {
     if (process.platform === 'darwin') {
       // Deep-link into the macOS Notifications settings pane.
@@ -38,6 +41,25 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     } else if (process.platform === 'win32') {
       void shell.openExternal('ms-settings:notifications')
     }
+  })
+
+  // Why: Electron's main-process `Notification` class exposes no synchronous
+  // way to read macOS auth status — the renderer-side `Notification.permission`
+  // does not exist here. We expose what we can reliably observe: whether the
+  // platform supports notifications and whether we've already kicked off the
+  // first-permission prompt. A 'denied' OS result is invisible to us; the
+  // dispatch path simply won't deliver in that case, which the user can
+  // diagnose via the System Settings deep-link.
+  const getPermissionStatus = (): NotificationPermissionStatusResult => ({
+    supported: Notification.isSupported(),
+    platform: process.platform,
+    requested: store.getUI().notificationPermissionRequested === true
+  })
+
+  ipcMain.handle('notifications:getPermissionStatus', getPermissionStatus)
+  ipcMain.handle('notifications:requestPermission', (): NotificationPermissionStatusResult => {
+    triggerStartupNotificationRegistration(store)
+    return getPermissionStatus()
   })
 
   ipcMain.removeHandler('notifications:dispatch')

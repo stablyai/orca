@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { getDefaultUIState } from '../../shared/constants'
 
 import {
@@ -14,10 +14,14 @@ import logo from '../../../resources/logo.svg'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { useAppStore } from './store'
 import { useShallow } from 'zustand/react/shallow'
 import { useIpcEvents } from './hooks/useIpcEvents'
@@ -31,10 +35,12 @@ import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
+import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
+import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -42,15 +48,13 @@ import {
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import { buildWorkspaceSessionPayload } from './lib/workspace-session'
-import { countWorkingAgents, getWorkingAgentsPerWorktree } from './lib/agent-status'
-import { activateAndRevealWorktree } from './lib/worktree-activation'
 import { applyDocumentTheme } from './lib/document-theme'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { findWorktreeById, getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { isEditableTarget } from './lib/editable-target'
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
+import type { OnboardingState } from '../../shared/types'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -61,7 +65,20 @@ const isWindows = !isMac && navigator.userAgent.includes('Windows')
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
-    return window.api.ui.onMaximizeChanged(setMaximized)
+    // Why: window:maximize-changed only fires on transitions, so a window
+    // restored to a maximized state at startup would render the wrong icon
+    // until the user first clicks the button. Seed from main on mount.
+    let cancelled = false
+    void window.api.ui.isMaximized().then((value) => {
+      if (!cancelled) {
+        setMaximized(value)
+      }
+    })
+    const unsubscribe = window.api.ui.onMaximizeChanged(setMaximized)
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
   return (
     <div className="window-controls">
@@ -117,30 +134,14 @@ const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceCo
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  // xterm.js focuses a hidden <textarea class="xterm-helper-textarea"> for
-  // keyboard input.  That element IS an editable target, but we must NOT
-  // suppress global shortcuts when the terminal itself is focused — otherwise
-  // Cmd/Ctrl+P and other app-level keybindings become unreachable.
-  if (target.classList.contains('xterm-helper-textarea')) {
-    return false
-  }
-
-  if (target.isContentEditable) {
-    return true
-  }
-  return (
-    target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !==
-    null
-  )
-}
+// Why: lazy so onboarding's step modules + assets aren't fetched for users
+// past first-launch. The gate `shouldShowOnboarding` lives in its own tiny
+// module so no eager import path pulls OnboardingFlow into the main chunk.
+const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
 
 function App(): React.JSX.Element {
+  useUnreadDockBadge()
+
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
   // must check on every store mutation. Consolidating 19 action refs into one
@@ -178,23 +179,6 @@ function App(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const agentInputs = useAppStore(
-    useShallow((s) => ({
-      tabsByWorktree: s.tabsByWorktree,
-      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-      // Why: ptyIdsByTabId gates title-scraped agent activity on actual PTY
-      // liveness so slept worktrees (whose pane titles are preserved as wake
-      // hints) cannot inflate the title-bar count or dock badge.
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      worktreesByRepo: s.worktreesByRepo
-    }))
-  )
-  const activeAgentCount = useMemo(() => countWorkingAgents(agentInputs), [agentInputs])
-  const workingAgentsPerWorktree = useMemo(
-    () => getWorkingAgentsPerWorktree(agentInputs),
-    [agentInputs]
-  )
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
@@ -217,6 +201,7 @@ function App(): React.JSX.Element {
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -289,6 +274,10 @@ function App(): React.JSX.Element {
           actions.pruneLastVisitedTimestamps()
           actions.seedActiveWorktreeLastVisitedIfMissing()
           await actions.fetchBrowserSessionProfiles()
+          const onboardingState = await window.api.onboarding.get()
+          if (!cancelled) {
+            setOnboarding(onboardingState)
+          }
 
           // Why: SSH connections must be re-established BEFORE terminal
           // reconnect so that reconnectPersistedTerminals can route SSH-backed
@@ -737,14 +726,7 @@ function App(): React.JSX.Element {
     })
     observer.observe(controls)
     return () => observer.disconnect()
-  }, [
-    activeAgentCount,
-    isFullScreen,
-    settings?.showTitlebarAgentActivity,
-    showSidebar,
-    workspaceActive,
-    sidebarOpen
-  ])
+  }, [isFullScreen, settings?.showTitlebarAppName, showSidebar, workspaceActive, sidebarOpen])
 
   useEffect(() => {
     if (
@@ -806,6 +788,28 @@ function App(): React.JSX.Element {
           <div className="pl-2" />
         )}
         {showSidebar && (
+          <>
+            {settings?.showTitlebarAppName !== false && (
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <div className="titlebar-app-name" aria-label="Orca">
+                    Orca
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem
+                    onSelect={() => {
+                      void actions.updateSettings({ showTitlebarAppName: false })
+                    }}
+                  >
+                    Hide App Name
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            )}
+          </>
+        )}
+        {showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -821,101 +825,6 @@ function App(): React.JSX.Element {
             </TooltipContent>
           </Tooltip>
         )}
-        {settings?.showTitlebarAgentActivity !== false ? (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
-                aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-              >
-                <span
-                  className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
-                  aria-hidden
-                />
-                <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
-              <div
-                className={`titlebar-agent-hovercard-header${activeAgentCount > 0 ? ' titlebar-agent-hovercard-header-with-list' : ''}`}
-              >
-                {activeAgentCount === 0
-                  ? 'No agents active'
-                  : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-              </div>
-              {activeAgentCount > 0 && (
-                <div className="titlebar-agent-hovercard-list">
-                  {Object.entries(workingAgentsPerWorktree).map(([worktreeId, { agents }]) => {
-                    const wt = findWorktreeById(worktreesByRepo, worktreeId)
-                    // Why: when a transient git error causes worktreesByRepo to
-                    // lose a worktree, the raw worktreeId (uuid::path) is not
-                    // useful. Extract a cross-platform path basename as a
-                    // readable fallback.
-                    const sepIdx = worktreeId.indexOf('::')
-                    const pathPart = sepIdx !== -1 ? worktreeId.slice(sepIdx + 2) : worktreeId
-                    const fallbackName = pathPart.split(/[\\/]/).pop() || pathPart
-                    return (
-                      <div key={worktreeId}>
-                        <button
-                          className="titlebar-agent-hovercard-worktree"
-                          onClick={() => {
-                            // Why: if the worktree is missing from worktreesByRepo
-                            // (transient git error cleared the list), refresh the
-                            // repo's worktrees before navigating so the activation
-                            // lookup succeeds instead of silently failing.
-                            if (!wt) {
-                              const repoId = getRepoIdFromWorktreeId(worktreeId)
-                              void useAppStore
-                                .getState()
-                                .fetchWorktrees(repoId)
-                                .then(() => {
-                                  activateAndRevealWorktree(worktreeId)
-                                })
-                              return
-                            }
-                            activateAndRevealWorktree(worktreeId)
-                          }}
-                        >
-                          <span className="titlebar-agent-hovercard-name">
-                            {wt?.displayName ?? fallbackName}
-                          </span>
-                        </button>
-                        {agents.map((agent) => (
-                          <button
-                            key={`${agent.tabId}:${agent.paneId ?? 'none'}:${agent.label}`}
-                            className="titlebar-agent-hovercard-agent"
-                            onClick={() => {
-                              activateAndRevealWorktree(worktreeId)
-                              activateTabAndFocusPane(agent.tabId, agent.paneId)
-                            }}
-                          >
-                            <span className="titlebar-agent-hovercard-agent-label">
-                              {agent.label}
-                            </span>
-                            <span className="titlebar-agent-hovercard-agent-dot" />
-                          </button>
-                        ))}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              <button
-                className="titlebar-agent-hovercard-hide"
-                onClick={() => {
-                  void actions.updateSettings({ showTitlebarAgentActivity: false })
-                  toast('Agent activity badge hidden', {
-                    description: 'You can turn it back on in Settings → Appearance.',
-                    duration: Infinity,
-                    dismissible: true
-                  })
-                }}
-              >
-                Hide from titlebar
-              </button>
-            </PopoverContent>
-          </Popover>
-        ) : null}
       </div>
       {/* Why: Back/Forward traverse mixed worktree + Tasks history, so the
           cluster is shown wherever the history shortcut is live (terminal or
@@ -987,7 +896,14 @@ function App(): React.JSX.Element {
       className="flex flex-col h-screen w-screen overflow-hidden"
       style={
         {
-          '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`
+          '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
+          // Why: consumed by anything that needs to avoid the fixed-position
+          // window-controls overlay on Windows (floating sidebar toggle, right
+          // sidebar header, etc.) without hardcoding 138px in multiple places.
+          '--window-controls-width': isWindows ? '138px' : '0px',
+          // Why: consumed by the side-position activity bar to push icons below
+          // the fixed-position window-controls overlay on Windows.
+          '--window-controls-height': isWindows ? '36px' : '0px'
         } as React.CSSProperties
       }
     >
@@ -1100,8 +1016,20 @@ function App(): React.JSX.Element {
                     a few pixels, which reads as layout jitter. */}
                 {workspaceActive && !rightSidebarOpen && (
                   <div
-                    className="absolute top-0 right-0 z-10 flex items-center h-[36px]"
-                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    className="absolute top-0 z-10 flex items-center h-[36px]"
+                    style={
+                      {
+                        // Why: right: var(--window-controls-width) is the single
+                        // mechanism that keeps the toggle clear of the
+                        // fixed-position window-controls overlay on Windows (138px)
+                        // and sits at the right edge on non-Windows (0px). No
+                        // internal spacer needed — adding one would push the button
+                        // a further 138px to the left and cover the pane-actions
+                        // Ellipsis button with an un-clickable div.
+                        right: 'var(--window-controls-width)',
+                        WebkitAppRegion: 'no-drag'
+                      } as React.CSSProperties
+                    }
                   >
                     {rightSidebarToggle}
                   </div>
@@ -1166,6 +1094,11 @@ function App(): React.JSX.Element {
       <TelemetryFirstLaunchSurface />
       <ZoomOverlay />
       <SshPassphraseDialog />
+      {onboarding && shouldShowOnboarding(onboarding) ? (
+        <Suspense fallback={null}>
+          <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
+        </Suspense>
+      ) : null}
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and

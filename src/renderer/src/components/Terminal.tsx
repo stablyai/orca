@@ -881,18 +881,13 @@ function Terminal(): React.JSX.Element | null {
     const isMac = navigator.userAgent.includes('Mac')
     const onKeyDown = (e: KeyboardEvent): void => {
       const mod = isMac ? e.metaKey : e.ctrlKey
-      // Why: when the browser workspace is the active surface, standard
-      // browser tab creation should stay inside that workspace. Reusing the
-      // same shortcut keeps Orca's embedded browser aligned with user
-      // expectations instead of unexpectedly mutating the outer tab strip.
+      // Why: Cmd/Ctrl+T always opens a new terminal, regardless of which
+      // surface is active. Browser-tab creation has its own shortcut
+      // (Cmd/Ctrl+Shift+B) so users have a predictable way to spawn a
+      // terminal from anywhere in the central pane.
       if (mod && e.key === 't' && !e.shiftKey && !e.repeat) {
         e.preventDefault()
-        const state = useAppStore.getState()
-        if (state.activeTabType === 'browser') {
-          handleNewBrowserTab()
-        } else {
-          handleNewTab()
-        }
+        handleNewTab()
         return
       }
 

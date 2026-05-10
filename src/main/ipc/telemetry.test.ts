@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: a single test file pins the IPC boundary behavior for all four telemetry handlers plus the cohort-injection invariants; splitting would fragment the threat-model coverage. */
 // IPC boundary behavior for the telemetry surface. Strict type narrows must
 // drop obviously-malformed calls before they reach the validator (the
 // renderer is in the threat model). Pins the consent-mutation rate limit:
@@ -17,14 +18,16 @@ const {
   setOptInMock,
   persistBannerAcknowledgeMock,
   consumeConsentMutationTokenMock,
-  getCohortAtEmitMock
+  getCohortAtEmitMock,
+  getOnboardingCohortAtEmitMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   trackMock: vi.fn(),
   setOptInMock: vi.fn(),
   persistBannerAcknowledgeMock: vi.fn(),
   consumeConsentMutationTokenMock: vi.fn(),
-  getCohortAtEmitMock: vi.fn()
+  getCohortAtEmitMock: vi.fn(),
+  getOnboardingCohortAtEmitMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
@@ -38,6 +41,9 @@ vi.mock('../telemetry/burst-cap', () => ({
 }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
+}))
+vi.mock('../telemetry/onboarding-cohort-classifier', () => ({
+  getOnboardingCohortAtEmit: getOnboardingCohortAtEmitMock
 }))
 
 import { _resetStoreForTests, registerTelemetryHandlers } from './telemetry'
@@ -89,6 +95,8 @@ describe('telemetry IPC handlers', () => {
     consumeConsentMutationTokenMock.mockReturnValue(true)
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 0 })
+    getOnboardingCohortAtEmitMock.mockReset()
+    getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
     _resetStoreForTests()
   })
   afterEach(() => {
@@ -156,6 +164,83 @@ describe('telemetry IPC handlers', () => {
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', {})
     expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: undefined })
+  })
+
+  // Threat-model parity with the cohort override test: a compromised
+  // renderer must NOT be able to forge `nth_repo_added` either. The same
+  // spread-order invariant applies — `{ ...baseProps, ...getCohortAtEmit() }`
+  // — and the same future-refactor regression risk exists. Pinning both
+  // fields keeps the threat model symmetric.
+  it('main-derived nth_repo_added overrides renderer-supplied value', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'app_opened', { nth_repo_added: 99 })
+    expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: 2 })
+  })
+
+  // ── Onboarding cohort injection (mirrors the nth_repo_added pattern) ──
+
+  it('injects onboarding cohort on events whose schema declares cohort', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: 'fresh_install' })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'onboarding_step_viewed', { step: 1 })
+    expect(trackMock).toHaveBeenCalledWith('onboarding_step_viewed', {
+      step: 1,
+      cohort: 'fresh_install'
+    })
+  })
+
+  it('does NOT inject onboarding cohort on non-onboarding events', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'settings_changed', { setting_key: 'editorAutoSave', value_kind: 'bool' })
+    expect(getOnboardingCohortAtEmitMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards undefined onboarding cohort fail-soft', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: true, optedIn: null })
+    getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'onboarding_started', {})
+    expect(trackMock).toHaveBeenCalledWith('onboarding_started', { cohort: undefined })
+  })
+
+  // Threat-model invariant: a compromised renderer must NOT be able to forge
+  // `cohort` by including it in the props payload. The IPC handler spreads
+  // the main-derived cohort AFTER the caller-supplied props, so the main
+  // value wins. This test pins that invariant — flipping the spread order
+  // would silently let a compromised renderer fake any cohort value.
+  it('main-derived cohort overrides renderer-supplied cohort', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: 'fresh_install' })
+    const handler = handlers.get('telemetry:track')!
+    // Caller tries to forge cohort='upgrade_backfill'; main must overwrite.
+    handler({}, 'onboarding_started', { cohort: 'upgrade_backfill' })
+    expect(trackMock).toHaveBeenCalledWith('onboarding_started', {
+      cohort: 'fresh_install'
+    })
+  })
+
+  // Threat-model invariant under degraded classifier: a compromised
+  // renderer must NOT be able to forge `cohort` even when the classifier
+  // fails soft to `{ cohort: undefined }`. The IPC handler spreads the
+  // classifier output AFTER the caller-supplied props, so an explicit
+  // `undefined` from the classifier still overwrites a forged value. A
+  // future refactor that switches the spread to a conditional assign
+  // (`if (c.cohort !== undefined) baseProps.cohort = c.cohort`) would
+  // silently regress this — pinning it here.
+  it('main-derived undefined cohort overrides renderer-supplied cohort (degraded classifier)', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: true, optedIn: true })
+    getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
+    const handler = handlers.get('telemetry:track')!
+    // Compromised renderer attempts to forge cohort='upgrade_backfill';
+    // main strips it via the explicit-undefined spread.
+    handler({}, 'onboarding_started', { cohort: 'upgrade_backfill' })
+    expect(trackMock).toHaveBeenCalledWith('onboarding_started', {
+      cohort: undefined
+    })
   })
 
   it('drops track calls with a non-string name', () => {

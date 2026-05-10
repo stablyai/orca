@@ -21,12 +21,6 @@ type Props = {
   // grows, so the parent decorator passes a callback we fire on resize and
   // it re-syncs the zone height. Without this the editor inputs would clip.
   onContentResize?: () => void
-  // Why: the SourceControl sidebar can request that a specific card open
-  // its editor. The decorator forwards that pending id; when it matches,
-  // we enter edit mode on the next render and acknowledge so the request
-  // doesn't fire repeatedly.
-  pendingEdit?: boolean
-  onPendingEditConsumed?: () => void
   onSubmitEdit?: (body: string) => Promise<boolean>
 }
 
@@ -35,48 +29,12 @@ export function DiffCommentCard({
   body,
   onDelete,
   onContentResize,
-  pendingEdit,
-  onPendingEditConsumed,
   onSubmitEdit
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-
-  // Why: stash the consumed callback in a ref so the effect below doesn't
-  // re-run every parent render (the decorator passes a fresh arrow each time).
-  // Without this, an unrelated re-render with `pendingEdit=true` still in props
-  // would re-fire the effect after `editing` flipped to false from Cancel,
-  // re-entering edit mode against the user's intent.
-  const onPendingEditConsumedRef = useRef(onPendingEditConsumed)
-  onPendingEditConsumedRef.current = onPendingEditConsumed
-  // Why: ack each `pendingEdit` activation exactly once. The effect's
-  // `editing` and `body` deps cause re-entry after `setEditing(true)` lands or
-  // when an external edit lands mid-request; without this guard ack would fire
-  // multiple times per request, producing redundant `setEditingDiffCommentId`
-  // store writes and re-render churn.
-  const ackedPendingEditRef = useRef(false)
-
-  // Why: enter edit mode when the sidebar requests it via the UI slice. The
-  // ack callback clears the pending id so re-clicking after cancel works. Ack
-  // also fires when the card is already editing — otherwise a same-id re-
-  // request from the sidebar would leave the global state stuck.
-  useEffect(() => {
-    if (!pendingEdit) {
-      ackedPendingEditRef.current = false
-      return
-    }
-    if (ackedPendingEditRef.current) {
-      return
-    }
-    ackedPendingEditRef.current = true
-    if (!editing) {
-      setEditing(true)
-      setDraft(body)
-    }
-    onPendingEditConsumedRef.current?.()
-  }, [pendingEdit, editing, body])
 
   // Why: keep the draft in sync with external body changes when not actively
   // editing, so a concurrent agent edit (or a delete + recreate) is visible

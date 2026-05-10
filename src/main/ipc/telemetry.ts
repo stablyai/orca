@@ -39,9 +39,10 @@ import { ipcMain } from 'electron'
 import { consumeConsentMutationToken } from '../telemetry/burst-cap'
 import { persistBannerAcknowledgeWithoutEmitting, setOptIn, track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
 import type { Store } from '../persistence'
-import { isCohortExtendedEvent } from '../../shared/telemetry-events'
+import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
 import type { EventName, EventProps } from '../../shared/telemetry-events'
 import type { OptInVia } from '../../shared/telemetry-events'
 
@@ -123,11 +124,20 @@ export function registerTelemetryHandlers(store: Store): void {
     // validation and silently drop the entire event. The renderer call sites
     // stay synchronous (matching the existing fire-and-forget shape) and
     // avoid an extra IPC round-trip to fetch cohort.
+    //
+    // Onboarding events get the same treatment for the `cohort` property,
+    // gated by `isOnboardingEvent` (events whose schema declares `cohort`).
+    // The two injection sets are disjoint by construction today — no schema
+    // declares both `nth_repo_added` and `cohort` — but combining them via
+    // spread keeps that an additive change rather than a structural one.
     const eventName = name as EventName
     const baseProps = (props ?? {}) as Record<string, unknown>
-    const finalProps = isCohortExtendedEvent(eventName)
+    const withRepoCohort = isCohortExtendedEvent(eventName)
       ? { ...baseProps, ...getCohortAtEmit() }
       : baseProps
+    const finalProps = isOnboardingEvent(eventName)
+      ? { ...withRepoCohort, ...getOnboardingCohortAtEmit() }
+      : withRepoCohort
     // The casts to `EventName` / `EventProps<EventName>` here are
     // pass-through only — this file does NOT pretend the renderer's
     // name/props are type-safe. The validator inside `track()` is the

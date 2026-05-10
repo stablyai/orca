@@ -1296,7 +1296,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               ...(effectivePresetId ? { presetId: effectivePresetId } : {})
             }
           : undefined,
-        telemetrySource
+        telemetrySource,
+        linkedWorkItem?.title
       )
       const worktree = result.worktree
 
@@ -1327,9 +1328,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // "create" path is the new-workspace surface; request_kind is
       // `'new'` because this is always a fresh session (issue/PR-driven
       // follow-ups go through launch-work-item-direct.ts).
+      // Why: when the composer is opened from onboarding, the first
+      // `agent_started` must attribute to `onboarding` so D1 activation
+      // can be measured against the funnel.
       const composerTelemetry: AgentStartedTelemetry = {
         agent_kind: tuiAgentToAgentKind(tuiAgent),
-        launch_source: 'new_workspace_composer',
+        launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
         request_kind: 'new'
       }
       activateAndRevealWorktree(worktree.id, {
@@ -1373,6 +1377,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     applyWorktreeMeta,
     issueCommandTemplate,
     effectiveLinkedPR,
+    linkedWorkItem?.title,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
     note,
@@ -1441,7 +1446,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(effectivePresetId ? { presetId: effectivePresetId } : {})
               }
             : undefined,
-          telemetrySource
+          telemetrySource,
+          linkedWorkItem?.title
         )
         const worktree = result.worktree
 
@@ -1527,7 +1533,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? null
             : {
                 agent_kind: tuiAgentToAgentKind(agent),
-                launch_source: 'new_workspace_composer',
+                launch_source:
+                  telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
                 request_kind: 'new'
               }
         activateAndRevealWorktree(worktree.id, {

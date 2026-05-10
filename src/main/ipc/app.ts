@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import { app, ipcMain } from 'electron'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
+import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 
 const execFileAsync = promisify(execFile)
 
@@ -65,5 +66,9 @@ export function registerAppHandlers(): void {
       app.relaunch()
       app.exit(0)
     }, 150)
+  })
+
+  ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
+    setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
   })
 }

@@ -45,7 +45,9 @@ import type {
   GetRateLimitResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationPermissionStatusResult,
   NotificationSoundResult,
+  OnboardingState,
   OrcaHooks,
   PersistedUIState,
   PRCheckDetail,
@@ -59,7 +61,9 @@ import type {
   MemorySnapshot,
   UpdateStatus,
   Worktree,
+  WorktreeBaseStatusEvent,
   WorktreeMeta,
+  WorktreeRemoteBranchConflictEvent,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionState
@@ -91,6 +95,7 @@ import type {
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
 } from '../shared/github-project-types'
+import type { RichMarkdownContextMenuCommandPayload } from '../shared/rich-markdown-context-menu'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -356,6 +361,8 @@ export type AppApi = {
    *  US QWERTY but whose Option layer composes characters (issue #1205).
    *  Returns null on non-Darwin platforms or when the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
+  /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
+  setUnreadDockBadgeCount: (count: number) => Promise<void>
 }
 
 export type PreloadApi = {
@@ -433,6 +440,10 @@ export type PreloadApi = {
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
     onChanged: (callback: (data: { repoId: string }) => void) => () => void
+    onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void) => () => void
+    onRemoteBranchConflict: (
+      callback: (data: WorktreeRemoteBranchConflictEvent) => void
+    ) => () => void
   }
   pty: {
     spawn: (opts: {
@@ -586,6 +597,12 @@ export type PreloadApi = {
       repoPath: string
       number: number
       body: string
+      /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
+       *  too, so the IPC and `gh` call paths are identical. The renderer cache
+       *  key is keyed by the drawer's `type`, so callers pass it through to
+       *  scope the cross-window invalidation broadcast correctly and avoid
+       *  evicting an unrelated PR/issue that happens to share the number. */
+      type?: 'issue' | 'pr'
     }) => Promise<GitHubCommentResult>
     addPRReviewCommentReply: (args: {
       repoPath: string
@@ -599,6 +616,14 @@ export type PreloadApi = {
     addPRReviewComment: (args: GitHubPRReviewCommentInput) => Promise<GitHubCommentResult>
     listLabels: (args: { repoPath: string }) => Promise<string[]>
     listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
+    /**
+     * Subscribe to local-mutation broadcasts. Used by the work-item-drawer
+     * cache to invalidate entries across windows after a successful mutation.
+     * Returns an unsubscribe function.
+     */
+    onWorkItemMutated: (
+      callback: (payload: { repoPath: string; type: 'issue' | 'pr'; number: number }) => void
+    ) => () => void
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
     /**
@@ -750,7 +775,20 @@ export type PreloadApi = {
   notifications: {
     dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
     openSystemSettings: () => Promise<void>
+    getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
+    requestPermission: () => Promise<NotificationPermissionStatusResult>
     playSound: (options?: { force?: boolean }) => Promise<NotificationSoundResult>
+  }
+  onboarding: {
+    get: () => Promise<OnboardingState>
+    // Why: main-process `updateOnboarding` merges checklist field-by-field, so
+    // callers can pass a partial checklist (e.g. just `{ addedRepo: true }`)
+    // without re-supplying every flag.
+    update: (
+      updates: Partial<Omit<OnboardingState, 'checklist'>> & {
+        checklist?: Partial<OnboardingState['checklist']>
+      }
+    ) => Promise<OnboardingState>
   }
   developerPermissions: {
     getStatus: () => Promise<DeveloperPermissionState[]>
@@ -1073,9 +1111,13 @@ export type PreloadApi = {
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
+    onRichMarkdownContextCommand: (
+      callback: (payload: RichMarkdownContextMenuCommandPayload) => void
+    ) => () => void
     onFullscreenChanged: (callback: (isFullScreen: boolean) => void) => () => void
     minimize: () => void
     maximize: () => void
+    isMaximized: () => Promise<boolean>
     onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
     requestClose: () => void
     popupMenu: () => void
@@ -1197,7 +1239,7 @@ export type PreloadApi = {
     listNetworkInterfaces: () => Promise<{
       interfaces: { name: string; address: string }[]
     }>
-    getPairingQR: (args?: { address?: string }) => Promise<
+    getPairingQR: (args?: { address?: string; rotate?: boolean }) => Promise<
       | { available: false }
       | {
           available: true

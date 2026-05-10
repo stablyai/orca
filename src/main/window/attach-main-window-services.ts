@@ -198,6 +198,8 @@ function registerRuntimeWindowLifecycle(
   }
   runtime.setNotifier({
     worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
+    worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
     activateWorktree: (
       repoId,

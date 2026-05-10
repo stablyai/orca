@@ -179,6 +179,16 @@ describe('SshChannelMultiplexer', () => {
       const lastFrame = transport.written.at(-1)!
       expect(lastFrame[0]).toBe(MessageType.KeepAlive)
     })
+
+    it('turns transport write failures into connection loss instead of throwing from the timer', () => {
+      const writeError = new Error('write EPIPE')
+      transport.write = vi.fn(() => {
+        throw writeError
+      })
+
+      expect(() => vi.advanceTimersByTime(5_000)).not.toThrow()
+      expect(mux.isDisposed()).toBe(true)
+    })
   })
 
   describe('dispose', () => {

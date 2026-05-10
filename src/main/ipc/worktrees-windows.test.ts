@@ -184,9 +184,15 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     // Why: createLocalWorktree routes `git fetch` through
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). Stub it for path tests.
     const runtimeStub = {
-      fetchRemoteWithCache: async () => {
-        /* noop */
-      }
+      resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
+      hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
+      isRemoteFetchFresh: vi.fn().mockResolvedValue(false),
+      getOrStartRemoteFetch: vi.fn().mockResolvedValue({ ok: true }),
+      fetchRemoteWithCache: vi.fn().mockResolvedValue(undefined),
+      emitWorktreeBaseStatus: vi.fn(),
+      recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
+      reconcileWorktreeBaseStatus: vi.fn(),
+      clearOptimisticReconcileToken: vi.fn()
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })

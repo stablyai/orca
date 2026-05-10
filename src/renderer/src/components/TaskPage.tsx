@@ -785,21 +785,6 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [pageData.taskSource])
 
-  // Why: when settings hydrate after Tasks mounts, seed taskSource from
-  // defaultTaskSource — but only once. Re-running on every defaultTaskSource
-  // change would clobber an in-session manual source pick (e.g. the user
-  // clicked the Linear icon and then changed the default in Settings).
-  const defaultTaskSourceSeededRef = useRef(false)
-  useEffect(() => {
-    if (defaultTaskSourceSeededRef.current) {
-      return
-    }
-    if (!pageData.taskSource && settings?.defaultTaskSource) {
-      setTaskSource(settings.defaultTaskSource)
-      defaultTaskSourceSeededRef.current = true
-    }
-  }, [settings?.defaultTaskSource, pageData.taskSource])
-
   // Why: Project mode is a sub-tab within the GitHub source. Visible whenever
   // the user is on the GitHub task source — actual entry into Project mode is
   // gated on a non-null `activeProject` once they pick one.

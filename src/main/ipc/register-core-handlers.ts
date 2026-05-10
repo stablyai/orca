@@ -17,6 +17,7 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerNotificationHandlers } from './notifications'
+import { registerOnboardingHandlers } from './onboarding'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
@@ -83,6 +84,7 @@ export function registerCoreHandlers(
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)
   registerNotificationHandlers(store, runtime)
+  registerOnboardingHandlers(store)
   registerDeveloperPermissionHandlers()
   registerSettingsHandlers(store)
   registerTelemetryHandlers(store)

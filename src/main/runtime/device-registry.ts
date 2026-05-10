@@ -52,6 +52,17 @@ export class DeviceRegistry {
     return this.addDevice(name)
   }
 
+  // Why: explicit rotation path for "Regenerate QR" — invalidates any
+  // existing never-scanned token (e.g. one that was screenshotted, copied
+  // to clipboard, or shown on a screen-share) and mints a fresh one. Without
+  // this, getOrCreatePendingDevice keeps returning the same token forever
+  // until a phone actually pairs, so users have no way to revoke a leaked
+  // pre-pairing token.
+  rotatePendingDevice(name: string): DeviceEntry {
+    this.devices = this.devices.filter((d) => d.lastSeenAt !== 0)
+    return this.addDevice(name)
+  }
+
   removeDevice(deviceId: string): boolean {
     const before = this.devices.length
     this.devices = this.devices.filter((d) => d.deviceId !== deviceId)

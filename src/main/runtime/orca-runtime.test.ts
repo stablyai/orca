@@ -1200,6 +1200,46 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false)
   })
 
+  it('clears optimistic reconcile tokens when a CLI worktree removal succeeds', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const worktreeBaseStatus = vi.fn()
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      worktreeBaseStatus,
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+
+    const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+    await runtime.reconcileWorktreeBaseStatus({
+      repoId: TEST_REPO_ID,
+      repoPath: TEST_REPO_PATH,
+      worktreeId: TEST_WORKTREE_ID,
+      base: {
+        remote: 'origin',
+        branch: 'main',
+        ref: 'refs/remotes/origin/main',
+        base: 'origin/main'
+      },
+      branchName: 'feature',
+      createdBaseSha: 'created-sha',
+      token,
+      fetchPromise: Promise.resolve({ ok: true })
+    })
+
+    expect(worktreeBaseStatus).not.toHaveBeenCalled()
+  })
+
   it('invalidates the filesystem-auth cache after CLI worktree creation', async () => {
     // Reproduces: CLI-created worktrees fail with "Access denied: unknown
     // repository or worktree path" because the filesystem-auth cache was
@@ -1402,9 +1442,10 @@ describe('OrcaRuntimeService', () => {
 
       runtime.setAgentBrowserBridge({ tabSwitch: tabSwitchMock } as never)
 
-      await expect(
-        runtime.browserTabSwitch({ page: 'page-1', focus: true })
-      ).resolves.toEqual({ switched: 0, browserPageId: 'page-1' })
+      await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({
+        switched: 0,
+        browserPageId: 'page-1'
+      })
       // Bridge is unchanged — focus is delivered to the renderer via IPC
       // (notifyRendererBrowserPaneFocus), not threaded through bridge state.
       expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')

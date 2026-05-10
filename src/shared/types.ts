@@ -111,6 +111,8 @@ export type Worktree = {
   /** ID of the saved preset this worktree was created from, if any. Cleared
    *  when the worktree is no longer sparse on refresh. */
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
@@ -131,6 +133,8 @@ export type WorktreeMeta = {
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 }
 
@@ -841,6 +845,10 @@ export type SparsePreset = {
 export type CreateWorktreeArgs = {
   repoId: string
   name: string
+  /** Optional user-facing label to persist separately from the git-safe
+   *  branch/path seed. Used when a workspace is created from a GitHub or
+   *  Linear artifact whose title should remain readable in the sidebar. */
+  displayName?: string
   baseBranch?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
@@ -859,6 +867,28 @@ export type CreateWorktreeResult = {
   worktree: Worktree
   setup?: WorktreeSetupLaunch
   warning?: string
+  initialBaseStatus?: WorktreeBaseStatusEvent
+}
+
+export type WorktreeBaseStatusKind = 'checking' | 'current' | 'drift' | 'base_changed' | 'unknown'
+
+export type WorktreeBaseStatusEvent = {
+  repoId: string
+  worktreeId: string
+  status: WorktreeBaseStatusKind
+  base: string
+  /** Configured remote name parsed from `base` (longest-prefix match). Absent
+   *  when classification skipped optimistic reconcile (e.g. legacy fallback). */
+  remote?: string
+  behind?: number
+  recentSubjects?: string[]
+}
+
+export type WorktreeRemoteBranchConflictEvent = {
+  repoId: string
+  worktreeId: string
+  remote: string
+  branchName: string
 }
 
 // ─── Updater ─────────────────────────────────────────────────────────
@@ -1119,8 +1149,8 @@ export type GlobalSettings = {
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
   rightSidebarOpenByDefault: boolean
-  /** Whether to show the live agent activity count badge in the titlebar. */
-  showTitlebarAgentActivity: boolean
+  /** Whether to show the Orca app name in the titlebar. */
+  showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */
@@ -1271,6 +1301,14 @@ export type GhosttyImportPreview = {
   error?: string
 }
 
+// Subset of the renderer's onboarding-step Ghostty `DiscoveryState['status']`
+// values that ever ship a telemetry event. The UI-only states (`'idle'`,
+// `'detecting'`) never fire `onboarding_ghostty_discovered`. Lives in
+// `shared/` because the schema in `telemetry-events.ts` (node-tsconfig) and
+// `ThemeStep.tsx` (web-tsconfig) both need it for the compile-time
+// schema-vs-renderer enum sync guard.
+export type DiscoveryStatusEmitted = 'found' | 'absent' | 'imported'
+
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
 
 export type NotificationDispatchRequest = {
@@ -1315,6 +1353,41 @@ export type NotificationSoundDataResult =
 export type NotificationSoundPathResult =
   | { ok: true; path: string }
   | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
+
+export type OnboardingOutcome = 'completed' | 'dismissed'
+
+export type OnboardingChecklistState = {
+  addedRepo: boolean
+  choseAgent: boolean
+  ranFirstAgent: boolean
+  ranSecondAgentOnSameTask: boolean
+  triedCmdJ: boolean
+  shapedSidebar: boolean
+  reviewedDiff: boolean
+  openedPr: boolean
+  addedFolder: boolean
+  openedFile: boolean
+  ranAgentOnFile: boolean
+  // Why: UI state flag (panel visibility), not an activation event. The
+  // telemetry checklist enum in telemetry-events.ts intentionally omits this.
+  dismissed: boolean
+}
+
+export type OnboardingState = {
+  closedAt: number | null
+  outcome: OnboardingOutcome | null
+  // Sentinel `-1` = not started; `1..4` = highest wizard step the user
+  // finished. Kept as `number` (not a literal union) because callers clamp
+  // via `Math.max`/`Math.min` against arbitrary numerics.
+  lastCompletedStep: number
+  checklist: OnboardingChecklistState
+}
+
+export type NotificationPermissionStatusResult = {
+  supported: boolean
+  platform: NodeJS.Platform
+  requested: boolean
+}
 
 export type WorktreeCardProperty =
   | 'status'
@@ -1534,6 +1607,7 @@ export type PersistedState = {
   }
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
+  onboarding: OnboardingState
 }
 
 // ─── Filesystem ─────────────────────────────────────────────

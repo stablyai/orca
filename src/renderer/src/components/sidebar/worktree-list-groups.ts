@@ -2,7 +2,7 @@ import {
   CircleCheckBig,
   CircleDot,
   CircleX,
-  FolderGit2,
+  Folder,
   GitPullRequest,
   LayoutList,
   Pin
@@ -62,7 +62,7 @@ export const PR_GROUP_META: Record<
 
 export const REPO_GROUP_META = {
   tone: 'text-foreground',
-  icon: FolderGit2
+  icon: Folder
 } as const
 
 export const PINNED_GROUP_KEY = 'pinned'

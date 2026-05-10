@@ -32,7 +32,8 @@ const {
   registerFilesystemWatcherHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
-  registerExportHandlersMock
+  registerExportHandlersMock,
+  registerOnboardingHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -65,7 +66,12 @@ const {
   registerFilesystemWatcherHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
-  registerExportHandlersMock: vi.fn()
+  registerExportHandlersMock: vi.fn(),
+  registerOnboardingHandlersMock: vi.fn()
+}))
+
+vi.mock('./onboarding', () => ({
+  registerOnboardingHandlers: registerOnboardingHandlersMock
 }))
 
 vi.mock('./cli', () => ({
