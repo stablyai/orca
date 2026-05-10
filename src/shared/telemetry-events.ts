@@ -20,6 +20,7 @@ import type {
   DiscoveryStatusEmitted,
   GlobalSettings,
   OnboardingChecklistState,
+  PathSource,
   ShellHydrationFailureReason
 } from './types'
 
@@ -404,6 +405,15 @@ type _PathFailureReasonSync =
     : never
 const _pathFailureReasonSyncCheck: _PathFailureReasonSync = true
 void _pathFailureReasonSyncCheck
+
+type _PathSourceSync =
+  z.infer<typeof pathSourceSchema> extends PathSource
+    ? PathSource extends z.infer<typeof pathSourceSchema>
+      ? true
+      : never
+    : never
+const _pathSourceSyncCheck: _PathSourceSync = true
+void _pathSourceSyncCheck
 
 // Fired at click time from `setSelectedAgentInteractive` so we capture
 // mind-changes within the step rather than just the final pick. `agent_kind`
