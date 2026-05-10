@@ -68,7 +68,8 @@ export type WorktreeSlice = {
     /** Telemetry-only: which renderer surface initiated this create. Optional
      *  so existing callers default to `unknown`; specify when the surface
      *  matters for the activation funnel. */
-    telemetrySource?: WorkspaceCreateTelemetrySource
+    telemetrySource?: WorkspaceCreateTelemetrySource,
+    displayName?: string
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,

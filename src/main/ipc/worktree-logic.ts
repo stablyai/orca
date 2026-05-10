@@ -30,6 +30,23 @@ export function sanitizeWorktreeName(input: string): string {
   return sanitized
 }
 
+export function sanitizeWorktreeDisplayName(input: string): string | undefined {
+  const withoutControls = Array.from(input, (char) => {
+    const code = char.charCodeAt(0)
+    return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
+  }).join('')
+  const sanitized = withoutControls
+    // Why: titles come from external systems. Strip bidi override controls so a
+    // malicious title cannot visually reorder adjacent sidebar text.
+    .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+    .trim()
+
+  return sanitized || undefined
+}
+
 /**
  * Ensure a target path is within the workspace directory (prevent path traversal).
  */

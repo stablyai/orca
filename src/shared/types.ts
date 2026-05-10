@@ -845,6 +845,10 @@ export type SparsePreset = {
 export type CreateWorktreeArgs = {
   repoId: string
   name: string
+  /** Optional user-facing label to persist separately from the git-safe
+   *  branch/path seed. Used when a workspace is created from a GitHub or
+   *  Linear artifact whose title should remain readable in the sidebar. */
+  displayName?: string
   baseBranch?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest

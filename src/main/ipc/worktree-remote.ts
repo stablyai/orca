@@ -30,6 +30,7 @@ import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import {
   sanitizeWorktreeName,
+  sanitizeWorktreeDisplayName,
   computeBranchName,
   computeWorktreePath,
   ensurePathWithinWorkspace,
@@ -86,6 +87,9 @@ export async function createRemoteWorktree(
   const settings = store.getSettings()
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
+  const requestedDisplayName = args.displayName
+    ? sanitizeWorktreeDisplayName(args.displayName)
+    : undefined
 
   // Get git username from remote
   let username = ''
@@ -222,9 +226,11 @@ export async function createRemoteWorktree(
     // max(lastActivityAt, createdAt + GRACE_MS) to keep it on top until the
     // window elapses. See smart-sort.ts `CREATE_GRACE_MS`.
     createdAt: now,
-    ...(shouldSetDisplayName(requestedName, branchName, sanitizedName)
-      ? { displayName: requestedName }
-      : {})
+    ...(requestedDisplayName
+      ? { displayName: requestedDisplayName }
+      : shouldSetDisplayName(requestedName, branchName, sanitizedName)
+        ? { displayName: requestedName }
+        : {})
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
   const worktree = mergeWorktree(repo.id, created, meta)
@@ -251,6 +257,9 @@ export async function createLocalWorktree(
   const username = getGitUsername(repo.path)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
+  const requestedDisplayName = args.displayName
+    ? sanitizeWorktreeDisplayName(args.displayName)
+    : undefined
 
   // Why (§3.3): determine the base branch (and therefore the remote we need to
   // fetch) FIRST, so the fetch can overlap all pre-create work below. Neither
@@ -476,9 +485,11 @@ export async function createLocalWorktree(
     // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
     createdAt: now,
     baseRef: baseBranch,
-    ...(shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
-      ? { displayName: effectiveRequestedName }
-      : {}),
+    ...(requestedDisplayName
+      ? { displayName: requestedDisplayName }
+      : shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
+        ? { displayName: effectiveRequestedName }
+        : {}),
     ...(sparseDirectories.length > 0
       ? {
           sparseDirectories,

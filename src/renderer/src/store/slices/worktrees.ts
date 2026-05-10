@@ -222,7 +222,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     baseBranch,
     setupDecision = 'inherit',
     sparseCheckout,
-    telemetrySource
+    telemetrySource,
+    displayName
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -242,6 +243,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             baseBranch,
             setupDecision,
             sparseCheckout,
+            ...(displayName ? { displayName } : {}),
             ...(telemetrySource ? { telemetrySource } : {})
           })
           // Why: a file watcher (worktrees.onChanged) can fire between the

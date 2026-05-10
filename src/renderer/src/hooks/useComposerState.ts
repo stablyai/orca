@@ -1296,7 +1296,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               ...(effectivePresetId ? { presetId: effectivePresetId } : {})
             }
           : undefined,
-        telemetrySource
+        telemetrySource,
+        linkedWorkItem?.title
       )
       const worktree = result.worktree
 
@@ -1376,6 +1377,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     applyWorktreeMeta,
     issueCommandTemplate,
     effectiveLinkedPR,
+    linkedWorkItem?.title,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
     note,
@@ -1444,7 +1446,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(effectivePresetId ? { presetId: effectivePresetId } : {})
               }
             : undefined,
-          telemetrySource
+          telemetrySource,
+          linkedWorkItem?.title
         )
         const worktree = result.worktree
 

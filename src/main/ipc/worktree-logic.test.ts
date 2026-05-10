@@ -2,6 +2,7 @@ import { join, resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
+  sanitizeWorktreeDisplayName,
   ensurePathWithinWorkspace,
   computeBranchName,
   computeWorktreePath,
@@ -71,6 +72,27 @@ describe('sanitizeWorktreeName', () => {
 
   it('throws for whitespace-only name', () => {
     expect(() => sanitizeWorktreeName('   ')).toThrow('Invalid worktree name')
+  })
+})
+
+describe('sanitizeWorktreeDisplayName', () => {
+  it('keeps readable punctuation while collapsing unsafe controls and whitespace', () => {
+    expect(sanitizeWorktreeDisplayName('  Fix: login / callback\n\tregression\u0000  ')).toBe(
+      'Fix: login / callback regression'
+    )
+  })
+
+  it('strips bidi override controls from external artifact titles', () => {
+    expect(sanitizeWorktreeDisplayName('Review \u202eexe.txt')).toBe('Review exe.txt')
+  })
+
+  it('truncates very long titles', () => {
+    const title = 'a'.repeat(200)
+    expect(sanitizeWorktreeDisplayName(title)).toHaveLength(120)
+  })
+
+  it('returns undefined when nothing displayable remains', () => {
+    expect(sanitizeWorktreeDisplayName('\u0000\n\t')).toBeUndefined()
   })
 })
 

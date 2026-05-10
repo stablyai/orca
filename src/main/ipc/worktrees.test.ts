@@ -313,6 +313,37 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('persists a sanitized artifact title as the worktree display name', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      displayName: '  Fix: dashboards\nfor PRs\u0000  '
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        displayName: 'Fix: dashboards for PRs'
+      })
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        displayName: 'Fix: dashboards for PRs'
+      })
+    })
+  })
+
   it('does not await a cold fetch when the remote-tracking base exists locally', async () => {
     const remoteBase = {
       remote: 'origin',

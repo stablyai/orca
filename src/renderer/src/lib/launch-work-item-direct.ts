@@ -219,7 +219,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       baseBranch,
       finalSetupDecision,
       undefined,
-      telemetrySource
+      telemetrySource,
+      item.title
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
