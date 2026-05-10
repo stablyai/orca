@@ -384,7 +384,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   role="button"
                   tabIndex={0}
                   className={cn(
-                    'group flex h-7 w-full items-center gap-1.5 pl-3 pr-1.5 text-left transition-all cursor-pointer',
+                    'group flex h-7 w-full items-center gap-1.5 pl-3 pr-1 text-left transition-all cursor-pointer',
                     // First header sits directly under SidebarHeader, which already
                     // supplies its own spacing — only offset secondary group headers.
                     vItem.index !== firstHeaderIndex && 'mt-2',
@@ -436,7 +436,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           type="button"
                           variant="ghost"
                           size="icon-xs"
-                          className="mr-0.5 size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
+                          className="size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
                           aria-label={`Create worktree for ${row.label}`}
                           onClick={(event) => {
                             event.preventDefault()
