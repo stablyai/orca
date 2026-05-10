@@ -7,6 +7,7 @@ import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-sear
 import { useAppStore } from '../../store'
 import { FontAutocomplete } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
+import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 
 type AppearancePaneProps = {
   settings: GlobalSettings
@@ -154,6 +155,7 @@ export function AppearancePane({
   const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
+  const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, THEME_ENTRIES) ? (
@@ -329,7 +331,7 @@ export function AppearancePane({
           </p>
         </div>
 
-        {STATUS_BAR_TOGGLES.map((toggle) => {
+        {visibleStatusBarToggles.map((toggle) => {
           const enabled = statusBarItems.includes(toggle.id)
           return (
             <SearchableSetting
