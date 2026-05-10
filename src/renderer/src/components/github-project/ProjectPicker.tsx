@@ -4,8 +4,9 @@
 // from `listAccessibleProjects` and is cached for 5 minutes. Paste-to-add
 // accepts org/user project URLs and `owner/number` shorthand.
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown, Copy, Loader, Pin, Search } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Loader, Pin, Search } from 'lucide-react'
 import { toast } from 'sonner'
+import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -642,31 +643,18 @@ function PartialFailuresBanner({
 }
 
 function AuthErrorBanner({ error }: { error: GitHubProjectViewError }): React.JSX.Element {
-  const command =
-    error.type === 'auth_required'
-      ? 'gh auth login'
-      : error.type === 'scope_missing'
-        ? 'gh auth refresh -s project -s read:org -s repo'
-        : null
+  if (error.type === 'auth_required' || error.type === 'scope_missing') {
+    return (
+      <GhAuthErrorHelp
+        error={error as GitHubProjectViewError & { type: 'auth_required' | 'scope_missing' }}
+        variant="banner"
+      />
+    )
+  }
+  // Non-auth errors keep the legacy single-line banner.
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
       <div>{error.message}</div>
-      {command ? (
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              await window.api.ui.writeClipboardText(command)
-              toast.success('Command copied')
-            } catch {
-              toast.error('Failed to copy')
-            }
-          }}
-          className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
-        >
-          <Copy className="size-3" /> Copy command
-        </button>
-      ) : null}
     </div>
   )
 }

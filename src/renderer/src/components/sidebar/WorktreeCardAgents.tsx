@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -51,7 +52,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const setActiveTab = useAppStore((s) => s.setActiveTab)
   const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
 
   // Why: per-worktree collapse is session-only UI state. Single-primitive
@@ -87,6 +87,18 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const handleActivateAgentTab = useCallback(
     (tabId: string, paneKey: string) => {
       acknowledgeAgents([paneKey])
+      const colon = paneKey.indexOf(':')
+      const tail = colon > 0 ? paneKey.slice(colon + 1) : ''
+      const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
+      let paneId: number | null = null
+      if (Number.isFinite(parsed) && parsed > 0) {
+        paneId = parsed
+      } else {
+        // Why: paneKey for sidebar agent rows is always ${tabId}:${paneId}
+        // with a positive integer paneId; anything else (empty, zero,
+        // non-numeric) means upstream row construction drifted.
+        console.warn('[WorktreeCardAgents] malformed paneKey, skipping pane focus', paneKey)
+      }
       // Why: route through activateAndRevealWorktree so cross-repo clicks also
       // set activeRepoId, record a nav-history entry, clear sidebar filters,
       // reveal the card, and stamp focus recency — per the design doc rule
@@ -97,10 +109,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
-        setActiveTab(tabId)
+        activateTabAndFocusPane(tabId, paneId)
       }
     },
-    [worktreeId, setActiveTab, acknowledgeAgents]
+    [worktreeId, acknowledgeAgents]
   )
 
   const handleToggleCollapsed = useCallback(

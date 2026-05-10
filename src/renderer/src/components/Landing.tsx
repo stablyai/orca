@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
@@ -61,6 +61,8 @@ type StarState = 'loading' | 'starred' | 'not-starred' | 'hidden'
 
 function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Element | null {
   const [state, setState] = useState<StarState>('loading')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -79,7 +81,24 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     }
   }, [])
 
+  useEffect(() => {
+    if (!menuOpen) {
+      return
+    }
+    const onDocClick = (e: MouseEvent): void => {
+      if (!wrapperRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [menuOpen])
+
   const handleClick = async (): Promise<void> => {
+    if (state === 'starred') {
+      setMenuOpen((v) => !v)
+      return
+    }
     if (state !== 'not-starred') {
       return
     }
@@ -101,25 +120,43 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
   }
 
   return (
-    <button
-      className={cn(
-        'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all duration-300',
-        state === 'loading' && 'pointer-events-none opacity-0',
-        state === 'not-starred' &&
-          'border-amber-400/30 text-amber-300/90 hover:border-amber-400/50 hover:bg-amber-400/[0.08] cursor-pointer',
-        state === 'starred' && 'border-amber-400/25 bg-amber-400/[0.06] text-amber-400/60'
-      )}
-      onClick={handleClick}
-      disabled={state === 'starred' || state === 'loading'}
-    >
-      <Star
+    <div ref={wrapperRef} className="relative inline-block">
+      <button
         className={cn(
-          'size-3.5 transition-all duration-300',
-          state === 'starred' ? 'fill-amber-400/60 text-amber-400/60' : 'text-amber-400/80'
+          'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all duration-300',
+          state === 'loading' && 'pointer-events-none opacity-0',
+          state === 'not-starred' &&
+            'cursor-pointer border-amber-500/60 text-amber-700 hover:border-amber-500/80 hover:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300/90 dark:hover:border-amber-400/50 dark:hover:bg-amber-400/[0.08]',
+          state === 'starred' &&
+            'cursor-pointer border-amber-500/50 bg-amber-400/10 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/[0.06] dark:text-amber-400/60'
         )}
-      />
-      {state === 'starred' ? 'Starred on GitHub' : 'Star on GitHub'}
-    </button>
+        onClick={handleClick}
+        disabled={state === 'loading'}
+      >
+        <Star
+          className={cn(
+            'size-3.5 transition-all duration-300',
+            state === 'starred'
+              ? 'fill-amber-500/70 text-amber-500/70 dark:fill-amber-400/60 dark:text-amber-400/60'
+              : 'text-amber-600 dark:text-amber-400/80'
+          )}
+        />
+        {state === 'starred' ? 'Starred on GitHub' : 'Star on GitHub'}
+      </button>
+      {state === 'starred' && menuOpen && (
+        <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-md">
+          <button
+            className="w-full px-3 py-1.5 text-left text-[13px] text-foreground hover:bg-muted"
+            onClick={() => {
+              setMenuOpen(false)
+              setState('hidden')
+            }}
+          >
+            Hide
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

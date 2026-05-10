@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { ORCA_BROWSER_BLANK_URL } from './constants'
 import {
+  buildSearchUrl,
+  normalizeKagiSessionLink,
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
-  buildSearchUrl
+  redactKagiSessionToken
 } from './browser-url'
 
 describe('browser-url helpers', () => {
@@ -67,6 +69,9 @@ describe('browser-url helpers', () => {
     expect(normalizeBrowserNavigationUrl('react hooks', 'bing')).toBe(
       'https://www.bing.com/search?q=react%20hooks'
     )
+    expect(normalizeBrowserNavigationUrl('react hooks', 'kagi')).toBe(
+      'https://kagi.com/search?q=react%20hooks'
+    )
   })
 
   it('treats domain-like inputs as URLs, not searches', () => {
@@ -82,6 +87,54 @@ describe('browser-url helpers', () => {
     )
     expect(buildSearchUrl('hello world', 'duckduckgo')).toBe(
       'https://duckduckgo.com/?q=hello%20world'
+    )
+    expect(buildSearchUrl('hello world', 'kagi')).toBe('https://kagi.com/search?q=hello%20world')
+  })
+
+  it('uses a Kagi private session link when configured', () => {
+    const sessionLink = 'https://kagi.com/search?token=secret&q=%s#ignored'
+    expect(normalizeKagiSessionLink(sessionLink)).toBe('https://kagi.com/search?token=secret')
+    expect(
+      buildSearchUrl('hello world', 'kagi', {
+        kagiSessionLink: sessionLink
+      })
+    ).toBe('https://kagi.com/search?token=secret&q=hello+world')
+    expect(
+      normalizeBrowserNavigationUrl('hello world', 'kagi', {
+        kagiSessionLink: sessionLink
+      })
+    ).toBe('https://kagi.com/search?token=secret&q=hello+world')
+  })
+
+  it('rejects invalid Kagi private session links', () => {
+    expect(normalizeKagiSessionLink('https://kagi.com/search?q=%s')).toBeNull()
+    expect(normalizeKagiSessionLink('http://kagi.com/search?token=secret')).toBeNull()
+    expect(normalizeKagiSessionLink('https://example.com/search?token=secret')).toBeNull()
+    expect(normalizeKagiSessionLink('https://user:pass@kagi.com/search?token=secret')).toBeNull()
+    expect(normalizeKagiSessionLink('https://kagi.com:8443/search?token=secret')).toBeNull()
+  })
+
+  it('accepts kagi.com/search/ with trailing slash', () => {
+    expect(normalizeKagiSessionLink('https://kagi.com/search/?token=secret')).toBe(
+      'https://kagi.com/search/?token=secret'
+    )
+  })
+
+  it('collapses duplicate token params in Kagi private session links', () => {
+    expect(normalizeKagiSessionLink('https://kagi.com/search?token=A&token=B')).toBe(
+      'https://kagi.com/search?token=A'
+    )
+  })
+
+  it('redacts Kagi private session tokens from displayable URLs', () => {
+    expect(redactKagiSessionToken('https://kagi.com/search?token=secret&q=hello+world')).toBe(
+      'https://kagi.com/search?q=hello+world'
+    )
+    expect(redactKagiSessionToken('https://kagi.com/search?q=hello+world')).toBe(
+      'https://kagi.com/search?q=hello+world'
+    )
+    expect(redactKagiSessionToken('https://kagi.com/search/?token=secret&q=hi')).toBe(
+      'https://kagi.com/search/?q=hi'
     )
   })
 })

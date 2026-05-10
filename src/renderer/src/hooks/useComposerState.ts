@@ -383,10 +383,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       return
     }
     let cancelled = false
-    void (window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
-      owner: string
-      repo: string
-    } | null>)
+    void (
+      window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
+        owner: string
+        repo: string
+      } | null>
+    )
       .then((result) => {
         if (cancelled) {
           return
@@ -1177,20 +1179,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
-      const details = [
-        `[${issue.identifier}] ${issue.title}`,
-        `Status: ${issue.state.name} · Team: ${issue.team.name}`,
-        issue.assignee ? `Assignee: ${issue.assignee.displayName}` : null,
-        issue.labels.length > 0 ? `Labels: ${issue.labels.join(', ')}` : null,
-        `URL: ${issue.url}`,
-        issue.description ? `\n${issue.description}` : null
-      ]
-        .filter(Boolean)
-        .join('\n')
-      if (!noteRef.current.trim() || noteRef.current === lastAutoNoteRef.current) {
-        setNote(details)
-        lastAutoNoteRef.current = details
-      }
+      // Why: match the GitHub issue/PR flow — paste only the URL as a draft
+      // into the agent's input (no auto-submit). The launch path already
+      // drafts `linkedWorkItem.url` when the note is empty; auto-filling the
+      // note here would flip Linear into the `isLinearTypedOnly` branch and
+      // auto-submit the full details block.
     },
     [name]
   )
@@ -1303,7 +1296,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               ...(effectivePresetId ? { presetId: effectivePresetId } : {})
             }
           : undefined,
-        telemetrySource
+        telemetrySource,
+        linkedWorkItem?.title
       )
       const worktree = result.worktree
 
@@ -1334,9 +1328,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // "create" path is the new-workspace surface; request_kind is
       // `'new'` because this is always a fresh session (issue/PR-driven
       // follow-ups go through launch-work-item-direct.ts).
+      // Why: when the composer is opened from onboarding, the first
+      // `agent_started` must attribute to `onboarding` so D1 activation
+      // can be measured against the funnel.
       const composerTelemetry: AgentStartedTelemetry = {
         agent_kind: tuiAgentToAgentKind(tuiAgent),
-        launch_source: 'new_workspace_composer',
+        launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
         request_kind: 'new'
       }
       activateAndRevealWorktree(worktree.id, {
@@ -1380,6 +1377,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     applyWorktreeMeta,
     issueCommandTemplate,
     effectiveLinkedPR,
+    linkedWorkItem?.title,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
     note,
@@ -1448,7 +1446,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(effectivePresetId ? { presetId: effectivePresetId } : {})
               }
             : undefined,
-          telemetrySource
+          telemetrySource,
+          linkedWorkItem?.title
         )
         const worktree = result.worktree
 
@@ -1509,7 +1508,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent: draftLaunchPlan.agent,
             launchCommand: draftLaunchPlan.launchCommand,
             expectedProcess: draftLaunchPlan.expectedProcess,
-            followupPrompt: null
+            followupPrompt: null,
+            ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
           }
         } else if (agent !== null) {
           startupPlan = buildAgentStartupPlan({
@@ -1533,7 +1533,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? null
             : {
                 agent_kind: tuiAgentToAgentKind(agent),
-                launch_source: 'new_workspace_composer',
+                launch_source:
+                  telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
                 request_kind: 'new'
               }
         activateAndRevealWorktree(worktree.id, {
@@ -1542,6 +1543,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? {
                 startup: {
                   command: startupPlan.launchCommand,
+                  ...(startupPlan.env ? { env: startupPlan.env } : {}),
                   ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
                 }
               }

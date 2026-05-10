@@ -4,6 +4,8 @@ import type {
   SetupDecision,
   WorkspaceCreateTelemetrySource,
   Worktree,
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
 
@@ -17,6 +19,8 @@ export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   activeWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
+  baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
+  remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
   /**
    * Monotonically increasing counter that signals when the sidebar sort order
    * should be recomputed.  Only bumped by events that represent meaningful
@@ -64,7 +68,8 @@ export type WorktreeSlice = {
     /** Telemetry-only: which renderer surface initiated this create. Optional
      *  so existing callers default to `unknown`; specify when the surface
      *  matters for the activation funnel. */
-    telemetrySource?: WorkspaceCreateTelemetrySource
+    telemetrySource?: WorkspaceCreateTelemetrySource,
+    displayName?: string
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -108,6 +113,12 @@ export type WorktreeSlice = {
    * one-shot at hydration time. See design §4.4.
    */
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
+  updateWorktreeGitIdentity: (
+    worktreeId: string,
+    identity: { head?: string; branch?: string }
+  ) => void
+  updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
+  updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void
 }
 
 export function findWorktreeById(

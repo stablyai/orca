@@ -66,6 +66,45 @@ export async function getTerminalContent(page: Page, charLimit = 4000): Promise<
   )
 }
 
+export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Promise<string> {
+  await expect
+    .poll(
+      async () => {
+        const tabId = await resolveActiveTabId(page)
+        if (!tabId) {
+          return null
+        }
+
+        return page.evaluate((tabId) => {
+          const manager = window.__paneManagers?.get(tabId)
+          const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+          return activePane?.container?.dataset?.ptyId ?? null
+        }, tabId)
+      },
+      {
+        timeout: timeoutMs,
+        message: 'Active terminal pane did not receive a PTY binding'
+      }
+    )
+    .not.toBeNull()
+
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    throw new Error('waitForActivePanePtyId: no active terminal tab')
+  }
+
+  const ptyId = await page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    return activePane?.container?.dataset?.ptyId ?? null
+  }, tabId)
+
+  if (!ptyId) {
+    throw new Error('waitForActivePanePtyId: active pane has no PTY binding')
+  }
+  return ptyId
+}
+
 // Why: PTY IDs are opaque integers not exposed in the DOM. Probe each
 // candidate with a unique marker and read back via SerializeAddon.
 export async function discoverActivePtyId(page: Page): Promise<string> {

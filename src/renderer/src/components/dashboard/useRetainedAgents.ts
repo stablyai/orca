@@ -13,31 +13,11 @@ export function useRetainedAgentsSync(liveGroups: DashboardRepoGroup[]): void {
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)
-  const dashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
   const prevAgentsRef = useRef<Map<string, { row: DashboardAgentRow; worktreeId: string }>>(
     new Map()
   )
 
   useEffect(() => {
-    // Why: the experimental-setting gate lives inside the effect (not around
-    // the hook declarations above) so rules-of-hooks stays satisfied — the
-    // store selectors and useRef must always run. When the dashboard is
-    // disabled, skip all retention work to avoid touching the store for a
-    // feature the user cannot see. Keeping this check here (rather than in
-    // App.tsx) makes the hook self-contained and safe to call unconditionally
-    // from any site.
-    if (!dashboardEnabled) {
-      // Why: reset the previous-agents snapshot while the flag is off so a
-      // later off->on toggle (same session, no restart) does not resurrect
-      // pre-disable state. Without this, the first post-re-enable run would
-      // diff current liveGroups against a stale map captured before the flag
-      // flipped off, and collectRetainedAgentsOnDisappear could retroactively
-      // retain agents that finished / had their paneKeys reused during the
-      // off window — an "agent disappeared while the dashboard was hidden"
-      // case must NOT produce a retained row on re-enable.
-      prevAgentsRef.current = new Map()
-      return
-    }
     const current = new Map<string, { row: DashboardAgentRow; worktreeId: string }>()
     const existingWorktreeIds = new Set<string>()
     for (const group of liveGroups) {
@@ -77,13 +57,7 @@ export function useRetainedAgentsSync(liveGroups: DashboardRepoGroup[]): void {
     if (consumedSuppressedPaneKeys.length > 0) {
       clearRetentionSuppressedPaneKeys(consumedSuppressedPaneKeys)
     }
-  }, [
-    liveGroups,
-    retainAgents,
-    pruneRetainedAgents,
-    clearRetentionSuppressedPaneKeys,
-    dashboardEnabled
-  ])
+  }, [liveGroups, retainAgents, pruneRetainedAgents, clearRetentionSuppressedPaneKeys])
 }
 
 export function collectRetainedAgentsOnDisappear(args: {

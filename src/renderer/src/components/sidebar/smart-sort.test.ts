@@ -1,7 +1,13 @@
 /* eslint-disable max-lines */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
-import { buildWorktreeComparator, computeSmartScore, type SmartSortOverride } from './smart-sort'
+import {
+  buildWorktreeComparator,
+  computeSmartScore,
+  CREATE_GRACE_MS,
+  effectiveRecentActivity,
+  type SmartSortOverride
+} from './smart-sort'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
@@ -37,7 +43,8 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isPinned: overrides.isPinned ?? false,
     displayName: overrides.displayName ?? overrides.id ?? 'wt-1',
     sortOrder: overrides.sortOrder ?? 0,
-    lastActivityAt: overrides.lastActivityAt ?? 0
+    lastActivityAt: overrides.lastActivityAt ?? 0,
+    ...(overrides.createdAt !== undefined ? { createdAt: overrides.createdAt } : {})
   }
 }
 
@@ -509,5 +516,102 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
     worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
 
     expect(worktrees.map((w) => w.id)).toEqual(['fresh-active', 'stale-high-order'])
+  })
+})
+
+describe('effectiveRecentActivity — create-grace floor', () => {
+  it('returns lastActivityAt when createdAt is absent', () => {
+    const wt = makeWorktree({ id: 'old', lastActivityAt: 12345 })
+    expect(effectiveRecentActivity(wt, NOW)).toBe(12345)
+  })
+
+  it('returns createdAt + CREATE_GRACE_MS when grace window exceeds lastActivityAt', () => {
+    const wt = makeWorktree({ id: 'fresh', lastActivityAt: NOW, createdAt: NOW })
+    expect(effectiveRecentActivity(wt, NOW)).toBe(NOW + CREATE_GRACE_MS)
+  })
+
+  it('returns lastActivityAt when grace window has elapsed', () => {
+    const wt = makeWorktree({
+      id: 'post-grace',
+      createdAt: NOW - CREATE_GRACE_MS - 60_000,
+      lastActivityAt: NOW - 1000
+    })
+    expect(effectiveRecentActivity(wt, NOW)).toBe(NOW - 1000)
+  })
+
+  it('returns lastActivityAt when real activity has surpassed the grace floor', () => {
+    // A user who interacted 3 minutes after create has lastActivityAt > createdAt + 3min,
+    // but createdAt + 5min still wins for the next 2 minutes.
+    const createdAt = NOW - 3 * 60 * 1000
+    const wt = makeWorktree({ id: 'used', createdAt, lastActivityAt: NOW - 60_000 })
+    // createdAt + GRACE_MS = NOW + 2min, which exceeds lastActivityAt (NOW - 1min).
+    expect(effectiveRecentActivity(wt, NOW)).toBe(createdAt + CREATE_GRACE_MS)
+  })
+
+  it('returns lastActivityAt once the grace window has elapsed even when no other activity has occurred', () => {
+    // Bug-fix case: a worktree created days ago that was never touched after
+    // creation. Without the time-bound check, the floor would still apply and
+    // the worktree would rank as `createdAt + 5min` forever, masking truly
+    // fresher worktrees.
+    const createdAt = NOW - CREATE_GRACE_MS - 1
+    const wt = makeWorktree({ id: 'untouched', createdAt, lastActivityAt: createdAt })
+    expect(effectiveRecentActivity(wt, NOW)).toBe(createdAt)
+  })
+})
+
+describe('buildWorktreeComparator — recent with createdAt grace window', () => {
+  it('keeps a newly-created worktree on top even when another worktree bumps lastActivityAt', () => {
+    // Simulates the bug: user creates a worktree at t=0, then an ambient PTY
+    // bump on a different worktree lands at t=+100ms. Without the grace
+    // window, the bumped worktree would outrank the new one by 100ms.
+    const newWorktree = makeWorktree({
+      id: 'new',
+      displayName: 'New',
+      createdAt: NOW,
+      lastActivityAt: NOW
+    })
+    const bumpedByAmbient = makeWorktree({
+      id: 'bumped',
+      displayName: 'Bumped',
+      lastActivityAt: NOW + 100
+    })
+    const worktrees = [bumpedByAmbient, newWorktree]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['new', 'bumped'])
+  })
+
+  it('falls through to normal recency once the grace window has elapsed', () => {
+    const oldCreated = makeWorktree({
+      id: 'old-created',
+      displayName: 'Old created',
+      // Created longer ago than GRACE_MS so the floor has expired.
+      createdAt: NOW - CREATE_GRACE_MS - 10_000,
+      lastActivityAt: NOW - 30_000
+    })
+    const freshActivity = makeWorktree({
+      id: 'fresh-activity',
+      displayName: 'Fresh activity',
+      // No createdAt (discovered on disk), but has recent real activity.
+      lastActivityAt: NOW - 1000
+    })
+    const worktrees = [oldCreated, freshActivity]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['fresh-activity', 'old-created'])
+  })
+
+  it('does not disturb ranking for worktrees without createdAt', () => {
+    // All existing worktrees (persisted before createdAt field existed) stay
+    // sorted by lastActivityAt alone.
+    const alpha = makeWorktree({ id: 'alpha', displayName: 'Alpha', lastActivityAt: 5000 })
+    const bravo = makeWorktree({ id: 'bravo', displayName: 'Bravo', lastActivityAt: 10_000 })
+    const worktrees = [alpha, bravo]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['bravo', 'alpha'])
   })
 })

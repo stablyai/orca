@@ -41,23 +41,19 @@ export function TextInputModal({
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
 
-      <View style={styles.group}>
-        <View style={styles.inputWrap}>
-          <TextInput
-            style={styles.input}
-            value={value}
-            onChangeText={setValue}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            autoFocus
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-            selectionColor={colors.accentBlue}
-          />
-        </View>
-      </View>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={setValue}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        autoFocus
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="done"
+        onSubmitEditing={handleSubmit}
+        selectionColor={colors.accentBlue}
+      />
 
       <View style={styles.actions}>
         <Pressable
@@ -97,16 +93,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2
   },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  inputWrap: {
-    padding: spacing.md
-  },
+  // Why: matches NewWorktreeModal's input — bgRaised on the modal
+  // background reads as a tappable surface (brighter than the wrapper)
+  // rather than a recessed pit (darker than the wrapper, which is what
+  // bgBase looked like inside a bgPanel group).
   input: {
-    backgroundColor: colors.bgBase,
+    backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
@@ -127,7 +119,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.button
   },
   submitButton: {
-    backgroundColor: colors.accentBlue,
+    backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radii.button
@@ -144,7 +136,7 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   submitText: {
-    color: '#fff',
+    color: colors.bgBase,
     fontSize: typography.bodySize,
     fontWeight: '600'
   }

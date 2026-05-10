@@ -6,7 +6,7 @@ import {
   type FocusTerminalPaneDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { fitAndFocusPanes, fitPanes, hasDimensionsChanged } from './pane-helpers'
+import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
 
@@ -19,7 +19,6 @@ type UseTerminalPaneGlobalEffectsArgs = {
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
-  pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   toggleExpandPane: (paneId: number) => void
@@ -34,7 +33,6 @@ export function useTerminalPaneGlobalEffects({
   managerRef,
   containerRef,
   paneTransportsRef,
-  pendingWritesRef,
   isActiveRef,
   isVisibleRef,
   toggleExpandPane
@@ -43,34 +41,11 @@ export function useTerminalPaneGlobalEffects({
   worktreeIdRef.current = worktreeId
   const cwdRef = useRef(cwd)
   cwdRef.current = cwd
-  // Why: starts as `true` so the first render with isVisible=false triggers
-  // suspendRendering(). Without this, background worktrees that mount hidden
-  // (isVisible=false from the start) never suspend their WebGL contexts —
-  // openTerminal() unconditionally creates a WebGL addon, but this effect
-  // only suspends on true→false transitions. The leaked contexts exhaust
-  // Chromium's ~8-context budget, causing "webglcontextlost" on visible
-  // terminals and making them unresponsive.
+  // Starts true so the first render with isVisible=false triggers a
+  // suspendRendering(). Background worktrees that mount hidden would
+  // otherwise leak WebGL contexts — openTerminal() unconditionally creates
+  // one — and exhaust Chromium's ~8-context budget across worktrees.
   const wasVisibleRef = useRef(true)
-
-  // Why: tracks any in-progress chunked pending-write flush so the cleanup
-  // function can cancel it if the pane deactivates mid-flush.
-  const pendingFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Why: the deferred rAF (guardedFit) must be cancellable when the pane
-  // deactivates before the rAF fires — otherwise it would call
-  // fitAndFocusPanes() on a suspended manager.
-  const pendingRafRef = useRef<number | null>(null)
-
-  // Why: two independent code paths schedule fitPanes() after a worktree
-  // switch — the isActive effect (after pending-write drain) and the
-  // ResizeObserver (after its 150 ms debounce).  On Windows, each redundant
-  // fit() call adds non-trivial overhead (clear + refresh of 10 000
-  // scrollback lines).  An epoch counter lets whichever path fires first
-  // serve the activation, while the second path skips.  The staleness
-  // check also rejects callbacks from a prior activation during rapid
-  // worktree switches (A→B→C).
-  const fitEpochRef = useRef(0)
-  const fitRanForEpochRef = useRef(-1)
 
   useEffect(() => {
     const manager = managerRef.current
@@ -78,115 +53,25 @@ export function useTerminalPaneGlobalEffects({
       return
     }
     if (isVisible) {
-      // Why: resume WebGL immediately so the terminal shows its last-known
-      // state on the first painted frame. Without this, the browser paints
-      // 1+ frames of stale xterm DOM-fallback content at wrong dimensions
-      // (the "stretched" flash). On macOS, WebGL context creation is ~5 ms
-      // — fast enough to feel instant. On Windows (ANGLE → D3D11) it can
-      // take 100–500 ms, but the alternative (deferring to a rAF) leaves
-      // the terminal visibly distorted, which is a worse UX tradeoff.
+      // Resume WebGL immediately so the terminal shows its last-known state
+      // on the first painted frame. macOS context creation is ~5 ms; on
+      // Windows (ANGLE → D3D11) it can be 100–500 ms but a deferred resume
+      // would paint a stretched DOM-fallback flash, which is worse UX.
       manager.resumeRendering()
-
-      fitEpochRef.current++
-      const epoch = fitEpochRef.current
-
-      // Why: while a worktree is in the background, PTY output accumulates
-      // in pendingWritesRef with no size cap.  A Claude agent running for
-      // minutes can produce hundreds of KB.  Writing it all in one
-      // synchronous terminal.write() blocks the renderer for 2–5 s on
-      // Windows, freezing the UI on every worktree switch.
-      //
-      // Fix: drain each pane's pending buffer in 32 KB chunks with a
-      // setTimeout(0) yield between chunks.  This lets the browser paint
-      // frames and process input events between chunks so the UI stays
-      // responsive while the scrollback catches up.  The fit is deferred
-      // until after the final chunk so xterm only reflows once.
-      const CHUNK_SIZE = 32 * 1024
-      const entries = Array.from(pendingWritesRef.current.entries()).filter(
-        ([, buf]) => buf.length > 0
-      )
-      // Clear all pending buffers immediately so new PTY output arriving
-      // during the flush goes into a fresh buffer instead of being lost.
-      for (const [paneId] of entries) {
-        pendingWritesRef.current.set(paneId, '')
-      }
-
-      const guardedFit = (): void => {
-        pendingRafRef.current = null
-        const mgr = managerRef.current
-        if (!mgr) {
-          return
-        }
-        // Why: three-layer guard prevents redundant and stale fits.
-        // 1. Staleness — reject callbacks from a superseded activation
-        //    (e.g. rapid A→B→C worktree switch).
-        if (epoch !== fitEpochRef.current) {
-          return
-        }
-        // 2. Dimension check — if a window resize changed the container
-        //    size, the fit must run even if one already ran for this epoch.
-        const dimensionsChanged = hasDimensionsChanged(mgr)
-        // 3. Dedup — if dims are the same and a fit already ran, skip.
-        if (!dimensionsChanged && fitRanForEpochRef.current >= epoch) {
-          return
-        }
-        fitRanForEpochRef.current = epoch
-        if (isActive) {
-          fitAndFocusPanes(mgr)
-          return
-        }
-        fitPanes(mgr)
-      }
-
-      if (entries.length === 0) {
-        pendingRafRef.current = requestAnimationFrame(guardedFit)
+      // Single fit on resume. xterm has been writing live the whole time
+      // (no visibility-gated buffering), so cols/rows are already correct
+      // for the new container; this fit is just to absorb any container
+      // dimension change that happened while we were hidden (e.g. sidebar
+      // toggle on another worktree).
+      if (isActive) {
+        fitAndFocusPanes(manager)
       } else {
-        let entryIdx = 0
-        let offset = 0
-
-        const drainNextChunk = (): void => {
-          if (entryIdx >= entries.length) {
-            pendingFlushRef.current = null
-            pendingRafRef.current = requestAnimationFrame(guardedFit)
-            return
-          }
-
-          const [paneId, buffer] = entries[entryIdx]
-          const pane = manager.getPanes().find((p) => p.id === paneId)
-          if (!pane) {
-            entryIdx++
-            offset = 0
-            pendingFlushRef.current = setTimeout(drainNextChunk, 0)
-            return
-          }
-
-          const chunk = buffer.slice(offset, offset + CHUNK_SIZE)
-          pane.terminal.write(chunk)
-          offset += CHUNK_SIZE
-
-          if (offset >= buffer.length) {
-            entryIdx++
-            offset = 0
-          }
-
-          // Yield to the browser between chunks so the UI stays responsive.
-          pendingFlushRef.current = setTimeout(drainNextChunk, 0)
-        }
-
-        drainNextChunk()
+        fitPanes(manager)
       }
     } else if (wasVisibleRef.current) {
-      // Cancel any in-progress chunked flush before suspending.
-      if (pendingFlushRef.current !== null) {
-        clearTimeout(pendingFlushRef.current)
-        pendingFlushRef.current = null
-      }
-      // Cancel any pending rAF so guardedFit doesn't run on a
-      // suspended manager.
-      if (pendingRafRef.current !== null) {
-        cancelAnimationFrame(pendingRafRef.current)
-        pendingRafRef.current = null
-      }
+      // Suspend WebGL when going hidden. xterm.write() continues to land in
+      // the (now DOM-renderer-fallback or paused-canvas) terminal; the
+      // suspend is purely a GPU resource decision.
       manager.suspendRendering()
     }
     wasVisibleRef.current = isVisible
@@ -295,17 +180,9 @@ export function useTerminalPaneGlobalEffects({
         if (!manager) {
           return
         }
-        // Why: apply the same epoch-based deduplication as the isActive
-        // effect's rAF path.  Read the current epoch at fire time (not a
-        // captured value) because the ResizeObserver persists across the
-        // activation.  Dimension changes (e.g. window resize) bypass the
-        // dedup so legitimate refits are never suppressed.
-        const currentEpoch = fitEpochRef.current
-        const dimensionsChanged = hasDimensionsChanged(manager)
-        if (!dimensionsChanged && fitRanForEpochRef.current >= currentEpoch) {
-          return
-        }
-        fitRanForEpochRef.current = currentEpoch
+        // safeFit early-returns when proposeDimensions matches current
+        // cols/rows, so a no-op resize is cheap. Always-live writes mean
+        // there is no "deferred drain" race; fit can run unconditionally.
         fitPanes(manager)
       }, RESIZE_DEBOUNCE_MS)
     })

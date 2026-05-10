@@ -428,7 +428,16 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
         <SearchableSetting
           title="Codex Accounts"
           description="Manage which Codex account Orca uses for live rate limit fetching."
-          keywords={['codex', 'account', 'rate limit', 'status bar', 'quota']}
+          // Why: this single SearchableSetting backs the whole Codex section,
+          // including the "Active Codex Account" sub-control (account picker
+          // below). Roll every Codex search entry's title/description/keywords
+          // into one haystack so a search for "Active Codex Account" doesn't
+          // render the section header with no body underneath it.
+          keywords={ACCOUNTS_CODEX_SEARCH_ENTRIES.flatMap((entry) => [
+            entry.title,
+            entry.description ?? '',
+            ...(entry.keywords ?? [])
+          ])}
           className="space-y-3 px-1 py-2"
         >
           {/* Why: Settings deep-links can target this subsection directly from

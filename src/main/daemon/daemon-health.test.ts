@@ -120,22 +120,48 @@ describe('parseDaemonPidFile', () => {
     const serialized = serializeDaemonPidFile({ pid: 12345, startedAtMs: 1_700_000_000_000 })
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
-      startedAtMs: 1_700_000_000_000
+      startedAtMs: 1_700_000_000_000,
+      entryPath: null
+    })
+  })
+
+  it('parses JSON pid files with entryPath', () => {
+    const serialized = serializeDaemonPidFile({
+      pid: 12345,
+      startedAtMs: 1_700_000_000_000,
+      entryPath: '/repo/out/main/daemon-entry.js'
+    })
+    expect(parseDaemonPidFile(serialized)).toEqual({
+      pid: 12345,
+      startedAtMs: 1_700_000_000_000,
+      entryPath: '/repo/out/main/daemon-entry.js'
     })
   })
 
   it('accepts JSON with startedAtMs missing and returns null for it', () => {
     // Why: forward-compatible with hypothetical future daemons that might write
     // pid without startedAtMs (platform where getProcessStartedAtMs returns null).
-    expect(parseDaemonPidFile('{"pid":9999}')).toEqual({ pid: 9999, startedAtMs: null })
+    expect(parseDaemonPidFile('{"pid":9999}')).toEqual({
+      pid: 9999,
+      startedAtMs: null,
+      entryPath: null
+    })
   })
 
   it('falls back to bare-integer parsing for legacy pid files', () => {
     // Why: pre-Phase-0 daemons wrote the pid file as a bare integer.
     // parseDaemonPidFile must still accept those to avoid leaking a stale
     // daemon across a single upgrade boundary.
-    expect(parseDaemonPidFile('12345')).toEqual({ pid: 12345, startedAtMs: null })
-    expect(parseDaemonPidFile('  12345\n')).toEqual({ pid: 12345, startedAtMs: null })
+    expect(parseDaemonPidFile('12345')).toEqual({
+      pid: 12345,
+      startedAtMs: null,
+      entryPath: null
+    })
+    expect(parseDaemonPidFile('  12345\n')).toEqual({
+      pid: 12345,
+      startedAtMs: null,
+      entryPath: null
+    })
   })
 
   it('returns null for malformed input', () => {

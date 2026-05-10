@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
+import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -61,7 +63,83 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
 const electronViteCli =
   process.env.ORCA_ELECTRON_VITE_CLI ||
   path.join(path.dirname(require.resolve('electron-vite/package.json')), 'bin', 'electron-vite.js')
-const forwardedArgs = ['dev', ...process.argv.slice(2)]
+
+// Why: every `pn dev` should be attachable from agent-browser/playwright-cli
+// without manual port juggling. Pick a best-effort deterministic port per
+// worktree; falls back to a probe sweep if the deterministic pick or its
+// neighbors are busy (multiple worktrees may share a machine).
+const forwardedRaw = process.argv.slice(2)
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer()
+    srv.once('error', () => {
+      // Why: error fires before listen binds; close() may throw — swallow it
+      // so the handle is released without leaking listeners across 64 probes.
+      try {
+        srv.close()
+      } catch {}
+      resolve(false)
+    })
+    srv.once('listening', () => srv.close(() => resolve(true)))
+    srv.listen(port, '127.0.0.1')
+  })
+}
+async function pickDebugPort() {
+  // Why: 32 bits of SHA1 (vs 16) reduces truncation bias; modulo 200 still
+  // collides routinely across many worktrees, hence the probe sweep below.
+  const seed = parseInt(createHash('sha1').update(repoRoot).digest('hex').slice(0, 8), 16)
+  const base = 9333 + (seed % 200) // deterministic base in 9333..9532; probe sweeps up to base+63
+  for (let i = 0; i < 64; i++) {
+    const p = base + i
+    if (await isPortFree(p)) {
+      return p
+    }
+  }
+  return null
+}
+function parseDebugPortEnv(raw) {
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isInteger(n) || n < 1 || n > 65535 || String(n) !== raw.trim()) {
+    return null
+  }
+  return n
+}
+// Why: exact match (or `=` form) avoids false positives on hypothetical
+// `--remote-debugging-port-*` flags; the bare flag also covers the
+// space-separated form. `--remote-debugging-pipe` opts into pipe-based
+// debugging — don't fight the user's choice by injecting a port.
+const userPassedPort = forwardedRaw.some(
+  (a) => a === '--remote-debugging-port' || a.startsWith('--remote-debugging-port=') || a === '--remote-debugging-pipe'
+)
+// Why: --help/--version exit immediately; binding a probe socket and printing
+// a debug-port line would be noise.
+const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
+let forwardedExtras = []
+if (!userPassedPort && !isHelpOrVersion) {
+  const envPortRaw = process.env.REMOTE_DEBUGGING_PORT
+  let port = null
+  if (envPortRaw) {
+    port = parseDebugPortEnv(envPortRaw)
+    if (port === null) {
+      console.error(
+        `[orca-dev] Ignoring invalid REMOTE_DEBUGGING_PORT=${JSON.stringify(envPortRaw)}; falling back to probe.`
+      )
+    }
+  }
+  if (port === null) {
+    port = await pickDebugPort()
+  }
+  if (port !== null) {
+    forwardedExtras = [`--remote-debugging-port=${port}`]
+    // Why: stderr keeps stdout clean for downstream parsing; log uses
+    // 127.0.0.1 to match the interface we actually probed (localhost may
+    // resolve to ::1 on IPv6-first hosts).
+    console.error(`[orca-dev] Remote debugging on http://127.0.0.1:${port}`)
+  } else {
+    console.error('[orca-dev] No free debug port found in sweep; starting without --remote-debugging-port.')
+  }
+}
+const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',
   env: process.env,

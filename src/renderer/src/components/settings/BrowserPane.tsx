@@ -20,6 +20,7 @@ import { BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES } from './br
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
+import { KagiSessionLinkForm } from './KagiSessionLinkForm'
 
 export const BROWSER_PANE_SEARCH_ENTRIES = [
   ...BROWSER_USE_PANE_SEARCH_ENTRIES,
@@ -55,6 +56,8 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
   useEffect(() => {
     setHomePageDraft(browserDefaultUrl ?? '')
   }, [browserDefaultUrl])
+
+  const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
   const showHomePage = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[0]])
   const showSearchEngine = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[1]])
@@ -136,8 +139,20 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
         <SearchableSetting
           title="Default Search Engine"
           description="Search engine used when typing non-URL text in the address bar."
-          keywords={['browser', 'search', 'engine', 'google', 'duckduckgo', 'bing', 'omnibox']}
-          className="flex items-center justify-between gap-4 px-1 py-2"
+          keywords={[
+            'browser',
+            'search',
+            'engine',
+            'google',
+            'duckduckgo',
+            'bing',
+            'kagi',
+            'session',
+            'private',
+            'token',
+            'omnibox'
+          ]}
+          className="flex items-start justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">
             <Label>Default Search Engine</Label>
@@ -145,24 +160,27 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
               Used when typing non-URL text in the address bar.
             </p>
           </div>
-          <Select
-            value={browserDefaultSearchEngine ?? 'google'}
-            onValueChange={(value) => {
-              const engine = value as SearchEngine
-              setBrowserDefaultSearchEngine(engine === 'google' ? null : engine)
-            }}
-          >
-            <SelectTrigger className="h-7 w-36 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(SEARCH_ENGINE_LABELS) as SearchEngine[]).map((engine) => (
-                <SelectItem key={engine} value={engine} className="text-xs">
-                  {SEARCH_ENGINE_LABELS[engine]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Select
+              value={selectedSearchEngine}
+              onValueChange={(value) => {
+                const engine = value as SearchEngine
+                setBrowserDefaultSearchEngine(engine === 'google' ? null : engine)
+              }}
+            >
+              <SelectTrigger className="h-7 w-36 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(SEARCH_ENGINE_LABELS) as SearchEngine[]).map((engine) => (
+                  <SelectItem key={engine} value={engine} className="text-xs">
+                    {SEARCH_ENGINE_LABELS[engine]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedSearchEngine === 'kagi' ? <KagiSessionLinkForm /> : null}
+          </div>
         </SearchableSetting>
       ) : null}
 

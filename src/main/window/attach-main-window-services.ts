@@ -23,9 +23,9 @@ import {
   dismissNudge
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history'
-import { listRepoWorktrees } from '../repo-worktrees'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -41,7 +41,8 @@ export function attachMainWindowServices(
     runtime,
     getSelectedCodexHomePath,
     () => store.getSettings(),
-    prepareClaudeAuth
+    prepareClaudeAuth,
+    store
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live
@@ -50,19 +51,10 @@ export function attachMainWindowServices(
   // and ensures the handlers are re-installed on macOS app re-activation when
   // the main window is recreated.
   registerDaemonManagementHandlers()
-  // Why: GC runs on a 10s delay so live worktree enumeration completes first.
-  // Uses git worktree list (not store.getWorktreeMeta) because untouched
-  // worktrees have no metadata entries — see design doc §7.6.
+  // Why: do not enumerate repo paths from background GC. `git worktree list`
+  // can re-touch protected folders on macOS and trigger folder-access prompts.
   scheduleHistoryGc(async () => {
-    const repos = store.getRepos()
-    const ids = new Set<string>()
-    for (const repo of repos) {
-      const worktrees = await listRepoWorktrees(repo)
-      for (const wt of worktrees) {
-        ids.add(`${repo.id}::${wt.path}`)
-      }
-    }
-    return ids
+    return getKnownWorktreeIdsForHistoryGc(store)
   })
   // Why: warm-reattach gap (docs/resource-usage-remote-mislabel.md §1).
   // Daemon-hosted PTYs survive renderer restarts on purpose, so on a fresh
@@ -218,6 +210,8 @@ function registerRuntimeWindowLifecycle(
   }
   runtime.setNotifier({
     worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
+    worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
     activateWorktree: (
       repoId,

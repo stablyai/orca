@@ -3,31 +3,11 @@ import { promisify } from 'node:util'
 import { app, ipcMain } from 'electron'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
+import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 
 const execFileAsync = promisify(execFile)
 
-export type AppRuntimeFlags = {
-  /** Whether the experimental agent dashboard setting was enabled when this
-   *  session booted. When true, Claude/Codex/Gemini managed hook installation
-   *  was attempted at startup (individual install failures are logged but do
-   *  not flip this flag — the inline agents list treats missing hooks as
-   *  no-ops). Toggling the setting only affects hook installation on the next
-   *  launch, so the renderer compares this against the current setting to
-   *  decide whether a "restart required" banner needs to be shown. */
-  agentDashboardEnabledAtStartup: boolean
-}
-
-let runtimeFlags: AppRuntimeFlags = {
-  agentDashboardEnabledAtStartup: false
-}
-
-export function setAppRuntimeFlags(flags: AppRuntimeFlags): void {
-  runtimeFlags = flags
-}
-
 export function registerAppHandlers(): void {
-  ipcMain.handle('app:getRuntimeFlags', (): AppRuntimeFlags => runtimeFlags)
-
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
 
@@ -86,5 +66,9 @@ export function registerAppHandlers(): void {
       app.relaunch()
       app.exit(0)
     }, 150)
+  })
+
+  ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
+    setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
   })
 }

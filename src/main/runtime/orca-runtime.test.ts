@@ -209,6 +209,16 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getRuntimeId()).toBeTruthy()
   })
 
+  it('reports protocol version and minimum compatible mobile version on status', () => {
+    const runtime = createRuntime()
+
+    const status = runtime.getStatus()
+    expect(typeof status.protocolVersion).toBe('number')
+    expect(typeof status.minCompatibleMobileVersion).toBe('number')
+    expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
+    expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
+  })
+
   it('claims the first window as authoritative and ignores later windows', () => {
     const runtime = createRuntime()
 
@@ -1104,6 +1114,54 @@ describe('OrcaRuntimeService', () => {
     expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), undefined)
   })
 
+  it('stamps createdAt alongside lastActivityAt so CLI-created worktrees get the Recent-sort grace window', async () => {
+    // Why: parity with createLocalWorktree / createRemoteWorktree. Without
+    // createdAt, ambient PTY bumps in OTHER worktrees during the few seconds
+    // after creation can push the new worktree below them in Recent sort.
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-grace')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-grace')
+    vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: {} })
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/runtime-grace',
+        head: 'def',
+        branch: 'runtime-grace',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const before = Date.now()
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-grace'
+    })
+    const after = Date.now()
+
+    expect(result.worktree.createdAt).toBeDefined()
+    expect(result.worktree.createdAt).toBeGreaterThanOrEqual(before)
+    expect(result.worktree.createdAt).toBeLessThanOrEqual(after)
+    // Both fields must be stamped from the same `now` so the grace-window
+    // math (max(lastActivityAt, createdAt + GRACE_MS)) is well-defined.
+    expect(result.worktree.createdAt).toBe(result.worktree.lastActivityAt)
+  })
+
   it('skips archive hooks for CLI worktree removal by default', async () => {
     const runtime = new OrcaRuntimeService(store)
     vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -1140,6 +1198,46 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ id: TEST_REPO_ID, path: TEST_REPO_PATH })
     )
     expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false)
+  })
+
+  it('clears optimistic reconcile tokens when a CLI worktree removal succeeds', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const worktreeBaseStatus = vi.fn()
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      worktreeBaseStatus,
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+
+    const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+    await runtime.reconcileWorktreeBaseStatus({
+      repoId: TEST_REPO_ID,
+      repoPath: TEST_REPO_PATH,
+      worktreeId: TEST_WORKTREE_ID,
+      base: {
+        remote: 'origin',
+        branch: 'main',
+        ref: 'refs/remotes/origin/main',
+        base: 'origin/main'
+      },
+      branchName: 'feature',
+      createdBaseSha: 'created-sha',
+      token,
+      fetchPromise: Promise.resolve({ ok: true })
+    })
+
+    expect(worktreeBaseStatus).not.toHaveBeenCalled()
   })
 
   it('invalidates the filesystem-auth cache after CLI worktree creation', async () => {
@@ -1335,6 +1433,24 @@ describe('OrcaRuntimeService', () => {
       expect(captureStartMock).toHaveBeenCalledWith(undefined, 'page-2')
     })
 
+    it('accepts focus on tab switch without altering bridge args (focus is main-side concern)', async () => {
+      const runtime = createRuntime()
+      const tabSwitchMock = vi.fn().mockResolvedValue({
+        switched: 0,
+        browserPageId: 'page-1'
+      })
+
+      runtime.setAgentBrowserBridge({ tabSwitch: tabSwitchMock } as never)
+
+      await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({
+        switched: 0,
+        browserPageId: 'page-1'
+      })
+      // Bridge is unchanged — focus is delivered to the renderer via IPC
+      // (notifyRendererBrowserPaneFocus), not threaded through bridge state.
+      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')
+    })
+
     it('does not silently drop invalid explicit worktree selectors for page-targeted commands', async () => {
       vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
       const runtime = createRuntime()
@@ -1526,10 +1642,9 @@ describe('OrcaRuntimeService', () => {
 
       // The post-daemon provider's prefix-matching session must have been
       // shut down, proving the thunk resolved lazily at call time.
-      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
-        `${TEST_WORKTREE_ID}@@aaaaaaaa`,
-        true
-      )
+      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`, {
+        immediate: true
+      })
       // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })

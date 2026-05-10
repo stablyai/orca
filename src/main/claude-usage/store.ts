@@ -2,7 +2,6 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
-import type { Repo } from '../../shared/types'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -13,16 +12,10 @@ import type {
   ClaudeUsageSessionRow,
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
-import { listRepoWorktrees } from '../repo-worktrees'
 import type { Store } from '../persistence'
-import { mergeWorktree } from '../ipc/worktree-logic'
+import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
-import {
-  createWorktreeRefs,
-  getDefaultWorktreeLabel,
-  getSessionProjectLabel,
-  scanClaudeUsageFiles
-} from './scanner'
+import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
 
 const SCHEMA_VERSION = 1
 const STALE_MS = 5 * 60_000
@@ -131,12 +124,6 @@ function getLocalDay(timestamp: string): string | null {
   return `${year}-${month}-${day}`
 }
 
-type ClaudeUsageWorktree = {
-  worktreeId: string
-  path: string
-  displayName: string
-}
-
 export class ClaudeUsageStore {
   private state: ClaudeUsagePersistedState
   private readonly store: Store
@@ -226,7 +213,7 @@ export class ClaudeUsageStore {
     this.scanPromise = (async () => {
       try {
         const repos = this.store.getRepos()
-        const worktreesByRepo = await this.loadWorktreesByRepo(repos)
+        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const result = await scanClaudeUsageFiles(createWorktreeRefs(repos, worktreesByRepo))
         this.state.processedFiles = result.processedFiles
         this.state.sessions = result.sessions
@@ -501,26 +488,5 @@ export class ClaudeUsageStore {
       }
       return true
     })
-  }
-
-  private async loadWorktreesByRepo(repos: Repo[]): Promise<Map<string, ClaudeUsageWorktree[]>> {
-    const worktreesByRepo = new Map<string, ClaudeUsageWorktree[]>()
-
-    for (const repo of repos) {
-      const gitWorktrees = await listRepoWorktrees(repo)
-      const mapped = gitWorktrees.map((worktree) => {
-        const worktreeId = `${repo.id}::${worktree.path}`
-        const meta = this.store.getWorktreeMeta(worktreeId)
-        const merged = mergeWorktree(repo.id, worktree, meta, repo.displayName)
-        return {
-          worktreeId,
-          path: worktree.path,
-          displayName: merged.displayName || getDefaultWorktreeLabel(worktree.path)
-        }
-      })
-      worktreesByRepo.set(repo.id, mapped)
-    }
-
-    return worktreesByRepo
   }
 }

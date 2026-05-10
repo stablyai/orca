@@ -118,7 +118,9 @@ function buildStartupOpts(
   agent: TuiAgent | null,
   plan: ReturnType<typeof buildAgentStartupPlan>,
   launchSource: LaunchSource
-): { startup?: { command: string; telemetry?: AgentStartedTelemetry } } {
+): {
+  startup?: { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry }
+} {
   if (!plan) {
     return {}
   }
@@ -127,7 +129,11 @@ function buildStartupOpts(
       ? null
       : { agent_kind: tuiAgentToAgentKind(agent), launch_source: launchSource, request_kind: 'new' }
   return {
-    startup: { command: plan.launchCommand, ...(telemetry ? { telemetry } : {}) }
+    startup: {
+      command: plan.launchCommand,
+      ...(plan.env ? { env: plan.env } : {}),
+      ...(telemetry ? { telemetry } : {})
+    }
   }
 }
 
@@ -213,10 +219,34 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       baseBranch,
       finalSetupDecision,
       undefined,
-      telemetrySource
+      telemetrySource,
+      item.title
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
+    const meta: {
+      linkedIssue?: number
+      linkedPR?: number
+      linkedLinearIssue?: string
+    } = {}
+    if (item.type === 'issue' && item.number) {
+      meta.linkedIssue = item.number
+    } else if (item.type === 'pr' && item.number) {
+      meta.linkedPR = item.number
+    }
+    if (item.linearIdentifier) {
+      meta.linkedLinearIssue = item.linearIdentifier
+    }
+    if (Object.keys(meta).length > 0) {
+      // Why: the Project direct-launch path activates the new workspace
+      // immediately. Persist the link first so the first sidebar render can
+      // show the issue/PR association instead of briefly looking unlinked.
+      // Best-effort: the worktree is already created on disk, so a meta
+      // write failure must not abort activation and orphan it.
+      void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
+        // Non-critical: continue into activation without the link metadata.
+      })
+    }
 
     const detectedIds = new Set(await detectedAgentsPromise)
     effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
@@ -264,7 +294,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
-        followupPrompt: null
+        followupPrompt: null,
+        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
       }
       draftLaunchedNatively = true
     } else if (effectiveAgent !== null) {
@@ -292,25 +323,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const message = error instanceof Error ? error.message : 'Failed to create workspace.'
     toast.error(message)
     return
-  }
-
-  const meta: {
-    linkedIssue?: number
-    linkedPR?: number
-    linkedLinearIssue?: string
-  } = {}
-  if (item.type === 'issue' && item.number) {
-    meta.linkedIssue = item.number
-  } else if (item.type === 'pr' && item.number) {
-    meta.linkedPR = item.number
-  }
-  if (item.linearIdentifier) {
-    meta.linkedLinearIssue = item.linearIdentifier
-  }
-  if (Object.keys(meta).length > 0) {
-    void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
-      // Meta update is non-critical for the draft flow — continue.
-    })
   }
 
   store.setSidebarOpen(true)

@@ -7,6 +7,7 @@ import {
   CircleDot,
   ExternalLink,
   GitBranch,
+  GitBranchPlus,
   GitPullRequest,
   Github,
   LoaderCircle,
@@ -36,6 +37,7 @@ import {
   type RepoSlug
 } from '@/lib/github-links'
 import { cn } from '@/lib/utils'
+import { LinearIcon } from '@/components/icons/LinearIcon'
 import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
 
 type SmartNameMode = 'smart' | 'github' | 'branches' | 'linear' | 'text'
@@ -86,8 +88,17 @@ const MODES: {
   { id: 'text', label: 'Name', Icon: CaseSensitive }
 ]
 
+const emptyHintByMode: Record<SmartNameMode, string> = {
+  smart: 'Start typing to create a name or find a source.',
+  github: 'Start typing to search GitHub PRs and issues.',
+  branches: 'Start typing to find a branch or create a new one.',
+  linear: 'Start typing to search Linear issues.',
+  text: ''
+}
+
 type RowEntry =
   | { kind: 'use-name'; value: string; name: string }
+  | { kind: 'create-branch'; value: string; name: string }
   | { kind: 'github'; value: string; item: GitHubWorkItem }
   | { kind: 'branch'; value: string; refName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
@@ -108,17 +119,21 @@ export default function SmartWorkspaceNameField({
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
   const {
     addRepo,
+    checkLinearConnection,
     fetchWorkItems,
     getCachedWorkItems,
     linearStatus,
+    linearStatusChecked,
     listLinearIssues,
     searchLinearIssues
   } = useAppStore(
     useShallow((s) => ({
       addRepo: s.addRepo,
+      checkLinearConnection: s.checkLinearConnection,
       fetchWorkItems: s.fetchWorkItems,
       getCachedWorkItems: s.getCachedWorkItems,
       linearStatus: s.linearStatus,
+      linearStatusChecked: s.linearStatusChecked,
       listLinearIssues: s.listLinearIssues,
       searchLinearIssues: s.searchLinearIssues
     }))
@@ -156,6 +171,16 @@ export default function SmartWorkspaceNameField({
     },
     [inputRef]
   )
+
+  useEffect(() => {
+    // Why: the composer can be opened before any other Linear-aware surface
+    // (TaskPage, IntegrationsPane) has had a chance to refresh status, leaving
+    // `linearStatus.connected=false` even when the user is actually connected.
+    // Trigger a check on mount if it hasn't run this session.
+    if (!linearStatusChecked) {
+      void checkLinearConnection()
+    }
+  }, [checkLinearConnection, linearStatusChecked])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(value), SEARCH_DEBOUNCE_MS)
@@ -371,9 +396,28 @@ export default function SmartWorkspaceNameField({
 
   const rows = useMemo<RowEntry[]>(() => {
     const trimmed = value.trim()
-    const nextRows: RowEntry[] = trimmed
-      ? [{ kind: 'use-name', value: `use-name-${trimmed}`, name: trimmed }]
-      : []
+    // Why: on the Branches tab the generic "Use … as workspace name" row
+    // reads as off-topic — the user is picking/creating a branch. Swap it
+    // for a branch-creation row that's pinned above existing-branch results
+    // (suppressed when an existing branch matches exactly so we don't offer
+    // to "create" something that already exists).
+    const branchExactMatch = mode === 'branches' && trimmed.length > 0 && branches.includes(trimmed)
+    // Why: the "Use … as workspace name" row only makes sense in Smart
+    // mode, where the user might be typing a free-form name. On dedicated
+    // source tabs (GitHub/Linear/Branches) it's off-topic — the user is
+    // there to pick (or, on Branches, create) a source.
+    const useNameRow: RowEntry | null =
+      trimmed && mode === 'smart'
+        ? { kind: 'use-name', value: `use-name-${trimmed}`, name: trimmed }
+        : null
+    const createBranchRow: RowEntry | null =
+      trimmed && mode === 'branches' && !branchExactMatch
+        ? { kind: 'create-branch', value: `create-branch-${trimmed}`, name: trimmed }
+        : null
+    const nextRows: RowEntry[] = []
+    if (useNameRow) {
+      nextRows.push(useNameRow)
+    }
     if (mode === 'text') {
       return nextRows
     }
@@ -387,6 +431,9 @@ export default function SmartWorkspaceNameField({
       )
     }
     if (mode === 'smart' || mode === 'branches') {
+      if (createBranchRow) {
+        nextRows.push(createBranchRow)
+      }
       nextRows.push(
         ...branches.map((refName) => ({
           kind: 'branch' as const,
@@ -407,20 +454,78 @@ export default function SmartWorkspaceNameField({
     return nextRows.slice(0, RESULT_LIMIT + 1)
   }, [branches, githubItems, linearIssues, mode, value])
 
-  useEffect(() => {
-    if (rows.length > 0) {
-      setCommandValue((current) =>
-        rows.some((row) => row.value === current) ? current : rows[0].value
-      )
+  // Why: source rows (GitHub/branches/Linear) are driven by debouncedQuery,
+  // so they're stale until the user pauses typing for SEARCH_DEBOUNCE_MS.
+  // We don't want to filter them out (causes flicker as results appear and
+  // disappear with each keystroke), but we do need to prevent cmdk's Enter
+  // handler from auto-selecting a stale source row. Two cases:
+  //   - Smart/Branches: a typed-text row (use-name / create-branch) exists
+  //     and is pinned at the top — force the highlight onto it so Enter
+  //     commits the typed text instead of a stale issue/PR/branch.
+  //   - GitHub/Linear: no typed-text fallback row, so clear the highlight
+  //     entirely; the input's Enter handler falls through to onPlainEnter.
+  const isQueryStale = value.trim().length > 0 && debouncedQuery.trim() !== value.trim()
+
+  // Why: when the typed value is unambiguously a source reference — a
+  // GitHub issue/PR shorthand ("#1234"), a github.com issue/pull URL, or a
+  // Linear identifier ("STA-123") — the user is clearly looking up that
+  // specific source rather than naming a workspace. Once a matching row
+  // appears in the results, snap the highlight onto it so Enter picks it
+  // instead of the typed-text fallback.
+  const sourceIntent = useMemo<'github' | 'linear' | null>(() => {
+    const trimmed = value.trim()
+    if (!trimmed) {
+      return null
     }
-  }, [rows])
+    if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
+      return 'github'
+    }
+    if (/^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
+      return 'linear'
+    }
+    return null
+  }, [value])
+
+  useEffect(() => {
+    if (rows.length === 0) {
+      return
+    }
+    if (isQueryStale) {
+      const typedTextRow = rows.find(
+        (row) => row.kind === 'use-name' || row.kind === 'create-branch'
+      )
+      // No typed-text fallback in this mode (GitHub/Linear): clear the
+      // highlight so cmdk doesn't auto-select a stale source on Enter.
+      setCommandValue(typedTextRow ? typedTextRow.value : '')
+      return
+    }
+    if (sourceIntent === 'github') {
+      const githubRow = rows.find((row) => row.kind === 'github')
+      if (githubRow) {
+        setCommandValue(githubRow.value)
+        return
+      }
+    } else if (sourceIntent === 'linear') {
+      const linearRow = rows.find((row) => row.kind === 'linear')
+      if (linearRow) {
+        setCommandValue(linearRow.value)
+        return
+      }
+    }
+    setCommandValue((current) =>
+      rows.some((row) => row.value === current) ? current : rows[0].value
+    )
+  }, [isQueryStale, rows, sourceIntent])
 
   const loading = githubLoading || branchesLoading || linearLoading
   const ActiveInputIcon = mode === 'text' ? CaseSensitive : loading ? LoaderCircle : Search
 
   const handleSelect = useCallback(
     (row: RowEntry) => {
-      if (row.kind === 'use-name') {
+      if (row.kind === 'use-name' || row.kind === 'create-branch') {
+        // Why: "create new branch" has no existing ref to base from, so
+        // it follows the same path as a typed name — the workspace's branch
+        // is derived from `name` and `baseBranch` stays unset (default base).
         onValueChange(row.name)
       } else if (row.kind === 'github') {
         onGitHubItemSelect(row.item)
@@ -517,6 +622,31 @@ export default function SmartWorkspaceNameField({
           ref={tabsListRef}
           variant="line"
           className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
+          onFocusCapture={(event) => {
+            // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
+            // the active trigger on every render, so we can't keep it out of
+            // the natural Tab order via props or a MutationObserver (race
+            // with React commits). Instead, intercept focus *on entry* into
+            // the tabs list:
+            //   - Forward Tab from outside (e.g., Repo combobox) → bounce to
+            //     the search input so the segmented control is skipped.
+            //   - Shift-Tab from the input → relatedTarget is the input, so
+            //     allow focus to land on the active trigger (segmented
+            //     control remains reachable in reverse).
+            //   - Intra-list focus moves (arrow keys) → relatedTarget is
+            //     inside the list; allow.
+            const previous = event.relatedTarget as HTMLElement | null
+            const list = tabsListRef.current
+            const input = localInputRef.current
+            if (!list || !input) {
+              return
+            }
+            if (!previous || previous === input || list.contains(previous)) {
+              return
+            }
+            event.stopPropagation()
+            input.focus({ preventScroll: true })
+          }}
         >
           {MODES.map(({ id, label, Icon }) => (
             <TabsTrigger
@@ -633,8 +763,13 @@ export default function SmartWorkspaceNameField({
                           if (row) {
                             event.preventDefault()
                             handleSelect(row)
+                            return
                           }
-                          return
+                          // No highlighted row (e.g., stale results in
+                          // GitHub/Linear modes where the highlight was
+                          // cleared to avoid auto-selecting a stale source).
+                          // Fall through to onPlainEnter so the keypress
+                          // doesn't feel inert.
                         }
                         onPlainEnter?.()
                       }
@@ -687,9 +822,9 @@ export default function SmartWorkspaceNameField({
                 </div>
               ) : rows.length === 0 ? (
                 <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  {mode === 'linear' && !linearStatus.connected
+                  {mode === 'linear' && linearStatusChecked && !linearStatus.connected
                     ? 'Connect Linear in Settings to search issues.'
-                    : 'Start typing to create a name or find a source.'}
+                    : emptyHintByMode[mode]}
                 </div>
               ) : (
                 <CommandGroup className="p-1">
@@ -747,6 +882,9 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'use-name') {
     return <CaseSensitive className="size-3.5 shrink-0 text-muted-foreground" />
   }
+  if (row.kind === 'create-branch') {
+    return <GitBranchPlus className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   if (row.kind === 'github') {
     return row.item.type === 'pr' ? (
       <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
@@ -757,11 +895,7 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  return (
-    <span className="size-3.5 shrink-0 rounded-sm bg-muted text-[8px] font-semibold leading-3.5 text-muted-foreground">
-      L
-    </span>
-  )
+  return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
 function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }): React.JSX.Element {
@@ -774,11 +908,7 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
   if (kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  return (
-    <span className="size-3.5 shrink-0 rounded-sm bg-muted text-center text-[8px] font-semibold leading-3.5 text-muted-foreground">
-      L
-    </span>
-  )
+  return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
 function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
@@ -787,6 +917,14 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
       <span className="min-w-0 truncate">
         Use <span className="font-medium text-foreground">&ldquo;{row.name}&rdquo;</span> as
         workspace name
+      </span>
+    )
+  }
+  if (row.kind === 'create-branch') {
+    return (
+      <span className="min-w-0 truncate">
+        Create new branch{' '}
+        <span className="font-mono text-[11px] font-medium text-foreground">{row.name}</span>
       </span>
     )
   }

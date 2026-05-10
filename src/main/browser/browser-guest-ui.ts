@@ -1,7 +1,8 @@
 import { screen, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl
+  normalizeExternalBrowserUrl,
+  redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
   isWindowShortcutModifierChord,
@@ -31,7 +32,10 @@ export function setupGuestContextMenu(args: {
     if (!renderer) {
       return
     }
-    const pageUrl = guest.getURL()
+    // Why: redact Kagi session tokens before the URL leaves main; the renderer
+    // pipes pageUrl into clipboard writes and shell.openExternal, both of which
+    // would otherwise expose the bearer token outside Orca.
+    const pageUrl = redactKagiSessionToken(guest.getURL())
     // Why: params.linkURL is empty when the user right-clicks non-link
     // content. Normalizing an empty string through normalizeBrowserNavigationUrl
     // produces the blank-page constant (a truthy string), which would trick the
@@ -280,12 +284,10 @@ export function setupGuestShortcutForwarding(args: {
     if (input.code === 'KeyB' && input.shift) {
       renderer.send('ui:newBrowserTab')
     } else if (input.code === 'KeyT' && !input.shift) {
-      // Why: once focus is inside a browser guest, Cmd/Ctrl+T should extend
-      // the current browser workspace with another internal page instead of
-      // creating a sibling Orca terminal tab. The renderer still decides
-      // whether that means "new page in this workspace" or "new workspace"
-      // based on the current active surface.
-      renderer.send('ui:newBrowserTab')
+      // Why: Cmd/Ctrl+T always opens a new terminal in the central pane,
+      // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the
+      // dedicated shortcut for new browser tabs.
+      renderer.send('ui:newTerminalTab')
     } else if (input.code === 'KeyL' && !input.shift) {
       // Why: the address bar lives in the renderer chrome, not the guest
       // page. Forward Cmd/Ctrl+L out of the guest so the active BrowserPane

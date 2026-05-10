@@ -88,6 +88,10 @@ export class OrcaRuntimeRpcServer {
   // Why: each WebSocket connection has its own E2EE channel that manages the
   // handshake and encrypt/decrypt lifecycle. Keyed by WebSocket instance.
   private e2eeChannels = new Map<WebSocket, E2EEChannel>()
+  // Why: stable per-WebSocket id used as the cleanup key for streaming
+  // subscriptions, so the server can reap a closing socket's subscriptions
+  // without affecting other live sockets that share the same deviceToken.
+  private wsConnectionIds = new Map<WebSocket, string>()
   // Why: separate from Node's server.maxConnections because we need to count
   // only long-running dispatches, not every in-flight short RPC. See §3.1 +
   // §7 risk #2.
@@ -220,6 +224,11 @@ export class OrcaRuntimeRpcServer {
         wsTransport.onMessage((msg, _reply, ws) => {
           let channel = this.e2eeChannels.get(ws)
           if (!channel) {
+            // Why: stable per-ws id used as the cleanup-index key for
+            // streaming subscriptions, so the server can reap them exactly
+            // when this socket closes (without affecting other live sockets
+            // that share the same deviceToken).
+            this.wsConnectionIds.set(ws, randomBytes(8).toString('hex'))
             channel = new E2EEChannel(ws, {
               serverSecretKey: this.e2eeKeypair!.secretKey,
               validateToken: (token) => this.deviceRegistry?.validateToken(token) != null,
@@ -251,16 +260,28 @@ export class OrcaRuntimeRpcServer {
 
         // Why: when a mobile client disconnects, the runtime must clean up
         // connection-scoped state like mobile-fit overrides and the E2EE
-        // channel to prevent orphaned state.
-        wsTransport.onConnectionClose((clientId) => {
-          for (const [ws, channel] of this.e2eeChannels) {
-            if (channel.deviceToken === clientId) {
-              channel.destroy()
-              this.e2eeChannels.delete(ws)
-              break
-            }
+        // channel to prevent orphaned state. A single paired device can hold
+        // multiple concurrent sockets (host screen + accounts screen, etc.),
+        // so destroy the channel for THIS exact ws and skip the per-client
+        // teardown when other sockets for the same token are still alive.
+        wsTransport.onConnectionClose((clientId, ws, hasOtherConnections) => {
+          // Why: sweep streaming subscriptions for THIS ws regardless of
+          // hasOtherConnections, so per-ws listeners (notifications,
+          // accounts, terminal) don't leak across reconnects. This is
+          // independent of the deviceToken-scoped onClientDisconnected.
+          const connectionId = this.wsConnectionIds.get(ws)
+          if (connectionId) {
+            this.runtime.cleanupSubscriptionsForConnection(connectionId)
+            this.wsConnectionIds.delete(ws)
           }
-          this.runtime.onClientDisconnected(clientId)
+          const channel = this.e2eeChannels.get(ws)
+          if (channel) {
+            channel.destroy()
+            this.e2eeChannels.delete(ws)
+          }
+          if (!hasOtherConnections) {
+            this.runtime.onClientDisconnected(clientId)
+          }
         })
 
         await wsTransport.start()
@@ -429,7 +450,8 @@ export class OrcaRuntimeRpcServer {
       wsTransport.setClientId(ws, token)
     }
 
-    await this.dispatcher.dispatchStreaming(request, reply)
+    const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
+    await this.dispatcher.dispatchStreaming(request, reply, { connectionId })
   }
 
   private buildError(id: string, code: string, message: string): RpcResponse {

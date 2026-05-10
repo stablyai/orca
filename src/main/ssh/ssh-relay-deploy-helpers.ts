@@ -10,12 +10,14 @@ export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
 export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTransport> {
   return new Promise<MultiplexerTransport>((resolve, reject) => {
     let sentinelReceived = false
+    let settled = false
     let stderrOutput = ''
     let bufferedStdout = Buffer.alloc(0)
     let closedAfterSentinel = false
 
     const timeout = setTimeout(() => {
-      if (!sentinelReceived) {
+      if (!settled) {
+        settled = true
         channel.close()
         reject(
           new Error(
@@ -36,20 +38,48 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
     const dataCallbacks: ((data: Buffer) => void)[] = []
     const closeCallbacks: (() => void)[] = []
 
-    channel.on('close', () => {
-      if (!sentinelReceived) {
-        clearTimeout(timeout)
-        reject(
-          new Error(
-            `Relay process exited before ready.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
-          )
-        )
+    const notifyClosed = (): void => {
+      if (closedAfterSentinel) {
         return
       }
       closedAfterSentinel = true
       for (const cb of closeCallbacks) {
         cb()
       }
+    }
+
+    const failOrClose = (err: Error): void => {
+      clearTimeout(timeout)
+      if (!sentinelReceived) {
+        if (!settled) {
+          settled = true
+          reject(err)
+        }
+        return
+      }
+      notifyClosed()
+    }
+
+    // Why: SSH channel streams emit `error` when the remote host disappears.
+    // Unhandled EventEmitter errors are process-fatal, so convert them into
+    // startup rejection before the sentinel and transport close after it.
+    channel.on('error', (err: Error) => failOrClose(err))
+    channel.stderr.on('error', (err: Error) => failOrClose(err))
+
+    channel.on('close', () => {
+      if (!sentinelReceived) {
+        clearTimeout(timeout)
+        if (!settled) {
+          settled = true
+          reject(
+            new Error(
+              `Relay process exited before ready.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
+            )
+          )
+        }
+        return
+      }
+      notifyClosed()
     })
 
     // Why: data arriving in the same TCP chunk as the sentinel is buffered
@@ -88,6 +118,7 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         if (afterSentinel.length > 0) {
           pendingAfterSentinel = afterSentinel
         }
+        settled = true
 
         const transport: MultiplexerTransport = {
           write: (buf: Buffer) => channel.stdin.write(buf),
@@ -139,6 +170,19 @@ export async function execCommand(conn: SshConnection, command: string): Promise
       }
     }, EXEC_TIMEOUT_MS)
 
+    const fail = (err: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      reject(err)
+    }
+
+    // Why: remote reboot tears down exec channels with stream errors. Without
+    // scoped listeners, Node treats those as uncaught exceptions.
+    channel.on('error', fail)
+    channel.stderr.on('error', fail)
     channel.on('data', (data: Buffer) => {
       stdout += data.toString('utf-8')
     })

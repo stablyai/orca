@@ -10,6 +10,7 @@ export type DaemonConnectionInfo = {
 export type DaemonPidFile = {
   pid: number
   startedAtMs: number | null
+  entryPath?: string
 }
 
 export type DaemonProcessHandle = {

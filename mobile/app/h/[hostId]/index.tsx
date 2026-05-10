@@ -24,11 +24,23 @@ import {
   Plus,
   Moon,
   Filter,
-  Check
+  Check,
+  UserCircle
 } from 'lucide-react-native'
-import { connect, type RpcClient } from '../../../src/transport/rpc-client'
+import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
-import type { ConnectionState, RpcSuccess } from '../../../src/transport/types'
+import {
+  useHostClient,
+  useCloseHost,
+  useForceReconnect,
+  useReconnectAttempt,
+  useLastConnectedAt
+} from '../../../src/transport/client-context'
+import {
+  classifyConnection,
+  type ConnectionVerdict
+} from '../../../src/transport/connection-health'
+import type { RpcSuccess } from '../../../src/transport/types'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModal } from '../../../src/components/NewWorktreeModal'
@@ -37,14 +49,25 @@ import { PickerModal, type PickerOption } from '../../../src/components/PickerMo
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
+import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
-import { colors, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { evaluateCompat, type CompatVerdict } from '../../../src/transport/protocol-compat'
 import {
   loadPinnedIds,
   savePinnedIds,
   loadPreferences,
   savePreferences
 } from '../../../src/storage/preferences'
+
+// Why: locally-typed subset of the desktop's RuntimeStatus we read from
+// `status.get`. Only the version fields matter to mobile today; everything
+// else is opaque. Both fields are optional since pre-PR desktops won't
+// return them — the compat evaluator handles undefined gracefully.
+type DesktopStatus = {
+  protocolVersion?: number
+  minCompatibleMobileVersion?: number
+}
 
 type Worktree = {
   worktreeId: string
@@ -75,13 +98,8 @@ type FilterState = {
   selectedRepos: Set<string>
 }
 
-const STATUS_LABELS: Record<ConnectionState, string> = {
-  connecting: 'Connecting…',
-  handshaking: 'Securing…',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  reconnecting: 'Reconnecting…',
-  'auth-failed': 'Auth failed'
+function isErrorVerdict(v: ConnectionVerdict): boolean {
+  return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
 }
 
 const SORT_OPTIONS: PickerOption<SortMode>[] = [
@@ -244,13 +262,19 @@ export default function HostScreen() {
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
-  const [client, setClient] = useState<RpcClient | null>(null)
+  // Why: shared client per host owned by RpcClientProvider. See
+  // docs/mobile-shared-client-per-host.md.
+  const { client, state: connState } = useHostClient(hostId)
+  const reconnectAttempts = useReconnectAttempt(hostId)
+  const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
-  const [connState, setConnState] = useState<ConnectionState>('disconnected')
+  const closeHostClient = useCloseHost()
+  const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
+  const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
@@ -302,14 +326,17 @@ export default function HostScreen() {
     }
   }, [hostId])
 
+  // Why: keep clientRef in sync so existing imperative call sites work
+  // unchanged. Also re-seed the cached worktree list on hostId change
+  // since the useState initializer only runs on first mount.
   useEffect(() => {
-    let disposed = false
-    let rpcClient: RpcClient | null = null
-    clientRef.current = null
-    setClient(null)
-    setConnState('connecting')
+    clientRef.current = client
+  }, [client])
+
+  useEffect(() => {
     setHostName('')
     setError('')
+    setCompatVerdict({ kind: 'ok' })
     // Why: re-seed from the current host's cache on every hostId change.
     // The useState initializer only runs on first mount, so if Expo Router
     // reuses this screen with a different hostId, we must reset here.
@@ -323,45 +350,20 @@ export default function HostScreen() {
       setWorktrees([])
       setLastKnownWorktrees([])
     }
-
-    // Why: defer the RPC connection until after the navigation animation
-    // completes. Without this, connect() and loadHosts() block the JS
-    // thread during mount, delaying the screen transition by ~200-400ms.
-    // With cached worktrees the user sees content instantly; the live
-    // connection starts once the animation settles.
-    const rafId = requestAnimationFrame(() => {
-      if (disposed) return
-      void (async () => {
-        const hosts = await loadHosts()
-        const host = hosts.find((h) => h.id === hostId)
-        if (!host || disposed) {
-          if (!host && !disposed) setError('Host not found')
-          return
-        }
-
-        rpcClient = connect(host.endpoint, host.deviceToken, host.publicKeyB64, (state) => {
-          if (!disposed) setConnState(state)
-        })
-        if (disposed) {
-          rpcClient.close()
-          rpcClient = null
-          return
-        }
-        setHostName(host.name)
-        clientRef.current = rpcClient
-        setClient(rpcClient)
-
-        await updateLastConnected(host.id)
-      })()
-    })
-
-    return () => {
-      disposed = true
-      cancelAnimationFrame(rafId)
-      rpcClient?.close()
-      if (clientRef.current === rpcClient) {
-        clientRef.current = null
+    if (!hostId) return
+    let stale = false
+    void loadHosts().then((hosts) => {
+      if (stale) return
+      const host = hosts.find((h) => h.id === hostId)
+      if (!host) {
+        setError('Host not found')
+        return
       }
+      setHostName(host.name)
+      void updateLastConnected(host.id)
+    })
+    return () => {
+      stale = true
     }
   }, [hostId])
 
@@ -418,6 +420,47 @@ export default function HostScreen() {
       void fetchWorktrees()
     }
   }, [connState, fetchWorktrees])
+
+  // Why: read desktop's protocol version from status.get on every connect
+  // and re-evaluate compatibility. If the desktop declares this mobile
+  // build too old (or vice versa via the local minimum), the host detail
+  // screen swaps to a hard-block screen instead of the worktree list.
+  // Today's compat constants are wide-open so this never blocks; the wire
+  // format is in place to flip a switch in a future release.
+  useEffect(() => {
+    if (connState !== 'connected' || !client) return
+    let cancelled = false
+    const requestClient = client
+    void (async () => {
+      try {
+        const response = await requestClient.sendRequest('status.get')
+        if (cancelled || clientRef.current !== requestClient) return
+        if (!response.ok) return
+        const status = (response as RpcSuccess).result as DesktopStatus
+        const verdict = evaluateCompat({
+          desktopProtocolVersion: status.protocolVersion,
+          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
+        })
+        setCompatVerdict(verdict)
+        if (verdict.kind === 'blocked') {
+          // Why: deterministic breadcrumb so support can confirm a block
+          // actually fired (vs a render bug). No PII — just version ints.
+          console.warn('[protocol-compat] blocked', {
+            reason: verdict.reason,
+            desktopVersion: verdict.desktopVersion,
+            requiredMobileVersion: verdict.requiredMobileVersion,
+            requiredDesktopVersion: verdict.requiredDesktopVersion
+          })
+        }
+      } catch {
+        // Why: rare path — sendRequest can throw on transport tear-down.
+        // Treat as transient; verdict stays at previous value.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [connState, client])
 
   useEffect(() => {
     if (connState !== 'connected') return
@@ -498,9 +541,14 @@ export default function HostScreen() {
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) return
+    // Why: close the shared client first so its WebSocket is gone before
+    // the host record disappears; otherwise the next loadHosts() the
+    // provider does (e.g. on remount) wouldn't find this host but the
+    // socket would still be open, leaking state.
+    closeHostClient(hostId)
     await removeHost(hostId)
     router.back()
-  }, [hostId, router])
+  }, [hostId, router, closeHostClient])
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
@@ -631,6 +679,10 @@ export default function HostScreen() {
     )
   }
 
+  if (compatVerdict.kind === 'blocked') {
+    return <ProtocolBlockScreen verdict={compatVerdict} />
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topChrome}>
@@ -638,15 +690,45 @@ export default function HostScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <ChevronLeft size={22} color={colors.textPrimary} />
           </Pressable>
-          <View style={styles.hostIdentity}>
-            <StatusDot state={connState} />
-            <Text style={styles.hostNameText} numberOfLines={1}>
-              {hostName || 'Host'}
-            </Text>
-          </View>
-          {connState !== 'connected' && (
-            <Text style={styles.statusText}>{STATUS_LABELS[connState]}</Text>
-          )}
+          {(() => {
+            const headerVerdict = classifyConnection({
+              state: connState,
+              reconnectAttempts,
+              lastConnectedAt
+            })
+            return (
+              <>
+                <View style={styles.hostIdentity}>
+                  <StatusDot state={connState} verdict={headerVerdict} />
+                  <Text style={styles.hostNameText} numberOfLines={1}>
+                    {hostName || 'Host'}
+                  </Text>
+                </View>
+                {connState !== 'connected' &&
+                  (() => {
+                    // Why: status label removed in favor of just the dot +
+                    // Reconnect button — the home screen already surfaces the
+                    // verdict text per host, and the dot color already
+                    // signals severity here. Auth-failed routes through its
+                    // dedicated banner so we still want to suppress the
+                    // Reconnect button for that case.
+                    const verdict = headerVerdict
+                    const isError = isErrorVerdict(verdict)
+                    const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
+                    if (!showReconnectButton) return null
+                    return (
+                      <Pressable
+                        style={styles.reconnectButton}
+                        onPress={() => void forceReconnectHost(hostId!)}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.reconnectButtonText}>Reconnect</Text>
+                      </Pressable>
+                    )
+                  })()}
+              </>
+            )
+          })()}
         </View>
 
         {/* Filter/sort/group toolbar */}
@@ -681,6 +763,17 @@ export default function HostScreen() {
           </Pressable>
 
           <View style={styles.toolbarSpacer} />
+
+          <Pressable
+            style={styles.searchToggle}
+            onPress={() => router.push(`/h/${hostId}/accounts`)}
+            disabled={connState !== 'connected'}
+          >
+            <UserCircle
+              size={16}
+              color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+            />
+          </Pressable>
 
           <Pressable
             style={styles.newButton}
@@ -1086,9 +1179,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary
   },
-  statusText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+  reconnectButton: {
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle
+  },
+  reconnectButtonText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   authBanner: {
     backgroundColor: colors.bgPanel,

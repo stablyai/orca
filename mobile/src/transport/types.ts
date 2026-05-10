@@ -35,6 +35,20 @@ export const PairingOfferSchema = z.object({
 
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
 
+export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
+
+export type ConnectionLogEntry = {
+  id: string
+  ts: number
+  level: ConnectionLogLevel
+  // Short human-readable phase label, e.g. 'Opening WebSocket'.
+  message: string
+  // Optional second line for endpoint/error/elapsed detail.
+  detail?: string
+}
+
+export type ConnectionLogSink = (entry: ConnectionLogEntry) => void
+
 export type ConnectionState =
   | 'connecting'
   | 'handshaking'
@@ -60,3 +74,16 @@ export const HostProfileSchema = z.object({
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite()
 })
+
+// Why: persisted host record after the v0.0.3 keychain split. The
+// deviceToken is held in iOS Keychain via expo-secure-store and joined
+// in at load time; it must NOT appear in AsyncStorage anymore.
+export const StoredHostProfileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  endpoint: z.string().min(1),
+  publicKeyB64: z.string().min(1),
+  lastConnected: z.number().finite()
+})
+
+export type StoredHostProfile = z.infer<typeof StoredHostProfileSchema>

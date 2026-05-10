@@ -12,7 +12,10 @@ import type {
   Repo,
   SparsePreset,
   WorktreeMeta,
-  GlobalSettings
+  GlobalSettings,
+  OnboardingChecklistState,
+  OnboardingOutcome,
+  OnboardingState
 } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -20,9 +23,11 @@ import { getGitUsername } from './git/repo'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
+  getDefaultOnboardingState,
   getDefaultUIState,
   getDefaultRepoHookSettings,
-  getDefaultWorkspaceSession
+  getDefaultWorkspaceSession,
+  ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 
@@ -53,6 +58,14 @@ function decrypt(ciphertext: string): string {
     )
     return ciphertext
   }
+}
+
+function encryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? encrypt(value) : null
+}
+
+function decryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? decrypt(value) : null
 }
 
 // Why: the data-file path must not be a module-level constant. Module-level
@@ -95,6 +108,88 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
 }
 
+// Why: shared by load-time merge and the IPC update handler so the same
+// strict whitelist guards every entry into onboarding state — arbitrary
+// renderer/disk input cannot inject unknown keys or wrong-typed values.
+// Returns only validated fields; unknown keys are dropped silently.
+// Why: returns Partial<...> with a partial checklist so the IPC update path
+// merges over current state without wiping previously-true keys. Invalid
+// top-level fields are OMITTED (not coerced to fallbacks) so partial updates
+// don't clobber valid persisted state; the load-path caller spreads defaults.
+export function sanitizeOnboardingUpdate(
+  input: unknown
+): Partial<Omit<OnboardingState, 'checklist'>> & { checklist?: Partial<OnboardingChecklistState> } {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+  const raw = input as Record<string, unknown>
+  const out: Partial<Omit<OnboardingState, 'checklist'>> & {
+    checklist?: Partial<OnboardingChecklistState>
+  } = {}
+
+  if ('closedAt' in raw) {
+    // Why: `typeof raw.closedAt === 'number'` would let NaN/Infinity through;
+    // JSON.stringify writes those as `null` on save, which silently reverts
+    // closedAt and re-opens the wizard on next load. Require a finite,
+    // non-negative timestamp so live state matches what disk can persist.
+    if (typeof raw.closedAt === 'number' && Number.isFinite(raw.closedAt) && raw.closedAt >= 0) {
+      out.closedAt = raw.closedAt
+    } else if (raw.closedAt === null) {
+      out.closedAt = null
+    }
+    // else: omit — preserve existing persisted value on merge.
+  }
+  if ('outcome' in raw) {
+    const v = raw.outcome
+    if (v === 'completed' || v === 'dismissed') {
+      out.outcome = v as OnboardingOutcome
+    } else if (v === null) {
+      out.outcome = null
+    }
+    // else: omit.
+  }
+  if ('lastCompletedStep' in raw) {
+    const v = raw.lastCompletedStep
+    if (typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP) {
+      out.lastCompletedStep = v
+    }
+    // else: omit.
+  }
+  if ('checklist' in raw) {
+    const rawChecklist = raw.checklist
+    if (rawChecklist && typeof rawChecklist === 'object' && !Array.isArray(rawChecklist)) {
+      // Why: copy ONLY caller-sent boolean keys so partial updates (e.g.
+      // `{ addedRepo: true }`) don't reset other checklist items to false.
+      const defaults = getDefaultOnboardingState().checklist
+      const rc = rawChecklist as Record<string, unknown>
+      const checklist: Partial<OnboardingChecklistState> = {}
+      for (const key of Object.keys(defaults) as (keyof OnboardingChecklistState)[]) {
+        if (key in rc && typeof rc[key] === 'boolean') {
+          checklist[key] = rc[key] as boolean
+        }
+      }
+      out.checklist = checklist
+    }
+  }
+  return out
+}
+
+// Why: read a settings field that was removed from the GlobalSettings type
+// but still round-trips on disk via the ...parsed.settings spread. One-shot
+// use only — for the inline-agents default-on migration's Case B discriminator.
+// Delete with the migration in the cleanup release (2+ stable releases after
+// _inlineAgentsDefaultedForAllUsers ships).
+function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
+  return (
+    (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
+      ?.experimentalAgentDashboard === true
+  )
+}
+
+function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | undefined {
+  return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -128,6 +223,9 @@ export class Store {
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
         }
+        if (parsed.ui?.browserKagiSessionLink) {
+          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
+        }
 
         // Merge with defaults in case new fields were added
         const defaults = getDefaultPersistedState(homedir())
@@ -157,6 +255,10 @@ export class Store {
           settings: {
             ...defaults.settings,
             ...parsed.settings,
+            // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
+            // the old persisted flag forward once so enabled users don't lose it.
+            experimentalPet:
+              parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             notifications: {
@@ -175,24 +277,42 @@ export class Store {
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
             // Why: the 'inline-agents' card property was added after the
-            // experimentalAgentDashboard toggle. Users who had the toggle on
-            // in a prior rc already had worktreeCardProperties persisted
-            // without the new entry, so a simple defaults merge wouldn't
-            // reach them and the inline agent list stayed hidden after
-            // upgrade. One-shot append 'inline-agents' to their persisted
-            // array when the experimental toggle is true; the flag prevents
-            // re-firing so a deliberate uncheck from the Workspaces view
-            // options menu sticks across restarts.
-            // The flag is stamped on every successful load — including when
-            // the experiment is off — so that a later flip-on is handled by
-            // the renderer's ExperimentalPane handler rather than re-firing
-            // this migration.
+            // feature shipped behind an experimental toggle. Now that the
+            // feature is default-on for everyone, every existing user needs
+            // 'inline-agents' appended to their persisted
+            // worktreeCardProperties on first load after upgrade so the
+            // inline agent rows render without further opt-in. A flag
+            // prevents re-firing so a deliberate uncheck from the Workspaces
+            // view options menu sticks across restarts.
+            //
+            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
+            // That legacy flag was stamped unconditionally on every successful
+            // load() in prior builds, regardless of whether the experiment was
+            // toggled on. Every prior-RC user therefore already has it set to
+            // true on disk, including the opt-out cohort this widened
+            // migration was specifically written to reach. Gating on the
+            // legacy flag would silently skip exactly those users. The
+            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
+            // the new default-on migration can distinguish "already migrated
+            // under the new rules" from "happened to launch a prior build".
+            //
+            // Case B preservation: a user who turned the experiment on and then
+            // deliberately unchecked 'inline-agents' from the sidebar options
+            // menu has the same on-disk shape as a never-touched user. The
+            // discriminator below reads the deprecated `experimentalAgentDashboard`
+            // value as a one-shot signal. Both branches of the migration stamp
+            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
+            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
-            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForExperiment === true
-            const experimentOn = parsed.settings?.experimentalAgentDashboard === true
+            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
+            const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
+            const deliberateUncheck =
+              hadExperimentOn &&
+              Array.isArray(rawCardProps) &&
+              !rawCardProps.includes('inline-agents')
             const needsInlineAgentsMigration =
               !inlineAgentsMigrated &&
-              experimentOn &&
+              !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
             const migratedCardProps =
@@ -207,7 +327,11 @@ export class Store {
               ...(migratedCardProps !== undefined
                 ? { worktreeCardProperties: migratedCardProps }
                 : {}),
-              _inlineAgentsDefaultedForExperiment: true
+              // Why: keep stamping the legacy flag for forward-compat with
+              // a rollback to a pre-default-on build that still reads it.
+              // The new flag is the one that actually gates the migration.
+              _inlineAgentsDefaultedForExperiment: true,
+              _inlineAgentsDefaultedForAllUsers: true
             }
           })(),
           // Why: the workspace session is the most volatile persisted surface
@@ -231,7 +355,37 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
-          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget)
+          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          onboarding: (() => {
+            // Why: if we successfully parsed an existing orca-data.json that
+            // lacks an onboarding block, this is an upgrade-cohort user —
+            // backfill as completed (not dismissed) so they don't get dropped
+            // into the wizard regardless of whether they currently have repos,
+            // SSH targets, or just non-default settings. Analytics still
+            // distinguish this from users who explicitly bailed mid-funnel.
+            if (!parsed.onboarding) {
+              return {
+                ...defaults.onboarding,
+                closedAt: Date.now(),
+                outcome: 'completed' as const,
+                lastCompletedStep: ONBOARDING_FINAL_STEP
+              }
+            }
+            // Why: validate every persisted onboarding key explicitly via the
+            // shared sanitizer instead of spreading raw values. A type-flipped
+            // field on disk (string where number expected, unknown checklist
+            // key) is dropped or coerced to the default rather than poisoning
+            // in-memory state.
+            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding)
+            return {
+              ...defaults.onboarding,
+              ...sanitized,
+              checklist: {
+                ...defaults.onboarding.checklist,
+                ...sanitized.checklist
+              }
+            }
+          })()
         }
       }
     } catch (err) {
@@ -348,6 +502,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -389,6 +547,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -415,6 +577,16 @@ export class Store {
 
   getRepos(): Repo[] {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
+  }
+
+  /**
+   * O(1) read of the persisted repo count. Use this when you only need the
+   * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
+   * may run a synchronous git subprocess via `getGitUsername()`, which is
+   * wasteful when the caller only reads `.length`.
+   */
+  getRepoCount(): number {
+    return this.state.repos.length
   }
 
   getRepo(id: string): Repo | undefined {
@@ -600,6 +772,38 @@ export class Store {
     this.scheduleSave()
   }
 
+  // ── Onboarding ────────────────────────────────────────────────────
+
+  getOnboarding(): PersistedState['onboarding'] {
+    const defaults = getDefaultOnboardingState()
+    return {
+      ...defaults,
+      ...this.state.onboarding,
+      checklist: {
+        ...defaults.checklist,
+        ...this.state.onboarding?.checklist
+      }
+    }
+  }
+
+  updateOnboarding(
+    updates: Partial<Omit<PersistedState['onboarding'], 'checklist'>> & {
+      checklist?: Partial<OnboardingChecklistState>
+    }
+  ): PersistedState['onboarding'] {
+    const current = this.getOnboarding()
+    this.state.onboarding = {
+      ...current,
+      ...updates,
+      checklist: {
+        ...current.checklist,
+        ...updates.checklist
+      }
+    }
+    this.scheduleSave()
+    return this.getOnboarding()
+  }
+
   // ── GitHub Cache ──────────────────────────────────────────────────
 
   getGitHubCache(): PersistedState['githubCache'] {
@@ -618,8 +822,95 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    // Why: closes the second half of the SIGKILL race (Issue #217). The
+    // renderer's debounced session writer captures its state BEFORE pty:spawn
+    // returns, so the snapshot it later flushes via session:set has no
+    // tab.ptyId / ptyIdsByLeafId for the just-spawned PTY. If that stale
+    // snapshot lands AFTER persistPtyBinding's sync flush, it would overwrite
+    // the durable binding and re-open the orphan window. Merge in any
+    // existing bindings whenever the incoming snapshot's binding is empty.
+    const prior = this.state.workspaceSession
+    if (session && prior) {
+      const priorTabs = prior.tabsByWorktree ?? {}
+      const nextTabs = session.tabsByWorktree ?? {}
+      for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
+        const priorList = priorTabs[worktreeId]
+        if (!priorList) {
+          continue
+        }
+        for (const tab of tabs) {
+          if (tab.ptyId) {
+            continue
+          }
+          const priorTab = priorList.find((t) => t.id === tab.id)
+          if (priorTab?.ptyId) {
+            tab.ptyId = priorTab.ptyId
+          }
+        }
+      }
+      const priorLayouts = prior.terminalLayoutsByTabId ?? {}
+      const nextLayouts = session.terminalLayoutsByTabId ?? {}
+      for (const [tabId, layout] of Object.entries(nextLayouts)) {
+        const priorLayout = priorLayouts[tabId]
+        if (!priorLayout?.ptyIdsByLeafId) {
+          continue
+        }
+        const incoming = layout.ptyIdsByLeafId
+        if (incoming && Object.keys(incoming).length > 0) {
+          continue
+        }
+        layout.ptyIdsByLeafId = { ...priorLayout.ptyIdsByLeafId }
+      }
+    }
     this.state.workspaceSession = session
     this.scheduleSave()
+  }
+
+  // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217). The
+  // renderer's debounced session writer (~450 ms total) is normally the only
+  // path that writes tab.ptyId / ptyIdsByLeafId; a force-quit inside that
+  // window orphans the daemon's history dir. Patching + sync flushing here
+  // before pty:spawn returns guarantees the renderer cannot observe a
+  // spawn-success without the binding already being durable on disk.
+  persistPtyBinding(args: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+  }): void {
+    const session = this.state.workspaceSession
+    if (!session) {
+      return
+    }
+    const tabs = session.tabsByWorktree?.[args.worktreeId]
+    const tab = tabs?.find((t) => t.id === args.tabId)
+    if (tab) {
+      tab.ptyId = args.ptyId
+    }
+    const layout = session.terminalLayoutsByTabId?.[args.tabId]
+    if (layout) {
+      layout.ptyIdsByLeafId = {
+        ...layout.ptyIdsByLeafId,
+        [args.leafId]: args.ptyId
+      }
+    } else {
+      // Why: first-spawn-ever for a new tab — the renderer's debounced writer
+      // creates the layout entry on PaneManager init, but the binding has to
+      // be on disk before pty:spawn returns or a SIGKILL inside the same
+      // window would lose ptyIdsByLeafId for split-pane cold restore. The
+      // renderer will overwrite this minimal layout once persistLayoutSnapshot
+      // fires.
+      session.terminalLayoutsByTabId = {
+        ...session.terminalLayoutsByTabId,
+        [args.tabId]: {
+          root: { type: 'leaf', leafId: args.leafId },
+          activeLeafId: args.leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+        }
+      }
+    }
+    this.flush()
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────

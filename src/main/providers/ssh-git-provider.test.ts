@@ -128,6 +128,39 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(compareResult)
   })
 
+  it('getUpstreamStatus sends git.upstreamStatus request', async () => {
+    const upstreamResult = { hasUpstream: true, upstreamName: 'origin/main', ahead: 1, behind: 0 }
+    mux.request.mockResolvedValue(upstreamResult)
+
+    const result = await provider.getUpstreamStatus('/home/user/repo')
+    expect(mux.request).toHaveBeenCalledWith('git.upstreamStatus', {
+      worktreePath: '/home/user/repo'
+    })
+    expect(result).toEqual(upstreamResult)
+  })
+
+  it('pushBranch sends git.push request and forwards publish mode', async () => {
+    await provider.pushBranch('/home/user/repo', true)
+    expect(mux.request).toHaveBeenCalledWith('git.push', {
+      worktreePath: '/home/user/repo',
+      publish: true
+    })
+  })
+
+  it('pullBranch sends git.pull request', async () => {
+    await provider.pullBranch('/home/user/repo')
+    expect(mux.request).toHaveBeenCalledWith('git.pull', {
+      worktreePath: '/home/user/repo'
+    })
+  })
+
+  it('fetchRemote sends git.fetch request', async () => {
+    await provider.fetchRemote('/home/user/repo')
+    expect(mux.request).toHaveBeenCalledWith('git.fetch', {
+      worktreePath: '/home/user/repo'
+    })
+  })
+
   it('getBranchDiff sends git.branchDiff request', async () => {
     const diffs = [{ kind: 'text', originalContent: '', modifiedContent: 'new' }]
     mux.request.mockResolvedValue(diffs)

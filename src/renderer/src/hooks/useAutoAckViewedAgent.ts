@@ -1,5 +1,52 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+
+/**
+ * Pure helper used by the hook below — exported so the regression test for
+ * the codex-row-stays-bold race (docs/codex-agent-row-bold-stuck.md) can
+ * exercise the decision against a real test store without needing a DOM.
+ *
+ * Returns the list of paneKeys that should be acked given the active tab.
+ * Walks BOTH the live agent map AND the retained snapshot map: the inline
+ * agents list renders the union, so the ack scan must too. A paneKey may
+ * appear in both maps simultaneously (paneKey reuse mid-frame); duplicate
+ * pushes are harmless because acknowledgeAgents short-circuits per key.
+ */
+export function computeAutoAckTargets(
+  state: {
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
+    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+    acknowledgedAgentsByPaneKey: Record<string, number>
+  },
+  activeTabId: string
+): string[] {
+  const prefix = `${activeTabId}:`
+  const targets: string[] = []
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    if (!paneKey.startsWith(prefix)) {
+      continue
+    }
+    const ackAt = state.acknowledgedAgentsByPaneKey[paneKey] ?? 0
+    // Why: use stateStartedAt (not updatedAt) so tool/prompt pings within the
+    // same state don't re-trigger ack work — keeping the comparison aligned
+    // with WorktreeCardAgents' is-unvisited rule.
+    if (ackAt < entry.stateStartedAt) {
+      targets.push(paneKey)
+    }
+  }
+  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
+    if (!paneKey.startsWith(prefix)) {
+      continue
+    }
+    const ackAt = state.acknowledgedAgentsByPaneKey[paneKey] ?? 0
+    if (ackAt < retained.entry.stateStartedAt) {
+      targets.push(paneKey)
+    }
+  }
+  return targets
+}
 
 // Why: an agent row counts as "already seen" when the user is actually looking
 // at the tab it lives on. Without this effect, ack only fires via an explicit
@@ -11,15 +58,25 @@ import { useAppStore } from '@/store'
 // sees every state change with no re-render amplification up the component
 // tree. A reference-equality guard inside the callback bails out immediately
 // when none of the five slices we care about (activeView, activeTabId,
-// agentStatusByPaneKey, acknowledgedAgentsByPaneKey, settings) have changed —
-// so the Object.entries walk only runs for updates that could legitimately
-// affect the ack decision.
+// agentStatusByPaneKey, retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey)
+// have changed — so the Object.entries walk only runs for updates
+// that could legitimately affect the ack decision.
 //
 // It acks whenever:
 //   - activeView is 'terminal' (the user isn't on Settings/Tasks), AND
 //   - activeTabId identifies a live tab, AND
-//   - at least one agentStatusByPaneKey entry has paneKey prefixed by
-//     `${activeTabId}:` AND its ackAt < stateStartedAt.
+//   - at least one agentStatusByPaneKey entry OR retainedAgentsByPaneKey
+//     entry has paneKey prefixed by `${activeTabId}:` AND its
+//     ackAt < stateStartedAt.
+//
+// Why both maps: the inline-agents list renders the union of live + retained
+// rows (see useWorktreeAgentRows), so the ack scan must too. Without the
+// retained walk, a `done` row whose live entry was torn down by the
+// title-revert path (see pty-connection.ts:onAgentExited) migrates to the
+// retained map carrying a fresh `done.stateStartedAt` and never gets
+// auto-acked — leaving the inline row bold forever even while the user
+// stares at the terminal. Codex hits this race reliably because its TUI
+// reverts to a shell title within milliseconds of `Stop`.
 //
 // The ack ALSO requires the OS window to be visible and focused
 // (document.visibilityState === 'visible' && document.hasFocus()) —
@@ -43,15 +100,8 @@ export function useAutoAckViewedAgent(): void {
     let lastActiveView: unknown = undefined
     let lastActiveTabId: unknown = undefined
     let lastAgentStatus: unknown = undefined
+    let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
-    // Why: settings is tracked so flipping `experimentalAgentDashboard`
-    // alone re-evaluates the feature gate below — without this, a pure
-    // settings change would be swallowed by the fast-path until some other
-    // tracked slice changed. Tracking the whole settings reference (rather
-    // than the one specific boolean) is acceptable because settings changes
-    // are rare compared to agent-status updates, and it matches the existing
-    // pattern of tracking whole slice references.
-    let lastSettings: unknown = undefined
 
     const maybeAck = (): void => {
       const s = useAppStore.getState()
@@ -59,20 +109,9 @@ export function useAutoAckViewedAgent(): void {
         s.activeView === lastActiveView &&
         s.activeTabId === lastActiveTabId &&
         s.agentStatusByPaneKey === lastAgentStatus &&
-        s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
-        s.settings === lastSettings
+        s.retainedAgentsByPaneKey === lastRetained &&
+        s.acknowledgedAgentsByPaneKey === lastAcknowledged
       ) {
-        return
-      }
-
-      // Why: mirror the inline agents' visibility gate — when the
-      // experimental agent-activity feature is off, nothing in the UI reads
-      // the ack map, so accumulating entries for unseen agents is wasted
-      // memory and the Object.entries scan below is pure overhead. The
-      // subscribe callback fires on any store change, so flipping the
-      // setting naturally re-evaluates this guard without a separate
-      // subscription.
-      if (s.settings?.experimentalAgentDashboard !== true) {
         return
       }
 
@@ -97,36 +136,19 @@ export function useAutoAckViewedAgent(): void {
       if (!activeTabId) {
         return
       }
-      // Why: advance the refs ONLY after all gates have passed — if the visibility
-      // or feature gate caused an early return, we must leave the refs stale so
-      // the next call (e.g. triggered by the focus listener on return) sees a
-      // diff and actually runs the scan. Updating refs before the gates would
-      // consume the diff silently and leave the user returning to cards whose
-      // bold-until-viewed rows stay bold until some unrelated store change
-      // happens to bump the refs again.
+      // Why: advance the refs ONLY after all gates have passed — if the
+      // visibility gate (window hidden/unfocused or no activeTabId) caused an
+      // early return, leave the refs stale so the next call (e.g. triggered by
+      // the focus listener on return) sees a diff and actually runs the scan.
+      // Updating refs before the gates would consume the diff silently and
+      // leave the user returning to cards whose bold-until-viewed rows stay
+      // bold until some unrelated store change happens to bump the refs.
       lastActiveView = s.activeView
       lastActiveTabId = s.activeTabId
       lastAgentStatus = s.agentStatusByPaneKey
+      lastRetained = s.retainedAgentsByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
-      lastSettings = s.settings
-      const prefix = `${activeTabId}:`
-      const toAck: string[] = []
-      for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-        if (!paneKey.startsWith(prefix)) {
-          continue
-        }
-        const ackAt = s.acknowledgedAgentsByPaneKey[paneKey] ?? 0
-        // Why: use stateStartedAt (not updatedAt) so tool/prompt pings
-        // within the same state don't re-trigger ack work on every event —
-        // acknowledgeAgents short-circuits anyway when the value is
-        // unchanged, but keeping the comparison in sync with the
-        // "is-unvisited" rule in WorktreeCardAgents avoids a stutter
-        // where we ack on an updatedAt-bump that didn't cross a state
-        // transition.
-        if (ackAt < entry.stateStartedAt) {
-          toAck.push(paneKey)
-        }
-      }
+      const toAck = computeAutoAckTargets(s, activeTabId)
       if (toAck.length > 0) {
         s.acknowledgeAgents(toAck)
       }

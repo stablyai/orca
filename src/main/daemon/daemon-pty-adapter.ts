@@ -230,26 +230,31 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.client.notify('resize', { sessionId: id, cols, rows })
   }
 
-  async shutdown(id: string, _immediate: boolean): Promise<void> {
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.client.request('kill', { sessionId: id })
     this.activeSessionIds.delete(id)
     this.initialCwds.delete(id)
-    // Why: user explicitly closed this terminal — clean up disk history
-    // so it doesn't trigger a false cold restore on next launch.
-    if (this.historyManager) {
+    // Why: history removal is for the "user explicitly closed this terminal"
+    // path. Sleep also calls shutdown but expects scrollback to survive — wake
+    // re-spawns and the cold-restore reader needs the dir intact. Caller
+    // indicates intent via opts.keepHistory.
+    if (this.historyManager && !opts.keepHistory) {
       void this.historyManager
         .removeSession(id)
         .catch((err) => console.warn('[history] removeSession failed:', id, err))
     }
 
-    // Why: delete-then-set ensures the entry moves to the end of Map iteration
-    // order, so re-killing a session doesn't leave it as the first eviction target.
-    this.killedSessionTombstones.delete(id)
-    this.killedSessionTombstones.set(id, Date.now())
-    if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
-      const oldest = this.killedSessionTombstones.keys().next().value
-      if (oldest) {
-        this.killedSessionTombstones.delete(oldest)
+    // Why: tombstone rejects reattach against a session the user explicitly
+    // killed. Sleep legitimately reattaches on wake, so skip both the LRU bump
+    // and the size-cap eviction under keepHistory.
+    if (!opts.keepHistory) {
+      this.killedSessionTombstones.delete(id)
+      this.killedSessionTombstones.set(id, Date.now())
+      if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
+        const oldest = this.killedSessionTombstones.keys().next().value
+        if (oldest) {
+          this.killedSessionTombstones.delete(oldest)
+        }
       }
     }
   }

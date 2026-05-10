@@ -8,32 +8,39 @@ import { z } from 'zod'
 // Why: the original handlers treated non-numeric/NaN limit values as "no
 // limit" rather than as errors. Preserve that forgiving behavior so CLI
 // callers passing stringified numbers or Infinity still reach the runtime.
+// The outer optional() is required for omitted keys in Zod v4; an optional
+// schema hidden behind pipe() still makes z.object require the property.
 export const OptionalFiniteNumber = z
   .unknown()
   .transform((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
-  .pipe(z.number().optional())
+  .pipe(z.union([z.number(), z.undefined()]))
+  .optional()
 
 export const OptionalPositiveInt = z
   .unknown()
   .transform((value) =>
     typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
   )
-  .pipe(z.number().optional())
+  .pipe(z.union([z.number(), z.undefined()]))
+  .optional()
 
 export const OptionalString = z
   .unknown()
   .transform((value) => (typeof value === 'string' && value.length > 0 ? value : undefined))
-  .pipe(z.string().optional())
+  .pipe(z.union([z.string(), z.undefined()]))
+  .optional()
 
 export const OptionalPlainString = z
   .unknown()
   .transform((value) => (typeof value === 'string' ? value : undefined))
-  .pipe(z.string().optional())
+  .pipe(z.union([z.string(), z.undefined()]))
+  .optional()
 
 export const OptionalBoolean = z
   .unknown()
   .transform((value) => (typeof value === 'boolean' ? value : undefined))
-  .pipe(z.boolean().optional())
+  .pipe(z.union([z.boolean(), z.undefined()]))
+  .optional()
 
 // Why: runtime handlers accept `linkedIssue: number | null | undefined` with
 // distinct meanings — undefined means "no update", null means "clear", number
@@ -50,6 +57,7 @@ export const TriStateLinkedIssue = z
     return undefined
   })
   .pipe(z.union([z.number(), z.null(), z.undefined()]))
+  .optional()
 
 // Why: the legacy extractBrowserTarget treated worktree as a plain-string
 // passthrough (empty string preserved) but `page` as non-empty-string. The

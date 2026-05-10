@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto'
 import { type BrowserWindow, ipcMain, app } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
 import { openCodeHookService } from '../opencode/hook-service'
 import { agentHookServer } from '../agent-hooks/server'
@@ -16,6 +17,7 @@ import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
+import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
 import {
@@ -27,6 +29,7 @@ import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 import { track } from '../telemetry/client'
 import { classifyError } from '../telemetry/classify-error'
+import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import {
   agentKindSchema,
   launchSourceSchema,
@@ -182,16 +185,13 @@ export function buildPtyHostEnv(
     baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
   const preexistingPiAgentDir = baseEnv.PI_CODING_AGENT_DIR ?? process.env.PI_CODING_AGENT_DIR
 
-  const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
-  if (preexistingOpenCodeConfigDir) {
-    // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
-    // user-provided directory would silently hide their custom OpenCode
-    // config, so preserve it. The Orca status plugin will not load, so the
-    // dashboard falls back to a blank status for that pane until the user
-    // unsets their override.
-    delete openCodeHookEnv.OPENCODE_CONFIG_DIR
-  }
-  Object.assign(baseEnv, openCodeHookEnv)
+  // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
+  // value cannot coexist with an Orca-only injection. Hand the user's value
+  // (when present) to the hook service and let it materialize a per-PTY
+  // mirror overlay that lets the user's plugins and Orca's status plugin
+  // load together — same pattern Pi uses below for PI_CODING_AGENT_DIR. See
+  // docs/opencode-config-dir-collision.md.
+  Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
 
   // Why: Claude/Codex native hooks run inside the shell process, so Orca
   // must inject the loopback receiver coordinates before the agent starts.
@@ -416,7 +416,8 @@ export function registerPtyHandlers(
   runtime?: OrcaRuntimeService,
   getSelectedCodexHomePath?: () => string | null,
   getSettings?: () => GlobalSettings,
-  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>
+  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  store?: Store
 ): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
@@ -431,6 +432,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
+  ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
   // Configure the local provider with app-specific hooks.
   // Why: only LocalPtyProvider has the configure() method — daemon-backed
@@ -552,64 +554,80 @@ export function registerPtyHandlers(
   bindProviderListeners()
   rebindProviderListeners = bindProviderListeners
 
+  // Why: a persistent ipcMain listener with a request-ID dispatch table
+  // (instead of one listener per call) so concurrent serialize requests do
+  // not stack listeners and trip Node's MaxListeners=10 warning. Many
+  // sleeping PTYs waking at once (e.g. on relaunch) routinely fan out 10+
+  // concurrent calls.
+  type SerializeResult = { data: string; cols: number; rows: number; lastTitle?: string } | null
+  const pendingSerializeRequests = new Map<
+    string,
+    { resolve: (result: SerializeResult) => void; timeout: NodeJS.Timeout }
+  >()
+
+  function settleSerializeRequest(requestId: string, result: SerializeResult): void {
+    const pending = pendingSerializeRequests.get(requestId)
+    if (!pending) {
+      return
+    }
+    clearTimeout(pending.timeout)
+    pendingSerializeRequests.delete(requestId)
+    pending.resolve(result)
+  }
+
+  ipcMain.on(
+    'pty:serializeBuffer:response',
+    (
+      _event,
+      args: {
+        requestId?: string
+        snapshot?: {
+          data?: unknown
+          cols?: unknown
+          rows?: unknown
+          lastTitle?: unknown
+        } | null
+      }
+    ) => {
+      if (typeof args?.requestId !== 'string') {
+        return
+      }
+      const snapshot = args.snapshot
+      if (
+        snapshot &&
+        typeof snapshot.data === 'string' &&
+        typeof snapshot.cols === 'number' &&
+        typeof snapshot.rows === 'number'
+      ) {
+        const result: { data: string; cols: number; rows: number; lastTitle?: string } = {
+          data: snapshot.data,
+          cols: snapshot.cols,
+          rows: snapshot.rows
+        }
+        if (typeof snapshot.lastTitle === 'string' && snapshot.lastTitle.length > 0) {
+          result.lastTitle = snapshot.lastTitle
+        }
+        settleSerializeRequest(args.requestId, result)
+      } else {
+        settleSerializeRequest(args.requestId, null)
+      }
+    }
+  )
+
   function requestSerializedBuffer(
     ptyId: string,
     opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
-  ): Promise<{ data: string; cols: number; rows: number; lastTitle?: string } | null> {
+  ): Promise<SerializeResult> {
     if (mainWindow.isDestroyed()) {
       return Promise.resolve(null)
     }
 
     const requestId = randomUUID()
-    return new Promise((resolve) => {
-      const cleanup = (): void => {
-        clearTimeout(timeout)
-        ipcMain.removeListener('pty:serializeBuffer:response', onResponse)
-      }
-
+    return new Promise<SerializeResult>((resolve) => {
       const timeout = setTimeout(() => {
-        cleanup()
-        resolve(null)
+        settleSerializeRequest(requestId, null)
       }, 750)
-
-      const onResponse = (
-        _event: Electron.IpcMainEvent,
-        args: {
-          requestId?: string
-          snapshot?: {
-            data?: unknown
-            cols?: unknown
-            rows?: unknown
-            lastTitle?: unknown
-          } | null
-        }
-      ): void => {
-        if (args.requestId !== requestId) {
-          return
-        }
-        cleanup()
-        const snapshot = args.snapshot
-        if (
-          snapshot &&
-          typeof snapshot.data === 'string' &&
-          typeof snapshot.cols === 'number' &&
-          typeof snapshot.rows === 'number'
-        ) {
-          const result: { data: string; cols: number; rows: number; lastTitle?: string } = {
-            data: snapshot.data,
-            cols: snapshot.cols,
-            rows: snapshot.rows
-          }
-          if (typeof snapshot.lastTitle === 'string' && snapshot.lastTitle.length > 0) {
-            result.lastTitle = snapshot.lastTitle
-          }
-          resolve(result)
-        } else {
-          resolve(null)
-        }
-      }
-
-      ipcMain.on('pty:serializeBuffer:response', onResponse)
+      pendingSerializeRequests.set(requestId, { resolve, timeout })
       const payload: {
         requestId: string
         ptyId: string
@@ -661,7 +679,7 @@ export function registerPtyHandlers(
       // Why: shutdown() is async but the PtyController interface is sync.
       // Swallowing the rejection prevents an unhandled promise rejection crash
       // if the remote SSH session is already gone.
-      void provider.shutdown(ptyId, false).catch(() => {})
+      void provider.shutdown(ptyId, { immediate: false }).catch(() => {})
       clearProviderPtyState(ptyId)
       markClaudePtyExited(ptyId)
       runtime?.onPtyExit(ptyId, -1)
@@ -722,6 +740,14 @@ export function registerPtyHandlers(
         worktreeId?: string
         sessionId?: string
         shellOverride?: string
+        // Why: closes the SIGKILL race documented in INVESTIGATION.md by
+        // letting main patch + sync-flush the (worktreeId, tabId, leafId →
+        // ptyId) binding before pty:spawn returns. Only the renderer's
+        // user-typing-Ctrl+T daemon-host path threads these; mobile/runtime
+        // CLI/SSH spawns leave them undefined and the main-side guard
+        // short-circuits.
+        tabId?: string
+        leafId?: string
         // Why: telemetry-plan.md§Agent launch semantics. The renderer
         // threads what Orca was *asked* to launch through this field; main
         // fires `agent_started` only after `provider.spawn` resolves. Loose
@@ -889,6 +915,19 @@ export function registerPtyHandlers(
       try {
         result = await provider.spawn(spawnOptions)
       } catch (err) {
+        const rawMessage = err instanceof Error ? err.message : String(err)
+        const hintedMessage = addNodePtyRecoveryHint(rawMessage)
+        let spawnError: Error
+        if (hintedMessage === rawMessage && err instanceof Error) {
+          spawnError = err
+        } else if (err instanceof Error) {
+          // Why: rewrite the message in place so the original stack trace,
+          // name, and any custom fields survive into telemetry and logs.
+          err.message = hintedMessage
+          spawnError = err
+        } else {
+          spawnError = new Error(hintedMessage)
+        }
         if (effectiveSessionId !== undefined) {
           ptySizes.delete(effectiveSessionId)
         }
@@ -915,19 +954,41 @@ export function registerPtyHandlers(
             ? ('claude-code' as const)
             : null
         if (errorAgentKind) {
-          const classified = classifyError(err)
+          const classified = classifyError(spawnError)
           track('agent_error', {
             agent_kind: errorAgentKind,
-            error_class: classified.error_class
+            error_class: classified.error_class,
+            ...getCohortAtEmit()
           })
         }
-        throw err
+        throw spawnError
       }
       ptyOwnership.set(result.id, args.connectionId ?? null)
       if (preAllocatedHandle) {
         runtime?.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
       }
       ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
+      // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217).
+      // The renderer's debounced session writer runs in parallel for every
+      // other field; we patch the load-bearing (tab.ptyId, ptyIdsByLeafId)
+      // binding synchronously so a force-quit in the ~450 ms debounce window
+      // can no longer orphan the daemon's history dir. Other spawn callers
+      // (mobile, runtime CLI, SSH) leave tabId/leafId undefined and this
+      // short-circuits — preserves their existing behavior.
+      if (
+        isDaemonHostSpawn &&
+        store &&
+        args.worktreeId !== undefined &&
+        args.tabId !== undefined &&
+        args.leafId !== undefined
+      ) {
+        store.persistPtyBinding({
+          worktreeId: args.worktreeId,
+          tabId: args.tabId,
+          leafId: args.leafId,
+          ptyId: result.id
+        })
+      }
       // Why: pre-signal cooperation gate — when the renderer has declared it
       // will own the serializer for this paneKey, suppress the daemon-snapshot
       // seed so the renderer's hydration path (maybeHydrateHeadlessFromRenderer)
@@ -1053,7 +1114,8 @@ export function registerPtyHandlers(
           track('agent_started', {
             agent_kind: agentKindParse.data,
             launch_source: launchSourceParse.data,
-            request_kind: requestKindParse.data
+            request_kind: requestKindParse.data,
+            ...getCohortAtEmit()
           })
         }
       }
@@ -1102,6 +1164,23 @@ export function registerPtyHandlers(
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 
+  // Why: pty:reportGeometry is a measurement-only sibling of pty:resize.
+  // pty:resize means "I want the PTY at this size" (a write/intent — gated
+  // by mobile-driver and cascade suppress). pty:reportGeometry means "the
+  // desktop pane I'm rendering currently measures this many cells" (a
+  // read/observation). Mobile-fit hold needs the latter even while the
+  // former is intentionally blocked: when a previously-hidden desktop
+  // tab becomes visible while a phone is driving, the server has no way
+  // to learn the real desktop dims, and resolveDesktopRestoreTarget
+  // returns the stale spawn default (e.g. 80×24) on Take Back. Splitting
+  // the channels keeps each guard simple — pty:resize keeps its mobile-
+  // driver gate; pty:reportGeometry never resizes the PTY, only refreshes
+  // the restore-target cache. See docs/mobile-fit-hold.md.
+  ipcMain.removeAllListeners('pty:reportGeometry')
+  ipcMain.on('pty:reportGeometry', (_event, args: { id: string; cols: number; rows: number }) => {
+    runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
+  })
+
   // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold restore
   // cache after the renderer has consumed the data. No-op for non-daemon providers.
   ipcMain.on('pty:ackColdRestore', (_event, args: { id: string }) => {
@@ -1118,13 +1197,16 @@ export function registerPtyHandlers(
       .catch(() => {})
   })
 
-  ipcMain.handle('pty:kill', async (_event, args: { id: string }) => {
+  ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
     // Why: try/finally ensures ptyOwnership is cleaned up even if shutdown
     // throws (e.g. SSH connection already gone or daemon session already
     // reaped). Swallowing the error prevents noisy renderer-side rejections
     // when killing orphaned sessions that the daemon has already discarded.
     try {
-      await getProviderForPty(args.id).shutdown(args.id, true)
+      await getProviderForPty(args.id).shutdown(args.id, {
+        immediate: true,
+        keepHistory: args.keepHistory ?? false
+      })
     } catch {
       /* session already dead — cleanup below handles the rest */
     } finally {

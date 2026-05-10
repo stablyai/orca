@@ -1,13 +1,18 @@
 import * as pty from 'node-pty'
+import { statSync } from 'fs'
 import { win32 as pathWin32 } from 'path'
 import type { SubprocessHandle } from './session'
+import { DaemonProtocolError } from './types'
 import {
   getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
   resolvePtyShellPath
 } from './shell-ready'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
-import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
+import {
+  ensureNodePtySpawnHelperExecutable,
+  getNodePtySpawnHelperCandidates
+} from '../providers/local-pty-utils'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
@@ -41,6 +46,54 @@ function getDefaultCwd(): string {
     return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
   }
   return 'C:\\'
+}
+
+function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
+  const detailName = kind === 'helper' ? 'helper' : 'cwd'
+  const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
+  return new DaemonProtocolError(
+    `Daemon's ${kind === 'helper' ? 'node-pty install' : 'working directory'} is gone ` +
+      `(worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT ` +
+      `(errno 2, No such file or directory) - ${detailName}='${path}'`
+  )
+}
+
+function preflightMacNodePtySpawnEnvironment(): void {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  let daemonCwd: string
+  try {
+    daemonCwd = process.cwd()
+    if (!statSync(daemonCwd).isDirectory()) {
+      throw formatMissingDaemonPathError('cwd', daemonCwd)
+    }
+  } catch (error) {
+    if (error instanceof DaemonProtocolError) {
+      throw error
+    }
+    throw formatMissingDaemonPathError('cwd', '<unavailable>')
+  }
+
+  let candidates: string[]
+  try {
+    candidates = getNodePtySpawnHelperCandidates()
+  } catch {
+    throw formatMissingDaemonPathError('helper', '<unresolved>')
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (statSync(candidate).isFile()) {
+        return
+      }
+    } catch {
+      // Try the next node-pty native location.
+    }
+  }
+
+  throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
 }
 
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
@@ -121,6 +174,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
+  preflightMacNodePtySpawnEnvironment()
 
   const proc = pty.spawn(shellPath, shellArgs, {
     name: 'xterm-256color',

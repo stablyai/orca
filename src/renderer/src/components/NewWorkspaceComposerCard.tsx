@@ -398,6 +398,25 @@ export default function NewWorkspaceComposerCard({
                   : '-translate-y-1 opacity-0 delay-0'
               )}
             >
+              {smartNameSelection ? (
+                // Why: when a source (PR/issue/Linear/branch) is picked the
+                // smart field shows a pill instead of an editable name, so
+                // surface the auto-derived workspace name here under Advanced
+                // where it can be reviewed/overridden. When the user typed an
+                // explicit name there's no source pill — the smart input is
+                // already the name field, so we don't duplicate it here.
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(event) => onNameValueChange(event.target.value)}
+                    placeholder="Workspace name"
+                    className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  />
+                </div>
+              ) : null}
+
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Note</label>
                 <textarea

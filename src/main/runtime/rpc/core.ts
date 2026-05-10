@@ -46,6 +46,12 @@ export type RpcContext = {
   // runtime-rpc transport (direct in-process callers don't need it).
   // See design doc §3.1 counter-lifecycle.
   signal?: AbortSignal
+  // Why: streaming handlers (notifications/accounts/terminal subscribe)
+  // register cleanup callbacks against the runtime so reconnects don't leak
+  // listeners. Keying those cleanups by per-WebSocket connectionId lets the
+  // server reap all subscriptions for a closing socket, even when other
+  // sockets for the same deviceToken stay alive (multi-screen mobile).
+  connectionId?: string
 }
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown

@@ -101,11 +101,18 @@ export type Worktree = {
   isPinned: boolean
   sortOrder: number
   lastActivityAt: number
+  /** Set once when Orca creates the worktree. Absent for worktrees discovered
+   *  on disk or persisted before this field existed. Used by the sidebar to
+   *  grant newly-created worktrees a short grace window at the top of Recent,
+   *  immune to ambient PTY-bump reordering in other worktrees. */
+  createdAt?: number
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
    *  when the worktree is no longer sparse on refresh. */
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
@@ -121,9 +128,13 @@ export type WorktreeMeta = {
   isPinned: boolean
   sortOrder: number
   lastActivityAt: number
+  /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
+  createdAt?: number
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
+  /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
+  baseRef?: string
   diffComments?: DiffComment[]
 }
 
@@ -834,6 +845,10 @@ export type SparsePreset = {
 export type CreateWorktreeArgs = {
   repoId: string
   name: string
+  /** Optional user-facing label to persist separately from the git-safe
+   *  branch/path seed. Used when a workspace is created from a GitHub or
+   *  Linear artifact whose title should remain readable in the sidebar. */
+  displayName?: string
   baseBranch?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
@@ -852,6 +867,28 @@ export type CreateWorktreeResult = {
   worktree: Worktree
   setup?: WorktreeSetupLaunch
   warning?: string
+  initialBaseStatus?: WorktreeBaseStatusEvent
+}
+
+export type WorktreeBaseStatusKind = 'checking' | 'current' | 'drift' | 'base_changed' | 'unknown'
+
+export type WorktreeBaseStatusEvent = {
+  repoId: string
+  worktreeId: string
+  status: WorktreeBaseStatusKind
+  base: string
+  /** Configured remote name parsed from `base` (longest-prefix match). Absent
+   *  when classification skipped optimistic reconcile (e.g. legacy fallback). */
+  remote?: string
+  behind?: number
+  recentSubjects?: string[]
+}
+
+export type WorktreeRemoteBranchConflictEvent = {
+  repoId: string
+  worktreeId: string
+  remote: string
+  branchName: string
 }
 
 // ─── Updater ─────────────────────────────────────────────────────────
@@ -1112,8 +1149,8 @@ export type GlobalSettings = {
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
   rightSidebarOpenByDefault: boolean
-  /** Whether to show the live agent activity count badge in the titlebar. */
-  showTitlebarAgentActivity: boolean
+  /** Whether to show the Orca app name in the titlebar. */
+  showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */
@@ -1200,20 +1237,23 @@ export type GlobalSettings = {
    *  detection, so no visible behavior change. Then we flip this flag to true
    *  and never migrate again. */
   terminalMacOptionAsAltMigrated: boolean
-  /** Experimental: live agent activity — inline per-workspace-card agent
-   *  rows showing state, prompt, and last message, plus retention of "done"
-   *  rows and the hook-driven status slice that feeds them. Opt-in because
-   *  the surface is still in preview: managed hook installation
-   *  (Claude/Codex/Gemini) only runs when this is true, so toggling it on
-   *  takes effect on the next app launch. The in-pane status indicators and
-   *  the cursor-agent hook path are unaffected by this toggle. */
-  experimentalAgentDashboard: boolean
   experimentalMobile: boolean
-  /** Experimental: floating animated sidekick (claude.webp) in the bottom-right
+  /** Auto-restore window for a phone-fit PTY after the last mobile
+   *  subscriber leaves. `null` (default) holds the PTY at phone size
+   *  indefinitely; the desktop "Restore" banner remains the explicit
+   *  return-to-desktop-size action. A finite millisecond value schedules
+   *  an automatic restore that long after the last unsubscribe. Clamped
+   *  on read into [5_000ms, 60min] to defend against bad config.
+   *  See docs/mobile-fit-hold.md. */
+  mobileAutoRestoreFitMs: number | null
+  /** Experimental: floating animated pet (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the
    *  current session (no relaunch) because it is purely renderer-side. */
-  experimentalSidekick: boolean
+  experimentalPet: boolean
+  /** Legacy persisted key from before the sidekick -> pet rename. Read only
+   *  during migration; new writes use experimentalPet. */
+  experimentalSidekick?: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the
@@ -1261,6 +1301,14 @@ export type GhosttyImportPreview = {
   error?: string
 }
 
+// Subset of the renderer's onboarding-step Ghostty `DiscoveryState['status']`
+// values that ever ship a telemetry event. The UI-only states (`'idle'`,
+// `'detecting'`) never fire `onboarding_ghostty_discovered`. Lives in
+// `shared/` because the schema in `telemetry-events.ts` (node-tsconfig) and
+// `ThemeStep.tsx` (web-tsconfig) both need it for the compile-time
+// schema-vs-renderer enum sync guard.
+export type DiscoveryStatusEmitted = 'found' | 'absent' | 'imported'
+
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
 
 export type NotificationDispatchRequest = {
@@ -1305,6 +1353,41 @@ export type NotificationSoundDataResult =
 export type NotificationSoundPathResult =
   | { ok: true; path: string }
   | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
+
+export type OnboardingOutcome = 'completed' | 'dismissed'
+
+export type OnboardingChecklistState = {
+  addedRepo: boolean
+  choseAgent: boolean
+  ranFirstAgent: boolean
+  ranSecondAgentOnSameTask: boolean
+  triedCmdJ: boolean
+  shapedSidebar: boolean
+  reviewedDiff: boolean
+  openedPr: boolean
+  addedFolder: boolean
+  openedFile: boolean
+  ranAgentOnFile: boolean
+  // Why: UI state flag (panel visibility), not an activation event. The
+  // telemetry checklist enum in telemetry-events.ts intentionally omits this.
+  dismissed: boolean
+}
+
+export type OnboardingState = {
+  closedAt: number | null
+  outcome: OnboardingOutcome | null
+  // Sentinel `-1` = not started; `1..4` = highest wizard step the user
+  // finished. Kept as `number` (not a literal union) because callers clamp
+  // via `Math.max`/`Math.min` against arbitrary numerics.
+  lastCompletedStep: number
+  checklist: OnboardingChecklistState
+}
+
+export type NotificationPermissionStatusResult = {
+  supported: boolean
+  platform: NodeJS.Platform
+  requested: boolean
+}
 
 export type WorktreeCardProperty =
   | 'status'
@@ -1366,7 +1449,9 @@ export type PersistedUIState = {
   /** URL to navigate to when a new browser tab is opened. Null means blank tab.
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null
-  browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | null
+  browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
+  /** Optional Kagi private-session link used only when Kagi is the search engine. */
+  browserKagiSessionLink?: string | null
   /** Saved window bounds so the app restores to the user's last position/size
    *  instead of maximizing on every launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
@@ -1378,15 +1463,23 @@ export type PersistedUIState = {
    *  migration never re-fires — allowing users to intentionally select the
    *  new 'recent' (last-activity) sort without it being clobbered on restart. */
   _sortBySmartMigrated?: boolean
-  /** One-shot migration flag for the inline-agents view-mode rollout. The
-   *  'inline-agents' card property was introduced after the
-   *  experimentalAgentDashboard toggle — users on prior rcs who had the
-   *  toggle on already had `worktreeCardProperties` persisted without it,
-   *  so merging with the new defaults never added it for them. When this
-   *  flag is absent, the main-process load() appends 'inline-agents' to
-   *  the persisted array if experimentalAgentDashboard is true, then sets
-   *  the flag so a later uncheck from the view-options menu sticks. */
+  /** LEGACY one-shot flag from the experimental-toggle era of the inline
+   *  agents feature. It was stamped unconditionally on every successful
+   *  load() in prior builds (regardless of whether the experiment was on),
+   *  so it cannot be used to detect "already migrated under the new
+   *  default-on rules" — every prior-RC user already has it set to true on
+   *  disk. Kept persisted for forward-compat with rollback to a pre-default-on
+   *  build that still reads it; the actual migration gate is now
+   *  `_inlineAgentsDefaultedForAllUsers` below. */
   _inlineAgentsDefaultedForExperiment?: boolean
+  /** One-shot migration flag for the default-on rollout of the inline
+   *  agents feature. Set once on first load after upgrade once the
+   *  'inline-agents' card property has been ensured in
+   *  `worktreeCardProperties`. Distinct from
+   *  `_inlineAgentsDefaultedForExperiment` because that legacy flag was
+   *  stamped on every prior load and so is permanently dirty for the
+   *  prior-RC opt-out cohort the widened migration is meant to reach. */
+  _inlineAgentsDefaultedForAllUsers?: boolean
   /** Snapshot of totalAgentsSpawned captured the first time we see the current
    *  app version. Why: the nag threshold counts agents spawned *since the
    *  user's last update* so a fresh install or new release does not trigger
@@ -1404,23 +1497,29 @@ export type PersistedUIState = {
    *  suppress the nag — no further thresholds, no notifications. */
   starNagCompleted?: boolean
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
-  /** Whether the experimental sidekick overlay is currently visible. Separate
-   *  from the experimentalSidekick settings flag so "Hide sidekick" from the
+  /** Whether the experimental pet overlay is currently visible. Separate
+   *  from the experimentalPet settings flag so "Hide pet" from the
    *  status-bar menu is a reversible dismiss (re-show without re-enabling the
-   *  feature). Absent = treated as true so existing users see the sidekick
+   *  feature). Absent = treated as true so existing users see the pet
    *  the first time they enable the experimental flag. */
-  sidekickVisible?: boolean
-  /** Active sidekick id: one of the bundled ids or a custom UUID from
-   *  customSidekicks. Unknown ids fall back to the default at read time so
-   *  removing a custom sidekick the user had selected doesn't leave the
+  petVisible?: boolean
+  /** Active pet id: one of the bundled ids or a custom UUID from
+   *  customPets. Unknown ids fall back to the default at read time so
+   *  removing a custom pet the user had selected doesn't leave the
    *  overlay rendering nothing. */
+  petId?: string
+  /** User-uploaded pet images. Bytes live under the legacy
+   *  userData/sidekicks/custom/ folder; this field is the metadata index so
+   *  custom pets ride the existing PersistedUIState save pipeline. */
+  customPets?: CustomPet[]
+  /** On-screen size of the pet overlay in CSS pixels (square box).
+   *  Clamped to [PET_SIZE_MIN, PET_SIZE_MAX] when read. */
+  petSize?: number
+  /** Legacy persisted keys from before the sidekick -> pet rename. Read only
+   *  during migration; new writes use the pet* names above. */
+  sidekickVisible?: boolean
   sidekickId?: string
-  /** User-uploaded sidekick images. Bytes live under userData/sidekicks/custom/;
-   *  this field is the metadata index so custom sidekicks ride the existing
-   *  PersistedUIState save pipeline. */
-  customSidekicks?: CustomSidekick[]
-  /** On-screen size of the sidekick overlay in CSS pixels (square box).
-   *  Clamped to [SIDEKICK_SIZE_MIN, SIDEKICK_SIZE_MAX] when read. */
+  customSidekicks?: CustomPet[]
   sidekickSize?: number
   /** Page-position state for Tasks. Source/repo/team/project selections keep
    *  using their existing settings paths; this only restores transient tabs
@@ -1428,15 +1527,15 @@ export type PersistedUIState = {
   taskResumeState?: TaskResumeState
 }
 
-export const SIDEKICK_SIZE_MIN = 60
-export const SIDEKICK_SIZE_MAX = 360
-export const SIDEKICK_SIZE_DEFAULT = 180
+export const PET_SIZE_MIN = 60
+export const PET_SIZE_MAX = 360
+export const PET_SIZE_DEFAULT = 180
 
-/** Metadata for a user-uploaded sidekick image. `id` is the stable identifier;
+/** Metadata for a user-uploaded pet image. `id` is the stable identifier;
  *  the on-disk filename (preserving the original extension) lives in `fileName`.
  *  The renderer never learns the absolute path — it asks main for the bytes
- *  via sidekick:read using (id, fileName). */
-export type CustomSidekick = {
+ *  via pet:read using (id, fileName). */
+export type CustomPet = {
   id: string
   label: string
   fileName: string
@@ -1508,6 +1607,7 @@ export type PersistedState = {
   }
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
+  onboarding: OnboardingState
 }
 
 // ─── Filesystem ─────────────────────────────────────────────
@@ -1579,6 +1679,19 @@ export type GitStatusEntry = GitUncommittedEntry
 export type GitStatusResult = {
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation
+  head?: string
+  branch?: string
+}
+
+// Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a
+// "sync" signal — callers must check hasUpstream before treating 0/0 as in-sync.
+// Kept separate from GitStatusResult because upstream lookup can fail for
+// reasons unrelated to working-tree status (e.g., no upstream is expected).
+export type GitUpstreamStatus = {
+  hasUpstream: boolean
+  upstreamName?: string
+  ahead: number
+  behind: number
 }
 
 export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'

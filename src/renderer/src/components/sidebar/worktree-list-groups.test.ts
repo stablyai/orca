@@ -100,6 +100,41 @@ describe('buildRows with pinned worktrees', () => {
 
     expect(rows[0]).toMatchObject({ type: 'header', label: 'c15t' })
   })
+
+  it('groups folder-mode workspaces under their folder name', () => {
+    const folderRepo: Repo = {
+      ...repo,
+      id: 'folder-1',
+      path: '/tmp/design-assets',
+      displayName: 'design-assets',
+      kind: 'folder'
+    }
+    const folderWorktree: Worktree = {
+      ...worktree,
+      id: 'folder-1::/tmp/design-assets',
+      repoId: folderRepo.id,
+      path: folderRepo.path,
+      branch: '',
+      displayName: folderRepo.displayName,
+      isMainWorktree: true
+    }
+    const rows = buildRows(
+      'repo',
+      [folderWorktree],
+      new Map([[folderRepo.id, folderRepo]]),
+      null,
+      new Set()
+    )
+
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'repo:folder-1',
+      label: 'design-assets',
+      count: 1,
+      repo: folderRepo
+    })
+    expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: folderWorktree.id } })
+  })
 })
 
 describe('WorktreeList header styles', () => {

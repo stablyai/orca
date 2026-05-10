@@ -30,6 +30,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
@@ -383,7 +384,7 @@ function TabBarInner({
                 <SortableTab
                   key={item.id}
                   tab={item.data}
-                  tabCount={tabs.length}
+                  tabCount={orderedItems.length}
                   hasTabsToRight={index < orderedItems.length - 1}
                   isActive={activeTabType === 'terminal' && item.id === activeTabId}
                   isExpanded={expandedPaneByTabId[item.id] === true}
@@ -557,6 +558,7 @@ function TabBarInner({
               <DropdownMenuShortcut>{NEW_FILE_SHORTCUT}</DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
+          <DropdownMenuSeparator />
           <QuickLaunchAgentMenuItems
             worktreeId={worktreeId}
             groupId={resolvedGroupId}

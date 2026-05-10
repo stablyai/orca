@@ -851,7 +851,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     data-current={isCurrentWorktree ? 'true' : undefined}
                     className={cn(
                       'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-[#ededed] data-[selected=true]:text-foreground dark:data-[selected=true]:bg-[#333333]'
+                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
                     <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
@@ -966,7 +966,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   onSelect={() => handleSelectItem(entry)}
                   className={cn(
                     'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                    'data-[selected=true]:border-border data-[selected=true]:bg-[#ededed] data-[selected=true]:text-foreground dark:data-[selected=true]:bg-[#333333]'
+                    'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                   )}
                 >
                   <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">

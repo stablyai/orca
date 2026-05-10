@@ -309,9 +309,8 @@ function gcScanRoot(
   return result
 }
 
-/** Run background GC to prune history directories for worktrees that no
- *  longer exist. Must be called after live worktree enumeration is complete
- *  to avoid deleting history for worktrees that haven't been discovered yet. */
+/** Run background GC to prune history directories for worktrees that are no
+ *  longer in Orca's known live-worktree set. */
 export function runHistoryGc(liveWorktreeIds: Set<string>): void {
   try {
     const main = gcScanRoot(getHistoryRoot(), liveWorktreeIds)
@@ -348,8 +347,7 @@ export function runHistoryGc(liveWorktreeIds: Set<string>): void {
 }
 
 /** Schedule GC after a delay so it runs after workspace hydration completes.
- *  `getLiveWorktreeIds` should enumerate all currently known worktree IDs
- *  (e.g. by listing repos and their git worktrees). */
+ *  `getLiveWorktreeIds` should use already-known IDs, not probe repo paths. */
 export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>): void {
   // Why 10s: avoids competing with startup-critical I/O while still running
   // early enough to clean up before the user notices disk usage (§7.6).

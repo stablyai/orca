@@ -284,17 +284,20 @@ async function pinPrereleaseFeed(): Promise<void> {
   // back to the default /releases/latest/download/ URL. In the "no newer"
   // case that feed will report the latest stable and compareVersions in the
   // 'update-available' handler will correctly mark it as not-available.
-  const newerTag = await fetchNewerReleaseTag(app.getVersion())
+  const currentVersion = app.getVersion()
+  const newerTag = await fetchNewerReleaseTag(currentVersion)
+  // Why: console.info goes to stdout and is captured by Console.app on macOS
+  // and by --enable-logging elsewhere. This is the only window we have into
+  // the updater on a user's machine when something goes wrong (issue: RC user
+  // not offered newer stable). Cheap to keep, invaluable when triaging.
   if (newerTag) {
-    autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: getReleaseDownloadUrl(newerTag)
-    })
+    const url = getReleaseDownloadUrl(newerTag)
+    console.info(`[updater] prerelease feed pinned: current=${currentVersion} → ${url}`)
+    autoUpdater.setFeedURL({ provider: 'generic', url })
   } else {
-    autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/latest/download'
-    })
+    const url = 'https://github.com/stablyai/orca/releases/latest/download'
+    console.info(`[updater] prerelease feed fallback: current=${currentVersion} → ${url}`)
+    autoUpdater.setFeedURL({ provider: 'generic', url })
   }
 }
 
@@ -508,6 +511,19 @@ export function setupAutoUpdater(
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+
+  // Why: the only on-machine window we have into electron-updater. Without
+  // this, an unexpected `update-not-available` (e.g. RC user not offered
+  // newer stable) is invisible — we can't tell whether the manifest fetch
+  // got the wrong version, the request failed, or a stale in-flight check
+  // was deduped. Logs go to main-process stdout, captured on macOS by
+  // Console.app under the app bundle, and on Win/Linux by --enable-logging.
+  autoUpdater.logger = {
+    info: (m: unknown) => console.info('[autoUpdater]', m),
+    warn: (m: unknown) => console.warn('[autoUpdater]', m),
+    error: (m: unknown) => console.error('[autoUpdater]', m),
+    debug: (m: unknown) => console.debug('[autoUpdater]', m)
+  } as never
 
   // Why: no Windows Authenticode certificate exists for this project.
   // electron-builder embeds the code-signing publisherName into the app's

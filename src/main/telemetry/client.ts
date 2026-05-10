@@ -33,6 +33,7 @@ import { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { getCohortAtEmit } from './cohort-classifier'
 import { resolveConsent, type ConsentState } from './consent'
 import { commonPropsSchema, validate } from './validator'
 
@@ -248,20 +249,19 @@ function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string):
   })
 }
 
+// In `pnpm dev` and any contributor / non-official build, `track()` is a
+// no-op: it returns immediately without transmitting, logging, or running
+// the burst-cap / consent / validator pipeline. Telemetry only flows in
+// official stable/rc builds where CI injects `ORCA_BUILD_IDENTITY` and
+// `ORCA_POSTHOG_WRITE_KEY`.
 export function track<N extends EventName>(name: N, props: EventProps<N>): void {
-  // Console mirror: always in non-official builds (so the whole team —
-  // contributors included — sees exactly what would transmit) and also in
-  // official builds when `TELEMETRY_ENABLED` is off (PR 2 verification).
-  // These are the only two paths that short-circuit before the pipeline.
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
-    console.debug('[telemetry]', name, props)
     return
   }
 
   // (1) Shutdown gate. Late IPC arrivals should not attempt to enqueue
   // against a client that is actively flushing.
   if (shuttingDown) {
-    console.debug('[telemetry] shutdown-gate drop:', name)
     return
   }
   if (!posthog || !commonProps || !storeRef) {
@@ -437,7 +437,10 @@ export function trackAppOpenedOnce(): void {
     return
   }
   appOpenedTrackedThisSession = true
-  track('app_opened', {})
+  // Why: `nth_repo_added: 0` on `app_opened` is the canonical session-zero
+  // / pre-repo cohort signal — a user who has launched but never added a
+  // repo. See docs/onboarding-funnel-cohort-addendum.md.
+  track('app_opened', { ...getCohortAtEmit() })
 }
 
 export async function shutdownTelemetry(): Promise<void> {

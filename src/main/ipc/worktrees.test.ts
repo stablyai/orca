@@ -135,6 +135,17 @@ describe('registerWorktreeHandlers', () => {
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn()
   }
+  let runtimeStub: {
+    resolveRemoteTrackingBase: ReturnType<typeof vi.fn>
+    hasRemoteTrackingRef: ReturnType<typeof vi.fn>
+    isRemoteFetchFresh: ReturnType<typeof vi.fn>
+    getOrStartRemoteFetch: ReturnType<typeof vi.fn>
+    fetchRemoteWithCache: ReturnType<typeof vi.fn>
+    emitWorktreeBaseStatus: ReturnType<typeof vi.fn>
+    recordOptimisticReconcileToken: ReturnType<typeof vi.fn>
+    reconcileWorktreeBaseStatus: ReturnType<typeof vi.fn>
+    clearOptimisticReconcileToken: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     for (const m of [
@@ -208,9 +219,9 @@ describe('registerWorktreeHandlers', () => {
     getDefaultBaseRefMock.mockReturnValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
-    // Why: createLocalWorktree now fires `git fetch` in the background via
-    // gitExecFileAsync. The default mock must return a resolved promise so
-    // the fire-and-forget `.catch()` chain doesn't trip on undefined.
+    // Why: createLocalWorktree can still hit legacy git fetch fallback in
+    // narrow unit harnesses. Return a resolved promise so catch/then chains
+    // don't trip on undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getEffectiveHooksMock.mockReturnValue(null)
     shouldRunSetupForCreateMock.mockReturnValue(false)
@@ -252,10 +263,16 @@ describe('registerWorktreeHandlers', () => {
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). A minimal stub
     // keeps these tests focused on create-flow semantics; the full
     // cache behavior is covered by fetch-remote-cache.test.ts.
-    const runtimeStub = {
-      fetchRemoteWithCache: async () => {
-        /* noop — fetch mocked at gitExecFileAsync level via gitExecFileAsyncMock */
-      }
+    runtimeStub = {
+      resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
+      hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
+      isRemoteFetchFresh: vi.fn().mockResolvedValue(false),
+      getOrStartRemoteFetch: vi.fn().mockResolvedValue({ ok: true }),
+      fetchRemoteWithCache: vi.fn().mockResolvedValue(undefined),
+      emitWorktreeBaseStatus: vi.fn(),
+      recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
+      reconcileWorktreeBaseStatus: vi.fn(),
+      clearOptimisticReconcileToken: vi.fn()
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -294,6 +311,96 @@ describe('registerWorktreeHandlers', () => {
         branch: 'improve-dashboard-2'
       })
     })
+  })
+
+  it('persists a sanitized artifact title as the worktree display name', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      displayName: '  Fix: dashboards\nfor PRs\u0000  '
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        displayName: 'Fix: dashboards for PRs'
+      })
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        displayName: 'Fix: dashboards for PRs'
+      })
+    })
+  })
+
+  it('does not await a cold fetch when the remote-tracking base exists locally', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    let resolveFetch!: () => void
+    const pendingFetch = new Promise<{ ok: true }>((resolve) => {
+      resolveFetch = () => resolve({ ok: true })
+    })
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    runtimeStub.getOrStartRemoteFetch.mockReturnValue(pendingFetch)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'created-sha',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
+
+    const createPromise = handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    }) as Promise<unknown>
+
+    const result = await Promise.race([
+      createPromise,
+      new Promise((resolve) => setTimeout(() => resolve('timed-out'), 0))
+    ])
+    expect(result).not.toBe('timed-out')
+
+    expect(runtimeStub.getOrStartRemoteFetch).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
+    expect(runtimeStub.emitWorktreeBaseStatus).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      worktreeId: 'repo-1::/workspace/improve-dashboard',
+      status: 'checking',
+      base: 'origin/main',
+      remote: 'origin'
+    })
+    expect(runtimeStub.reconcileWorktreeBaseStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdBaseSha: 'created-sha',
+        fetchPromise: pendingFetch
+      })
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        initialBaseStatus: expect.objectContaining({ status: 'checking', base: 'origin/main' })
+      })
+    )
+    resolveFetch()
   })
 
   it('throws a clear error when no default base ref can be resolved', async () => {
@@ -376,6 +483,136 @@ describe('registerWorktreeHandlers', () => {
       })
     ])
     expect(listWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('stamps lastActivityAt on first discovery so newly-added worktrees sort to the top of Recent', async () => {
+    // Why: a worktree that exists on disk but has no persisted WorktreeMeta
+    // (e.g. a folder repo just added, or a pre-existing worktree in a
+    // newly-added git repo) would otherwise fall back to `lastActivityAt: 0`
+    // and rank dead last in the Recent sort.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/discovered-wt',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getWorktreeMeta.mockReturnValue(undefined)
+    const stampedMeta = { lastActivityAt: 1_700_000_000_000 }
+    store.setWorktreeMeta.mockReturnValue(stampedMeta)
+
+    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
+      id: string
+      lastActivityAt: number
+    }[]
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/discovered-wt',
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+    expect(listed[0]).toMatchObject({
+      id: 'repo-1::/workspace/discovered-wt',
+      lastActivityAt: 1_700_000_000_000
+    })
+  })
+
+  it('does not re-stamp lastActivityAt when a worktree already has persisted meta', async () => {
+    // Why: only the *first* discovery should stamp. Re-stamping on every list
+    // would overwrite real activity and reshuffle the sidebar on refresh.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/existing-wt',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getWorktreeMeta.mockReturnValue({
+      displayName: '',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 42
+    })
+
+    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
+      id: string
+      lastActivityAt: number
+    }[]
+
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(listed[0].lastActivityAt).toBe(42)
+  })
+
+  it('stamps lastActivityAt on first discovery for folder-mode repos', async () => {
+    // Why: folder repos produce a synthetic worktree that flows through the
+    // same list path. Without the stamp, adding a folder puts its card at the
+    // bottom of Recent even though the user just added it.
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder'
+      }
+    ])
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder'
+    })
+    store.getWorktreeMeta.mockReturnValue(undefined)
+    store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
+
+    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/folder',
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+  })
+
+  it('stamps lastActivityAt on first discovery via worktrees:listAll', async () => {
+    // Why: the stamping logic lives in both worktrees:list and worktrees:listAll.
+    // Without a dedicated test, a regression in the listAll loop would silently
+    // bury newly-discovered worktrees from the multi-repo sidebar view.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/discovered-wt',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getWorktreeMeta.mockReturnValue(undefined)
+    store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
+
+    const listed = (await handlers['worktrees:listAll'](null, undefined)) as {
+      id: string
+      lastActivityAt: number
+    }[]
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/discovered-wt',
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+    expect(listed[0]).toMatchObject({
+      id: 'repo-1::/workspace/discovered-wt',
+      lastActivityAt: 1_700_000_000_000
+    })
   })
 
   it('skips past a suffix that already belongs to a PR after an initial branch conflict', async () => {

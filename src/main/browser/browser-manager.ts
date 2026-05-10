@@ -7,7 +7,8 @@ import { randomUUID } from 'node:crypto'
 import { shell, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl
+  normalizeExternalBrowserUrl,
+  redactKagiSessionToken
 } from '../../shared/browser-url'
 import type {
   BrowserDownloadFinishedEvent,
@@ -445,7 +446,10 @@ export class BrowserManager {
           action: 'opened-in-orca'
         })
       } else if (externalUrl) {
-        void shell.openExternal(externalUrl)
+        // Why: a target=_blank click on a Kagi search result page produces a
+        // popup URL that still contains the bearer token; redact before
+        // handing the URL to the OS default browser.
+        void shell.openExternal(redactKagiSessionToken(externalUrl))
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(externalUrl),
           action: 'opened-external'
@@ -1425,9 +1429,15 @@ export class BrowserManager {
       return
     }
 
+    // Why: redact Kagi session tokens before the validated URL is persisted
+    // by the renderer into BrowserPage.loadError (saved to disk via the
+    // workspace session writer).
     renderer.send('browser:guest-load-failed', {
       browserPageId: browserTabId,
-      loadError
+      loadError: {
+        ...loadError,
+        validatedUrl: redactKagiSessionToken(loadError.validatedUrl)
+      }
     })
   }
 

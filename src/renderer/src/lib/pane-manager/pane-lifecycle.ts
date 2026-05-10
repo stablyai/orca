@@ -182,7 +182,15 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
 
-  // Activate unicode 11
+  // Activate Unicode 11 widths *before* any caller-driven write. CJK / emoji /
+  // ZWJ codepoints get baked into the buffer at the active unicode version on
+  // write — if a restore (snapshot, scrollback, cold-restore) writes bytes
+  // through xterm while the default v6 width tables are still active, wide
+  // chars lay out as single cells and any subsequent re-measurement breaks
+  // pairing (visible as broken `?`-style glyphs). All restore paths
+  // (replayTerminalLayout → splitPane/createInitialPane → openTerminal,
+  // restoreScrollbackBuffers, handleReattachResult) run after openTerminal,
+  // so the activation must stay at this position.
   terminal.unicode.activeVersion = '11'
 
   // Why: the OS reads the focused textarea's screen rect at compositionstart to

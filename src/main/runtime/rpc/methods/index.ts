@@ -8,6 +8,7 @@ import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
+import { ACCOUNT_METHODS } from './accounts'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -21,5 +22,6 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...BROWSER_EXTRA_METHODS,
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
-  ...STATS_METHODS
+  ...STATS_METHODS,
+  ...ACCOUNT_METHODS
 ]

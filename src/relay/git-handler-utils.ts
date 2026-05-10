@@ -72,12 +72,27 @@ export function parseConflictKind(xy: string): string | null {
 export function parseStatusOutput(stdout: string): {
   entries: Record<string, unknown>[]
   unmergedLines: string[]
+  head?: string
+  branch?: string
 } {
   const entries: Record<string, unknown>[] = []
   const unmergedLines: string[] = []
+  let head: string | undefined
+  let branch: string | undefined
 
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
+      continue
+    }
+
+    if (line.startsWith('# branch.oid ')) {
+      head = line.slice('# branch.oid '.length).trim()
+      continue
+    }
+
+    if (line.startsWith('# branch.head ')) {
+      const branchHead = line.slice('# branch.head '.length).trim()
+      branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
       continue
     }
 
@@ -130,7 +145,7 @@ export function parseStatusOutput(stdout: string): {
     }
   }
 
-  return { entries, unmergedLines }
+  return { entries, unmergedLines, head, branch }
 }
 
 /**

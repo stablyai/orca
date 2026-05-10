@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  addRepoSetupStepActionSchema,
   AGENT_KIND_VALUES,
   agentKindSchema,
   commonPropsSchema,
@@ -105,6 +106,69 @@ describe('agent_started schema', () => {
     const parsed = eventSchemas.agent_started.safeParse({
       agent_kind: 'claude-code',
       launch_source: 'sidebar'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('add_repo_setup_step_action schema', () => {
+  it('accepts every Setup-step action declared in the schema', () => {
+    for (const action of addRepoSetupStepActionSchema.options) {
+      const parsed = eventSchemas.add_repo_setup_step_action.safeParse({ action })
+      expect(parsed.success).toBe(true)
+    }
+  })
+
+  it('rejects unknown action enum values', () => {
+    const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
+      action: 'export_to_pdf'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects extra keys via .strict()', () => {
+    const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
+      action: 'skip',
+      repo_name: 'orca' // raw repo names are UGC — must not cross the wire
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('workspace_create_failed schema', () => {
+  it('accepts a valid payload', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'git_failed'
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects unknown error_class values', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'cosmic_ray'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  // Core invariant mirroring agent_error: raw error strings never cross the
+  // wire. If this test ever flips, the failure-rate lane is leaking UGC —
+  // revert the offending schema change.
+  it('rejects error_message via .strict()', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'git_failed',
+      error_message: 'fatal: cannot create work tree at /Users/alice/secret'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects error_stack via .strict()', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'git_failed',
+      error_stack: 'Error: cannot create work tree\n    at /Users/alice/...'
     })
     expect(parsed.success).toBe(false)
   })

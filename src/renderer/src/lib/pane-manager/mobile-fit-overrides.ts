@@ -23,6 +23,13 @@ type OverrideChangeEvent = {
   mode: 'mobile-fit' | 'desktop-fit'
   cols: number
   rows: number
+  // Why: the dimensions the PTY was at *before* this event fired. For a
+  // desktop-fit transition this is the prior mobile-fit cols/rows so
+  // listeners can check whether xterm is still stuck at phone dims and
+  // needs the safety-net resize, vs. already moved on (e.g. user resized
+  // the desktop pane while mobile was active).
+  priorCols: number | null
+  priorRows: number | null
 }
 type OverrideChangeListener = (event: OverrideChangeEvent) => void
 const changeListeners = new Set<OverrideChangeListener>()
@@ -44,12 +51,20 @@ export function setFitOverride(
   cols: number,
   rows: number
 ): void {
+  const prior = overridesByPtyId.get(ptyId) ?? null
   if (mode === 'mobile-fit') {
     overridesByPtyId.set(ptyId, { mode, cols, rows })
   } else {
     overridesByPtyId.delete(ptyId)
   }
-  notifyChange({ ptyId, mode, cols, rows })
+  notifyChange({
+    ptyId,
+    mode,
+    cols,
+    rows,
+    priorCols: prior?.cols ?? null,
+    priorRows: prior?.rows ?? null
+  })
 }
 
 export function getPaneIdsForPty(ptyId: string): number[] {

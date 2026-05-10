@@ -785,17 +785,6 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [pageData.taskSource])
 
-  // Why: settings.defaultTaskSource can change while Tasks is open (Settings
-  // panel is reachable without unmounting Tasks). The one-shot resume effect
-  // only seeds taskSource on first mount, so without this sync a mid-session
-  // change to the default would not propagate when no explicit page-level
-  // taskSource was passed.
-  useEffect(() => {
-    if (!pageData.taskSource && settings?.defaultTaskSource) {
-      setTaskSource(settings.defaultTaskSource)
-    }
-  }, [settings?.defaultTaskSource, pageData.taskSource])
-
   // Why: Project mode is a sub-tab within the GitHub source. Visible whenever
   // the user is on the GitHub task source — actual entry into Project mode is
   // gated on a non-null `activeProject` once they pick one.
