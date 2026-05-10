@@ -441,16 +441,25 @@ export class SshRelaySession {
         paneKey?: unknown
         tabId?: unknown
         worktreeId?: unknown
+        env?: unknown
+        version?: unknown
         payload?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
         return
       }
+      // Why: forward env/version verbatim so Orca's warn-once cross-build /
+      // dev-vs-prod diagnostics fire on remote events the same as on local
+      // ones — see docs/design/agent-status-over-ssh.md §3 ("Replay /
+      // version mismatch") and the relay's wire envelope at
+      // src/shared/agent-hook-relay.ts.
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
           tabId: typeof envelope.tabId === 'string' ? envelope.tabId : undefined,
           worktreeId: typeof envelope.worktreeId === 'string' ? envelope.worktreeId : undefined,
+          env: typeof envelope.env === 'string' ? envelope.env : undefined,
+          version: typeof envelope.version === 'string' ? envelope.version : undefined,
           payload: envelope.payload
         },
         this.targetId

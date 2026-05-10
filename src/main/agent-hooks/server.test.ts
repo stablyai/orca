@@ -14,7 +14,10 @@ import {
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
-import { parseAgentStatusPayload } from '../../shared/agent-status-types'
+import {
+  AGENT_STATUS_MAX_FIELD_LENGTH,
+  parseAgentStatusPayload
+} from '../../shared/agent-status-types'
 
 const { trackMock } = vi.hoisted(() => ({
   trackMock: vi.fn()
@@ -161,6 +164,116 @@ describe('AgentHookServer listener replay', () => {
       expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
         reason: 'empty_pane_key'
       })
+    } finally {
+      server.stop()
+    }
+  })
+
+  // Why: agent-status-over-SSH §3 — ingestRemote must run the same warn-once
+  // cross-build diagnostics the local HTTP path runs, so a remote source of
+  // genuinely stale hooks emits the same signal locally.
+  it('runs warn-once env/version diagnostics on relay-forwarded events', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: PANE,
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'conn-1',
+          payload: expect.objectContaining({ state: 'working', agentType: 'claude' })
+        })
+      )
+
+      const warnCalls = warn.mock.calls.map((c) => String(c[0]))
+      expect(warnCalls.some((m) => m.includes('v999'))).toBe(true)
+      expect(warnCalls.some((m) => m.includes('development') && m.includes('production'))).toBe(
+        true
+      )
+
+      const warnsAfterFirst = warn.mock.calls.length
+      server.ingestRemote(
+        {
+          paneKey: 'tab-2:0',
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: 'tab-2:0',
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+      expect(warn.mock.calls.length).toBe(warnsAfterFirst)
+      expect(listener).toHaveBeenCalledTimes(2)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('treats remote env as normal relay traffic and normalizes payload at the trust boundary', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      const oversizedPrompt = 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH + 50)
+      server.ingestRemote(
+        {
+          paneKey: ' tab-3:0 ',
+          tabId: ' tab-3 ',
+          worktreeId: ' wt-3 ',
+          env: 'remote',
+          version: '1',
+          payload: {
+            state: 'done',
+            prompt: oversizedPrompt,
+            agentType: 'codex'
+          }
+        },
+        ' conn-9 '
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: 'tab-3:0',
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          connectionId: 'conn-9',
+          payload: expect.objectContaining({
+            state: 'done',
+            agentType: 'codex',
+            prompt: 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH)
+          })
+        })
+      )
+      expect(warn).not.toHaveBeenCalled()
     } finally {
       server.stop()
     }

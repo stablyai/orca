@@ -31,6 +31,10 @@ import type { ParsedAgentStatusPayload } from './agent-status-types'
 // that consumes it from the relay side).
 export type AgentHookSource = 'claude' | 'codex' | 'gemini' | 'opencode' | 'cursor' | 'pi' | 'droid'
 
+/** Env marker used by the remote relay. It is a transport/location marker, not
+ *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
+export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
+
 /** Wire envelope for a single hook event flowing relay → Orca. */
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
