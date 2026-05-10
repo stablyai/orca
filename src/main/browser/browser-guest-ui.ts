@@ -284,12 +284,10 @@ export function setupGuestShortcutForwarding(args: {
     if (input.code === 'KeyB' && input.shift) {
       renderer.send('ui:newBrowserTab')
     } else if (input.code === 'KeyT' && !input.shift) {
-      // Why: once focus is inside a browser guest, Cmd/Ctrl+T should extend
-      // the current browser workspace with another internal page instead of
-      // creating a sibling Orca terminal tab. The renderer still decides
-      // whether that means "new page in this workspace" or "new workspace"
-      // based on the current active surface.
-      renderer.send('ui:newBrowserTab')
+      // Why: Cmd/Ctrl+T always opens a new terminal in the central pane,
+      // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the
+      // dedicated shortcut for new browser tabs.
+      renderer.send('ui:newTerminalTab')
     } else if (input.code === 'KeyL' && !input.shift) {
       // Why: the address bar lives in the renderer chrome, not the guest
       // page. Forward Cmd/Ctrl+L out of the guest so the active BrowserPane
