@@ -1,19 +1,25 @@
-# Orca CLI Docs
+# Orca Docs
 
-Keep this folder focused on the durable references for Orca's public CLI and runtime model.
+Keep this folder focused on durable design notes, implementation plans, and
+feature references that are still useful after the original PR or release work
+lands.
 
-## Keep These Docs
+## Current References
 
-- `orca-cli-focused-v1-status.md`
-  - What is actually implemented and intentionally in scope now.
-- `orca-cli-v1-spec.md`
-  - The public CLI contract, selector grammar, JSON envelope, and command semantics.
-- `orca-runtime-layer-design.md`
-  - Why the runtime layer exists and which boundaries it owns.
-- `orca-cli-bundled-distribution.md`
-  - How the bundled desktop-app distribution and PATH registration model works.
+- `focus-follows-mouse-design.md`
+  - Rationale and edge cases for focus-follows-mouse behavior.
+- `focus-follows-mouse-plan.md`
+  - Rollout checklist and validation notes for focus-follows-mouse.
+- `split-groups-rollout-pr*.md`
+  - Incremental split-groups rollout plans.
+- `file-explorer-external-drop.md`
+  - Design notes for importing files from OS drag-and-drop.
+- `performance-audit.md` and `performance-implementation-plan.md`
+  - Performance findings and planned remediation steps.
+- Other feature-specific markdown files in this folder remain useful when they
+  match the area you are changing.
 
-## Why The Folder Is Small
+## Why The Folder Changes
 
 Earlier design and implementation work produced several planning and evaluation docs.
 Those were useful while the feature was taking shape, but they were intentionally removed
