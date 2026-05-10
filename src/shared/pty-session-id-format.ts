@@ -31,7 +31,11 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
     return { worktreeId: null }
   }
   const candidate = sessionId.slice(0, idx)
-  if (!candidate.includes(WORKTREE_ID_SEPARATOR)) {
+  // Why: require non-empty halves on both sides of `::` so degenerate
+  // ids like `::@@…`, `repo::@@…`, or `::path@@…` don't synthesize a
+  // phantom worktreeId for memory attribution.
+  const sepIdx = candidate.indexOf(WORKTREE_ID_SEPARATOR)
+  if (sepIdx <= 0 || sepIdx + WORKTREE_ID_SEPARATOR.length >= candidate.length) {
     return { worktreeId: null }
   }
   return { worktreeId: candidate }

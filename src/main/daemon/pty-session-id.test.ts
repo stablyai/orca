@@ -104,4 +104,18 @@ describe('parsePtySessionId', () => {
     const wt = 'repo::/Users/me/email@host/wt'
     expect(parsePtySessionId(`${wt}@@deadbeef`)).toEqual({ worktreeId: wt })
   })
+
+  it('rejects degenerate `::@@…` ids with empty repo and path halves', () => {
+    // Why: `String.includes('::')` would accept '::' as a worktreeId.
+    // Memory-attribution callers must not bucket sessions under an empty key.
+    expect(parsePtySessionId('::@@deadbeef')).toEqual({ worktreeId: null })
+  })
+
+  it('rejects ids with an empty path half (`repo::@@…`)', () => {
+    expect(parsePtySessionId('repo::@@deadbeef')).toEqual({ worktreeId: null })
+  })
+
+  it('rejects ids with an empty repoId half (`::path@@…`)', () => {
+    expect(parsePtySessionId('::path@@deadbeef')).toEqual({ worktreeId: null })
+  })
 })

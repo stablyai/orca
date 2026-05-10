@@ -14,7 +14,7 @@
  * session, reattribute each one to its repo via the minted session-id
  * format, and only register sessions whose repo has no `connectionId`
  * (i.e. truly local). Truly remote (SSH) sessions stay out of the
- * registry, mirroring the spawn-time gate at `pty.ts:1005`.
+ * registry, mirroring the spawn-time gate (the `if (!args.connectionId)` block around the `registerPty` call in `src/main/ipc/pty.ts`).
  */
 
 import { getDaemonProvider } from '../daemon/daemon-init'
@@ -41,7 +41,7 @@ let hasHydrated = false
  * Once-per-process when the daemon is reachable on first call:
  * `attachMainWindowServices` fires on every macOS dock re-activation, so
  * the module-level `hasHydrated` guard ensures the git-worktree
- * enumeration and `reconcileOnStartup` daemon RPC only run on the first
+ * enumeration and `listSessions` daemon RPC only run on the first
  * successful invocation. If the daemon is offline at first call (no
  * provider yet), the function returns without flipping the flag so a
  * later macOS re-activation can retry; once a provider is obtained the
@@ -52,7 +52,7 @@ let hasHydrated = false
  * union still covers that case until the daemon comes back. Any failure
  * here is a coverage degradation, not a correctness regression.
  */
-export async function hydrateLocalPtyRegistryAtBoot(store: Store): Promise<void> {
+export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos'>): Promise<void> {
   try {
     if (hasHydrated) {
       return
@@ -70,12 +70,10 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Store): Promise<void>
     // renderer-side union still covers that case.
     hasHydrated = true
 
-    // Why: build the same valid-worktree set scheduleHistoryGc uses, so
-    // reconcileOnStartup can prune sessions whose repo or worktree no
-    // longer exists. Reuses git I/O the GC pass would do anyway 10s
-    // later.
+    // Why: build a worktree-id → connectionId map so we can SSH-gate each
+    // session before registering. Live git enumeration matches the path
+    // shape used by `mintPtySessionId` (`${repoId}::${path}`).
     const repos = store.getRepos()
-    const validWorktreeIds = new Set<string>()
     const repoConnectionIdByWorktreeId = new Map<string, string | null>()
 
     for (const repo of repos) {
@@ -83,31 +81,23 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Store): Promise<void>
       const connectionId = repo.connectionId ?? null
       for (const wt of worktrees) {
         const worktreeId = `${repo.id}::${wt.path}`
-        validWorktreeIds.add(worktreeId)
         repoConnectionIdByWorktreeId.set(worktreeId, connectionId)
       }
     }
 
-    const { alive } = await provider.reconcileOnStartup(validWorktreeIds)
-
-    // Why: getActiveSessionIds() / SessionInfo are read through the
-    // adapter's listSessions() so we get the pid alongside each id.
-    // Routing through every adapter (current + legacy) keeps protocol
-    // coverage symmetric with reconcileOnStartup.
+    // Why: SessionInfo is read through the adapter's listSessions() so we
+    // get the pid alongside each id. Routing through every adapter
+    // (current + legacy) keeps protocol coverage symmetric with the
+    // orphan-cleanup path.
     const sessionInfos = await collectSessionInfos(provider)
-    const aliveSet = new Set(alive)
 
     const alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
 
     for (const info of sessionInfos) {
-      if (!aliveSet.has(info.sessionId)) {
-        continue
-      }
       // Why: pid-write ordering — `pty:spawn` is the authoritative
-      // writer for in-session sessions; if that fired between
-      // reconcileOnStartup and this loop, we must not overwrite a
-      // known-good pid with a stale one from listSessions(). Skip if
-      // the entry already exists. See doc §1d.
+      // writer for in-session sessions; if that fired before this loop
+      // started, we must not overwrite a known-good pid with a stale one
+      // from listSessions(). Skip if the entry already exists. See doc §1d.
       if (alreadyRegistered.has(info.sessionId)) {
         continue
       }
@@ -116,10 +106,10 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Store): Promise<void>
         continue
       }
       // Why: SSH sessions must stay out of the registry — mirrors the
-      // spawn-time gate at `pty.ts:1005`. If the repo isn't in the
-      // store at all, treat it as local-unknown rather than remote: the
-      // worst outcome is a pid we can't sample, which the collector
-      // already handles.
+      // spawn-time `if (!args.connectionId)` gate around `registerPty` in
+      // `src/main/ipc/pty.ts`. If the repo isn't in the store, skip the
+      // session: we can't prove it's local, and the renderer-side union
+      // still surfaces the session at the cost of a missing pid sample.
       if (!repoConnectionIdByWorktreeId.has(worktreeId)) {
         continue
       }
@@ -158,10 +148,14 @@ async function collectSessionInfos(
     try {
       const sessions = await adapter.listSessions()
       out.push(...sessions)
-    } catch {
+    } catch (err) {
       // Why: a single adapter failing should not abort hydration of the
       // others — the current adapter and any legacy daemons each have
       // their own socket and one being unreachable is normal.
+      console.warn(
+        '[memory] listSessions failed for one adapter during hydration:',
+        err instanceof Error ? err.message : String(err)
+      )
     }
   }
   return out
