@@ -18,7 +18,8 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildExplicitEntriesByTabId,
   buildWorktreeComparator,
-  computeSmartScore
+  computeSmartScore,
+  hasAnyLivePty
 } from './smart-sort'
 import {
   type GroupHeaderRow,
@@ -512,6 +513,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   // Read tabsByWorktree when needed for filtering or sorting
   const needsTabs = showActiveOnly || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
+  const ptyIdsByTabId = useAppStore((s) => (needsTabs ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
     showActiveOnly ? s.browserTabsByWorktree : null
   )
@@ -602,10 +604,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     // Instead, restore the pre-shutdown order from the persisted sortOrder
     // snapshot, and switch to the live smart score once PTYs start spawning.
     if (sortBy === 'smart' && !sessionHasHadPty.current) {
-      const hasAnyLivePty = Object.values(state.tabsByWorktree)
-        .flat()
-        .some((t) => t.ptyId)
-      if (hasAnyLivePty) {
+      if (hasAnyLivePty(state.tabsByWorktree, state.ptyIdsByTabId)) {
         sessionHasHadPty.current = true
       } else {
         nonArchivedWorktrees.sort(
@@ -643,7 +642,8 @@ const WorktreeList = React.memo(function WorktreeList() {
                 state.prCache,
                 now,
                 state.agentStatusByPaneKey,
-                explicitByTabId
+                explicitByTabId,
+                state.ptyIdsByTabId
               )
             ])
           )
@@ -658,7 +658,8 @@ const WorktreeList = React.memo(function WorktreeList() {
         null,
         state.agentStatusByPaneKey,
         precomputedScores,
-        explicitByTabId
+        explicitByTabId,
+        state.ptyIdsByTabId
       )
     )
     return nonArchivedWorktrees.map((w) => w.id)
@@ -685,6 +686,7 @@ const WorktreeList = React.memo(function WorktreeList() {
       filterRepoIds,
       showActiveOnly,
       tabsByWorktree,
+      ptyIdsByTabId,
       browserTabsByWorktree,
       activeWorktreeId,
       hideDefaultBranchWorkspace,
@@ -698,6 +700,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     hideDefaultBranchWorkspace,
     repoMap,
     tabsByWorktree,
+    ptyIdsByTabId,
     browserTabsByWorktree,
     sortedIds,
     worktreeMap,

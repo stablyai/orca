@@ -146,5 +146,5 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
       now: Date.now()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, entries, retained, worktreeId, agentStatusEpoch])
+  }, [tabs, entries, retained, agentStatusEpoch])
 }

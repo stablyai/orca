@@ -1,5 +1,8 @@
 import type { AppState } from '@/store/types'
 
+// Why: these selectors return fresh maps whose top-level values preserve
+// underlying per-tab references, so callers must compare them shallowly.
+
 type WorktreeCardStatusInputState = Pick<
   AppState,
   'tabsByWorktree' | 'runtimePaneTitlesByTabId' | 'ptyIdsByTabId'
