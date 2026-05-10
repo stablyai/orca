@@ -319,12 +319,12 @@ function RightSidebarInner(): React.JSX.Element {
           </ContextMenu>
         ) : (
           /* ── Side layout: static title header ── */
-          /* Why: no right-sidebar-header-inset here — in side mode the 40px
-             activity bar strip sits to the right of the panel content, so the
-             header never reaches the window-controls zone. Adding the 138px
-             inset would push the close button 178px from the window edge,
-             creating a 40px gap between it and the minimize button. */
-          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border">
+          /* Why: the 40px side activity bar absorbs the rightmost 40px of the
+             138px window-controls overlay, but the remaining 98px still overlaps
+             the panel header. right-sidebar-header-side-inset applies exactly
+             that remainder (138-40=98px) as padding-right so the close button
+             clears the minimize button without the full 138px gap. */
+          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>

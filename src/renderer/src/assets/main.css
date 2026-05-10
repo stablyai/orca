@@ -487,6 +487,16 @@
   padding-top: var(--window-controls-height, 0px);
 }
 
+/* Why: in side activity-bar mode the panel header does NOT extend to the window
+   edge — the 40px icon strip sits to its right. But the window-controls overlay
+   is 138px wide, so it still overlaps the panel by (138 - 40) = 98px. Apply
+   exactly that remainder as padding-right so the close button clears the
+   minimize button. max(0px, ...) keeps this a no-op on non-Windows where the
+   var is 0px and the subtraction would otherwise go negative. */
+.right-sidebar-header-side-inset {
+  padding-right: max(0px, calc(var(--window-controls-width, 0px) - 40px));
+}
+
 .sidebar-toggle {
   -webkit-app-region: no-drag;
   background: none;
