@@ -55,7 +55,7 @@ export default function ProjectRow({
   const rowInner = (
     <div
       className={cn(
-        'group grid items-center gap-3 border-b border-border/30 px-3 py-2 hover:bg-muted/30',
+        'group grid min-h-10 items-stretch gap-3 border-b border-border/30 px-3 hover:bg-accent/60',
         disabled && 'opacity-60'
       )}
       style={{ gridTemplateColumns: gridTemplate }}
@@ -63,8 +63,8 @@ export default function ProjectRow({
       {fields.map((f, idx) => {
         const next = fields[idx + 1]
         return (
-          <div key={f.id} className="relative flex min-w-0 items-center overflow-hidden">
-            <div className="min-w-0 flex-1 overflow-hidden">
+          <div key={f.id} className="relative flex min-w-0 items-stretch overflow-hidden">
+            <div className="flex min-w-0 flex-1 items-stretch overflow-hidden">
               <ProjectCell
                 row={row}
                 field={f}
