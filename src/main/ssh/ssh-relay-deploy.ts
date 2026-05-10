@@ -345,7 +345,9 @@ async function launchRelay(
   const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd)
   launchChannel.on('data', () => {})
+  launchChannel.on('error', () => {})
   launchChannel.stderr.on('data', () => {})
+  launchChannel.stderr.on('error', () => {})
   // Why: the shell exits quickly (nohup ... &), but the SSH channel stays
   // open until all child fds close. Explicitly closing it after the poll
   // loop prevents channel accumulation across relay restarts, which would
