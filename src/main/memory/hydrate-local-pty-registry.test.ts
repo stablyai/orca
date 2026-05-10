@@ -12,8 +12,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../shared/types'
 import type { SessionInfo } from '../daemon/types'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
+import type { Store } from '../persistence'
 import type { hydrateLocalPtyRegistryAtBoot as HydrateFn } from './hydrate-local-pty-registry'
 import type {
   listRegisteredPtys as ListFn,
@@ -37,12 +39,24 @@ vi.mock('../repo-worktrees', () => ({
   listRepoWorktrees: (repo: unknown) => listRepoWorktreesMock(repo)
 }))
 
-type FakeStore = { getRepos: () => { id: string; connectionId: string | null }[] }
-
-function makeStore(repos: { id: string; connectionId?: string | null }[] = []): FakeStore {
-  return {
-    getRepos: () => repos.map((r) => ({ id: r.id, connectionId: r.connectionId ?? null }))
-  }
+// Why: hydrateLocalPtyRegistryAtBoot accepts `Pick<Store, 'getRepos'>` and
+// the hydrator only reads `id` + `connectionId` off each Repo, but Repo's
+// required fields (path, displayName, badgeColor, addedAt) still have to be
+// present at the type level. Filling them with placeholder values keeps the
+// test schema-compliant without coupling to anything the hydrator doesn't
+// touch.
+function makeStore(
+  repos: { id: string; connectionId?: string | null }[] = []
+): Pick<Store, 'getRepos'> {
+  const built: Repo[] = repos.map((r) => ({
+    id: r.id,
+    path: `/tmp/${r.id}`,
+    displayName: r.id,
+    badgeColor: '#000000',
+    addedAt: 0,
+    connectionId: r.connectionId ?? null
+  }))
+  return { getRepos: () => built }
 }
 
 function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSessions'> {
