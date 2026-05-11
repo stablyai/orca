@@ -511,6 +511,13 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
 
+      # Why: `pnpm build:release` verifies the Linux computer-use provider by
+      # importing AT-SPI bindings, which are runtime package deps but are not
+      # present on stock GitHub Ubuntu release runners.
+      - name: Install Linux computer-use provider dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+
       - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
         run: node config/scripts/verify-macos-release-env.mjs
