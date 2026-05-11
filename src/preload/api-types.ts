@@ -389,6 +389,7 @@ export type PreloadApi = {
       kind?: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
+    reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
       updates: Partial<

@@ -66,6 +66,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:remove')
+  ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
@@ -414,6 +415,22 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', false)
       return { repo }
+    }
+  )
+
+  ipcMain.handle(
+    'repos:reorder',
+    (_event, args: { orderedIds: string[] }): { status: 'applied' | 'rejected' } => {
+      // Why: validate at the IPC boundary — IPC input is untrusted and a
+      // permutation mismatch means the renderer's drag was stale relative to
+      // a concurrent add/remove. Reject so the renderer can resync.
+      const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
+      const applied = store.reorderRepos(ids)
+      if (applied) {
+        notifyReposChanged(mainWindow)
+        return { status: 'applied' }
+      }
+      return { status: 'rejected' }
     }
   )
 

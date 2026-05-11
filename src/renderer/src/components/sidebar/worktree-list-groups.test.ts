@@ -137,6 +137,40 @@ describe('buildRows with pinned worktrees', () => {
   })
 })
 
+describe('buildRows repo grouping order', () => {
+  const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha' }
+  const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta' }
+  const repoC: Repo = { ...repo, id: 'repo-c', displayName: 'gamma' }
+  const map = new Map([
+    [repoA.id, repoA],
+    [repoB.id, repoB],
+    [repoC.id, repoC]
+  ])
+  const wA: Worktree = { ...worktree, id: 'wt-a', repoId: repoA.id, displayName: 'a' }
+  const wB: Worktree = { ...worktree, id: 'wt-b', repoId: repoB.id, displayName: 'b' }
+  const wC: Worktree = { ...worktree, id: 'wt-c', repoId: repoC.id, displayName: 'c' }
+
+  it('orders repo headers by explicit repoOrder, not first-encounter', () => {
+    // Worktree stream encounters in order C, A, B — but repoOrder says B, A, C.
+    const repoOrder = new Map([
+      [repoB.id, 0],
+      [repoA.id, 1],
+      [repoC.id, 2]
+    ])
+    const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
+    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
+    expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
+  })
+
+  it('places unknown repo ids last and sorts them by label', () => {
+    // Only repoB is in repoOrder; repoA and repoC fall through to label sort.
+    const repoOrder = new Map([[repoB.id, 0]])
+    const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
+    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
+    expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
+  })
+})
+
 describe('WorktreeList header styles', () => {
   it('does not title-case workspace group labels', () => {
     const source = readFileSync(

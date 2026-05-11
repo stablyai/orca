@@ -287,6 +287,9 @@ const api = {
 
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
 
+    reorder: (args: { orderedIds: string[] }): Promise<{ status: 'applied' | 'rejected' }> =>
+      ipcRenderer.invoke('repos:reorder', args),
+
     update: (args: { repoId: string; updates: Record<string, unknown> }): Promise<unknown> =>
       ipcRenderer.invoke('repos:update', args),
 
