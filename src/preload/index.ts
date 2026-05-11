@@ -72,6 +72,7 @@ import type {
 } from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
@@ -285,6 +286,9 @@ const api = {
     }): Promise<unknown> => ipcRenderer.invoke('repos:create', args),
 
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
+
+    reorder: (args: { orderedIds: string[] }): Promise<{ status: 'applied' | 'rejected' }> =>
+      ipcRenderer.invoke('repos:reorder', args),
 
     update: (args: { repoId: string; updates: Record<string, unknown> }): Promise<unknown> =>
       ipcRenderer.invoke('repos:update', args),
@@ -942,11 +946,8 @@ const api = {
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),
-    refreshAgents: (): Promise<{
-      agents: string[]
-      addedPathSegments: string[]
-      shellHydrationOk: boolean
-    }> => ipcRenderer.invoke('preflight:refreshAgents'),
+    refreshAgents: (): Promise<RefreshAgentsResult> =>
+      ipcRenderer.invoke('preflight:refreshAgents'),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
@@ -2306,6 +2307,11 @@ const api = {
         paneKey: string
         tabId?: string
         worktreeId?: string
+        // Why: stamped by main from the SshChannelMultiplexer the event
+        // arrived on (or null for local). The renderer uses it to drop
+        // in-flight events when an SSH connection tears down — see
+        // docs/design/agent-status-over-ssh.md §5.
+        connectionId: string | null
         state: AgentStatusState
         prompt?: string
         agentType?: string
@@ -2321,6 +2327,7 @@ const api = {
           paneKey: string
           tabId?: string
           worktreeId?: string
+          connectionId: string | null
           state: AgentStatusState
           prompt?: string
           agentType?: string

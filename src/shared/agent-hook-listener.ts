@@ -239,7 +239,9 @@ function resolveToolState(
 const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Read: ['file_path', 'filePath', 'path'],
   Write: ['file_path', 'filePath', 'path'],
+  Create: ['file_path', 'filePath', 'path'],
   Edit: ['file_path', 'filePath', 'path'],
+  Execute: ['command'],
   MultiEdit: ['file_path', 'filePath', 'path'],
   NotebookEdit: ['file_path', 'filePath', 'path'],
   Bash: ['command'],
@@ -247,6 +249,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Grep: ['pattern'],
   WebFetch: ['url'],
   WebSearch: ['query'],
+  FetchUrl: ['url'],
   read_file: ['file_path', 'path'],
   write_file: ['file_path', 'path'],
   read_many_files: ['file_path', 'paths', 'path'],
@@ -604,6 +607,53 @@ function extractPiToolFields(
   return {}
 }
 
+function isDroidPermissionNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('permission') ||
+    lower.includes('approve') ||
+    lower.includes('approval') ||
+    lower.includes('confirm')
+  )
+}
+
+function extractDroidToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
+    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      deriveToolInputPreview(toolName, hookPayload.arguments)
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (eventName === 'PostToolUse') {
+      const responseText =
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.tool_output)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (eventName === 'Stop') {
+    const direct = readString(hookPayload, 'last_assistant_message')
+    if (direct) {
+      return { lastAssistantMessage: direct }
+    }
+    const fromTranscript = readLastAssistantFromTranscript(hookPayload.transcript_path)
+    if (fromTranscript) {
+      return { lastAssistantMessage: fromTranscript }
+    }
+  }
+  return {}
+}
+
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
   // typecheck here instead of silently falling through to `false`.
@@ -620,6 +670,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
       return eventName === 'before_agent_start'
+    case 'droid':
+      return eventName === 'UserPromptSubmit' || eventName === 'SessionStart'
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -648,6 +700,8 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
       return extractPiToolFields(eventName, hookPayload)
+    case 'droid':
+      return extractDroidToolFields(eventName, hookPayload)
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -927,6 +981,50 @@ function normalizePiEvent(
   )
 }
 
+function normalizeDroidEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const notificationMessage = readString(hookPayload, 'message')
+  const stateName =
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'SessionStart' ||
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse'
+      ? 'working'
+      : eventName === 'Stop'
+        ? 'done'
+        : eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)
+          ? 'waiting'
+          : null
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('droid', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('droid', eventName) }
+  )
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('droid', eventName)
+      }),
+      agentType: 'droid',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -1022,6 +1120,9 @@ export function normalizeHookPayload(
     case 'pi':
       payload = normalizePiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'droid':
+      payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -1044,7 +1145,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/gemini': 'gemini',
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
-  '/hook/pi': 'pi'
+  '/hook/pi': 'pi',
+  '/hook/droid': 'droid'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {
