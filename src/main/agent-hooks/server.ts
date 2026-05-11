@@ -77,7 +77,17 @@ export class AgentHookServer {
    *  before feeding the event into the same `onAgentStatus` fanout the HTTP
    *  path uses. See docs/design/agent-status-over-ssh.md §5. */
   ingestRemote(
-    envelope: { paneKey: string; tabId?: string; worktreeId?: string; payload: unknown },
+    envelope: {
+      paneKey: string
+      tabId?: string
+      worktreeId?: string
+      // Why: forwarded verbatim from the agent CLI POST body on the remote so
+      // the warn-once cross-build / dev-vs-prod diagnostics fire identically
+      // to the local HTTP path. Declared on the type now; consumed in PR2.
+      env?: string
+      version?: string
+      payload: unknown
+    },
     connectionId: string
   ): void {
     // Why: signature says non-empty, but the wire crosses a trust boundary —
