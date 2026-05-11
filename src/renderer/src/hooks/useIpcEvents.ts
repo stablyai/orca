@@ -1173,10 +1173,12 @@ function resolvePaneKey(
   let repoConnectionId: string | null = null
   if (owningWorktreeId !== undefined) {
     let owningRepoId: string | undefined
-    for (const [repoId, worktrees] of Object.entries(store.worktreesByRepo ?? {})) {
-      if (worktrees.some((w) => w.id === owningWorktreeId)) {
-        owningRepoId = repoId
-        break
+    outer: for (const [repoId, worktrees] of Object.entries(store.worktreesByRepo ?? {})) {
+      for (const w of worktrees) {
+        if (w.id === owningWorktreeId) {
+          owningRepoId = repoId
+          break outer
+        }
       }
     }
     if (owningRepoId !== undefined) {

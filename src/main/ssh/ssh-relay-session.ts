@@ -437,7 +437,7 @@ export class SshRelaySession {
       if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
         return
       }
-      const envelope = params as unknown as {
+      const envelope = params as {
         paneKey?: unknown
         tabId?: unknown
         worktreeId?: unknown
@@ -474,6 +474,12 @@ export class SshRelaySession {
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch((err) => {
       const code = (err as { code?: unknown })?.code
       if (code === -32601) {
+        return
+      }
+      // Why: a normal disconnect/teardown rejects the in-flight request with
+      // "Multiplexer disposed"; suppress the warn for that path so reconnect
+      // cycles aren't noisy.
+      if (mux.isDisposed()) {
         return
       }
       console.warn(

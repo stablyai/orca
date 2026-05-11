@@ -40,7 +40,6 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
     let relayFeedFn: ((data: Buffer) => void) | undefined
     const clientDataCallbacks: ((data: Buffer) => void)[] = []
-    const clientCloseCallbacks: (() => void)[] = []
 
     const clientTransport: MultiplexerTransport = {
       write: (data: Buffer) => {
@@ -49,9 +48,10 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       onData: (cb) => {
         clientDataCallbacks.push(cb)
       },
-      onClose: (cb) => {
-        clientCloseCallbacks.push(cb)
-      }
+      // Why: MultiplexerTransport.onClose is a required field; the test never
+      // simulates a transport close, so register a no-op rather than tracking
+      // callbacks that nothing invokes.
+      onClose: () => {}
     }
 
     dispatcher = new RelayDispatcher((data: Buffer) => {

@@ -88,7 +88,14 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR2'
 ])
 
-type SerializedPtyEntry = { id: string; pid: number; cols: number; rows: number; cwd: string }
+type SerializedPtyEntry = {
+  id: string
+  pid: number
+  cols: number
+  rows: number
+  cwd: string
+  paneKey?: string
+}
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 export type PtyEnvAugmenter = () => Record<string, string>
@@ -230,12 +237,9 @@ export class PtyHandler {
     const shell = resolveDefaultShell()
     const id = `pty-${this.nextId++}`
 
-    // Why: server-side env injection — agent-hook coords (PORT/TOKEN/ENDPOINT)
-    // come from augmenters registered at relay boot, so the agent CLI inside
-    // the PTY can post to the relay's loopback hook server without Orca having
-    // to ferry them across the SSH wire. Augmenter values are placed AFTER
-    // the renderer-supplied env so a deliberate user override (rare) still
-    // wins, matching docs/design/agent-status-over-ssh.md §3.
+    // Why: server-side augmenter values (ORCA_AGENT_HOOK_*) override any
+    // renderer-supplied env so the live hook-server coords always reach the
+    // agent CLI — they come from the relay, not the renderer.
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
@@ -468,7 +472,7 @@ export class PtyHandler {
         continue
       }
       const { pid, cols, rows } = managed.pty
-      entries.push({ id, pid, cols, rows, cwd: managed.initialCwd })
+      entries.push({ id, pid, cols, rows, cwd: managed.initialCwd, paneKey: managed.paneKey })
     }
     return JSON.stringify(entries)
   }
@@ -498,7 +502,13 @@ export class PtyHandler {
         cwd: entry.cwd,
         env: process.env as Record<string, string>
       })
-      this.wireAndStore({ id: entry.id, pty: term, initialCwd: entry.cwd, buffered: '' })
+      this.wireAndStore({
+        id: entry.id,
+        pty: term,
+        initialCwd: entry.cwd,
+        buffered: '',
+        paneKey: entry.paneKey
+      })
 
       // Why: nextId starts at 1 and is only incremented by spawn(). Revived
       // PTYs carry their original IDs (e.g. "pty-3"), so without this bump the
