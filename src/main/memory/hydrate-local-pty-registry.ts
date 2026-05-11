@@ -1,14 +1,14 @@
 /**
  * Boot-time hydration of `pty-registry` from the live daemon.
  *
- * Why: see docs/resource-usage-remote-mislabel.md §1. The registry is
- * normally populated by the `pty:spawn` IPC handler. On warm reattach
- * (a fresh Orca process bound to a still-running daemon), the renderer
- * hasn't re-mounted every pane yet, so `pty:spawn` hasn't fired for
- * those sessions and the memory collector's snapshot omits them. The
- * renderer then unions in `pty.listSessions()` results with
- * `hasLocalSamples: false`, which the chip predicate rendered as
- * "REMOTE" — even though the sessions are local.
+ * Why: the registry is normally populated by the `pty:spawn` IPC
+ * handler. On warm reattach (a fresh Orca process bound to a
+ * still-running daemon), the renderer hasn't re-mounted every pane
+ * yet, so `pty:spawn` hasn't fired for those sessions and the memory
+ * collector's snapshot omits them. The renderer then unions in
+ * `pty.listSessions()` results with `hasLocalSamples: false`, which
+ * the chip predicate rendered as "REMOTE" — even though the sessions
+ * are local.
  *
  * This module fills the gap once at boot: ask the daemon for every live
  * session, reattribute each one to its repo via the minted session-id
@@ -60,8 +60,7 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     const provider = getDaemonProvider()
     if (!provider) {
       // Why: leave hasHydrated false so a later activation (after the
-      // daemon comes up) can retry. See doc §Failure-modes "Daemon
-      // offline at boot".
+      // daemon comes up) can retry.
       return
     }
     // Why: flip only once we have a provider — committed to either
@@ -97,7 +96,7 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       // Why: pid-write ordering — `pty:spawn` is the authoritative
       // writer for in-session sessions; if that fired before this loop
       // started, we must not overwrite a known-good pid with a stale one
-      // from listSessions(). Skip if the entry already exists. See doc §1d.
+      // from listSessions(). Skip if the entry already exists.
       if (alreadyRegistered.has(info.sessionId)) {
         continue
       }

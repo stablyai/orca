@@ -10,8 +10,7 @@
  *   pane, so the chip predicate (which keyed on a "snapshot includes this
  *   worktree" flag) misread missing data as "remote." Two changes shipped:
  *   (1) boot-time hydration of `pty-registry` from the daemon, and (2) the
- *   chip predicate switched to `repo.connectionId != null`. Full design at
- *   `docs/resource-usage-remote-mislabel.md`.
+ *   chip predicate switched to `repo.connectionId != null`.
  *
  * What it covers:
  *   - On a second launch against the same userDataDir, the snapshot from

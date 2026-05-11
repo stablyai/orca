@@ -6,8 +6,7 @@
  * `attach-main-window-services.ts` both need to recover the owning
  * worktreeId from a session id. Three call sites silently re-implementing
  * the same parser (one of them looser than the others) was the seed of
- * the resource-usage REMOTE-mislabel bug — see
- * docs/resource-usage-remote-mislabel.md §1c. Centralising the format here
+ * the resource-usage REMOTE-mislabel bug. Centralising the format here
  * keeps a single definition that both the main process and the renderer
  * can import.
  */

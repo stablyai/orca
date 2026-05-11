@@ -154,7 +154,7 @@ describe('mergeSnapshotAndSessions', () => {
   })
 
   it('warm-reattach local PTY: chip stays off when repo has no connectionId', () => {
-    // Why: regression coverage for docs/resource-usage-remote-mislabel.md.
+    // Why: regression coverage for the warm-reattach REMOTE mislabel.
     // A live local daemon session whose registry entry the renderer hasn't
     // re-spawned yet must NOT be flagged as remote. Under the old
     // predicate (`!hasLocalSamples`) it was — that was the bug.

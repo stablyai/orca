@@ -64,8 +64,7 @@ export type UnifiedWorktreeRow = {
   hasLocalSamples: boolean
   /** Why: the chip in ResourceUsageStatusSegment now keys on this — the repo
    *  has an SSH connectionId — instead of `!hasLocalSamples`, which used to
-   *  mislabel warm-reattached *local* PTYs as REMOTE. See
-   *  docs/resource-usage-remote-mislabel.md §2. */
+   *  mislabel warm-reattached *local* PTYs as REMOTE. */
   isRemote: boolean
   sessions: UnifiedSessionRow[]
 }
@@ -78,7 +77,7 @@ export type UnifiedRepoGroup = {
   /** Why: renamed in spirit but kept as `hasRemoteChildren` for callsite
    *  stability — the repo-level chip predicate is now "the repo's
    *  connectionId is non-null", which is the only way a repo can have
-   *  remote children. See docs/resource-usage-remote-mislabel.md §2. */
+   *  remote children. */
   hasRemoteChildren: boolean
   worktrees: UnifiedWorktreeRow[]
 }
@@ -99,8 +98,7 @@ export type MergeContext = {
    *  daemon sessions whose repo isn't in the snapshot (typical SSH case). */
   repoDisplayNameById: Map<string, string>
   /** Repo connectionId by repo id (null/missing == local). Drives the
-   *  `· remote` chip predicate, decoupling label from data-coverage. See
-   *  docs/resource-usage-remote-mislabel.md §2. */
+   *  `· remote` chip predicate, decoupling label from data-coverage. */
   repoConnectionIdById: Map<string, string | null>
 }
 
@@ -402,11 +400,9 @@ export function mergeSnapshotAndSessions(
   }
 
   // ── Step 3: per-repo aggregates. Remote children are identified by the
-  //   repo's connectionId (not by missing data) — see
-  //   docs/resource-usage-remote-mislabel.md §2 for why this used to
-  //   piggyback on `!hasLocalSamples` and why that was wrong. The aggregate
-  //   still skips rows we can't sample (worktree.cpu === null) so the
-  //   numbers stay honest.
+  //   repo's connectionId, not by missing data — `!hasLocalSamples` would
+  //   mislabel warm-reattached local PTYs. The aggregate still skips rows
+  //   we can't sample (worktree.cpu === null) so the numbers stay honest.
   for (const repo of repos.values()) {
     let cpuSum = 0
     let memSum = 0

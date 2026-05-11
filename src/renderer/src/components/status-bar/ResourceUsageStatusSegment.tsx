@@ -445,7 +445,7 @@ function WorktreeRow({
           {/* Why: chip is gated on the repo's SSH connectionId, not on
               missing data. Warm-reattached local PTYs used to land here
               with hasLocalSamples=false even though they're plainly
-              local — see docs/resource-usage-remote-mislabel.md. */}
+              local. */}
           {worktree.isRemote && (
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
               · remote
@@ -734,7 +734,7 @@ export function ResourceUsageStatusSegment({
   // connectionId is SSH-backed and its PTYs run on a remote host; that's
   // the only honest signal for "remote." Building the map from the
   // canonical store list avoids re-deriving remoteness from a missing
-  // memory sample (the bug fixed by docs/resource-usage-remote-mislabel.md).
+  // memory sample.
   const repoConnectionIdById = useMemo(() => {
     const map = new Map<string, string | null>()
     for (const repo of repos) {

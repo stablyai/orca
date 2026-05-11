@@ -56,7 +56,7 @@ export function attachMainWindowServices(
   scheduleHistoryGc(async () => {
     return getKnownWorktreeIdsForHistoryGc(store)
   })
-  // Why: warm-reattach gap (docs/resource-usage-remote-mislabel.md §1).
+  // Why: warm-reattach gap.
   // Daemon-hosted PTYs survive renderer restarts on purpose, so on a fresh
   // Orca launch the daemon's `listSessions()` returns sessions that
   // `pty:spawn` hasn't re-registered yet. Without this hydration, the

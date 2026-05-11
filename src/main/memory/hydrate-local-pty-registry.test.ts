@@ -8,7 +8,6 @@
  *   - Pid-write ordering. `pty:spawn` is the authoritative writer; if it
  *     wrote pid=12345 before the boot pass ran, the boot pass must NOT
  *     clobber that with `pid: null` from a pre-publish daemon listSessions.
- *     This is the load-bearing invariant from §1d of the design doc.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -125,7 +124,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
     // Why: the renderer-side step-2 merge fallback covers this case. The
     // hydrator must not surface the failure to the caller — it logs and
-    // moves on. This is the §Failure-modes "Daemon offline at boot" path.
+    // moves on.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await expect(hydrate(makeStore([{ id: 'repo-a' }]))).resolves.toBeUndefined()
     warnSpy.mockRestore()
@@ -138,8 +137,8 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
     const ptyId = 'repo-a::/local/Triton@@deadbeef'
     // Why: simulate the spawn-time path having already written the row
-    // with the real pid before the boot pass runs. The §1d invariant says
-    // the boot pass must skip rather than overwriting with a stale pid.
+    // with the real pid before the boot pass runs. The boot pass must
+    // skip rather than overwriting with a stale pid.
     registerPty({
       ptyId,
       worktreeId: 'repo-a::/local/Triton',
