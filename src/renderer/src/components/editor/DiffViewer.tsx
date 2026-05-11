@@ -143,6 +143,89 @@ export default function DiffViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modifiedEditor, popover?.lineNumber])
 
+  // Why: on a fresh open (no cached view state, no pending scroll-to-note),
+  // center the first diff change in the viewport. We do this from a dedicated
+  // effect — not from handleMount — so it sequences AFTER the comment
+  // decorator inserts its view zones. If we scrolled during handleMount, late
+  // zone insertion would shift content downward and the user would land on a
+  // note further down the file instead of the first change.
+  //
+  // `getTopForLineNumber(line, /* includeViewZones */ true)` accounts for any
+  // zones already in the layout, so the math survives whatever the decorator
+  // added in this render pass. The didScroll guard makes this strictly
+  // one-shot per mount.
+  const didAutoScrollFirstDiffRef = useRef(false)
+  // Why: the one-shot above is intentionally per-modelKey. Today every call
+  // site uses `key={viewStateScopeId}` so the component remounts on model
+  // change and the ref is fresh, but the auto-scroll effect lists modelKey in
+  // its deps — make that contract honest by resetting the flag when modelKey
+  // flips, so a future call site without a remount key still gets a fresh
+  // first-diff scroll per file.
+  useLayoutEffect(() => {
+    didAutoScrollFirstDiffRef.current = false
+  }, [modelKey])
+  useEffect(() => {
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor || !modifiedEditor) {
+      return
+    }
+    if (didAutoScrollFirstDiffRef.current) {
+      return
+    }
+    if (diffViewStateCache.get(modelKey)) {
+      return
+    }
+    if (pendingScrollForThisViewer) {
+      // Why: the decorator owns this scroll for this mount, so permanently
+      // yield by setting the one-shot flag. Otherwise, when the decorator
+      // ack's and `pendingScrollForThisViewer` flips back to null, this
+      // effect would re-run with empty cache + un-set flag and overwrite
+      // the comment scroll with a jump to the first diff.
+      didAutoScrollFirstDiffRef.current = true
+      return
+    }
+    let rafId: number | null = null
+    const run = (): void => {
+      if (didAutoScrollFirstDiffRef.current) {
+        return
+      }
+      const changes = diffEditor.getLineChanges()
+      if (!changes || changes.length === 0) {
+        return
+      }
+      const line = Math.max(1, changes[0].modifiedStartLineNumber)
+      // Defer one frame so any view zones added in this render pass are part
+      // of the layout before we measure. Cancel any earlier pending rAF so
+      // a late onDidUpdateDiff can't enqueue a redundant scroll.
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (didAutoScrollFirstDiffRef.current || !modifiedEditor.getModel()) {
+          return
+        }
+        const top = modifiedEditor.getTopForLineNumber(line, true)
+        const editorHeight = modifiedEditor.getLayoutInfo().height
+        modifiedEditor.setPosition({ lineNumber: line, column: 1 })
+        modifiedEditor.setScrollTop(Math.max(0, top - editorHeight / 2))
+        didAutoScrollFirstDiffRef.current = true
+      })
+    }
+    // If the diff result is already available, run immediately; otherwise
+    // wait for it. onDidUpdateDiff fires once the diff computation lands.
+    if (diffEditor.getLineChanges()) {
+      run()
+    }
+    const sub = diffEditor.onDidUpdateDiff(() => run())
+    return () => {
+      sub.dispose()
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+    }
+  }, [modifiedEditor, modelKey, pendingScrollForThisViewer])
+
   const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
       return
@@ -211,6 +294,10 @@ export default function DiffViewer({
       if (savedViewState) {
         requestAnimationFrame(() => diffEditor.restoreViewState(savedViewState))
       }
+      // Auto-scroll to first diff is handled in a separate useEffect below so
+      // it can sequence after the comment-decorator inserts its view zones —
+      // otherwise late zones shift content downward and the user lands away
+      // from the first change (e.g. on a note further down the file).
 
       if (editable) {
         // Cmd/Ctrl+S to save

@@ -1353,3 +1353,263 @@ describe('setActiveWorktree', () => {
     expect(s.activeFileId).toBe(fileId)
   })
 })
+
+// Why: sleep (`shutdownWorktreeTerminals(wt, { keepIdentifiers: true })`)
+// kills the PTYs but preserves wake hints (tab.ptyId, ptyIdsByLeafId, the
+// runtime pane titles) so wake can reattach to the same daemon-history dir
+// or relay session. Before the sleep-statuses fix, the live agent-status
+// rows were also preserved — so a Claude that was mid-turn at sleep time
+// kept its row in the inline agents list as "working" until the 30-min
+// stale TTL decayed it. Sleep now drops live entries and retained `done`
+// snapshots for the whole worktree, so the card folds to a single grey signal.
+describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockApi.pty.kill.mockResolvedValue(undefined)
+  })
+
+  it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus('tab-1:0', {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'claude'
+    })
+    expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    const s = store.getState()
+    expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+  })
+
+  it('drops retainedAgentsByPaneKey entries for the slept worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const otherWt = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWt, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })],
+        [otherWt]: [makeTab({ id: 'tab-2', worktreeId: otherWt })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    // Plant one current-tab row and one orphan row. Retained rows render by
+    // worktreeId, so sleep must sweep both instead of only tab prefixes.
+    store.getState().retainAgents([
+      {
+        entry: {
+          paneKey: 'tab-1:0',
+          state: 'done',
+          stateStartedAt: 1000,
+          updatedAt: 1000,
+          stateHistory: [],
+          prompt: 'finished prompt',
+          agentType: 'claude',
+          terminalTitle: undefined,
+          interrupted: false
+        },
+        worktreeId: wt,
+        tab: makeTab({ id: 'tab-1', worktreeId: wt, title: 'Claude' }),
+        agentType: 'claude',
+        startedAt: 1000
+      },
+      {
+        entry: {
+          paneKey: 'tab-orphan:0',
+          state: 'done',
+          stateStartedAt: 1001,
+          updatedAt: 1001,
+          stateHistory: [],
+          prompt: 'orphaned finished prompt',
+          agentType: 'claude',
+          terminalTitle: undefined,
+          interrupted: false
+        },
+        worktreeId: wt,
+        tab: makeTab({ id: 'tab-orphan', worktreeId: wt, title: 'Claude' }),
+        agentType: 'claude',
+        startedAt: 1001
+      },
+      {
+        entry: {
+          paneKey: 'tab-2:0',
+          state: 'done',
+          stateStartedAt: 1002,
+          updatedAt: 1002,
+          stateHistory: [],
+          prompt: 'other prompt',
+          agentType: 'claude',
+          terminalTitle: undefined,
+          interrupted: false
+        },
+        worktreeId: otherWt,
+        tab: makeTab({ id: 'tab-2', worktreeId: otherWt, title: 'Claude' }),
+        agentType: 'claude',
+        startedAt: 1002
+      }
+    ])
+    expect(store.getState().retainedAgentsByPaneKey['tab-1:0']).toBeDefined()
+    expect(store.getState().retainedAgentsByPaneKey['tab-orphan:0']).toBeDefined()
+    expect(store.getState().retainedAgentsByPaneKey['tab-2:0']).toBeDefined()
+    store.getState().acknowledgeAgents(['tab-1:0', 'tab-orphan:0', 'tab-2:0'])
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(store.getState().retainedAgentsByPaneKey['tab-1:0']).toBeUndefined()
+    expect(store.getState().retainedAgentsByPaneKey['tab-orphan:0']).toBeUndefined()
+    expect(store.getState().retainedAgentsByPaneKey['tab-2:0']).toBeDefined()
+    expect(store.getState().acknowledgedAgentsByPaneKey['tab-1:0']).toBeUndefined()
+    expect(store.getState().acknowledgedAgentsByPaneKey['tab-orphan:0']).toBeUndefined()
+    expect(store.getState().acknowledgedAgentsByPaneKey['tab-2:0']).toBeGreaterThan(0)
+  })
+
+  it('clears prior acknowledgements on sleep because the worktree surface is folded', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus('tab-1:0', {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'claude'
+    })
+    store.getState().acknowledgeAgents(['tab-1:0'])
+    const ackBeforeSleep = store.getState().acknowledgedAgentsByPaneKey['tab-1:0']
+    expect(ackBeforeSleep).toBeGreaterThan(0)
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(store.getState().acknowledgedAgentsByPaneKey['tab-1:0']).toBeUndefined()
+  })
+
+  it('plants retention suppressors on sleep so a previously-live `done` cannot re-retain', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus('tab-1:0', {
+      state: 'done',
+      prompt: 'p',
+      agentType: 'claude'
+    })
+    expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBeUndefined()
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    // Why: sleep folds retained rows too, so the next retention sync must not
+    // recreate a `done` row from the previous render after the user slept it.
+    expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
+  })
+
+  it('preserves existing retention suppressors across sleep (identity-preserved suppressor map)', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      retentionSuppressedPaneKeys: { 'tab-1:0': true }
+    })
+
+    expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    // Why: an existing suppressor was planted by a prior dismissal flow; sleep
+    // must not erase it (would resurface a row the user already dismissed).
+    expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
+  })
+
+  it('still wipes retained + ack entries under remove-worktree shutdown', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus('tab-1:0', {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'claude'
+    })
+    store.getState().acknowledgeAgents(['tab-1:0'])
+    store.getState().retainAgents([
+      {
+        entry: {
+          paneKey: 'tab-1:0',
+          state: 'done',
+          stateStartedAt: 1000,
+          updatedAt: 1000,
+          stateHistory: [],
+          prompt: 'p',
+          agentType: 'claude',
+          terminalTitle: undefined,
+          interrupted: false
+        },
+        worktreeId: wt,
+        tab: makeTab({ id: 'tab-1', worktreeId: wt, title: 'Claude' }),
+        agentType: 'claude',
+        startedAt: 1000
+      }
+    ])
+
+    // Default opts (no keepIdentifiers) => remove-worktree path.
+    await store.getState().shutdownWorktreeTerminals(wt)
+
+    const s = store.getState()
+    expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+    expect(s.retainedAgentsByPaneKey['tab-1:0']).toBeUndefined()
+    expect(s.acknowledgedAgentsByPaneKey['tab-1:0']).toBeUndefined()
+  })
+})

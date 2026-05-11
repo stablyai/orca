@@ -76,7 +76,6 @@ describe('FsHandler', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-fs-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    ctx.registerRoot(tmpDir)
     handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx)
   })
 

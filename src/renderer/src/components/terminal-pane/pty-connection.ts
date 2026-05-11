@@ -13,6 +13,7 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
+import { terminalOutputRequiresDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
 import {
   paneLeafId,
   POST_REPLAY_MODE_RESET,
@@ -580,12 +581,19 @@ export function connectPanePty(
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
     // write-completion callback until xterm finishes parsing.
+    const writeReplayData = (data: string): void => {
+      if (terminalOutputRequiresDomRenderer(data)) {
+        manager.markPaneHasComplexScriptOutput(pane.id)
+      }
+      replayIntoTerminal(pane, deps.replayingPanesRef, data)
+    }
+
     const replayDataCallback = (data: string): void => {
       // Relay replay buffer holds the last 100 KB of output, which may
       // overlap with content already rendered in xterm before the
       // disconnect. Clear first to prevent duplication on SSH reconnect.
-      replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-      replayIntoTerminal(pane, deps.replayingPanesRef, data)
+      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      writeReplayData(data)
     }
 
     const dataCallback = (data: string): void => {
@@ -595,6 +603,9 @@ export function connectPanePty(
       // keeps GPU resources from leaking. Visibility-gated buffering used
       // to feed bytes into xterm at stale dimensions on resume, which was
       // the root of the cursor-on-strange-line and broken-wide-char bugs.
+      if (terminalOutputRequiresDomRenderer(data)) {
+        manager.markPaneHasComplexScriptOutput(pane.id)
+      }
       pane.terminal.write(data)
 
       if (pendingStartupCommand) {
@@ -663,12 +674,12 @@ export function connectPanePty(
       // the daemon and relay are by definition tracking the same session
       // and only the freshest source belongs on screen.
       if (connectResult?.snapshot) {
-        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. Focus reporting is the unsafe exception: preserving `?1004h`
         // can make restored shells ring BEL on pane focus/blur.
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
+        writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
         if (connectResult.coldRestore) {
           // Snapshot superseded the cold-restore payload — ack it so the
           // daemon does not redeliver it on the next reattach.
@@ -679,9 +690,9 @@ export function connectPanePty(
         // already hold pre-disconnect content; clear first to avoid
         // duplication. Focus-reporting reset prevents BEL from stale mode
         // bits in the replayed data.
-        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.replay)
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.replay)
+        writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
         if (connectResult.coldRestore) {
           window.api.pty.ackColdRestore(ptyId)
         }
@@ -693,18 +704,14 @@ export function connectPanePty(
         // may contain query sequences the previous agent CLI emitted;
         // writing them through xterm.write would trigger auto-replies that
         // land in the new shell's stdin. See replay-guard.ts.
-        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.coldRestore.scrollback)
-        replayIntoTerminal(
-          pane,
-          deps.replayingPanesRef,
-          '\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n'
-        )
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.coldRestore.scrollback)
+        writeReplayData('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
         // Cold-restore means the daemon lost the session and spawned a
         // fresh shell — no TUI is consuming the mode-setting bytes that a
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
         // reset them to match the fresh shell's expectations.
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_MODE_RESET)
+        writeReplayData(POST_REPLAY_MODE_RESET)
         window.api.pty.ackColdRestore(ptyId)
       }
       if (connectResult?.sessionExpired) {

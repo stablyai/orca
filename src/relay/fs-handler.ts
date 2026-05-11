@@ -2,6 +2,8 @@ import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from
 import { execFile } from 'child_process'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
+// Why: RelayContext is accepted in the constructor for protocol back-compat
+// (see docs/relay-fs-allowlist-removal.md), but no longer consulted on FS ops.
 import { expandTilde } from './context'
 import {
   DEFAULT_MAX_RESULTS,
@@ -24,12 +26,10 @@ type WatchState = {
 
 export class FsHandler {
   private dispatcher: RelayDispatcher
-  private context: RelayContext
   private watches = new Map<string, WatchState>()
 
-  constructor(dispatcher: RelayDispatcher, context: RelayContext) {
+  constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
     this.dispatcher = dispatcher
-    this.context = context
     this.registerHandlers()
   }
 
@@ -52,7 +52,6 @@ export class FsHandler {
 
   private async readDir(params: Record<string, unknown>) {
     const dirPath = expandTilde(params.dirPath as string)
-    await this.context.validatePathResolved(dirPath)
     const entries = await readdir(dirPath, { withFileTypes: true })
     return entries
       .map((entry) => ({
@@ -70,13 +69,11 @@ export class FsHandler {
 
   private async readFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    await this.context.validatePathResolved(filePath)
     return readRelayFileContent(filePath)
   }
 
   private async writeFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    await this.context.validatePathResolved(filePath)
     const content = params.content as string
     try {
       const fileStats = await lstat(filePath)
@@ -93,7 +90,6 @@ export class FsHandler {
 
   private async stat(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    await this.context.validatePathResolved(filePath)
     // Why: lstat is used instead of stat so that symlinks are reported as
     // symlinks rather than being silently followed. stat() follows symlinks,
     // meaning isSymbolicLink() would always return false.
@@ -109,7 +105,6 @@ export class FsHandler {
 
   private async deletePath(params: Record<string, unknown>) {
     const targetPath = expandTilde(params.targetPath as string)
-    await this.context.validatePathResolved(targetPath)
     const recursive = params.recursive as boolean | undefined
     const stats = await stat(targetPath)
     if (stats.isDirectory() && !recursive) {
@@ -120,9 +115,6 @@ export class FsHandler {
 
   private async createFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    // Why: symlinks in parent directories can redirect creation outside the
-    // workspace. validatePathResolved follows symlinks before checking roots.
-    await this.context.validatePathResolved(filePath)
     const { dirname } = await import('path')
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
@@ -130,45 +122,29 @@ export class FsHandler {
 
   private async createDir(params: Record<string, unknown>) {
     const dirPath = expandTilde(params.dirPath as string)
-    await this.context.validatePathResolved(dirPath)
     await mkdir(dirPath, { recursive: true })
   }
 
   private async rename(params: Record<string, unknown>) {
     const oldPath = expandTilde(params.oldPath as string)
     const newPath = expandTilde(params.newPath as string)
-    await this.context.validatePathResolved(oldPath)
-    await this.context.validatePathResolved(newPath)
     await rename(oldPath, newPath)
   }
 
   private async copy(params: Record<string, unknown>) {
     const source = expandTilde(params.source as string)
     const destination = expandTilde(params.destination as string)
-    // Why: cp follows symlinks — a symlink inside the workspace pointing to
-    // /etc would copy sensitive files into the workspace where readFile can
-    // exfiltrate them.
-    await this.context.validatePathResolved(source)
-    await this.context.validatePathResolved(destination)
     await cp(source, destination, { recursive: true })
   }
 
   private async realpath(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    this.context.validatePath(filePath)
-    const resolved = await realpath(filePath)
-    // Why: a symlink inside the workspace may resolve to a path outside it.
-    // Returning the resolved path without validation leaks the external target.
-    this.context.validatePath(resolved)
-    return resolved
+    return await realpath(filePath)
   }
 
   private async search(params: Record<string, unknown>) {
     const query = params.query as string
     const rootPath = expandTilde(params.rootPath as string)
-    // Why: a symlink inside the workspace pointing to a directory outside it
-    // would let rg search (and return content from) files beyond the workspace.
-    await this.context.validatePathResolved(rootPath)
     const caseSensitive = params.caseSensitive as boolean | undefined
     const wholeWord = params.wholeWord as boolean | undefined
     const useRegex = params.useRegex as boolean | undefined
@@ -203,7 +179,6 @@ export class FsHandler {
 
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
     const rootPath = expandTilde(params.rootPath as string)
-    await this.context.validatePathResolved(rootPath)
     // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
     // don't get double-scanned. The shared helper validates the shape and
     // normalizes into root-relative prefixes; malformed input yields [] so
@@ -240,7 +215,6 @@ export class FsHandler {
 
   private async watch(params: Record<string, unknown>, context?: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
-    this.context.validatePath(rootPath)
 
     if (this.watches.size >= 20) {
       throw new Error('Maximum number of file watchers reached')

@@ -9,16 +9,10 @@ import type { GitExec } from './git-handler-ops'
 
 // ─── Worktree management ─────────────────────────────────────────────
 
-export async function addWorktreeOp(
-  git: GitExec,
-  validatePath: (p: string) => void,
-  params: Record<string, unknown>
-): Promise<void> {
+export async function addWorktreeOp(git: GitExec, params: Record<string, unknown>): Promise<void> {
   const repoPath = params.repoPath as string
-  validatePath(repoPath)
   const branchName = params.branchName as string
   const targetDir = params.targetDir as string
-  validatePath(targetDir)
   const base = params.base as string | undefined
   const track = params.track as boolean | undefined
 
@@ -42,11 +36,9 @@ export async function addWorktreeOp(
 
 export async function removeWorktreeOp(
   git: GitExec,
-  validatePath: (p: string) => void,
   params: Record<string, unknown>
 ): Promise<void> {
   const worktreePath = params.worktreePath as string
-  validatePath(worktreePath)
   const force = params.force as boolean | undefined
 
   let repoPath = worktreePath

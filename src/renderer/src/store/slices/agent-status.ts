@@ -71,6 +71,21 @@ export type AgentStatusSlice = {
    *  remaining agent rows (live or retained) must not reappear. */
   dropAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 
+  /** Remove all entries for a worktree AND suppress re-retention for live rows.
+   *  Used on worktree sleep/remove — the whole worktree surface is folding, so
+   *  retained rows must drop even if their original tab is no longer present.
+   *
+   *  Note on orphan-live asymmetry: liveKeys are matched against tab prefixes
+   *  derived from `tabsByWorktree[worktreeId]`. Live entries belonging to the
+   *  same worktree but whose tab has already been pruned from `tabsByWorktree`
+   *  (an orphan-live race) are not swept here. The retained side has a
+   *  fallback (`retained.worktreeId === worktreeId`); the live side does not,
+   *  because live entries do not carry a worktreeId. In practice the gap is
+   *  bounded — `removeAgentStatus` is called on PTY exit — and dropping an
+   *  orphan-live entry on shutdown is best-effort, so accepting the asymmetry
+   *  is the simpler tradeoff. */
+  dropAgentStatusByWorktree: (worktreeId: string) => void
+
   /** Retain agent snapshots (called by the top-level retention sync effect).
    *  Accepts an array so multiple agents disappearing in the same frame
    *  produce a single set(...) — avoids intermediate states visible
@@ -89,6 +104,15 @@ export type AgentStatusSlice = {
   /** Clear one-shot teardown suppressors after the retention sync observes
    *  that disappearance and decides not to retain the row. */
   clearRetentionSuppressedPaneKeys: (paneKeys: string[]) => void
+}
+
+function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
+  for (const prefix of tabPrefixes) {
+    if (paneKey.startsWith(prefix)) {
+      return true
+    }
+  }
+  return false
 }
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
@@ -466,6 +490,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // would leak because no such transition will ever fire. Also skip
         // keys that are already suppressed so we don't spuriously reallocate
         // the suppressor map for subscribers that select on its identity.
+        //
+        // Same-frame race: if a hook ping promotes working→done in the same
+        // render frame as teardown, the next retention-sync run sees the entry
+        // as `done` in prevAgents and surfaces it in retained — even though
+        // the user just tore it down. Planting suppressors is the cheap guard
+        // for the common ordering; the rare inverse ordering has the same
+        // bounded suppressor-leak tradeoff described in dropAgentStatus.
         const suppressorAdds = liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
         let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
         if (suppressorAdds.length > 0) {
@@ -485,6 +516,84 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // Why: mirrors removeAgentStatusByTabPrefix — only bump the live-map
           // epoch / sortEpoch when the live map actually changed. Retained-only
           // sweeps do not participate in smart-sort or freshness calculations.
+          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      if (hadLive) {
+        queueMicrotask(() => freshness.schedule())
+      }
+    },
+
+    dropAgentStatusByWorktree: (worktreeId) => {
+      let hadLive = false
+      set((s) => {
+        const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+        const liveKeys = Object.keys(s.agentStatusByPaneKey).filter((k) =>
+          paneKeyMatchesAnyTabPrefix(k, tabPrefixes)
+        )
+        const retainedKeys = Object.entries(s.retainedAgentsByPaneKey)
+          .filter(
+            ([paneKey, retained]) =>
+              retained.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+          )
+          .map(([paneKey]) => paneKey)
+        const retainedKeySet = new Set(retainedKeys)
+        // See removeAgentStatus for rationale on ack cleanup. Current tabs are
+        // swept by prefix; orphan retained rows are swept by their retained key.
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        const ackKeys = Object.keys(nextAck).filter(
+          (k) => paneKeyMatchesAnyTabPrefix(k, tabPrefixes) || retainedKeySet.has(k)
+        )
+        if (ackKeys.length > 0) {
+          nextAck = { ...nextAck }
+          for (const key of ackKeys) {
+            delete nextAck[key]
+          }
+        }
+        // Mirror dropAgentStatusByTabPrefix: when nothing live or retained
+        // changed, narrow the return to just the ack delta (or s) so we don't
+        // emit a new top-level state object that re-renders full-state
+        // subscribers for nothing.
+        if (liveKeys.length === 0 && retainedKeys.length === 0) {
+          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+            return { acknowledgedAgentsByPaneKey: nextAck }
+          }
+          return s
+        }
+        hadLive = liveKeys.length > 0
+
+        const nextLive =
+          liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        for (const key of liveKeys) {
+          delete nextLive[key]
+        }
+
+        const nextRetained =
+          retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
+        for (const key of retainedKeys) {
+          delete nextRetained[key]
+        }
+
+        // Why: a worktree-level teardown folds the whole surface. Current live
+        // rows need one-shot suppressors so the retention sync cannot recreate a
+        // done row from the previous render after sleep/remove has hidden it.
+        const suppressorAdds = liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
+        let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+        if (suppressorAdds.length > 0) {
+          nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
+          for (const key of suppressorAdds) {
+            nextRetentionSuppressedPaneKeys[key] = true
+          }
+        }
+
+        return {
+          agentStatusByPaneKey: nextLive,
+          retainedAgentsByPaneKey: nextRetained,
+          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
           agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
         }

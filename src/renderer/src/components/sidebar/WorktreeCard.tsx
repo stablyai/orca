@@ -22,8 +22,8 @@ import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
-  getWorktreeStatus,
   getWorktreeStatusLabel,
+  resolveWorktreeStatus,
   type WorktreeStatus
 } from '@/lib/worktree-status'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
@@ -39,6 +39,10 @@ import {
   FilledBellIcon
 } from './WorktreeCardHelpers'
 import { IssueSection, PrSection, CommentSection } from './WorktreeCardMeta'
+import {
+  selectLivePtyIdsForWorktree,
+  selectRuntimePaneTitlesForWorktree
+} from './worktree-card-status-inputs'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -123,23 +127,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
-  // Why: split-pane tabs expose per-pane titles that the aggregate
-  // `tab.title` does not preserve (onActivePaneChange overwrites it with the
-  // focused pane's title). getWorktreeStatus needs those pane titles to keep
-  // the sidebar spinner reflecting *any* working pane, not just the focused
-  // one. Narrow the subscription to this worktree's tabs via useShallow so
-  // unrelated pane-title updates do not re-render every sidebar card.
+  // Why: keep these as separate shallow selectors. Combining them into one
+  // returned object nests freshly-created maps under fresh keys, so Zustand's
+  // shallow memoization sees every unrelated store write as a change and
+  // re-renders every mounted card.
+  // tab.ptyId is the wake-hint sessionId preserved across sleep, not a
+  // liveness signal; sleep-then-card-render would lie the dot green if we
+  // read tab.ptyId; ptyIdsByTabId is the source of truth.
+  // tab.title is the focused-pane title (onActivePaneChange overwrites it),
+  // so the per-pane title map is needed to keep the sidebar spinner
+  // reflecting *any* working pane, not just the focused one.
   const runtimePaneTitlesForWorktree = useAppStore(
-    useShallow((s) => {
-      const out: Record<string, Record<number, string>> = {}
-      for (const tab of s.tabsByWorktree[worktree.id] ?? []) {
-        const paneTitles = s.runtimePaneTitlesByTabId[tab.id]
-        if (paneTitles) {
-          out[tab.id] = paneTitles
-        }
-      }
-      return out
-    })
+    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktree.id))
+  )
+  const ptyIdsForWorktree = useAppStore(
+    useShallow((s) => selectLivePtyIdsForWorktree(s, worktree.id))
   )
 
   const branch = branchDisplayName(worktree.branch)
@@ -245,21 +247,33 @@ const WorktreeCard = React.memo(function WorktreeCard({
     })
   )
 
-  const status: WorktreeStatus = useMemo(() => {
-    if (hasPermission) {
-      return 'permission'
-    }
-    // Compute the heuristic once so we can let 'working' beat done without
-    // letting quieter heuristic states ('active'/'inactive') erase a done.
-    const heuristic = getWorktreeStatus(tabs, browserTabs, runtimePaneTitlesForWorktree)
-    if (heuristic === 'working') {
-      return 'working'
-    }
-    if (hasLiveDone || hasRetainedDone) {
-      return 'done'
-    }
-    return heuristic
-  }, [tabs, browserTabs, runtimePaneTitlesForWorktree, hasPermission, hasLiveDone, hasRetainedDone])
+  // Why: resolveWorktreeStatus enforces the runtime-liveness precondition —
+  // when no tab in this worktree has a live PTY (and no browser tab exists)
+  // it short-circuits to 'inactive' before consulting hook-reported state or
+  // retained-done snapshots. That keeps the dot honest across sleep, crash,
+  // and slept-with-retained-done while preserving the row data used by the
+  // inline agents list (retained 'done' rows still render inside the card).
+  const status: WorktreeStatus = useMemo(
+    () =>
+      resolveWorktreeStatus({
+        tabs,
+        browserTabs,
+        ptyIdsByTabId: ptyIdsForWorktree,
+        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
+        hasPermission,
+        hasLiveDone,
+        hasRetainedDone
+      }),
+    [
+      tabs,
+      browserTabs,
+      ptyIdsForWorktree,
+      runtimePaneTitlesForWorktree,
+      hasPermission,
+      hasLiveDone,
+      hasRetainedDone
+    ]
+  )
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')

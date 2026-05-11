@@ -5,9 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@xterm/addon-ligatures@0.11.0-beta.198':
+  '@xterm/addon-ligatures@0.11.0-beta.216':
     hash: df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634
-    path: config/patches/@xterm__addon-ligatures@0.11.0-beta.198.patch
+    path: config/patches/@xterm__addon-ligatures@0.11.0-beta.216.patch
   node-pty@1.1.0:
     hash: 93c259888173175ad66ab303977deb17f2aee9e276cb35522dc61815c65358d4
     path: config/patches/node-pty@1.1.0.patch
@@ -86,32 +86,32 @@ importers:
         specifier: ^3.22.5
         version: 3.22.5
       '@xterm/addon-fit':
-        specifier: 0.12.0-beta.198
-        version: 0.12.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.12.0-beta.216
+        version: 0.12.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-ligatures':
-        specifier: 0.11.0-beta.198
-        version: 0.11.0-beta.198(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.11.0-beta.216
+        version: 0.11.0-beta.216(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-search':
-        specifier: 0.17.0-beta.198
-        version: 0.17.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.17.0-beta.216
+        version: 0.17.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-serialize':
-        specifier: 0.15.0-beta.198
-        version: 0.15.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.15.0-beta.216
+        version: 0.15.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-unicode11':
-        specifier: 0.10.0-beta.198
-        version: 0.10.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.10.0-beta.216
+        version: 0.10.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-web-links':
-        specifier: 0.13.0-beta.198
-        version: 0.13.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.13.0-beta.216
+        version: 0.13.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-webgl':
-        specifier: 0.20.0-beta.197
-        version: 0.20.0-beta.197(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.20.0-beta.215
+        version: 0.20.0-beta.215(@xterm/xterm@6.1.0-beta.216)
       '@xterm/headless':
-        specifier: 6.1.0-beta.198
-        version: 6.1.0-beta.198
+        specifier: 6.1.0-beta.216
+        version: 6.1.0-beta.216
       '@xterm/xterm':
-        specifier: 6.1.0-beta.198
-        version: 6.1.0-beta.198
+        specifier: 6.1.0-beta.216
+        version: 6.1.0-beta.216
       agent-browser:
         specifier: ~0.24.1
         version: 0.24.1
@@ -2997,47 +2997,47 @@ packages:
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
 
-  '@xterm/addon-fit@0.12.0-beta.198':
-    resolution: {integrity: sha512-1EZFzOaUjRnlo5p2diIV9+HHVtHqr0O7TEFCstSuFqV/5QaKkRiWiKaMfsPEg2pF5P7yBOASk73yUPII7oquaA==}
+  '@xterm/addon-fit@0.12.0-beta.216':
+    resolution: {integrity: sha512-IgKE3ngNodSnmj1O+EEYpKQZkSbAUbghPlCWd8G32RL0piIMqb3FX3BuYLnWZeLNoD9iMtublLMG1T9XjGeVvA==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-ligatures@0.11.0-beta.198':
-    resolution: {integrity: sha512-LpF9KYiixxybSdyWpBtaPg5S1NNosQU0vcYg9P71xZFVRPT5vjaFvxYd80hV0oeKdnT25EMgNxwxbqHasmHQvg==}
+  '@xterm/addon-ligatures@0.11.0-beta.216':
+    resolution: {integrity: sha512-NJrK8MRi64Kb1Kxz5Jmrnd7H2gTlBqM3wHfObneD7T4xGFoPZkeX2/Kit4IcHt2Y5CTAQFAc92DilsncVm1HnQ==}
     engines: {node: '>8.0.0'}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-search@0.17.0-beta.198':
-    resolution: {integrity: sha512-loNSX0cB4P+9Sg13sgB/cQPPBgdOi1hxRyZ75Jj90+4iKe227mRmgzdqU3wxr10nyFWJWCpysCjVT+47tdC8mQ==}
+  '@xterm/addon-search@0.17.0-beta.216':
+    resolution: {integrity: sha512-p//4yv5aB2eyQcCFmPQ/s7tTFSTwKbtxs89xP1gvMbT9QuZgjW9FNqaQKb1GLDWtMpSfZdy7RrUp4GiCg3PVJQ==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-serialize@0.15.0-beta.198':
-    resolution: {integrity: sha512-0yf13cLPaKX8nkgUqclcdbU5FexacA/xnvWzHzGFYTku0WH+SqygbQcDOcg4bTUGgCcvfZqntEb1NQpr+69KgQ==}
+  '@xterm/addon-serialize@0.15.0-beta.216':
+    resolution: {integrity: sha512-scj/83XfYHg5LiDscYDP9dnadUMZt8To1tbdncQP/dZq2pD4TsTMokW1pciVYYazLBxCeKZybbVLEuOo7IPCqQ==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-unicode11@0.10.0-beta.198':
-    resolution: {integrity: sha512-3itjZ5lTQ5tnDcpUAplX88BsTJTZOvEzX9wNTNMO2aPuctLavMNg2+pXU8KTkeRhUZnDyhx9Lsv81dDs94vWDQ==}
+  '@xterm/addon-unicode11@0.10.0-beta.216':
+    resolution: {integrity: sha512-i7TrEHOTzUEOClH1+6IHoHy7bR/XHVRBjHc5e0u6A1HucFkAlCU+bqUY8EfwNOh1/iUjuB06EtNh6BM1o/ZAlA==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-web-links@0.13.0-beta.198':
-    resolution: {integrity: sha512-qA/B1tuNLpqlzscrAVFjLKjuH0CmKKyfbTn78Y3RLKs6H7xxdYSE6/DjJ1zg9C6aDtLwF9lsaOFpPSPf2AfpYQ==}
+  '@xterm/addon-web-links@0.13.0-beta.216':
+    resolution: {integrity: sha512-ZP3BDy1na/37TZHO8FB+XHJFoO8muyPoOzkaL2X28n5A9ZFQPbf834EMRsvDczKnfQvtZcve+ZCmMJj1ZHGjow==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-webgl@0.20.0-beta.197':
-    resolution: {integrity: sha512-0o30FvLzfd9ODuB1gbpwYMGQHYiz0FebmVaMP0Idesw1sLIG3qc7aIIBQEUnWiBDsKbDHhaysW8WTxacg2AhaQ==}
+  '@xterm/addon-webgl@0.20.0-beta.215':
+    resolution: {integrity: sha512-oCbH3YxiGOzRcKxwTfSRCA1TqpoT/AitO2X5MuqD14DVnb4Z3rTKQYfHBA7R6HA7U4K9OzmtIsi5+VyEIEaWsg==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/headless@6.1.0-beta.198':
-    resolution: {integrity: sha512-pDS/I5HLGwwJf8sWZFaT+qbHxgFu0qdVQv5/XDzhNyKXMXQJ7cL3ZsJsIox5JxLo2ZuYLVVY8/lirHronhOSfA==}
+  '@xterm/headless@6.1.0-beta.216':
+    resolution: {integrity: sha512-HCut3ABwBv5zVUAB+5KVTW4svr/fCeVMW9xtaJIhmXZsNHOrhVFOGX7E2CYzRa8xdX/aI2JdTIhgLl8xjcHEoA==}
 
-  '@xterm/xterm@6.1.0-beta.198':
-    resolution: {integrity: sha512-udjhNFi4YfypbVBJV7gFNwQV3KziZFJdq+fg87WefGF5JkGbC+4LvIhEsHXR0Kb5Ez8ESxeqM7Yjvj+kw8zDAg==}
+  '@xterm/xterm@6.1.0-beta.216':
+    resolution: {integrity: sha512-87rfymzVje5eYUlGG94hz1WkOYvFRcFDGdiOAbg4d8xt8OGSGR2nMNU4I1n5MDE1RBPBqRd+WVJ5w7q3pwMoZA==}
 
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
@@ -8910,39 +8910,39 @@ snapshots:
   '@xmldom/xmldom@0.9.10':
     optional: true
 
-  '@xterm/addon-fit@0.12.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-fit@0.12.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-ligatures@0.11.0-beta.198(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-ligatures@0.11.0-beta.216(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
       lru-cache: 6.0.0
       opentype.js: 0.8.0
 
-  '@xterm/addon-search@0.17.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-search@0.17.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-serialize@0.15.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-serialize@0.15.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-unicode11@0.10.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-unicode11@0.10.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-web-links@0.13.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-web-links@0.13.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-webgl@0.20.0-beta.197(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-webgl@0.20.0-beta.215(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/headless@6.1.0-beta.198': {}
+  '@xterm/headless@6.1.0-beta.216': {}
 
-  '@xterm/xterm@6.1.0-beta.198': {}
+  '@xterm/xterm@6.1.0-beta.216': {}
 
   abbrev@4.0.0: {}
 

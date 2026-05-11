@@ -305,9 +305,7 @@ function RightSidebarInner(): React.JSX.Element {
               <div className="flex items-center justify-between border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset">
                 <TooltipProvider delayDuration={400}>
                   <div className="flex items-center">{activityBarIcons}</div>
-                  <div className="flex items-center">
-                    {closeButton}
-                  </div>
+                  <div className="flex items-center">{closeButton}</div>
                 </TooltipProvider>
               </div>
             </ContextMenuTrigger>
@@ -328,9 +326,7 @@ function RightSidebarInner(): React.JSX.Element {
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
             <TooltipProvider delayDuration={400}>
-              <div className="flex items-center">
-                {closeButton}
-              </div>
+              <div className="flex items-center">{closeButton}</div>
             </TooltipProvider>
           </div>
         )}

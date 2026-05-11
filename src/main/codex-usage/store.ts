@@ -24,8 +24,11 @@ let _codexUsageFile: string | null = null
 
 const MODEL_PRICING: Record<string, { input: number; cachedInput: number; output: number }> = {
   'gpt-5': { input: 1.25, cachedInput: 0.125, output: 10 },
-  'gpt-5.2-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
-  'gpt-5.3-codex': { input: 1.9, cachedInput: 0.19, output: 15 }
+  'gpt-5.1': { input: 1.25, cachedInput: 0.125, output: 10 },
+  'gpt-5.2': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.3-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.4': { input: 2.5, cachedInput: 0.25, output: 15 },
+  'gpt-5.5': { input: 5, cachedInput: 0.5, output: 30 }
 }
 
 function getDefaultState(): CodexUsagePersistedState {
@@ -78,14 +81,23 @@ function normalizeModelForPricing(model: string | null): string | null {
   }
 
   const lower = model.toLowerCase()
-  if (lower === 'gpt-5' || lower === 'gpt-5-codex' || lower.startsWith('gpt-5.4')) {
+  if (lower === 'gpt-5' || lower === 'gpt-5-codex') {
     return 'gpt-5'
   }
-  if (lower.startsWith('gpt-5.2-codex')) {
-    return 'gpt-5.2-codex'
+  if (lower.startsWith('gpt-5.1')) {
+    return 'gpt-5.1'
+  }
+  if (lower.startsWith('gpt-5.2')) {
+    return 'gpt-5.2'
   }
   if (lower.startsWith('gpt-5.3-codex')) {
     return 'gpt-5.3-codex'
+  }
+  if (lower.startsWith('gpt-5.4')) {
+    return 'gpt-5.4'
+  }
+  if (lower.startsWith('gpt-5.5')) {
+    return 'gpt-5.5'
   }
   return null
 }

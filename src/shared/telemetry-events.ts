@@ -15,8 +15,15 @@
 
 import { z } from 'zod'
 
+import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
-import type { DiscoveryStatusEmitted, GlobalSettings, OnboardingChecklistState } from './types'
+import type {
+  DiscoveryStatusEmitted,
+  GlobalSettings,
+  OnboardingChecklistState,
+  PathSource,
+  ShellHydrationFailureReason
+} from './types'
 
 // ── Shared property enums ───────────────────────────────────────────────
 
@@ -250,6 +257,27 @@ const workspaceCreateFailedSchema = z
   })
   .strict()
 
+// Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
+// hook installation only targets these four agents and the labels here match
+// the `*HookService.install()` call sites in `src/main/index.ts`. `claude`
+// (not `claude-code`) is intentional — the failure is about Claude Code's
+// `~/.claude/settings.json`, not the broader product taxonomy. Sourced from
+// `AGENT_HOOK_TARGETS` so the wire enum and the IPC `AgentHookTarget` type
+// cannot drift if a fifth hook-install agent is added.
+export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
+export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
+
+// Why: install failures are config-file-shape errors (malformed JSON, missing
+// keys, ACL denials on `~/.claude` etc.) — not user content. The 200-char
+// cap is the truncation contract; callers must truncate before calling
+// `track`, and the validator will drop overlength strings via `.max(200)`.
+const agentHookInstallFailedSchema = z
+  .object({
+    agent: hookInstallAgentSchema,
+    error_message: z.string().max(200)
+  })
+  .strict()
+
 // ── Onboarding ──────────────────────────────────────────────────────────
 //
 // Closed enums only — no raw paths, repo names, clone URLs, or error
@@ -376,6 +404,39 @@ const activationChecklistItemCompletedSchema = z
   })
   .strict()
 
+// Why: see docs/agent-on-path-detection.md. Disambiguates `on_path: false`
+// rows on dashboard 1562016 — distinguishes shell-hydration failure (where
+// `on_path` is misleading because Orca's view of PATH is incomplete) from
+// genuinely-not-on-PATH (where the field is reporting accurately). Closed
+// enum kept in lockstep with `ShellHydrationFailureReason` via a compile-time
+// guard below.
+const pathSourceSchema = z.enum(['shell_hydrate', 'sync_seed_only'])
+const pathFailureReasonSchema = z.enum(['none', 'no_shell', 'timeout', 'spawn_error', 'empty_path'])
+
+// Compile-time guard: schema enum must match `ShellHydrationFailureReason`.
+// Adding a new failure mode in `hydrate-shell-path.ts` without updating both
+// the shared alias and this schema breaks the build here. Without the guard,
+// a new enum value would ship `failureReason` strings the strict validator
+// rejects, dropping the entire `onboarding_agent_picked` event at parse time
+// and losing the `agent_kind`/`on_path` data on that pick.
+type _PathFailureReasonSync =
+  z.infer<typeof pathFailureReasonSchema> extends ShellHydrationFailureReason
+    ? ShellHydrationFailureReason extends z.infer<typeof pathFailureReasonSchema>
+      ? true
+      : never
+    : never
+const _pathFailureReasonSyncCheck: _PathFailureReasonSync = true
+void _pathFailureReasonSyncCheck
+
+type _PathSourceSync =
+  z.infer<typeof pathSourceSchema> extends PathSource
+    ? PathSource extends z.infer<typeof pathSourceSchema>
+      ? true
+      : never
+    : never
+const _pathSourceSyncCheck: _PathSourceSync = true
+void _pathSourceSyncCheck
+
 // Fired at click time from `setSelectedAgentInteractive` so we capture
 // mind-changes within the step rather than just the final pick. `agent_kind`
 // uses `tuiAgentToAgentKind` so the wire enum stays closed even when stale
@@ -394,6 +455,11 @@ const onboardingAgentPickedSchema = z
     // ("Show N more"). Signals whether users go looking for less-popular
     // agents — input for catalog ordering decisions.
     from_collapsed_section: z.boolean(),
+    // Why: instrumentation for the `on_path:false` triage. `.optional()` is
+    // load-bearing — events emitted before this deploy validate cleanly under
+    // `.strict()`. See docs/agent-on-path-detection.md.
+    path_source: pathSourceSchema.optional(),
+    path_failure_reason: pathFailureReasonSchema.optional(),
     cohort: cohortSchema
   })
   .strict()
@@ -461,6 +527,7 @@ export const eventSchemas = {
 
   agent_started: agentStartedSchema,
   agent_error: agentErrorSchema,
+  agent_hook_install_failed: agentHookInstallFailedSchema,
 
   settings_changed: settingsChangedSchema,
 
@@ -528,12 +595,11 @@ type _CohortExtendedRoster =
 type _DerivedCohortExtendedEvents = {
   [N in EventName]: 'nth_repo_added' extends keyof EventMap[N] ? N : never
 }[EventName]
-type _CohortExtendedRosterSync =
-  _CohortExtendedRoster extends _DerivedCohortExtendedEvents
-    ? _DerivedCohortExtendedEvents extends _CohortExtendedRoster
-      ? true
-      : never
+type _CohortExtendedRosterSync = _CohortExtendedRoster extends _DerivedCohortExtendedEvents
+  ? _DerivedCohortExtendedEvents extends _CohortExtendedRoster
+    ? true
     : never
+  : never
 const _cohortExtendedRosterSyncCheck: _CohortExtendedRosterSync = true
 void _cohortExtendedRosterSyncCheck
 
@@ -577,12 +643,11 @@ type _OnboardingCohortRoster =
 type _DerivedOnboardingCohortEvents = {
   [N in EventName]: 'cohort' extends keyof EventMap[N] ? N : never
 }[EventName]
-type _OnboardingCohortRosterSync =
-  _OnboardingCohortRoster extends _DerivedOnboardingCohortEvents
-    ? _DerivedOnboardingCohortEvents extends _OnboardingCohortRoster
-      ? true
-      : never
+type _OnboardingCohortRosterSync = _OnboardingCohortRoster extends _DerivedOnboardingCohortEvents
+  ? _DerivedOnboardingCohortEvents extends _OnboardingCohortRoster
+    ? true
     : never
+  : never
 const _onboardingCohortRosterSyncCheck: _OnboardingCohortRosterSync = true
 void _onboardingCohortRosterSyncCheck
 

@@ -5,7 +5,8 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
-import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
+import { track } from '@/lib/telemetry'
+import { buildAgentPickedPayload } from './agent-picked-payload'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
@@ -26,6 +27,8 @@ export function useOnboardingFlow(
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
+  const pathSource = useAppStore((s) => s.pathSource)
+  const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const openModal = useAppStore((s) => s.openModal)
@@ -91,6 +94,11 @@ export function useOnboardingFlow(
   const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
   const isDetectingRef = useRef<boolean>(isDetectingAgents)
   const selectedAgentRef = useRef(selectedAgent)
+  // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
+  // the freshest hydration classification at click time. Mirrors the
+  // detectedAgentIdsRef / isDetectingRef pattern.
+  const pathSourceRef = useRef(pathSource)
+  const pathFailureReasonRef = useRef(pathFailureReason)
   useEffect(() => {
     selectedAgentRef.current = selectedAgent
   }, [selectedAgent])
@@ -105,16 +113,20 @@ export function useOnboardingFlow(
         return
       }
       // Why: emit at click time, not at step completion, so we capture
-      // mind-changes within the step. `tuiAgentToAgentKind` falls back to
-      // `'other'` for any string outside the union.
-      const detected = detectedAgentIdsRef.current
-      track('onboarding_agent_picked', {
-        agent_kind: tuiAgentToAgentKind(value),
-        on_path: detected.includes(value),
-        detected_count: detected.length,
-        detection_state: isDetectingRef.current ? 'pending' : 'complete',
-        from_collapsed_section: fromCollapsedSection
-      })
+      // mind-changes within the step. The payload builder is extracted so the
+      // store-fields-attached invariant has unit coverage — see
+      // agent-picked-payload.test.ts.
+      track(
+        'onboarding_agent_picked',
+        buildAgentPickedPayload({
+          agent: value,
+          detectedAgentIds: detectedAgentIdsRef.current,
+          isDetecting: isDetectingRef.current,
+          fromCollapsedSection,
+          pathSource: pathSourceRef.current,
+          pathFailureReason: pathFailureReasonRef.current
+        })
+      )
     },
     []
   )
@@ -132,6 +144,12 @@ export function useOnboardingFlow(
   useEffect(() => {
     isDetectingRef.current = isDetectingAgents
   }, [isDetectingAgents])
+  useEffect(() => {
+    pathSourceRef.current = pathSource
+  }, [pathSource])
+  useEffect(() => {
+    pathFailureReasonRef.current = pathFailureReason
+  }, [pathFailureReason])
 
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const startTimeRef = useRef<number>(Date.now())

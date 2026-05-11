@@ -189,6 +189,57 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('accepts onboarding_agent_picked with path_source and path_failure_reason', () => {
+    // Why: the on_path:false triage instrumentation —
+    // see docs/agent-on-path-detection.md.
+    const result = validate('onboarding_agent_picked', {
+      agent_kind: 'claude-code',
+      on_path: false,
+      detected_count: 0,
+      detection_state: 'complete',
+      from_collapsed_section: false,
+      path_source: 'sync_seed_only',
+      path_failure_reason: 'timeout'
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepts onboarding_agent_picked without the new optional path fields', () => {
+    // Pre-deploy events validate cleanly under `.optional()`.
+    const result = validate('onboarding_agent_picked', {
+      agent_kind: 'codex',
+      on_path: true,
+      detected_count: 2,
+      detection_state: 'complete',
+      from_collapsed_section: false
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects onboarding_agent_picked with unknown path_source', () => {
+    const result = validate('onboarding_agent_picked', {
+      agent_kind: 'claude-code',
+      on_path: true,
+      detected_count: 1,
+      detection_state: 'complete',
+      from_collapsed_section: false,
+      path_source: 'env_path'
+    } as never)
+    expect(result.ok).toBe(false)
+  })
+
+  it('rejects onboarding_agent_picked with unknown path_failure_reason', () => {
+    const result = validate('onboarding_agent_picked', {
+      agent_kind: 'claude-code',
+      on_path: true,
+      detected_count: 1,
+      detection_state: 'complete',
+      from_collapsed_section: false,
+      path_failure_reason: 'parse_failed'
+    } as never)
+    expect(result.ok).toBe(false)
+  })
+
   it('accepts onboarding_ghostty_discovered with field_group_count_bucket', () => {
     const result = validate('onboarding_ghostty_discovered', {
       state: 'found',

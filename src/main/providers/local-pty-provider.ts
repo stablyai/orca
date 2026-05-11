@@ -155,6 +155,9 @@ export class LocalPtyProvider implements IPtyProvider {
     let effectiveCwd: string
     let validationCwd: string
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
+    let getFallbackShellReadyConfig:
+      | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
+      | undefined
     if (wslInfo) {
       const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
       shellPath = 'wsl.exe'
@@ -249,9 +252,20 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const finalEnv = this.opts.buildSpawnEnv ? this.opts.buildSpawnEnv(id, spawnEnv) : spawnEnv
     if (!wslInfo && process.platform !== 'win32') {
+      // Why: any Orca-injected overlay env that user rc files can clobber
+      // needs the wrapper so the post-rc restore line runs.
+      const needsNoMarkerWrapper =
+        finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
+        finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
+        finalEnv.ORCA_PI_CODING_AGENT_DIR
+      getFallbackShellReadyConfig = args.command
+        ? (shell) => getShellReadyLaunchConfig(shell)
+        : needsNoMarkerWrapper
+          ? (shell) => getAttributionShellLaunchConfig(shell)
+          : undefined
       const shellLaunch = args.command
         ? getShellReadyLaunchConfig(shellPath)
-        : finalEnv.ORCA_ATTRIBUTION_SHIM_DIR
+        : needsNoMarkerWrapper
           ? getAttributionShellLaunchConfig(shellPath)
           : null
       if (shellLaunch) {
@@ -283,7 +297,7 @@ export class LocalPtyProvider implements IPtyProvider {
       cwd: effectiveCwd,
       env: finalEnv,
       ptySpawn: pty.spawn,
-      getShellReadyConfig: args.command ? (shell) => getShellReadyLaunchConfig(shell) : undefined,
+      getShellReadyConfig: getFallbackShellReadyConfig,
       // Why: if zsh failed and bash took over, HISTFILE still points to
       // zsh_history. Update it *before* spawn so the child inherits the
       // correct filename (see design doc §8).

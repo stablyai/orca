@@ -13,10 +13,13 @@ const describePosix = process.platform === 'win32' ? describe.skip : describe
 
 describePosix('daemon shell-ready launch config', () => {
   let previousUserDataPath: string | undefined
+  let previousOrcaOrigZdotdir: string | undefined
   let userDataPath: string
 
   beforeEach(() => {
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousOrcaOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
+    delete process.env.ORCA_ORIG_ZDOTDIR
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-shell-ready-test-'))
     process.env.ORCA_USER_DATA_PATH = userDataPath
   })
@@ -26,6 +29,11 @@ describePosix('daemon shell-ready launch config', () => {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+    if (previousOrcaOrigZdotdir === undefined) {
+      delete process.env.ORCA_ORIG_ZDOTDIR
+    } else {
+      process.env.ORCA_ORIG_ZDOTDIR = previousOrcaOrigZdotdir
     }
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
@@ -157,6 +165,27 @@ describePosix('daemon shell-ready launch config', () => {
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
     expect(zshenv).toContain('*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+  })
+
+  it('writes wrappers that restore OpenCode and Pi config after user startup files', async () => {
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+    getShellReadyLaunchConfig('/bin/bash')
+
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+    const restoreLine =
+      '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+    const piRestoreLine =
+      '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
+    expect(zshrc).toContain(restoreLine)
+    expect(zlogin).toContain(restoreLine)
+    expect(bashRc).toContain(restoreLine)
+    expect(zshrc).toContain(piRestoreLine)
+    expect(zlogin).toContain(piRestoreLine)
+    expect(bashRc).toContain(piRestoreLine)
   })
 
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {

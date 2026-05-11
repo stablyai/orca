@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: this file co-locates tightly-coupled scenario
+   tests for the resource-usage merge function. Splitting them weakens the
+   single-source view of how snapshot + daemon-session inputs combine. */
 import { describe, expect, it } from 'vitest'
 import type { MemorySnapshot, TerminalTab, WorktreeMemory } from '../../../../shared/types'
 import {
@@ -53,6 +56,7 @@ const baseCtx = (overrides: Partial<MergeContext> = {}): MergeContext => ({
   runtimePaneTitlesByTabId: {},
   workspaceSessionReady: true,
   repoDisplayNameById: new Map(),
+  repoConnectionIdById: new Map(),
   ...overrides
 })
 
@@ -121,7 +125,10 @@ describe('mergeSnapshotAndSessions', () => {
     const ds: DaemonSession[] = [
       { id: 'orca::/remote/Stingray@@abcd1234', cwd: '', title: 'orca/Stingray' }
     ]
-    const out = mergeSnapshotAndSessions(null, ds, baseCtx())
+    const ctx = baseCtx({
+      repoConnectionIdById: new Map([['orca', 'ssh-conn-1']])
+    })
+    const out = mergeSnapshotAndSessions(null, ds, ctx)
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
       repoId: 'orca',
@@ -133,6 +140,7 @@ describe('mergeSnapshotAndSessions', () => {
       worktreeId: 'orca::/remote/Stingray',
       worktreeName: 'Stingray',
       hasLocalSamples: false,
+      isRemote: true,
       cpu: null,
       memory: null
     })
@@ -142,6 +150,28 @@ describe('mergeSnapshotAndSessions', () => {
       cpu: null,
       memory: null,
       bound: false
+    })
+  })
+
+  it('warm-reattach local PTY: chip stays off when repo has no connectionId', () => {
+    // Why: regression coverage for the warm-reattach REMOTE mislabel.
+    // A live local daemon session whose registry entry the renderer hasn't
+    // re-spawned yet must NOT be flagged as remote. Under the old
+    // predicate (`!hasLocalSamples`) it was — that was the bug.
+    const ds: DaemonSession[] = [
+      { id: 'orca::/local/Triton@@deadbeef', cwd: '/local/Triton', title: 'orca/Triton' }
+    ]
+    const ctx = baseCtx({
+      repoConnectionIdById: new Map([['orca', null]])
+    })
+    const out = mergeSnapshotAndSessions(null, ds, ctx)
+    expect(out[0]).toMatchObject({
+      repoId: 'orca',
+      hasRemoteChildren: false
+    })
+    expect(out[0].worktrees[0]).toMatchObject({
+      hasLocalSamples: false,
+      isRemote: false
     })
   })
 
@@ -160,41 +190,60 @@ describe('mergeSnapshotAndSessions', () => {
     expect(out[0].worktrees[0].sessions[0].bound).toBe(true)
   })
 
-  it('repo aggregate excludes remote children but flags hasRemoteChildren', () => {
+  it('repo aggregate sums only worktrees with numeric metrics; remote-by-connectionId flags chip', () => {
+    // Why: a single repo can be both reflected as a snapshot worktree
+    // (covered by the local collector) and a daemon-only session
+    // (not in the snapshot). Under the connectionId predicate, the
+    // chip flips for the *remote* repo case; the local repo keeps
+    // numeric aggregates and no chip. Each scenario is verified with
+    // its own single-repo input.
     const localWt: WorktreeMemory = {
-      worktreeId: 'orca::/local/Triton',
+      worktreeId: 'local-repo::/local/Triton',
       worktreeName: 'Triton',
-      repoId: 'orca',
-      repoName: 'ORCA',
+      repoId: 'local-repo',
+      repoName: 'LOCAL',
       cpu: 0.5,
       memory: 125_000_000,
       history: [],
       sessions: []
     }
-    const ds: DaemonSession[] = [
-      { id: 'orca::/remote/Stingray@@1234', cwd: '', title: 'orca/Stingray' }
+    const remoteDs: DaemonSession[] = [
+      { id: 'remote-repo::/remote/Stingray@@1234', cwd: '', title: 'remote/Stingray' }
     ]
-    const out = mergeSnapshotAndSessions(makeSnapshot([localWt]), ds, baseCtx())
-    expect(out).toHaveLength(1)
-    expect(out[0]).toMatchObject({
-      repoId: 'orca',
+    const ctx = baseCtx({
+      repoConnectionIdById: new Map<string, string | null>([
+        ['local-repo', null],
+        ['remote-repo', 'ssh-conn-1']
+      ])
+    })
+    const out = mergeSnapshotAndSessions(makeSnapshot([localWt]), remoteDs, ctx)
+    expect(out).toHaveLength(2)
+    const local = out.find((r) => r.repoId === 'local-repo')!
+    const remote = out.find((r) => r.repoId === 'remote-repo')!
+    expect(local).toMatchObject({
       cpu: 0.5,
       memory: 125_000_000,
+      hasRemoteChildren: false
+    })
+    expect(remote).toMatchObject({
+      cpu: null,
+      memory: null,
       hasRemoteChildren: true
     })
-    expect(out[0].worktrees).toHaveLength(2)
-    const local = out[0].worktrees.find((w) => w.hasLocalSamples)!
-    const remote = out[0].worktrees.find((w) => !w.hasLocalSamples)!
-    expect(local.cpu).toBe(0.5)
-    expect(remote.cpu).toBeNull()
+    expect(local.worktrees[0].isRemote).toBe(false)
+    expect(remote.worktrees[0].isRemote).toBe(true)
   })
 
-  it('unresolvable session falls into unattributed bucket', () => {
+  it('unresolvable session falls into unattributed bucket without flagging remote', () => {
+    // Why: under the connectionId predicate, an unresolved session is
+    // not evidence of remoteness — we just don't know what it belongs
+    // to. The chip should stay off; the row still surfaces in the
+    // unattributed bucket with `—` cells because we have no sample.
     const ds: DaemonSession[] = [{ id: 'opaque-id-without-prefix', cwd: '', title: 'shell' }]
     const out = mergeSnapshotAndSessions(null, ds, baseCtx())
     expect(out).toHaveLength(1)
     expect(out[0].repoId).toBe(UNATTRIBUTED_REPO_ID)
-    expect(out[0].hasRemoteChildren).toBe(true)
+    expect(out[0].hasRemoteChildren).toBe(false)
     expect(out[0].worktrees[0].sessions[0].sessionId).toBe('opaque-id-without-prefix')
   })
 

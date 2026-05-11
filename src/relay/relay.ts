@@ -152,6 +152,13 @@ function main(): void {
 
   const context = new RelayContext()
 
+  // Why: session.registerRoot is now a protocol-level no-op (the relay no
+  // longer enforces a workspace allowlist; see docs/relay-fs-allowlist-removal.md).
+  // Both notification and request handlers are retained so a new main
+  // connecting to a new relay during the upgrade window — and an old main
+  // connecting to a new relay — both keep working without "Method not found"
+  // errors. Tracked for removal once the relay-version floor moves past the
+  // cutover.
   dispatcher.onNotification('session.registerRoot', (params) => {
     const rootPath = params.rootPath as string
     if (rootPath) {
@@ -159,12 +166,6 @@ function main(): void {
     }
   })
 
-  // Why: worktree creation needs to await root registration before sending
-  // addWorktree, which validates the target directory. While FIFO frame
-  // processing means a notification won't be reordered in steady state,
-  // the request variant makes the ordering guarantee explicit and closes
-  // failure windows during relay reconnect or fresh-host scenarios where
-  // roots may not yet be registered at all. See issue #911.
   dispatcher.onRequest('session.registerRoot', async (params) => {
     const rootPath = params.rootPath as string
     if (rootPath) {

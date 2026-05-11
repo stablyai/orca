@@ -3,6 +3,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getActiveMultiplexer } from './ssh'
 
@@ -69,6 +70,14 @@ export type RefreshAgentsResult = {
   addedPathSegments: string[]
   /** True when the shell spawn succeeded. False = relied on existing PATH. */
   shellHydrationOk: boolean
+  /** Whether `detectInstalledAgents` ran against shell-hydrated PATH or only
+   *  the seed list from `patchPackagedProcessPath`. Drives the on_path:false
+   *  triage in tile A on dashboard 1562016. */
+  pathSource: PathSource
+  /** Why hydration failed (or `'none'` on success). Typed against the shared
+   *  alias so the IPC boundary stays in lockstep with the renderer-visible
+   *  enum on `onboardingAgentPickedSchema`. */
+  pathFailureReason: ShellHydrationFailureReason
 }
 
 /**
@@ -84,7 +93,9 @@ export async function refreshShellPathAndDetectAgents(): Promise<RefreshAgentsRe
   return {
     agents,
     addedPathSegments: added,
-    shellHydrationOk: hydration.ok
+    shellHydrationOk: hydration.ok,
+    pathSource: hydration.ok ? 'shell_hydrate' : 'sync_seed_only',
+    pathFailureReason: hydration.failureReason
   }
 }
 

@@ -162,6 +162,7 @@ function createPane(paneId: number) {
 function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
+    markPaneHasComplexScriptOutput: vi.fn(),
     getPanes: vi.fn(() => Array.from({ length: paneCount }, (_, index) => ({ id: index + 1 }))),
     closePane: vi.fn(),
     getActivePane: vi.fn<() => { id: number } | null>(() => null)
@@ -765,6 +766,29 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('hello\r\n')
 
     expect(pane.terminal.write).toHaveBeenCalledWith('hello\r\n')
+  })
+
+  it('marks panes that receive Arabic output for DOM rendering', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.('Arabic: السلام عليكم\r\n')
+
+    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(pane.terminal.write).toHaveBeenCalledWith('Arabic: السلام عليكم\r\n')
   })
 
   it('reattaches via daemon sessionId when an in-session PTY is live', async () => {

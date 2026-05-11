@@ -19,8 +19,23 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.shellArgs[1]).toBe('-Command')
     // The actual command must dot-source $PROFILE before setting encodings,
     // otherwise oh-my-posh / starship / PSReadLine never load.
-    expect(result.shellArgs[2]).toContain('. $PROFILE')
-    expect(result.shellArgs[2]).toContain('UTF8')
+    const command = result.shellArgs[2] ?? ''
+    const profileIndex = command.indexOf('. $PROFILE')
+    const opencodeRestoreIndex = command.indexOf(
+      '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
+    )
+    const piRestoreIndex = command.indexOf(
+      '$env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR'
+    )
+    const outputEncodingIndex = command.indexOf('[Console]::OutputEncoding')
+    const inputEncodingIndex = command.indexOf('[Console]::InputEncoding')
+
+    expect(profileIndex).toBeGreaterThanOrEqual(0)
+    expect(opencodeRestoreIndex).toBeGreaterThan(profileIndex)
+    expect(piRestoreIndex).toBeGreaterThan(profileIndex)
+    expect(outputEncodingIndex).toBeGreaterThan(opencodeRestoreIndex)
+    expect(outputEncodingIndex).toBeGreaterThan(piRestoreIndex)
+    expect(inputEncodingIndex).toBeGreaterThan(outputEncodingIndex)
   })
 
   it('handles pwsh.exe (PowerShell Core) the same as Windows PowerShell', () => {

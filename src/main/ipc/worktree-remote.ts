@@ -149,25 +149,17 @@ export async function createRemoteWorktree(
     /* best-effort */
   }
 
-  // Why: the relay's git.addWorktree validates targetDir against registered
-  // roots. The worktree sibling path (repo/../name) is outside the repo root
-  // and must be registered first. Using request (not notify) makes the
-  // ordering guarantee explicit rather than relying on FIFO frame processing,
-  // and closes failure windows during relay reconnect or fresh-host scenarios
-  // where roots may not yet be registered at all. See issue #911.
   const mux = getActiveMultiplexer(repo.connectionId!)
   if (!mux) {
     throw new Error('SSH connection is not available. Please reconnect and try again.')
   }
-  // Why: git.addWorktree validates both repoPath and targetDir against
-  // registered roots. In a fresh-host or reconnect scenario, registerRelayRoots
-  // may not have finished yet, so neither path may be registered. Register both
-  // synchronously here to close that window.
-  //
-  // Why (fallback): when Orca reconnects via --connect to a relay still in its
-  // grace period, the old relay binary may not have the request handler yet.
-  // Fall back to notify so worktree creation still works against pre-upgrade
-  // relays.
+  // Why: kept for back-compat with old relay binaries during the upgrade
+  // window — those still gate git.addWorktree on registered roots, so we
+  // must prime them synchronously to close fresh-host / reconnect windows.
+  // New relays no-op these calls. Notify-fallback handles older relays that
+  // pre-date the request-form session.registerRoot handler. Tracked for
+  // removal once the relay-version floor moves past the cutover (see
+  // docs/relay-fs-allowlist-removal.md).
   try {
     await Promise.all([
       mux.request('session.registerRoot', { rootPath: repo.path }),
@@ -194,13 +186,14 @@ export async function createRemoteWorktree(
       (err.message.includes('No workspace roots registered yet') ||
         err.message.includes('Path outside authorized workspace'))
     ) {
-      // Why: validatePath throws two distinct errors — "No workspace roots
-      // registered yet" (relay has no roots at all, e.g., reconnect before
-      // registerRelayRoots completes) and "Path outside authorized workspace"
-      // (roots exist but the sibling worktree path isn't among them). Both are
-      // implementation details that mean nothing to the user.
+      // Why: only an OLD relay binary (pre-allowlist-removal) can produce
+      // these errors. New relays no-op session.registerRoot. Translate the
+      // raw error into an actionable upgrade-window message while still
+      // preserving the original string for bug reports. Tracked for removal
+      // once the relay-version floor moves past the cutover (see
+      // docs/relay-fs-allowlist-removal.md).
       throw new Error(
-        'The SSH relay has not registered the worktree path yet. Please wait a moment and try again, or disconnect and reconnect the SSH session.'
+        `Older relay reported an authorization error; please reconnect to deploy the latest relay. (${err.message})`
       )
     }
     throw err

@@ -1,4 +1,5 @@
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type { TerminalTab } from '../../../shared/types'
 
 export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
@@ -12,11 +13,18 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
 }
 
 export function getWorktreeStatus(
-  tabs: Pick<TerminalTab, 'id' | 'ptyId' | 'title'>[],
+  tabs: Pick<TerminalTab, 'id' | 'title'>[],
   browserTabs: { id: string }[],
+  ptyIdsByTabId: Record<string, string[]>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>> = {}
 ): WorktreeStatus {
-  const liveTabs = tabs.filter((tab) => tab.ptyId)
+  // Why: liveness gates every promotion. tab.ptyId is the wake-hint sessionId
+  // preserved across sleep (so wake can reattach to the same daemon history
+  // dir / relay session) — it is *not* a liveness signal. ptyIdsByTabId is the
+  // source of truth: sleep clears it to []; pty.spawn writes it; pty.kill
+  // clears it. Reading the live-pty map keeps the dot honest after sleep,
+  // crash, or any path where the wake-hint outlives the actual PTY.
+  const liveTabs = tabs.filter((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
 
   // Why: a split-pane tab can host multiple concurrent agents, but `tab.title`
   // only reflects the most-recently-focused pane (see onActivePaneChange in
@@ -64,4 +72,69 @@ function tabHasStatus(
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {
   return STATUS_LABELS[status]
+}
+
+/**
+ * Apply the WorktreeCard priority overlay (permission > working > done >
+ * heuristic) on top of the title-heuristic base. The live-pty precondition is
+ * inherited via getWorktreeStatus: when no tab in this worktree has a live
+ * PTY and no browser tab exists, getWorktreeStatus returns 'inactive' and
+ * none of the promotion paths fire — so the worktree dot stays grey across
+ * sleep, renderer crash + rehydration, and any other path where wake-hint
+ * sessionIds outlive the actual PTY. On sleep specifically,
+ * `dropAgentStatusByWorktree` also clears retained rows for the worktree, so
+ * this precondition is the second line of defense; the rehydration-from-disk
+ * path is where retained 'done' rows can outlive the live PTY and the
+ * precondition does the load-bearing work.
+ *
+ * Argument semantics (sourced by the WorktreeCard caller from the store):
+ * - `tabs`, `browserTabs`: the worktree's terminal and browser tabs.
+ * - `ptyIdsByTabId`: live-PTY map narrowed to this worktree (the liveness
+ *   gate; see tabHasLivePty).
+ * - `runtimePaneTitlesByTabId`: per-tab pane title map narrowed to this
+ *   worktree (used by the title-heuristic for split-pane spinners).
+ * - `hasPermission`: any fresh hook entry in {blocked, waiting} for a tab in
+ *   this worktree.
+ * - `hasLiveDone`: any fresh hook entry in {done} for a tab in this worktree.
+ * - `hasRetainedDone`: any retained-agent snapshot scoped to this worktreeId.
+ */
+export function resolveWorktreeStatus(args: {
+  tabs: Pick<TerminalTab, 'id' | 'title'>[]
+  browserTabs: { id: string }[]
+  ptyIdsByTabId: Record<string, string[]>
+  runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
+  hasPermission: boolean
+  hasLiveDone: boolean
+  hasRetainedDone: boolean
+}): WorktreeStatus {
+  const heuristic = getWorktreeStatus(
+    args.tabs,
+    args.browserTabs,
+    args.ptyIdsByTabId,
+    args.runtimePaneTitlesByTabId ?? {}
+  )
+  // Why: liveness precondition. Without any live PTY (and no browser tab),
+  // agent-state hooks and retained-done snapshots must not promote the dot
+  // off grey — the agent process is gone the instant pty.kill fires.
+  if (heuristic === 'inactive') {
+    return 'inactive'
+  }
+  if (args.hasPermission) {
+    return 'permission'
+  }
+  // Why: heuristic 'permission' must outrank heuristic 'working' (a tab can
+  // be "working" while another pane in the same tab is blocked on permission;
+  // the user-actionable signal wins). Both this branch and the args.hasPermission
+  // branch above return 'permission' — they're separated only because
+  // args.hasPermission must also outrank heuristic 'working' below.
+  if (heuristic === 'permission') {
+    return 'permission'
+  }
+  if (heuristic === 'working') {
+    return 'working'
+  }
+  if (args.hasLiveDone || args.hasRetainedDone) {
+    return 'done'
+  }
+  return heuristic
 }

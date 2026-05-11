@@ -47,7 +47,6 @@ export async function detectConflictOperation(worktreePath: string): Promise<str
 
 export async function getStatusOp(
   git: GitExec,
-  validatePath: (p: string) => void,
   params: Record<string, unknown>
 ): Promise<{
   entries: Record<string, unknown>[]
@@ -56,7 +55,6 @@ export async function getStatusOp(
   branch?: string
 }> {
   const worktreePath = params.worktreePath as string
-  validatePath(worktreePath)
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
   let head: string | undefined

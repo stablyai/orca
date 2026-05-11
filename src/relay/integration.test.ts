@@ -75,7 +75,6 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
 
     // Register handlers on the relay
     const context = new RelayContext()
-    context.registerRoot(tmpDir)
     fsHandler = new FsHandler(dispatcher, context)
     new GitHandler(dispatcher, context)
 

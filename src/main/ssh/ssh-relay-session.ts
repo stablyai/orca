@@ -390,9 +390,10 @@ export class SshRelaySession {
     unregisterSshGitProvider(this.targetId)
   }
 
-  // Why: the relay's RelayContext starts with rootsRegistered=false and rejects
-  // all FS operations until at least one root is registered. This must run
-  // after every relay deploy because each deploy creates a fresh RelayContext.
+  // Why: kept for back-compat with old relay binaries during the upgrade
+  // window — those still gate FS ops on registered roots. New relays no-op
+  // these notifications. Tracked for removal once the relay-version floor
+  // moves past the cutover (see docs/relay-fs-allowlist-removal.md).
   private async registerRelayRoots(mux: SshChannelMultiplexer): Promise<void> {
     const remoteRepos = this.store.getRepos().filter((r) => r.connectionId === this.targetId)
 
