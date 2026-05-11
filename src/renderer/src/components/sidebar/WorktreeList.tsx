@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import React, { useMemo, useCallback, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ChevronDown, CircleX, GripVertical, Plus } from 'lucide-react'
+import { ChevronDown, CircleX, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   getAllWorktreesFromState,
@@ -392,7 +392,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         {repoDrag.state.draggingRepoId !== null && repoDrag.state.dropIndicatorY !== null ? (
           <div
             role="presentation"
-            className="pointer-events-none absolute left-2 right-2 z-10 h-0.5 rounded-full bg-primary"
+            className="pointer-events-none absolute left-2 right-2 z-10 border-t border-dashed border-muted-foreground/70"
             style={{ top: `${repoDrag.state.dropIndicatorY}px` }}
           />
         ) : null}
@@ -410,7 +410,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 key={vItem.key}
                 role="presentation"
                 data-index={vItem.index}
-                data-repo-header-id={repoIdForHeader}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 right-0"
                 style={{ transform: `translateY(${vItem.start}px)` }}
@@ -418,9 +417,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 <div
                   role="button"
                   tabIndex={0}
+                  data-repo-header-id={repoIdForHeader}
                   className={cn(
-                    'group flex h-7 w-full items-center gap-1.5 pl-3 pr-1 text-left transition-all cursor-pointer',
-                    isDraggingThis && 'opacity-50',
+                    'group flex h-7 w-full items-center gap-1.5 pl-3 pr-1 text-left transition-all',
+                    'cursor-pointer',
+                    isDraggingThis &&
+                      'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
                     // First header sits directly under SidebarHeader, which already
                     // supplies its own spacing — only offset secondary group headers.
                     vItem.index !== firstHeaderIndex && 'mt-2',
@@ -434,27 +436,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     }
                   }}
                 >
-                  {isRepoHeader && repoIdForHeader ? (
-                    <div
-                      role="button"
-                      aria-label={`Reorder ${row.label}`}
-                      tabIndex={-1}
-                      // Why: occupies the header's leftmost slot. Stop pointer
-                      // propagation so the header's click-to-collapse handler
-                      // doesn't fire when the user starts a drag.
-                      onPointerDown={(e) => repoDrag.onHandlePointerDown(e, repoIdForHeader)}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                      }}
-                      className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
-                    >
-                      <GripVertical className="size-3.5" />
-                    </div>
-                  ) : null}
-
                   {row.icon ? (
                     <div
+                      onPointerDown={
+                        isRepoHeader && repoIdForHeader
+                          ? (e) => repoDrag.onHandlePointerDown(e, repoIdForHeader)
+                          : undefined
+                      }
                       className={cn(
                         'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
                         row.repo && 'text-muted-foreground'

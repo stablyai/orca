@@ -67,9 +67,8 @@ design-docs/
 .atl/
 
 # Local-only design/planning docs (not checked in)
-docs/*-design.md
-docs/*-plan.md
-docs/design-*.md
+docs/*.md
+!docs/README*.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

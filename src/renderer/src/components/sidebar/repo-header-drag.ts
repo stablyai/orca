@@ -41,10 +41,17 @@ type HeaderRect = {
 
 export type RepoHeaderDragController = {
   state: RepoDragState
-  // Call from the drag handle's onPointerDown. Stops propagation upstream so
-  // the surrounding header click-to-collapse handler does not fire.
+  // Call from the repo header's onPointerDown. The drag does NOT start
+  // immediately — it arms a pending session that promotes to an active drag
+  // only once the pointer moves past DRAG_THRESHOLD_PX. A pointerup before
+  // promotion releases without committing, so the surrounding click handler
+  // still fires and toggles the group's collapsed state.
   onHandlePointerDown: (event: React.PointerEvent<HTMLElement>, repoId: string) => void
 }
+
+// Pixels the pointer must travel before we promote a pending press into a
+// real drag. Below this we treat the press as a normal click (toggle group).
+const DRAG_THRESHOLD_PX = 4
 
 export function useRepoHeaderDrag({
   orderedRepoIds,
@@ -52,6 +59,9 @@ export function useRepoHeaderDrag({
   getScrollContainer
 }: UseRepoHeaderDragArgs): RepoHeaderDragController {
   const [state, setState] = useState<RepoDragState>(INITIAL_STATE)
+  // Tracks whether a press has begun (armed) regardless of promotion. Used
+  // only to gate window listeners; visible drag state lives in `state`.
+  const [sessionArmed, setSessionArmed] = useState(false)
   // Why: endDrag reads dropIndex on pointerup, but binding the listener with
   // dropIndex in deps would re-add window listeners on every pointermove.
   // The ref tracks the latest computed value without invalidating the effect.
@@ -71,6 +81,12 @@ export function useRepoHeaderDrag({
     pointerId: number
     headerRects: HeaderRect[]
     handleEl: HTMLElement
+    startX: number
+    startY: number
+    // false until the pointer moves past DRAG_THRESHOLD_PX. While false the
+    // session exists but no drop indicator is shown and pointerup is treated
+    // as a click rather than a drop.
+    promoted: boolean
   } | null>(null)
 
   const computeDrop = useCallback(
@@ -96,12 +112,16 @@ export function useRepoHeaderDrag({
           break
         }
       }
+      // Why anchor to the target header (not midpoint between headers): the
+      // space between two repo group headers is filled with worktree cards,
+      // so the midpoint falls *inside another repo's content*. Sitting the
+      // indicator just above the target header keeps it at the visual top of
+      // where the dragged group would land.
+      const INDICATOR_GAP_PX = 4
       const indicatorY =
-        insertBefore === 0
-          ? rects[0].top
-          : insertBefore >= rects.length
-            ? rects.at(-1)!.bottom
-            : (rects[insertBefore - 1].bottom + rects[insertBefore].top) / 2
+        insertBefore >= rects.length
+          ? rects.at(-1)!.bottom + INDICATOR_GAP_PX
+          : Math.max(0, rects[insertBefore].top - INDICATOR_GAP_PX)
       return { dropIndex: insertBefore, dropIndicatorY: indicatorY }
     },
     []
@@ -111,6 +131,7 @@ export function useRepoHeaderDrag({
     const session = dragSessionRef.current
     if (!session) {
       setState(INITIAL_STATE)
+      setSessionArmed(false)
       return
     }
     try {
@@ -118,10 +139,36 @@ export function useRepoHeaderDrag({
     } catch {
       // capture may already be released (pointercancel, element unmounted)
     }
+    if (session.promoted) {
+      // After a real drag, the browser still fires a click on the header.
+      // Swallow exactly one click in capture phase so it doesn't toggle the
+      // group's collapsed state. Scope to the dragged handle (and ancestors)
+      // so an unrelated click that races between pointerup and the failsafe
+      // teardown isn't silently eaten.
+      const handleEl = session.handleEl
+      const swallow = (e: MouseEvent): void => {
+        const target = e.target as Node | null
+        if (target && handleEl.contains(target)) {
+          e.stopPropagation()
+          e.preventDefault()
+        }
+        window.removeEventListener('click', swallow, true)
+      }
+      window.addEventListener('click', swallow, true)
+      // Failsafe: if no click ever arrives (e.g. pointercancel), drop the
+      // listener after a tick so future clicks aren't silenced.
+      setTimeout(() => window.removeEventListener('click', swallow, true), 0)
+    }
+    // Only commit a reorder if the press was promoted into a real drag —
+    // otherwise the press was effectively a click, and the surrounding
+    // header onClick handler will toggle collapse.
     const finalIndex =
-      commit && latestDropIndexRef.current !== null ? latestDropIndexRef.current : null
+      commit && session.promoted && latestDropIndexRef.current !== null
+        ? latestDropIndexRef.current
+        : null
     dragSessionRef.current = null
     setState(INITIAL_STATE)
+    setSessionArmed(false)
     if (finalIndex === null) {
       return
     }
@@ -142,16 +189,27 @@ export function useRepoHeaderDrag({
     onCommitRef.current(next)
   }, [])
 
-  // Window-level listeners while dragging — pointer capture on the handle
-  // element ensures the events still fire even if the pointer leaves it.
+  // Window-level listeners while a session is armed — pointer capture on the
+  // header element ensures the events still fire even if the pointer leaves
+  // it. The session may be unpromoted (waiting for a movement past the
+  // threshold to become a real drag) or promoted (drop indicator visible).
   useEffect(() => {
-    if (!state.draggingRepoId) {
+    if (!sessionArmed) {
       return
     }
     const onPointerMove = (e: PointerEvent): void => {
       const session = dragSessionRef.current
       if (!session || e.pointerId !== session.pointerId) {
         return
+      }
+      if (!session.promoted) {
+        const dx = e.clientX - session.startX
+        const dy = e.clientY - session.startY
+        if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+          return
+        }
+        session.promoted = true
+        setState({ draggingRepoId: session.repoId, dropIndex: null, dropIndicatorY: null })
       }
       const drop = computeDrop(e.clientY)
       if (!drop) {
@@ -160,7 +218,7 @@ export function useRepoHeaderDrag({
       setState((prev) =>
         prev.dropIndex === drop.dropIndex && prev.dropIndicatorY === drop.dropIndicatorY
           ? prev
-          : { draggingRepoId: prev.draggingRepoId, ...drop }
+          : { draggingRepoId: session.repoId, ...drop }
       )
     }
     const onPointerUp = (e: PointerEvent): void => {
@@ -196,7 +254,26 @@ export function useRepoHeaderDrag({
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('blur', onBlur)
     }
-  }, [state.draggingRepoId, computeDrop, endDrag])
+  }, [sessionArmed, computeDrop, endDrag])
+
+  // From pointerdown onward (armed session, before/after promotion) force a
+  // grabbing cursor and disable text selection across the whole window so
+  // the user gets immediate feedback that the press registered, even before
+  // they've moved past DRAG_THRESHOLD_PX.
+  useEffect(() => {
+    if (!sessionArmed) {
+      return
+    }
+    const body = document.body
+    const prevCursor = body.style.cursor
+    const prevUserSelect = body.style.userSelect
+    body.style.cursor = 'grabbing'
+    body.style.userSelect = 'none'
+    return () => {
+      body.style.cursor = prevCursor
+      body.style.userSelect = prevUserSelect
+    }
+  }, [sessionArmed])
 
   const onHandlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>, repoId: string) => {
@@ -204,10 +281,13 @@ export function useRepoHeaderDrag({
       if (event.button !== 0) {
         return
       }
-      // Stop the surrounding header's click-to-collapse from firing.
-      event.preventDefault()
-      event.stopPropagation()
-
+      // Don't intercept presses that originated on a nested control (the
+      // `+` create-worktree button or the chevron). Those have their own
+      // click semantics and shouldn't arm a drag.
+      const target = event.target as HTMLElement | null
+      if (target && target !== event.currentTarget && target.closest('button')) {
+        return
+      }
       const container = getContainerRef.current()
       if (!container) {
         return
@@ -244,16 +324,17 @@ export function useRepoHeaderDrag({
         repoId,
         pointerId: event.pointerId,
         headerRects,
-        handleEl
+        handleEl,
+        startX: event.clientX,
+        startY: event.clientY,
+        promoted: false
       }
-      const drop = computeDrop(event.clientY)
-      setState({
-        draggingRepoId: repoId,
-        dropIndex: drop?.dropIndex ?? null,
-        dropIndicatorY: drop?.dropIndicatorY ?? null
-      })
+      // Don't show drag UI yet. Wait for movement past DRAG_THRESHOLD_PX so a
+      // simple click on the header still toggles collapse via the surrounding
+      // onClick handler.
+      setSessionArmed(true)
     },
-    [computeDrop]
+    []
   )
 
   return { state, onHandlePointerDown }
