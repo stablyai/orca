@@ -49,13 +49,11 @@ import type {
   NotificationSoundResult,
   OnboardingState,
   OrcaHooks,
-  PathSource,
   PersistedUIState,
   PRCheckDetail,
   PRComment,
   PRInfo,
   Repo,
-  ShellHydrationFailureReason,
   SparsePreset,
   SearchOptions,
   SearchResult,
@@ -252,15 +250,6 @@ export type RefreshAgentsResult = {
   agents: string[]
   addedPathSegments: string[]
   shellHydrationOk: boolean
-  /** Why: drives the agent_picks `on_path:false` triage in dashboard 1562016
-   *  (insight A). `'shell_hydrate'` = detection saw the user's full shell PATH;
-   *  `'sync_seed_only'` = hydration failed and detection ran against the
-   *  seed list from `patchPackagedProcessPath`. */
-  pathSource: PathSource
-  /** Why: classified hydration outcome. `'none'` on success; one of the failure
-   *  modes when `shellHydrationOk` is false. Typed off the shared alias so
-   *  schema/main/preload/renderer stay in lockstep. */
-  pathFailureReason: ShellHydrationFailureReason
 }
 
 export type PreflightApi = {
@@ -389,7 +378,6 @@ export type PreloadApi = {
       kind?: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
-    reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
       updates: Partial<
@@ -779,6 +767,7 @@ export type PreloadApi = {
     codexStatus: () => Promise<AgentHookInstallStatus>
     geminiStatus: () => Promise<AgentHookInstallStatus>
     cursorStatus: () => Promise<AgentHookInstallStatus>
+    droidStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
     markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }) => Promise<void>
@@ -1237,11 +1226,6 @@ export type PreloadApi = {
         paneKey: string
         tabId?: string
         worktreeId?: string
-        // Why: stamped by main from the SshChannelMultiplexer the event
-        // arrived on (or null for local). The renderer uses it to drop
-        // in-flight events when an SSH connection tears down — see
-        // docs/design/agent-status-over-ssh.md §5.
-        connectionId: string | null
         state: AgentStatusState
         prompt?: string
         agentType?: string

@@ -4,6 +4,7 @@ import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
+import { droidHookService } from '../droid/hook-service'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
@@ -20,6 +21,7 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
+  ipcMain.removeHandler('agentHooks:droidStatus')
 
   // Why: errors from getStatus() (fs permission denied, homedir resolution
   // failure, etc.) must be reported inline via state:'error' so the sidebar can
@@ -71,6 +73,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'cursor',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:droidStatus', (): AgentHookInstallStatus => {
+    try {
+      return droidHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'droid',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
