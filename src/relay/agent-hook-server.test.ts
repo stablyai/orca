@@ -137,6 +137,44 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  // Why: PR2 trusts the relay-side normalization and does NOT re-run the
+  // canonical normalizer in Orca's `ingestRemote`. The safety net that keeps
+  // that trust-model defensible is that a malformed event causes
+  // `normalizeHookPayload` to return null and `handleRequest` to skip the
+  // `forward()` call entirely — nothing reaches the wire. Pin that behavior
+  // so a future relay refactor cannot quietly start forwarding unnormalized
+  // payloads to Orca.
+  it('does not forward when normalizeHookPayload rejects the event', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: 'tab-1:0',
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          // Why: bogus hook_event_name — normalizeClaudeEvent returns null for
+          // any value outside its known set, which propagates up so
+          // normalizeHookPayload returns null.
+          payload: { hook_event_name: 'BogusEvent', prompt: 'ignored' }
+        })
+      })
+      // Why: hook server fails open with 204 even on rejected input — the
+      // contract is "never block the agent", not "tell the agent it lost".
+      expect(res.status).toBe(204)
+      expect(forward).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('exposes ORCA_AGENT_HOOK_* env vars after start', async () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

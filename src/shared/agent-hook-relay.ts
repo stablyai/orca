@@ -10,10 +10,14 @@
 //
 // Per the design doc:
 // - The relay normalizes; Orca routes. The envelope's `payload` field has
-//   already been through `normalizeHookPayload` on the relay side; Orca's
-//   ingestRemote re-runs the canonical normalizer at the trust boundary
-//   (defense-in-depth) before feeding the event into the same `onAgentStatus`
-//   fanout the local HTTP path uses.
+//   already been through `normalizeHookPayload` (which calls
+//   `parseAgentStatusPayload` → `normalizeAgentStatusObject`) on the relay
+//   side, so Orca's `ingestRemote` trusts the wire payload and feeds it into
+//   the same `onAgentStatus` fanout the local HTTP path uses without
+//   re-normalizing. The safety net that keeps "trust the relay" defensible is
+//   that any malformed input on the relay side causes `normalizeHookPayload`
+//   to return null and `RelayAgentHookServer` to skip the forward — nothing
+//   ever reaches `ingestRemote`.
 // - The wire `connectionId` is **always `null`**: a `connectionId` is Orca's
 //   local handle on an `ssh2` connection, not a wire identity. Orca stamps the
 //   real value on receive from `mux` identity inside `ingestRemote`.
@@ -51,8 +55,9 @@ export type AgentHookRelayEnvelope = {
    *  protocol-version diagnostic fire on remote events the same as on local. */
   version?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
-   *  Orca's `ingestRemote` re-validates via `normalizeAgentStatusPayload` at
-   *  the trust boundary as defense-in-depth. */
+   *  Orca's `ingestRemote` trusts this normalization — malformed events never
+   *  reach the wire because `normalizeHookPayload` returning null causes the
+   *  relay's `handleRequest` to skip the `forward()` call. */
   payload: ParsedAgentStatusPayload
 }
 
