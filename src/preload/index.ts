@@ -2309,7 +2309,7 @@ const api = {
         // arrived on (or null for local). The renderer uses it to drop
         // in-flight events when an SSH connection tears down — see
         // docs/design/agent-status-over-ssh.md §5.
-        connectionId?: string | null
+        connectionId: string | null
         state: AgentStatusState
         prompt?: string
         agentType?: string
@@ -2325,7 +2325,7 @@ const api = {
           paneKey: string
           tabId?: string
           worktreeId?: string
-          connectionId?: string | null
+          connectionId: string | null
           state: AgentStatusState
           prompt?: string
           agentType?: string

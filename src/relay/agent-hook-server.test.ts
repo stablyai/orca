@@ -89,6 +89,8 @@ describe('RelayAgentHookServer', () => {
         body: JSON.stringify({
           paneKey: 'tab-1:0',
           tabId: 'tab-1',
+          env: 'remote',
+          version: '1',
           payload: { hook_event_name: 'UserPromptSubmit', prompt: 'cache me' }
         })
       })
@@ -97,6 +99,12 @@ describe('RelayAgentHookServer', () => {
       expect(replayed).toBe(1)
       expect(forward).toHaveBeenCalledTimes(1)
       expect(forward.mock.calls[0][0].payload.prompt).toBe('cache me')
+      // Why: replay must preserve the wire envelope's env/version (and source)
+      // so Orca's warn-once cross-build / dev-vs-prod diagnostics fire on
+      // replayed events the same as on live POST events.
+      expect(forward.mock.calls[0][0].source).toBe('claude')
+      expect(forward.mock.calls[0][0].env).toBe('remote')
+      expect(forward.mock.calls[0][0].version).toBe('1')
     } finally {
       server.stop()
     }

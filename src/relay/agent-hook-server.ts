@@ -62,6 +62,17 @@ export class RelayAgentHookServer {
   private endpointFilePath: string
   private endpointFileWritten = false
   private state: HookListenerState = createHookListenerState()
+  // Why: the shared `HookListenerState.lastStatusByPaneKey` cache only stores
+  // `AgentHookEventPayload` (no wire-envelope fields). Replay must still emit
+  // the original `source`/`env`/`version` so Orca's warn-once diagnostics fire
+  // identically to the live POST path. Keep this as a per-instance sidecar map
+  // so the shared listener type stays unchanged. Invariant: every key present
+  // in `state.lastStatusByPaneKey` must also be present here — populated and
+  // cleared in lockstep on the live POST path, clearPaneState, and stop().
+  private lastEnvelopeMetaByPaneKey: Map<
+    string,
+    { source: AgentHookSource; env?: string; version?: string }
+  > = new Map()
   private forward: RelayHookForward
 
   constructor(options: RelayHookServerOptions) {
@@ -115,6 +126,7 @@ export class RelayAgentHookServer {
     this.token = ''
     this.endpointFileWritten = false
     clearAllListenerCaches(this.state)
+    this.lastEnvelopeMetaByPaneKey.clear()
   }
 
   /** Request-driven replay: walks the per-paneKey last-payload cache and
@@ -125,8 +137,16 @@ export class RelayAgentHookServer {
    *  notifications on the dispatcher's single write callback. */
   replayCachedPayloadsForPanes(): number {
     let count = 0
-    for (const event of this.state.lastStatusByPaneKey.values()) {
-      this.forwardEvent(event)
+    for (const [paneKey, event] of this.state.lastStatusByPaneKey.entries()) {
+      const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
+      // Why: invariant — every paneKey in the shared status cache is populated
+      // in lockstep with `lastEnvelopeMetaByPaneKey`. If meta is missing,
+      // something has drifted; skip rather than fall back to a guessed source
+      // that would mis-tag the event downstream.
+      if (!meta) {
+        continue
+      }
+      this.forwardEvent(event, meta.source, meta.env, meta.version)
       count++
     }
     return count
@@ -137,6 +157,7 @@ export class RelayAgentHookServer {
    *  local server's clearPaneState on PTY teardown. */
   clearPaneState(paneKey: string): void {
     clearPaneCacheState(this.state, paneKey)
+    this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
 
   /** Env vars to inject into every relay-spawned PTY so the hook script /
@@ -190,7 +211,12 @@ export class RelayAgentHookServer {
       const event = normalizeHookPayload(this.state, source, body, this.env)
       if (event) {
         this.state.lastStatusByPaneKey.set(event.paneKey, event)
-        this.forwardEvent(event, source, this.bodyEnv(body), this.bodyVersion(body))
+        // TODO: once normalizeHookPayload returns validated env/version, drop
+        // bodyEnv/bodyVersion and source those from the listener result instead.
+        const env = this.bodyEnv(body)
+        const version = this.bodyVersion(body)
+        this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
+        this.forwardEvent(event, source, env, version)
       }
       res.writeHead(204)
       res.end()
@@ -204,18 +230,12 @@ export class RelayAgentHookServer {
 
   private forwardEvent(
     event: AgentHookEventPayload,
-    source?: AgentHookSource,
+    source: AgentHookSource,
     env?: string,
     version?: string
   ): void {
     const envelope: AgentHookRelayEnvelope = {
-      // Why: when re-emitting from the cache (request-driven replay) we may
-      // not remember the original source — but since the same payload was
-      // produced by the same per-CLI normalizer, we look it up from the
-      // payload's `agentType` field. Falls back to 'claude' if absent — at
-      // worst this routes to the same `onAgentStatus` fanout downstream so
-      // the wire mis-tag is harmless.
-      source: source ?? sourceFromAgentType(event.payload.agentType),
+      source,
       paneKey: event.paneKey,
       tabId: event.tabId,
       worktreeId: event.worktreeId,
@@ -244,16 +264,3 @@ export class RelayAgentHookServer {
   }
 }
 
-function sourceFromAgentType(agentType: string | undefined): AgentHookSource {
-  switch (agentType) {
-    case 'claude':
-    case 'codex':
-    case 'gemini':
-    case 'opencode':
-    case 'cursor':
-    case 'pi':
-      return agentType
-    default:
-      return 'claude'
-  }
-}

@@ -18,6 +18,7 @@ import {
   createHookListenerState,
   getEndpointFileName,
   HOOK_REQUEST_SLOWLORIS_MS,
+  MAX_PANE_KEY_LEN,
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
@@ -27,6 +28,7 @@ import {
   type HookListenerState
 } from '../../shared/agent-hook-listener'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { normalizeAgentStatusPayload } from '../../shared/agent-status-types'
 
 export type { AgentHookSource }
 
@@ -69,35 +71,70 @@ export class AgentHookServer {
   /** Ingest a payload that arrived over the relay JSON-RPC channel rather
    *  than the local HTTP server. `connectionId` is the SshChannelMultiplexer
    *  identity Orca holds (the wire envelope carries connectionId: null and
-   *  Orca stamps the real value here). The relay has already normalized the
-   *  payload via the shared listener module, so we skip re-normalization and
-   *  feed the envelope into the same `onAgentStatus` fanout the HTTP path
-   *  uses. See docs/design/agent-status-over-ssh.md §5. */
+   *  Orca stamps the real value here). The relay pre-normalizes the inner
+   *  payload via the shared listener module; we re-run the canonical
+   *  normalizer here as a defense-in-depth check at the trust boundary
+   *  before feeding the event into the same `onAgentStatus` fanout the HTTP
+   *  path uses. See docs/design/agent-status-over-ssh.md §5. */
   ingestRemote(
     envelope: { paneKey: string; tabId?: string; worktreeId?: string; payload: unknown },
     connectionId: string
   ): void {
+    // Why: signature says non-empty, but the wire crosses a trust boundary —
+    // re-check at runtime (and trim) so a whitespace-only or empty
+    // connectionId can't poison caches.
+    if (typeof connectionId !== 'string') {
+      return
+    }
+    const trimmedConnectionId = connectionId.trim()
+    if (trimmedConnectionId.length === 0) {
+      return
+    }
     if (!envelope || typeof envelope.paneKey !== 'string' || envelope.paneKey.length === 0) {
       return
     }
-    const payload = envelope.payload
-    if (
-      typeof payload !== 'object' ||
-      payload === null ||
-      typeof (payload as { state?: unknown }).state !== 'string'
-    ) {
+    // Why: match the listener's HTTP path — `normalizeHookPayload` trims and
+    // length-caps paneKey before caching, so the cache key here must follow
+    // the same rule or remote-vs-local events for the same pane would diverge.
+    const paneKey = envelope.paneKey.trim()
+    if (paneKey.length === 0 || paneKey.length > MAX_PANE_KEY_LEN) {
+      return
+    }
+    if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
+      return
+    }
+    if (envelope.worktreeId !== undefined && typeof envelope.worktreeId !== 'string') {
+      return
+    }
+    // Why: mirror the HTTP path's `readStringField` behavior — trim and treat
+    // empty-after-trim as undefined rather than letting a literal "" leak
+    // into the event.
+    const tabId =
+      envelope.tabId !== undefined && envelope.tabId.trim().length > 0
+        ? envelope.tabId.trim()
+        : undefined
+    const worktreeId =
+      envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
+        ? envelope.worktreeId.trim()
+        : undefined
+    // Why: the relay is across a trust boundary; re-run the canonical
+    // normalizer on the inner payload so prompt/agentType/toolName/toolInput
+    // length caps, embedded-newline collapse, and the `interrupted`-only-on-
+    // done invariant are enforced here too. Returns null on malformed input
+    // (including invalid state), which subsumes the prior explicit state
+    // check.
+    const normalizedPayload = normalizeAgentStatusPayload(envelope.payload)
+    if (!normalizedPayload) {
       return
     }
     const event: AgentHookEventPayload = {
-      paneKey: envelope.paneKey,
-      tabId: envelope.tabId,
-      worktreeId: envelope.worktreeId,
-      connectionId,
-      // Why: trust the relay-side normalization. The shared listener module
-      // already enforced the field-shape invariants on the remote.
-      payload: payload as AgentHookEventPayload['payload']
+      paneKey,
+      tabId,
+      worktreeId,
+      connectionId: trimmedConnectionId,
+      payload: normalizedPayload
     }
-    this.state.lastStatusByPaneKey.set(event.paneKey, event)
+    this.state.lastStatusByPaneKey.set(paneKey, event)
     this.onAgentStatus?.(event)
   }
 

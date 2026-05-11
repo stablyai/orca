@@ -280,11 +280,11 @@ function openMainWindow(): BrowserWindow {
       return
     }
     mainWindow?.webContents.send('agentStatus:set', {
+      ...payload,
       paneKey,
       tabId,
       worktreeId,
-      connectionId,
-      ...payload
+      connectionId
     })
     // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
     // and opencode's stays bare "OpenCode" — neither carries a working/idle

@@ -43,7 +43,7 @@ export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
 /** Bound paneKey size — `${tabId}:${paneId}` is well under 200 chars in
  *  practice; cap defends per-pane caches against pathological input. */
-const MAX_PANE_KEY_LEN = 200
+export const MAX_PANE_KEY_LEN = 200
 
 /** Per-listener-instance state that holds caches needing per-PTY teardown
  *  (last prompt, last tool snapshot, last status replay). Both Orca's main
@@ -178,7 +178,9 @@ function extractPromptText(hookPayload: Record<string, unknown>): string {
   for (const key of candidateKeys) {
     const value = hookPayload[key]
     if (typeof value === 'string' && value.trim().length > 0) {
-      return value
+      // Why: trim so prompts match what readStringField produces elsewhere —
+      // surrounding whitespace would otherwise leak into UI and caches.
+      return value.trim()
     }
   }
   // Why: OpenCode's plugin sends MessagePart events with { role, text }. When
@@ -187,7 +189,7 @@ function extractPromptText(hookPayload: Record<string, unknown>): string {
   if (hookPayload.role === 'user' && typeof hookPayload.text === 'string') {
     const trimmed = hookPayload.text.trim()
     if (trimmed.length > 0) {
-      return hookPayload.text
+      return trimmed
     }
   }
   return ''
@@ -603,22 +605,27 @@ function extractPiToolFields(
 }
 
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
-  if (source === 'claude') {
-    return eventName === 'UserPromptSubmit'
+  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // typecheck here instead of silently falling through to `false`.
+  switch (source) {
+    case 'claude':
+      return eventName === 'UserPromptSubmit'
+    case 'codex':
+      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
+    case 'gemini':
+      return eventName === 'BeforeAgent'
+    case 'opencode':
+      return false
+    case 'cursor':
+      return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
+    case 'pi':
+      return eventName === 'before_agent_start'
+    default: {
+      const _exhaustive: never = source
+      void _exhaustive
+      return false
+    }
   }
-  if (source === 'codex') {
-    return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
-  }
-  if (source === 'gemini') {
-    return eventName === 'BeforeAgent'
-  }
-  if (source === 'cursor') {
-    return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
-  }
-  if (source === 'pi') {
-    return eventName === 'before_agent_start'
-  }
-  return false
 }
 
 function extractToolFields(
@@ -626,22 +633,27 @@ function extractToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  if (source === 'claude') {
-    return extractClaudeToolFields(eventName, hookPayload)
+  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // typecheck here instead of silently routing through OpenCode's extractor.
+  switch (source) {
+    case 'claude':
+      return extractClaudeToolFields(eventName, hookPayload)
+    case 'codex':
+      return extractCodexToolFields(eventName, hookPayload)
+    case 'gemini':
+      return extractGeminiToolFields(eventName, hookPayload)
+    case 'opencode':
+      return extractOpenCodeToolFields(eventName, hookPayload)
+    case 'cursor':
+      return extractCursorToolFields(eventName, hookPayload)
+    case 'pi':
+      return extractPiToolFields(eventName, hookPayload)
+    default: {
+      const _exhaustive: never = source
+      void _exhaustive
+      return {}
+    }
   }
-  if (source === 'codex') {
-    return extractCodexToolFields(eventName, hookPayload)
-  }
-  if (source === 'gemini') {
-    return extractGeminiToolFields(eventName, hookPayload)
-  }
-  if (source === 'cursor') {
-    return extractCursorToolFields(eventName, hookPayload)
-  }
-  if (source === 'pi') {
-    return extractPiToolFields(eventName, hookPayload)
-  }
-  return extractOpenCodeToolFields(eventName, hookPayload)
 }
 
 function normalizeClaudeEvent(
@@ -988,18 +1000,34 @@ export function normalizeHookPayload(
   const eventName = (hookPayload as Record<string, unknown>).hook_event_name
   const promptText = extractPromptText(hookPayload as Record<string, unknown>)
   const hookPayloadRecord = hookPayload as Record<string, unknown>
-  const payload =
-    source === 'claude'
-      ? normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      : source === 'codex'
-        ? normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-        : source === 'gemini'
-          ? normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-          : source === 'cursor'
-            ? normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-            : source === 'pi'
-              ? normalizePiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-              : normalizeOpenCodeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // typecheck here instead of silently routing through OpenCode's normalizer.
+  let payload: ParsedAgentStatusPayload | null
+  switch (source) {
+    case 'claude':
+      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'codex':
+      payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'gemini':
+      payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'opencode':
+      payload = normalizeOpenCodeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'cursor':
+      payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'pi':
+      payload = normalizePiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    default: {
+      const _exhaustive: never = source
+      void _exhaustive
+      payload = null
+    }
+  }
 
   // Why: connectionId stays null at the listener layer. The local server keeps
   // it null; the relay forwards null on the wire and Orca's `ingestRemote`

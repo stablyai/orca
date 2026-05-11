@@ -64,6 +64,20 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
+  it('trims surrounding whitespace from extracted prompt text', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: 'tab-1:0',
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: '   hi   ' }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.prompt).toBe('hi')
+  })
+
   it('rejects oversized paneKey', () => {
     const event = normalizeHookPayload(
       state,
