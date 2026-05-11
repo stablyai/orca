@@ -1,5 +1,14 @@
 /* eslint-disable max-lines -- Why: the GH item dialog keeps its header, conversation, files, and checks tabs co-located so the read-only PR/Issue surface stays in one place while this view evolves. */
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import {
   AlignJustify,
   ArrowDown,
@@ -509,6 +518,23 @@ type WorkItemDetailsCacheEntry = {
 }
 const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
+// Why: drawers subscribe via useSyncExternalStore so reopening a cached item
+// paints synchronously on first render. Stability of the snapshot relies on
+// every cache write replacing the entry object identity (delete+set), which
+// touchWorkItemDetailsCache already does.
+const workItemDetailsCacheListeners = new Set<() => void>()
+function subscribeWorkItemDetailsCache(listener: () => void): () => void {
+  workItemDetailsCacheListeners.add(listener)
+  return () => {
+    workItemDetailsCacheListeners.delete(listener)
+  }
+}
+function notifyWorkItemDetailsCache(): void {
+  for (const listener of workItemDetailsCacheListeners) {
+    listener()
+  }
+}
+
 function getWorkItemDetailsCacheKey(args: {
   repoPath: string
   issueSourcePreference: string | undefined
@@ -532,13 +558,20 @@ function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry
     }
     workItemDetailsCache.delete(oldest)
   }
+  notifyWorkItemDetailsCache()
 }
 
 // Why: exposed so mutation handlers (in this file and elsewhere) can drop a
 // stale entry after a successful local mutation. Cross-window invalidation
 // arrives via the `gh:workItemMutated` event listener installed below.
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  workItemDetailsCache.delete(key)
+  // Why: bump generation so an in-flight fetch launched before this exact-key
+  // invalidation will not write its stale result back into the cache.
+  workItemDetailsCacheGeneration += 1
+  const existed = workItemDetailsCache.delete(key)
+  if (existed) {
+    notifyWorkItemDetailsCache()
+  }
 }
 
 // Why: monotonically increases on every invalidation so an in-flight refetch
@@ -559,10 +592,15 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
   workItemDetailsCacheGeneration += 1
   const suffix = `\0${args.type}\0${args.number}`
   const prefix = `${args.repoPath}\0`
+  let removed = false
   for (const key of Array.from(workItemDetailsCache.keys())) {
     if (key.startsWith(prefix) && key.endsWith(suffix)) {
       workItemDetailsCache.delete(key)
+      removed = true
     }
+  }
+  if (removed) {
+    notifyWorkItemDetailsCache()
   }
 }
 
@@ -2397,9 +2435,6 @@ export default function GitHubItemDialog({
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
   const [tab, setTab] = useState<ItemDialogTab>('conversation')
-  const [details, setDetails] = useState<GitHubWorkItemDetails | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('flat')
@@ -2439,7 +2474,6 @@ export default function GitHubItemDialog({
     }
   }, [workItemId, workItemState, workItemLabels])
 
-  const requestIdRef = useRef(0)
   // Why: track comments added optimistically before the detail fetch resolves
   // so they can be merged into the fetch result instead of being overwritten.
   const optimisticCommentsRef = useRef<PRComment[]>([])
@@ -2477,22 +2511,62 @@ export default function GitHubItemDialog({
     }
   }, [workItem])
 
+  // Why: subscribe to the module-level cache so reopening a cached item
+  // paints synchronously on first render. getSnapshot returns the entry
+  // object directly — touchWorkItemDetailsCache writes always replace entry
+  // identity (delete+set), so Map.get is referentially stable between writes.
+  const cachedEntry = useSyncExternalStore(
+    subscribeWorkItemDetailsCache,
+    useCallback(
+      () => (detailsCacheKey ? workItemDetailsCache.get(detailsCacheKey) : undefined),
+      [detailsCacheKey]
+    )
+  )
+
+  // Why: merge optimistic comments into the cached details. Keyed off
+  // cachedEntry identity (stable) rather than the optimistic ref array (a
+  // fresh array each render) to avoid unnecessary recomputation. Cache
+  // notifications after optimistic writes will re-render this anyway.
+  const details = useMemo<GitHubWorkItemDetails | null>(() => {
+    const cachedDetails = cachedEntry?.details ?? null
+    if (!cachedDetails) {
+      return null
+    }
+    const opt = optimisticCommentsRef.current
+    if (opt.length === 0) {
+      return cachedDetails
+    }
+    const ids = new Set(cachedDetails.comments.map((c) => c.id))
+    const missing = opt.filter((c) => !ids.has(c.id))
+    if (missing.length === 0) {
+      return cachedDetails
+    }
+    return { ...cachedDetails, comments: [...cachedDetails.comments, ...missing] }
+  }, [cachedEntry])
+
+  const loading = !!cachedEntry?.pending && !cachedEntry?.details
+  const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
+
+  // Why: if a cross-window mutation invalidates the open drawer's entry
+  // (cachedEntry becomes undefined while workItem is still set), the main
+  // fetch effect won't re-run because its deps haven't changed. Bump a local
+  // tick so the fetch effect fires a refetch in that case.
+  const [refetchTick, setRefetchTick] = useState(0)
+  useEffect(() => {
+    if (workItem && detailsCacheKey && !cachedEntry) {
+      setRefetchTick((n) => n + 1)
+    }
+  }, [workItem, detailsCacheKey, cachedEntry])
+
   useEffect(() => {
     if (!workItem || !repoPath || !detailsCacheKey) {
-      setDetails(null)
-      setError(null)
       return
     }
-    // Why: if the user clicks through several rows quickly, discard stale
-    // responses by tagging each request with a monotonic id and only applying
-    // results whose id matches the latest one.
-    requestIdRef.current += 1
-    const requestId = requestIdRef.current
     // Why: only clear optimistic comments when switching to a genuinely
     // different item. When reopening the same item (close → reopen), the
     // gh API's 60s response cache will return stale data that omits the
     // just-posted comment — preserving the optimistic ref lets the merge
-    // logic below re-attach it to the stale response.
+    // logic above re-attach it to the stale response.
     if (workItem.id !== prevItemIdRef.current) {
       optimisticCommentsRef.current = []
     }
@@ -2502,28 +2576,6 @@ export default function GitHubItemDialog({
     const cached = workItemDetailsCache.get(detailsCacheKey)
     const now = Date.now()
     const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
-
-    // Why: paint cached data immediately when we have it so reopen feels
-    // instant. Only fall back to a blocking spinner when there's nothing to
-    // show. Optimistic comments still merge below for both paths.
-    if (cached?.details) {
-      const opt = optimisticCommentsRef.current
-      let painted = cached.details
-      if (opt.length > 0) {
-        const ids = new Set(painted.comments.map((c) => c.id))
-        const missing = opt.filter((c) => !ids.has(c.id))
-        if (missing.length > 0) {
-          painted = { ...painted, comments: [...painted.comments, ...missing] }
-        }
-      }
-      setDetails(painted)
-      setError(null)
-      setLoading(false)
-    } else {
-      setDetails(null)
-      setError(null)
-      setLoading(true)
-    }
 
     if (hasFreshData) {
       return
@@ -2557,13 +2609,16 @@ export default function GitHubItemDialog({
     inflight
       .then((result) => {
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
+        const prev = workItemDetailsCache.get(detailsCacheKey)
+        if (invalidatedMidFlight) {
+          // Why: entry was deliberately dropped; do not recreate it. If the
+          // entry still exists (later open repopulated it) leave it alone too.
+          return
+        }
         // Why: 404/unauthorized must not overwrite valid cached data. When the
         // IPC resolves to null and we already have cached details, keep the
         // stale data — only blank entries get the null payload.
-        const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (invalidatedMidFlight) {
-          // Skip cache write entirely — the entry was deliberately dropped.
-        } else if (result === null && prev?.details) {
+        if (result === null && prev?.details) {
           touchWorkItemDetailsCache(detailsCacheKey, {
             details: prev.details,
             fetchedAt: prev.fetchedAt,
@@ -2576,53 +2631,24 @@ export default function GitHubItemDialog({
             error: undefined
           })
         }
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        // Why: merge any comments the user posted optimistically while the
-        // detail fetch was in-flight, using id to avoid duplicates.
-        const opt = optimisticCommentsRef.current
-        let merged = result
-        if (opt.length > 0 && merged) {
-          const fetchedIds = new Set(merged.comments.map((c: PRComment) => c.id))
-          const missing = opt.filter((c) => !fetchedIds.has(c.id))
-          if (missing.length > 0) {
-            merged = { ...merged, comments: [...merged.comments, ...missing] }
-          }
-        }
-        if (merged !== null || !cached?.details) {
-          setDetails(merged)
-        }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : 'Failed to load details'
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
+        if (invalidatedMidFlight) {
+          return
+        }
         const prev = workItemDetailsCache.get(detailsCacheKey)
         // Why: stale-on-error — keep cached data if we have it, drop the
         // pending promise so the next open can retry. Only surface the
-        // blocking error when nothing is cached. If invalidated mid-flight,
-        // don't restore stale data into the now-empty entry.
-        if (!invalidatedMidFlight) {
-          touchWorkItemDetailsCache(detailsCacheKey, {
-            details: prev?.details ?? null,
-            fetchedAt: prev?.fetchedAt ?? 0,
-            error: message
-          })
-        }
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        if (!prev?.details) {
-          setError(message)
-        }
+        // blocking error when nothing is cached.
+        touchWorkItemDetailsCache(detailsCacheKey, {
+          details: prev?.details ?? null,
+          fetchedAt: prev?.fetchedAt ?? 0,
+          error: message
+        })
       })
-      .finally(() => {
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        setLoading(false)
-      })
-  }, [repoPath, workItem, detailsCacheKey])
+  }, [repoPath, workItem, detailsCacheKey, refetchTick])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const body = details?.body ?? ''
@@ -2636,25 +2662,11 @@ export default function GitHubItemDialog({
       // that overwrites the optimistic comment. The next dialog open (after
       // cache expiry) will pick up the server-confirmed version.
       optimisticCommentsRef.current.push(comment)
-      setDetails((prev) => {
-        if (prev) {
-          return { ...prev, comments: [...prev.comments, comment] }
-        }
-        if (!workItem) {
-          return prev
-        }
-        // Why: details may still be loading — create a minimal shell
-        // so the optimistic comment isn't silently dropped.
-        return {
-          item: workItem,
-          body: '',
-          comments: [comment]
-        }
-      })
-      // Why: keep the module-level cache in sync so a reopen paints the new
-      // comment without waiting on a refetch. Mark fetchedAt as stale (0) so
-      // the next open still triggers a background refresh to pick up
-      // server-side fields like reaction groups or thread bindings.
+      // Why: write through the module-level cache so subscribers (this
+      // drawer plus any concurrent ones on the same item) re-render with the
+      // optimistic comment. Mark fetchedAt as stale (0) so the next open
+      // still triggers a background refresh to pick up server-side fields
+      // like reaction groups or thread bindings.
       if (detailsCacheKey) {
         const prev = workItemDetailsCache.get(detailsCacheKey)
         if (prev?.details) {
@@ -2667,9 +2679,12 @@ export default function GitHubItemDialog({
             })
           }
         }
+        // Why: when the cache has no details yet (still loading), the
+        // optimistic comment is held only in optimisticCommentsRef and will
+        // be merged once the in-flight fetch lands and writes details.
       }
     },
-    [workItem, detailsCacheKey]
+    [detailsCacheKey]
   )
 
   return (
