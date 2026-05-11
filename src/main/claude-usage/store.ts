@@ -100,10 +100,19 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (lower.includes('sonnet-3-7') || lower.includes('sonnet-3.7')) {
     return 'claude-sonnet-3-7'
   }
+  // Why: legacy version-first IDs like `claude-3-5-sonnet-20241022` are still
+  // present in historical Claude Code/SDK logs read off disk. Match them so
+  // their cost is not silently dropped from the breakdown.
+  if (lower.includes('3-5-sonnet') || lower.includes('3.5-sonnet')) {
+    return 'claude-sonnet-3-7'
+  }
   if (lower.includes('haiku-4-5')) {
     return 'claude-haiku-4-5'
   }
   if (lower.includes('haiku-3-5') || lower.includes('haiku-3.5')) {
+    return 'claude-haiku-3-5'
+  }
+  if (lower.includes('3-5-haiku') || lower.includes('3.5-haiku')) {
     return 'claude-haiku-3-5'
   }
   if (lower.includes('haiku-3')) {
