@@ -116,8 +116,6 @@
 
 .markdown-body h2 {
   font-size: 1.4em;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.3em;
 }
 
 .markdown-body h3 {
