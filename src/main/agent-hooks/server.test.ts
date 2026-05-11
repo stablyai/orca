@@ -228,6 +228,9 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
       expect(warn.mock.calls.length).toBe(warnsAfterFirst)
+      // Why: pin both invariants — warn-once dedupe AND fanout still fires for
+      // the second event. Without the second assertion, a future refactor that
+      // drops the second event silently would still leave warn-count unchanged.
       expect(listener).toHaveBeenCalledTimes(2)
     } finally {
       server.stop()

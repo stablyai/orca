@@ -155,6 +155,15 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
   })
 
   it('replays the cached last-status on agent_hook.requestReplay', async () => {
+    // Why: register the listener BEFORE the initial POST so live notifications
+    // are observed. setListener on a non-empty cache replays cached entries
+    // synchronously; if we set it AFTER the POST drains, the assertion below
+    // would pass without the relay's replay actually crossing the wire.
+    const events: { paneKey: string; payload: unknown }[] = []
+    orcaServer.setListener((event) => {
+      events.push({ paneKey: event.paneKey, payload: event.payload })
+    })
+
     const { port, token } = hookServer.getCoordinates()
     await fetch(`http://127.0.0.1:${port}/hook/claude`, {
       method: 'POST',
@@ -168,25 +177,27 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       })
     })
 
-    // Drain the initial notification so the replay test below isn't
-    // confounded by the first POST's live event.
-    await new Promise((r) => setTimeout(r, 50))
-
-    const events: { paneKey: string; payload: unknown }[] = []
-    orcaServer.setListener((event) => {
-      events.push({ paneKey: event.paneKey, payload: event.payload })
-    })
+    // Why: spin until the live notification arrives so the replay request
+    // below produces a strictly-second event in `events`.
+    const liveStart = Date.now()
+    while (events.length === 0 && Date.now() - liveStart < 1500) {
+      await new Promise((r) => setImmediate(r))
+    }
+    expect(events).toHaveLength(1)
 
     const result = (await mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD)) as {
       replayed: number
     }
     expect(result.replayed).toBe(1)
 
-    const start = Date.now()
-    while (events.length === 0 && Date.now() - start < 1500) {
+    // Why: relay-side replay produces a fresh notification; spin until it
+    // arrives so the assertion below proves the round-trip (relay → wire →
+    // mux → ingestRemote → listener) rather than just the relay-side count.
+    const replayStart = Date.now()
+    while (events.length < 2 && Date.now() - replayStart < 1500) {
       await new Promise((r) => setImmediate(r))
     }
-    expect(events.length).toBeGreaterThanOrEqual(1)
-    expect(events[0].paneKey).toBe('tab-9:0')
+    expect(events).toHaveLength(2)
+    expect(events[1].paneKey).toBe('tab-9:0')
   })
 })

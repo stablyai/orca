@@ -145,6 +145,27 @@ export class PtyHandler {
     }
   }
 
+  /** Build the augmented spawn env. Augmenter values override `process.env`
+   *  and any renderer-supplied env (the augmenter contract — see
+   *  addEnvAugmenter doc-comment). Used by both spawn() and revive() so the
+   *  relationship between process.env, renderer env, and augmenters cannot
+   *  drift between the two paths — revived shells after a relay restart must
+   *  see the fresh ORCA_AGENT_HOOK_* coords just like freshly-spawned ones,
+   *  otherwise agent-status over SSH silently breaks on every revive. */
+  private buildSpawnEnv(rendererEnv?: Record<string, string>): Record<string, string> {
+    const augmented: Record<string, string> = {}
+    for (const augmenter of this.envAugmenters) {
+      try {
+        Object.assign(augmented, augmenter())
+      } catch (err) {
+        process.stderr.write(
+          `[pty-handler] env augmenter threw: ${err instanceof Error ? err.message : String(err)}\n`
+        )
+      }
+    }
+    return { ...process.env, ...rendererEnv, ...augmented } as Record<string, string>
+  }
+
   /** Wire onData/onExit listeners for a managed PTY and store it. */
   private wireAndStore(managed: ManagedPty): void {
     this.ptys.set(managed.id, managed)
@@ -239,17 +260,9 @@ export class PtyHandler {
 
     // Why: server-side augmenter values (ORCA_AGENT_HOOK_*) override any
     // renderer-supplied env so the live hook-server coords always reach the
-    // agent CLI — they come from the relay, not the renderer.
-    const augmented: Record<string, string> = {}
-    for (const augmenter of this.envAugmenters) {
-      try {
-        Object.assign(augmented, augmenter())
-      } catch (err) {
-        process.stderr.write(
-          `[pty-handler] env augmenter threw: ${err instanceof Error ? err.message : String(err)}\n`
-        )
-      }
-    }
+    // agent CLI — they come from the relay, not the renderer. See
+    // buildSpawnEnv for the precedence contract.
+    const spawnEnv = this.buildSpawnEnv(env)
 
     // Why: SSH exec channels give the relay a minimal environment without
     // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
@@ -259,7 +272,7 @@ export class PtyHandler {
       cols,
       rows,
       cwd,
-      env: { ...process.env, ...env, ...augmented } as Record<string, string>
+      env: spawnEnv
     })
 
     // Why: capture the renderer-supplied paneKey on the managed entry so the
@@ -495,12 +508,18 @@ export class PtyHandler {
       if (!ptyMod) {
         continue
       }
+      // Why: revive must apply the same env augmenters as spawn(), otherwise
+      // a relay restart (which rebinds the hook server on a fresh port/token)
+      // produces revived shells that lack ORCA_AGENT_HOOK_* and cannot reach
+      // the loopback receiver — silent end-to-end break of agent-status over
+      // SSH. No renderer env is passed: the revived shell wasn't spawned with
+      // a renderer-supplied env stash to replay.
       const term = ptyMod.spawn(resolveDefaultShell(), ['-l'], {
         name: 'xterm-256color',
         cols: entry.cols,
         rows: entry.rows,
         cwd: entry.cwd,
-        env: process.env as Record<string, string>
+        env: this.buildSpawnEnv()
       })
       this.wireAndStore({
         id: entry.id,

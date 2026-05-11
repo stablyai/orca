@@ -409,10 +409,14 @@ describe('PtyHandler', () => {
     })
   })
 
-  it('applies env augmenters after process.env and renderer-supplied env', async () => {
+  it('applies env augmenters after process.env and renderer-supplied env (augmenter wins on key conflict)', async () => {
     handler.addEnvAugmenter(() => ({
       ORCA_AGENT_HOOK_PORT: '12345',
-      ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
+      ORCA_AGENT_HOOK_TOKEN: 'abc-uuid',
+      // Why: also override a key the renderer supplied below so the test pins
+      // the documented "augmenter wins on key conflict" invariant — see the
+      // doc-comment on addEnvAugmenter in pty-handler.ts.
+      ORCA_PANE_KEY: 'augmenter-wins'
     }))
 
     await dispatcher.callRequest('pty.spawn', {
@@ -423,9 +427,12 @@ describe('PtyHandler', () => {
 
     expect(mockPtySpawn).toHaveBeenCalled()
     const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
-    expect(callArgs.env.ORCA_PANE_KEY).toBe('tab-1:0')
     expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+    // Augmenter override beats the renderer-supplied value:
+    expect(callArgs.env.ORCA_PANE_KEY).toBe('augmenter-wins')
+    // Renderer-supplied keys not in augmenter map flow through:
+    expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
   })
 
   it('invokes the exit listener with the spawn-time paneKey', async () => {
