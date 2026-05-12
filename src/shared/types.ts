@@ -655,7 +655,14 @@ export type GitHubPRRefreshEvent = {
   outcome?: PRRefreshOutcome
   status?: 'queued' | 'in-flight' | 'paused' | 'skipped'
   pausedUntil?: number
-  skippedReason?: 'fresh' | 'not-git' | 'bare' | 'archived' | 'disconnected' | 'rate-limit'
+  skippedReason?:
+    | 'fresh'
+    | 'not-git'
+    | 'bare'
+    | 'archived'
+    | 'disconnected'
+    | 'remote'
+    | 'rate-limit'
 }
 
 export type PRCheckDetail = {

@@ -111,6 +111,9 @@ export default function ChecksPanel(): React.JSX.Element {
   const isFolder = repo ? isFolderRepo(repo) : false
   const prCacheKey = repo && branch ? `${repo.id}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
+  const prRefreshState = useAppStore((s) =>
+    prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
+  )
   const prNumber = pr?.number ?? null
   const remoteStatus = activeWorktreeId ? remoteStatusesByWorktree[activeWorktreeId] : undefined
   const hasUncommittedChanges = activeWorktreeId
@@ -521,43 +524,25 @@ export default function ChecksPanel(): React.JSX.Element {
     isCurrentAsyncResult
   ])
 
-  const handleEntryRefresh = useCallback(async () => {
-    if (!repo || !branch || !activeWorktreeId) {
-      return
-    }
-    // Why: entering the Checks tab is automatic UI behavior, not an explicit
-    // user refresh. Route PR refresh through the coordinator so rate-limit
-    // guards still apply, while checks/comments can refresh from cached PR data.
-    enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
-
-    if (!pr) {
-      setChecks([])
-      setComments([])
-      return
-    }
-
-    const refreshedChecks = fetchPRChecks(repo.path, pr.number, branch, pr.headSha, pr.prRepo, {
-      force: true,
-      repoId: repo.id
-    }).then(
-      (result) => {
-        setChecks(result)
-        const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
-        pollIntervalRef.current =
-          signature === prevChecksRef.current
-            ? Math.min(pollIntervalRef.current * 2, 120_000)
-            : 30_000
-        prevChecksRef.current = signature
-      },
-      (err) => {
-        console.warn('Failed to fetch PR checks:', err)
-        setChecks([])
+  const handleEntryRefresh = useCallback(
+    (options: { refreshChecks: boolean; refreshComments: boolean }) => {
+      if (!repo || !branch || !activeWorktreeId) {
+        return
       }
-    )
-    setChecksLoading(true)
-    const refreshedComments = fetchComments({ force: true, prNumberOverride: pr.number })
-    await Promise.all([refreshedChecks.finally(() => setChecksLoading(false)), refreshedComments])
-  }, [repo, branch, activeWorktreeId, enqueueGitHubPRRefresh, pr, fetchPRChecks, fetchComments])
+      // Why: entering the Checks tab is automatic UI behavior, not an explicit
+      // user refresh. Route PR refresh through the coordinator so rate-limit
+      // guards still apply; only force detail panes that the entry freshness rule
+      // already proved stale, so tab entry stays fresh without broad fan-out.
+      enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
+      if (options.refreshChecks) {
+        void fetchChecks({ force: true })
+      }
+      if (options.refreshComments) {
+        void fetchComments({ force: true })
+      }
+    },
+    [repo, branch, activeWorktreeId, enqueueGitHubPRRefresh, fetchChecks, fetchComments]
+  )
 
   // Why: force a freshness check on each "entry" into the Checks tab so PRs
   // opened outside Orca, externally force-pushed heads, and stale checks/comments
@@ -582,23 +567,29 @@ export default function ChecksPanel(): React.JSX.Element {
     }
     lastEntryKeyRef.current = entryKey
 
+    const now = Date.now()
     const stale = shouldEntryRefresh({
       prFetchedAt,
       checksFetchedAt,
       commentsFetchedAt,
       prNumber,
-      now: Date.now(),
+      now,
       graceMs: ENTRY_REFRESH_GRACE_MS
     })
     if (!stale) {
       return
     }
+    const cutoff = now - ENTRY_REFRESH_GRACE_MS
+    const refreshChecks =
+      prNumber !== null && (checksFetchedAt === undefined || checksFetchedAt < cutoff)
+    const refreshComments =
+      prNumber !== null && (commentsFetchedAt === undefined || commentsFetchedAt < cutoff)
 
     // Reset polling attention state so the forced fetch's signature establishes
     // a fresh baseline rather than colliding with the previous PR's backoff.
     pollIntervalRef.current = 30_000
     prevChecksRef.current = ''
-    void handleEntryRefresh()
+    handleEntryRefresh({ refreshChecks, refreshComments })
   }, [entryKey, prFetchedAt, checksFetchedAt, commentsFetchedAt, prNumber, handleEntryRefresh])
 
   const handleStartEdit = useCallback(() => {
@@ -894,6 +885,10 @@ export default function ChecksPanel(): React.JSX.Element {
           : conflictOperation === 'cherry-pick'
             ? 'Cherry-pick'
             : null
+    const isQueuedPRRefresh = prRefreshState?.status === 'queued'
+    const isInFlightPRRefresh = prRefreshState?.status === 'in-flight'
+    const isCheckingPR = isQueuedPRRefresh || isInFlightPRRefresh
+    const isPausedPRRefresh = prRefreshState?.status === 'paused'
 
     const canCreate = hostedReviewCreation?.canCreate
     const canPushCreate = hostedReviewCreation?.blockedReason === 'needs_push'
@@ -916,14 +911,26 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
         <div className="px-4 py-6">
           <div className="text-sm font-medium text-foreground">
-            {operationInProgress ? `${operationLabel} in progress` : 'No pull request found'}
+            {operationInProgress
+              ? `${operationLabel} in progress`
+              : isQueuedPRRefresh
+                ? 'Refresh queued'
+                : isInFlightPRRefresh
+                  ? 'Checking for pull request'
+                  : 'No pull request found'}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {operationInProgress
               ? 'PR checks will be available after the operation completes'
-              : canPushCreate
-                ? 'Push your branch before creating a pull request.'
-                : 'Create a pull request to start checks and review.'}
+              : isQueuedPRRefresh
+                ? 'GitHub status will refresh shortly'
+                : isInFlightPRRefresh
+                  ? 'Refreshing GitHub status for this branch'
+                  : isPausedPRRefresh
+                    ? 'GitHub refresh is paused by the current rate-limit budget'
+                    : canPushCreate
+                      ? 'Push your branch before creating a pull request.'
+                      : 'Create a pull request to start checks and review.'}
           </div>
           {!operationInProgress && (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -941,7 +948,7 @@ export default function ChecksPanel(): React.JSX.Element {
               <Button
                 size="xs"
                 variant="outline"
-                disabled={emptyRefreshing}
+                disabled={emptyRefreshing || isCheckingPR || isPausedPRRefresh}
                 onClick={() => {
                   if (!activeWorktreeId) {
                     return
@@ -952,7 +959,13 @@ export default function ChecksPanel(): React.JSX.Element {
                   })
                 }}
               >
-                {emptyRefreshing ? 'Refreshing…' : 'Refresh'}
+                {isQueuedPRRefresh
+                  ? 'Queued'
+                  : emptyRefreshing || isInFlightPRRefresh
+                    ? 'Refreshing…'
+                    : isPausedPRRefresh
+                      ? 'Paused'
+                      : 'Refresh'}
               </Button>
             </div>
           )}
@@ -1040,7 +1053,7 @@ export default function ChecksPanel(): React.JSX.Element {
         {/* Updated at */}
         {pr.updatedAt && (
           <div className="text-[10px] text-muted-foreground/60">
-            Updated {new Date(pr.updatedAt).toLocaleString()}
+            PR updated {new Date(pr.updatedAt).toLocaleString()}
           </div>
         )}
 

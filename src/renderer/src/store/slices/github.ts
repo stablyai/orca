@@ -1432,6 +1432,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       try {
         const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
+        const usesRefreshCoordinator = !runtimeRepo && Boolean(window.api.gh.refreshPRNow)
         const outcome = runtimeRepo
           ? await callRuntimeRpc<PRInfo | null>(
               runtimeRepo.target,
@@ -1466,7 +1467,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             })()
         const pr: PRInfo | null =
           outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
-        if (prRequestGenerations.get(cacheKey) === generation) {
+        if (!usesRefreshCoordinator && prRequestGenerations.get(cacheKey) === generation) {
           if (outcome.kind !== 'upstream-error') {
             set((s) => ({
               prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: outcome.fetchedAt } }

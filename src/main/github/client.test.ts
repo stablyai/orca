@@ -530,6 +530,43 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('uses linked PR number as the source of truth when provided', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 77,
+        title: 'Linked PR lookup',
+        state: 'OPEN',
+        url: 'https://github.com/acme/widgets/pull/77',
+        statusCheckRollup: [],
+        updatedAt: '2026-03-28T00:00:00Z',
+        isDraft: false,
+        mergeable: 'MERGEABLE',
+        baseRefName: 'main',
+        headRefName: 'contributor/original',
+        baseRefOid: 'base-oid',
+        headRefOid: 'head-oid'
+      })
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'refs/heads/local-created-from-pr', 77)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'pr',
+        'view',
+        '77',
+        '--repo',
+        'acme/widgets',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr?.number).toBe(77)
+  })
+
   it('falls back to gh pr view when the remote cannot be resolved to GitHub', async () => {
     getOwnerRepoMock.mockResolvedValueOnce(null)
     ghExecFileAsyncMock.mockResolvedValueOnce({

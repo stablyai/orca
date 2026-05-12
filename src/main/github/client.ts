@@ -67,9 +67,24 @@ import {
   deriveCheckStatus
 } from './mappers'
 import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './comment-reactions'
-import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
+import {
+  getRateLimit,
+  noteRateLimitSpend,
+  rateLimitGuard,
+  type RateLimitBucketKind
+} from './rate-limit'
 
 const ORCA_REPO = 'stablyai/orca'
+
+async function assertRateLimitBudget(bucket: RateLimitBucketKind): Promise<void> {
+  await getRateLimit()
+  const guard = rateLimitGuard(bucket)
+  if (guard.blocked) {
+    throw new Error(
+      `GitHub ${bucket} rate limit is low; retry after ${new Date(guard.resetAt * 1000).toLocaleTimeString()}`
+    )
+  }
+}
 
 type PRBranchData = {
   number: number
@@ -1632,23 +1647,6 @@ async function getPRByNumber(
   }
 }
 
-async function exactPRMatchesWorktreeHead(
-  repoPath: string,
-  branchName: string,
-  data: PullRequestLookupData,
-  connectionId?: string | null
-): Promise<boolean> {
-  if (!connectionId && data.headRefOid) {
-    try {
-      const { stdout } = await gitExecFileAsync(['rev-parse', 'HEAD'], { cwd: repoPath })
-      return stdout.trim() === data.headRefOid
-    } catch {
-      return false
-    }
-  }
-  return !branchName || data.headRefName === branchName
-}
-
 function isNotFoundGhError(err: unknown): boolean {
   const stderr = err instanceof Error ? err.message : String(err)
   return classifyGhError(stderr).type === 'not_found'
@@ -1664,10 +1662,10 @@ function shouldStopAfterExactLookupError(err: unknown): boolean {
  * Get PR info for a given branch using gh CLI.
  * Returns null if gh is not installed, or no PR exists for the branch.
  *
- * When `linkedPRNumber` is provided and the repo identity is known, starts
- * with a direct PR-number lookup. This handles "create from PR" worktrees,
- * whose branch is a fresh local branch, and avoids spending a branch-list
- * request before asking for the exact PR the worktree already stores.
+ * When `linkedPRNumber` is provided, it is the source of truth. This handles
+ * "create from PR" worktrees whose local branch differs from the PR head ref,
+ * and prevents a coalesced linked-PR refresh from fanning out an unrelated
+ * branch lookup result to sibling aliases.
  */
 export async function getPRForBranch(
   repoPath: string,
@@ -1698,8 +1696,6 @@ export async function getPRForBranchOutcome(
     const { candidates, headRepo } = await resolvePRRepositoryCandidates(repoPath, connectionId)
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null
-    let exactLinkedData: PullRequestLookupData | null = null
-    let exactLinkedRepo: OwnerRepo | null = null
 
     if (typeof linkedPRNumber === 'number') {
       for (const candidate of candidates) {
@@ -1708,25 +1704,41 @@ export async function getPRForBranchOutcome(
           if (!linkedData) {
             continue
           }
-          if (await exactPRMatchesWorktreeHead(repoPath, branchName, linkedData, connectionId)) {
-            data = linkedData
-            dataRepo = candidate
-            break
+          data = linkedData
+          dataRepo = candidate
+          break
+        } catch (err) {
+          if (shouldStopAfterExactLookupError(err)) {
+            throw err
           }
-          // Why: linked PR metadata is user-editable. If the stored number still
-          // resolves but no longer matches this worktree, let branch lookup correct it.
-          exactLinkedData ??= linkedData
-          exactLinkedRepo ??= candidate
-        } catch {
           // Candidate probing is best-effort; another repo may own the PR.
         }
       }
-    }
 
-    // During a rebase the worktree is in detached HEAD and branch is empty.
-    // An empty --head filter causes gh to return an arbitrary PR — skip the
-    // branch lookup and rely on the linkedPR fallback below if available.
-    if (!data && branchName) {
+      if (!data && candidates.length === 0) {
+        const args = ['pr', 'view', String(linkedPRNumber), '--json', PR_LOOKUP_JSON_FIELDS]
+        try {
+          const { stdout } = await ghExecFileAsync(args, ghOptions)
+          data = JSON.parse(stdout)
+        } catch (err) {
+          if (!isNoPullRequestError(err)) {
+            return {
+              kind: 'upstream-error',
+              errorType: classifyPRRefreshError(err),
+              message: err instanceof Error ? err.message : String(err),
+              fetchedAt: Date.now()
+            }
+          }
+          // Why: a stale linkedPRNumber (PR deleted, wrong repo, ...) makes
+          // `gh pr view <number>` reject. Treat that as the no-PR case so
+          // callers see the historical `null` semantics instead of a thrown
+          // error every poll cycle.
+          data = null
+        }
+      }
+    } else if (branchName) {
+      // During a rebase the worktree is in detached HEAD and branch is empty.
+      // An empty --head filter causes gh to return an arbitrary PR.
       if (candidates.length > 0) {
         for (const candidate of candidates) {
           try {
@@ -1767,34 +1779,6 @@ export async function getPRForBranchOutcome(
         }
       }
     }
-
-    if (!data && candidates.length === 0 && typeof linkedPRNumber === 'number') {
-      const args = ['pr', 'view', String(linkedPRNumber), '--json', PR_LOOKUP_JSON_FIELDS]
-      try {
-        const { stdout } = await ghExecFileAsync(args, ghOptions)
-        data = JSON.parse(stdout)
-      } catch (err) {
-        if (!isNoPullRequestError(err)) {
-          return {
-            kind: 'upstream-error',
-            errorType: classifyPRRefreshError(err),
-            message: err instanceof Error ? err.message : String(err),
-            fetchedAt: Date.now()
-          }
-        }
-        // Why: a stale linkedPRNumber (PR deleted, wrong repo, …) makes
-        // `gh pr view <number>` reject. Treat that as the no-PR case so
-        // callers see the historical `null` semantics instead of a thrown
-        // error every poll cycle.
-        data = null
-      }
-    }
-
-    if (!data && exactLinkedData) {
-      data = exactLinkedData
-      dataRepo = exactLinkedRepo
-    }
-
     if (!data) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
@@ -1852,6 +1836,12 @@ export async function getPRChecks(
 ): Promise<PRCheckDetail[]> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
   const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  if (ownerRepo && headSha) {
+    await assertRateLimitBudget('core')
+  }
+  // Why: even the REST check-runs path can fall back to `gh pr checks`, so
+  // guard GraphQL before acquiring the global gh lock.
+  await assertRateLimitBudget('graphql')
   const fallbackToPRChecks = async (): Promise<PRCheckDetail[]> => {
     const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
     if (ownerRepo) {
@@ -1866,6 +1856,7 @@ export async function getPRChecks(
       }
       throw err
     })
+    noteRateLimitSpend('graphql')
     const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
     return data.map((d) => ({
       name: d.name,
@@ -1890,6 +1881,7 @@ export async function getPRChecks(
           ],
           ghOptions
         )
+        noteRateLimitSpend('core')
         const data = JSON.parse(stdout) as {
           check_runs: {
             id?: number
@@ -2241,6 +2233,10 @@ export async function getPRComments(
 ): Promise<PRComment[]> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
   const ownerRepo = options?.prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  if (ownerRepo) {
+    await assertRateLimitBudget('core')
+  }
+  await assertRateLimitBudget('graphql')
   await acquire()
   try {
     if (ownerRepo) {
@@ -2290,6 +2286,8 @@ export async function getPRComments(
           ghOptions
         )
       ])
+      noteRateLimitSpend('core', 2)
+      noteRateLimitSpend('graphql')
 
       // Parse issue comments (REST)
       type RESTComment = {
@@ -2441,6 +2439,7 @@ export async function getPRComments(
       ['pr', 'view', String(prNumber), '--json', 'comments'],
       ghOptions
     )
+    noteRateLimitSpend('graphql')
     const data = JSON.parse(stdout) as {
       comments: {
         author: { login: string }

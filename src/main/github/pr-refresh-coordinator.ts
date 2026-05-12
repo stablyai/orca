@@ -118,6 +118,9 @@ function validateCandidate(
   if (candidate.isArchived) {
     return 'archived'
   }
+  if (candidate.connectionId && candidate.connectionState === 'connected') {
+    return 'remote'
+  }
   if (candidate.connectionId && candidate.connectionState === 'disconnected') {
     return 'disconnected'
   }
@@ -469,6 +472,12 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
     branch: candidate.branch,
     worktreeId: candidate.worktreeId
   }
+  const key = refreshKey(candidate)
+  const existing = queue.get(key)
+  const aliases = existing ? Array.from(existing.aliases.values()) : [alias]
+  if (!aliases.some((entry) => entry.cacheKey === alias.cacheKey)) {
+    aliases.push(alias)
+  }
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
     const outcome: PRRefreshOutcome = {
@@ -477,20 +486,21 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
       message: `Cannot refresh PR for this worktree: ${skippedReason}`,
       fetchedAt: Date.now()
     }
-    broadcast({ aliases: [alias], reason: 'manual', status: 'skipped', skippedReason })
+    broadcast({ aliases, reason: 'manual', status: 'skipped', skippedReason })
     return outcome
   }
 
-  queue.delete(refreshKey(candidate))
+  queue.delete(key)
   const requestSequence = nextSequence()
-  broadcast({ aliases: [alias], reason: 'manual', status: 'in-flight' }, requestSequence)
+  broadcast({ aliases, reason: 'manual', status: 'in-flight' }, requestSequence)
   const outcome = await getPRForBranchOutcome(
     candidate.repoPath,
     candidate.branch,
     candidate.linkedPRNumber ?? null,
     candidate.connectionId ?? null
   )
-  broadcast({ aliases: [alias], reason: 'manual', outcome }, requestSequence)
-  scheduleVisibleFollowUp(refreshKey(candidate), candidate, outcome, 40, [alias])
+  outcomeObserver?.(candidate, outcome)
+  broadcast({ aliases, reason: 'manual', outcome }, requestSequence)
+  scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases)
   return outcome
 }
