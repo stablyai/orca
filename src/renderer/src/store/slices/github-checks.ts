@@ -39,6 +39,7 @@ export function syncPRChecksStatus(
   repoId: string | undefined,
   branch: string | undefined,
   checks: PRCheckDetail[],
+  headSha?: string,
   prRepo?: GitHubOwnerRepo | null
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
@@ -53,7 +54,10 @@ export function syncPRChecksStatus(
   }
   // Why: fork PR rediscovery can retarget the branch cache while an older
   // checks request is still in flight; only the matching PR repo may update it.
-  if (!samePRRepo(prEntry.data.prRepo, prRepo)) {
+  if (prRepo !== undefined && !samePRRepo(prEntry.data.prRepo, prRepo)) {
+    return null
+  }
+  if (headSha && prEntry.data.headSha && prEntry.data.headSha !== headSha) {
     return null
   }
 

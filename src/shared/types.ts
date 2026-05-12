@@ -608,6 +608,56 @@ export type PRInfo = {
   conflictSummary?: PRConflictSummary
 }
 
+export type PRRefreshOutcome =
+  | { kind: 'found'; pr: PRInfo; fetchedAt: number }
+  | { kind: 'no-pr'; fetchedAt: number }
+  | {
+      kind: 'upstream-error'
+      errorType:
+        | 'rate_limited'
+        | 'auth'
+        | 'network'
+        | 'permission'
+        | 'repo_unavailable'
+        | 'gh_unavailable'
+        | 'unknown'
+      message: string
+      fetchedAt: number
+    }
+
+export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr'
+
+export type GitHubPRRefreshAlias = {
+  cacheKey: string
+  repoPath: string
+  branch: string
+  worktreeId?: string
+}
+
+export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
+  linkedPRNumber?: number | null
+  repoKind: RepoKind
+  repoId: string
+  isBare?: boolean
+  isArchived?: boolean
+  connectionId?: string | null
+  connectionState?: 'connected' | 'disconnected' | 'unknown'
+  cachedFetchedAt?: number | null
+  cachedHasPR?: boolean | null
+  cachedPRState?: PRState | null
+  cachedChecksStatus?: CheckStatus | null
+}
+
+export type GitHubPRRefreshEvent = {
+  sequence: number
+  reason: GitHubPRRefreshReason
+  aliases: GitHubPRRefreshAlias[]
+  outcome?: PRRefreshOutcome
+  status?: 'queued' | 'in-flight' | 'paused' | 'skipped'
+  pausedUntil?: number
+  skippedReason?: 'fresh' | 'not-git' | 'bare' | 'archived' | 'disconnected' | 'rate-limit'
+}
+
 export type PRCheckDetail = {
   name: string
   status: 'queued' | 'in_progress' | 'completed'

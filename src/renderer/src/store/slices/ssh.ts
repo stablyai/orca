@@ -74,8 +74,15 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   setSshConnectionState: (targetId, state) =>
     set((s) => {
       const next = new Map(s.sshConnectionStates)
+      const previous = next.get(targetId)
       next.set(targetId, state)
-      return { sshConnectionStates: next }
+      return {
+        sshConnectionStates: next,
+        sshConnectedGeneration:
+          previous?.status !== 'connected' && state.status === 'connected'
+            ? s.sshConnectedGeneration + 1
+            : s.sshConnectedGeneration
+      }
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),

@@ -366,6 +366,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const [pinDragOver, setPinDragOver] = useState(false)
   const [lineageReconnectWorktreeId, setLineageReconnectWorktreeId] = useState<string | null>(null)
   const canReorderRepoHeaders = groupBy === 'repo' && repoGroupOrdering === 'manual'
+  const lastVisibleRefreshKeyRef = useRef('')
+  const reportVisibleGitHubPRRefreshCandidates = useAppStore(
+    (s) => s.reportVisibleGitHubPRRefreshCandidates
+  )
+  const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
 
   // Drag is only meaningful when repo headers are using manual order. The
   // controller is still constructed for hook order stability when inert.
@@ -841,6 +847,43 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     },
     [markDirectScrollInput]
   )
+
+  useEffect(() => {
+    if (!cardProps.includes('pr') && !cardProps.includes('ci')) {
+      if (lastVisibleRefreshKeyRef.current !== '__hidden__') {
+        lastVisibleRefreshKeyRef.current = '__hidden__'
+        reportVisibleGitHubPRRefreshCandidates([], Date.now())
+      }
+      return
+    }
+    const scrollEl = scrollRef.current
+    if (!scrollEl) {
+      return
+    }
+    const viewportTop = scrollEl.scrollTop
+    const viewportBottom = viewportTop + scrollEl.clientHeight
+    const visibleRows = virtualItems
+      .filter((item) => item.start < viewportBottom && item.end > viewportTop)
+      .map((item) => renderRows[item.index])
+      .filter((row): row is Extract<Row, { type: 'item' }> => row?.type === 'item')
+      .filter((row) => row.repo?.kind === 'git' && !row.worktree.isBare && row.worktree.branch)
+    const visibleWorktreeIds = visibleRows.map((row) => row.worktree.id)
+    const visibleIdentity = visibleRows
+      .map((row) => `${row.worktree.id}:${row.worktree.branch}:${row.worktree.linkedPR ?? ''}`)
+      .join('|')
+    const key = `${visibleIdentity}:${sshConnectedGeneration}:${cardProps.join(',')}`
+    if (!key || key === lastVisibleRefreshKeyRef.current) {
+      return
+    }
+    lastVisibleRefreshKeyRef.current = key
+    reportVisibleGitHubPRRefreshCandidates(visibleWorktreeIds, Date.now())
+  }, [
+    cardProps,
+    renderRows,
+    reportVisibleGitHubPRRefreshCandidates,
+    sshConnectedGeneration,
+    virtualItems
+  ])
 
   const activeDescendantId =
     activeWorktreeId != null &&

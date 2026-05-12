@@ -16,6 +16,9 @@ import type {
   CustomPet,
   FsChangedPayload,
   GetRateLimitResult,
+  GitHubPRRefreshCandidate,
+  GitHubPRRefreshEvent,
+  GitHubPRRefreshReason,
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
@@ -767,6 +770,27 @@ const api = {
       branch: string
       linkedPRNumber?: number | null
     }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
+
+    refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
+      ipcRenderer.invoke('gh:refreshPRNow', args),
+
+    enqueuePRRefresh: (args: {
+      candidate: GitHubPRRefreshCandidate
+      reason: GitHubPRRefreshReason
+      priority?: number
+    }): Promise<unknown> => ipcRenderer.invoke('gh:enqueuePRRefresh', args),
+
+    reportVisiblePRRefreshCandidates: (args: {
+      candidates: GitHubPRRefreshCandidate[]
+      generation: number
+    }): Promise<unknown> => ipcRenderer.invoke('gh:reportVisiblePRRefreshCandidates', args),
+
+    onPRRefreshEvent: (callback: (event: GitHubPRRefreshEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, event: GitHubPRRefreshEvent): void =>
+        callback(event)
+      ipcRenderer.on('gh:prRefreshEvent', listener)
+      return () => ipcRenderer.removeListener('gh:prRefreshEvent', listener)
+    },
 
     issue: (args: { repoPath: string; repoId?: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:issue', args),

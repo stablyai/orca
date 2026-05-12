@@ -6,6 +6,7 @@ import type {
   IssueSourcePreference,
   ListWorkItemsResult,
   PRInfo,
+  PRRefreshOutcome,
   PRMergeableState,
   PRCheckDetail,
   PRCheckRunDetails,
@@ -69,6 +70,51 @@ import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './com
 import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 
 const ORCA_REPO = 'stablyai/orca'
+
+type PRBranchData = {
+  number: number
+  title: string
+  state: string
+  url: string
+  statusCheckRollup: unknown[]
+  updatedAt: string
+  isDraft?: boolean
+  mergeable: string
+  baseRefName?: string
+  headRefName?: string
+  baseRefOid?: string
+  headRefOid?: string
+}
+
+function classifyPRRefreshError(
+  err: unknown
+): Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType'] {
+  const message = err instanceof Error ? err.message : String(err)
+  const lower = message.toLowerCase()
+  if (lower.includes('rate limit')) {
+    return 'rate_limited'
+  }
+  if (
+    lower.includes('timeout') ||
+    lower.includes('no such host') ||
+    lower.includes('network') ||
+    lower.includes('could not resolve host')
+  ) {
+    return 'network'
+  }
+  if (lower.includes('http 403') || lower.includes('resource not accessible')) {
+    return 'permission'
+  }
+  if (lower.includes('http 404') || lower.includes('could not resolve to a repository')) {
+    return 'repo_unavailable'
+  }
+  return /auth|login|credential/i.test(message) ? 'auth' : 'unknown'
+}
+
+function isNoPullRequestError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /no pull requests? found|could not find.*pull request/i.test(message)
+}
 
 /**
  * Check if the authenticated user has starred the Orca repo.
@@ -1629,10 +1675,20 @@ export async function getPRForBranch(
   linkedPRNumber?: number | null,
   connectionId?: string | null
 ): Promise<PRInfo | null> {
+  const outcome = await getPRForBranchOutcome(repoPath, branch, linkedPRNumber, connectionId)
+  return outcome.kind === 'found' ? outcome.pr : null
+}
+
+export async function getPRForBranchOutcome(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber?: number | null,
+  connectionId?: string | null
+): Promise<PRRefreshOutcome> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && typeof linkedPRNumber !== 'number') {
-    return null
+    return { kind: 'no-pr', fetchedAt: Date.now() }
   }
   const context = githubRepoContext(repoPath, connectionId)
   const ghOptions = ghRepoExecOptions(context)
@@ -1696,11 +1752,19 @@ export async function getPRForBranch(
           }
         }
       } else {
-        const { stdout } = await ghExecFileAsync(
-          ['pr', 'view', branchName, '--json', PR_LOOKUP_JSON_FIELDS],
-          ghOptions
-        )
-        data = JSON.parse(stdout)
+        try {
+          const { stdout } = await ghExecFileAsync(
+            ['pr', 'view', branchName, '--json', PR_LOOKUP_JSON_FIELDS],
+            ghOptions
+          )
+          data = JSON.parse(stdout)
+        } catch (err) {
+          if (isNoPullRequestError(err)) {
+            data = null
+          } else {
+            throw err
+          }
+        }
       }
     }
 
@@ -1709,7 +1773,15 @@ export async function getPRForBranch(
       try {
         const { stdout } = await ghExecFileAsync(args, ghOptions)
         data = JSON.parse(stdout)
-      } catch {
+      } catch (err) {
+        if (!isNoPullRequestError(err)) {
+          return {
+            kind: 'upstream-error',
+            errorType: classifyPRRefreshError(err),
+            message: err instanceof Error ? err.message : String(err),
+            fetchedAt: Date.now()
+          }
+        }
         // Why: a stale linkedPRNumber (PR deleted, wrong repo, …) makes
         // `gh pr view <number>` reject. Treat that as the no-PR case so
         // callers see the historical `null` semantics instead of a thrown
@@ -1724,7 +1796,7 @@ export async function getPRForBranch(
     }
 
     if (!data) {
-      return null
+      return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
     const conflictSummary =
@@ -1737,20 +1809,29 @@ export async function getPRForBranch(
         : undefined
 
     return {
-      number: data.number,
-      title: data.title,
-      state: mapPRState(data.state, data.isDraft),
-      url: data.url,
-      checksStatus: deriveCheckStatus(data.statusCheckRollup),
-      updatedAt: data.updatedAt,
-      mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN',
-      headSha: data.headRefOid,
-      prRepo: dataRepo ?? undefined,
-      headRepo: headRepo ?? undefined,
-      conflictSummary
+      kind: 'found',
+      fetchedAt: Date.now(),
+      pr: {
+        number: data.number,
+        title: data.title,
+        state: mapPRState(data.state, data.isDraft),
+        url: data.url,
+        checksStatus: deriveCheckStatus(data.statusCheckRollup),
+        updatedAt: data.updatedAt,
+        mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN',
+        headSha: data.headRefOid,
+        prRepo: dataRepo ?? undefined,
+        headRepo: headRepo ?? undefined,
+        conflictSummary
+      }
     }
-  } catch {
-    return null
+  } catch (err) {
+    return {
+      kind: 'upstream-error',
+      errorType: classifyPRRefreshError(err),
+      message: err instanceof Error ? err.message : String(err),
+      fetchedAt: Date.now()
+    }
   } finally {
     release()
   }

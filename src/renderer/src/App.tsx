@@ -241,6 +241,7 @@ function App(): React.JSX.Element {
       fetchSettings: s.fetchSettings,
       initGitHubCache: s.initGitHubCache,
       refreshAllGitHub: s.refreshAllGitHub,
+      reportVisibleGitHubPRRefreshCandidates: s.reportVisibleGitHubPRRefreshCandidates,
       hydrateWorkspaceSession: s.hydrateWorkspaceSession,
       hydrateTabsSession: s.hydrateTabsSession,
       hydrateEditorSession: s.hydrateEditorSession,
@@ -927,6 +928,8 @@ function App(): React.JSX.Element {
     const handler = (): void => {
       if (document.visibilityState === 'visible') {
         actions.refreshAllGitHub()
+      } else {
+        actions.reportVisibleGitHubPRRefreshCandidates([], Date.now())
       }
     }
     document.addEventListener('visibilitychange', handler)
