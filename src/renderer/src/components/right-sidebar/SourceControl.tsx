@@ -436,6 +436,8 @@ function SourceControlInner(): React.JSX.Element {
     (s) => s.getHostedReviewCreationEligibility
   )
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
+  const prCache = useAppStore((s) => s.prCache)
+  const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
@@ -773,8 +775,12 @@ function SourceControlInner(): React.JSX.Element {
   const hostedReviewEntry = hostedReviewCacheKey
     ? hostedReviewCache[hostedReviewCacheKey]
     : undefined
+  const activePrCacheKey = activeRepo && branchName ? `${activeRepo.id}::${branchName}` : null
+  const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? (hostedReviewEntry?.data ?? null)
+    ? activePrFromQueue
+      ? { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
+      : (hostedReviewEntry?.data ?? null)
     : null
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
@@ -790,7 +796,14 @@ function SourceControlInner(): React.JSX.Element {
     (linkedGitHubPR !== null || linkedGitLabMR !== null) &&
     hostedReviewEntry === undefined
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
+    if (
+      !isBranchVisible ||
+      !activeRepo ||
+      isFolder ||
+      !branchName ||
+      branchName === 'HEAD' ||
+      !activeWorktreeId
+    ) {
       return
     }
     // Why: the Source Control panel renders branch review status directly.
@@ -804,9 +817,14 @@ function SourceControlInner(): React.JSX.Element {
       linkedGitLabMR,
       staleWhileRevalidate: true
     })
+    // Why: the GitHub-specific cache powers grouping/check panels; keep that
+    // refresh behind the coordinator so Source Control does not bypass pacing.
+    enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
   }, [
     activeRepo,
+    activeWorktreeId,
     branchName,
+    enqueueGitHubPRRefresh,
     fetchHostedReviewForBranch,
     isBranchVisible,
     isFolder,

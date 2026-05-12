@@ -48,7 +48,8 @@ import {
 import {
   enqueuePRRefresh,
   refreshPRNow,
-  reportVisiblePRRefreshCandidates
+  reportVisiblePRRefreshCandidates,
+  setPRRefreshOutcomeObserver
 } from '../github/pr-refresh-coordinator'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
@@ -153,6 +154,15 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     }
   }
 
+  setPRRefreshOutcomeObserver((candidate, outcome) => {
+    const repo =
+      store.getRepos().find((r) => r.id === candidate.repoId) ??
+      store.getRepos().find((r) => resolve(r.path) === resolve(candidate.repoPath))
+    if (repo) {
+      recordPRIfNeeded(repo, outcome)
+    }
+  })
+
   ipcMain.handle(
     'gh:prForBranch',
     async (_event, args: { repoPath: string; branch: string; linkedPRNumber?: number | null }) => {
@@ -199,7 +209,11 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       }
     ) => {
       const repo = assertRegisteredRepo(args.candidate.repoPath, store)
-      enqueuePRRefresh({ ...args.candidate, repoPath: repo.path }, args.reason, args.priority ?? 0)
+      enqueuePRRefresh(
+        { ...args.candidate, repoPath: repo.path, repoId: repo.id },
+        args.reason,
+        args.priority ?? 0
+      )
       return true
     }
   )
@@ -209,7 +223,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     (event, args: { candidates: GitHubPRRefreshCandidate[]; generation: number }) => {
       const candidates = args.candidates.map((candidate) => {
         const repo = assertRegisteredRepo(candidate.repoPath, store)
-        return { ...candidate, repoPath: repo.path }
+        return { ...candidate, repoPath: repo.path, repoId: repo.id }
       })
       reportVisiblePRRefreshCandidates(candidates, args.generation, event.sender.id)
       return true

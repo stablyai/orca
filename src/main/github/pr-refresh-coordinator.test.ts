@@ -125,4 +125,51 @@ describe('pr-refresh-coordinator', () => {
     expect(inFlightEvents.map((event) => event.reason)).toEqual(['visible', 'active'])
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
+
+  it('preserves coalesced aliases across visible follow-up refreshes', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'pending' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success' }),
+        fetchedAt: Date.now()
+      })
+
+    reportVisiblePRRefreshCandidates(
+      [
+        makeCandidate({
+          cacheKey: '/repo::feature/a',
+          branch: 'feature/a',
+          linkedPRNumber: 12,
+          worktreeId: 'wt-a'
+        }),
+        makeCandidate({
+          cacheKey: '/repo::feature/b',
+          branch: 'feature/b',
+          linkedPRNumber: 12,
+          worktreeId: 'wt-b'
+        })
+      ],
+      1,
+      1
+    )
+    await vi.runOnlyPendingTimersAsync()
+    await vi.advanceTimersByTimeAsync(90_000)
+
+    const outcomeEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.outcome)
+
+    expect(outcomeEvents).toHaveLength(2)
+    expect(outcomeEvents[1].aliases.map((alias) => alias.cacheKey).sort()).toEqual([
+      '/repo::feature/a',
+      '/repo::feature/b'
+    ])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
 })

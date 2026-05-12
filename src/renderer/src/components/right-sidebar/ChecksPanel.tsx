@@ -153,10 +153,12 @@ export default function ChecksPanel(): React.JSX.Element {
     []
   )
   useEffect(() => {
-    if (repo && !isFolder && branch) {
-      void fetchPRForBranch(repo.path, branch, { repoId: repo.id, linkedPRNumber: linkedPR })
+    if (isPanelVisible && repo && !isFolder && branch) {
+      if (activeWorktreeId) {
+        enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
+      }
     }
-  }, [repo, isFolder, branch, linkedPR, fetchPRForBranch])
+  }, [repo, isFolder, branch, activeWorktreeId, enqueueGitHubPRRefresh, isPanelVisible])
 
   useEffect(() => {
     if (!repo || isFolder || !branch || !isPanelVisible) {
@@ -203,7 +205,14 @@ export default function ChecksPanel(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!repo || isFolder || !branch || !pr || pr.mergeable !== 'CONFLICTING') {
+    if (
+      !repo ||
+      isFolder ||
+      !branch ||
+      !pr ||
+      pr.mergeable !== 'CONFLICTING' ||
+      !activeWorktreeId
+    ) {
       conflictSummaryRefreshKeyRef.current = null
       setConflictDetailsRefreshing(false)
       return
@@ -232,7 +241,7 @@ export default function ChecksPanel(): React.JSX.Element {
         setConflictDetailsRefreshing(false)
       }
     })
-  }, [repo, isFolder, branch, pr, linkedPR, fetchPRForBranch])
+  }, [repo, isFolder, branch, pr, activeWorktreeId, linkedPR, fetchPRForBranch])
 
   // Fetch checks via cached store method
   const fetchChecks = useCallback(

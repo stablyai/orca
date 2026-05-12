@@ -22,6 +22,11 @@ type QueueEntry = {
   windowId?: number
 }
 
+type PRRefreshOutcomeObserver = (
+  candidate: GitHubPRRefreshCandidate,
+  outcome: PRRefreshOutcome
+) => void
+
 const MIN_BACKGROUND_REFRESH_AGE_MS = 60_000
 const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
 const MIN_BACKGROUND_SPACING_MS = 10_000
@@ -38,6 +43,11 @@ const backgroundStarts: number[] = []
 const errorBackoff = new Map<string, { failures: number; retryAt: number }>()
 let lastBackgroundStartAt = 0
 const visibleByWindow = new Map<number, { generation: number; keys: Set<string> }>()
+let outcomeObserver: PRRefreshOutcomeObserver | null = null
+
+export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
+  outcomeObserver = observer
+}
 
 function nextSequence(): number {
   sequence += 1
@@ -187,7 +197,21 @@ function scheduleVisibleFollowUp(
     return
   }
   errorBackoff.delete(key)
-  enqueuePRRefresh(visibleCandidateAfterOutcome(candidate, outcome), 'visible', priority, windowId)
+  const followUpCandidate = visibleCandidateAfterOutcome(candidate, outcome)
+  const dueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+  // Why: coalesced linked-PR refreshes may represent several local branches.
+  // Preserve every alias for the next visible follow-up so all cache entries
+  // keep receiving periodic updates.
+  queue.set(key, {
+    key,
+    candidate: followUpCandidate,
+    aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
+    reason: 'visible',
+    priority,
+    dueAt,
+    windowId
+  })
+  scheduleDrain(Math.max(0, dueAt - Date.now()))
 }
 
 function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): number {
@@ -341,6 +365,7 @@ async function drainQueue(): Promise<void> {
         next.candidate.linkedPRNumber ?? null,
         next.candidate.connectionId ?? null
       )
+      outcomeObserver?.(next.candidate, outcome)
       broadcast({ aliases, reason: next.reason, outcome }, requestSequence)
       scheduleVisibleFollowUp(
         next.key,
