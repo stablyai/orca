@@ -736,10 +736,7 @@ jobs:
           }
 
           $latestYml = Get-Content -Path 'dist/latest.yml' -Raw
-          $latestYml = [regex]::Replace($latestYml, '(?m)^(\s*)sha512: .+$', {
-            param($match)
-            "$($match.Groups[1].Value)sha512: $hash"
-          })
+          $latestYml = $latestYml -replace '(?m)^sha512: .+$', "sha512: $hash"
           $latestYml = $latestYml -replace '(?m)^    size: \d+$', "    size: $($installer.Length)"
           $latestYml = $latestYml -replace '(?m)^    blockMapSize: \d+$', "    blockMapSize: $($blockmap.Length)"
           Set-Content -Path 'dist/latest.yml' -Value $latestYml -NoNewline
