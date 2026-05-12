@@ -127,7 +127,10 @@ function shouldSkipFresh(
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
 }
 
-function shouldBroadcastQueued(dueAt: number): boolean {
+function shouldBroadcastQueued(reason: GitHubPRRefreshReason, dueAt: number): boolean {
+  if (isBudgetedBackground(reason)) {
+    return false
+  }
   return dueAt - Date.now() <= 5_000
 }
 
@@ -400,9 +403,9 @@ export function enqueuePRRefresh(
       windowId
     })
   }
-  // Why: freshness follow-ups can be scheduled minutes out. Only immediate
-  // queueing should surface in the card UI as pending work.
-  if (shouldBroadcastQueued(dueAt)) {
+  // Why: visible/SWR refreshes are background maintenance and may sit behind
+  // the budget queue. Only user/action-driven queueing should surface in UI.
+  if (shouldBroadcastQueued(reason, dueAt)) {
     broadcast({ aliases: [alias], reason, status: 'queued' })
   }
   scheduleDrain()

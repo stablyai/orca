@@ -78,7 +78,7 @@ describe('pr-refresh-coordinator', () => {
     vi.useRealTimers()
   })
 
-  it('does not show a delayed visible follow-up as queued after a successful refresh', async () => {
+  it('does not show visible background refreshes as queued', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock.mockResolvedValueOnce({
       kind: 'found',
@@ -93,8 +93,7 @@ describe('pr-refresh-coordinator', () => {
       .map(([, event]) => event)
       .filter((event) => event.status === 'queued')
 
-    expect(queuedEvents).toHaveLength(1)
-    expect(queuedEvents[0].reason).toBe('visible')
+    expect(queuedEvents).toHaveLength(0)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 
