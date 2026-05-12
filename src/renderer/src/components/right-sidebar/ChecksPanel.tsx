@@ -44,6 +44,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const getHostedReviewCreationEligibility = useAppStore(
     (s) => s.getHostedReviewCreationEligibility
   )
+  const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
@@ -511,6 +512,44 @@ export default function ChecksPanel(): React.JSX.Element {
     isCurrentAsyncResult
   ])
 
+  const handleEntryRefresh = useCallback(async () => {
+    if (!repo || !branch || !activeWorktreeId) {
+      return
+    }
+    // Why: entering the Checks tab is automatic UI behavior, not an explicit
+    // user refresh. Route PR refresh through the coordinator so rate-limit
+    // guards still apply, while checks/comments can refresh from cached PR data.
+    enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
+
+    if (!pr) {
+      setChecks([])
+      setComments([])
+      return
+    }
+
+    const refreshedChecks = fetchPRChecks(repo.path, pr.number, branch, pr.headSha, pr.prRepo, {
+      force: true,
+      repoId: repo.id
+    }).then(
+      (result) => {
+        setChecks(result)
+        const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
+        pollIntervalRef.current =
+          signature === prevChecksRef.current
+            ? Math.min(pollIntervalRef.current * 2, 120_000)
+            : 30_000
+        prevChecksRef.current = signature
+      },
+      (err) => {
+        console.warn('Failed to fetch PR checks:', err)
+        setChecks([])
+      }
+    )
+    setChecksLoading(true)
+    const refreshedComments = fetchComments({ force: true, prNumberOverride: pr.number })
+    await Promise.all([refreshedChecks.finally(() => setChecksLoading(false)), refreshedComments])
+  }, [repo, branch, activeWorktreeId, enqueueGitHubPRRefresh, pr, fetchPRChecks, fetchComments])
+
   // Why: force a freshness check on each "entry" into the Checks tab so PRs
   // opened outside Orca, externally force-pushed heads, and stale checks/comments
   // appear without waiting for the cache TTL. The grace window suppresses
@@ -550,8 +589,8 @@ export default function ChecksPanel(): React.JSX.Element {
     // a fresh baseline rather than colliding with the previous PR's backoff.
     pollIntervalRef.current = 30_000
     prevChecksRef.current = ''
-    void handleRefresh()
-  }, [entryKey, prFetchedAt, checksFetchedAt, commentsFetchedAt, prNumber, handleRefresh])
+    void handleEntryRefresh()
+  }, [entryKey, prFetchedAt, checksFetchedAt, commentsFetchedAt, prNumber, handleEntryRefresh])
 
   const handleStartEdit = useCallback(() => {
     if (!pr) {
