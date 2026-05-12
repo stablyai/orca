@@ -14,7 +14,8 @@ vi.mock('electron', () => {
       isPackaged: false,
       commandLine: {
         appendSwitch: vi.fn(),
-        getSwitchValue: vi.fn(() => '')
+        getSwitchValue: vi.fn(() => ''),
+        hasSwitch: vi.fn(() => false)
       }
     }
   }
@@ -246,13 +247,84 @@ describe('installDevParentWatchdog', () => {
   })
 })
 
-describe('enableMainProcessGpuFeatures', () => {
+describe('configureMainProcessGpuFeatures', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  const originalSessionType = process.env.XDG_SESSION_TYPE
+  const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+  function setPlatform(platform: NodeJS.Platform): void {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: platform
+    })
+  }
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (originalSessionType === undefined) {
+      delete process.env.XDG_SESSION_TYPE
+    } else {
+      process.env.XDG_SESSION_TYPE = originalSessionType
+    }
+    if (originalWaylandDisplay === undefined) {
+      delete process.env.WAYLAND_DISPLAY
+    } else {
+      process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+    }
+  })
+
+  it('disables GPU compositing on Linux Wayland sessions to avoid terminal WebGL artifacts', async () => {
+    const { app } = await import('electron')
+    const { configureMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    process.env.XDG_SESSION_TYPE = 'wayland'
+    delete process.env.WAYLAND_DISPLAY
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.hasSwitch).mockReturnValue(false)
+    configureMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-compositing')
+  })
+
+  it('does not disable GPU compositing outside Linux Wayland sessions', async () => {
+    const { app } = await import('electron')
+    const { configureMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    process.env.XDG_SESSION_TYPE = 'x11'
+    delete process.env.WAYLAND_DISPLAY
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.hasSwitch).mockReturnValue(false)
+    configureMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-compositing')
+  })
+
+  it('keeps an explicit GPU compositing command-line switch authoritative', async () => {
+    const { app } = await import('electron')
+    const { configureMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    process.env.XDG_SESSION_TYPE = 'wayland'
+    delete process.env.WAYLAND_DISPLAY
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.hasSwitch).mockImplementation(
+      (switchName) => switchName === 'enable-gpu-compositing'
+    )
+    configureMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-compositing')
+  })
+
   it('appends VS Code-style GPU channel flags without unsafe WebGPU/Vulkan opt-ins', async () => {
     const { app } = await import('electron')
-    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const { configureMainProcessGpuFeatures } = await import('./configure-process')
 
     vi.mocked(app.commandLine.appendSwitch).mockClear()
-    enableMainProcessGpuFeatures()
+    configureMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'enable-features',
@@ -263,11 +335,11 @@ describe('enableMainProcessGpuFeatures', () => {
 
   it('preserves existing enable-features switches', async () => {
     const { app } = await import('electron')
-    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const { configureMainProcessGpuFeatures } = await import('./configure-process')
 
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('ExistingFeature')
-    enableMainProcessGpuFeatures()
+    configureMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'enable-features',
