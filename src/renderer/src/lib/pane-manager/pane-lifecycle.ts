@@ -10,7 +10,6 @@ import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { WebglAddon } from '@xterm/addon-webgl'
 import { SerializeAddon } from '@xterm/addon-serialize'
 
 import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-types'
@@ -23,24 +22,11 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
-import type { GlobalSettings } from '../../../../shared/types'
+import { ENABLE_WEBGL_RENDERER, attachWebgl, disposeWebgl } from './pane-webgl-renderer'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
 // ---------------------------------------------------------------------------
-
-const ENABLE_WEBGL_RENDERER = true
-let suggestedRendererType: 'dom' | undefined
-
-export function resetTerminalWebglSuggestion(): void {
-  // Why: VS Code clears its suggested renderer when gpuAcceleration changes,
-  // letting "auto" retry WebGL after a user toggles the setting.
-  suggestedRendererType = undefined
-}
-
-function shouldUseWebgl(mode: GlobalSettings['terminalGpuAcceleration']): boolean {
-  return mode === 'on' || (mode === 'auto' && suggestedRendererType === undefined)
-}
 
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
@@ -124,6 +110,7 @@ export function createPaneDOM(
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    hasComplexScriptOutput: false,
     fitAddon,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -287,74 +274,6 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
       disposeWebgl(pane)
       attachWebgl(pane)
     }
-  }
-}
-
-export function disposeWebgl(
-  pane: ManagedPaneInternal,
-  options?: { refreshDimensions?: boolean }
-): void {
-  if (!pane.webglAddon) {
-    return
-  }
-  try {
-    pane.webglAddon.dispose()
-  } catch {
-    /* ignore */
-  }
-  pane.webglAddon = null
-  if (options?.refreshDimensions) {
-    // Why: VS Code refreshes terminal dimensions after WebGL teardown because
-    // DOM and WebGL renderer cell metrics differ. Without this, Linux DOM
-    // scrollbars can desync and trigger visible reflow jitter.
-    requestAnimationFrame(() => {
-      try {
-        pane.fitAddon.fit()
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
-      } catch {
-        /* ignore — pane may have been disposed in the meantime */
-      }
-    })
-  }
-}
-
-export function attachWebgl(pane: ManagedPaneInternal): void {
-  if (
-    !ENABLE_WEBGL_RENDERER ||
-    !pane.gpuRenderingEnabled ||
-    !shouldUseWebgl(pane.terminalGpuAcceleration) ||
-    pane.webglAttachmentDeferred ||
-    pane.webglDisabledAfterContextLoss
-  ) {
-    pane.webglAddon = null
-    return
-  }
-  try {
-    const webglAddon = new WebglAddon()
-    webglAddon.onContextLoss(() => {
-      console.warn(
-        '[terminal] WebGL context lost for pane',
-        pane.id,
-        '— falling back to DOM renderer'
-      )
-      // Why: Chromium starts reclaiming terminal contexts under pressure.
-      // Recreating WebGL for this pane can loop context loss and leave xterm
-      // visually blank, so keep the pane on the DOM renderer until remount.
-      pane.webglDisabledAfterContextLoss = true
-      disposeWebgl(pane, { refreshDimensions: true })
-    })
-    pane.terminal.loadAddon(webglAddon)
-    pane.webglAddon = webglAddon
-  } catch (err) {
-    if (pane.terminalGpuAcceleration === 'auto') {
-      // Why: mirrors VS Code's `terminal.integrated.gpuAcceleration=auto`
-      // behavior: once WebGL fails, keep subsequent auto panes on DOM until
-      // the setting changes and resets the suggestion.
-      suggestedRendererType = 'dom'
-    }
-    // WebGL not available — default DOM renderer is fine, but log it for debugging
-    console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
-    pane.webglAddon = null
   }
 }
 

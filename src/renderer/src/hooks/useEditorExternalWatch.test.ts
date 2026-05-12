@@ -16,9 +16,28 @@ vi.mock('@/components/editor/editor-autosave', () => ({
 
 import {
   createExternalWatchEventHandler,
-  getOverflowExternalReloadTargets
+  getOverflowExternalReloadTargets,
+  getWatchedTargetKey
 } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
+
+describe('getWatchedTargetKey', () => {
+  it('changes when a worktree gains an SSH connection id', () => {
+    expect(
+      getWatchedTargetKey({
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: undefined
+      })
+    ).not.toBe(
+      getWatchedTargetKey({
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'conn-1'
+      })
+    )
+  })
+})
 
 describe('getOverflowExternalReloadTargets', () => {
   const setExternalMutation = vi.fn()

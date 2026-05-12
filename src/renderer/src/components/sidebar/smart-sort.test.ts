@@ -6,6 +6,7 @@ import {
   computeSmartScore,
   CREATE_GRACE_MS,
   effectiveRecentActivity,
+  sortWorktreesSmart,
   type SmartSortOverride
 } from './smart-sort'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -136,6 +137,26 @@ describe('computeSmartScore', () => {
     expect(computeSmartScore(withLiveTerminal, tabsByWorktree, repoMap, null)).toBeGreaterThan(
       computeSmartScore(withoutLiveTerminal, tabsByWorktree, repoMap, null)
     )
+  })
+
+  it('does not reward slept wake-hint tabs as live terminals', () => {
+    const slept = makeWorktree({ id: 'slept' })
+    const tabsByWorktree = {
+      [slept.id]: [
+        makeTab({
+          id: 'tab-slept',
+          worktreeId: slept.id,
+          ptyId: 'wake-hint-session',
+          title: 'codex working'
+        })
+      ]
+    }
+
+    expect(
+      computeSmartScore(slept, tabsByWorktree, repoMap, null, NOW, undefined, undefined, {
+        'tab-slept': []
+      })
+    ).toBe(0)
   })
 
   it('uses the current branch PR cache instead of persisted linkedPR metadata', () => {
@@ -438,6 +459,42 @@ describe('buildWorktreeComparator', () => {
     worktrees.sort(buildWorktreeComparator('smart', null, repoMap, prCache, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['new', 'shutdown'])
+  })
+})
+
+describe('sortWorktreesSmart', () => {
+  it('keeps cold-start persisted order when only slept wake-hint tabs exist', () => {
+    const persistedFirst = makeWorktree({
+      id: 'persisted-first',
+      displayName: 'Persisted First',
+      sortOrder: 20
+    })
+    const sleptWorking = makeWorktree({
+      id: 'slept-working',
+      displayName: 'Slept Working',
+      sortOrder: 0
+    })
+    const tabsByWorktree = {
+      [sleptWorking.id]: [
+        makeTab({
+          id: 'tab-slept',
+          worktreeId: sleptWorking.id,
+          ptyId: 'wake-hint-session',
+          title: 'codex working'
+        })
+      ]
+    }
+
+    const sorted = sortWorktreesSmart(
+      [sleptWorking, persistedFirst],
+      tabsByWorktree,
+      repoMap,
+      null,
+      undefined,
+      { 'tab-slept': [] }
+    )
+
+    expect(sorted.map((worktree) => worktree.id)).toEqual(['persisted-first', 'slept-working'])
   })
 })
 

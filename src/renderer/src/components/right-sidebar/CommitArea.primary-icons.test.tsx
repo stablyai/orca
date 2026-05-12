@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ArrowDownUp, ArrowUp, CloudUpload } from 'lucide-react'
+import { ArrowDownUp, ArrowUp, CloudUpload, Plus } from 'lucide-react'
 import { CommitArea } from './SourceControl'
 import { Button } from '@/components/ui/button'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
@@ -127,5 +127,18 @@ describe('CommitArea primary action icons', () => {
     })
     const element = CommitArea(props)
     expect(primaryHasIcon(element, CloudUpload)).toBe(true)
+  })
+
+  // Why: a dirty tree with nothing staged surfaces 'Stage Files' as the
+  // primary, anchored by a Plus icon to read as an additive bulk action.
+  it('renders a plus icon on a Stage Files primary', () => {
+    const props = baseProps({
+      stagedCount: 0,
+      hasUnstagedChanges: true,
+      hasMessage: false,
+      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+    })
+    const element = CommitArea(props)
+    expect(primaryHasIcon(element, Plus)).toBe(true)
   })
 })

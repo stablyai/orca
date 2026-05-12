@@ -30,6 +30,7 @@ export type RepoSlice = {
     >
   ) => Promise<void>
   setActiveRepo: (repoId: string | null) => void
+  reorderRepos: (orderedIds: string[]) => Promise<void>
 }
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => ({
@@ -267,5 +268,33 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  setActiveRepo: (repoId) => set({ activeRepoId: repoId })
+  setActiveRepo: (repoId) => set({ activeRepoId: repoId }),
+
+  reorderRepos: async (orderedIds) => {
+    // Optimistically apply the new order so the sidebar updates instantly;
+    // resync only if main rejects (stale permutation due to a racing add/remove).
+    const previous = get().repos
+    const byId = new Map(previous.map((r) => [r.id, r]))
+    const next: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = byId.get(id)
+      if (repo) {
+        next.push(repo)
+      }
+    }
+    if (next.length !== previous.length) {
+      // Caller passed a non-permutation — refuse to apply locally.
+      return
+    }
+    set({ repos: next })
+    try {
+      const result = await window.api.repos.reorder({ orderedIds })
+      if (result.status === 'rejected') {
+        await get().fetchRepos()
+      }
+    } catch (err) {
+      console.error('Failed to reorder repos:', err)
+      await get().fetchRepos()
+    }
+  }
 })

@@ -62,7 +62,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
     const resp = await relay.waitForResponse(id)
@@ -80,7 +79,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.readDir', { dirPath: tmpDir })
     const resp = await relay.waitForResponse(id)
@@ -95,7 +93,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const filePath = path.join(tmpDir, 'output.txt')
     const wId = relay.send('fs.writeFile', { filePath, content: 'via subprocess' })
@@ -121,7 +118,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('git.status', { worktreePath: tmpDir })
     const resp = await relay.waitForResponse(id)
@@ -148,7 +144,6 @@ describe('Subprocess: Relay entry point', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.readFile', { filePath: path.join(tmpDir, 'nonexistent.txt') })
     const resp = await relay.waitForResponse(id)
@@ -164,7 +159,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id1 = relay.send('fs.stat', { filePath: path.join(tmpDir, 'one.txt') })
     const id2 = relay.send('fs.stat', { filePath: path.join(tmpDir, 'two.txt') })
@@ -202,53 +196,60 @@ describe('Subprocess: Relay entry point', () => {
     expect(relay.proc.exitCode).toBe(0)
   }, 10_000)
 
-  it('registers root via request and returns acknowledgment', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
-
+  it('session.registerRoot request returns ok acknowledgment', async () => {
+    // Why: session.registerRoot is a protocol-level no-op since the FS
+    // allowlist removal, but the request form still must reply { ok: true }
+    // for back-compat with mains during the upgrade window. See
+    // docs/relay-fs-allowlist-removal.md.
     relay = spawn()
     await relay.sentinelReceived
 
-    const id = relay.send('session.registerRoot', { rootPath: tmpDir })
+    const id = relay.send('session.registerRoot', { rootPath: '/tmp/anything' })
     const resp = await relay.waitForResponse(id)
 
     expect(resp.error).toBeUndefined()
     expect(resp.result).toEqual({ ok: true })
-
-    const statId = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
-    const statResp = await relay.waitForResponse(statId)
-    expect(statResp.error).toBeUndefined()
-    expect((statResp.result as { type: string }).type).toBe('file')
   }, 10_000)
 
-  it('rejects fs operations when no roots are registered', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
-
-    relay = spawn()
-    await relay.sentinelReceived
-
-    const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
-    const resp = await relay.waitForResponse(id)
-
-    expect(resp.error).toBeDefined()
-    expect(resp.error!.message).toContain('No workspace roots registered yet')
-  }, 10_000)
-
-  it('rejects paths outside registered roots', async () => {
+  it('reads files outside any registered root', async () => {
+    // Regression test for the architecture change in docs/relay-fs-allowlist-removal.md:
+    // the relay no longer enforces a workspace allowlist.
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
-    writeFileSync(path.join(outsideDir, 'secret.txt'), 'secret')
+    writeFileSync(path.join(outsideDir, 'secret.txt'), 'visible')
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
-    const id = relay.send('fs.stat', { filePath: path.join(outsideDir, 'secret.txt') })
+    const id = relay.send('fs.readFile', { filePath: path.join(outsideDir, 'secret.txt') })
     const resp = await relay.waitForResponse(id)
 
-    expect(resp.error).toBeDefined()
-    expect(resp.error!.message).toContain('Path outside authorized workspace')
+    expect(resp.error).toBeUndefined()
+    expect((resp.result as { content: string }).content).toBe('visible')
+
+    await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
+  }, 10_000)
+
+  it('reads files via symlinks resolving outside the workspace', async () => {
+    // Regression test for issue #1661: a symlink under the workspace pointing
+    // to a directory outside it must resolve transparently. The pre-removal
+    // relay rejected this with "Path outside authorized workspace".
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
+    const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
+    writeFileSync(path.join(outsideDir, 'data.txt'), 'symlinked-target')
+    const { symlinkSync } = require('fs')
+    symlinkSync(outsideDir, path.join(tmpDir, 'link'))
+
+    relay = spawn()
+    await relay.sentinelReceived
+
+    const id = relay.send('fs.readFile', {
+      filePath: path.join(tmpDir, 'link', 'data.txt')
+    })
+    const resp = await relay.waitForResponse(id)
+
+    expect(resp.error).toBeUndefined()
+    expect((resp.result as { content: string }).content).toBe('symlinked-target')
 
     await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
   }, 10_000)

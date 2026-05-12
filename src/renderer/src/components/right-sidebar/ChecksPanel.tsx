@@ -15,6 +15,7 @@ import {
   ChecksList,
   PRCommentsList
 } from './checks-helpers'
+import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 
 export default function ChecksPanel(): React.JSX.Element {
@@ -78,6 +79,21 @@ export default function ChecksPanel(): React.JSX.Element {
   const conflictOperation = activeWorktreeId
     ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
     : 'unknown'
+
+  // Why: select only timestamps (not whole cache records) so the entry-refresh
+  // effect doesn't re-run on every cache mutation. See
+  // docs/refresh-on-checks-tab.md.
+  const prFetchedAt = useAppStore((s) =>
+    prCacheKey ? s.prCache[prCacheKey]?.fetchedAt : undefined
+  )
+  const checksCacheKey = repo && prNumber ? `${repo.path}::pr-checks::${prNumber}` : ''
+  const commentsCacheKey = repo && prNumber ? `${repo.path}::pr-comments::${prNumber}` : ''
+  const checksFetchedAt = useAppStore((s) =>
+    checksCacheKey ? s.checksCache[checksCacheKey]?.fetchedAt : undefined
+  )
+  const commentsFetchedAt = useAppStore((s) =>
+    commentsCacheKey ? s.commentsCache[commentsCacheKey]?.fetchedAt : undefined
+  )
 
   // Fetch PR data when the active worktree/branch changes.
   // Why: pass linkedPR so worktrees created from a PR (whose new local branch
@@ -240,9 +256,41 @@ export default function ChecksPanel(): React.JSX.Element {
         linkedPRNumber: linkedPR
       })
       if (refreshedPR) {
+        // Why: call fetchPRChecks directly with the refreshed PR's headSha so
+        // we don't pass the stale headSha captured by `fetchChecks`'s closure
+        // before the PR refresh completed (covers external force-pushes and
+        // PR-number changes).
+        const refreshedChecks = fetchPRChecks(
+          repo.path,
+          refreshedPR.number,
+          branch,
+          refreshedPR.headSha,
+          { force: true }
+        ).then(
+          (result) => {
+            setChecks(result)
+            const signature = JSON.stringify(
+              result.map((c) => `${c.name}:${c.status}:${c.conclusion}`)
+            )
+            pollIntervalRef.current =
+              signature === prevChecksRef.current
+                ? Math.min(pollIntervalRef.current * 2, 120_000)
+                : 30_000
+            prevChecksRef.current = signature
+          },
+          (err) => {
+            console.warn('Failed to fetch PR checks:', err)
+            setChecks([])
+          }
+        )
+        setChecksLoading(true)
+        const refreshedComments = fetchComments({
+          force: true,
+          prNumberOverride: refreshedPR.number
+        })
         await Promise.all([
-          fetchChecks({ force: true, prNumberOverride: refreshedPR.number }),
-          fetchComments({ force: true, prNumberOverride: refreshedPR.number })
+          refreshedChecks.finally(() => setChecksLoading(false)),
+          refreshedComments
         ])
       } else {
         setChecks([])
@@ -251,7 +299,49 @@ export default function ChecksPanel(): React.JSX.Element {
     } finally {
       setIsRefreshing(false)
     }
-  }, [repo, branch, linkedPR, fetchPRForBranch, fetchChecks, fetchComments])
+  }, [repo, branch, linkedPR, fetchPRForBranch, fetchPRChecks, fetchComments])
+
+  // Why: force a freshness check on each "entry" into the Checks tab so PRs
+  // opened outside Orca, externally force-pushed heads, and stale checks/comments
+  // appear without waiting for the cache TTL. The grace window suppresses
+  // duplicate fetches from rapid show/hide toggles. See
+  // docs/refresh-on-checks-tab.md.
+  const entryKey =
+    isPanelVisible && repo && !isFolder && branch
+      ? `${activeWorktreeId ?? ''}::${repo.path}::${branch}`
+      : ''
+  const lastEntryKeyRef = useRef<string>('')
+  useEffect(() => {
+    if (!entryKey) {
+      // Resetting on hide is required so reopening the panel on the same PR
+      // re-evaluates freshness (a prevKey !== currentKey check alone would miss
+      // close-and-reopen of the same PR).
+      lastEntryKeyRef.current = ''
+      return
+    }
+    if (lastEntryKeyRef.current === entryKey) {
+      return
+    }
+    lastEntryKeyRef.current = entryKey
+
+    const stale = shouldEntryRefresh({
+      prFetchedAt,
+      checksFetchedAt,
+      commentsFetchedAt,
+      prNumber,
+      now: Date.now(),
+      graceMs: ENTRY_REFRESH_GRACE_MS
+    })
+    if (!stale) {
+      return
+    }
+
+    // Reset polling attention state so the forced fetch's signature establishes
+    // a fresh baseline rather than colliding with the previous PR's backoff.
+    pollIntervalRef.current = 30_000
+    prevChecksRef.current = ''
+    void handleRefresh()
+  }, [entryKey, prFetchedAt, checksFetchedAt, commentsFetchedAt, prNumber, handleRefresh])
 
   const handleStartEdit = useCallback(() => {
     if (!pr) {

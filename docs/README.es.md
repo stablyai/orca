@@ -97,6 +97,18 @@ yay -S stably-orca-git
 
 ---
 
+## [Nuevo] Ver el estado en vivo de todos los agents
+
+**Ve qué hace cada agent — de un vistazo.**
+
+Sigue el estado en vivo de cada agent en cada worktree desde un solo lugar. Detecta qué agents están trabajando, esperando entrada o terminados — sin tener que ir clicando por las pestañas.
+
+<p align="center">
+  <img src="assets/agent-statuses.gif" alt="Orca Agent Statuses — ve el estado en vivo de todos los agents en los worktrees" width="800" />
+</p>
+
+---
+
 ## [Nuevo] Anotar diff de IA
 
 **Comenta directamente sobre los diffs generados por IA.**

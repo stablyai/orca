@@ -28,11 +28,18 @@ const MODEL_PRICING: Record<
   string,
   { input: number; output: number; cacheRead: number; cacheWrite: number }
 > = {
-  'claude-opus-4-6': { input: 6.15, output: 30.75, cacheRead: 0.61, cacheWrite: 7.69 },
-  'claude-opus-4-5': { input: 6.15, output: 30.75, cacheRead: 0.61, cacheWrite: 7.69 },
-  'claude-sonnet-4-6': { input: 3.69, output: 18.45, cacheRead: 0.37, cacheWrite: 4.61 },
-  'claude-sonnet-4-5': { input: 3.69, output: 18.45, cacheRead: 0.37, cacheWrite: 4.61 },
-  'claude-haiku-4-5': { input: 1.23, output: 6.15, cacheRead: 0.12, cacheWrite: 1.54 }
+  'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  'claude-opus-4-6': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  'claude-opus-4-1': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+  'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+  'claude-sonnet-4-6': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  'claude-sonnet-4-5': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  'claude-sonnet-4': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  'claude-sonnet-3-7': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  'claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+  'claude-haiku-3-5': { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 },
+  'claude-haiku-3': { input: 0.25, output: 1.25, cacheRead: 0.03, cacheWrite: 0.3 }
 }
 
 function getDefaultState(): ClaudeUsagePersistedState {
@@ -66,14 +73,50 @@ function normalizeModelForPricing(model: string | null): string | null {
     return null
   }
   const lower = model.toLowerCase()
-  if (lower.includes('opus')) {
+  if (lower.includes('opus-4-7')) {
+    return 'claude-opus-4-7'
+  }
+  if (lower.includes('opus-4-6')) {
     return 'claude-opus-4-6'
   }
-  if (lower.includes('sonnet')) {
+  if (lower.includes('opus-4-5')) {
+    return 'claude-opus-4-5'
+  }
+  if (lower.includes('opus-4-1')) {
+    return 'claude-opus-4-1'
+  }
+  if (lower.includes('opus-4')) {
+    return 'claude-opus-4'
+  }
+  if (lower.includes('sonnet-4-6')) {
     return 'claude-sonnet-4-6'
   }
-  if (lower.includes('haiku')) {
+  if (lower.includes('sonnet-4-5')) {
+    return 'claude-sonnet-4-5'
+  }
+  if (lower.includes('sonnet-4')) {
+    return 'claude-sonnet-4'
+  }
+  if (lower.includes('sonnet-3-7') || lower.includes('sonnet-3.7')) {
+    return 'claude-sonnet-3-7'
+  }
+  // Why: legacy version-first IDs like `claude-3-5-sonnet-20241022` are still
+  // present in historical Claude Code/SDK logs read off disk. Match them so
+  // their cost is not silently dropped from the breakdown.
+  if (lower.includes('3-5-sonnet') || lower.includes('3.5-sonnet')) {
+    return 'claude-sonnet-3-7'
+  }
+  if (lower.includes('haiku-4-5')) {
     return 'claude-haiku-4-5'
+  }
+  if (lower.includes('haiku-3-5') || lower.includes('haiku-3.5')) {
+    return 'claude-haiku-3-5'
+  }
+  if (lower.includes('3-5-haiku') || lower.includes('3.5-haiku')) {
+    return 'claude-haiku-3-5'
+  }
+  if (lower.includes('haiku-3')) {
+    return 'claude-haiku-3'
   }
   return null
 }

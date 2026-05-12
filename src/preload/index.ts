@@ -71,8 +71,9 @@ import type {
   PortForwardEntry,
   DetectedPort
 } from '../shared/ssh-types'
-import type { AgentStatusState } from '../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
@@ -286,6 +287,9 @@ const api = {
     }): Promise<unknown> => ipcRenderer.invoke('repos:create', args),
 
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
+
+    reorder: (args: { orderedIds: string[] }): Promise<{ status: 'applied' | 'rejected' }> =>
+      ipcRenderer.invoke('repos:reorder', args),
 
     update: (args: { repoId: string; updates: Record<string, unknown> }): Promise<unknown> =>
       ipcRenderer.invoke('repos:update', args),
@@ -956,11 +960,8 @@ const api = {
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),
-    refreshAgents: (): Promise<{
-      agents: string[]
-      addedPathSegments: string[]
-      shellHydrationOk: boolean
-    }> => ipcRenderer.invoke('preflight:refreshAgents'),
+    refreshAgents: (): Promise<RefreshAgentsResult> =>
+      ipcRenderer.invoke('preflight:refreshAgents'),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
@@ -1049,6 +1050,12 @@ const api = {
       ipcRenderer.invoke('developerPermissions:request', args),
     openSettings: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('developerPermissions:openSettings', args)
+  },
+
+  computerUsePermissions: {
+    getStatus: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:getStatus'),
+    openSetup: (args?: { id?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('computerUsePermissions:openSetup', args)
   },
 
   shell: {
@@ -1847,11 +1854,25 @@ const api = {
       return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
     },
     onCreateTerminal: (
-      callback: (data: { worktreeId: string; command?: string; title?: string }) => void
+      callback: (data: {
+        requestId?: string
+        worktreeId: string
+        command?: string
+        title?: string
+        ptyId?: string
+        activate?: boolean
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { worktreeId: string; command?: string; title?: string }
+        data: {
+          requestId?: string
+          worktreeId: string
+          command?: string
+          title?: string
+          ptyId?: string
+          activate?: boolean
+        }
       ) => callback(data)
       ipcRenderer.on('ui:createTerminal', listener)
       return () => ipcRenderer.removeListener('ui:createTerminal', listener)
@@ -2315,37 +2336,23 @@ const api = {
 
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */
-    onSet: (
-      callback: (data: {
-        paneKey: string
-        tabId?: string
-        worktreeId?: string
-        state: AgentStatusState
-        prompt?: string
-        agentType?: string
-        toolName?: string
-        toolInput?: string
-        lastAssistantMessage?: string
-        interrupted?: boolean
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          paneKey: string
-          tabId?: string
-          worktreeId?: string
-          state: AgentStatusState
-          prompt?: string
-          agentType?: string
-          toolName?: string
-          toolInput?: string
-          lastAssistantMessage?: string
-          interrupted?: boolean
-        }
-      ) => callback(data)
+    onSet: (callback: (data: AgentStatusIpcPayload) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: AgentStatusIpcPayload) =>
+        callback(data)
       ipcRenderer.on('agentStatus:set', listener)
       return () => ipcRenderer.removeListener('agentStatus:set', listener)
+    },
+    /** Pull the current cached hook statuses after renderer workspace-session
+     *  hydration. This avoids losing startup replays before the renderer
+     *  knows which tabs exist. */
+    getSnapshot: (): Promise<AgentStatusIpcPayload[]> =>
+      ipcRenderer.invoke('agentStatus:getSnapshot'),
+    /** Drop the cached hook status for a paneKey on both sides — main-process
+     *  cache (lastStatusByPaneKey) and on-disk last-status file. Fired from
+     *  the renderer when the user dismisses a retained row so a relaunch
+     *  cannot resurrect it. Fire-and-forget; no response. */
+    drop: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:drop', paneKey)
     }
   }
 }

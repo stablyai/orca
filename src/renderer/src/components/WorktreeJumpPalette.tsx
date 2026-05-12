@@ -151,6 +151,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // jump palette. Without this, clicking between panes would desync the
   // palette's spinner from the sidebar's spinner.
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  // Why: ptyIdsByTabId is the live-pty source of truth — without it,
+  // getWorktreeStatus would treat slept tabs as live (their preserved
+  // tab.ptyId is a wake-hint sessionId, not a liveness signal) and the jump
+  // palette dot would lie green even though the sidebar dot is correctly grey.
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -224,9 +229,24 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const sortedWorktrees = useMemo(
     () =>
       hasQuery
-        ? sortWorktreesSmart(visibleWorktrees, tabsByWorktree, repoMap, prCache)
+        ? sortWorktreesSmart(
+            visibleWorktrees,
+            tabsByWorktree,
+            repoMap,
+            prCache,
+            undefined,
+            ptyIdsByTabId
+          )
         : switchableWorktreesForRows,
-    [hasQuery, visibleWorktrees, switchableWorktreesForRows, tabsByWorktree, repoMap, prCache]
+    [
+      hasQuery,
+      visibleWorktrees,
+      switchableWorktreesForRows,
+      tabsByWorktree,
+      repoMap,
+      prCache,
+      ptyIdsByTabId
+    ]
   )
 
   const browserSortedWorktrees = useMemo(() => {
@@ -236,8 +256,15 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     // tab on the default-branch worktree before toggling hide-on should still
     // be able to Cmd+J back to it — the setting hides the *workspace row*,
     // not the browser tabs that live inside it.
-    return sortWorktreesSmart(allWorktrees, tabsByWorktree, repoMap, prCache)
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache])
+    return sortWorktreesSmart(
+      allWorktrees,
+      tabsByWorktree,
+      repoMap,
+      prCache,
+      undefined,
+      ptyIdsByTabId
+    )
+  }, [allWorktrees, tabsByWorktree, repoMap, prCache, ptyIdsByTabId])
 
   // Why: browser rows need worktree lookups for repo badge colors, and browser
   // search intentionally includes archived worktrees. This map must cover all
@@ -833,6 +860,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 const status = getWorktreeStatus(
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
+                  ptyIdsByTabId,
                   runtimePaneTitlesByTabId
                 )
                 const statusLabel = getWorktreeStatusLabel(status)

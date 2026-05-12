@@ -442,7 +442,11 @@ function WorktreeRow({
           disabled={!isNavigable}
         >
           <span className="text-xs font-medium truncate">{rowLabel}</span>
-          {!worktree.hasLocalSamples && (
+          {/* Why: chip is gated on the repo's SSH connectionId, not on
+              missing data. Warm-reattached local PTYs used to land here
+              with hasLocalSamples=false even though they're plainly
+              local. */}
+          {worktree.isRemote && (
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
               · remote
             </span>
@@ -726,6 +730,19 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
+  // Why: drives the `· remote` chip predicate. A repo with a non-null
+  // connectionId is SSH-backed and its PTYs run on a remote host; that's
+  // the only honest signal for "remote." Building the map from the
+  // canonical store list avoids re-deriving remoteness from a missing
+  // memory sample.
+  const repoConnectionIdById = useMemo(() => {
+    const map = new Map<string, string | null>()
+    for (const repo of repos) {
+      map.set(repo.id, repo.connectionId ?? null)
+    }
+    return map
+  }, [repos])
+
   // Why: skip the merge entirely when the popover is closed. The merged
   // tree is only ever displayed inside <PopoverContent>; computing it on
   // every store mutation (e.g. runtimePaneTitlesByTabId, which changes on
@@ -739,7 +756,8 @@ export function ResourceUsageStatusSegment({
             ptyIdsByTabId,
             runtimePaneTitlesByTabId,
             workspaceSessionReady,
-            repoDisplayNameById
+            repoDisplayNameById,
+            repoConnectionIdById
           })
         : [],
     [
@@ -750,7 +768,8 @@ export function ResourceUsageStatusSegment({
       ptyIdsByTabId,
       runtimePaneTitlesByTabId,
       workspaceSessionReady,
-      repoDisplayNameById
+      repoDisplayNameById,
+      repoConnectionIdById
     ]
   )
 

@@ -137,7 +137,7 @@ export type TerminalSlice = {
     worktreeId: string,
     targetGroupId?: string,
     shellOverride?: string,
-    options?: { pendingActivationSpawn?: boolean }
+    options?: { pendingActivationSpawn?: boolean; initialPtyId?: string; activate?: boolean }
   ) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
@@ -329,11 +329,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
         (entry) => !orphanTerminalIds.has(entry.id)
       )
+      const shouldActivate = options?.activate !== false
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
       tab = {
         id,
-        ptyId: null,
+        // Why: CLI-created background sessions already own a PTY; revealing
+        // one later should attach the pane instead of spawning a duplicate.
+        ptyId: options?.initialPtyId ?? null,
         worktreeId,
         // Why: users expect terminal labels to reflect the currently open set,
         // not a monotonic creation counter. Reusing the lowest free ordinal
@@ -364,9 +367,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         worktreeId,
         validTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId]
       )
-      const nextActiveGroupIdByWorktree = validTargetGroupId
-        ? { ...activeGroupIdByWorktree, [worktreeId]: validTargetGroupId }
-        : activeGroupIdByWorktree
+      const nextActiveGroupIdByWorktree =
+        shouldActivate && validTargetGroupId
+          ? { ...activeGroupIdByWorktree, [worktreeId]: validTargetGroupId }
+          : activeGroupIdByWorktree
       const existingUnifiedTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
       const existingTerminalTab = findTabByEntityInGroup(
         s.unifiedTabsByWorktree,
@@ -388,10 +392,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         createdAt: tab.createdAt
       }
       const nextGroupOrder = dedupeTabOrder([...group.tabOrder, unifiedTab.id])
-      const nextRecent = pushRecentTabId(
-        sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder),
-        unifiedTab.id
-      )
+      const nextRecent = shouldActivate
+        ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder), unifiedTab.id)
+        : sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder)
+      const nextActiveTabIdForWorktree = shouldActivate
+        ? tab.id
+        : (s.activeTabIdByWorktree[worktreeId] ?? group.activeTabId ?? tab.id)
       return {
         ...orphanCleanupPatch,
         tabsByWorktree: {
@@ -411,7 +417,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...groupsByWorktree,
           [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
             ...group,
-            activeTabId: unifiedTab.id,
+            activeTabId: shouldActivate ? unifiedTab.id : (group.activeTabId ?? unifiedTab.id),
             tabOrder: nextGroupOrder,
             recentTabIds: nextRecent
           })
@@ -421,9 +427,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.layoutByWorktree,
           [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
         },
-        activeTabId: tab.id,
-        activeTabIdByWorktree: { ...s.activeTabIdByWorktree, [worktreeId]: tab.id },
-        ptyIdsByTabId: { ...s.ptyIdsByTabId, [tab.id]: [] },
+        activeTabId: shouldActivate ? tab.id : s.activeTabId,
+        activeTabIdByWorktree: {
+          ...s.activeTabIdByWorktree,
+          [worktreeId]: nextActiveTabIdForWorktree
+        },
+        ptyIdsByTabId: {
+          ...s.ptyIdsByTabId,
+          [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
+        },
         terminalLayoutsByTabId: {
           ...s.terminalLayoutsByTabId,
           [tab.id]: emptyLayoutSnapshot()
@@ -1125,17 +1137,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
 
-    // Why: under remove-worktree, sweep agent-status rows so a tab killed in
-    // the 'done' state doesn't leave the WorktreeCard dot blue. Under sleep,
-    // the agent-status describes the live agent process which the user
-    // expects to survive sleep — skip the drop so wake renders the prior
-    // status until the next event arrives. (Mirror of the pattern in
-    // closeTab / pane-close, which drop their own rows explicitly.)
-    if (!keepIdentifiers) {
-      for (const tab of tabs) {
-        get().dropAgentStatusByTabPrefix(tab.id)
-      }
-    }
+    // Why: sleep/remove fold the whole worktree surface. The live PTY bindings
+    // were cleared above and kill is about to run, so live rows are stale;
+    // retained rows are folded too so a grey slept card does not keep a green
+    // "done" row. Sweep by worktreeId because retained snapshots can outlive
+    // their original tab.
+    get().dropAgentStatusByWorktree(worktreeId)
 
     if (ptyIds.length === 0) {
       return
@@ -1688,13 +1695,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const tabLevelPtyId = pendingReconnectPtyIdByTabId[tabId]
         const hasLeafMappings = Object.keys(leafPtyMap).length > 0
 
-        // Why: restore ptyId on the tab so getWorktreeStatus() sees it as
-        // active (green dot) even before the terminal pane mounts — including
-        // deferred SSH worktrees whose connection isn't established yet. Without
-        // this, the sidebar "show active only" filter hides SSH worktrees and
-        // the user must manually search for them. The actual PTY reattach is
-        // handled later by pty-connection.ts when the terminal pane mounts;
-        // this block only sets the visual state.
+        // Why: populate the wake-hint and the live-pty map so the worktree
+        // dot lights up green even before the terminal pane mounts —
+        // including deferred SSH worktrees whose connection isn't established
+        // yet. tab.ptyId carries the wake-hint sessionId (consumed by
+        // pty-connection.ts on remount); ptyIdsByTabId is the source of
+        // truth getWorktreeStatus reads for liveness. Without the live-pty
+        // population, the sidebar "show active only" filter hides SSH
+        // worktrees and the user must manually search for them. The actual
+        // PTY reattach is handled later by pty-connection.ts when the
+        // terminal pane mounts; this block only sets the visual state.
         console.warn(
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )

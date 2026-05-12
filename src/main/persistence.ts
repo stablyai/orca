@@ -599,6 +599,38 @@ export class Store {
     this.scheduleSave()
   }
 
+  // Why: returns false on a stale permutation (concurrent add/remove races
+  // the renderer's drag) so the caller can tell the renderer to resync rather
+  // than persist an order that drops or duplicates ids.
+  reorderRepos(orderedIds: string[]): boolean {
+    const current = this.state.repos
+    if (orderedIds.length !== current.length) {
+      return false
+    }
+    const seen = new Set<string>()
+    for (const id of orderedIds) {
+      if (typeof id !== 'string' || seen.has(id)) {
+        return false
+      }
+      seen.add(id)
+    }
+    const byId = new Map<string, Repo>()
+    for (const r of current) {
+      byId.set(r.id, r)
+    }
+    const next: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = byId.get(id)
+      if (!repo) {
+        return false
+      }
+      next.push(repo)
+    }
+    this.state.repos = next
+    this.scheduleSave()
+    return true
+  }
+
   removeRepo(id: string): void {
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
     // Why: presets are repo-scoped, so removing the repo means the presets

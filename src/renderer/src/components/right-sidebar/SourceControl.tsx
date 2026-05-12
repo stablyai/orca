@@ -126,6 +126,7 @@ const PRIMARY_ICONS: Partial<
   >
 > = {
   commit: Check,
+  stage: Plus,
   push: ArrowUp,
   sync: ArrowDownUp,
   publish: CloudUpload
@@ -725,27 +726,6 @@ function SourceControlInner(): React.JSX.Element {
     [handleCommit, runCompoundCommitAction, runRemoteAction]
   )
 
-  // Why: PrimaryActionKind is narrowed to the single-action kinds the
-  // primary can emit ('commit' | 'push' | 'pull' | 'sync' | 'publish') —
-  // compound commit_* kinds are dropdown-only. An exhaustive switch keeps
-  // the mapping honest: if a new PrimaryActionKind is added, TypeScript
-  // lights up the missing case instead of silently falling through.
-  const handlePrimaryClick = useCallback((): void => {
-    switch (primaryAction.kind) {
-      case 'commit':
-      case 'push':
-      case 'pull':
-      case 'sync':
-      case 'publish':
-        handleActionInvoke(primaryAction.kind)
-        return
-      default: {
-        const _exhaustive: never = primaryAction.kind
-        void _exhaustive
-      }
-    }
-  }, [handleActionInvoke, primaryAction.kind])
-
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
       if (!activeWorktreeId || !worktreePath) {
@@ -894,6 +874,57 @@ function SourceControlInner(): React.JSX.Element {
     },
     [worktreePath, grouped, activeWorktreeId, isExecutingBulk, clearSelection]
   )
+
+  // Why: 'stage' primary stages every unstaged + untracked path in one
+  // bulkStage call. It bypasses handleActionInvoke because that handler is
+  // typed to DropdownActionKind and 'stage' is intentionally not in the
+  // dropdown union — the dropdown surface is unchanged.
+  const handleStageAllPrimary = useCallback(async (): Promise<void> => {
+    if (!worktreePath || isExecutingBulk) {
+      return
+    }
+    const filePaths = [
+      ...getStageAllPaths(grouped.unstaged, 'unstaged'),
+      ...getStageAllPaths(grouped.untracked, 'untracked')
+    ]
+    if (filePaths.length === 0) {
+      return
+    }
+    setIsExecutingBulk(true)
+    try {
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.bulkStage({ worktreePath, filePaths, connectionId })
+      clearSelection()
+    } finally {
+      setIsExecutingBulk(false)
+    }
+  }, [worktreePath, isExecutingBulk, grouped, activeWorktreeId, clearSelection])
+
+  // Why: PrimaryActionKind is narrowed to the single-action kinds the
+  // primary can emit ('commit' | 'stage' | 'push' | 'pull' | 'sync' |
+  // 'publish') — compound commit_* kinds are dropdown-only. An exhaustive
+  // switch keeps the mapping honest: if a new PrimaryActionKind is added,
+  // TypeScript lights up the missing case instead of silently falling
+  // through. 'stage' routes to a dedicated primary-only handler because
+  // handleActionInvoke is typed to DropdownActionKind.
+  const handlePrimaryClick = useCallback((): void => {
+    switch (primaryAction.kind) {
+      case 'stage':
+        void handleStageAllPrimary()
+        return
+      case 'commit':
+      case 'push':
+      case 'pull':
+      case 'sync':
+      case 'publish':
+        handleActionInvoke(primaryAction.kind)
+        return
+      default: {
+        const _exhaustive: never = primaryAction.kind
+        void _exhaustive
+      }
+    }
+  }, [handleActionInvoke, handleStageAllPrimary, primaryAction.kind])
 
   const handleUnstageAll = useCallback(async () => {
     if (!worktreePath || isExecutingBulk) {

@@ -136,6 +136,9 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
  * @param worktreePath - Absolute path where the worktree will be created
  * @param branch - Branch name for the new worktree
  * @param baseBranch - Optional base branch to create from (defaults to HEAD)
+ * @remarks Side effect: passes `--no-track` and may write `push.autoSetupRemote=true`
+ * to the repo's shared config (best-effort, warn-only on failure; preserves any
+ * user-set value at any scope). See body comment below for the full rationale.
  */
 export async function addWorktree(
   repoPath: string,
@@ -203,11 +206,73 @@ export async function addWorktree(
   if (noCheckout) {
     args.push('--no-checkout')
   }
-  args.push('-b', branch, worktreePath)
+  // Why: --no-track keeps the new branch from inheriting the base ref's
+  // upstream, so `git status` doesn't report "behind by N" against the base
+  // pre-publish and tools/agents don't misread an unpublished branch as
+  // out-of-sync. First push sets the upstream — see push.autoSetupRemote
+  // below for the terminal ergonomics.
+  args.push('--no-track', '-b', branch, worktreePath)
   if (baseBranch) {
     args.push(baseBranch)
   }
   await gitExecFileAsync(args, { cwd: repoPath })
+
+  // SSH parity: src/relay/git-handler.ts addWorktree mirrors this exact
+  // probe-and-write state machine. If you change the logic here, update
+  // the relay handler in lockstep so local and SSH paths stay aligned.
+  //
+  // Why: with --no-track there is no upstream until first push. Setting
+  // push.autoSetupRemote=true makes a plain `git push` from the terminal
+  // create origin/<branch> and set it as upstream automatically — matching
+  // user expectations from modern git without requiring `-u`. Note that
+  // `--local` on a linked worktree writes to the shared common-dir config,
+  // so this affects the whole repo, not just this worktree. That is
+  // intentional and acceptable: the value is benign and idempotent, and
+  // every Orca-created worktree wants the same default. True per-worktree
+  // scope would require enabling extensions.worktreeConfig=true repo-wide,
+  // which is a larger change we deliberately avoid.
+  //
+  // Notes on the design:
+  // - push.autoSetupRemote is honored by git >= 2.37; older clients ignore
+  //   the value, so `git push` falls back to the pre-2.37 "no upstream"
+  //   error and the user runs `git push -u` once.
+  // - Failures here are warn-only: config writes are best-effort and a
+  //   missing write degrades to the same fallback as old git.
+  // - The write is skipped when any value is already set (local, global,
+  //   or system) so a deliberate user `false` is preserved.
+  // - Not rolled back on creation failure: addSparseWorktree's catch path
+  //   removes the worktree but does not unset this config. That is consistent
+  //   with the "benign and idempotent" rationale above — every Orca-created
+  //   worktree wants this default, and a future creation will silently re-set
+  //   it via the existing-value check anyway.
+  try {
+    // Why: `--get` (not `--local --get`) so a value set at any scope
+    // (local/global/system) counts as "user already chose" and we don't
+    // overwrite it.
+    let alreadySet = false
+    try {
+      await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
+        cwd: worktreePath
+      })
+      alreadySet = true
+    } catch (readError) {
+      // Why: `git config --get` exits 1 only when the key is unset at every
+      // scope. Any other exit code means a real read failure (corrupt config,
+      // locked file, parse error) — surface that via the outer catch instead
+      // of silently overwriting whatever value the user actually has.
+      const code = (readError as { code?: unknown })?.code
+      if (code !== 1) {
+        throw readError
+      }
+    }
+    if (!alreadySet) {
+      await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
+        cwd: worktreePath
+      })
+    }
+  } catch (error) {
+    console.warn(`addWorktree: failed to set push.autoSetupRemote for ${worktreePath}`, error)
+  }
 }
 
 export async function addSparseWorktree(

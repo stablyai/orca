@@ -16,6 +16,7 @@ import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
+import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
 import { resolveConsent } from './telemetry/consent'
@@ -275,29 +276,34 @@ function openMainWindow(): BrowserWindow {
     }
   })
   mainWindow = window
-  agentHookServer.setListener(({ paneKey, tabId, worktreeId, payload }) => {
-    if (mainWindow?.isDestroyed()) {
-      return
+  agentHookServer.setListener(
+    ({ paneKey, tabId, worktreeId, connectionId, payload, receivedAt, stateStartedAt }) => {
+      if (mainWindow?.isDestroyed()) {
+        return
+      }
+      mainWindow?.webContents.send('agentStatus:set', {
+        ...payload,
+        paneKey,
+        tabId,
+        worktreeId,
+        connectionId,
+        receivedAt,
+        stateStartedAt
+      })
+      // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
+      // and opencode's stays bare "OpenCode" — neither carries a working/idle
+      // signal the title heuristic can read. Synthesize an OSC title update
+      // from the hook state and inject it into the pane's data stream so the
+      // existing renderer-side title tracker (which drives the sidebar
+      // spinner, unread badge, and worktree status dot for every other agent)
+      // lights up for these panes too. Braille prefix → working keyword path;
+      // "action required" → permission; bare label → idle.
+      const profile = SYNTHETIC_TITLE_PROFILES[payload.agentType ?? '']
+      if (profile) {
+        driveSyntheticTitleFromHook(paneKey, payload.state, profile)
+      }
     }
-    mainWindow?.webContents.send('agentStatus:set', {
-      paneKey,
-      tabId,
-      worktreeId,
-      ...payload
-    })
-    // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
-    // and opencode's stays bare "OpenCode" — neither carries a working/idle
-    // signal the title heuristic can read. Synthesize an OSC title update
-    // from the hook state and inject it into the pane's data stream so the
-    // existing renderer-side title tracker (which drives the sidebar
-    // spinner, unread badge, and worktree status dot for every other agent)
-    // lights up for these panes too. Braille prefix → working keyword path;
-    // "action required" → permission; bare label → idle.
-    const profile = SYNTHETIC_TITLE_PROFILES[payload.agentType ?? '']
-    if (profile) {
-      driveSyntheticTitleFromHook(paneKey, payload.state, profile)
-    }
-  })
+  )
   return window
 }
 
@@ -488,22 +494,14 @@ app.whenReady().then(async () => {
   // Why: managed hook installation mutates user-global agent config. Each
   // installer runs inside its own try/catch so a malformed local config
   // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
-  for (const installManagedHooks of [
-    () => claudeHookService.install(),
-    () => codexHookService.install(),
-    () => geminiHookService.install()
-  ]) {
-    try {
-      installManagedHooks()
-    } catch (error) {
-      console.error('[agent-hooks] Failed to install managed hooks:', error)
-    }
-  }
-  try {
-    cursorHookService.install()
-  } catch (error) {
-    console.error('[agent-hooks] Failed to install Cursor managed hooks:', error)
-  }
+  // The agent label travels with each installer so the catch can attribute
+  // the failure in the `agent_hook_install_failed` telemetry event.
+  runManagedHookInstallers([
+    ['claude', () => claudeHookService.install()],
+    ['codex', () => codexHookService.install()],
+    ['gemini', () => geminiHookService.install()],
+    ['cursor', () => cursorHookService.install()]
+  ])
 
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),

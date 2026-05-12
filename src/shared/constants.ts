@@ -64,9 +64,9 @@ export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
 
 // Why: initial threshold of agents spawned (since last update) before we show
 // the star-on-GitHub notification. Doubles each time the user dismisses
-// without starring — e.g. 50 → 100 → 200 → 400. Past dismissals are encoded
+// without starring — e.g. 35 → 70 → 140 → 280. Past dismissals are encoded
 // in starNagNextThreshold, so this constant is only the first-time seed.
-export const STAR_NAG_INITIAL_THRESHOLD = 50
+export const STAR_NAG_INITIAL_THRESHOLD = 35
 
 export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'status',
@@ -233,6 +233,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: off by default — opt-in cosmetic joke feature. Leaving the default
     // false keeps the overlay unmounted for users who never enable it.
     experimentalPet: false,
+    experimentalActivity: false,
     experimentalWorktreeSymlinks: false,
     // Why: hydrate an empty default so the renderer's optional-chained reads
     // (`settings?.githubProjects?.activeProject`) land on a stable shape
@@ -292,7 +293,8 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarVisible: true,
     dismissedUpdateVersion: null,
     lastUpdateCheckAt: null,
-    trustedOrcaHooks: {}
+    trustedOrcaHooks: {},
+    acknowledgedAgentsByPaneKey: {}
   }
 }
 

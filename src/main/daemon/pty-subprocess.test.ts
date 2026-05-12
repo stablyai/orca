@@ -1,5 +1,8 @@
 /* oxlint-disable max-lines -- Why: exercises full PTY subprocess surface (spawn setup, signal routing, data events, platform-specific shell configs, and Windows PowerShell implementations) with co-located test scenarios to prevent fixture drift. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 
 const { spawnMock, isPwshAvailableMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -15,6 +18,15 @@ vi.mock('../pwsh', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
+
+const ORCA_SHELL_WRAPPER_ENV = [
+  'ORCA_ATTRIBUTION_SHIM_DIR',
+  'ORCA_OPENCODE_CONFIG_DIR',
+  'ORCA_PI_CODING_AGENT_DIR'
+] as const
+const POWERSHELL_PROFILE_COMMAND = expect.stringMatching(
+  /ORCA_OPENCODE_CONFIG_DIR[\s\S]*ORCA_PI_CODING_AGENT_DIR[\s\S]*UTF8/
+)
 
 function mockPtyProcess(pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
@@ -39,10 +51,38 @@ function mockPtyProcess(pid = 12345) {
 }
 
 describe('createPtySubprocess', () => {
+  const savedWrapperEnv: Partial<Record<(typeof ORCA_SHELL_WRAPPER_ENV)[number], string>> = {}
+  let previousUserDataPath: string | undefined
+  let userDataPath: string
+
   beforeEach(() => {
     spawnMock.mockReset()
     isPwshAvailableMock.mockReset()
     isPwshAvailableMock.mockReturnValue(false)
+    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-subprocess-test-'))
+    process.env.ORCA_USER_DATA_PATH = userDataPath
+    for (const key of ORCA_SHELL_WRAPPER_ENV) {
+      savedWrapperEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    if (previousUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+    rmSync(userDataPath, { recursive: true, force: true })
+    for (const key of ORCA_SHELL_WRAPPER_ENV) {
+      if (savedWrapperEnv[key] === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = savedWrapperEnv[key]
+      }
+      delete savedWrapperEnv[key]
+    }
   })
   it('spawns node-pty with correct options', () => {
     const proc = mockPtyProcess()
@@ -231,6 +271,48 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
+  it('uses shell wrapper when OpenCode config must survive shell startup', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    createPtySubprocess({
+      sessionId: 'test',
+      cols: 80,
+      rows: 24,
+      env: {
+        SHELL: '/bin/zsh',
+        OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay',
+        ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+      }
+    })
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toContain('shell-ready/zsh')
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
+  it('uses shell wrapper when Pi config must survive shell startup', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    createPtySubprocess({
+      sessionId: 'test',
+      cols: 80,
+      rows: 24,
+      env: {
+        SHELL: '/bin/zsh',
+        PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay',
+        ORCA_PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay'
+      }
+    })
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toContain('shell-ready/zsh')
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
   it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -298,11 +380,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'powershell.exe',
-      [
-        '-NoExit',
-        '-Command',
-        'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-      ],
+      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
       expect.any(Object)
     )
   })
@@ -331,11 +409,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'pwsh.exe',
-      [
-        '-NoExit',
-        '-Command',
-        'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-      ],
+      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
       expect.any(Object)
     )
   })
@@ -364,11 +438,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'powershell.exe',
-      [
-        '-NoExit',
-        '-Command',
-        'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-      ],
+      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
       expect.any(Object)
     )
   })
@@ -397,11 +467,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'powershell.exe',
-      [
-        '-NoExit',
-        '-Command',
-        'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-      ],
+      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
       expect.any(Object)
     )
   })

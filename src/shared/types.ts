@@ -8,6 +8,21 @@ import type { GitLabProjectSettings } from './gitlab-types'
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
 export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './telemetry-events'
 
+// ─── Shell PATH hydration ────────────────────────────────────────────
+// Why: shared so the main-side `HydrationResult` discriminator and the
+// telemetry schema in `telemetry-events.ts` stay in lockstep without
+// `src/shared/` taking a forbidden import from `src/main/`. A compile-time
+// guard in telemetry-events.ts asserts the schema enum matches this alias —
+// adding a new failure mode without updating both places fails the build.
+export type ShellHydrationFailureReason =
+  | 'none'
+  | 'no_shell'
+  | 'timeout'
+  | 'spawn_error'
+  | 'empty_path'
+
+export type PathSource = 'shell_hydrate' | 'sync_seed_only'
+
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
 
@@ -1211,9 +1226,9 @@ export type GlobalSettings = {
   promptCacheTtlMs: number
   /** Why: Codex rate-limit account routing is a durable app preference owned by
    *  the main process, not transient UI state. Persisting the selected managed
-   *  homes here lets Orca resolve the correct `CODEX_HOME` before the renderer
-   *  hydrates, while keeping this scope explicitly separate from Codex usage
-   *  analytics and external terminal sessions. */
+   *  auth here lets Orca prepare shared ~/.codex before the renderer hydrates,
+   *  while keeping this scope explicitly separate from Codex usage analytics
+   *  and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
   /** Why: Claude Code keeps conversations under one shared config root. Orca
@@ -1299,6 +1314,10 @@ export type GlobalSettings = {
   /** Legacy persisted key from before the sidekick -> pet rename. Read only
    *  during migration; new writes use experimentalPet. */
   experimentalSidekick?: boolean
+  /** Experimental: Slack-style Activity page that groups agent/worktree status
+   *  events by worktree. Opt-in while the UI and backend event model are still
+   *  being refined. */
+  experimentalActivity: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the
@@ -1495,6 +1514,14 @@ export type PersistedUIState = {
   /** Once the user has seen the "your sessions won't be interrupted"
    *  reassurance card, we never show it again. */
   updateReassuranceSeen?: boolean
+  /** Per-paneKey "user has visited this row" timestamps, used by the inline
+   *  agents list to mute rows the user has already seen. Persisted because
+   *  agent rows themselves now survive restart; without persisting acks too,
+   *  rows you'd already clicked come back bold on relaunch. Stale entries
+   *  keyed on dead panes are inert: a future paneKey reuse stamps a fresh
+   *  stateStartedAt that beats the old ack via the existing comparison in
+   *  WorktreeCardAgents. Renderer-owned, written through ui:set. */
+  acknowledgedAgentsByPaneKey?: Record<string, number>
   /** URL to navigate to when a new browser tab is opened. Null means blank tab.
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null

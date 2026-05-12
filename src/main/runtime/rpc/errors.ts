@@ -3,6 +3,7 @@
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
+import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -46,8 +47,18 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'invalid_limit'
 ])
 
+const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
+
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string' &&
+    COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
+  ) {
+    return errorResponse(id, meta, (error as { code: string }).code, message)
+  }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
     return errorResponse(id, meta, message, message)
   }

@@ -23,10 +23,9 @@ export type DashboardAgentRow = {
   startedAt: number
 }
 
-// Why: the shape here is deliberately minimal — just what useRetainedAgentsSync
-// needs to diff liveGroups and decide which vanished agents to retain. The
-// per-card rendering pipeline is separate (WorktreeCardAgents +
-// useWorktreeAgentRows read retained entries directly from the store).
+// Why: the shape here is deliberately minimal. The per-card rendering pipeline
+// is separate (WorktreeCardAgents + useWorktreeAgentRows read retained entries
+// directly from the store).
 export type DashboardWorktreeCard = {
   repo: Repo
   worktree: Worktree
@@ -134,10 +133,7 @@ function buildDashboardData(
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Cross-worktree aggregate of live agent rows. Used by useRetainedAgentsSync
- * to drive retention: when a previously-live 'done' agent disappears from
- * this set, its snapshot is moved into retainedAgentsByPaneKey so the inline
- * per-card list can still render it.
+ * Cross-worktree aggregate of live agent rows.
  *
  * Not used to render anything directly — the inline list reads its own
  * worktree-scoped slice via useWorktreeAgentRows.

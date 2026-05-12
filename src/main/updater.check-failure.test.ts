@@ -33,6 +33,7 @@ const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, 
       autoUpdaterMock.checkForUpdates.mockReset()
       autoUpdaterMock.downloadUpdate.mockReset()
       autoUpdaterMock.quitAndInstall.mockReset()
+      autoUpdaterMock.setFeedURL.mockClear()
     }
 
     const autoUpdaterMock = {
@@ -91,6 +92,20 @@ vi.mock('./updater-nudge', () => ({
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
 
+const ONE_HOUR_MS = 60 * 60 * 1000
+const THIRTY_SECONDS_MS = 30 * 1000
+const FRIENDLY_MESSAGE = "Couldn't reach the update server. Try again in a few minutes."
+
+function makeBenignCheckFailure(message: string): void {
+  autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+    autoUpdaterMock.emit('checking-for-update')
+    queueMicrotask(() => {
+      autoUpdaterMock.emit('error', new Error(message))
+    })
+    return Promise.reject(new Error(message))
+  })
+}
+
 describe('updater check failure handling', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -105,63 +120,53 @@ describe('updater check failure handling', () => {
     isMock.dev = false
     killAllPtyMock.mockReset()
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
-  it('surfaces GitHub release transition errors to user-initiated checks', async () => {
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('error', new Error('Unable to find latest version on GitHub'))
-      })
-      return Promise.reject(new Error('Unable to find latest version on GitHub'))
-    })
+  it('surfaces GitHub release-transition failures with calmer copy and no short retry', async () => {
+    vi.useFakeTimers()
+    makeBenignCheckFailure('Unable to find latest version on GitHub')
 
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never)
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      const statuses = sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-      // Why: a user-initiated benign failure must show a visible error. Silently
-      // sending 'idle' (or 'not-available') makes the button look broken.
-      expect(statuses).toContainEqual(
-        expect.objectContaining({
-          state: 'error',
-          userInitiated: true,
-          message: expect.stringContaining('GitHub may be temporarily unavailable')
-        })
-      )
-      expect(statuses).not.toContainEqual(
-        expect.objectContaining({ state: 'not-available', userInitiated: true })
-      )
-    })
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+
+    expect(statuses).toContainEqual({ state: 'checking', userInitiated: true })
+    expect(statuses).toContainEqual(
+      expect.objectContaining({
+        state: 'error',
+        userInitiated: true,
+        message: FRIENDLY_MESSAGE
+      })
+    )
+    expect(statuses).not.toContainEqual(
+      expect.objectContaining({ message: expect.stringContaining('Unable to find latest version') })
+    )
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(THIRTY_SECONDS_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
   })
 
-  it('surfaces missing latest-mac.yml to user-initiated checks', async () => {
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit(
-          'error',
-          new Error('Cannot find channel "latest-mac.yml" update info: HttpError: 404')
-        )
-      })
-      return Promise.reject(
-        new Error('Cannot find channel "latest-mac.yml" update info: HttpError: 404')
-      )
-    })
+  it('surfaces missing latest-mac.yml to user-initiated checks with calmer copy', async () => {
+    makeBenignCheckFailure('Cannot find channel "latest-mac.yml" update info: HttpError: 404')
 
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never)
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
     await vi.waitFor(() => {
       const statuses = sendMock.mock.calls
@@ -171,7 +176,7 @@ describe('updater check failure handling', () => {
         expect.objectContaining({
           state: 'error',
           userInitiated: true,
-          message: expect.stringContaining('GitHub may be temporarily unavailable')
+          message: FRIENDLY_MESSAGE
         })
       )
       expect(statuses).not.toContainEqual(
@@ -180,30 +185,32 @@ describe('updater check failure handling', () => {
     })
   })
 
-  it('silently drops background benign failures to idle', async () => {
-    // Why: background checks must stay quiet; only user-initiated clicks get
-    // an error card. This prevents noisy nag during a release transition.
-    autoUpdaterMock.checkForUpdates.mockImplementationOnce(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('error', new Error('Unable to find latest version on GitHub'))
-      })
-      return Promise.reject(new Error('Unable to find latest version on GitHub'))
-    })
+  it('silently drops background benign failures to idle and waits for the hourly retry', async () => {
+    vi.useFakeTimers()
+    makeBenignCheckFailure('Unable to find latest version on GitHub')
 
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
     const { setupAutoUpdater, checkForUpdates } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never)
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdates()
-    await vi.waitFor(() => {
-      const statuses = sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-      expect(statuses).toContainEqual({ state: 'idle' })
-      expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
-    })
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+
+    expect(statuses).toContainEqual({ state: 'idle' })
+    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(THIRTY_SECONDS_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(ONE_HOUR_MS - THIRTY_SECONDS_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 })

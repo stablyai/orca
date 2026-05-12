@@ -83,7 +83,8 @@ const TerminalWait = TerminalHandle.extend({
 const TerminalCreateParams = z.object({
   worktree: OptionalString,
   command: OptionalString,
-  title: OptionalString
+  title: OptionalString,
+  focus: z.unknown().optional()
 })
 
 const TerminalSplit = TerminalHandle.extend({
@@ -268,7 +269,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.createTerminal(params.worktree, {
         command: params.command,
-        title: params.title
+        title: params.title,
+        focus: params.focus === true
       })
     })
   }),

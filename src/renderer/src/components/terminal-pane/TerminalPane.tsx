@@ -36,14 +36,13 @@ import {
 } from '@/lib/pane-manager/mobile-fit-overrides'
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
 // that otherwise leaves createTerminalSlice undefined at store-init time.
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
-
-const MAX_BUFFER_BYTES = 512 * 1024
 
 type TerminalPaneProps = {
   tabId: string
@@ -834,41 +833,6 @@ export default function TerminalPane({
       if (panes.length === 0) {
         return
       }
-      // No renderer-side pending writes to flush — PTY output writes live
-      // into xterm regardless of visibility, so the SerializeAddon already
-      // sees the freshest possible state at this point.
-      const buffers: Record<string, string> = {}
-      for (const pane of panes) {
-        try {
-          const leafId = paneLeafId(pane.id)
-          let scrollback = pane.terminal.options.scrollback ?? 10_000
-          let serialized = pane.serializeAddon.serialize({ scrollback })
-          // Cap at 512KB — binary search for largest scrollback that fits.
-          if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
-            let lo = 1
-            let hi = scrollback
-            let best = ''
-            while (lo <= hi) {
-              const mid = Math.floor((lo + hi) / 2)
-              const attempt = pane.serializeAddon.serialize({ scrollback: mid })
-              if (attempt.length <= MAX_BUFFER_BYTES) {
-                best = attempt
-                lo = mid + 1
-              } else {
-                hi = mid - 1
-              }
-            }
-            serialized = best
-          }
-          if (serialized.length > 0) {
-            buffers[leafId] = serialized
-          }
-        } catch {
-          // Serialization failure for one pane should not block others.
-        }
-      }
-      const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
-      const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
       // Why: setTabLayout REPLACES — it doesn't merge. captureBuffers can
       // run during a transient window (post-remount, just-attached,
       // mid-replay) where xterm hasn't rendered yet so serialize returns 0
@@ -876,42 +840,14 @@ export default function TerminalPane({
       // buffer. Merge prior state in for leaves whose live capture came back
       // empty. Same shape as persistLayoutSnapshot.
       const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
-      const currentLeafIds = new Set(panes.map((p) => paneLeafId(p.id)))
-      const ptyEntries = panes
-        .map(
-          (pane) =>
-            [
-              paneLeafId(pane.id),
-              paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-            ] as const
-        )
-        .filter((entry): entry is readonly [string, string] => entry[1] !== null)
-      const mergedBuffers = mergeCapturedLeafState({
-        prior: existing?.buffersByLeafId,
-        fresh: buffers,
-        currentLeafIds
+      const layout = captureTerminalShutdownLayout({
+        manager,
+        container,
+        expandedPaneId: expandedPaneIdRef.current,
+        paneTransports: paneTransportsRef.current,
+        paneTitlesByPaneId: paneTitlesRef.current,
+        existingLayout: existing
       })
-      const mergedPtyIds = mergeCapturedLeafState({
-        prior: existing?.ptyIdsByLeafId,
-        fresh: Object.fromEntries(ptyEntries),
-        currentLeafIds
-      })
-      if (Object.keys(mergedBuffers).length > 0) {
-        layout.buffersByLeafId = mergedBuffers
-      }
-      if (Object.keys(mergedPtyIds).length > 0) {
-        layout.ptyIdsByLeafId = mergedPtyIds
-      }
-      // Merge pane titles so the shutdown snapshot doesn't silently drop them.
-      // Why: the old early-return on empty buffers skipped this entirely, which
-      // meant titles were lost on restart when the terminal had no scrollback
-      // content (e.g. fresh pane, cleared screen).
-      const titleEntries = panes
-        .filter((p) => paneTitlesRef.current[p.id])
-        .map((p) => [paneLeafId(p.id), paneTitlesRef.current[p.id]] as const)
-      if (titleEntries.length > 0) {
-        layout.titlesByLeafId = Object.fromEntries(titleEntries)
-      }
       setTabLayout(tabId, layout)
     }
     shutdownBufferCaptures.set(tabId, captureBuffers)

@@ -4,6 +4,7 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../shared/agent-status-types'
+import { tabHasLivePty } from './tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
 
 // Re-export from shared module so existing renderer imports continue to work.
@@ -28,6 +29,14 @@ import {
 type AgentQueryArgs = {
   tabsByWorktree: Record<string, TerminalTab[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  // Why: title-scraped agent activity (pane titles, tab.title) survives sleep
+  // because runtimePaneTitlesByTabId is intentionally preserved under
+  // keepIdentifiers for wake recovery. Without the live-PTY map, slept tabs
+  // whose preserved titles still match a working pattern would surface as
+  // working agents through the title-bar count, dock badge, and per-worktree
+  // aggregates. Threading ptyIdsByTabId lets every title-scrape branch gate
+  // on actual liveness (`tabHasLivePty`).
+  ptyIdsByTabId: Record<string, string[]>
   worktreesByRepo: Record<string, Worktree[]>
 }
 
@@ -45,6 +54,7 @@ export type WorktreeAgents = {
 export function getWorkingAgentsPerWorktree({
   tabsByWorktree,
   runtimePaneTitlesByTabId,
+  ptyIdsByTabId,
   worktreesByRepo
 }: AgentQueryArgs): Record<string, WorktreeAgents> {
   const validIds = collectWorktreeIds(worktreesByRepo)
@@ -61,6 +71,13 @@ export function getWorkingAgentsPerWorktree({
     const agents: WorkingAgentEntry[] = []
 
     for (const tab of tabs) {
+      // Why: title-scraped activity must be gated on actual PTY liveness.
+      // runtimePaneTitlesByTabId is preserved under sleep (keepIdentifiers),
+      // so a slept tab whose pane titles still match a working pattern would
+      // surface as a working agent without this gate.
+      if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
+        continue
+      }
       const paneTitles = runtimePaneTitlesByTabId[tab.id]
       if (paneTitles && Object.keys(paneTitles).length > 0) {
         for (const [paneIdStr, title] of Object.entries(paneTitles)) {
@@ -76,7 +93,7 @@ export function getWorkingAgentsPerWorktree({
             }
           }
         }
-      } else if (tab.ptyId && detectAgentStatusFromTitle(tab.title) === 'working') {
+      } else if (detectAgentStatusFromTitle(tab.title) === 'working') {
         const label = getAgentLabel(tab.title)
         if (label) {
           agents.push({ label, status: 'working', tabId: tab.id, paneId: null })
@@ -196,6 +213,7 @@ export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): Work
 export function countWorkingAgents({
   tabsByWorktree,
   runtimePaneTitlesByTabId,
+  ptyIdsByTabId,
   worktreesByRepo
 }: AgentQueryArgs): number {
   const validIds = collectWorktreeIds(worktreesByRepo)
@@ -206,7 +224,7 @@ export function countWorkingAgents({
       continue
     }
     for (const tab of tabs) {
-      count += countWorkingAgentsForTab(tab, runtimePaneTitlesByTabId)
+      count += countWorkingAgentsForTab(tab, runtimePaneTitlesByTabId, ptyIdsByTabId)
     }
   }
 
@@ -225,8 +243,17 @@ function collectWorktreeIds(worktreesByRepo: Record<string, Worktree[]>): Set<st
 
 function countWorkingAgentsForTab(
   tab: TerminalTab,
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
+  ptyIdsByTabId: Record<string, string[]>
 ): number {
+  // Why: liveness precondition shared with getWorkingAgentsPerWorktree.
+  // runtimePaneTitlesByTabId is preserved under sleep (keepIdentifiers) and
+  // tab.ptyId is the wake-hint sessionId, not a liveness signal. Without
+  // this gate, slept tabs whose preserved titles still match a working
+  // pattern would inflate the title-bar agent count and dock badge.
+  if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
+    return 0
+  }
   let count = 0
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
   // Why: split-pane tabs can host multiple concurrent agents, but the
@@ -242,11 +269,7 @@ function countWorkingAgentsForTab(
     }
     return count
   }
-  // Why: restored session tabs can keep the last agent title even before a
-  // PTY reconnects (or after the PTY is gone). Count only live PTY-backed
-  // tab fallbacks so the titlebar matches the sidebar's notion of
-  // "actively running" instead of surfacing stale pre-shutdown state.
-  if (tab.ptyId && detectAgentStatusFromTitle(tab.title) === 'working') {
+  if (detectAgentStatusFromTitle(tab.title) === 'working') {
     count += 1
   }
   return count

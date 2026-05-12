@@ -10,6 +10,8 @@
 
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
@@ -47,6 +49,14 @@ export class SshRelaySession {
   // up, the onStateChange reconnect path never fires. This callback lets
   // ssh.ts wire up relay-level reconnect from outside the session.
   private _onRelayLost: ((targetId: string) => void) | null = null
+  // Why: a wire-handshake mismatch is terminal — the daemon and client are at
+  // different versions, no amount of backoff retry will reconcile them. This
+  // separate callback lets ssh.ts surface the failure to the user and skip
+  // the relay-lost backoff loop entirely. Distinct from _onRelayLost because
+  // _onRelayLost expects a recoverable transport drop.
+  private _onTerminalRelayError:
+    | ((targetId: string, err: RelayVersionMismatchError) => void)
+    | null = null
   private _onReady: ((targetId: string) => void) | null = null
   private portScanner: PortScanner | null = null
 
@@ -65,6 +75,10 @@ export class SshRelaySession {
 
   setOnRelayLost(cb: (targetId: string) => void): void {
     this._onRelayLost = cb
+  }
+
+  setOnTerminalRelayError(cb: (targetId: string, err: RelayVersionMismatchError) => void): void {
+    this._onTerminalRelayError = cb
   }
 
   setOnReady(cb: (targetId: string) => void): void {
@@ -158,6 +172,20 @@ export class SshRelaySession {
       if (!this.isDisposed()) {
         this.teardownProviders('shutdown')
         this._state = 'idle'
+      }
+      // Why: a wire-handshake mismatch on the FIRST connect is also terminal
+      // — the deployed relay binary on disk does not match a still-running
+      // daemon (typically because a legacy daemon from before the
+      // versioned-dir change is still alive). Notify the terminal-error
+      // callback so ssh.ts surfaces an actionable message and the caller's
+      // catch path doesn't conflate this with a transient deploy failure.
+      // We still rethrow so doConnect's existing failure path runs (clean up
+      // the SSH connection); ssh.ts's handler is idempotent.
+      if (isRelayVersionMismatchError(err)) {
+        console.warn(
+          `[ssh-relay-session] Terminal relay version mismatch on initial connect for ${this.targetId}: ${err.message}`
+        )
+        this._onTerminalRelayError?.(this.targetId, err)
       }
       throw err
     }
@@ -294,6 +322,17 @@ export class SshRelaySession {
       if (this.abortController === abortController && !this.isDisposed()) {
         this.teardownProviders('connection_lost')
       }
+      // Why: a version-mismatch is terminal. Fire the typed callback so
+      // ssh.ts can surface a "please reconnect manually" notice and skip the
+      // relay-lost backoff loop entirely. We do NOT keep state at
+      // 'reconnecting' — there's no transient drop to recover from.
+      if (isRelayVersionMismatchError(err)) {
+        console.warn(
+          `[ssh-relay-session] Terminal relay version mismatch for ${this.targetId}: ${err.message}`
+        )
+        this._onTerminalRelayError?.(this.targetId, err)
+        return
+      }
       // Why: stay in 'reconnecting' rather than reverting to 'ready', because
       // the provider stack is already torn down. The SSH connection manager
       // will fire another onStateChange when it reconnects again.
@@ -390,9 +429,10 @@ export class SshRelaySession {
     unregisterSshGitProvider(this.targetId)
   }
 
-  // Why: the relay's RelayContext starts with rootsRegistered=false and rejects
-  // all FS operations until at least one root is registered. This must run
-  // after every relay deploy because each deploy creates a fresh RelayContext.
+  // Why: kept for back-compat with old relay binaries during the upgrade
+  // window — those still gate FS ops on registered roots. New relays no-op
+  // these notifications. Tracked for removal once the relay-version floor
+  // moves past the cutover (see docs/relay-fs-allowlist-removal.md).
   private async registerRelayRoots(mux: SshChannelMultiplexer): Promise<void> {
     const remoteRepos = this.store.getRepos().filter((r) => r.connectionId === this.targetId)
 

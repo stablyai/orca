@@ -150,7 +150,8 @@ export function buildRows(
   worktrees: Worktree[],
   repoMap: Map<string, Repo>,
   prCache: Record<string, unknown> | null,
-  collapsedGroups: Set<string>
+  collapsedGroups: Set<string>,
+  repoOrder?: Map<string, number>
 ): Row[] {
   const result: Row[] = []
 
@@ -210,7 +211,28 @@ export function buildRows(
       }
     }
   } else {
-    orderedGroups.push(...Array.from(grouped.entries()))
+    // Why: header order must follow the canonical state.repos array order, not
+    // first-encounter from the smart-sorted worktree stream — otherwise sorting
+    // or filtering side effects could shuffle which repo header appears first,
+    // and manual reorder would have nothing to bind to. Unknown ids (no entry
+    // in repoOrder) sort last by label so they remain deterministic.
+    const entries = Array.from(grouped.entries())
+    if (repoOrder) {
+      const rankFor = (key: string): number => {
+        const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
+        const rank = repoOrder.get(repoId)
+        return rank === undefined ? Number.POSITIVE_INFINITY : rank
+      }
+      entries.sort((a, b) => {
+        const ra = rankFor(a[0])
+        const rb = rankFor(b[0])
+        if (ra !== rb) {
+          return ra - rb
+        }
+        return a[1].label.localeCompare(b[1].label)
+      })
+    }
+    orderedGroups.push(...entries)
   }
 
   for (const [key, group] of orderedGroups) {

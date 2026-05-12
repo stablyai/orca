@@ -323,14 +323,21 @@ export default function TabGroupPanel({
           </div>
           {/* Why: Electron's native drag hit-test ignores z-index — a no-drag
               element only overrides drag when it's a DOM descendant, not a
-              sibling in another branch. The floating right-sidebar toggle in
-              App.tsx sits in a separate DOM tree, so we need an explicit
-              no-drag child here to punch a hole in the drag surface beneath it
-              and let clicks through to the toggle. */}
+              sibling in another branch. The floating right-sidebar toggle and
+              the fixed-position window-controls overlay on Windows both sit in
+              separate DOM trees, so we need an explicit no-drag child here to
+              punch holes in the drag surface beneath them. The sidebar toggle
+              is 40px (w-10); window controls add --window-controls-width
+              (138px on Windows, 0px elsewhere) on top. */}
           {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
             <div
-              className="shrink-0 w-10"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="shrink-0"
+              style={
+                {
+                  width: 'calc(40px + var(--window-controls-width, 0px))',
+                  WebkitAppRegion: 'no-drag'
+                } as React.CSSProperties
+              }
             />
           ) : null}
         </div>

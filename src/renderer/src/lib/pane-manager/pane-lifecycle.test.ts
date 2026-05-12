@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { attachWebgl, openTerminal, resetTerminalWebglSuggestion } from './pane-lifecycle'
+import {
+  attachWebgl,
+  markComplexScriptOutput,
+  resetTerminalWebglSuggestion
+} from './pane-webgl-renderer'
+import { openTerminal } from './pane-lifecycle'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 
 const webglMock = vi.hoisted(() => ({
@@ -35,6 +40,7 @@ function createPane(): ManagedPaneInternal {
     gpuRenderingEnabled: true,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    hasComplexScriptOutput: false,
     fitAddon: {
       fit: vi.fn()
     } as never,
@@ -159,6 +165,33 @@ describe('attachWebgl', () => {
 
     expect(forcedPane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps auto-mode panes on DOM after complex-script output', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+
+    markComplexScriptOutput(pane)
+
+    expect(pane.hasComplexScriptOutput).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+
+    attachWebgl(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows explicit on mode to override complex-script DOM fallback', () => {
+    const pane = createPane()
+
+    markComplexScriptOutput(pane)
+    pane.terminalGpuAcceleration = 'on'
+    attachWebgl(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('openTerminal — Unicode 11 ordering', () => {
@@ -239,6 +272,7 @@ describe('openTerminal — Unicode 11 ordering', () => {
       gpuRenderingEnabled: false,
       webglAttachmentDeferred: false,
       webglDisabledAfterContextLoss: false,
+      hasComplexScriptOutput: false,
       fitAddon,
       fitResizeObserver: null,
       pendingObservedFitRafId: null,

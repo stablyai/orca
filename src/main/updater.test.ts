@@ -206,7 +206,7 @@ describe('updater', () => {
         expect.objectContaining({
           state: 'error',
           userInitiated: true,
-          message: expect.stringContaining('GitHub may be temporarily unavailable')
+          message: expect.stringContaining("Couldn't reach the update server")
         })
       )
     })

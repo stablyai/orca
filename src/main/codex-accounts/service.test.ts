@@ -92,6 +92,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalMobile: false,
     mobileAutoRestoreFitMs: null,
     experimentalPet: false,
+    experimentalActivity: false,
     experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',

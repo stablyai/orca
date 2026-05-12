@@ -138,6 +138,21 @@ function getProviderForPty(ptyId: string): IPtyProvider {
   return getProvider(connectionId)
 }
 
+function normalizeNodePtySpawnError(err: unknown): Error {
+  const rawMessage = err instanceof Error ? err.message : String(err)
+  const hintedMessage = addNodePtyRecoveryHint(rawMessage)
+  if (hintedMessage === rawMessage && err instanceof Error) {
+    return err
+  }
+  if (err instanceof Error) {
+    // Why: preserve the original stack/name/custom fields while returning the
+    // same recovery guidance as the renderer-driven pty:spawn path.
+    err.message = hintedMessage
+    return err
+  }
+  return new Error(hintedMessage)
+}
+
 // ─── Host PTY env assembly ──────────────────────────────────────────
 // Why: both the LocalPtyProvider.buildSpawnEnv closure and the daemon-active
 // fallback in pty:spawn need the same set of host-local env injections
@@ -192,6 +207,11 @@ export function buildPtyHostEnv(
   // load together — same pattern Pi uses below for PI_CODING_AGENT_DIR. See
   // docs/opencode-config-dir-collision.md.
   Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+  if (baseEnv.OPENCODE_CONFIG_DIR) {
+    // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
+    // wrappers restore this PTY-scoped value after user startup files run.
+    baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
+  }
 
   // Why: Claude/Codex native hooks run inside the shell process, so Orca
   // must inject the loopback receiver coordinates before the agent starts.
@@ -208,6 +228,11 @@ export function buildPtyHostEnv(
   // back to a fresh UUID per spawn; that would discard user Pi state on
   // every daemon reconnect.
   Object.assign(baseEnv, piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir))
+  if (baseEnv.PI_CODING_AGENT_DIR) {
+    // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
+    // wrappers restore this PTY-scoped value after user startup files run.
+    baseEnv.ORCA_PI_CODING_AGENT_DIR = baseEnv.PI_CODING_AGENT_DIR
+  }
 
   // Why: Codex account switching now materializes auth into one shared
   // runtime home (~/.codex), and Codex launched inside Orca terminals must
@@ -457,7 +482,14 @@ export function registerPtyHandlers(
         })
         // Why: agents need their own terminal handle at process start so they
         // can self-identify in orchestration messages without an extra RPC.
-        const preAllocatedHandle = runtime?.preAllocateHandleForPty(id)
+        const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
+        const preAllocatedHandle =
+          requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
+            ? requestedHandle
+            : runtime?.preAllocateHandleForPty(id)
+        if (requestedHandle && requestedHandle !== preAllocatedHandle) {
+          delete env.ORCA_TERMINAL_HANDLE
+        }
         if (preAllocatedHandle) {
           env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
         }
@@ -478,6 +510,7 @@ export function registerPtyHandlers(
   // reduces IPC round-trips from hundreds/sec to ~120/sec under high
   // throughput, with no perceptible latency increase for interactive use.
   const pendingData = new Map<string, string>()
+  const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   const PTY_BATCH_INTERVAL_MS = 8
 
@@ -665,6 +698,110 @@ export function registerPtyHandlers(
   // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
   runtime?.setPtyController({
+    spawn: async (args) => {
+      const provider = getProvider(args.connectionId)
+      const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
+      if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
+        throw new Error('A Claude account switch is in progress. Try again after it finishes.')
+      }
+      const claudeAuth = isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth() : null
+      if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
+        throw new Error('A Claude account switch is in progress. Try again after it finishes.')
+      }
+      if (claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
+        throw new Error(
+          'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
+        )
+      }
+
+      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      const sessionId = isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined
+      let env: Record<string, string> | undefined = claudeAuth
+        ? { ...args.env, ...claudeAuth.envPatch }
+        : args.env
+      if (args.preAllocatedHandle) {
+        env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
+      }
+      if (isDaemonHostSpawn && sessionId) {
+        if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
+          throw new Error('Invalid PTY session id')
+        }
+        env = buildPtyHostEnv(sessionId, env ?? {}, {
+          isPackaged: app.isPackaged,
+          userDataPath: app.getPath('userData'),
+          selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false
+        })
+      }
+
+      const spawnOptions: PtySpawnOptions = {
+        cols: args.cols,
+        rows: args.rows,
+        cwd: args.cwd,
+        env
+      }
+      if (claudeAuth?.stripAuthEnv) {
+        spawnOptions.envToDelete = [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
+      }
+      if (args.command !== undefined) {
+        spawnOptions.command = args.command
+      }
+      if (args.worktreeId !== undefined) {
+        spawnOptions.worktreeId = args.worktreeId
+      }
+      if (sessionId !== undefined) {
+        spawnOptions.sessionId = sessionId
+        ptySizes.set(sessionId, { cols: args.cols, rows: args.rows })
+      }
+      if (process.platform === 'win32' && !args.connectionId) {
+        spawnOptions.shellOverride = getSettings?.()?.terminalWindowsShell
+        spawnOptions.terminalWindowsPowerShellImplementation = getSettings
+          ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
+          : undefined
+      }
+
+      let result: PtySpawnResult
+      try {
+        if (args.preAllocatedHandle) {
+          trustedTerminalHandleEnv.add(args.preAllocatedHandle)
+        }
+        result = await provider.spawn(spawnOptions)
+      } catch (err) {
+        if (sessionId !== undefined) {
+          ptySizes.delete(sessionId)
+          clearProviderPtyState(sessionId)
+        }
+        throw normalizeNodePtySpawnError(err)
+      } finally {
+        if (args.preAllocatedHandle) {
+          trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
+        }
+      }
+      ptyOwnership.set(result.id, args.connectionId ?? null)
+      ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
+      if (args.preAllocatedHandle) {
+        runtime?.registerPreAllocatedHandleForPty(result.id, args.preAllocatedHandle)
+      }
+      if (args.worktreeId) {
+        runtime?.registerPty(result.id, args.worktreeId)
+      }
+      if (isClaudeLaunch) {
+        markClaudePtySpawned(result.id)
+      }
+      if (!args.connectionId) {
+        registerPty({
+          ptyId: result.id,
+          worktreeId: args.worktreeId ?? null,
+          sessionId: sessionId ?? null,
+          paneKey: null,
+          pid:
+            typeof result.pid === 'number' && Number.isFinite(result.pid) && result.pid > 0
+              ? result.pid
+              : null
+        })
+      }
+      return { id: result.id }
+    },
     write: (ptyId, data) => {
       const provider = getProviderForPty(ptyId)
       try {
@@ -913,21 +1050,12 @@ export function registerPtyHandlers(
       }
       let result: PtySpawnResult
       try {
+        if (preAllocatedHandle) {
+          trustedTerminalHandleEnv.add(preAllocatedHandle)
+        }
         result = await provider.spawn(spawnOptions)
       } catch (err) {
-        const rawMessage = err instanceof Error ? err.message : String(err)
-        const hintedMessage = addNodePtyRecoveryHint(rawMessage)
-        let spawnError: Error
-        if (hintedMessage === rawMessage && err instanceof Error) {
-          spawnError = err
-        } else if (err instanceof Error) {
-          // Why: rewrite the message in place so the original stack trace,
-          // name, and any custom fields survive into telemetry and logs.
-          err.message = hintedMessage
-          spawnError = err
-        } else {
-          spawnError = new Error(hintedMessage)
-        }
+        const spawnError = normalizeNodePtySpawnError(err)
         if (effectiveSessionId !== undefined) {
           ptySizes.delete(effectiveSessionId)
         }
@@ -962,6 +1090,10 @@ export function registerPtyHandlers(
           })
         }
         throw spawnError
+      } finally {
+        if (preAllocatedHandle) {
+          trustedTerminalHandleEnv.delete(preAllocatedHandle)
+        }
       }
       ptyOwnership.set(result.id, args.connectionId ?? null)
       if (preAllocatedHandle) {

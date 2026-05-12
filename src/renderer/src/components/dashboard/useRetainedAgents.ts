@@ -1,47 +1,187 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { type DashboardRepoGroup, type DashboardAgentRow } from './useDashboardData'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { type DashboardAgentRow } from './useDashboardData'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
 
 // Why: when an agent finishes or its terminal closes, the store cleans up the
-// explicit status entry and the agent vanishes from useDashboardData. Retaining
-// the last-known "done" snapshot in the store lets the inline per-card agents
-// list render the done row until the user dismisses it, rather than having the
-// row wink out the moment the terminal process exits.
+// explicit status entry and the agent vanishes from the live status set.
+// Retaining the last-known "done" snapshot in the store lets the inline
+// per-card agents list render the done row until the user dismisses it, rather
+// than having the row wink out the moment the terminal process exits.
 
-export function useRetainedAgentsSync(liveGroups: DashboardRepoGroup[]): void {
+type RetainedAgentSnapshot = Map<string, { row: DashboardAgentRow; worktreeId: string }>
+
+type RetainedAgentsSyncInputs = {
+  repos: Repo[]
+  worktreesByRepo: Record<string, Worktree[]>
+  tabsByWorktree: Record<string, TerminalTab[]>
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusEpoch?: number
+}
+
+type RetainedAgentsSyncSnapshotInputs = RetainedAgentsSyncInputs & {
+  now: number
+}
+
+function paneKeyTabId(paneKey: string): string | null {
+  const colonIndex = paneKey.indexOf(':')
+  if (colonIndex <= 0) {
+    return null
+  }
+  return paneKey.slice(0, colonIndex)
+}
+
+function buildLiveTabIndex(args: {
+  repos: Repo[]
+  worktreesByRepo: Record<string, Worktree[]>
+  tabsByWorktree: Record<string, TerminalTab[]>
+}): {
+  existingWorktreeIds: Set<string>
+  tabIndex: Map<string, { tab: TerminalTab; worktreeId: string }>
+} {
+  const existingWorktreeIds = new Set<string>()
+  const tabIndex = new Map<string, { tab: TerminalTab; worktreeId: string }>()
+
+  for (const repo of args.repos) {
+    const worktrees = args.worktreesByRepo[repo.id] ?? []
+    for (const worktree of worktrees) {
+      if (worktree.isArchived) {
+        continue
+      }
+      existingWorktreeIds.add(worktree.id)
+      const tabs = args.tabsByWorktree[worktree.id] ?? []
+      for (const tab of tabs) {
+        tabIndex.set(tab.id, { tab, worktreeId: worktree.id })
+      }
+    }
+  }
+
+  return { existingWorktreeIds, tabIndex }
+}
+
+function agentStartedAt(entry: AgentStatusEntry): number {
+  return entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+}
+
+export function buildRetainedAgentsSyncSignature(args: RetainedAgentsSyncInputs): string {
+  const { existingWorktreeIds, tabIndex } = buildLiveTabIndex(args)
+  const worktreeParts = [...existingWorktreeIds].sort()
+  const tabParts = [...tabIndex.entries()]
+    .map(([tabId, owner]) => `${owner.worktreeId}:${tabId}`)
+    .sort()
+  const agentParts: string[] = []
+
+  for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
+    const tabId = paneKeyTabId(paneKey)
+    if (!tabId) {
+      continue
+    }
+    const owner = tabIndex.get(tabId)
+    if (!owner) {
+      continue
+    }
+    // Why: working/blocked/waiting pings can update prompt/tool text dozens of
+    // times per second; retention only cares about identity, state, freshness,
+    // and final done payloads.
+    const doneUpdatedAt = entry.state === 'done' ? entry.updatedAt : ''
+    agentParts.push(
+      [
+        owner.worktreeId,
+        paneKey,
+        entry.state,
+        entry.interrupted === true ? 'interrupted' : '',
+        agentStartedAt(entry),
+        doneUpdatedAt
+      ].join(':')
+    )
+  }
+
+  agentParts.sort()
+  return [
+    `epoch:${args.agentStatusEpoch ?? 0}`,
+    `worktrees:${worktreeParts.join(',')}`,
+    `tabs:${tabParts.join(',')}`,
+    `agents:${agentParts.join(',')}`
+  ].join('|')
+}
+
+export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshotInputs): {
+  currentAgents: RetainedAgentSnapshot
+  existingWorktreeIds: Set<string>
+} {
+  const { existingWorktreeIds, tabIndex } = buildLiveTabIndex(args)
+  const currentAgents: RetainedAgentSnapshot = new Map()
+
+  for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
+    const tabId = paneKeyTabId(paneKey)
+    if (!tabId) {
+      continue
+    }
+    const owner = tabIndex.get(tabId)
+    if (!owner) {
+      continue
+    }
+    const isFresh = isExplicitAgentStatusFresh(entry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+    const shouldDecay =
+      !isFresh &&
+      (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
+    currentAgents.set(paneKey, {
+      row: {
+        paneKey,
+        entry,
+        tab: owner.tab,
+        agentType: entry.agentType ?? 'unknown',
+        state: shouldDecay ? 'idle' : entry.state,
+        startedAt: agentStartedAt(entry)
+      },
+      worktreeId: owner.worktreeId
+    })
+  }
+
+  return { currentAgents, existingWorktreeIds }
+}
+
+export function useRetainedAgentsSync(): void {
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)
-  const prevAgentsRef = useRef<Map<string, { row: DashboardAgentRow; worktreeId: string }>>(
-    new Map()
+  const retentionSignature = useAppStore((s) =>
+    buildRetainedAgentsSyncSignature({
+      repos: s.repos,
+      worktreesByRepo: s.worktreesByRepo,
+      tabsByWorktree: s.tabsByWorktree,
+      agentStatusByPaneKey: s.agentStatusByPaneKey,
+      agentStatusEpoch: s.agentStatusEpoch
+    })
   )
+  const prevAgentsRef = useRef<RetainedAgentSnapshot>(new Map())
 
   useEffect(() => {
-    const current = new Map<string, { row: DashboardAgentRow; worktreeId: string }>()
-    const existingWorktreeIds = new Set<string>()
-    for (const group of liveGroups) {
-      for (const wt of group.worktrees) {
-        existingWorktreeIds.add(wt.worktree.id)
-        for (const agent of wt.agents) {
-          current.set(agent.paneKey, { row: agent, worktreeId: wt.worktree.id })
-        }
-      }
-    }
+    const state = useAppStore.getState()
+    const { currentAgents, existingWorktreeIds } = buildRetainedAgentsSyncSnapshot({
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo,
+      tabsByWorktree: state.tabsByWorktree,
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      agentStatusEpoch: state.agentStatusEpoch,
+      now: Date.now()
+    })
 
     // Why: read retention state via getState() instead of subscribing. This
-    // effect's driving input is liveGroups — retention decisions only need to
-    // happen when an agent appears/disappears from the live set. Subscribing
-    // to retainedAgentsByPaneKey would create a feedback loop (this effect
-    // calls retainAgents which updates that map, re-firing the effect).
-    // retentionSuppressedPaneKeys is only acted on when the corresponding
-    // pane disappears from liveGroups, so its changes are naturally picked
-    // up on the next liveGroups-driven run via this fresh getState() read.
-    const { retainedAgentsByPaneKey: retainedNow, retentionSuppressedPaneKeys } =
-      useAppStore.getState()
+    // effect's driving input is the retention signature — retention decisions
+    // only need to happen when live identity/state/freshness or worktree
+    // membership changes. Subscribing to retainedAgentsByPaneKey would create
+    // a feedback loop because this effect calls retainAgents.
+    const { retainedAgentsByPaneKey: retainedNow, retentionSuppressedPaneKeys } = state
     const { toRetain, consumedSuppressedPaneKeys } = collectRetainedAgentsOnDisappear({
       previousAgents: prevAgentsRef.current,
-      currentAgents: current,
+      currentAgents,
       retainedAgentsByPaneKey: retainedNow,
       retentionSuppressedPaneKeys
     })
@@ -52,12 +192,12 @@ export function useRetainedAgentsSync(liveGroups: DashboardRepoGroup[]): void {
     // atomic update keeps the inline agents list visually stable.
     retainAgents(toRetain)
 
-    prevAgentsRef.current = current
+    prevAgentsRef.current = currentAgents
     pruneRetainedAgents(existingWorktreeIds)
     if (consumedSuppressedPaneKeys.length > 0) {
       clearRetentionSuppressedPaneKeys(consumedSuppressedPaneKeys)
     }
-  }, [liveGroups, retainAgents, pruneRetainedAgents, clearRetentionSuppressedPaneKeys])
+  }, [retentionSignature, retainAgents, pruneRetainedAgents, clearRetentionSuppressedPaneKeys])
 }
 
 export function collectRetainedAgentsOnDisappear(args: {

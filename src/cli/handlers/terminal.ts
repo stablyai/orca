@@ -119,7 +119,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command: getOptionalStringFlag(flags, 'command'),
-      title: getOptionalStringFlag(flags, 'title')
+      title: getOptionalStringFlag(flags, 'title'),
+      focus: flags.get('focus') === true
     })
     printResult(result, json, formatTerminalCreate)
   },

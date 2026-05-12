@@ -6,7 +6,7 @@ import type {
 } from './pane-manager-types'
 import { createDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
-import { disposeWebgl, attachWebgl } from './pane-lifecycle'
+import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 
 export { findLineByContent, captureScrollState, restoreScrollState } from './pane-scroll'
 

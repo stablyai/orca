@@ -46,6 +46,7 @@ import {
 } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
@@ -466,23 +467,19 @@ function Terminal(): React.JSX.Element | null {
   }, [queueEditorCloseRequests])
 
   useEffect(() => {
-    if (tabs.length === 0) {
-      return
-    }
-    if (activeTabId && tabs.some((tab) => tab.id === activeTabId)) {
+    if (!shouldRepairActiveTerminalTab({ activeTabType, activeTabId, tabs })) {
       return
     }
     // Why: mutating Zustand during render trips React's "Cannot update a
-    // component while rendering a different component" warning. Keep the
-    // legacy active-tab repair, but run it as an effect after the render that
-    // observed the stale activeTabId.
+    // component while rendering a different component" warning. Keep the repair
+    // terminal-only so inactive CLI-created tabs cannot steal editor/browser focus.
     setActiveTab(tabs[0].id)
     // Why: `tabs` is intentionally the dependency here because the repair must
     // react to tab-order/content changes, not just scalar IDs. The list comes
     // from Zustand selectors and is small in practice, so this explicit repair
     // effect is preferred over duplicating reconciliation state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTabId, setActiveTab, tabs])
+  }, [activeTabId, activeTabType, setActiveTab, tabs])
 
   // Track which worktrees have been activated during this app session.
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY

@@ -1,1186 +1,180 @@
-/* eslint-disable max-lines -- Why: the hook server owns the full HTTP ingest surface (routing, body parsing, per-CLI normalization, transcript scan, pane dispatch) in one place so the contract with Claude/Codex/Gemini hooks stays consistent and doesn't drift across files. */
+/* eslint-disable max-lines -- Why: this file owns the loopback HTTP adapter, the on-disk last-status persistence layer (hydrate, sanitize, TTL, atomic write, drop), and the relay ingest path in one place so the cache lifecycle (set → schedule → drain) lives next to the surfaces that mutate it. Splitting would force mutual `private` accessor scaffolding for a single class. */
+// Why: this module is the Orca-main-process adapter for the shared
+// agent-hook listener pipeline (`src/shared/agent-hook-listener.ts`). The
+// listener internals (request parsing, payload normalization, endpoint-file
+// writing, validation) live in `shared/` so the relay can host the same
+// pipeline on the remote without dragging Electron in. This file owns:
+//   - the loopback HTTP socket + bearer-token auth
+//   - the IPC fanout (setListener / lastStatusByPaneKey replay)
+//   - the `ingestRemote` entry point that bypasses HTTP for relay-forwarded
+//     events (see docs/design/agent-status-over-ssh.md §5)
+//   - the on-disk last-status cache (`last-status.json`) that survives
+//     Orca restart so retained dashboard rows reappear on relaunch
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { randomUUID } from 'crypto'
-import {
-  chmodSync,
-  closeSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  readSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'fs'
+import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import {
-  parseAgentStatusPayload,
-  type ParsedAgentStatusPayload
-} from '../../shared/agent-status-types'
+
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
+import {
+  clearAllListenerCaches,
+  clearPaneCacheState,
+  createHookListenerState,
+  getEndpointFileName,
+  HOOK_REQUEST_SLOWLORIS_MS,
+  MAX_PANE_KEY_LEN,
+  normalizeHookPayload,
+  parseFormEncodedBody,
+  readRequestBody,
+  resolveHookSource,
+  writeEndpointFile,
+  type AgentHookEventPayload,
+  type HookListenerState
+} from '../../shared/agent-hook-listener'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import {
+  type AgentStatusIpcPayload,
+  normalizeAgentStatusPayload
+} from '../../shared/agent-status-types'
 
-// Why: Pi rides this server via a bundled extension (see
-// pi/agent-status-extension-source) that fetch()es /hook/pi from inside
-// the pi Node process. Like OpenCode, pi has no settings.json hook
-// surface — its extensibility is the in-process TypeScript extension API
-// (pi.on('agent_start'), 'tool_call', etc.), so the extension pre-maps
-// pi's event names to the same hook_event_name vocabulary used here
-// before POSTing. See normalizePiEvent below for the mapping.
-//
-// OpenCode rides this server via a bundled plugin (see opencode/hook-service)
-// that fetch()es /hook/opencode from inside the OpenCode process. Unlike
-// Claude/Codex/Gemini, OpenCode's event names are in-process plugin events
-// (session.status, session.idle, permission.asked) rather than settings.json
-// hook names, so the plugin pre-maps them to our hook_event_name vocabulary
-// before POSTing. See normalizeOpenCodeEvent below for the mapping.
-//
-// Cursor (cursor-agent) exposes a declarative hooks.json surface that is
-// conceptually similar to Claude's settings.json hooks but uses camelCase
-// event names (beforeSubmitPrompt, preToolUse, postToolUse, stop, etc.) per
-// https://cursor.com/docs/hooks. See normalizeCursorEvent below.
-type AgentHookSource = 'claude' | 'codex' | 'gemini' | 'opencode' | 'cursor' | 'pi'
+export type { AgentHookSource }
 
-type AgentHookEventPayload = {
-  paneKey: string
-  tabId?: string
-  worktreeId?: string
-  payload: ParsedAgentStatusPayload
+// Why: server-process-only enrichment of the shared event payload. The shared
+// listener emits `AgentHookEventPayload` (the bare event shape). For
+// persistence and the dashboard's "did the agent transition since I last
+// looked?" comparison, we attach `receivedAt` (when the latest event arrived
+// for this pane) and `stateStartedAt` (when the current state first appeared).
+// Stored in `state.lastStatusByPaneKey` via assignability — `AgentHookEventPayload`
+// is the declared map value, and the extra fields ride along untouched because
+// the shared module only writes/clears, never reads.
+type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+  receivedAt: number
+  stateStartedAt: number
 }
 
-// Why: only log a given version/env mismatch once per process so a stale hook
-// script that fires on every keystroke doesn't flood the logs.
-const warnedVersions = new Set<string>()
-const warnedEnvs = new Set<string>()
-// Why: cap the warning Sets so a buggy or malicious local client that varies
-// its `version`/`env` fields per request cannot grow these Sets without bound
-// for the process lifetime. Once saturated, we drop further warnings (and skip
-// inserting the new key) — the diagnostic value of "warn once" is preserved
-// for the common case while memory stays bounded against untrusted input.
-const MAX_WARNED_KEYS = 32
-// Why: hook events can arrive while Orca is windowless (common on macOS when
-// the user closes the window but leaves the app running). Retain the latest
-// normalized status per pane so reopening the window can replay current agent
-// state instead of showing nothing until the next hook event happens.
-const lastStatusByPaneKey = new Map<string, AgentHookEventPayload>()
+// Why: name of the on-disk cache that survives Orca restart. Lives next to
+// the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
+// restart artifacts stay co-located.
+const LAST_STATUS_FILE_NAME = 'last-status.json'
 
-// Why: Claude documents `prompt` on UserPromptSubmit; other agents may use
-// different field names. Probe a small allowlist so we can surface the real
-// user prompt in the dashboard regardless of which agent is reporting.
-function extractPromptText(hookPayload: Record<string, unknown>): string {
-  const candidateKeys = ['prompt', 'user_prompt', 'userPrompt', 'message']
-  for (const key of candidateKeys) {
-    const value = hookPayload[key]
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value
-    }
+// Why: starts at 2 (not 1) because pre-merge dev iterations of this branch
+// wrote a v1 shape with no receivedAt / stateStartedAt. Bumping to 2 means a
+// developer who upgrades from an in-flight branch sees an empty hydration
+// once instead of partially-typed legacy entries. New file format; never
+// shipped to users at v1. A mismatched version is treated as a corrupt file
+// (silent empty hydration).
+const LAST_STATUS_FILE_VERSION = 2
+
+// Why: trailing-edge debounce so a burst of hook events from a multi-agent
+// run produces one disk write instead of N. The latency budget matches other
+// hook-server batching; quit-time uses flushStatusPersistSync() for the
+// guaranteed final flush.
+const STATUS_PERSIST_DEBOUNCE_MS = 250
+
+// Why: bound the on-disk file's growth across many sessions. PTY-teardown
+// eviction handles closed panes, but daemon-restored PTYs that never re-attach
+// and crash-recovery paths where teardown never fires can leave entries
+// pinned forever. 7 days matches the user-visible "still relevant?" horizon —
+// older entries have almost certainly been resolved or abandoned and should
+// not resurrect on hydrate.
+const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+type LastStatusFile = {
+  version: number
+  entries: Record<string, EnrichedAgentHookEventPayload>
+}
+
+// Why: paneKey is `${tabId}:${paneId}` — exactly one ':' with non-empty
+// segments on either side. Used both at write time (defensive) and at
+// hydrate time (drop on mismatch).
+export function isValidPaneKey(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) {
+    return false
   }
-  // Why: OpenCode's plugin sends MessagePart events with { role, text }. When
-  // role === 'user', the text *is* the prompt — surface it so the dashboard
-  // shows the user's most recent input even though OpenCode has no dedicated
-  // UserPromptSubmit event we can hook into.
-  if (hookPayload.role === 'user' && typeof hookPayload.text === 'string') {
-    const trimmed = hookPayload.text.trim()
-    if (trimmed.length > 0) {
-      return hookPayload.text
-    }
+  const colon = value.indexOf(':')
+  if (colon <= 0 || colon === value.length - 1) {
+    return false
   }
-  return ''
+  // Why: exactly one colon. Anything weirder is corruption.
+  return !value.includes(':', colon + 1)
 }
 
-function parseFormEncodedBody(body: string): Record<string, string> {
-  const params = new URLSearchParams(body)
-  const parsed: Record<string, string> = {}
-  for (const [key, value] of params.entries()) {
-    parsed[key] = value
-  }
-  return parsed
-}
-
-function readRequestBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let byteLength = 0
-    let settled = false
-    req.on('data', (chunk: Buffer) => {
-      if (settled) {
-        return
-      }
-      // Why: check size in bytes (not UTF-16 code units) and stop accumulating
-      // after rejection so a malicious client cannot push memory past the
-      // advertised 1 MB cap.
-      if (byteLength + chunk.length > 1_000_000) {
-        settled = true
-        reject(new Error('payload too large'))
-        req.destroy()
-        return
-      }
-      byteLength += chunk.length
-      chunks.push(chunk)
-    })
-    req.on('end', () => {
-      if (settled) {
-        return
-      }
-      settled = true
-      try {
-        // Why: decode once via Buffer.concat so multi-byte UTF-8 characters that
-        // straddle a chunk boundary are reassembled correctly. Per-chunk
-        // `.toString('utf8')` would corrupt emoji or non-ASCII inside assistant
-        // messages.
-        const body = chunks.length > 0 ? Buffer.concat(chunks).toString('utf8') : ''
-        const contentType = req.headers['content-type'] ?? ''
-        if (typeof contentType === 'string' && contentType.includes('application/json')) {
-          resolve(body ? JSON.parse(body) : {})
-          return
-        }
-        if (
-          typeof contentType === 'string' &&
-          contentType.includes('application/x-www-form-urlencoded')
-        ) {
-          resolve(parseFormEncodedBody(body))
-          return
-        }
-        // Why: existing managed scripts POST JSON and the updated Unix scripts
-        // POST form-encoded data. Default to JSON for unknown/missing content
-        // types so legacy callers that omit the header still behave as before.
-        resolve(body ? JSON.parse(body) : {})
-      } catch (error) {
-        reject(error)
-      }
-    })
-    req.on('error', (err) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      reject(err)
-    })
-    // Why: req.destroy() (called by the slowloris setTimeout in the route
-    // handler) emits 'close'/'aborted' but not 'end' or 'error'. Without this
-    // handler the promise would never settle and the chunk buffers would be
-    // retained for the process lifetime, letting a slow client that holds a
-    // valid token accumulate pending closures indefinitely.
-    req.on('close', () => {
-      if (settled) {
-        return
-      }
-      settled = true
-      reject(new Error('aborted'))
-    })
-  })
-}
-
-// Why: only UserPromptSubmit carries the user's prompt. Subsequent events in
-// the same turn (PostToolUse, PermissionRequest, Stop, …) arrive with no
-// prompt, so we cache the last prompt per pane and reuse it until a new
-// prompt arrives. The cache survives across `done` so the user can still see
-// what finished; it's reset on the next UserPromptSubmit.
-const lastPromptByPaneKey = new Map<string, string>()
-
-function resolvePrompt(
+function sanitizeHydratedEntry(
   paneKey: string,
-  promptText: string,
-  options?: { resetOnNewTurn?: boolean }
-): string {
-  if (options?.resetOnNewTurn) {
-    // Why: some turn-boundary events (e.g. Codex SessionStart, OpenCode
-    // SessionBusy) do not carry the new prompt yet. Clearing here prevents the
-    // previous turn's prompt from leaking into the new working state until a
-    // later prompt-bearing event arrives.
-    lastPromptByPaneKey.delete(paneKey)
+  rawEntry: unknown
+): EnrichedAgentHookEventPayload | null {
+  if (!isValidPaneKey(paneKey)) {
+    return null
   }
-  if (promptText) {
-    lastPromptByPaneKey.set(paneKey, promptText)
-    return promptText
+  if (typeof rawEntry !== 'object' || rawEntry === null) {
+    return null
   }
-  return lastPromptByPaneKey.get(paneKey) ?? ''
-}
-
-type ToolSnapshot = {
-  toolName?: string
-  toolInput?: string
-  lastAssistantMessage?: string
-}
-
-// Why: mirrors `lastPromptByPaneKey`. Tool + assistant metadata arrives
-// piecemeal (PreToolUse gives name+input; PostToolUse gives response;
-// Stop gives the final message), and later events typically omit fields
-// the earlier ones provided. Caching per-pane lets the renderer show a
-// coherent snapshot instead of blinking whenever a field is missing.
-const lastToolByPaneKey = new Map<string, ToolSnapshot>()
-
-function resolveToolState(
-  paneKey: string,
-  update: ToolSnapshot,
-  options: { resetOnNewTurn: boolean }
-): ToolSnapshot {
-  if (options.resetOnNewTurn) {
-    // Why: a fresh user turn shouldn't inherit the previous turn's
-    // tool/assistant state — it would look like the agent is still on
-    // the old step until the first new tool event lands.
-    lastToolByPaneKey.delete(paneKey)
+  const record = rawEntry as Record<string, unknown>
+  if (record.paneKey !== paneKey) {
+    return null
   }
-  const previous = lastToolByPaneKey.get(paneKey) ?? {}
-  const merged: ToolSnapshot = {
-    toolName: update.toolName ?? previous.toolName,
-    toolInput: update.toolInput ?? previous.toolInput,
-    lastAssistantMessage: update.lastAssistantMessage ?? previous.lastAssistantMessage
+  const tabId = record.tabId
+  if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
+    return null
   }
-  lastToolByPaneKey.set(paneKey, merged)
-  return merged
-}
-
-// Why: per-tool allowlist (noqa style) — explicit mapping from tool name to
-// the single input field worth surfacing. Tools that aren't listed render
-// name-only. This avoids noisy fallbacks (e.g. "TaskUpdate 3" from the
-// task_id field) and keeps the preview honest: if we don't know how to
-// describe a tool's input meaningfully, we show nothing rather than guess.
-//
-// Ordering matters when a tool sends multiple well-known keys (e.g. Grep
-// sends both `pattern` and `path`); the first match wins.
-const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
-  // Claude tools (PascalCase).
-  Read: ['file_path', 'filePath', 'path'],
-  Write: ['file_path', 'filePath', 'path'],
-  Edit: ['file_path', 'filePath', 'path'],
-  MultiEdit: ['file_path', 'filePath', 'path'],
-  NotebookEdit: ['file_path', 'filePath', 'path'],
-  Bash: ['command'],
-  Glob: ['pattern'],
-  Grep: ['pattern'],
-  WebFetch: ['url'],
-  WebSearch: ['query'],
-  // Gemini tools (snake_case).
-  read_file: ['file_path', 'path'],
-  write_file: ['file_path', 'path'],
-  read_many_files: ['file_path', 'paths', 'path'],
-  edit_file: ['file_path', 'path'],
-  replace: ['file_path', 'path'],
-  run_shell_command: ['command'],
-  glob: ['pattern'],
-  search_file_content: ['pattern'],
-  web_fetch: ['url'],
-  google_web_search: ['query'],
-  // Codex tools. `exec_command` and `shell_command` both carry their command
-  // text under `cmd` (the Rust payload) or `command` (some wrappers); list
-  // both so whichever field is populated wins. `apply_patch` surfaces the
-  // touched path. `view_image` is path-only. `write_stdin` gets nothing
-  // meaningful — intentionally omitted so the row stays name-only.
-  exec_command: ['cmd', 'command'],
-  shell_command: ['cmd', 'command'],
-  apply_patch: ['path', 'file_path'],
-  view_image: ['path', 'file_path'],
-  // Pi tools (lowercase names matching pi's built-in tool registry).
-  // Why: pi's tool_call event forwards the raw input object; surface the
-  // canonical preview field per tool so dashboard rows show useful context
-  // (file path, command, search pattern) without the receiver knowing
-  // anything pi-specific beyond these key names. `glob` is shared with
-  // Gemini (same shape: { pattern }), so no separate entry is needed.
-  bash: ['command'],
-  read: ['path', 'file_path'],
-  write: ['path', 'file_path'],
-  edit: ['path', 'file_path'],
-  grep: ['pattern'],
-  web_search: ['query'],
-  fetch_content: ['url']
-}
-
-function deriveToolInputPreview(
-  toolName: string | undefined,
-  toolInput: unknown
-): string | undefined {
-  if (typeof toolInput === 'string') {
-    return toolInput
+  // Why: paneKey is `${tabId}:${paneId}`; a stored entry whose tabId field
+  // diverges from the key's tab segment is corruption (renamer bug, manual
+  // edit, future shape drift). Drop instead of hydrating an inconsistent row.
+  if (typeof tabId === 'string' && tabId !== paneKey.slice(0, paneKey.indexOf(':'))) {
+    return null
   }
-  if (typeof toolInput !== 'object' || toolInput === null) {
-    return undefined
+  const worktreeId = record.worktreeId
+  if (worktreeId !== undefined && (typeof worktreeId !== 'string' || worktreeId.length === 0)) {
+    return null
   }
-  if (!toolName) {
-    return undefined
+  const receivedAt = record.receivedAt
+  if (typeof receivedAt !== 'number' || !Number.isFinite(receivedAt) || receivedAt <= 0) {
+    return null
   }
-  const keys = TOOL_INPUT_KEYS_BY_TOOL[toolName]
-  if (!keys) {
-    return undefined
-  }
-  const record = toolInput as Record<string, unknown>
-  for (const key of keys) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value
-    }
-  }
-  return undefined
-}
-
-function readString(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key]
-  return typeof value === 'string' && value.length > 0 ? value : undefined
-}
-
-// Why: Claude `tool_response` can be a string, or an object with a `content`
-// array shaped like `[{type: 'text', text: '...'}]`. Surface the first text
-// block so PostToolUse for Task/Agent subagents carries something useful into
-// the `lastAssistantMessage` slot.
-function extractToolResponseText(toolResponse: unknown): string | undefined {
-  if (typeof toolResponse === 'string' && toolResponse.length > 0) {
-    return toolResponse
-  }
-  if (typeof toolResponse !== 'object' || toolResponse === null) {
-    return undefined
-  }
-  const record = toolResponse as Record<string, unknown>
-  const content = record.content
-  if (Array.isArray(content)) {
-    for (const part of content) {
-      if (typeof part === 'object' && part !== null) {
-        const text = (part as Record<string, unknown>).text
-        if (typeof text === 'string' && text.trim().length > 0) {
-          return text
-        }
-      }
-    }
-  }
-  const text = record.text
-  if (typeof text === 'string' && text.trim().length > 0) {
-    return text
-  }
-  return undefined
-}
-
-// Why: Claude's Stop event carries `transcript_path` to a JSONL transcript.
-// Reading the last assistant message gives us the "what did the agent just
-// say" preview without needing to buffer tool_response text across PostToolUse
-// events. We scan backward from the end of the file in chunks, stopping as
-// soon as we find an assistant text entry — bounded work in the common case
-// (one chunk) even when transcripts grow to hundreds of MB.
-const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
-// Why: ultimate safety cap so a malformed transcript (or a turn with
-// pathologically many tool calls and no assistant text) cannot stall the Stop
-// handler. 4 MB easily accommodates dozens of tool rounds before the final
-// reply; past that, we give up rather than block the hook response.
-const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
-
-function extractAssistantTextFromLine(line: string): string | undefined {
-  let entry: unknown
-  try {
-    entry = JSON.parse(line)
-  } catch {
-    return undefined
-  }
-  if (typeof entry !== 'object' || entry === null) {
-    return undefined
-  }
-  const record = entry as Record<string, unknown>
-  const nestedMessage = record.message as Record<string, unknown> | undefined
-  const role = record.role ?? nestedMessage?.role
-  if (role !== 'assistant') {
-    return undefined
-  }
-  const content = (nestedMessage ?? record).content
-  if (typeof content === 'string' && content.trim().length > 0) {
-    return content
-  }
-  // Why: assistant entries can be pure tool_use turns with no text parts.
-  // Return undefined so the caller keeps scanning backward for the most
-  // recent entry that actually contains assistant text.
-  if (Array.isArray(content)) {
-    for (const part of content) {
-      if (typeof part === 'object' && part !== null) {
-        const text = (part as Record<string, unknown>).text
-        if (typeof text === 'string' && text.trim().length > 0) {
-          return text
-        }
-      }
-    }
-  }
-  return undefined
-}
-
-function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
-  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
-    return undefined
-  }
-  try {
-    const stats = statSync(transcriptPath)
-    const size = stats.size
-    if (size <= 0) {
-      return undefined
-    }
-    const fd = openSync(transcriptPath, 'r')
-    try {
-      // Why: track unhandled leading bytes as a raw Buffer across iterations
-      // so multi-byte UTF-8 codepoints that straddle chunk boundaries are not
-      // corrupted. A previous implementation decoded the combined chunk then
-      // re-encoded `lines[0]` back to UTF-8 for the carry; when a chunk
-      // started mid-codepoint the decode produced U+FFFD replacement chars
-      // and the re-encode baked those replacements into the carry bytes
-      // permanently, mis-joining every subsequent chunk. Splitting on \n at
-      // the byte level (0x0a) and only decoding complete-line regions keeps
-      // the carry byte-exact.
-      let carryBytes: Buffer = Buffer.alloc(0)
-      let bytesRead = 0
-      while (bytesRead < size && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
-        const chunkSize = Math.min(size - bytesRead, TRANSCRIPT_CHUNK_BYTES)
-        const position = size - bytesRead - chunkSize
-        const buffer = Buffer.alloc(chunkSize)
-        // Why: readSync may return fewer bytes than requested (short reads).
-        // Loop until the full window is read (or EOF) before processing so the
-        // backward scan windows stay aligned — a bare `bytesRead += n` would
-        // advance from the last read's tail and either re-read overlapping
-        // bytes on the next iteration or miss lines entirely if short reads
-        // accumulate. Rare on local regular files but fs quirks exist.
-        let filled = 0
-        while (filled < chunkSize) {
-          const n = readSync(fd, buffer, filled, chunkSize - filled, position + filled)
-          if (n === 0) {
-            break
-          }
-          filled += n
-        }
-        const n = filled
-        bytesRead += n
-        if (n === 0) {
-          break
-        }
-        // Why: the newly-read chunk is earlier in the file than `carryBytes`
-        // (which came from the *previous* iteration's partial first line),
-        // so concatenation order is chunk first, carry second.
-        const combined = Buffer.concat([buffer.subarray(0, n), carryBytes])
-        const atStart = bytesRead >= size
-
-        // Find the first newline in the raw bytes. Everything before it is
-        // a (still) potentially-partial line when we haven't reached SOF;
-        // everything from it onward is a sequence of complete lines we can
-        // decode safely.
-        const firstNewline = combined.indexOf(0x0a)
-        let completeRegion: Buffer
-        let nextCarry: Buffer
-        if (atStart) {
-          // At start-of-file there is no earlier chunk; every line is complete.
-          completeRegion = combined
-          nextCarry = Buffer.alloc(0)
-        } else if (firstNewline === -1) {
-          // No newline in the combined bytes: the entire region is one
-          // potentially-partial line — carry all of it forward.
-          completeRegion = Buffer.alloc(0)
-          nextCarry = combined
-        } else {
-          // Bytes [0, firstNewline) are the partial-line carry; bytes
-          // [firstNewline+1, end) are the complete-line region. Dropping the
-          // newline itself avoids an empty leading "" line after split.
-          nextCarry = combined.subarray(0, firstNewline)
-          completeRegion = combined.subarray(firstNewline + 1)
-        }
-
-        if (completeRegion.length > 0) {
-          const lines = completeRegion.toString('utf8').split('\n')
-          for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i].trim()
-            if (line.length === 0) {
-              continue
-            }
-            const extracted = extractAssistantTextFromLine(line)
-            if (extracted !== undefined) {
-              return extracted
-            }
-          }
-        }
-        carryBytes = nextCarry
-      }
-      return undefined
-    } finally {
-      closeSync(fd)
-    }
-  } catch {
-    return undefined
-  }
-}
-
-function extractClaudeToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  const update: ToolSnapshot = {}
+  const stateStartedAt = record.stateStartedAt
   if (
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure'
+    typeof stateStartedAt !== 'number' ||
+    !Number.isFinite(stateStartedAt) ||
+    stateStartedAt <= 0
   ) {
-    const toolName = readString(hookPayload, 'tool_name')
-    update.toolName = toolName
-    update.toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-  }
-  if (eventName === 'PostToolUse') {
-    const responseText = extractToolResponseText(hookPayload.tool_response)
-    if (responseText) {
-      update.lastAssistantMessage = responseText
-    }
-  }
-  if (eventName === 'PostToolUseFailure') {
-    const errorText =
-      extractToolResponseText(hookPayload.tool_response) ??
-      readString(hookPayload, 'error') ??
-      readString(hookPayload, 'message')
-    if (errorText) {
-      update.lastAssistantMessage = errorText
-    }
-  }
-  if (eventName === 'Stop') {
-    // Why: newer Claude versions include `last_assistant_message` directly on
-    // the Stop payload, which is both cheaper and more reliable than reading
-    // the JSONL transcript. Prefer it when present; fall back to transcript
-    // scanning for older Claude versions that omit the field.
-    const direct = readString(hookPayload, 'last_assistant_message')
-    if (direct) {
-      update.lastAssistantMessage = direct
-    } else {
-      const lastFromTranscript = readLastAssistantFromTranscript(hookPayload.transcript_path)
-      if (lastFromTranscript) {
-        update.lastAssistantMessage = lastFromTranscript
-      }
-    }
-  }
-  return update
-}
-
-function extractCodexToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
-    // Why: Codex emits tool metadata under `tool_name` + `tool_input`
-    // (matching Claude's shape). We surface both so the dashboard row can
-    // show what the agent is currently doing during the otherwise-silent
-    // gap between UserPromptSubmit and Stop. See TOOL_INPUT_KEYS_BY_TOOL
-    // for which input field is previewed per Codex tool name.
-    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.input) ??
-      deriveToolInputPreview(toolName, hookPayload.arguments)
-    return { toolName, toolInput }
-  }
-  if (eventName === 'Stop') {
-    // Why: Codex documents `last_assistant_message` on Stop.
-    const message = readString(hookPayload, 'last_assistant_message')
-    if (message) {
-      return { lastAssistantMessage: message }
-    }
-  }
-  return {}
-}
-
-function extractGeminiToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse' || eventName === 'AfterTool') {
-    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.args) ??
-      deriveToolInputPreview(toolName, hookPayload.input)
-    return { toolName, toolInput }
-  }
-  if (eventName === 'AfterAgent') {
-    // Why: Gemini's AfterAgent payload carries the final reply under
-    // `prompt_response` (per geminicli.com/docs/hooks/reference). This is
-    // Gemini's analogue of Claude/Codex's `last_assistant_message` on Stop;
-    // surfacing it lets the dashboard show the agent's response on done.
-    const message = readString(hookPayload, 'prompt_response')
-    if (message) {
-      return { lastAssistantMessage: message }
-    }
-  }
-  return {}
-}
-
-function extractOpenCodeToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (eventName === 'MessagePart' && hookPayload.role === 'assistant') {
-    // Why: OpenCode streams the assistant's reply via repeated MessagePart
-    // events (one per text delta flush). Each event carries the cumulative
-    // text-so-far for that TextPart, so the latest one we see is the most
-    // complete snapshot to surface on `done`. We do NOT gate on SessionIdle
-    // because the plugin emits parts *before* session.idle fires, and gating
-    // would lose them.
-    const text = readString(hookPayload, 'text')
-    if (text) {
-      return { lastAssistantMessage: text }
-    }
-  }
-  return {}
-}
-
-// Why: Cursor's preToolUse / postToolUse / postToolUseFailure payloads carry
-// `tool_name` + `tool_input` (same shape as Claude). beforeShellExecution /
-// beforeMCPExecution carry a `command` field directly — surface that via a
-// synthetic "Shell" / "MCP" tool name so the dashboard row can show the
-// pending command while cursor-agent is blocked on approval.
-// afterAgentResponse carries a `text` field that is cursor's analogue of
-// Claude's last_assistant_message (the final composed reply for the turn).
-function extractCursorToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (
-    eventName === 'preToolUse' ||
-    eventName === 'postToolUse' ||
-    eventName === 'postToolUseFailure'
-  ) {
-    const toolName = readString(hookPayload, 'tool_name')
-    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-    const update: ToolSnapshot = { toolName, toolInput }
-    if (eventName === 'postToolUse') {
-      const responseText = extractToolResponseText(hookPayload.tool_output)
-      if (responseText) {
-        update.lastAssistantMessage = responseText
-      }
-    }
-    if (eventName === 'postToolUseFailure') {
-      const errorText =
-        extractToolResponseText(hookPayload.tool_output) ??
-        readString(hookPayload, 'error_message') ??
-        readString(hookPayload, 'error')
-      if (errorText) {
-        update.lastAssistantMessage = errorText
-      }
-    }
-    return update
-  }
-  if (eventName === 'beforeShellExecution') {
-    const command = readString(hookPayload, 'command')
-    return { toolName: 'Shell', toolInput: command }
-  }
-  if (eventName === 'beforeMCPExecution') {
-    const toolName = readString(hookPayload, 'tool_name') ?? 'MCP'
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      readString(hookPayload, 'command') ??
-      readString(hookPayload, 'url')
-    return { toolName, toolInput }
-  }
-  if (eventName === 'afterAgentResponse') {
-    const text = readString(hookPayload, 'text')
-    if (text) {
-      return { lastAssistantMessage: text }
-    }
-  }
-  return {}
-}
-
-// Why: pi's tool_call / tool_execution_start / tool_execution_end events all
-// carry `tool_name` + `tool_input` in the same shape, so they share one
-// extraction branch; resolveToolState merges across events last-write-wins so
-// the most recent one wins naturally. message_end (assistant role) carries
-// `text` — pi's analogue of Claude's last_assistant_message on Stop.
-function extractPiToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (
-    eventName === 'tool_call' ||
-    eventName === 'tool_execution_start' ||
-    eventName === 'tool_execution_end'
-  ) {
-    const toolName = readString(hookPayload, 'tool_name')
-    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-    return { toolName, toolInput }
-  }
-  if (eventName === 'message_end' && hookPayload.role === 'assistant') {
-    const text = readString(hookPayload, 'text')
-    if (text) {
-      return { lastAssistantMessage: text }
-    }
-  }
-  return {}
-}
-
-function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
-  if (source === 'claude') {
-    return eventName === 'UserPromptSubmit'
-  }
-  if (source === 'codex') {
-    // Why: Codex fires SessionStart at resume AND startup. Both mark the
-    // boundary of a fresh interactive turn from the hook's perspective, so
-    // clear the tool cache on either one.
-    return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
-  }
-  if (source === 'gemini') {
-    return eventName === 'BeforeAgent'
-  }
-  if (source === 'cursor') {
-    // Why: Cursor's beforeSubmitPrompt is the new-turn boundary (it carries
-    // the fresh prompt). sessionStart also begins a fresh session and should
-    // not inherit any cached tool state from whatever was left on disk.
-    return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
-  }
-  if (source === 'pi') {
-    // Why: pi fires before_agent_start at the start of every user turn,
-    // carrying the fresh prompt. Reset cached tool state then so a previous
-    // turn's tool preview does not bleed into the new one.
-    return eventName === 'before_agent_start'
-  }
-  // Why: OpenCode has no UserPromptSubmit analogue, AND the plugin emits the
-  // user's MessagePart *before* SessionBusy (message.updated fires on prompt
-  // submission; session.status goes busy only once OpenCode begins processing).
-  // So resetting on SessionBusy would clobber the user prompt that was just
-  // cached. The role=user MessagePart itself naturally overwrites the cache
-  // with each new turn, so no separate reset is needed here.
-  return false
-}
-
-function extractToolFields(
-  source: AgentHookSource,
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (source === 'claude') {
-    return extractClaudeToolFields(eventName, hookPayload)
-  }
-  if (source === 'codex') {
-    return extractCodexToolFields(eventName, hookPayload)
-  }
-  if (source === 'gemini') {
-    return extractGeminiToolFields(eventName, hookPayload)
-  }
-  if (source === 'cursor') {
-    return extractCursorToolFields(eventName, hookPayload)
-  }
-  if (source === 'pi') {
-    return extractPiToolFields(eventName, hookPayload)
-  }
-  return extractOpenCodeToolFields(eventName, hookPayload)
-}
-
-function normalizeClaudeEvent(
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const state =
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure'
-      ? 'working'
-      : eventName === 'PermissionRequest'
-        ? 'waiting'
-        : eventName === 'Stop'
-          ? 'done'
-          : null
-
-  if (!state) {
     return null
   }
-
-  const snapshot = resolveToolState(paneKey, extractToolFields('claude', eventName, hookPayload), {
-    resetOnNewTurn: isNewTurnEvent('claude', eventName)
-  })
-
-  // Why: Claude Code's `Stop` hook sets `is_interrupt: true` when the turn
-  // ended because the user hit ESC / Ctrl+C rather than completing normally.
-  // This is the authoritative signal (the agent itself reports it), so we
-  // forward it through only on Stop — other hook events don't carry it.
-  const interrupted =
-    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state,
-      prompt: resolvePrompt(paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('claude', eventName)
-      }),
-      agentType: 'claude',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      lastAssistantMessage: snapshot.lastAssistantMessage,
-      interrupted
-    })
-  )
-}
-
-// Why: Gemini CLI exposes BeforeAgent/AfterAgent/AfterTool hooks. BeforeAgent
-// fires at turn start and AfterTool resumes the working state after a tool
-// call completes; AfterAgent fires when the agent becomes idle. Gemini has no
-// permission-prompt hook, so we cannot surface a waiting state for Gemini.
-function normalizeGeminiEvent(
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const state =
-    eventName === 'BeforeAgent' ||
-    eventName === 'AfterTool' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'AfterAgent'
-        ? 'done'
-        : null
-
-  if (!state) {
+  // Why: connectionId is allowed to be null (local) or string (relay). Any
+  // other shape is rejected so the post-merge typed surface stays honest.
+  const connectionIdRaw = record.connectionId
+  let connectionId: string | null
+  if (connectionIdRaw === null || connectionIdRaw === undefined) {
+    connectionId = null
+  } else if (typeof connectionIdRaw === 'string') {
+    connectionId = connectionIdRaw
+  } else {
     return null
   }
-
-  const snapshot = resolveToolState(paneKey, extractToolFields('gemini', eventName, hookPayload), {
-    resetOnNewTurn: isNewTurnEvent('gemini', eventName)
-  })
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state,
-      prompt: resolvePrompt(paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('gemini', eventName)
-      }),
-      agentType: 'gemini',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
-}
-
-// Why: we deliberately do NOT map Codex `PreToolUse` to `waiting`. That event
-// fires for every tool call, not just ones that actually need approval, so
-// mapping it would flicker the dashboard. Instead we keep it at `working`
-// (same as Claude) and use it only to update tool-name / tool-input previews
-// so a running Codex turn has visible progress between UserPromptSubmit and
-// Stop. Real approval signals travel through Codex's separate `notify`
-// callback (different install surface); wiring that up is deferred.
-function normalizeCodexEvent(
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const state =
-    eventName === 'SessionStart' ||
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'Stop'
-        ? 'done'
-        : null
-
-  if (!state) {
+  const payload = normalizeAgentStatusPayload(record.payload)
+  if (!payload) {
     return null
   }
-
-  const snapshot = resolveToolState(paneKey, extractToolFields('codex', eventName, hookPayload), {
-    resetOnNewTurn: isNewTurnEvent('codex', eventName)
-  })
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state,
-      prompt: resolvePrompt(paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('codex', eventName)
-      }),
-      agentType: 'codex',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
-}
-
-// Why: OpenCode has no declarative hook surface — it exposes in-process plugin
-// events (session.status busy/idle, session.idle, permission.asked,
-// question.asked, message.updated, message.part.updated). The bundled plugin
-// (see opencode/hook-service) pre-maps those to our stable hook_event_name
-// vocabulary before POSTing so this normalizer can share the same switch
-// shape as Claude/Codex/Gemini. SessionBusy = turn started, SessionIdle =
-// turn finished, PermissionRequest = blocked on user approval, AskUserQuestion =
-// blocked on user reply to an ask-the-user tool (both map to `waiting` so the
-// sidebar renders the red "needs attention" indicator), MessagePart =
-// incremental text from user prompt or assistant reply (stays in `working`
-// because streaming chunks must not flip the row to done mid-turn).
-function normalizeOpenCodeEvent(
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const state =
-    eventName === 'SessionBusy' || eventName === 'MessagePart'
-      ? 'working'
-      : eventName === 'SessionIdle'
-        ? 'done'
-        : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
-          ? 'waiting'
-          : null
-
-  if (!state) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
+  return {
     paneKey,
-    extractToolFields('opencode', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('opencode', eventName) }
-  )
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state,
-      prompt: resolvePrompt(paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('opencode', eventName)
-      }),
-      agentType: 'opencode',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+    tabId: typeof tabId === 'string' ? tabId : undefined,
+    worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
+    connectionId,
+    payload,
+    receivedAt,
+    stateStartedAt
+  }
 }
 
-// Why: Cursor (cursor-agent) installs hooks via ~/.cursor/hooks.json with
-// camelCase event names, per https://cursor.com/docs/hooks. The CLI fires
-// stdin-JSON payloads for each subscribed event; we subscribe to the subset
-// that marks turn boundaries and produces meaningful working/done/waiting
-// transitions for the Orca sidebar. afterAgentResponse carries the final
-// assistant reply text, which is cursor's analogue of Claude's Stop
-// last_assistant_message — we keep the row in `working` there because the
-// true turn-end signal is `stop`.
-function normalizeCursorEvent(
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const state =
-    eventName === 'beforeSubmitPrompt' ||
-    eventName === 'sessionStart' ||
-    eventName === 'preToolUse' ||
-    eventName === 'postToolUse' ||
-    eventName === 'postToolUseFailure' ||
-    eventName === 'afterAgentResponse'
-      ? 'working'
-      : eventName === 'stop' || eventName === 'sessionEnd'
-        ? 'done'
-        : eventName === 'beforeShellExecution' || eventName === 'beforeMCPExecution'
-          ? 'waiting'
-          : null
-
-  if (!state) {
-    return null
+function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentStatusIpcPayload {
+  return {
+    paneKey: entry.paneKey,
+    tabId: entry.tabId,
+    worktreeId: entry.worktreeId,
+    connectionId: entry.connectionId,
+    receivedAt: entry.receivedAt,
+    stateStartedAt: entry.stateStartedAt,
+    ...entry.payload
   }
-
-  const snapshot = resolveToolState(paneKey, extractToolFields('cursor', eventName, hookPayload), {
-    resetOnNewTurn: isNewTurnEvent('cursor', eventName)
-  })
-
-  // Why: cursor-agent reports turn interrupts via `stop` with status !==
-  // "completed" (e.g. "cancelled", "stopped"). Forward the boolean so the
-  // sidebar can render the interrupted-turn treatment that Claude uses.
-  const interrupted =
-    eventName === 'stop' &&
-    typeof hookPayload.status === 'string' &&
-    hookPayload.status !== 'completed'
-      ? true
-      : undefined
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state,
-      prompt: resolvePrompt(paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('cursor', eventName)
-      }),
-      agentType: 'cursor',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      lastAssistantMessage: snapshot.lastAssistantMessage,
-      interrupted
-    })
-  )
-}
-
-// Why: pi exposes an in-process TypeScript extension API (no settings.json
-// hook surface). The bundled orca-agent-status extension installed into the
-// per-PTY pi overlay (PiTitlebarExtensionService) translates pi's lifecycle
-// events into the hook_event_name vocabulary used here so the dashboard
-// row sees the same working/done shape as Claude/Codex/Gemini.
-//
-// Mapping:
-//   before_agent_start | agent_start | tool_call | tool_execution_start |
-//   tool_execution_end | message_end                                       → working
-//   agent_end | session_shutdown                                           → done
-//
-// pi has no permission-prompt event we can hook today (tool_call CAN block
-// via { block: true, reason } but that's a synchronous return, not a
-// separate event), so there is no `waiting` state for pi yet. message_end
-// stays in `working` because the true turn-end signal is agent_end — the
-// assistant message body just updates lastAssistantMessage on the
-// already-active turn.
-function normalizePiEvent(
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const state =
-    eventName === 'before_agent_start' ||
-    eventName === 'agent_start' ||
-    eventName === 'tool_call' ||
-    eventName === 'tool_execution_start' ||
-    eventName === 'tool_execution_end' ||
-    eventName === 'message_end'
-      ? 'working'
-      : eventName === 'agent_end' || eventName === 'session_shutdown'
-        ? 'done'
-        : null
-
-  if (!state) {
-    return null
-  }
-
-  const snapshot = resolveToolState(paneKey, extractToolFields('pi', eventName, hookPayload), {
-    resetOnNewTurn: isNewTurnEvent('pi', eventName)
-  })
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state,
-      prompt: resolvePrompt(paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('pi', eventName)
-      }),
-      agentType: 'pi',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
-}
-
-function readStringField(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key]
-  if (typeof value !== 'string') {
-    return undefined
-  }
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : undefined
-}
-
-function normalizeHookPayload(
-  source: AgentHookSource,
-  body: unknown,
-  expectedEnv: string
-): AgentHookEventPayload | null {
-  if (typeof body !== 'object' || body === null) {
-    return null
-  }
-
-  const record = body as Record<string, unknown>
-  const paneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
-  const rawPayload = record.payload
-  const hookPayload =
-    typeof rawPayload === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(rawPayload)
-          } catch {
-            return null
-          }
-        })()
-      : rawPayload
-  // Why: paneKey comes from an authenticated-but-potentially-malicious local
-  // client; bound its size so pathological clients cannot blow up the
-  // per-pane caches (lastPromptByPaneKey / lastToolByPaneKey) with multi-MB
-  // keys. 200 chars is well above any legitimate `${tabId}:${paneId}` value.
-  const MAX_PANE_KEY_LEN = 200
-  if (
-    !paneKey ||
-    paneKey.length > MAX_PANE_KEY_LEN ||
-    typeof hookPayload !== 'object' ||
-    hookPayload === null
-  ) {
-    return null
-  }
-
-  // Why: scripts installed by an older app build may send a different shape.
-  // We accept the request (fail-open) but log once so stale installs are
-  // diagnosable instead of silently degrading.
-  const version = readStringField(record, 'version')
-  if (
-    version &&
-    version !== ORCA_HOOK_PROTOCOL_VERSION &&
-    !warnedVersions.has(version) &&
-    warnedVersions.size < MAX_WARNED_KEYS
-  ) {
-    warnedVersions.add(version)
-    console.warn(
-      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
-        'Reinstall agent hooks from Settings to upgrade the managed script.'
-    )
-  }
-
-  // Why: detects dev-vs-prod cross-talk. A hook installed by a dev build but
-  // triggered inside a prod terminal (or vice versa) still points at whichever
-  // loopback port the shell env captured, so the *other* instance may receive
-  // it. Logging the mismatch lets a user know their terminals are wired to the
-  // wrong Orca.
-  const clientEnv = readStringField(record, 'env')
-  if (clientEnv && clientEnv !== expectedEnv) {
-    const key = `${clientEnv}->${expectedEnv}`
-    if (!warnedEnvs.has(key) && warnedEnvs.size < MAX_WARNED_KEYS) {
-      warnedEnvs.add(key)
-      console.warn(
-        `[agent-hooks] received ${clientEnv} hook on ${expectedEnv} server. ` +
-          'Likely a stale terminal from another Orca install.'
-      )
-    }
-  }
-
-  const tabId = readStringField(record, 'tabId')
-  const worktreeId = readStringField(record, 'worktreeId')
-
-  const eventName = (hookPayload as Record<string, unknown>).hook_event_name
-  const promptText = extractPromptText(hookPayload as Record<string, unknown>)
-  const hookPayloadRecord = hookPayload as Record<string, unknown>
-  const payload =
-    source === 'claude'
-      ? normalizeClaudeEvent(eventName, promptText, paneKey, hookPayloadRecord)
-      : source === 'codex'
-        ? normalizeCodexEvent(eventName, promptText, paneKey, hookPayloadRecord)
-        : source === 'gemini'
-          ? normalizeGeminiEvent(eventName, promptText, paneKey, hookPayloadRecord)
-          : source === 'cursor'
-            ? normalizeCursorEvent(eventName, promptText, paneKey, hookPayloadRecord)
-            : source === 'pi'
-              ? normalizePiEvent(eventName, promptText, paneKey, hookPayloadRecord)
-              : normalizeOpenCodeEvent(eventName, promptText, paneKey, hookPayloadRecord)
-
-  return payload ? { paneKey, tabId, worktreeId, payload } : null
-}
-
-// Why: the endpoint file lives under userData so each Orca install (dev vs.
-// packaged) has its own path and the two cannot clobber each other. Using a
-// per-platform extension (`.env` on POSIX, `.cmd` on Windows) lets the hook
-// scripts source the file with their platform-native syntax (`.` on POSIX,
-// `call` on Windows); the OpenCode plugin's regex accepts both shapes so no
-// platform detection is needed inside the plugin source either.
-function getEndpointFileName(): string {
-  return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
-}
-
-// Why: every value in the endpoint file is sourced as shell. Reject any
-// value that contains shell/cmd metacharacters so a future field whose
-// value is not shell-safe-by-construction cannot command-inject via the
-// sourced file. Keep to a conservative allowlist of common printable
-// chars plus hyphen/dot/slash/colon/underscore — sufficient for ports,
-// UUIDs, version strings, and env names.
-// Rejects empty values (`+` quantifier) as defense-in-depth for future
-// callers — an empty sourced `KEY=` would silently clear the env var in
-// the sourcing shell, masking whatever legitimate value was previously set.
-function isShellSafeEndpointValue(value: string): boolean {
-  return /^[A-Za-z0-9._:/-]+$/.test(value)
 }
 
 export class AgentHookServer {
@@ -1191,37 +185,155 @@ export class AgentHookServer {
   // the server can detect dev vs. prod cross-talk. Set at start() from the
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
-  private onAgentStatus: ((payload: AgentHookEventPayload) => void) | null = null
+  private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
   // Why: directory that holds the on-disk endpoint file. Set via start()'s
   // `userDataPath` option so the class has no direct Electron dependency
-  // (keeps it mockable in the vitest node environment). When unset, we skip
-  // the endpoint-file write entirely — hooks still work via PTY env, just
-  // without survive-a-restart semantics.
+  // (keeps it mockable in the vitest node environment).
   private endpointDir: string | null = null
   private endpointFilePathCache: string | null = null
-  // Why: tracks whether writeEndpointFile() succeeded for the *current*
-  // start(). Without this flag, buildPtyEnv() would expose
-  // ORCA_AGENT_HOOK_ENDPOINT pointing at a path that may hold stale
-  // coordinates from a prior crashed instance — hook scripts would source
-  // those stale coords and silently post to a dead server. Gating the
-  // ENDPOINT env var on a successful write preserves the
-  // fail-open-to-fresh-env guarantee.
   private endpointFileWritten = false
+  // Why: per-instance caches (warn-once Sets, lastPrompt/lastTool/lastStatus
+  // by paneKey). Held on the instance instead of as module-level Maps so
+  // tests can spin up multiple servers without state cross-contamination.
+  private state: HookListenerState = createHookListenerState()
+  // Why: full path to the on-disk last-status cache. Set in start() from
+  // userDataPath. Null when the server runs without a userDataPath (e.g.
+  // tests that skip the userDataPath option) — in that case, persistence is
+  // a no-op and only in-memory replay applies.
+  private lastStatusFilePath: string | null = null
+  // Why: trailing-edge debounce timer. Captured per-instance so multiple
+  // server instances in the same process (tests) don't share state.
+  private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: identity check — skip writes when the JSON-stringified contents
+  // exactly match the last successful disk write. Cheap protection against
+  // re-firing trailing timers when nothing changed.
+  private lastWrittenJson: string | null = null
 
-  setListener(listener: ((payload: AgentHookEventPayload) => void) | null): void {
+  setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
     if (!listener) {
       return
     }
     // Why: replay is best-effort per pane so one throwing listener call can't
     // starve subsequent panes from being replayed.
-    for (const payload of lastStatusByPaneKey.values()) {
+    for (const payload of this.state.lastStatusByPaneKey.values()) {
       try {
-        listener(payload)
+        // Why: cache values are stored as enriched payloads (with receivedAt /
+        // stateStartedAt). The map's declared element type from the shared
+        // listener is the bare AgentHookEventPayload because the shared module
+        // never reads from this map; only this class does, and only enriched
+        // values are ever inserted.
+        listener(payload as EnrichedAgentHookEventPayload)
       } catch (err) {
         console.error('[agent-hooks] replay listener threw', err)
       }
     }
+  }
+
+  /** Snapshot of the current cached statuses, in the IPC-shaped form the
+   *  renderer consumes. Used by the `agentStatus:getSnapshot` IPC after
+   *  workspace tabs have hydrated, so the dashboard catches up on any
+   *  hook events that fired during startup. */
+  getStatusSnapshot(): AgentStatusIpcPayload[] {
+    return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
+      toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
+    )
+  }
+
+  private attachStatusTiming(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
+    const now = Date.now()
+    const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const stateStartedAt =
+      previous && previous.payload.state === payload.payload.state ? previous.stateStartedAt : now
+    return {
+      ...payload,
+      receivedAt: now,
+      stateStartedAt
+    }
+  }
+
+  /** Ingest a payload that arrived over the relay JSON-RPC channel rather
+   *  than the local HTTP server. `connectionId` is the SshChannelMultiplexer
+   *  identity Orca holds (the wire envelope carries connectionId: null and
+   *  Orca stamps the real value here). The relay pre-normalizes the inner
+   *  payload via the shared listener module; we re-run the canonical
+   *  normalizer here as a defense-in-depth check at the trust boundary
+   *  before feeding the event into the same `onAgentStatus` fanout the HTTP
+   *  path uses. See docs/design/agent-status-over-ssh.md §5. */
+  ingestRemote(
+    envelope: {
+      paneKey: string
+      tabId?: string
+      worktreeId?: string
+      // Why: forwarded verbatim from the agent CLI POST body on the remote so
+      // the warn-once cross-build / dev-vs-prod diagnostics fire identically
+      // to the local HTTP path. Declared on the type now; consumed in PR2.
+      env?: string
+      version?: string
+      payload: unknown
+    },
+    connectionId: string
+  ): void {
+    // Why: signature says non-empty, but the wire crosses a trust boundary —
+    // re-check at runtime (and trim) so a whitespace-only or empty
+    // connectionId can't poison caches.
+    if (typeof connectionId !== 'string') {
+      return
+    }
+    const trimmedConnectionId = connectionId.trim()
+    if (trimmedConnectionId.length === 0) {
+      return
+    }
+    if (!envelope || typeof envelope.paneKey !== 'string' || envelope.paneKey.length === 0) {
+      return
+    }
+    // Why: match the listener's HTTP path — `normalizeHookPayload` trims and
+    // length-caps paneKey before caching, so the cache key here must follow
+    // the same rule or remote-vs-local events for the same pane would diverge.
+    const paneKey = envelope.paneKey.trim()
+    if (paneKey.length === 0 || paneKey.length > MAX_PANE_KEY_LEN) {
+      return
+    }
+    if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
+      return
+    }
+    if (envelope.worktreeId !== undefined && typeof envelope.worktreeId !== 'string') {
+      return
+    }
+    // Why: mirror the HTTP path's `readStringField` behavior — trim and treat
+    // empty-after-trim as undefined rather than letting a literal "" leak
+    // into the event.
+    const tabId =
+      envelope.tabId !== undefined && envelope.tabId.trim().length > 0
+        ? envelope.tabId.trim()
+        : undefined
+    const worktreeId =
+      envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
+        ? envelope.worktreeId.trim()
+        : undefined
+    // Why: the relay is across a trust boundary; re-run the canonical
+    // normalizer on the inner payload so prompt/agentType/toolName/toolInput
+    // length caps, embedded-newline collapse, and the `interrupted`-only-on-
+    // done invariant are enforced here too. Returns null on malformed input
+    // (including invalid state), which subsumes the prior explicit state
+    // check.
+    const normalizedPayload = normalizeAgentStatusPayload(envelope.payload)
+    if (!normalizedPayload) {
+      return
+    }
+    const event: AgentHookEventPayload = {
+      paneKey,
+      tabId,
+      worktreeId,
+      connectionId: trimmedConnectionId,
+      payload: normalizedPayload
+    }
+    const enriched = this.attachStatusTiming(event)
+    this.state.lastStatusByPaneKey.set(paneKey, enriched)
+    this.scheduleStatusPersist()
+    this.onAgentStatus?.(enriched)
   }
 
   async start(options?: { env?: string; userDataPath?: string }): Promise<void> {
@@ -1235,9 +347,18 @@ export class AgentHookServer {
     if (options?.userDataPath) {
       this.endpointDir = join(options.userDataPath, 'agent-hooks')
       this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
+      this.lastStatusFilePath = join(this.endpointDir, LAST_STATUS_FILE_NAME)
     }
     this.token = randomUUID()
     this.endpointFileWritten = false
+    this.lastWrittenJson = null
+    // Why: hydrate before binding the HTTP listener so any new hook POST
+    // (which goes through state.lastStatusByPaneKey.set) runs against an
+    // already-populated map. The renderer later pulls this map as a snapshot
+    // after workspace tabs are hydrated.
+    if (this.lastStatusFilePath) {
+      this.hydrateLastStatusFromDisk()
+    }
     this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -1254,40 +375,26 @@ export class AgentHookServer {
       // Why: bound request time so a slow/stalled client cannot hold a socket
       // open indefinitely (slowloris-style). The hook endpoints are local and
       // should complete in well under a second.
-      req.setTimeout(5000, () => {
+      req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
         req.destroy()
       })
 
       try {
         const body = await readRequestBody(req)
-        // Why: match on pathname only so a future debugging addition of a
-        // query string or trailing slash from a hook sender does not silently
-        // 404 a valid, token-authenticated request.
         const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
-        const source: AgentHookSource | null =
-          pathname === '/hook/claude'
-            ? 'claude'
-            : pathname === '/hook/codex'
-              ? 'codex'
-              : pathname === '/hook/gemini'
-                ? 'gemini'
-                : pathname === '/hook/opencode'
-                  ? 'opencode'
-                  : pathname === '/hook/cursor'
-                    ? 'cursor'
-                    : pathname === '/hook/pi'
-                      ? 'pi'
-                      : null
+        const source = resolveHookSource(pathname)
         if (!source) {
           res.writeHead(404)
           res.end()
           return
         }
 
-        const payload = normalizeHookPayload(source, body, this.env)
-        if (payload) {
-          lastStatusByPaneKey.set(payload.paneKey, payload)
-          this.onAgentStatus?.(payload)
+        const normalized = normalizeHookPayload(this.state, source, body, this.env)
+        if (normalized) {
+          const enriched = this.attachStatusTiming(normalized)
+          this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+          this.scheduleStatusPersist()
+          this.onAgentStatus?.(enriched)
         }
 
         res.writeHead(204)
@@ -1301,12 +408,9 @@ export class AgentHookServer {
     })
 
     await new Promise<void>((resolve, reject) => {
-      // Why: the startup error handler must only reject the start() promise for
-      // errors that happen before 'listening'. Without swapping it out on
-      // success, any later runtime error (e.g. EADDRINUSE during rebind,
-      // socket errors) would call reject() on an already-settled promise and,
-      // more importantly, leaving it as the only 'error' listener means node
-      // treats runtime errors as unhandled and crashes the main process.
+      // Why: swap the startup error handler on success so a later runtime
+      // error (e.g. EADDRINUSE during rebind, socket errors) doesn't reject
+      // an already-settled promise or crash the main process as unhandled.
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
         reject(err)
@@ -1320,11 +424,7 @@ export class AgentHookServer {
         if (address && typeof address === 'object') {
           this.port = address.port
         }
-        // Why: the endpoint file is the core of the survives-Orca-restart
-        // design. Write it *after* we have a concrete port — hooks that source
-        // the file must see a usable coordinate set, not a stale one left over
-        // from a previous process (e.g. one that crashed before getting here).
-        this.writeEndpointFile()
+        this.maybeWriteEndpointFile()
         resolve()
       }
       this.server!.once('error', onStartupError)
@@ -1333,6 +433,12 @@ export class AgentHookServer {
   }
 
   stop(): void {
+    // Why: flush any pending debounced write to disk BEFORE we clear the
+    // in-memory map. Quit-time state must be captured even if the trailing
+    // timer was scheduled but had not yet fired; otherwise a multi-agent
+    // run that ended its last hook event <250 ms before quit would lose
+    // that final delta on relaunch.
+    this.flushStatusPersistSync()
     this.server?.close()
     this.server = null
     this.port = 0
@@ -1340,36 +446,41 @@ export class AgentHookServer {
     this.env = 'production'
     this.onAgentStatus = null
     // Why: intentionally do NOT delete the endpoint file on stop(). A stale
-    // file points at a dead port, which matches the fail-open policy (hook
-    // POSTs silently fail → same as pre-endpoint-file behavior). Attempting to unlink
-    // introduces a TOCTOU race: a concurrent Orca instance sharing userData
-    // could rewrite the file between our token check and unlink, and we'd
-    // delete their live endpoint file. The next successful start() overwrites
-    // the file atomically; the tmp-file sweep inside writeEndpointFile()
-    // handles orphan hygiene.
+    // file points at a dead port, which matches the fail-open policy. Unlink
+    // would introduce a TOCTOU race vs. a concurrent Orca instance.
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
-    // Why: drop all per-pane cache entries on shutdown so a subsequent start()
-    // in the same process (e.g. during tests or a settings-driven restart)
-    // does not inherit stale prompt/tool state from the previous run.
-    lastPromptByPaneKey.clear()
-    lastToolByPaneKey.clear()
-    lastStatusByPaneKey.clear()
-    // Why: across stop()/start() cycles the warn-once Sets would otherwise
-    // suppress legitimate new warnings after a restart.
-    warnedVersions.clear()
-    warnedEnvs.clear()
+    this.lastStatusFilePath = null
+    this.lastWrittenJson = null
+    clearAllListenerCaches(this.state)
+  }
+
+  /** Why: invoked from the renderer-driven agentStatus:drop IPC when a user
+   *  dismisses a still-active pane's status row. We must NOT wipe
+   *  lastPromptByPaneKey or lastToolByPaneKey here — the pane's agent may
+   *  still be alive, and the next hook event would otherwise arrive with an
+   *  empty prompt and missing tool snapshot until a fresh UserPromptSubmit
+   *  lands. clearPaneState (which wipes all three caches) is the right shape
+   *  only for PTY-teardown. */
+  dropStatusEntry(paneKey: string): void {
+    if (!this.state.lastStatusByPaneKey.has(paneKey)) {
+      return
+    }
+    this.state.lastStatusByPaneKey.delete(paneKey)
+    this.scheduleStatusPersist()
   }
 
   clearPaneState(paneKey: string): void {
-    // Why: callers invoke this on PTY teardown so the per-pane caches do not
-    // accumulate entries for dead panes over the process lifetime. Without
-    // this, every closed pane leaves its prompt + tool snapshot pinned in
-    // memory for the life of the main process.
-    lastPromptByPaneKey.delete(paneKey)
-    lastToolByPaneKey.delete(paneKey)
-    lastStatusByPaneKey.delete(paneKey)
+    // Why: only schedule a write when we actually evicted a status entry —
+    // dropping prompt/tool caches for a pane that never produced a hook
+    // event does not change the on-disk file, and skipping the write avoids
+    // re-stat'ing on every dead-pane teardown.
+    const hadStatus = this.state.lastStatusByPaneKey.has(paneKey)
+    clearPaneCacheState(this.state, paneKey)
+    if (hadStatus) {
+      this.scheduleStatusPersist()
+    }
   }
 
   buildPtyEnv(): Record<string, string> {
@@ -1377,12 +488,6 @@ export class AgentHookServer {
       return {}
     }
 
-    // Why: ORCA_AGENT_HOOK_ENDPOINT is the key that lets a surviving PTY reach
-    // the *current* Orca after a restart. The other four variables are retained
-    // for back-compat so pre-endpoint-file hook scripts (which do not know to
-    // source the endpoint file) continue to work on freshly spawned PTYs, and
-    // so the current script can fall through to env if the file is
-    // missing/unreadable for any reason.
     const env: Record<string, string> = {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
@@ -1395,132 +500,187 @@ export class AgentHookServer {
     return env
   }
 
-  // Why: exposed as a read-only getter so tests (and any future main-process
-  // caller that needs the path for diagnostics) do not have to reconstruct
-  // the path convention.
   get endpointFilePath(): string | null {
     return this.endpointFilePathCache
   }
 
-  // Why: writes the four coordinates atomically via a tmp-then-rename so a
-  // hook reading concurrently either sees the old file or the new one, never
-  // a half-written one. Fail-open: on EACCES / ENOSPC / etc. we log and move
-  // on — start() remains usable via PTY env for freshly-spawned PTYs. Only
-  // survivors lose the endpoint-file path, matching the hook-payload
-  // fail-open policy already enforced on the receiving end.
-  private writeEndpointFile(): void {
+  /** Test/diagnostic accessor for the on-disk last-status file path. */
+  get lastStatusPath(): string | null {
+    return this.lastStatusFilePath
+  }
+
+  private maybeWriteEndpointFile(): void {
     if (!this.endpointDir || !this.endpointFilePathCache) {
       return
     }
-    // Why: defensive reset — buildPtyEnv() must not see a stale `true` from
-    // a previous start() if this write fails before reaching the success
-    // assignment below.
     this.endpointFileWritten = false
-    const finalPath = this.endpointFilePathCache
-    // Why: unique-per-call tmp name (mirrors persistence.ts / installer-utils.ts); prevents cross-process collision if two writers race on the same endpoint dir.
-    const tmpPath = join(this.endpointDir, `.endpoint-${process.pid}-${randomUUID()}.tmp`)
-    const prefix = process.platform === 'win32' ? 'set ' : ''
-    // Why: every value written here is sourced as shell (`. "$file"` on
-    // POSIX, `call "%file%"` on Windows) — the file format IS shell, not
-    // key=value data. The current four inputs are shell-safe by
-    // construction: PORT is a number from listen(), TOKEN is randomUUID()
-    // output (hex + dashes only), VERSION is a compile-time string
-    // constant, and ENV is a fixed 'production' / 'development' literal
-    // passed from index.ts. Any future change that relaxes these
-    // invariants (user-supplied env name, persisted token, arbitrary
-    // free-form field) MUST add escaping or a safe-character validator
-    // before the write — otherwise a value like `foo&malicious` on Windows
-    // would command-inject via `call`, and a newline in any value would
-    // corrupt the POSIX sourceable output. The isShellSafeEndpointValue
-    // check below enforces this contract at runtime.
-    const valuesToWrite: [string, string][] = [
-      ['ORCA_AGENT_HOOK_PORT', String(this.port)],
-      ['ORCA_AGENT_HOOK_TOKEN', this.token],
-      ['ORCA_AGENT_HOOK_ENV', this.env],
-      ['ORCA_AGENT_HOOK_VERSION', ORCA_HOOK_PROTOCOL_VERSION]
-    ]
-    for (const [key, value] of valuesToWrite) {
-      if (!isShellSafeEndpointValue(value)) {
-        console.error(
-          `[agent-hooks] refusing to write endpoint file: ${key} contains ` +
-            'characters unsafe for shell sourcing. Falling back to PTY env.'
-        )
-        return
+    const ok = writeEndpointFile(this.endpointDir, this.endpointFilePathCache, {
+      port: this.port,
+      token: this.token,
+      env: this.env,
+      version: ORCA_HOOK_PROTOCOL_VERSION
+    })
+    this.endpointFileWritten = ok
+  }
+
+  private hydrateLastStatusFromDisk(): void {
+    if (!this.lastStatusFilePath) {
+      return
+    }
+    // Why: defensive — keeps hydrate idempotent against repeated start()
+    // calls; production callers always have an empty map here, but a future
+    // re-start path must not silently merge prior-session state.
+    this.state.lastStatusByPaneKey.clear()
+    let raw: string
+    try {
+      raw = readFileSync(this.lastStatusFilePath, 'utf8')
+    } catch (err) {
+      // Why: missing file is the common case (first launch).
+      // Other errors (EACCES, etc.) degrade to empty hydration with a single
+      // warn so the dashboard renders normally.
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.warn('[agent-hooks] failed to read last-status file:', err)
+      }
+      return
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      console.warn('[agent-hooks] last-status file is not valid JSON; ignoring')
+      return
+    }
+    if (typeof parsed !== 'object' || parsed === null) {
+      console.warn('[agent-hooks] last-status file is not an object; ignoring')
+      return
+    }
+    const file = parsed as Partial<LastStatusFile>
+    if (file.version !== LAST_STATUS_FILE_VERSION) {
+      console.warn(
+        `[agent-hooks] last-status file version mismatch (${String(
+          file.version
+        )} != ${LAST_STATUS_FILE_VERSION}); ignoring`
+      )
+      return
+    }
+    const entries = file.entries
+    if (typeof entries !== 'object' || entries === null) {
+      console.warn('[agent-hooks] last-status file entries missing or wrong shape; ignoring')
+      return
+    }
+    let hydrated = 0
+    let dropped = 0
+    // Why: bound disk growth — drop anything older than HYDRATE_MAX_AGE_MS so
+    // entries from worktrees archived weeks ago do not pile up forever. Use
+    // Date.now() once to keep the cutoff consistent across all entries this
+    // tick.
+    const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
+    for (const [paneKey, rawEntry] of Object.entries(entries)) {
+      const entry = sanitizeHydratedEntry(paneKey, rawEntry)
+      if (entry && entry.receivedAt >= ttlCutoff) {
+        this.state.lastStatusByPaneKey.set(paneKey, entry)
+        hydrated += 1
+      } else {
+        dropped += 1
       }
     }
-    const lines = [...valuesToWrite.map(([key, value]) => `${prefix}${key}=${value}`), '']
+    if (dropped > 0) {
+      console.warn(
+        `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
+      )
+    }
+    if (hydrated > 0 && dropped === 0) {
+      // Why: prime from the raw on-disk bytes (not a re-serialization) so the
+      // dedup is robust against future shape drift in serializeStatusFile.
+      // Only prime when hydration was lossless — if entries were dropped
+      // during sanitize, the in-memory map diverges from the on-disk bytes.
+      this.lastWrittenJson = raw
+    } else if (dropped > 0) {
+      // Why: clean the stale on-disk file now so a user who has not run an
+      // agent in 8+ days does not re-drop the same entries on every cold
+      // boot. Synchronous variant is safe at start time and avoids
+      // unref'd-timer-during-quit edge cases.
+      this.runStatusPersist()
+    }
+  }
+
+  private serializeStatusFile(): string {
+    const entries: Record<string, EnrichedAgentHookEventPayload> = {}
+    for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
+      // Why: defensive — never persist invalid keys even if they slipped
+      // into the in-memory map somehow. Same invariant the hydrate path
+      // enforces.
+      if (!isValidPaneKey(paneKey)) {
+        continue
+      }
+      entries[paneKey] = payload as EnrichedAgentHookEventPayload
+    }
+    const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }
+    return JSON.stringify(file)
+  }
+
+  private scheduleStatusPersist(): void {
+    if (!this.lastStatusFilePath) {
+      return
+    }
+    // Why: each call resets the timer; the disk write fires
+    // STATUS_PERSIST_DEBOUNCE_MS after the LAST event in the burst.
+    if (this.statusPersistTimer) {
+      clearTimeout(this.statusPersistTimer)
+    }
+    this.statusPersistTimer = setTimeout(() => {
+      this.statusPersistTimer = null
+      this.runStatusPersist()
+    }, STATUS_PERSIST_DEBOUNCE_MS)
+    // Why: don't keep the event loop alive just for a status flush — quit
+    // already triggers flushStatusPersistSync(). On Node 12+ unref() is a
+    // no-op when called on an already-unref'd timer.
+    if (typeof this.statusPersistTimer.unref === 'function') {
+      this.statusPersistTimer.unref()
+    }
+  }
+
+  flushStatusPersistSync(): void {
+    if (this.statusPersistTimer) {
+      clearTimeout(this.statusPersistTimer)
+      this.statusPersistTimer = null
+    }
+    if (!this.lastStatusFilePath) {
+      return
+    }
+    this.runStatusPersist()
+  }
+
+  private runStatusPersist(): void {
+    if (!this.lastStatusFilePath || !this.endpointDir) {
+      return
+    }
+    const json = this.serializeStatusFile()
+    if (json === this.lastWrittenJson) {
+      return
+    }
+    const tmpPath = join(this.endpointDir, `.last-status-${process.pid}-${randomUUID()}.tmp`)
     let tmpWritten = false
     try {
-      // Why: mode 0o700 — match the file's owner-only policy so the
-      // agent-hooks/ directory itself does not leak the existence of this
-      // Orca install (or the presence of the endpoint file) to other local
-      // users on a multi-user POSIX host. Default umask would otherwise
-      // leave the dir at 0o755 even though the file inside is 0o600.
       mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
       if (process.platform !== 'win32') {
-        // Why: mkdirSync's `mode` only applies when the dir is newly created —
-        // a pre-existing agent-hooks/ dir (from an earlier build or user
-        // intervention) keeps its original permissions. Re-chmod on every
-        // start() so the directory matches the 0600 file inside it. POSIX
-        // only; chmod semantics differ on Windows and the filesystem-level
-        // ACL model makes this check meaningless there.
         try {
           chmodSync(this.endpointDir, 0o700)
         } catch {
-          // Why: best-effort — a chmod failure (exotic fs, read-only mount)
-          // must not block the endpoint-file write itself.
+          // best-effort
         }
       }
-      // Why: a crash between writeFileSync and renameSync leaves stale
-      // `.endpoint-<pid>-<uuid>.tmp` in this directory. Sweep older-than-5-min
-      // orphans so the dir does not grow unboundedly. Fresh tmps are left
-      // alone so a legitimate concurrent instance is not disturbed.
-      try {
-        const entries = readdirSync(this.endpointDir)
-        const cutoff = Date.now() - 5 * 60 * 1000
-        for (const entry of entries) {
-          if (!entry.startsWith('.endpoint-') || !entry.endsWith('.tmp')) {
-            continue
-          }
-          const entryPath = join(this.endpointDir, entry)
-          try {
-            if (statSync(entryPath).mtimeMs < cutoff) {
-              unlinkSync(entryPath)
-            }
-          } catch {
-            // best-effort sweep
-          }
-        }
-      } catch {
-        // readdirSync can fail on exotic filesystems; never block the write
-      }
-      // Why: 0o600 — the token is a loopback bearer credential and must not
-      // be readable by other local users. Parity with PTY env exposure via
-      // /proc/<pid>/environ (owner-only on modern Linux).
-      // Why: `.cmd` files require CRLF for consistent `set` parsing across
-      // Windows versions — LF-only terminators are silently mis-parsed by
-      // some cmd.exe versions, which would break hook coord refresh (exactly
-      // the bug this file exists to fix). POSIX stays LF.
-      const separator = process.platform === 'win32' ? '\r\n' : '\n'
-      writeFileSync(tmpPath, lines.join(separator), { mode: 0o600 })
+      writeFileSync(tmpPath, json, { mode: 0o600 })
       tmpWritten = true
-      renameSync(tmpPath, finalPath)
-      this.endpointFileWritten = true
+      renameSync(tmpPath, this.lastStatusFilePath)
+      this.lastWrittenJson = json
     } catch (err) {
-      console.error('[agent-hooks] failed to write endpoint file:', err)
-      // Why: clean up tmp; never nuke the prior finalPath when we cannot
-      // guarantee we have replaced it. Stale finalPath → dead port → silent
-      // fail on hook POST matches the fail-open policy documented on the
-      // receiver side. Destroying the prior file would strand surviving PTYs
-      // that *could* have continued to fail silently against a dead port —
-      // strictly worse than leaving the prior coords in place until the next
-      // successful start() overwrites them.
+      console.warn('[agent-hooks] failed to write last-status file:', err)
       if (tmpWritten) {
         try {
           unlinkSync(tmpPath)
         } catch {
-          // Why: tmp may already be gone (rename partially succeeded, or an
-          // external process cleaned it). Nothing to do.
+          // tmp already gone
         }
       }
     }
@@ -1529,20 +689,28 @@ export class AgentHookServer {
 
 export const agentHookServer = new AgentHookServer()
 
-// Why: exported for test coverage of the per-agent field extractors. The
-// `normalizeHookPayload` function wraps these with the cache + routing logic
-// the tests need to exercise end-to-end; making it test-visible avoids
-// having to spin up a real HTTP server just to assert field shaping.
+// Why: exported for test coverage of the per-agent field extractors.
 export const _internals = {
-  normalizeHookPayload,
+  // Why: bind the test-helper to the singleton's state so existing tests keep
+  // exercising the same caches the live server uses.
+  normalizeHookPayload: (
+    source: AgentHookSource,
+    body: unknown,
+    expectedEnv: string
+  ): AgentHookEventPayload | null =>
+    normalizeHookPayload(_singletonState(), source, body, expectedEnv),
   parseFormEncodedBody,
   resetCachesForTests: (): void => {
-    lastPromptByPaneKey.clear()
-    lastToolByPaneKey.clear()
-    lastStatusByPaneKey.clear()
-    // Why: across test runs the warn-once Sets would otherwise suppress
-    // legitimate new warnings that a later test expects to observe.
-    warnedVersions.clear()
-    warnedEnvs.clear()
+    clearAllListenerCaches(_singletonState())
   }
+}
+
+// Why: ergonomic accessor so the `_internals` shim can reach the singleton's
+// per-instance state without exposing `state` on the public class surface.
+function _singletonState(): HookListenerState {
+  // The runtime field is private, but tests access this module exclusively
+  // through `_internals`, which only fires after the module-level
+  // `agentHookServer` is constructed. The cast keeps the compile-time
+  // private invariant intact.
+  return (agentHookServer as unknown as { state: HookListenerState }).state
 }

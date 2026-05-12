@@ -51,7 +51,8 @@ export type AgentStatusSlice = {
   setAgentStatus: (
     paneKey: string,
     payload: ParsedAgentStatusPayload,
-    terminalTitle?: string
+    terminalTitle?: string,
+    timing?: { updatedAt?: number; stateStartedAt?: number }
   ) => void
 
   /** Remove a single entry (e.g., when a pane's terminal exits). */
@@ -71,6 +72,21 @@ export type AgentStatusSlice = {
    *  remaining agent rows (live or retained) must not reappear. */
   dropAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 
+  /** Remove all entries for a worktree AND suppress re-retention for live rows.
+   *  Used on worktree sleep/remove — the whole worktree surface is folding, so
+   *  retained rows must drop even if their original tab is no longer present.
+   *
+   *  Note on orphan-live asymmetry: liveKeys are matched against tab prefixes
+   *  derived from `tabsByWorktree[worktreeId]`. Live entries belonging to the
+   *  same worktree but whose tab has already been pruned from `tabsByWorktree`
+   *  (an orphan-live race) are not swept here. The retained side has a
+   *  fallback (`retained.worktreeId === worktreeId`); the live side does not,
+   *  because live entries do not carry a worktreeId. In practice the gap is
+   *  bounded — `removeAgentStatus` is called on PTY exit — and dropping an
+   *  orphan-live entry on shutdown is best-effort, so accepting the asymmetry
+   *  is the simpler tradeoff. */
+  dropAgentStatusByWorktree: (worktreeId: string) => void
+
   /** Retain agent snapshots (called by the top-level retention sync effect).
    *  Accepts an array so multiple agents disappearing in the same frame
    *  produce a single set(...) — avoids intermediate states visible
@@ -89,6 +105,15 @@ export type AgentStatusSlice = {
   /** Clear one-shot teardown suppressors after the retention sync observes
    *  that disappearance and decides not to retain the row. */
   clearRetentionSuppressedPaneKeys: (paneKeys: string[]) => void
+}
+
+function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
+  for (const prefix of tabPrefixes) {
+    if (paneKey.startsWith(prefix)) {
+      return true
+    }
+  }
+  return false
 }
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
@@ -121,9 +146,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     retainedAgentsByPaneKey: {},
     retentionSuppressedPaneKeys: {},
 
-    setAgentStatus: (paneKey, payload, terminalTitle) => {
+    setAgentStatus: (paneKey, payload, terminalTitle, timing) => {
+      const updatedAt = timing?.updatedAt ?? Date.now()
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
+        // Why: snapshots and live pushes share receivedAt from the same main-side
+        // lastStatusByPaneKey.set, so equal timestamps carry identical data. Strict <
+        // preserves live-after-live updates that land in the same millisecond.
+        if (existing && updatedAt < existing.updatedAt) {
+          return s
+        }
         // Why: terminalTitle is identity-like — it labels the pane itself, not
         // the current turn's activity. Preserve the prior value when a ping
         // omits it so the pane label does not flicker out between hook events.
@@ -158,13 +190,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           }
         }
 
-        const now = Date.now()
-        // Why: stateStartedAt anchors to the first time this state was
-        // reported. Carry forward the prior value on tool/prompt pings within
-        // the same state so stateHistory[].startedAt reflects true state-onset
-        // (see AgentStatusEntry.stateStartedAt docs).
+        // Why: prefer main's authoritative stateStartedAt when provided — main's
+        // attachStatusTiming preserves it across same-state pings (server.ts) and
+        // persists it across restart. Fall back to existing.stateStartedAt only when
+        // main did not send timing (legacy callers / OSC fallback path), and to
+        // updatedAt for a brand-new pane.
         const stateStartedAt =
-          existing && existing.state === payload.state ? existing.stateStartedAt : now
+          timing?.stateStartedAt ??
+          (existing && existing.state === payload.state ? existing.stateStartedAt : updatedAt)
 
         // Why: tool/assistant fields come pre-merged from the main-process
         // cache (see `resolveToolState` in server.ts), so the payload always
@@ -174,7 +207,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const entry: AgentStatusEntry = {
           state: payload.state,
           prompt: payload.prompt,
-          updatedAt: now,
+          updatedAt,
           stateStartedAt,
           // Why: unlike tool/prompt/assistant fields (which legitimately clear on a
           // fresh turn), agentType is the agent's identity for the pane — it does
@@ -201,23 +234,23 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // it when a new turn starts (working → Stop reprices it).
           interrupted: payload.interrupted
         }
-        // Why: `agentStatusEpoch` bumps on every update because visual +
-        // freshness selectors (WorktreeCard status, hover content) care about
-        // tool-name/prompt/assistant-message churn within a turn. `sortEpoch`,
-        // on the other hand, bumps only when sort-relevant inputs change —
-        // avoiding sidebar re-sorts on every tool/prompt event would stress
-        // the smart-sort debounce for no reason. Sort-relevant inputs are:
+        // Why: broad freshness-aware subscribers only need a global tick when
+        // an entry appears, changes state, or crosses stale->fresh. Same-state
+        // tool/prompt pings still update agentStatusByPaneKey for the owning
+        // row, but they must not fan out through dashboard/sidebar aggregate
+        // work across every card. Sort-relevant inputs are:
         //   1. `state` transitions — sort score is a function of state.
         //   2. Freshness transitions (stale → fresh) — `computeSmartScoreFromSignals`
         //      in smart-sort.ts filters entries through
-        //      `isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)`
+        //      `isExplicitAgentStatusFresh(entry, updatedAt, AGENT_STATUS_STALE_AFTER_MS)`
         //      (30-min TTL). A stale entry that refreshes with the SAME state
         //      goes from "not contributing" to contributing +60 (working) or
-        //      +35 (blocked/waiting) to the score — order must update. The new
-        //      entry below always has `updatedAt = now`, so it is fresh; we
-        //      only need to detect the stale→fresh flip on `existing`.
+        //      +35 (blocked/waiting) to the score — order must update. Snapshot
+        //      hydration can pass an older updatedAt; in that case the entry is
+        //      still stored with its true age, and selectors will immediately
+        //      decay it if it is already stale.
         const wasFresh =
-          !!existing && isExplicitAgentStatusFresh(existing, now, AGENT_STATUS_STALE_AFTER_MS)
+          !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
         const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
         // Why: a new status event means the agent is live again — lift any
         // one-shot retention suppressor so the row can be retained normally
@@ -235,7 +268,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         return {
           agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
-          agentStatusEpoch: s.agentStatusEpoch + 1,
+          agentStatusEpoch: sortRelevantChange ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: sortRelevantChange ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
@@ -418,6 +451,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       if (liveExisted) {
         queueMicrotask(() => freshness.schedule())
       }
+      // Why: propagate the dismissal to the main-process hook cache so the
+      // on-disk last-status file evicts this paneKey on the next debounced
+      // write. Without this, the main process would re-hydrate the dismissed
+      // entry on the next launch and the row would re-appear. Fire-and-forget.
+      // Why: the typeof window guard keeps the slice usable from the
+      // node test environment, where window is undefined.
+      if (typeof window !== 'undefined') {
+        window.api?.agentStatus?.drop?.(paneKey)
+      }
     },
 
     dropAgentStatusByTabPrefix: (tabIdPrefix) => {
@@ -466,6 +508,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // would leak because no such transition will ever fire. Also skip
         // keys that are already suppressed so we don't spuriously reallocate
         // the suppressor map for subscribers that select on its identity.
+        //
+        // Same-frame race: if a hook ping promotes working→done in the same
+        // render frame as teardown, the next retention-sync run sees the entry
+        // as `done` in prevAgents and surfaces it in retained — even though
+        // the user just tore it down. Planting suppressors is the cheap guard
+        // for the common ordering; the rare inverse ordering has the same
+        // bounded suppressor-leak tradeoff described in dropAgentStatus.
         const suppressorAdds = liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
         let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
         if (suppressorAdds.length > 0) {
@@ -485,6 +534,84 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // Why: mirrors removeAgentStatusByTabPrefix — only bump the live-map
           // epoch / sortEpoch when the live map actually changed. Retained-only
           // sweeps do not participate in smart-sort or freshness calculations.
+          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      if (hadLive) {
+        queueMicrotask(() => freshness.schedule())
+      }
+    },
+
+    dropAgentStatusByWorktree: (worktreeId) => {
+      let hadLive = false
+      set((s) => {
+        const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+        const liveKeys = Object.keys(s.agentStatusByPaneKey).filter((k) =>
+          paneKeyMatchesAnyTabPrefix(k, tabPrefixes)
+        )
+        const retainedKeys = Object.entries(s.retainedAgentsByPaneKey)
+          .filter(
+            ([paneKey, retained]) =>
+              retained.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+          )
+          .map(([paneKey]) => paneKey)
+        const retainedKeySet = new Set(retainedKeys)
+        // See removeAgentStatus for rationale on ack cleanup. Current tabs are
+        // swept by prefix; orphan retained rows are swept by their retained key.
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        const ackKeys = Object.keys(nextAck).filter(
+          (k) => paneKeyMatchesAnyTabPrefix(k, tabPrefixes) || retainedKeySet.has(k)
+        )
+        if (ackKeys.length > 0) {
+          nextAck = { ...nextAck }
+          for (const key of ackKeys) {
+            delete nextAck[key]
+          }
+        }
+        // Mirror dropAgentStatusByTabPrefix: when nothing live or retained
+        // changed, narrow the return to just the ack delta (or s) so we don't
+        // emit a new top-level state object that re-renders full-state
+        // subscribers for nothing.
+        if (liveKeys.length === 0 && retainedKeys.length === 0) {
+          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+            return { acknowledgedAgentsByPaneKey: nextAck }
+          }
+          return s
+        }
+        hadLive = liveKeys.length > 0
+
+        const nextLive =
+          liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        for (const key of liveKeys) {
+          delete nextLive[key]
+        }
+
+        const nextRetained =
+          retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
+        for (const key of retainedKeys) {
+          delete nextRetained[key]
+        }
+
+        // Why: a worktree-level teardown folds the whole surface. Current live
+        // rows need one-shot suppressors so the retention sync cannot recreate a
+        // done row from the previous render after sleep/remove has hidden it.
+        const suppressorAdds = liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
+        let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+        if (suppressorAdds.length > 0) {
+          nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
+          for (const key of suppressorAdds) {
+            nextRetentionSuppressedPaneKeys[key] = true
+          }
+        }
+
+        return {
+          agentStatusByPaneKey: nextLive,
+          retainedAgentsByPaneKey: nextRetained,
+          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
           agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
         }
@@ -576,6 +703,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     },
 
     dismissRetainedAgentsByWorktree: (worktreeId) => {
+      // Why: collect inside set so we capture the exact paneKeys removed
+      // (worktree filter is applied here). After the synchronous set()
+      // returns, fan out a window.api.agentStatus.drop per removed key so
+      // the main-process hook cache (and on-disk last-status file) eviction
+      // matches the renderer's removal. Without this, the on-disk cache
+      // would resurrect the dismissed rows on the next launch.
+      const dismissedPaneKeys: string[] = []
       set((s) => {
         let changed = false
         const next: Record<string, RetainedAgentEntry> = {}
@@ -594,6 +728,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const [key, ra] of Object.entries(s.retainedAgentsByPaneKey)) {
           if (ra.worktreeId === worktreeId) {
             changed = true
+            dismissedPaneKeys.push(key)
             if (key in s.agentStatusByPaneKey && !(key in s.retentionSuppressedPaneKeys)) {
               toSuppress.push(key)
             }
@@ -616,6 +751,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           retentionSuppressedPaneKeys: nextSuppressed
         }
       })
+      if (typeof window !== 'undefined') {
+        for (const paneKey of dismissedPaneKeys) {
+          window.api?.agentStatus?.drop?.(paneKey)
+        }
+      }
     },
 
     pruneRetainedAgents: (validWorktreeIds) => {

@@ -162,6 +162,7 @@ function createPane(paneId: number) {
 function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
+    markPaneHasComplexScriptOutput: vi.fn(),
     getPanes: vi.fn(() => Array.from({ length: paneCount }, (_, index) => ({ id: index + 1 }))),
     closePane: vi.fn(),
     getActivePane: vi.fn<() => { id: number } | null>(() => null)
@@ -737,12 +738,54 @@ describe('connectPanePty', () => {
     expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('tab-pty')
   })
 
-  // Regression for the dim-mismatch bug — guarantees that we never
-  // reintroduce visibility-gated buffering. Bytes go straight to xterm,
-  // which lets the WebGL/DOM-fallback renderer parse them at live cols.
-  // Hidden panes still get writes; the visibility prop only controls
-  // WebGL suspend/resume in use-terminal-pane-global-effects.
-  it('writes PTY bytes straight to xterm regardless of visibility', async () => {
+  // Regression for foreground input lag with many background terminals:
+  // hidden panes still feed xterm, but their writes are scheduled through
+  // the shared output drain so 100 panes cannot all start xterm WriteBuffer
+  // setTimeout handlers in the same event-loop burst.
+  it('queues non-visible PTY bytes before writing them into xterm', async () => {
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps({
+        isVisibleRef: { current: false }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(6)
+
+      expect(capturedDataCallback.current).not.toBeNull()
+      capturedDataCallback.current?.('hello\r\n')
+      expect(pane.terminal.write).not.toHaveBeenCalledWith('hello\r\n')
+
+      for (const fn of pendingTimeouts) {
+        fn()
+      }
+
+      expect(pane.terminal.write).toHaveBeenCalledWith('hello\r\n')
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('writes visible split-pane PTY bytes immediately even when the tab is not active', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -755,16 +798,40 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      isVisibleRef: { current: false }
+      isActiveRef: { current: false },
+      isVisibleRef: { current: true }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
-    capturedDataCallback.current?.('hello\r\n')
+    capturedDataCallback.current?.('visible split output\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('hello\r\n')
+    expect(pane.terminal.write).toHaveBeenCalledWith('visible split output\r\n')
+  })
+
+  it('marks panes that receive Arabic output for DOM rendering', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.('Arabic: السلام عليكم\r\n')
+
+    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(pane.terminal.write).toHaveBeenCalledWith('Arabic: السلام عليكم\r\n')
   })
 
   it('reattaches via daemon sessionId when an in-session PTY is live', async () => {

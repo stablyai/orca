@@ -163,8 +163,6 @@
 
 .rich-markdown-editor h2 {
   font-size: 1.4em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--border);
 }
 
 .rich-markdown-editor h3 {

@@ -167,6 +167,40 @@ describe('SshChannelMultiplexer', () => {
 
       expect(handler).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 0 })
     })
+
+    it('typed dispatcher only fires for its method', () => {
+      const chunkHandler = vi.fn()
+      const otherHandler = vi.fn()
+      const generic = vi.fn()
+      mux.onNotificationByMethod('fs.streamChunk', chunkHandler)
+      mux.onNotificationByMethod('fs.streamEnd', otherHandler)
+      mux.onNotification(generic)
+
+      transport.dataCallbacks[0](
+        makeNotificationFrame('fs.streamChunk', { streamId: 1, seq: 0, data: 'aGk=' }, 1)
+      )
+
+      expect(chunkHandler).toHaveBeenCalledWith({ streamId: 1, seq: 0, data: 'aGk=' })
+      expect(otherHandler).not.toHaveBeenCalled()
+      expect(generic).toHaveBeenCalledWith('fs.streamChunk', {
+        streamId: 1,
+        seq: 0,
+        data: 'aGk='
+      })
+    })
+
+    it('typed dispatcher unsubscribe removes only that handler', () => {
+      const a = vi.fn()
+      const b = vi.fn()
+      const unsubA = mux.onNotificationByMethod('fs.streamEnd', a)
+      mux.onNotificationByMethod('fs.streamEnd', b)
+      unsubA()
+
+      transport.dataCallbacks[0](makeNotificationFrame('fs.streamEnd', { streamId: 7 }, 1))
+
+      expect(a).not.toHaveBeenCalled()
+      expect(b).toHaveBeenCalledWith({ streamId: 7 })
+    })
   })
 
   describe('keepalive', () => {

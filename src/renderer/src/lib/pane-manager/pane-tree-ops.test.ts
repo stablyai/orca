@@ -52,6 +52,7 @@ function createPane({
     gpuRenderingEnabled: true,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    hasComplexScriptOutput: false,
     fitAddon: {
       fit,
       proposeDimensions

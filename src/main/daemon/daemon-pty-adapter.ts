@@ -6,7 +6,7 @@ import { existsSync } from 'fs'
 import { DaemonClient } from './client'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
-import { mintPtySessionId } from './pty-session-id'
+import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import {
   PROTOCOL_VERSION,
@@ -330,14 +330,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (!session.isAlive) {
         continue
       }
-      // Why: session IDs use the format `${worktreeId}@@${shortUuid}`. The @@
-      // separator is unambiguous — worktreeIds contain hyphens and colons but
-      // never @@.
-      const separatorIdx = session.sessionId.lastIndexOf('@@')
-      const worktreeId =
-        separatorIdx !== -1 ? session.sessionId.slice(0, separatorIdx) : session.sessionId
+      // Why: session IDs use the format `${worktreeId}@@${shortUuid}`. Sessions
+      // whose id does not match the minted format (worktreeId === null) cannot
+      // be tied to a live worktree and are treated as orphans.
+      const { worktreeId } = parsePtySessionId(session.sessionId)
 
-      if (!validWorktreeIds.has(worktreeId)) {
+      if (worktreeId === null || !validWorktreeIds.has(worktreeId)) {
         try {
           await this.client.request('kill', { sessionId: session.sessionId })
         } catch {

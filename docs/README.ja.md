@@ -97,6 +97,18 @@ yay -S stably-orca-git
 
 ---
 
+## [新機能] すべての agent のライブステータスを表示
+
+**各 agent が何をしているか、ひと目で把握。**
+
+すべての worktree にまたがる各 agent のライブステータスを 1 か所で追跡できます。タブを切り替えなくても、作業中・入力待ち・完了済みの agent を一目で把握できます。
+
+<p align="center">
+  <img src="assets/agent-statuses.gif" alt="Orca Agent Statuses — worktree をまたいだ agent のライブステータスを表示" width="800" />
+</p>
+
+---
+
 ## [新機能] AI Diff への注釈
 
 **AI が生成した Diff に直接コメントできます。**

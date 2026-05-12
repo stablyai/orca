@@ -24,6 +24,7 @@ import type {
   WorktreeStartupLaunch
 } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
@@ -217,6 +218,10 @@ type RuntimePtyWorktreeRecord = {
   ptyId: string
   worktreeId: string
   connected: boolean
+  lastExitCode: number | null
+  lastAgentStatus: AgentStatus | null
+  lastOscTitle: string | null
+  title: string | null
   lastOutputAt: number | null
   tailBuffer: string[]
   tailPartialLine: string
@@ -231,6 +236,16 @@ type RuntimeHeadlessTerminal = {
 }
 
 type RuntimePtyController = {
+  spawn?(opts: {
+    cols: number
+    rows: number
+    cwd?: string
+    command?: string
+    env?: Record<string, string>
+    connectionId?: string | null
+    worktreeId?: string
+    preAllocatedHandle?: string
+  }): Promise<{ id: string }>
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
   getForegroundProcess(ptyId: string): Promise<string | null>
@@ -259,6 +274,13 @@ type RuntimeNotifier = {
     startup?: WorktreeStartupLaunch
   ): void
   createTerminal(worktreeId: string, opts: { command?: string; title?: string }): void
+  revealTerminalSession?(
+    worktreeId: string,
+    opts: { ptyId: string; title?: string | null; activate?: boolean }
+  ):
+    | Promise<{ tabId: string; title?: string | null }>
+    | { tabId: string; title?: string | null }
+    | void
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
@@ -903,6 +925,14 @@ export class OrcaRuntimeService {
       pty.tailTruncated = pty.tailTruncated || nextTail.truncated
       pty.tailLinesTotal += nextTail.newCompleteLines
       pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
+      if (oscTitle !== null) {
+        const prevStatus = pty.lastAgentStatus
+        pty.lastOscTitle = oscTitle
+        pty.lastAgentStatus = agentStatus
+        if (agentStatus === 'idle' && prevStatus !== 'idle') {
+          this.resolvePtyTuiIdleWaiters(pty, ptyId)
+        }
+      }
     }
 
     for (const leaf of this.leaves.values()) {
@@ -1717,6 +1747,8 @@ export class OrcaRuntimeService {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       pty.connected = false
+      pty.lastExitCode = exitCode
+      this.resolvePtyExitWaiters(pty, ptyId)
     }
 
     for (const leaf of this.leaves.values()) {
@@ -2969,10 +3001,7 @@ export class OrcaRuntimeService {
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
-      const wrote = this.ptyController?.write(pty.pty.ptyId, payload) ?? false
-      if (!wrote) {
-        throw new Error('terminal_not_writable')
-      }
+      await this.writeTerminalAction(pty.pty.ptyId, action, payload)
       return {
         handle,
         accepted: true,
@@ -2989,36 +3018,42 @@ export class OrcaRuntimeService {
       throw new Error('invalid_terminal_send')
     }
 
-    // Why: TUI apps (Claude Code, etc.) treat a single large write as a paste
-    // event. If \r is included in the same write as multi-line text, the TUI
-    // interprets it as part of the paste rather than a discrete Enter keypress.
-    // Splitting the text and the trailing control characters into separate
-    // writes with a small delay ensures the TUI processes the paste first,
-    // then receives Enter as a distinct input event.
-    const hasText = typeof action.text === 'string' && action.text.length > 0
-    const hasSuffix = action.enter || action.interrupt
-    if (hasText && hasSuffix) {
-      const textWrote = this.ptyController?.write(leaf.ptyId, action.text!) ?? false
-      if (!textWrote) {
-        throw new Error('terminal_not_writable')
-      }
-      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const suffixWrote = this.ptyController?.write(leaf.ptyId, suffix) ?? false
-      if (!suffixWrote) {
-        throw new Error('terminal_not_writable')
-      }
-    } else {
-      const wrote = this.ptyController?.write(leaf.ptyId, payload) ?? false
-      if (!wrote) {
-        throw new Error('terminal_not_writable')
-      }
-    }
+    await this.writeTerminalAction(leaf.ptyId, action, payload)
 
     return {
       handle,
       accepted: true,
       bytesWritten: Buffer.byteLength(payload, 'utf8')
+    }
+  }
+
+  private async writeTerminalAction(
+    ptyId: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    payload: string
+  ): Promise<void> {
+    // Why: TUI apps (Claude Code, etc.) treat a single large write as a paste
+    // event. Keep Enter/interrupt as a second write for both visible and
+    // background PTYs so CLI automation behaves the same either way.
+    const hasText = typeof action.text === 'string' && action.text.length > 0
+    const hasSuffix = action.enter || action.interrupt
+    if (hasText && hasSuffix) {
+      const textWrote = this.ptyController?.write(ptyId, action.text!) ?? false
+      if (!textWrote) {
+        throw new Error('terminal_not_writable')
+      }
+      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      const suffixWrote = this.ptyController?.write(ptyId, suffix) ?? false
+      if (!suffixWrote) {
+        throw new Error('terminal_not_writable')
+      }
+      return
+    }
+
+    const wrote = this.ptyController?.write(ptyId, payload) ?? false
+    if (!wrote) {
+      throw new Error('terminal_not_writable')
     }
   }
 
@@ -3030,6 +3065,52 @@ export class OrcaRuntimeService {
     }
   ): Promise<RuntimeTerminalWait> {
     const condition = options?.condition ?? 'exit'
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      if (condition === 'exit' && !pty.pty.connected) {
+        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      }
+      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      }
+      return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
+        const effectiveTimeoutMs =
+          typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
+            ? options.timeoutMs
+            : condition === 'tui-idle'
+              ? TUI_IDLE_DEFAULT_TIMEOUT_MS
+              : 0
+        const waiter: TerminalWaiter = {
+          handle,
+          condition,
+          resolve,
+          reject,
+          timeout: null,
+          pollInterval: null
+        }
+        if (effectiveTimeoutMs > 0) {
+          waiter.timeout = setTimeout(() => {
+            this.removeWaiter(waiter)
+            reject(new Error('timeout'))
+          }, effectiveTimeoutMs)
+        }
+        let waiters = this.waitersByHandle.get(handle)
+        if (!waiters) {
+          waiters = new Set()
+          this.waitersByHandle.set(handle, waiters)
+        }
+        waiters.add(waiter)
+        const live = this.getLivePtyForHandle(handle)
+        if (!live) {
+          this.removeWaiter(waiter)
+          reject(new Error('terminal_handle_stale'))
+        } else if (condition === 'exit' && !live.pty.connected) {
+          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+        } else if (condition === 'tui-idle' && live.pty.lastAgentStatus === 'idle') {
+          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+        }
+      })
+    }
     const { leaf } = this.getLiveLeafForHandle(handle)
 
     if (condition === 'exit' && getTerminalState(leaf) === 'exited') {
@@ -3389,6 +3470,7 @@ export class OrcaRuntimeService {
     linkedIssue?: number | null
     comment?: string
     runHooks?: boolean
+    activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
     startup?: WorktreeStartupLaunch
   }): Promise<CreateWorktreeResult> {
@@ -3529,16 +3611,6 @@ export class OrcaRuntimeService {
       console.warn(`[hooks] ${warning}`)
     }
 
-    this.notifier?.worktreesChanged(repo.id)
-    // Why: the editor currently creates the first Orca-managed terminal as a
-    // renderer-side consequence of activating a worktree. CLI-created
-    // worktrees must trigger that same activation path or they will exist on
-    // disk without becoming the active workspace in the UI.
-    if (args.startup) {
-      this.notifier?.activateWorktree(repo.id, worktree.id, setup, args.startup)
-    } else {
-      this.notifier?.activateWorktree(repo.id, worktree.id, setup)
-    }
     this.invalidateResolvedWorktreeCache()
     // Why: the filesystem-auth layer maintains a separate cache of registered
     // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
@@ -3546,6 +3618,38 @@ export class OrcaRuntimeService {
     // are not recognized and all git operations fail with "Access denied:
     // unknown repository or worktree path".
     invalidateAuthorizedRootsCache()
+    this.notifier?.worktreesChanged(repo.id)
+    const shouldActivate = args.activate === true || args.runHooks === true || Boolean(args.startup)
+    if (shouldActivate) {
+      // Why: plain CLI creates should not steal the user's current workspace.
+      // Startup launches still use renderer activation because they are an
+      // explicit request to start visible work in the new worktree.
+      if (args.startup) {
+        this.notifier?.activateWorktree(repo.id, worktree.id, setup, args.startup)
+      } else {
+        this.notifier?.activateWorktree(repo.id, worktree.id, setup)
+      }
+    } else if (this.ptyController?.spawn) {
+      try {
+        await this.createTerminal(`path:${worktree.path}`)
+        if (setup) {
+          await this.createTerminal(`path:${worktree.path}`, {
+            title: 'Setup',
+            command: buildSetupRunnerCommand(
+              setup.runnerScriptPath,
+              process.platform === 'win32' ? 'windows' : 'posix'
+            ),
+            env: setup.envVars
+          })
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        warning = warning
+          ? `${warning} Also failed to create the initial terminal for ${worktreePath}: ${message}`
+          : `Failed to create the initial terminal for ${worktreePath}: ${message}`
+        console.warn(`[worktree-create] ${warning}`)
+      }
+    }
     return {
       worktree,
       ...(setup ? { setup } : {}),
@@ -4007,6 +4111,17 @@ export class OrcaRuntimeService {
 
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
     this.assertGraphReady()
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      pty.pty.title = title
+      for (const leaf of this.leaves.values()) {
+        if (leaf.ptyId === pty.pty.ptyId) {
+          this.notifier?.renameTerminal(leaf.tabId, title)
+          return { handle, tabId: leaf.tabId, title }
+        }
+      }
+      return { handle, tabId: pty.record.tabId, title }
+    }
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
@@ -4014,8 +4129,53 @@ export class OrcaRuntimeService {
 
   async createTerminal(
     worktreeSelector?: string,
-    opts: { command?: string; title?: string } = {}
+    opts: { command?: string; env?: Record<string, string>; title?: string; focus?: boolean } = {}
   ): Promise<RuntimeTerminalCreate> {
+    if (opts.focus !== true) {
+      if (!worktreeSelector) {
+        throw new Error('MISSING_WORKTREE')
+      }
+      if (!this.ptyController?.spawn) {
+        throw new Error('runtime_unavailable')
+      }
+      const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+      const repo = this.store?.getRepo(worktree.repoId)
+      const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+      const result = await this.ptyController.spawn({
+        cols: 120,
+        rows: 40,
+        cwd: worktree.path,
+        command: opts.command,
+        env: opts.env,
+        connectionId: repo?.connectionId ?? null,
+        worktreeId: worktree.id,
+        preAllocatedHandle
+      })
+      this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+      this.registerPty(result.id, worktree.id)
+      const pty = this.getOrCreatePtyWorktreeRecord(result.id)
+      if (pty) {
+        pty.title = opts.title ?? null
+      }
+      const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+      let surface: RuntimeTerminalCreate['surface'] = 'background'
+      if (this.notifier?.revealTerminalSession) {
+        try {
+          // Why: after the PTY is spawned, renderer tab adoption is best-effort;
+          // failing here must not strand a live process without returning a handle.
+          await this.notifier.revealTerminalSession(worktree.id, {
+            ptyId: result.id,
+            title: opts.title ?? null,
+            activate: false
+          })
+          surface = 'visible'
+        } catch (err) {
+          console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
+        }
+      }
+      return { handle, worktreeId: worktree.id, title: opts.title ?? null, surface }
+    }
+
     this.assertGraphReady()
     const win = this.getAuthoritativeWindow()
     // Why: mirrors browserTabCreate — when no worktree is specified, pass
@@ -4062,7 +4222,7 @@ export class OrcaRuntimeService {
     // populates this.leaves may not have arrived yet. Wait for the leaf to
     // appear so we can return a valid handle the caller can use right away.
     const handle = await this.waitForTerminalHandle(reply.tabId)
-    return { handle, worktreeId: worktreeId ?? '', title: reply.title }
+    return { handle, worktreeId: worktreeId ?? '', title: reply.title, surface: 'visible' }
   }
 
   private waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
@@ -4173,7 +4333,18 @@ export class OrcaRuntimeService {
     this.assertGraphReady()
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
-      return { handle, tabId: pty.record.tabId, worktreeId: pty.pty.worktreeId }
+      if (!pty.pty.connected) {
+        throw new Error('terminal_exited')
+      }
+      const revealed = await this.notifier?.revealTerminalSession?.(pty.pty.worktreeId, {
+        ptyId: pty.pty.ptyId,
+        title: pty.pty.title ?? pty.pty.lastOscTitle
+      })
+      return {
+        handle,
+        tabId: revealed?.tabId ?? pty.record.tabId,
+        worktreeId: pty.pty.worktreeId
+      }
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId)
@@ -4182,6 +4353,11 @@ export class OrcaRuntimeService {
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
     this.assertGraphReady()
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
+      return { handle, tabId: pty.record.tabId, ptyKilled }
+    }
     const { leaf } = this.getLiveLeafForHandle(handle)
     let ptyKilled = false
     if (leaf.ptyId) {
@@ -4281,6 +4457,11 @@ export class OrcaRuntimeService {
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === worktree.id && leaf.ptyId) {
         ptyIds.add(leaf.ptyId)
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId === worktree.id && pty.connected) {
+        ptyIds.add(pty.ptyId)
       }
     }
 
@@ -4493,6 +4674,10 @@ export class OrcaRuntimeService {
         ptyId,
         worktreeId,
         connected: state.connected ?? true,
+        lastExitCode: null,
+        lastAgentStatus: null,
+        lastOscTitle: null,
+        title: null,
         lastOutputAt: state.lastOutputAt ?? null,
         tailBuffer: [],
         tailPartialLine: '',
@@ -4756,7 +4941,7 @@ export class OrcaRuntimeService {
       branch: worktree?.branch ?? '',
       tabId: `pty:${pty.ptyId}`,
       leafId: `pty:${pty.ptyId}`,
-      title: null,
+      title: pty.title ?? pty.lastOscTitle,
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
@@ -4788,7 +4973,19 @@ export class OrcaRuntimeService {
     record: TerminalHandleRecord
     pty: RuntimePtyWorktreeRecord
   } | null {
-    const record = this.handles.get(handle)
+    let record = this.handles.get(handle)
+    if (!record) {
+      const ptyId = [...this.handleByPtyId.entries()].find(
+        ([, mappedHandle]) => mappedHandle === handle
+      )?.[0]
+      const pty = ptyId ? this.ptysById.get(ptyId) : null
+      if (pty) {
+        // Why: graph reload/unavailability clears renderer handle records, but
+        // runtime-owned PTY handles remain the caller's control identity.
+        this.issuePtyHandle(pty)
+        record = this.handles.get(handle)
+      }
+    }
     if (!record || record.runtimeId !== this.runtimeId || !record.tabId.startsWith('pty:')) {
       return null
     }
@@ -4799,6 +4996,10 @@ export class OrcaRuntimeService {
     if (!pty || pty.ptyId !== record.ptyId) {
       return null
     }
+    // Why: renderer adoption can race with CLI reads. If this synthetic PTY
+    // handle is valid, keep ptyId -> handle populated so summaries do not mint
+    // a second handle for the same terminal.
+    this.handleByPtyId.set(record.ptyId, handle)
     return { record, pty }
   }
 
@@ -4824,7 +5025,7 @@ export class OrcaRuntimeService {
 
     return {
       handle,
-      status: pty.connected ? 'running' : 'unknown',
+      status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
       tail,
       truncated,
       nextCursor: String(pty.tailLinesTotal)
@@ -4888,7 +5089,8 @@ export class OrcaRuntimeService {
   }
 
   private issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
-    const existingHandle = this.handleByPtyId.get(pty.ptyId)
+    const existingHandle =
+      this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
     if (existingHandle) {
       const existingRecord = this.handles.get(existingHandle)
       if (
@@ -4896,11 +5098,12 @@ export class OrcaRuntimeService {
         existingRecord.runtimeId === this.runtimeId &&
         existingRecord.ptyId === pty.ptyId
       ) {
+        this.handleByPtyId.set(pty.ptyId, existingHandle)
         return existingHandle
       }
     }
 
-    const handle = `term_${randomUUID()}`
+    const handle = existingHandle ?? `term_${randomUUID()}`
     const syntheticId = `pty:${pty.ptyId}`
     this.handles.set(handle, {
       handle,
@@ -4914,6 +5117,19 @@ export class OrcaRuntimeService {
     })
     this.handleByPtyId.set(pty.ptyId, handle)
     return handle
+  }
+
+  private findHandleForPtyRecord(ptyId: string): string | null {
+    for (const [handle, record] of this.handles) {
+      if (
+        record.runtimeId === this.runtimeId &&
+        record.ptyId === ptyId &&
+        record.tabId.startsWith('pty:')
+      ) {
+        return handle
+      }
+    }
+    return null
   }
 
   private refreshWritableFlags(): void {
@@ -4976,6 +5192,41 @@ export class OrcaRuntimeService {
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
+      }
+    }
+  }
+
+  private resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    const handle = this.handleByPtyId.get(ptyId)
+    if (!handle) {
+      return
+    }
+    const waiters = this.waitersByHandle.get(handle)
+    if (!waiters || waiters.size === 0) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      if (waiter.condition === 'exit') {
+        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
+      } else {
+        this.removeWaiter(waiter)
+        waiter.reject(new Error('terminal_exited'))
+      }
+    }
+  }
+
+  private resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    const handle = this.handleByPtyId.get(ptyId)
+    if (!handle) {
+      return
+    }
+    const waiters = this.waitersByHandle.get(handle)
+    if (!waiters || waiters.size === 0) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      if (waiter.condition === 'tui-idle') {
+        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }
   }
@@ -6587,6 +6838,20 @@ function buildTerminalWaitResult(
     satisfied: true,
     status: getTerminalState(leaf),
     exitCode: leaf.lastExitCode
+  }
+}
+
+function buildPtyTerminalWaitResult(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  pty: RuntimePtyWorktreeRecord
+): RuntimeTerminalWait {
+  return {
+    handle,
+    condition,
+    satisfied: true,
+    status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
+    exitCode: pty.lastExitCode
   }
 }
 

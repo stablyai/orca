@@ -2,6 +2,10 @@ import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
+import {
+  RelayVersionMismatchError,
+  RELAY_EXIT_CODE_VERSION_MISMATCH
+} from './ssh-relay-version-mismatch-error'
 
 export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
 
@@ -14,18 +18,52 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
     let stderrOutput = ''
     let bufferedStdout = Buffer.alloc(0)
     let closedAfterSentinel = false
+    // Why: ssh2 fires 'exit' BEFORE 'close' with the remote exit code.
+    // Capturing it here lets us translate exit-42 (relay handshake mismatch)
+    // into a typed RelayVersionMismatchError so the relay-lost retry loop
+    // can skip backoff for this terminal condition.
+    let lastExitCode: number | null = null
+
+    // Why: when the sentinel timeout fires we close the channel and wait a
+    // short grace window for the 'close' handler to surface the typed
+    // RelayVersionMismatchError if the remote --connect actually exited 42.
+    // Settling here unconditionally would let a slow exit-42 (e.g. a remote
+    // with congested SSH multiplex or a paused VM) be misclassified as a
+    // generic timeout — which routes through the relay-lost retry backoff
+    // and re-introduces the failure mode the typed error was meant to
+    // prevent.
+    const TIMEOUT_GRACE_MS = 500
+    let timeoutFired = false
+    let timeoutGraceTimer: ReturnType<typeof setTimeout> | null = null
 
     const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true
-        channel.close()
-        reject(
-          new Error(
-            `Relay failed to start within ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
+      timeoutFired = true
+      channel.close()
+      timeoutGraceTimer = setTimeout(() => {
+        if (!settled) {
+          settled = true
+          reject(
+            new Error(
+              `Relay failed to start within ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
+            )
           )
-        )
-      }
+        }
+      }, TIMEOUT_GRACE_MS)
     }, RELAY_SENTINEL_TIMEOUT_MS)
+
+    const cancelTimers = (): void => {
+      clearTimeout(timeout)
+      if (timeoutGraceTimer) {
+        clearTimeout(timeoutGraceTimer)
+        timeoutGraceTimer = null
+      }
+    }
+
+    channel.on('exit', (code: number | null) => {
+      if (typeof code === 'number') {
+        lastExitCode = code
+      }
+    })
 
     const MAX_BUFFER_CAP = 64 * 1024
     channel.stderr.on('data', (data: Buffer) => {
@@ -49,7 +87,7 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
     }
 
     const failOrClose = (err: Error): void => {
-      clearTimeout(timeout)
+      cancelTimers()
       if (!sentinelReceived) {
         if (!settled) {
           settled = true
@@ -68,12 +106,28 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
     channel.on('close', () => {
       if (!sentinelReceived) {
-        clearTimeout(timeout)
+        cancelTimers()
         if (!settled) {
           settled = true
+          // Why: a wire-handshake mismatch on the daemon side closes the
+          // socket; --connect prints the mismatch detail to stderr and exits
+          // with code 42 BEFORE writing the sentinel. Translate that into a
+          // typed RelayVersionMismatchError so the retry loop in ssh.ts can
+          // distinguish a recoverable transport drop from this terminal
+          // condition and skip backoff. The check still wins over a fired
+          // timeout because the timeout handler defers settling for a small
+          // grace window so the close handler can deliver the exit code.
+          if (lastExitCode === RELAY_EXIT_CODE_VERSION_MISMATCH) {
+            const { expected, got } = parseHandshakeMismatchStderr(stderrOutput)
+            reject(new RelayVersionMismatchError(expected, got, stderrOutput.trim()))
+            return
+          }
+          const timeoutSuffix = timeoutFired
+            ? ` (after ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s sentinel timeout)`
+            : ''
           reject(
             new Error(
-              `Relay process exited before ready.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
+              `Relay process exited before ready${timeoutSuffix}.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
             )
           )
         }
@@ -109,7 +163,7 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
       if (sentinelIdx !== -1) {
         sentinelReceived = true
-        clearTimeout(timeout)
+        cancelTimers()
 
         const afterSentinel = bufferedStdout.subarray(
           Buffer.byteLength(text.substring(0, sentinelIdx + RELAY_SENTINEL.length), 'utf-8')
@@ -257,4 +311,19 @@ export async function resolveRemoteNodePath(conn: SshConnection): Promise<string
     'Node.js not found on remote host. Orca relay requires Node.js 18+. ' +
       'Install Node.js on the remote and try again.'
   )
+}
+
+// Why: extract the expected/got version pair from --connect's stderr line
+// "Handshake mismatch: expected=<x>, daemon=<y>" so the typed error carries
+// actionable detail. Best-effort: returns undefined fields if the regex
+// doesn't match, preserving the raw stderr verbatim for diagnostics.
+function parseHandshakeMismatchStderr(stderr: string): {
+  expected: string | undefined
+  got: string | undefined
+} {
+  const match = /expected=([^,\s]+),\s*daemon=([^\s;]+)/.exec(stderr)
+  if (!match) {
+    return { expected: undefined, got: undefined }
+  }
+  return { expected: match[1], got: match[2] }
 }

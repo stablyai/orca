@@ -287,10 +287,26 @@ export function useDiffCommentDecorator({
       // stale zone ids from a dead editor. The diff effect below deliberately
       // has no cleanup so comment-only changes don't cause a full zone
       // rebuild; this cleanup is the single place we reset zone tracking.
-      for (const entry of zones.values()) {
-        entry.root.unmount()
-      }
+      //
+      // Why defer the unmount: this cleanup can run inside React's commit work
+      // loop (e.g. when an editor is disposed during a parent render and the
+      // dispose listener's setState triggers a re-render that re-runs this
+      // effect). A synchronous root.unmount() in that window produces React
+      // 19's "Attempted to synchronously unmount a root while React was
+      // already rendering" warning. queueMicrotask lands the unmount at the
+      // end of the current task, before any next render, with no visible
+      // delay. Clear `zones` synchronously so a subsequent editor mount sees
+      // empty bookkeeping immediately. This matches the deferred unmount in
+      // the diff-pass effect below.
+      const rootsToUnmount = Array.from(zones.values(), (z) => z.root)
       zones.clear()
+      if (rootsToUnmount.length > 0) {
+        queueMicrotask(() => {
+          for (const root of rootsToUnmount) {
+            root.unmount()
+          }
+        })
+      }
       // Why: editor went away — drop both the in-flight scroll request and
       // the resolver closure (which captured the now-disposed editor).
       pendingScrollRef.current = null

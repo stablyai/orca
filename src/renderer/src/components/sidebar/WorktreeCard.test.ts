@@ -30,15 +30,18 @@ function makeTerminalTab(title: string): TerminalTab {
 
 describe('getWorktreeStatus', () => {
   it('treats browser-only worktrees as active', () => {
-    expect(getWorktreeStatus([], [{ id: 'browser-1' }])).toBe('active')
+    expect(getWorktreeStatus([], [{ id: 'browser-1' }], {})).toBe('active')
   })
 
   it('keeps terminal agent states higher priority than browser presence', () => {
-    expect(getWorktreeStatus([makeTerminalTab('permission needed')], [{ id: 'browser-1' }])).toBe(
-      'permission'
-    )
-    expect(getWorktreeStatus([makeTerminalTab('working hard')], [{ id: 'browser-1' }])).toBe(
-      'working'
-    )
+    // Why: liveness gate now requires ptyIdsByTabId, not tab.ptyId. Pass a
+    // populated live-pty map so this assertion exercises the live-tab branch.
+    const livePtyIds = { 'tab-1': ['pty-1'] }
+    expect(
+      getWorktreeStatus([makeTerminalTab('permission needed')], [{ id: 'browser-1' }], livePtyIds)
+    ).toBe('permission')
+    expect(
+      getWorktreeStatus([makeTerminalTab('working hard')], [{ id: 'browser-1' }], livePtyIds)
+    ).toBe('working')
   })
 })

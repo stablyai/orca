@@ -217,7 +217,7 @@ async function sendCheckFailureStatus(message: string, userInitiated?: boolean):
         // prefixes "Could not check for updates." and Settings prefixes
         // "Update check failed.", so the message here only carries the
         // actionable cause.
-        sendErrorStatus('GitHub may be temporarily unavailable. Try again in a minute.', true)
+        sendErrorStatus("Couldn't reach the update server. Try again in a few minutes.", true)
       } else {
         sendStatus({ state: 'idle' })
       }

@@ -36,8 +36,26 @@ export const RelayErrorCode = {
   PermissionDenied: -33002,
   PathNotFound: -33003,
   PtyAllocationFailed: -33004,
-  DiskFull: -33005
+  DiskFull: -33005,
+  TooManyStreams: -33006,
+  StreamProtocolError: -33007
 } as const
+
+export const JsonRpcErrorCode = {
+  MethodNotFound: -32601
+} as const
+
+// ── Streaming constants (see docs/relay-file-stream-design.md) ─────
+
+/** Per-chunk payload size for fs.readFileStream. Mirrors VS Code's
+ * `bufferSize: 256 * 1024` (vs/platform/files/node/diskFileSystemProvider.ts).
+ * 256KB raw → ~340KB base64, well under MAX_MESSAGE_SIZE. */
+export const STREAM_CHUNK_SIZE = 256 * 1024
+
+/** Cap on concurrent in-flight streams per relay; mirrors fs.watch's
+ * 20-watcher cap idiom. Prevents file-descriptor exhaustion from a buggy
+ * client. */
+export const MAX_CONCURRENT_STREAMS = 16
 
 // ── JSON-RPC types ──────────────────────────────────────────────────
 

@@ -97,6 +97,18 @@ yay -S stably-orca-git
 
 ---
 
+## [New] View Live Status of All Agents
+
+**See what every agent is doing — at a glance.**
+
+Track the live status of every agent across every worktree from one place. Spot which agents are working, waiting on input, or done — without clicking through tabs.
+
+<p align="center">
+  <img src="docs/assets/agent-statuses.gif" alt="Orca Agent Statuses — view live status of all agents across worktrees" width="800" />
+</p>
+
+---
+
 ## [New] Annotate AI Diff
 
 **Comment directly on AI-generated diffs.**

@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
@@ -20,6 +22,31 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
+  ipcMain.removeHandler('agentStatus:getSnapshot')
+  // Why: agentStatus:drop is sent fire-and-forget from the renderer via
+  // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
+  // round-trip a response. Removing first keeps re-registration safe even
+  // though the module-level registered guard already prevents re-entry today.
+  ipcMain.removeAllListeners('agentStatus:drop')
+  ipcMain.on('agentStatus:drop', (_event, paneKey: unknown) => {
+    if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
+      return
+    }
+    try {
+      // Why: dropStatusEntry (not clearPaneState) is correct here — the user is
+      // dismissing a status row, not tearing down a PTY. clearPaneState would also
+      // wipe the per-pane prompt/tool caches, which the next hook event for that
+      // (still-alive) pane needs to render a coherent row.
+      agentHookServer.dropStatusEntry(paneKey)
+    } catch (err) {
+      console.warn('[agent-hooks] dropStatusEntry failed:', err)
+    }
+  })
+  ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
+    // Why: the renderer pulls this after workspace hydration, so startup cannot
+    // lose replayed statuses while its local store is still empty.
+    return agentHookServer.getStatusSnapshot()
+  })
 
   // Why: errors from getStatus() (fs permission denied, homedir resolution
   // failure, etc.) must be reported inline via state:'error' so the sidebar can

@@ -61,11 +61,13 @@ import type {
   NotificationSoundResult,
   OnboardingState,
   OrcaHooks,
+  PathSource,
   PersistedUIState,
   PRCheckDetail,
   PRComment,
   PRInfo,
   Repo,
+  ShellHydrationFailureReason,
   SparsePreset,
   SearchOptions,
   SearchResult,
@@ -132,13 +134,18 @@ import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
-import type { AgentStatusState } from '../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionRequestResult,
   DeveloperPermissionState
 } from '../shared/developer-permissions-types'
+import type {
+  ComputerUsePermissionId,
+  ComputerUsePermissionSetupResult,
+  ComputerUsePermissionStatusResult
+} from '../shared/computer-use-permissions-types'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -265,6 +272,15 @@ export type RefreshAgentsResult = {
   agents: string[]
   addedPathSegments: string[]
   shellHydrationOk: boolean
+  /** Why: drives the agent_picks `on_path:false` triage in dashboard 1562016
+   *  (insight A). `'shell_hydrate'` = detection saw the user's full shell PATH;
+   *  `'sync_seed_only'` = hydration failed and detection ran against the
+   *  seed list from `patchPackagedProcessPath`. */
+  pathSource: PathSource
+  /** Why: classified hydration outcome. `'none'` on success; one of the failure
+   *  modes when `shellHydrationOk` is false. Typed off the shared alias so
+   *  schema/main/preload/renderer stay in lockstep. */
+  pathFailureReason: ShellHydrationFailureReason
 }
 
 export type PreflightApi = {
@@ -393,6 +409,7 @@ export type PreloadApi = {
       kind?: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
+    reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
       updates: Partial<
@@ -895,6 +912,12 @@ export type PreloadApi = {
     request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>
     openSettings: (args: { id: DeveloperPermissionId }) => Promise<void>
   }
+  computerUsePermissions: {
+    getStatus: () => Promise<ComputerUsePermissionStatusResult>
+    openSetup: (args?: {
+      id?: ComputerUsePermissionId
+    }) => Promise<ComputerUsePermissionSetupResult>
+  }
   shell: {
     openPath: (path: string) => Promise<void>
     openUrl: (url: string) => Promise<void>
@@ -1161,7 +1184,14 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     onCreateTerminal: (
-      callback: (data: { worktreeId: string; command?: string; title?: string }) => void
+      callback: (data: {
+        requestId?: string
+        worktreeId: string
+        command?: string
+        title?: string
+        ptyId?: string
+        activate?: boolean
+      }) => void
     ) => () => void
     onRequestTerminalCreate: (
       callback: (data: {
@@ -1320,20 +1350,12 @@ export type PreloadApi = {
   }
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */
-    onSet: (
-      callback: (data: {
-        paneKey: string
-        tabId?: string
-        worktreeId?: string
-        state: AgentStatusState
-        prompt?: string
-        agentType?: string
-        toolName?: string
-        toolInput?: string
-        lastAssistantMessage?: string
-        interrupted?: boolean
-      }) => void
-    ) => () => void
+    onSet: (callback: (data: AgentStatusIpcPayload) => void) => () => void
+    /** Return the current main-process hook cache after renderer hydration. */
+    getSnapshot: () => Promise<AgentStatusIpcPayload[]>
+    /** Drop a paneKey from the main-process hook cache and the on-disk
+     *  last-status file. Fire-and-forget. */
+    drop: (paneKey: string) => void
   }
   mobile: {
     listNetworkInterfaces: () => Promise<{

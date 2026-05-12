@@ -115,6 +115,10 @@ import {
   unregisterSshPtyProvider
 } from './pty'
 
+const POWERSHELL_PROFILE_COMMAND = expect.stringMatching(
+  /\. \$PROFILE[\s\S]*ORCA_OPENCODE_CONFIG_DIR[\s\S]*ORCA_PI_CODING_AGENT_DIR[\s\S]*UTF8/
+)
+
 function makeDisposable() {
   return { dispose: vi.fn() }
 }
@@ -131,10 +135,14 @@ describe('registerPtyHandlers', () => {
   }
 
   const savedPiAgentDir = process.env.PI_CODING_AGENT_DIR
+  const savedOrcaOpenCodeConfigDir = process.env.ORCA_OPENCODE_CONFIG_DIR
+  const savedOrcaPiAgentDir = process.env.ORCA_PI_CODING_AGENT_DIR
 
   beforeEach(() => {
     delete process.env.OPENCODE_CONFIG_DIR
     delete process.env.PI_CODING_AGENT_DIR
+    delete process.env.ORCA_OPENCODE_CONFIG_DIR
+    delete process.env.ORCA_PI_CODING_AGENT_DIR
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()
@@ -197,8 +205,20 @@ describe('registerPtyHandlers', () => {
   afterEach(() => {
     unregisterSshPtyProvider('ssh-1')
     setLocalPtyProvider(new LocalPtyProvider())
-    if (savedPiAgentDir !== undefined) {
+    if (savedPiAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR
+    } else {
       process.env.PI_CODING_AGENT_DIR = savedPiAgentDir
+    }
+    if (savedOrcaOpenCodeConfigDir === undefined) {
+      delete process.env.ORCA_OPENCODE_CONFIG_DIR
+    } else {
+      process.env.ORCA_OPENCODE_CONFIG_DIR = savedOrcaOpenCodeConfigDir
+    }
+    if (savedOrcaPiAgentDir === undefined) {
+      delete process.env.ORCA_PI_CODING_AGENT_DIR
+    } else {
+      process.env.ORCA_PI_CODING_AGENT_DIR = savedOrcaPiAgentDir
     }
   })
 
@@ -352,12 +372,14 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_OPENCODE_HOOK_TOKEN).toBe('opencode-token')
       expect(env.ORCA_OPENCODE_PTY_ID).toBe('test-pty')
       expect(env.OPENCODE_CONFIG_DIR).toEqual(expect.any(String))
+      expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(env.OPENCODE_CONFIG_DIR)
     })
 
     it('injects the Pi agent overlay env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent')
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
     })
 
     it('injects the Claude/Codex hook receiver env into Orca terminal PTYs', async () => {
@@ -524,6 +546,7 @@ describe('registerPtyHandlers', () => {
           '/user/custom/opencode'
         )
         expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
       })
 
       it('injects Pi overlay env (PI_CODING_AGENT_DIR) on the daemon path', async () => {
@@ -533,6 +556,7 @@ describe('registerPtyHandlers', () => {
         // the fixed overlay path from the shared setup.
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent')
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       })
 
       it('injects the selected Codex home on the daemon path', async () => {
@@ -630,6 +654,7 @@ describe('registerPtyHandlers', () => {
         })
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/ambient/pi/agent')
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       })
 
       it('skips attribution shims on the daemon path when the setting is disabled', async () => {
@@ -784,7 +809,9 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.CODEX_HOME).toBeUndefined()
         expect(env.FOO).toBe('bar')
         expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
@@ -891,6 +918,70 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('reuses the runtime background handle in local PTY spawn env', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        preAllocatedHandle?: string
+      }): Promise<{ id: string }>
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_wrong'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    expect(controller).not.toBeNull()
+    const spawnController = controller as unknown as RuntimeSpawnController
+    await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      preAllocatedHandle: 'term_expected'
+    })
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env as Record<string, string>
+    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_expected')
+    expect(runtime.preAllocateHandleForPty).not.toHaveBeenCalled()
+    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'term_expected'
+    )
+  })
+
+  it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_TERMINAL_HANDLE: 'term_untrusted' }
+    })
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env as Record<string, string>
+    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_trusted')
+    expect(runtime.preAllocateHandleForPty).toHaveBeenCalledWith(expect.any(String))
+  })
+
   describe('Windows UTF-8 code page', () => {
     let originalPlatform: string
     let originalComspec: string | undefined
@@ -939,11 +1030,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
         expect.any(Object)
       )
     })
@@ -956,11 +1043,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
         expect.any(Object)
       )
     })
@@ -1019,11 +1102,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
         expect.any(Object)
       )
     })
@@ -1045,11 +1124,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
         expect.any(Object)
       )
     })
@@ -1072,11 +1147,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'pwsh.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
         expect.any(Object)
       )
     })
@@ -1099,11 +1170,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
         expect.any(Object)
       )
     })
@@ -1126,11 +1193,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
         expect.any(Object)
       )
     })
@@ -1280,6 +1343,78 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('uses the POSIX shell wrapper so OpenCode config survives shell startup files', () => {
+    const originalPlatform = process.platform
+    const originalShell = process.env.SHELL
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    process.env.SHELL = '/bin/zsh'
+
+    try {
+      const [shell, args, options] = spawnAndGetCall({ cwd: '/tmp' })
+      expect(shell).toBe('/bin/zsh')
+      expect(args).toEqual(['-l'])
+      expect(options.env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
+
+  it('uses the POSIX shell wrapper so Pi config survives shell startup files', () => {
+    const originalPlatform = process.platform
+    const originalShell = process.env.SHELL
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    process.env.SHELL = '/bin/zsh'
+    openCodeBuildPtyEnvMock.mockImplementationOnce(() => ({
+      ORCA_OPENCODE_HOOK_PORT: '4567',
+      ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
+      ORCA_OPENCODE_PTY_ID: 'test-pty'
+    }))
+
+    try {
+      const [shell, args, options] = spawnAndGetCall({
+        cwd: '/tmp',
+        env: { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' }
+      })
+      expect(shell).toBe('/bin/zsh')
+      expect(args).toEqual(['-l'])
+      expect(options.env.OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(options.env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(options.env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
+
   it('does not force ~/.bashrc after sourcing bash login files in the shell-ready rcfile', async () => {
     const originalPlatform = process.platform
     const originalShell = process.env.SHELL
@@ -1424,7 +1559,14 @@ describe('registerPtyHandlers', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         '/bin/zsh',
         ['-l'],
-        expect.objectContaining({ cwd: '/tmp' })
+        expect.objectContaining({
+          cwd: '/tmp',
+          env: expect.objectContaining({
+            ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
+            ORCA_SHELL_READY_MARKER: '0',
+            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+          })
+        })
       )
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Shell "/opt/homebrew/bin/bash" is not executable')
@@ -1464,7 +1606,12 @@ describe('registerPtyHandlers', () => {
         ['-l'],
         expect.objectContaining({
           cwd: '/tmp',
-          env: expect.objectContaining({ SHELL: '/bin/zsh' })
+          env: expect.objectContaining({
+            SHELL: '/bin/zsh',
+            ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
+            ORCA_SHELL_READY_MARKER: '0',
+            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+          })
         })
       )
       expect(warnSpy).toHaveBeenCalledWith(

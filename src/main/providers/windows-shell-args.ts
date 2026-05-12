@@ -45,12 +45,17 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
+    // Why: PowerShell profiles run after the spawn env is set and may re-export
+    // user defaults; restore Orca's PTY-scoped overlays after the profile.
+    const command = [
+      'try { . $PROFILE } catch {}',
+      'if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }',
+      'if ($env:ORCA_PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR }',
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      '[Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+    ].join('; ')
     return {
-      shellArgs: [
-        '-NoExit',
-        '-Command',
-        'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-      ],
+      shellArgs: ['-NoExit', '-Command', command],
       effectiveCwd: cwd,
       validationCwd: cwd
     }

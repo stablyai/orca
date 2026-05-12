@@ -33,6 +33,7 @@ const WorktreeCreate = z.object({
   linkedIssue: TriStateLinkedIssue,
   comment: OptionalString,
   runHooks: OptionalBoolean,
+  activate: OptionalBoolean,
   setupDecision: z
     .unknown()
     .transform((v) =>
@@ -96,6 +97,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedIssue: params.linkedIssue,
         comment: params.comment,
         runHooks: params.runHooks === true,
+        activate: params.activate === true,
         setupDecision: params.setupDecision,
         startup: params.startupCommand ? { command: params.startupCommand } : undefined
       })

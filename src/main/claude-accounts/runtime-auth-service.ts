@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: Claude account switching has one safety
 boundary: runtime auth materialization. Keeping file, Keychain, snapshot, and
 env-patch semantics together prevents PTY launch and quota fetch paths drifting. */
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { ClaudeManagedAccount } from '../../shared/types'
@@ -30,6 +30,16 @@ type ClaudeSystemDefaultSnapshot = {
   capturedAt: number
 }
 
+type ClaudeAuthIdentity = {
+  email: string | null
+  organizationUuid: string | null
+}
+
+type ClaudeReadBackResult = { status: 'unchanged' | 'persisted' | 'rejected' }
+type ClaudeReadBackMatch =
+  | { kind: 'matched'; account: ClaudeManagedAccount }
+  | { kind: 'none' | 'ambiguous' }
+
 export class ClaudeRuntimeAuthService {
   private readonly pathResolver = new ClaudeRuntimePathResolver()
   private mutationQueue: Promise<unknown> = Promise.resolve()
@@ -39,6 +49,7 @@ export class ClaudeRuntimeAuthService {
   // an external login (e.g. `claude auth login`) overwrote it — so Orca adopts
   // the file as the new system default instead of restoring a stale snapshot.
   private lastWrittenCredentialsJson: string | null = null
+  private skipNextReadBackForAccountId: string | null = null
 
   constructor(private readonly store: Store) {
     this.initializeLastSyncedState()
@@ -63,7 +74,7 @@ export class ClaudeRuntimeAuthService {
     await this.serializeMutation(async () => {
       const settings = this.store.getSettings()
       if (!settings.activeClaudeManagedAccountId) {
-        await this.restoreSystemDefaultSnapshot()
+        await this.restoreSystemDefaultSnapshot({ detectExternalLogin: true })
         this.lastSyncedAccountId = null
         return
       }
@@ -100,27 +111,44 @@ export class ClaudeRuntimeAuthService {
       settings.claudeManagedAccounts,
       settings.activeClaudeManagedAccountId
     )
+    const previousAccount = this.getActiveAccount(
+      settings.claudeManagedAccounts,
+      this.lastSyncedAccountId
+    )
+    let outgoingReadBackResult: ClaudeReadBackResult = { status: 'unchanged' }
+    if (previousAccount && previousAccount.id !== activeAccount?.id) {
+      outgoingReadBackResult = await this.readBackRefreshedTokensForAccount(previousAccount, {
+        updateLastWrittenCredentialsJson: true
+      })
+    }
     if (!activeAccount) {
+      if (settings.activeClaudeManagedAccountId) {
+        this.store.updateSettings({ activeClaudeManagedAccountId: null })
+      }
       if (this.lastSyncedAccountId !== null) {
-        await this.restoreSystemDefaultSnapshot()
+        await this.restoreSystemDefaultSnapshot({
+          detectExternalLogin: outgoingReadBackResult.status !== 'rejected'
+        })
         this.lastSyncedAccountId = null
       }
       return
     }
 
-    await this.captureSystemDefaultSnapshotIfNeeded()
-
-    const credentialsJson = await this.readManagedCredentials(activeAccount)
+    let credentialsJson = await this.readManagedCredentials(activeAccount)
     if (!credentialsJson) {
       console.warn(
         '[claude-runtime-auth] Active managed account is missing credentials, restoring system default'
       )
       this.store.updateSettings({ activeClaudeManagedAccountId: null })
       if (this.lastSyncedAccountId !== null) {
-        await this.restoreSystemDefaultSnapshot()
+        await this.restoreSystemDefaultSnapshot({ detectExternalLogin: true })
         this.lastSyncedAccountId = null
       }
       return
+    }
+
+    if (this.lastSyncedAccountId === null) {
+      await this.captureSystemDefaultSnapshot({ force: true })
     }
 
     // Why: Claude CLI refreshes expired OAuth tokens and writes them back to
@@ -128,9 +156,21 @@ export class ClaudeRuntimeAuthService {
     // last wrote, the CLI must have refreshed — so we preserve those tokens
     // back to managed storage before overwriting runtime with managed state.
     if (this.lastSyncedAccountId === activeAccount.id) {
-      await this.readBackRefreshedTokens(activeAccount)
+      if (this.skipNextReadBackForAccountId === activeAccount.id) {
+        this.skipNextReadBackForAccountId = null
+      } else {
+        const readBackResult = await this.readBackRefreshedTokens(credentialsJson, {
+          updateLastWrittenCredentialsJson: true
+        })
+        if (readBackResult.status === 'persisted') {
+          credentialsJson = (await this.readManagedCredentials(activeAccount)) ?? credentialsJson
+        }
+      }
     }
 
+    if (this.lastSyncedAccountId !== activeAccount.id) {
+      this.skipNextReadBackForAccountId = null
+    }
     this.writeRuntimeCredentials(credentialsJson)
     if (process.platform === 'darwin') {
       await writeActiveClaudeKeychainCredentials(credentialsJson)
@@ -143,38 +183,103 @@ export class ClaudeRuntimeAuthService {
   // re-auth or add-account. Those flows write fresh tokens to managed storage,
   // so the read-back must be skipped to avoid overwriting them with stale
   // runtime tokens.
-  clearLastWrittenCredentialsJson(): void {
-    this.lastWrittenCredentialsJson = null
+  clearLastWrittenCredentialsJson(
+    accountId = this.store.getSettings().activeClaudeManagedAccountId
+  ): void {
+    if (accountId === this.store.getSettings().activeClaudeManagedAccountId) {
+      this.lastWrittenCredentialsJson = null
+    }
+    this.skipNextReadBackForAccountId = accountId
   }
 
-  private async readBackRefreshedTokens(account: ClaudeManagedAccount): Promise<void> {
+  private async readBackRefreshedTokens(
+    baselineCredentialsJson: string,
+    options: { updateLastWrittenCredentialsJson: boolean }
+  ): Promise<ClaudeReadBackResult> {
     try {
-      if (this.lastWrittenCredentialsJson === null) {
-        return
+      const runtimeContents = await this.readRuntimeCredentialsForReadBack(baselineCredentialsJson)
+      if (!runtimeContents) {
+        return { status: 'unchanged' }
+      }
+      if (
+        this.lastWrittenCredentialsJson !== null &&
+        runtimeContents === this.lastWrittenCredentialsJson
+      ) {
+        return { status: 'unchanged' }
       }
 
-      const paths = this.pathResolver.getRuntimePaths()
-      if (!existsSync(paths.credentialsPath)) {
-        return
+      const match = await this.findManagedAccountForRuntimeCredentials(runtimeContents)
+      if (match.kind !== 'matched') {
+        if (match.kind === 'ambiguous') {
+          console.warn('[claude-runtime-auth] Refusing ambiguous Claude auth read-back')
+        }
+        return { status: 'rejected' }
+      }
+      // Why: on cold app start we cannot tell whether matching runtime
+      // credentials are a fresh CLI refresh or stale state unless token
+      // metadata proves runtime is newer than managed storage.
+      if (
+        this.lastWrittenCredentialsJson === null &&
+        !this.runtimeCredentialsAreFresher(runtimeContents, baselineCredentialsJson)
+      ) {
+        return { status: 'rejected' }
       }
 
-      const runtimeContents = readFileSync(paths.credentialsPath, 'utf-8')
-      if (runtimeContents === this.lastWrittenCredentialsJson) {
-        return
+      await this.writeManagedCredentials(match.account, runtimeContents)
+      if (options.updateLastWrittenCredentialsJson) {
+        this.writeRuntimeCredentials(runtimeContents)
+        this.lastWrittenCredentialsJson = runtimeContents
+        if (process.platform === 'darwin') {
+          await writeActiveClaudeKeychainCredentials(runtimeContents)
+        }
       }
-
-      if (process.platform === 'darwin') {
-        await writeManagedClaudeKeychainCredentials(account.id, runtimeContents)
-      } else {
-        const credentialsPath = join(account.managedAuthPath, '.credentials.json')
-        writeFileAtomically(credentialsPath, runtimeContents, { mode: 0o600 })
-      }
+      return { status: 'persisted' }
     } catch (error) {
       // Why: read-back is best-effort. A transient fs error must not block the
       // forward sync path — the worst case is one more stale-token cycle, which
       // is strictly better than failing the entire sync.
       console.warn('[claude-runtime-auth] Failed to read back refreshed tokens:', error)
+      return { status: 'rejected' }
     }
+  }
+
+  private async readRuntimeCredentialsForReadBack(
+    baselineCredentialsJson: string
+  ): Promise<string | null> {
+    const paths = this.pathResolver.getRuntimePaths()
+    const fileCredentials = existsSync(paths.credentialsPath)
+      ? readFileSync(paths.credentialsPath, 'utf-8')
+      : null
+    if (process.platform === 'darwin') {
+      const keychainCredentials = await readActiveClaudeKeychainCredentials()
+      if (this.lastWrittenCredentialsJson === null) {
+        if (keychainCredentials && keychainCredentials !== baselineCredentialsJson) {
+          return keychainCredentials
+        }
+        if (fileCredentials && fileCredentials !== baselineCredentialsJson) {
+          return fileCredentials
+        }
+        return keychainCredentials ?? fileCredentials
+      }
+      if (keychainCredentials && keychainCredentials !== this.lastWrittenCredentialsJson) {
+        return keychainCredentials
+      }
+    }
+    if (!fileCredentials) {
+      return null
+    }
+    return fileCredentials
+  }
+
+  private async readBackRefreshedTokensForAccount(
+    account: ClaudeManagedAccount,
+    options: { updateLastWrittenCredentialsJson: boolean }
+  ): Promise<ClaudeReadBackResult> {
+    const managedCredentialsJson = await this.readManagedCredentials(account)
+    if (!managedCredentialsJson) {
+      return { status: 'unchanged' }
+    }
+    return this.readBackRefreshedTokens(managedCredentialsJson, options)
   }
 
   private getPreparation(): ClaudeRuntimeAuthPreparation {
@@ -198,6 +303,161 @@ export class ClaudeRuntimeAuthService {
     return accounts.find((account) => account.id === activeAccountId) ?? null
   }
 
+  private async findManagedAccountForRuntimeCredentials(
+    runtimeCredentialsJson: string
+  ): Promise<ClaudeReadBackMatch> {
+    const matches: ClaudeManagedAccount[] = []
+    for (const account of this.store.getSettings().claudeManagedAccounts) {
+      const managedCredentialsJson = await this.readManagedCredentials(account)
+      if (!managedCredentialsJson) {
+        continue
+      }
+      if (
+        this.runtimeCredentialsMatchAccount(
+          runtimeCredentialsJson,
+          account,
+          managedCredentialsJson,
+          this.readManagedOauthAccount(account)
+        ) === 'match'
+      ) {
+        matches.push(account)
+      }
+    }
+
+    if (matches.length === 1) {
+      return { kind: 'matched', account: matches[0] }
+    }
+    return { kind: matches.length === 0 ? 'none' : 'ambiguous' }
+  }
+
+  private runtimeCredentialsMatchAccount(
+    runtimeCredentialsJson: string,
+    account: ClaudeManagedAccount,
+    managedCredentialsJson: string,
+    managedOauthAccount: unknown
+  ): 'match' | 'mismatch' | 'unverifiable' {
+    const identity = this.readIdentityFromCredentials(runtimeCredentialsJson)
+    if (!identity) {
+      return 'mismatch'
+    }
+    const managedIdentity = this.readIdentityFromCredentials(managedCredentialsJson)
+    const managedOauthIdentity = this.readIdentityFromOauthAccount(managedOauthAccount)
+
+    // Why: this mirrors the Codex runtime-home guard. If another Claude login
+    // or missed live process rewrites shared runtime credentials, do not
+    // persist those credentials into the selected managed account.
+    const selectedOrganizationUuid = this.normalizeField(
+      account.organizationUuid ??
+        managedIdentity?.organizationUuid ??
+        managedOauthIdentity.organizationUuid
+    )
+    if (selectedOrganizationUuid && !identity.organizationUuid) {
+      return 'unverifiable'
+    }
+    if (
+      selectedOrganizationUuid &&
+      identity.organizationUuid &&
+      selectedOrganizationUuid !== identity.organizationUuid
+    ) {
+      return 'mismatch'
+    }
+    if (!identity.email) {
+      return 'unverifiable'
+    }
+    if (account.email && identity.email && this.normalizeField(account.email) !== identity.email) {
+      return 'mismatch'
+    }
+
+    return 'match'
+  }
+
+  private readIdentityFromCredentials(credentialsJson: string): ClaudeAuthIdentity | null {
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(credentialsJson) as Record<string, unknown>
+    } catch {
+      return null
+    }
+    const oauth = this.asRecord(parsed.claudeAiOauth)
+    return {
+      email: this.normalizeField(this.readString(oauth, 'email')),
+      organizationUuid: this.normalizeField(
+        this.readString(oauth, 'organizationUuid') ?? this.readString(oauth, 'organizationId')
+      )
+    }
+  }
+
+  private runtimeCredentialsAreFresher(
+    runtimeCredentialsJson: string,
+    managedCredentialsJson: string
+  ): boolean {
+    const runtimeFreshness = this.readFreshnessFromCredentials(runtimeCredentialsJson)
+    const managedFreshness = this.readFreshnessFromCredentials(managedCredentialsJson)
+    return (
+      runtimeFreshness !== null && managedFreshness !== null && runtimeFreshness > managedFreshness
+    )
+  }
+
+  private readFreshnessFromCredentials(credentialsJson: string): number | null {
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(credentialsJson) as Record<string, unknown>
+    } catch {
+      return null
+    }
+    const oauth = this.asRecord(parsed.claudeAiOauth)
+    return (
+      this.readNumber(oauth, 'expiresAt') ??
+      this.readNumber(oauth, 'expires_at') ??
+      this.readNumber(oauth, 'expiry') ??
+      this.readNumber(oauth, 'expires')
+    )
+  }
+
+  private readIdentityFromOauthAccount(oauthAccount: unknown): ClaudeAuthIdentity {
+    const oauth = this.asRecord(oauthAccount)
+    return {
+      email: this.normalizeField(
+        this.readString(oauth, 'emailAddress') ?? this.readString(oauth, 'email')
+      ),
+      organizationUuid: this.normalizeField(
+        this.readString(oauth, 'organizationUuid') ?? this.readString(oauth, 'organizationId')
+      )
+    }
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null
+    }
+    return value as Record<string, unknown>
+  }
+
+  private readString(value: Record<string, unknown> | null, key: string): string | null {
+    const candidate = value?.[key]
+    return typeof candidate === 'string' ? candidate : null
+  }
+
+  private readNumber(value: Record<string, unknown> | null, key: string): number | null {
+    const candidate = value?.[key]
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate
+    }
+    if (typeof candidate === 'string') {
+      const parsed = Number(candidate)
+      return Number.isFinite(parsed) ? parsed : null
+    }
+    return null
+  }
+
+  private normalizeField(value: string | null | undefined): string | null {
+    if (!value) {
+      return null
+    }
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
+  }
+
   private async readManagedCredentials(account: ClaudeManagedAccount): Promise<string | null> {
     if (process.platform === 'darwin') {
       return readManagedClaudeKeychainCredentials(account.id)
@@ -207,6 +467,18 @@ export class ClaudeRuntimeAuthService {
       return null
     }
     return readFileSync(credentialsPath, 'utf-8')
+  }
+
+  private async writeManagedCredentials(
+    account: ClaudeManagedAccount,
+    credentialsJson: string
+  ): Promise<void> {
+    if (process.platform === 'darwin') {
+      await writeManagedClaudeKeychainCredentials(account.id, credentialsJson)
+      return
+    }
+    const credentialsPath = join(account.managedAuthPath, '.credentials.json')
+    writeFileAtomically(credentialsPath, credentialsJson, { mode: 0o600 })
   }
 
   private readManagedOauthAccount(account: ClaudeManagedAccount): unknown {
@@ -221,9 +493,9 @@ export class ClaudeRuntimeAuthService {
     }
   }
 
-  private async captureSystemDefaultSnapshotIfNeeded(): Promise<void> {
+  private async captureSystemDefaultSnapshot(options: { force: boolean }): Promise<void> {
     const snapshotPath = this.getSystemDefaultSnapshotPath()
-    if (existsSync(snapshotPath)) {
+    if (!options.force && existsSync(snapshotPath)) {
       return
     }
 
@@ -241,13 +513,23 @@ export class ClaudeRuntimeAuthService {
     this.writeJson(snapshotPath, snapshot)
   }
 
-  private async restoreSystemDefaultSnapshot(): Promise<void> {
-    if (this.detectExternalLoginAndUpdateSnapshot()) {
+  private async restoreSystemDefaultSnapshot(options: {
+    detectExternalLogin: boolean
+  }): Promise<void> {
+    const externalState = options.detectExternalLogin
+      ? await this.detectExternalLoginAndUpdateSnapshot()
+      : 'none'
+    if (externalState === 'file-logout') {
       return
     }
 
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     if (!existsSync(snapshotPath)) {
+      rmSync(this.pathResolver.getRuntimePaths().credentialsPath, { force: true })
+      if (process.platform === 'darwin') {
+        await deleteActiveClaudeKeychainCredentials()
+      }
+      this.lastWrittenCredentialsJson = null
       return
     }
     const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf-8')) as ClaudeSystemDefaultSnapshot
@@ -258,9 +540,11 @@ export class ClaudeRuntimeAuthService {
     }
     this.writeRuntimeOauthAccount(snapshot.configOauthAccount)
     if (process.platform === 'darwin') {
-      await (snapshot.keychainCredentialsJson !== null
-        ? writeActiveClaudeKeychainCredentials(snapshot.keychainCredentialsJson)
-        : deleteActiveClaudeKeychainCredentials())
+      if (externalState !== 'keychain-change') {
+        await (snapshot.keychainCredentialsJson !== null
+          ? writeActiveClaudeKeychainCredentials(snapshot.keychainCredentialsJson)
+          : deleteActiveClaudeKeychainCredentials())
+      }
     }
   }
 
@@ -268,23 +552,43 @@ export class ClaudeRuntimeAuthService {
   // the credentials file while a managed account was active. If the file
   // differs from what Orca last wrote, that external login becomes the new
   // system default — no manual "refresh" button needed.
-  private detectExternalLoginAndUpdateSnapshot(): boolean {
+  private async detectExternalLoginAndUpdateSnapshot(): Promise<
+    'none' | 'file-logout' | 'keychain-change'
+  > {
     if (this.lastWrittenCredentialsJson === null) {
-      return false
+      return 'none'
     }
     const paths = this.pathResolver.getRuntimePaths()
     if (!existsSync(paths.credentialsPath)) {
-      return false
+      const currentKeychainCredentials =
+        process.platform === 'darwin' ? await readActiveClaudeKeychainCredentials() : null
+      if (
+        process.platform === 'darwin' &&
+        currentKeychainCredentials === this.lastWrittenCredentialsJson
+      ) {
+        return 'none'
+      }
+      const snapshotPath = this.getSystemDefaultSnapshotPath()
+      rmSync(snapshotPath, { force: true })
+      this.lastWrittenCredentialsJson = null
+      return 'file-logout'
     }
     const currentCredentials = readFileSync(paths.credentialsPath, 'utf-8')
+    const currentKeychainCredentials =
+      process.platform === 'darwin' ? await readActiveClaudeKeychainCredentials() : null
     if (currentCredentials === this.lastWrittenCredentialsJson) {
-      return false
+      if (
+        process.platform === 'darwin' &&
+        currentKeychainCredentials !== this.lastWrittenCredentialsJson
+      ) {
+        return 'keychain-change'
+      }
+      return 'none'
     }
-    // External login detected — adopt current state as the new system default
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     rmSync(snapshotPath, { force: true })
     this.lastWrittenCredentialsJson = null
-    return true
+    return 'file-logout'
   }
 
   private readRuntimeOauthAccount(): unknown {
@@ -316,10 +620,17 @@ export class ClaudeRuntimeAuthService {
     mkdirSync(dirname(credentialsPath), { recursive: true })
     // Why: repeated Claude spawns sync auth, but credentials rarely change.
     // Skipping unchanged rewrites avoids Windows EPERM contention in #1507.
-    if (this.lastWrittenCredentialsJson === contents && existsSync(credentialsPath)) {
+    // Still verify the file because another Claude process may have rewritten
+    // runtime credentials since Orca last materialized them.
+    if (
+      this.lastWrittenCredentialsJson === contents &&
+      this.fileContentsEqual(credentialsPath, contents)
+    ) {
+      this.ensureOwnerOnlyMode(credentialsPath)
       return
     }
     if (this.fileContentsEqual(credentialsPath, contents)) {
+      this.ensureOwnerOnlyMode(credentialsPath)
       this.lastWrittenCredentialsJson = contents
       return
     }
@@ -342,6 +653,17 @@ export class ClaudeRuntimeAuthService {
       return existsSync(targetPath) && readFileSync(targetPath, 'utf-8') === contents
     } catch {
       return false
+    }
+  }
+
+  private ensureOwnerOnlyMode(targetPath: string): void {
+    if (process.platform === 'win32') {
+      return
+    }
+    try {
+      chmodSync(targetPath, 0o600)
+    } catch {
+      /* Best effort: the next atomic write will set the restrictive mode. */
     }
   }
 
