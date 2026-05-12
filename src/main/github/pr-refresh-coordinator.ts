@@ -84,8 +84,16 @@ function isManual(reason: GitHubPRRefreshReason): boolean {
   return reason === 'manual'
 }
 
+function bypassesFreshnessDelay(reason: GitHubPRRefreshReason): boolean {
+  return reason === 'manual' || reason === 'active' || reason === 'post-push'
+}
+
 function isBackground(reason: GitHubPRRefreshReason): boolean {
   return reason !== 'manual'
+}
+
+function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
+  return reason === 'visible' || reason === 'swr'
 }
 
 function validateCandidate(
@@ -113,10 +121,14 @@ function shouldSkipFresh(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason
 ): boolean {
-  if (isManual(reason) || candidate.cachedFetchedAt == null) {
+  if (bypassesFreshnessDelay(reason) || candidate.cachedFetchedAt == null) {
     return false
   }
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
+}
+
+function shouldBroadcastQueued(dueAt: number): boolean {
+  return dueAt - Date.now() <= 5_000
 }
 
 function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
@@ -166,7 +178,8 @@ function scheduleVisibleFollowUp(
       dueAt: retryAt,
       windowId
     })
-    broadcast({ aliases, reason: 'visible', status: 'queued' })
+    // Why: this is a delayed retry, not active work; showing it as a spinner
+    // makes visible worktrees look stuck until the backoff expires.
     scheduleDrain(retryAt - Date.now())
     return
   }
@@ -257,7 +270,7 @@ async function drainQueue(): Promise<void> {
         return
       }
 
-      const budgetDelay = isBackground(next.reason) ? nextBudgetDelay() : 0
+      const budgetDelay = isBudgetedBackground(next.reason) ? nextBudgetDelay() : 0
       if (budgetDelay > 0) {
         scheduleDrain(budgetDelay)
         return
@@ -312,7 +325,9 @@ async function drainQueue(): Promise<void> {
           scheduleDrain(Math.max(1_000, retryAt - Date.now()))
           continue
         }
-        noteBackgroundStart()
+        if (isBudgetedBackground(next.reason)) {
+          noteBackgroundStart()
+        }
         noteRateLimitSpend('graphql')
         noteRateLimitSpend('core')
       }
@@ -385,7 +400,11 @@ export function enqueuePRRefresh(
       windowId
     })
   }
-  broadcast({ aliases: [alias], reason, status: 'queued' })
+  // Why: freshness follow-ups can be scheduled minutes out. Only immediate
+  // queueing should surface in the card UI as pending work.
+  if (shouldBroadcastQueued(dueAt)) {
+    broadcast({ aliases: [alias], reason, status: 'queued' })
+  }
   scheduleDrain()
 }
 
