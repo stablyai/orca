@@ -4,49 +4,10 @@ import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
-
-// Why: keep the unread accumulator local; "Mark all read" moved to the
-// thread-list overflow menu in ActivityPrototypePage so it lives next to
-// the cards it acts on.
-
-function useActivityUnreadCount(): number {
-  return useAppStore((s) => {
-    let count = 0
-    const isUnreadState = (state: AgentStatusState): boolean =>
-      state === 'done' || state === 'blocked' || state === 'waiting'
-    // Why: Activity feed surfaces every historical done/blocked/waiting event from
-    // stateHistory plus the live state, so the badge must mirror the same walk —
-    // counting only on entry.state under-counts panes that started a new turn.
-    const accumulate = (entry: AgentStatusEntry, ackAt: number): void => {
-      for (const history of entry.stateHistory) {
-        if (isUnreadState(history.state) && ackAt < history.startedAt) {
-          count += 1
-        }
-      }
-      if (isUnreadState(entry.state) && ackAt < entry.stateStartedAt) {
-        count += 1
-      }
-    }
-    for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-      accumulate(entry, s.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
-    }
-    for (const [paneKey, retained] of Object.entries(s.retainedAgentsByPaneKey)) {
-      accumulate(retained.entry, s.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
-    }
-    for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
-      const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-      if (entry) {
-        accumulate(entry, s.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0)
-      }
-    }
-    return count
-  })
-}
+import { useActivityUnreadCount } from './useActivityUnreadCount'
 
 export function ActivityTitlebarControls(): React.JSX.Element {
-  const unreadCount = useActivityUnreadCount()
+  const unreadCount = useActivityUnreadCount(true, 'agent-events')
   const closeActivityPage = useAppStore((s) => s.closeActivityPage)
 
   return (
