@@ -28,7 +28,7 @@ import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   configureDevUserDataPath,
-  configureMainProcessGpuFeatures,
+  enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
   installDevParentWatchdog,
   installUncaughtPipeErrorGuard,
@@ -163,7 +163,7 @@ if (hasSingleInstanceLock) {
   initStatsPath()
   initClaudeUsagePath()
   initCodexUsagePath()
-  configureMainProcessGpuFeatures()
+  enableMainProcessGpuFeatures()
 }
 
 function openMainWindow(): BrowserWindow {

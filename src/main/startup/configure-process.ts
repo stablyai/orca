@@ -169,22 +169,7 @@ export function installDevParentWatchdog(isDev: boolean): void {
   timer.unref()
 }
 
-function isLinuxWaylandSession(): boolean {
-  return (
-    process.platform === 'linux' &&
-    (process.env.XDG_SESSION_TYPE?.toLowerCase() === 'wayland' ||
-      Boolean(process.env.WAYLAND_DISPLAY))
-  )
-}
-
-function hasExplicitGpuCompositingSwitch(): boolean {
-  return (
-    app.commandLine.hasSwitch('disable-gpu-compositing') ||
-    app.commandLine.hasSwitch('enable-gpu-compositing')
-  )
-}
-
-export function configureMainProcessGpuFeatures(): void {
+export function enableMainProcessGpuFeatures(): void {
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
     // Why: mirror VS Code's conservative Electron GPU-channel startup flags
@@ -197,10 +182,4 @@ export function configureMainProcessGpuFeatures(): void {
     .filter(Boolean)
     .join(',')
   app.commandLine.appendSwitch('enable-features', features)
-
-  if (isLinuxWaylandSession() && !hasExplicitGpuCompositingSwitch()) {
-    // Why: Chromium GPU compositing can corrupt xterm WebGL terminal layers on
-    // Linux Wayland (Intel Arc/AMD reports; stablyai/orca#1579). Keep WebGL available.
-    app.commandLine.appendSwitch('disable-gpu-compositing')
-  }
 }
