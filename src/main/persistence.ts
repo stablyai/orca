@@ -287,6 +287,10 @@ export class Store {
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
               parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
+            // Why: Activity graduated from its experimental gate. Force the
+            // legacy flag on so existing profiles and rollback builds see the
+            // same default-on behavior as fresh installs.
+            experimentalActivity: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             notifications: {

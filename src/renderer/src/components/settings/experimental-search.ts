@@ -34,20 +34,6 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Activity Page',
-    description: 'Slack-style worktree activity feed for agent completions and blocking states.',
-    keywords: [
-      'experimental',
-      'activity',
-      'notifications',
-      'agents',
-      'worktrees',
-      'timeline',
-      'unread',
-      'bell'
-    ]
-  },
-  {
     title: 'Symlinks on worktrees',
     description:
       'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.',
@@ -80,6 +66,5 @@ function findEntry(title: string): SettingsSearchEntry {
 export const EXPERIMENTAL_SEARCH_ENTRY = {
   pet: findEntry('Pet'),
   orchestration: findEntry('Agent Orchestration'),
-  activity: findEntry('Activity Page'),
   symlinks: findEntry('Symlinks on worktrees')
 } as const

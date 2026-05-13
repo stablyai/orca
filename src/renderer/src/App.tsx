@@ -229,7 +229,6 @@ function App(): React.JSX.Element {
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
-  const activityEnabled = settings?.experimentalActivity === true
   const petVisible = useAppStore((s) => s.petVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
@@ -957,12 +956,6 @@ function App(): React.JSX.Element {
     }
   }, [activeView, rightSidebarOpen, actions])
 
-  useEffect(() => {
-    if (settings && !activityEnabled && activeView === 'activity') {
-      actions.setActiveView('terminal')
-    }
-  }, [activeView, activityEnabled, actions, settings])
-
   return (
     <div
       className="flex flex-col h-screen w-screen overflow-hidden"
@@ -1002,7 +995,7 @@ function App(): React.JSX.Element {
                 >
                   {titlebarLeftControls}
                 </div>
-                {activeView === 'activity' && activityEnabled ? (
+                {activeView === 'activity' ? (
                   <ActivityTitlebarControls />
                 ) : (
                   <div
@@ -1122,9 +1115,7 @@ function App(): React.JSX.Element {
                   <Suspense fallback={null}>
                     {activeView === 'settings' ? <Settings /> : null}
                     {activeView === 'tasks' ? <TaskPage /> : null}
-                    {activeView === 'activity' && activityEnabled ? (
-                      <ActivityPrototypePage />
-                    ) : null}
+                    {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                     {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
                   </Suspense>
                 </div>
