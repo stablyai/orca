@@ -1637,7 +1637,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         return checks
       } catch (err) {
         console.error('Failed to fetch PR checks:', err)
-        return get().checksCache[cacheKey]?.data ?? []
+        const latestCached = get().checksCache[cacheKey]
+        if (latestCached?.data && (!headSha || latestCached.headSha === headSha)) {
+          return latestCached.data
+        }
+        return []
       } finally {
         inflightChecksRequests.delete(inflightKey)
       }
