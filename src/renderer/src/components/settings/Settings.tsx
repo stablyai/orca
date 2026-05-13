@@ -11,6 +11,7 @@ import {
   Keyboard,
   Lock,
   MousePointerClick,
+  Network,
   ShieldCheck,
   Palette,
   Server,
@@ -44,6 +45,8 @@ import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './Notifica
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import { OrchestrationPane } from './OrchestrationPane'
+import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
 import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
@@ -76,6 +79,7 @@ type SettingsNavTarget =
   | 'ssh'
   | 'experimental'
   | 'agents'
+  | 'orchestration'
   | 'mobile'
   | 'repo'
 
@@ -116,18 +120,14 @@ function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }):
 const SECTION_FLASH_CLASS = 'settings-section-flash'
 const SECTION_FLASH_DURATION_MS = 900
 
-function scrollSectionIntoView(sectionId: string, container: HTMLElement | null): void {
+function scrollSectionIntoView(sectionId: string): void {
   const target = document.getElementById(sectionId)
   if (!target) {
     return
   }
-  // Why: centering a tall section pushes its heading above the viewport,
-  // which defeats the purpose of jumping to it. Only center when the whole
-  // section fits; otherwise align to the top so the title is always visible.
-  const fitsInViewport = container
-    ? target.getBoundingClientRect().height <= container.clientHeight
-    : true
-  target.scrollIntoView({ block: fitsInViewport ? 'center' : 'start' })
+  // Why: the scroll spy samples from the upper part of the viewport. Top-align
+  // sidebar jumps so it does not immediately reselect the previous section.
+  target.scrollIntoView({ block: 'start' })
 }
 
 function flashSectionHighlight(sectionId: string): void {
@@ -434,6 +434,13 @@ function Settings(): React.JSX.Element {
         searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
       },
       {
+        id: 'orchestration',
+        title: 'Orchestration',
+        description: 'Coordinate multiple coding agents through Orca.',
+        icon: Network,
+        searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'mobile',
         title: 'Mobile',
         description: 'Control terminals and agents from your phone.',
@@ -527,7 +534,7 @@ function Settings(): React.JSX.Element {
     const visibleIds = new Set(visibleNavSections.map((section) => section.id))
 
     if (scrollTargetId && pendingNavSectionId && visibleIds.has(pendingNavSectionId)) {
-      scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
+      scrollSectionIntoView(scrollTargetId)
       flashSectionHighlight(scrollTargetId)
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null
@@ -632,7 +639,7 @@ function Settings(): React.JSX.Element {
       if (sectionId === 'experimental' && modifiers?.shiftKey) {
         setHiddenExperimentalUnlocked((previous) => !previous)
       }
-      scrollSectionIntoView(sectionId, contentScrollRef.current)
+      scrollSectionIntoView(sectionId)
       flashSectionHighlight(sectionId)
       setActiveSectionId(sectionId)
     },
@@ -789,6 +796,15 @@ function Settings(): React.JSX.Element {
                   searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
                 >
                   <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="orchestration"
+                  title="Orchestration"
+                  description="Coordinate multiple coding agents through Orca."
+                  searchEntries={ORCHESTRATION_PANE_SEARCH_ENTRIES}
+                >
+                  <OrchestrationPane />
                 </SettingsSection>
 
                 <SettingsSection

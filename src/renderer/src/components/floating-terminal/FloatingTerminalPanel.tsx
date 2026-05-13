@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Minimize2, Network, X } from 'lucide-react'
+import { Maximize2, Minimize2, Minus } from 'lucide-react'
 import TabBar from '@/components/tab-bar/TabBar'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  ORCHESTRATION_SETUP_STATE_EVENT,
+  hasOrchestrationSetupMarker,
+  isOrchestrationSetupDismissed,
+  notifyOrchestrationSetupStateChanged
+} from '@/lib/orchestration-setup-state'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalTab } from '../../../../shared/types'
@@ -45,6 +51,9 @@ export function FloatingTerminalPanel({
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
   const [maximized, setMaximized] = useState(false)
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
+  const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
+    () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
+  )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -98,6 +107,39 @@ export function FloatingTerminalPanel({
     }
     focusTerminalTabSurface(activeFloatingTabId)
   }, [activeFloatingTabId, open])
+
+  const refreshOrchestrationSetupVisibility = useCallback(async (): Promise<void> => {
+    if (isOrchestrationSetupDismissed()) {
+      setShowOrchestrationSetup(false)
+      return
+    }
+    if (!hasOrchestrationSetupMarker()) {
+      setShowOrchestrationSetup(true)
+      return
+    }
+    try {
+      const status = await window.api.cli.getInstallStatus()
+      setShowOrchestrationSetup(status.state !== 'installed')
+    } catch {
+      setShowOrchestrationSetup(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (open) {
+      void refreshOrchestrationSetupVisibility()
+    }
+  }, [open, refreshOrchestrationSetupVisibility])
+
+  useEffect(() => {
+    const handleSetupStateChange = (): void => {
+      void refreshOrchestrationSetupVisibility()
+    }
+    window.addEventListener(ORCHESTRATION_SETUP_STATE_EVENT, handleSetupStateChange)
+    return () => {
+      window.removeEventListener(ORCHESTRATION_SETUP_STATE_EVENT, handleSetupStateChange)
+    }
+  }, [refreshOrchestrationSetupVisibility])
 
   const createFloatingTab = useCallback(() => {
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
@@ -207,6 +249,12 @@ export function FloatingTerminalPanel({
     }
   }
 
+  const dismissOrchestrationSetup = useCallback(() => {
+    localStorage.setItem('orca.orchestration.setupDismissed', '1')
+    setShowOrchestrationSetup(false)
+    notifyOrchestrationSetupStateChanged()
+  }, [])
+
   return (
     <div
       ref={panelRef}
@@ -261,16 +309,6 @@ export function FloatingTerminalPanel({
             />
           </div>
           <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="h-6 gap-1.5 px-2 text-xs"
-              onClick={() => setOrchestrationDialogOpen(true)}
-            >
-              <Network className="size-3.5" />
-              Enable orchestration
-            </Button>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -337,11 +375,47 @@ export function FloatingTerminalPanel({
             : null}
         </div>
       </div>
+      {showOrchestrationSetup ? (
+        <div
+          className="absolute right-4 bottom-4 z-10 w-[280px] rounded-md border border-border/60 bg-card/95 p-3 text-card-foreground shadow-xs"
+          data-floating-terminal-no-drag
+        >
+          <div className="space-y-2">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">Enable orchestration</p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Set up the Orca CLI and agent skill so agents can coordinate through Orca.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-1"
+                onClick={dismissOrchestrationSetup}
+              >
+                Dismiss
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="flex-1"
+                onClick={() => setOrchestrationDialogOpen(true)}
+              >
+                Enable
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {!maximized && <FloatingTerminalResizeHandles bounds={bounds} setBounds={setBounds} />}
       <FloatingTerminalOrchestrationDialog
         open={orchestrationDialogOpen}
         activeTabId={activeTab?.id ?? null}
         onOpenChange={setOrchestrationDialogOpen}
+        onSetupStateChange={() => void refreshOrchestrationSetupVisibility()}
       />
     </div>
   )
