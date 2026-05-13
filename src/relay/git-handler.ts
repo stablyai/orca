@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
+protocol surface so local and SSH git behavior stay in one dispatch table. */
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { rm } from 'fs/promises'
@@ -14,6 +16,7 @@ import {
 } from './git-handler-ops'
 import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
 
 const execFileAsync = promisify(execFile)
@@ -246,19 +249,19 @@ export class GitHandler {
 
   private async push(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
-    // Why: always pass --set-upstream (mirrors src/main/git/remote.ts).
-    // Orca's worktrees initially track the BASE ref (origin/main) because
-    // they're created via `git worktree add --track -b <name> <dir>
-    // <baseRef>` — without --set-upstream the local branch keeps tracking
-    // the base after the first push, so ahead/behind via @{u} measures
-    // "ahead of base" instead of "ahead of remote branch", and the UI's
-    // primary button never rotates from "Push" to "Commit". The `publish`
-    // flag is preserved in the param shape for IPC compatibility but is no
-    // longer load-bearing. On an already-published branch --set-upstream is
-    // a no-op for the tracking config.
+    // Why: mirror src/main/git/remote.ts. Push to a configured upstream when
+    // present so SSH worktrees with non-origin targets do not get repointed.
     void params.publish
     try {
-      await this.git(['push', '--set-upstream', 'origin', 'HEAD'], worktreePath)
+      const target = await resolveRelayPushTarget(
+        this.git.bind(this),
+        worktreePath,
+        params.pushTarget
+      )
+      const args = target
+        ? ['push', '--set-upstream', target.remote, target.refspec]
+        : ['push', '--set-upstream', 'origin', 'HEAD']
+      await this.git(args, worktreePath)
     } catch (error) {
       // Why: mirror the local gitPush normalization so SSH users see the same
       // "non-fast-forward / pull first" guidance instead of raw git stderr.

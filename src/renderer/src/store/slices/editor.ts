@@ -13,6 +13,7 @@ import type {
   GitConflictOperation,
   GitConflictResolutionStatus,
   GitConflictStatusSource,
+  GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus,
@@ -296,10 +297,16 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     publish?: boolean,
-    connectionId?: string
+    connectionId?: string,
+    pushTarget?: GitPushTarget
   ) => Promise<void>
   pullBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
-  syncBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
+  syncBranch: (
+    worktreeId: string,
+    worktreePath: string,
+    connectionId?: string,
+    pushTarget?: GitPushTarget
+  ) => Promise<void>
   fetchBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
@@ -1900,7 +1907,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       console.error('fetchUpstreamStatus failed', error)
     }
   },
-  pushBranch: async (worktreeId, worktreePath, publish = false, connectionId) => {
+  pushBranch: async (worktreeId, worktreePath, publish = false, connectionId, pushTarget) => {
     // Why: don't *await* a post-op git status / upstream refresh here.
     // Chaining awaited refreshes inside the mutation extends the gap before
     // compound flows (runCompoundCommitAction → runRemoteAction) reach the
@@ -1912,7 +1919,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     // store as soon as the IPC resolves.
     get().beginRemoteOperation(publish ? 'publish' : 'push')
     try {
-      await window.api.git.push({ worktreePath, publish, connectionId })
+      await window.api.git.push({ worktreePath, publish, connectionId, pushTarget })
     } catch (error) {
       toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
@@ -1933,7 +1940,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
     void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
   },
-  syncBranch: async (worktreeId, worktreePath, connectionId) => {
+  syncBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
     // Why: same shape as pushBranch / pullBranch — fire-and-forget the
     // post-op upstream refresh after the busy flag clears so the primary
     // button label rotates immediately when the IPC resolves.
@@ -1956,7 +1963,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       })
       if (upstreamStatus.ahead > 0) {
         try {
-          await window.api.git.push({ worktreePath, connectionId })
+          await window.api.git.push({
+            worktreePath,
+            connectionId,
+            pushTarget
+          })
         } catch (error) {
           // Why: format under the user-facing operation (sync) rather than
           // the inner step (push) — the user clicked Sync and shouldn't see

@@ -10,8 +10,11 @@ const {
   removeWorktreeMock,
   getGitUsernameMock,
   getDefaultBaseRefMock,
+  getDefaultRemoteMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
+  getWorkItemMock,
+  getPullRequestPushTargetMock,
   getEffectiveHooksMock,
   createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
@@ -33,8 +36,11 @@ const {
   removeWorktreeMock: vi.fn(),
   getGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
+  getDefaultRemoteMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
+  getWorkItemMock: vi.fn(),
+  getPullRequestPushTargetMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
@@ -71,11 +77,14 @@ vi.mock('../git/runner', () => ({
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
+  getDefaultRemote: getDefaultRemoteMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
 
 vi.mock('../github/client', () => ({
-  getPRForBranch: getPRForBranchMock
+  getPRForBranch: getPRForBranchMock,
+  getWorkItem: getWorkItemMock,
+  getPullRequestPushTarget: getPullRequestPushTargetMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -169,8 +178,11 @@ describe('registerWorktreeHandlers', () => {
       removeWorktreeMock,
       getGitUsernameMock,
       getDefaultBaseRefMock,
+      getDefaultRemoteMock,
       getBranchConflictKindMock,
       getPRForBranchMock,
+      getWorkItemMock,
+      getPullRequestPushTargetMock,
       getEffectiveHooksMock,
       createIssueCommandRunnerScriptMock,
       createSetupRunnerScriptMock,
@@ -231,8 +243,11 @@ describe('registerWorktreeHandlers', () => {
     store.setWorktreeMeta.mockReturnValue({})
     getGitUsernameMock.mockReturnValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
+    getDefaultRemoteMock.mockResolvedValue('origin')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
+    getWorkItemMock.mockResolvedValue(null)
+    getPullRequestPushTargetMock.mockResolvedValue(null)
     // Why: createLocalWorktree can still hit legacy git fetch fallback in
     // narrow unit harnesses. Return a resolved promise so catch/then chains
     // don't trip on undefined.
@@ -389,6 +404,94 @@ describe('registerWorktreeHandlers', () => {
         linkedIssue: 123,
         linkedPR: 456
       })
+    })
+  })
+
+  it('configures a PR push target during local create', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      }
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
+      { cwd: '/workspace/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'fetch',
+        'pr-prateek-orca',
+        '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle'
+      ],
+      { cwd: '/workspace/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'branch',
+        '--set-upstream-to',
+        'pr-prateek-orca/prateek/fix-sidebar-agents-toggle',
+        'improve-dashboard'
+      ],
+      { cwd: '/workspace/improve-dashboard' }
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        pushTarget: {
+          remoteName: 'pr-prateek-orca',
+          branchName: 'prateek/fix-sidebar-agents-toggle',
+          remoteUrl: 'git@github.com:prateek/orca.git'
+        }
+      })
+    )
+  })
+
+  it('returns the PR head push target when resolving a fork PR base', async () => {
+    getPullRequestPushTargetMock.mockResolvedValue({
+      remoteName: 'pr-prateek-orca',
+      branchName: 'prateek/fix-sidebar-agents-toggle',
+      remoteUrl: 'git@github.com:prateek/orca.git'
+    })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      prNumber: 1738,
+      headRefName: 'prateek/fix-sidebar-agents-toggle',
+      isCrossRepository: true
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1738/head'], {
+      cwd: '/workspace/repo'
+    })
+    expect(result).toEqual({
+      baseBranch: 'abc123',
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      }
     })
   })
 

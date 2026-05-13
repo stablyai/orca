@@ -14,13 +14,16 @@ import type { Store } from '../persistence'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
+  GitPushTarget,
   Repo,
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { validateGitPushTarget } from '../git/push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
+import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
@@ -47,6 +50,103 @@ async function readCommitSha(repoPath: string, ref: string): Promise<string> {
     cwd: repoPath
   })
   return stdout.trim()
+}
+
+async function findRemoteForUrl(repoPath: string, remoteUrl: string): Promise<string | null> {
+  const target = parseGitHubOwnerRepo(remoteUrl)
+  try {
+    const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath })
+    for (const remote of stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)) {
+      try {
+        const { stdout: urlStdout } = await gitExecFileAsync(['remote', 'get-url', remote], {
+          cwd: repoPath
+        })
+        const candidateUrl = urlStdout.trim()
+        const candidate = parseGitHubOwnerRepo(candidateUrl)
+        if (
+          target &&
+          candidate &&
+          target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
+          target.repo.toLowerCase() === candidate.repo.toLowerCase()
+        ) {
+          return remote
+        }
+        if (candidateUrl === remoteUrl) {
+          return remote
+        }
+      } catch {
+        // Ignore a remote that disappeared or has no fetch URL.
+      }
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function ensureUniqueRemoteName(repoPath: string, preferred: string): Promise<string> {
+  const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath })
+  const existing = new Set(
+    stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  )
+  if (!existing.has(preferred)) {
+    return preferred
+  }
+  for (let suffix = 2; suffix < 100; suffix += 1) {
+    const candidate = `${preferred}-${suffix}`
+    if (!existing.has(candidate)) {
+      return candidate
+    }
+  }
+  throw new Error(`Could not find an available remote name for ${preferred}.`)
+}
+
+async function prepareWorktreePushTarget(
+  repoPath: string,
+  target: GitPushTarget
+): Promise<GitPushTarget> {
+  await validateGitPushTarget(repoPath, target)
+  let remoteName = target.remoteName
+  if (target.remoteUrl) {
+    const existingRemote = await findRemoteForUrl(repoPath, target.remoteUrl)
+    if (existingRemote) {
+      remoteName = existingRemote
+    } else {
+      remoteName = await ensureUniqueRemoteName(repoPath, target.remoteName)
+      await gitExecFileAsync(['remote', 'add', remoteName, target.remoteUrl], { cwd: repoPath })
+    }
+  }
+
+  await gitExecFileAsync(
+    [
+      'fetch',
+      remoteName,
+      `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
+    ],
+    { cwd: repoPath }
+  )
+  return {
+    ...target,
+    remoteName
+  }
+}
+
+async function configureCreatedWorktreePushTarget(
+  worktreePath: string,
+  branchName: string,
+  target: GitPushTarget
+): Promise<GitPushTarget> {
+  await gitExecFileAsync(
+    ['branch', '--set-upstream-to', `${target.remoteName}/${target.branchName}`, branchName],
+    { cwd: worktreePath }
+  )
+  return target
 }
 
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
@@ -444,6 +544,14 @@ export async function createLocalWorktree(
   }
   emitCreateWorktreeProgress(mainWindow, 'creating')
 
+  let preparedPushTarget: GitPushTarget | undefined
+  if (args.pushTarget) {
+    // Why: validate and fetch the contributor remote before creating the
+    // worktree. If this fails, retrying won't hit branch/path conflicts from a
+    // half-created worktree.
+    preparedPushTarget = await prepareWorktreePushTarget(repo.path, args.pushTarget)
+  }
+
   await (sparseDirectories.length > 0
     ? addSparseWorktree(
         repo.path,
@@ -460,6 +568,19 @@ export async function createLocalWorktree(
         baseBranch,
         settings.refreshLocalBaseRefOnWorktreeCreate
       ))
+
+  let configuredPushTarget: GitPushTarget | undefined
+  if (preparedPushTarget) {
+    // Why: fork-PR review worktrees should publish commits back to the PR
+    // author's branch. Configure the branch upstream immediately so the
+    // existing Push/Pull/Sync controls use the contributor remote instead of
+    // silently defaulting to origin.
+    configuredPushTarget = await configureCreatedWorktreePushTarget(
+      worktreePath,
+      branchName,
+      preparedPushTarget
+    )
+  }
 
   // Re-list to get the freshly created worktree info
   const gitWorktrees = await listWorktrees(repo.path)
@@ -479,6 +600,7 @@ export async function createLocalWorktree(
     // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
     createdAt: now,
     baseRef: baseBranch,
+    ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...(requestedDisplayName
       ? { displayName: requestedDisplayName }
       : shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)

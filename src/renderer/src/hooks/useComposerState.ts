@@ -19,6 +19,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
   GitHubWorkItem,
+  GitPushTarget,
   LinearIssue,
   OrcaHooks,
   SetupDecision,
@@ -123,7 +124,11 @@ export type ComposerCardProps = {
   onBaseBranchChange: (next: string | undefined) => void
   /** Called when a PR is selected in the Start-from picker. Updates both
    *  baseBranch and linkedWorkItem/linkedPR in one pass. */
-  onBaseBranchPrSelect: (baseBranch: string, item: GitHubWorkItem) => void
+  onBaseBranchPrSelect: (
+    baseBranch: string,
+    item: GitHubWorkItem,
+    pushTarget?: GitPushTarget
+  ) => void
   /** PR number selected via the Start-from picker (when applicable). Used so the
    *  field can render "PR #N" copy. */
   baseBranchLinkedPrNumber: number | null
@@ -286,6 +291,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
+  const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
   // instead of slipping past the user. Cleared on any subsequent selection.
@@ -1077,6 +1083,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // selection is meaningless in the new repo. Resetting to undefined
       // makes the field fall back to the new repo's effective base ref.
       setBaseBranch(undefined)
+      setPushTarget(undefined)
       setStartFromResetHint(hint)
     },
     [baseBranch, linkedWorkItem, repoId, setRepoId]
@@ -1096,12 +1103,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleBaseBranchChange = useCallback((next: string | undefined): void => {
     setBaseBranch(next)
+    setPushTarget(undefined)
     setStartFromResetHint(null)
   }, [])
 
   const handleBaseBranchPrSelect = useCallback(
-    (nextBaseBranch: string, item: GitHubWorkItem): void => {
+    (nextBaseBranch: string, item: GitHubWorkItem, nextPushTarget?: GitPushTarget): void => {
       setBaseBranch(nextBaseBranch)
+      setPushTarget(nextPushTarget)
       setStartFromResetHint(null)
       // Why: per spec, a PR selection in the Start-from picker is also a
       // linkedWorkItem assignment. Reuse applyLinkedWorkItem so auto-name and
@@ -1125,12 +1134,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
-      applyLinkedWorkItem(item)
       setStartFromResetHint(null)
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
       if (item.type !== 'pr' || !repoForItem) {
+        setPushTarget(undefined)
+        applyLinkedWorkItem(item)
         return
       }
+      setPushTarget(undefined)
       void window.api.worktrees
         .resolvePrBase({
           repoId: repoForItem.id,
@@ -1142,9 +1153,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         })
         .then((result) => {
           if ('error' in result) {
+            setBaseBranch(undefined)
+            setPushTarget(undefined)
+            toast.error(result.error)
             return
           }
-          handleBaseBranchPrSelect(result.baseBranch, item)
+          handleBaseBranchPrSelect(result.baseBranch, item, result.pushTarget)
+        })
+        .catch((error: unknown) => {
+          setBaseBranch(undefined)
+          setPushTarget(undefined)
+          toast.error(error instanceof Error ? error.message : 'Failed to resolve PR base.')
         })
     },
     [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo]
@@ -1153,6 +1172,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleSmartBranchSelect = useCallback(
     (refName: string): void => {
       setBaseBranch(refName)
+      setPushTarget(undefined)
       setStartFromResetHint(null)
       if (!name.trim() || name === lastAutoNameRef.current) {
         setName(refName)
@@ -1193,6 +1213,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkedPR(null)
     setLinkedWorkItem(null)
     setBaseBranch(undefined)
+    setPushTarget(undefined)
     setStartFromResetHint(null)
     if (name === lastAutoNameRef.current) {
       setName('')
@@ -1297,7 +1318,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         telemetrySource,
         linkedWorkItem?.title,
         parsedLinkedIssueNumber ?? undefined,
-        effectiveLinkedPR ?? undefined
+        effectiveLinkedPR ?? undefined,
+        pushTarget
       )
       const worktree = result.worktree
 
@@ -1381,6 +1403,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onCreated,
     parsedLinkedIssueNumber,
     persistDraft,
+    pushTarget,
     repoId,
     requiresExplicitSetupChoice,
     resolvedSetupDecision,
@@ -1446,7 +1469,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           telemetrySource,
           linkedWorkItem?.title,
           parsedLinkedIssueNumber ?? undefined,
-          effectiveLinkedPR ?? undefined
+          effectiveLinkedPR ?? undefined,
+          pushTarget
         )
         const worktree = result.worktree
 
@@ -1582,6 +1606,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       onCreated,
       parsedLinkedIssueNumber,
       persistDraft,
+      pushTarget,
       repoId,
       requiresExplicitSetupChoice,
       resolvedSetupDecision,

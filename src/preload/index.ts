@@ -372,7 +372,7 @@ const api = {
       prNumber: number
       headRefName?: string
       isCrossRepository?: boolean
-    }): Promise<{ baseBranch: string } | { error: string }> =>
+    }): Promise<{ baseBranch: string; pushTarget?: unknown } | { error: string }> =>
       ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }): Promise<void> =>
@@ -1630,6 +1630,7 @@ const api = {
       worktreePath: string
       publish?: boolean
       connectionId?: string
+      pushTarget?: unknown
     }): Promise<void> => ipcRenderer.invoke('git:push', args),
     pull: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('git:pull', args),

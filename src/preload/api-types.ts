@@ -19,6 +19,7 @@ import type {
   GitBranchCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
   GitHubAssignableUser,
@@ -459,7 +460,7 @@ export type PreloadApi = {
       prNumber: number
       headRefName?: string
       isCrossRepository?: boolean
-    }) => Promise<{ baseBranch: string } | { error: string }>
+    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
@@ -992,6 +993,7 @@ export type PreloadApi = {
       worktreePath: string
       publish?: boolean
       connectionId?: string
+      pushTarget?: GitPushTarget
     }) => Promise<void>
     pull: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     branchDiff: (args: {

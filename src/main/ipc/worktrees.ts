@@ -8,6 +8,7 @@ import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
+  GitPushTarget,
   GitWorktreeInfo,
   Repo,
   WorktreeMeta
@@ -15,7 +16,7 @@ import type {
 import { removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
-import { getWorkItem } from '../github/client'
+import { getPullRequestPushTarget, getWorkItem } from '../github/client'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
@@ -281,7 +282,7 @@ export function registerWorktreeHandlers(
         headRefName?: string
         isCrossRepository?: boolean
       }
-    ): Promise<{ baseBranch: string } | { error: string }> => {
+    ): Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }> => {
       const repo = store.getRepo(args.repoId)
       if (!repo) {
         return { error: 'Repo not found' }
@@ -297,6 +298,7 @@ export function registerWorktreeHandlers(
 
       let headRefName = args.headRefName?.trim() ?? ''
       let isCrossRepository = args.isCrossRepository === true
+      let pushTarget: CreateWorktreeArgs['pushTarget'] | undefined
 
       // Skip the gh lookup when both hints are present (picker already has them).
       if (!headRefName) {
@@ -313,6 +315,21 @@ export function registerWorktreeHandlers(
         }
         if (item.isCrossRepository === true) {
           isCrossRepository = true
+        }
+      }
+      if (isCrossRepository) {
+        try {
+          pushTarget = (await getPullRequestPushTarget(repo.path, args.prNumber)) ?? undefined
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error
+                ? error.message
+                : `Could not resolve PR #${args.prNumber} head push target.`
+          }
+        }
+        if (!pushTarget) {
+          return { error: `Could not resolve PR #${args.prNumber} head push target.` }
         }
       }
 
@@ -352,11 +369,14 @@ export function registerWorktreeHandlers(
         if (!sha) {
           return { error: `Empty SHA resolving fork PR #${args.prNumber} head.` }
         }
-        return { baseBranch: sha }
+        return { baseBranch: sha, ...(pushTarget ? { pushTarget } : {}) }
       }
 
       try {
-        await gitExecFileAsync(['fetch', remote, headRefName], { cwd: repo.path })
+        await gitExecFileAsync(
+          ['fetch', remote, `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`],
+          { cwd: repo.path }
+        )
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return {
@@ -371,7 +391,10 @@ export function registerWorktreeHandlers(
         return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
       }
 
-      return { baseBranch: remoteRef }
+      if (!pushTarget) {
+        pushTarget = { remoteName: remote, branchName: headRefName }
+      }
+      return { baseBranch: remoteRef, pushTarget }
     }
   )
 

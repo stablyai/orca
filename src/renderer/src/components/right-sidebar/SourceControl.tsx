@@ -599,11 +599,23 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       try {
         if (kind === 'publish') {
-          await pushBranch(activeWorktreeId, worktreePath, true, connectionId)
+          await pushBranch(
+            activeWorktreeId,
+            worktreePath,
+            true,
+            connectionId,
+            activeWorktree?.pushTarget
+          )
           return
         }
         if (kind === 'push') {
-          await pushBranch(activeWorktreeId, worktreePath, false, connectionId)
+          await pushBranch(
+            activeWorktreeId,
+            worktreePath,
+            false,
+            connectionId,
+            activeWorktree?.pushTarget
+          )
           return
         }
         if (kind === 'pull') {
@@ -614,13 +626,21 @@ function SourceControlInner(): React.JSX.Element {
           await fetchBranch(activeWorktreeId, worktreePath, connectionId)
           return
         }
-        await syncBranch(activeWorktreeId, worktreePath, connectionId)
+        await syncBranch(activeWorktreeId, worktreePath, connectionId, activeWorktree?.pushTarget)
       } catch {
         // Why: remote action failures are surfaced by editor-slice actions to keep
         // one consistent toast path and avoid duplicate notifications in the UI.
       }
     },
-    [activeWorktreeId, fetchBranch, pullBranch, pushBranch, syncBranch, worktreePath]
+    [
+      activeWorktree?.pushTarget,
+      activeWorktreeId,
+      fetchBranch,
+      pullBranch,
+      pushBranch,
+      syncBranch,
+      worktreePath
+    ]
   )
 
   // Why: compound actions must commit first and only run the follow-up remote

@@ -128,8 +128,16 @@ export type Worktree = {
   sparsePresetId?: string
   /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
   baseRef?: string
+  /** Remote/branch Orca should publish review commits to when it created this worktree. */
+  pushTarget?: GitPushTarget
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
+
+export type GitPushTarget = {
+  remoteName: string
+  branchName: string
+  remoteUrl?: string
+}
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
 export type WorktreeMeta = {
@@ -150,6 +158,8 @@ export type WorktreeMeta = {
   sparsePresetId?: string
   /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
   baseRef?: string
+  /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
+  pushTarget?: GitPushTarget
   diffComments?: DiffComment[]
 }
 
@@ -570,8 +580,8 @@ export type GitHubWorkItem = {
   branchName?: string
   baseRefName?: string
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
-  // The Start-from picker disables fork PRs in v1 because the create flow cannot
-  // safely resolve a fork head from headRefName alone.
+  // The Start-from picker passes this to resolvePrBase so fork heads use
+  // refs/pull/<N>/head for creation and a separate PR-head push target.
   isCrossRepository?: boolean
   /** Why: required because the cross-repo view merges items from every selected
    *  repo — the table row's repo pill and the "open in browser" fallback need
@@ -869,6 +879,7 @@ export type CreateWorktreeArgs = {
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
+  pushTarget?: GitPushTarget
   /** Telemetry-only: which UI surface initiated this create. Threaded from
    *  the renderer entry point so main can emit `workspace_created` with the
    *  correct `source`. `unknown` is a valid wire value — an unrecognized
