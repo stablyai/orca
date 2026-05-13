@@ -73,4 +73,10 @@ describe('fetchNewerReleaseTag', () => {
     const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
     expect(await fetchNewerReleaseTag('1.3.19-rc.6')).toBe('v1.3.20-rc.1')
   })
+
+  it('returns a bounded fallback candidate after the newest newer tag', async () => {
+    respondWithAtom(['v1.3.51-rc.7', 'v1.3.51-rc.6', 'v1.3.51-rc.5'])
+    const { fetchNewerReleaseTags } = await import('./updater-prerelease-feed')
+    expect(await fetchNewerReleaseTags('1.3.51-rc.6', 2)).toEqual(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+  })
 })

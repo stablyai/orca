@@ -18,6 +18,40 @@ export function normalizeTagToVersion(tag: string): string {
   return tag.replace(/^v/i, '')
 }
 
+type ReleaseFeedTag = {
+  tag: string
+  version: string
+}
+
+async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+  try {
+    const res = await net.fetch(ATOM_FEED_URL, { signal: controller.signal })
+    if (!res.ok) {
+      return null
+    }
+    const body = await res.text()
+    const tags: ReleaseFeedTag[] = []
+
+    for (const match of body.matchAll(TAG_HREF_RE)) {
+      const tag = match[1]
+      const version = normalizeTagToVersion(tag)
+      if (isValidVersion(version)) {
+        tags.push({ tag, version })
+      }
+    }
+
+    tags.sort((left, right) => compareVersions(right.version, left.version))
+    return tags
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 /**
  * Walks the GitHub releases atom feed and returns the tag of the newest
  * release strictly greater than `currentVersion`, regardless of channel.
@@ -33,38 +67,24 @@ export function normalizeTagToVersion(tag: string): string {
  * nothing in the feed is newer than `currentVersion`.
  */
 export async function fetchNewerReleaseTag(currentVersion: string): Promise<string | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  return (await fetchNewerReleaseTags(currentVersion, 1))[0] ?? null
+}
 
-  try {
-    const res = await net.fetch(ATOM_FEED_URL, { signal: controller.signal })
-    if (!res.ok) {
-      return null
-    }
-    const body = await res.text()
-
-    let bestTag: string | null = null
-    let bestVersion: string | null = null
-
-    for (const match of body.matchAll(TAG_HREF_RE)) {
-      const tag = match[1]
-      const version = normalizeTagToVersion(tag)
-      if (!isValidVersion(version)) {
-        continue
-      }
-      if (compareVersions(version, currentVersion) <= 0) {
-        continue
-      }
-      if (bestVersion === null || compareVersions(version, bestVersion) > 0) {
-        bestTag = tag
-        bestVersion = version
-      }
-    }
-
-    return bestTag
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
+export async function fetchNewerReleaseTags(
+  currentVersion: string,
+  maxTags: number
+): Promise<string[]> {
+  const tags = await fetchReleaseFeedTags()
+  if (!tags || maxTags <= 0) {
+    return []
   }
+
+  const newestNewerIndex = tags.findIndex(
+    ({ version }) => compareVersions(version, currentVersion) > 0
+  )
+  if (newestNewerIndex === -1) {
+    return []
+  }
+
+  return tags.slice(newestNewerIndex, newestNewerIndex + maxTags).map(({ tag }) => tag)
 }

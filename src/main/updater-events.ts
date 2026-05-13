@@ -22,7 +22,11 @@ type UpdaterHandlerContext = {
   hasNewerDownloadedVersion: () => boolean
   performQuitAndInstall: () => void
   recordCompletedUpdateCheck: () => void
-  sendCheckFailureStatus: (message: string, userInitiated?: boolean) => Promise<void>
+  sendCheckFailureStatus: (
+    message: string,
+    userInitiated?: boolean,
+    source?: 'event' | 'promise'
+  ) => Promise<void>
   sendErrorStatus: (message: string, userInitiated?: boolean) => void
   sendStatus: (status: UpdateStatus) => void
   scheduleAutomaticUpdateCheck: (delayMs: number) => void
@@ -196,7 +200,7 @@ export function registerAutoUpdaterHandlers({
     setUserInitiatedCheck(false)
     const message = err?.message ?? 'Unknown error'
     if (getCurrentStatus().state === 'checking') {
-      void sendCheckFailureStatus(message, wasUserInitiated || undefined)
+      void sendCheckFailureStatus(message, wasUserInitiated || undefined, 'event')
       return
     }
     sendErrorStatus(message, wasUserInitiated || undefined)

@@ -15,10 +15,11 @@ import { registerAutoUpdaterHandlers } from './updater-events'
 import {
   compareVersions,
   isBenignCheckFailure,
+  isMissingUpdateManifestFailure,
   isPrereleaseVersion,
   statusesEqual
 } from './updater-fallback'
-import { fetchNewerReleaseTag, getReleaseDownloadUrl } from './updater-prerelease-feed'
+import { fetchNewerReleaseTags, getReleaseDownloadUrl } from './updater-prerelease-feed'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -54,6 +55,12 @@ let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
 let lastNudgeCheckAt = 0
+let pendingPrereleaseFallback: {
+  primaryTag: string
+  fallbackTag: string
+  suppressedPromiseFailureKey: string | null
+  used: boolean
+} | null = null
 
 let _getPendingUpdateNudgeId: (() => string | null) | null = null
 let _getDismissedUpdateNudgeId: (() => string | null) | null = null
@@ -70,6 +77,10 @@ let quittingForUpdate = false
 function clearAvailableUpdateContext(): void {
   availableVersion = null
   availableReleaseUrl = null
+}
+
+function clearPrereleaseFallbackContext(): void {
+  pendingPrereleaseFallback = null
 }
 
 function clearPendingUpdateNudge(): void {
@@ -194,13 +205,28 @@ function performQuitAndInstall(): void {
   autoUpdater.quitAndInstall(false, true)
 }
 
-async function sendCheckFailureStatus(message: string, userInitiated?: boolean): Promise<void> {
+async function sendCheckFailureStatus(
+  message: string,
+  userInitiated?: boolean,
+  source: 'event' | 'promise' = 'promise'
+): Promise<void> {
   const failureKey = `${userInitiated ? 'user' : 'auto'}:${message}`
+  if (
+    source === 'promise' &&
+    pendingPrereleaseFallback?.suppressedPromiseFailureKey === failureKey
+  ) {
+    pendingPrereleaseFallback.suppressedPromiseFailureKey = null
+    return
+  }
   if (pendingCheckFailureKey === failureKey && pendingCheckFailurePromise) {
     return pendingCheckFailurePromise
   }
 
   const handleFailure = async (): Promise<void> => {
+    if (retryPrereleaseFallbackAfterMissingManifest(message, userInitiated, source, failureKey)) {
+      return
+    }
+
     if (isBenignCheckFailure(message)) {
       // Why: release transition failures (missing latest.yml while a new
       // release is being published) and network blips are transient. Schedule
@@ -285,7 +311,13 @@ async function pinPrereleaseFeed(): Promise<void> {
   // case that feed will report the latest stable and compareVersions in the
   // 'update-available' handler will correctly mark it as not-available.
   const currentVersion = app.getVersion()
-  const newerTag = await fetchNewerReleaseTag(currentVersion)
+  const releaseTags = await fetchNewerReleaseTags(currentVersion, 2)
+  const newerTag = releaseTags[0] ?? null
+  const fallbackTag = releaseTags[1] ?? null
+  pendingPrereleaseFallback =
+    newerTag && fallbackTag
+      ? { primaryTag: newerTag, fallbackTag, suppressedPromiseFailureKey: null, used: false }
+      : null
   // Why: console.info goes to stdout and is captured by Console.app on macOS
   // and by --enable-logging elsewhere. This is the only window we have into
   // the updater on a user's machine when something goes wrong (issue: RC user
@@ -295,10 +327,49 @@ async function pinPrereleaseFeed(): Promise<void> {
     console.info(`[updater] prerelease feed pinned: current=${currentVersion} → ${url}`)
     autoUpdater.setFeedURL({ provider: 'generic', url })
   } else {
+    clearPrereleaseFallbackContext()
     const url = 'https://github.com/stablyai/orca/releases/latest/download'
     console.info(`[updater] prerelease feed fallback: current=${currentVersion} → ${url}`)
     autoUpdater.setFeedURL({ provider: 'generic', url })
   }
+}
+
+function retryPrereleaseFallbackAfterMissingManifest(
+  message: string,
+  userInitiated: boolean | undefined,
+  source: 'event' | 'promise',
+  failureKey: string
+): boolean {
+  if (
+    !pendingPrereleaseFallback ||
+    pendingPrereleaseFallback.used ||
+    !isMissingUpdateManifestFailure(message)
+  ) {
+    return false
+  }
+
+  // Why: a published tag can briefly point at a missing platform manifest
+  // during GitHub release transitions. Walk back once to the previous feed
+  // entry so users on the last good build see a normal not-available result.
+  pendingPrereleaseFallback.used = true
+  pendingPrereleaseFallback.suppressedPromiseFailureKey = source === 'event' ? failureKey : null
+  const { primaryTag, fallbackTag } = pendingPrereleaseFallback
+  const url = getReleaseDownloadUrl(fallbackTag)
+  console.info(
+    `[updater] prerelease manifest missing for ${primaryTag}; retrying once against ${url}`
+  )
+  autoUpdater.setFeedURL({ provider: 'generic', url })
+  userInitiatedCheck = Boolean(userInitiated)
+  backgroundCheckLaunchPending = !userInitiated
+  void autoUpdater.checkForUpdates().catch((err) => {
+    void sendCheckFailureStatus(String(err?.message ?? err), userInitiated, 'promise')
+  })
+  return true
+}
+
+function launchWithoutPrereleaseFallback(launch: () => Promise<unknown>): Promise<unknown> {
+  clearPrereleaseFallbackContext()
+  return launch()
 }
 
 function runBackgroundUpdateCheck(
@@ -325,10 +396,12 @@ function runBackgroundUpdateCheck(
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldResolvePrereleaseFeed() ? pinPrereleaseFeed().then(launch) : launch()
+  const run = shouldResolvePrereleaseFeed()
+    ? pinPrereleaseFeed().then(launch)
+    : launchWithoutPrereleaseFallback(launch)
   void Promise.resolve(run).catch((err) => {
     backgroundCheckLaunchPending = false
-    void sendCheckFailureStatus(String(err?.message ?? err))
+    void sendCheckFailureStatus(String(err?.message ?? err), undefined, 'promise')
   })
 }
 
@@ -363,6 +436,7 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   }
 
   if (options?.includePrerelease) {
+    clearPrereleaseFallbackContext()
     enableIncludePrerelease()
   }
 
@@ -375,10 +449,12 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   // and sending it from both places causes duplicate notifications (issue #35).
 
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldResolvePrereleaseFeed() ? pinPrereleaseFeed().then(launch) : launch()
+  const run = shouldResolvePrereleaseFeed()
+    ? pinPrereleaseFeed().then(launch)
+    : launchWithoutPrereleaseFallback(launch)
   void Promise.resolve(run).catch((err) => {
     userInitiatedCheck = false
-    void sendCheckFailureStatus(String(err?.message ?? err), true)
+    void sendCheckFailureStatus(String(err?.message ?? err), true, 'promise')
   })
 }
 
