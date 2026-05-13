@@ -10,6 +10,7 @@ import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
+import { AgentWorkflowShortcutsSection } from './AgentWorkflowShortcutsSection'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import {
@@ -409,6 +410,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
           })}
         </div>
       </section>
+
+      <AgentWorkflowShortcutsSection settings={settings} updateSettings={updateSettings} />
 
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
 

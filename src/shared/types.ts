@@ -1812,6 +1812,9 @@ export type GlobalSettings = {
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
   defaultTuiAgent: TuiAgent | 'blank' | null
+  /** When true, the sidebar new-workspace button creates a workspace directly
+   *  with the configured default agent when Orca can do so without more input. */
+  quickCreateWorkspaceWithDefaultAgent: boolean
   /** Agents hidden from future picker and automatic launch choices. Detection
    *  remains a raw PATH capability snapshot. */
   disabledTuiAgents: TuiAgent[]

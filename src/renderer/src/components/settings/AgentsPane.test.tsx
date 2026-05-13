@@ -6,6 +6,10 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import { getAgentAwakeDescription } from './agent-awake-copy'
+import {
+  SIDEBAR_QUICK_CREATE_DESCRIPTION,
+  SIDEBAR_QUICK_CREATE_TITLE
+} from './agent-workflow-shortcuts-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
@@ -95,6 +99,14 @@ describe('AgentsPane', () => {
     expect(markup).toContain('aria-checked="false"')
   })
 
+  it('renders the sidebar quick-create setting from settings', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain(SIDEBAR_QUICK_CREATE_TITLE)
+    expect(markup).toContain(SIDEBAR_QUICK_CREATE_DESCRIPTION)
+    expect(markup).toContain(`aria-label="${SIDEBAR_QUICK_CREATE_TITLE}"`)
+  })
+
   it('describes Windows lid behavior according to the device', () => {
     expect(getAgentAwakeDescription('Windows')).toBe(
       "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings."
@@ -159,6 +171,12 @@ describe('AgentsPane', () => {
   it('includes enable and hide search metadata for agent visibility', () => {
     expect(matchesSettingsSearch('disable', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('hide', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  })
+
+  it('includes quick-create search metadata for the sidebar shortcut', () => {
+    expect(matchesSettingsSearch('quick create', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('sidebar', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('default agent', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 
   it('renders per-agent availability as labeled status choices with explicit row copy', () => {

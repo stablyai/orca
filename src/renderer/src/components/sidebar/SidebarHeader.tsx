@@ -1,21 +1,39 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Kanban, Plus } from 'lucide-react'
+import { Kanban, Loader2, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { startSidebarWorkspaceCreateAction } from './sidebar-workspace-create-action'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
   const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
+  const [quickCreating, setQuickCreating] = useState(false)
+  const quickCreateInFlightRef = React.useRef(false)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
+  const settings = useAppStore((s) => s.settings)
   const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = repos.length > 0
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+
+  const openComposer = useCallback(() => {
+    openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
+  }, [openModal])
+
+  const handleNewWorkspace = useCallback(() => {
+    startSidebarWorkspaceCreateAction({
+      canCreateWorkspace,
+      settings,
+      quickCreateInFlight: quickCreateInFlightRef,
+      setQuickCreating,
+      openComposer
+    })
+  }, [canCreateWorkspace, openComposer, settings])
 
   const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
     setWorkspaceBoardOpen(open)
@@ -101,22 +119,24 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               <Button
                 variant="ghost"
                 size="icon-xs"
-                onClick={() => {
-                  if (!canCreateWorkspace) {
-                    return
-                  }
-                  openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
-                }}
-                aria-label="New workspace"
-                disabled={!canCreateWorkspace}
+                onClick={handleNewWorkspace}
+                aria-label={quickCreating ? 'Creating workspace' : 'New workspace'}
+                aria-busy={quickCreating}
+                disabled={!canCreateWorkspace || quickCreating}
               >
-                <Plus className="size-3.5" strokeWidth={2.25} />
+                {quickCreating ? (
+                  <Loader2 className="size-3.5 animate-spin" strokeWidth={2.25} />
+                ) : (
+                  <Plus className="size-3.5" strokeWidth={2.25} />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={6}>
-              {canCreateWorkspace
-                ? `New workspace (${newWorktreeShortcutLabel})`
-                : 'Add a project to create workspaces'}
+              {quickCreating
+                ? 'Creating workspace...'
+                : canCreateWorkspace
+                  ? `New workspace (${newWorktreeShortcutLabel})`
+                  : 'Add a project to create workspaces'}
             </TooltipContent>
           </Tooltip>
         </div>
