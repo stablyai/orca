@@ -177,6 +177,52 @@ describe('buildAgentStartupPlan', () => {
     ).toBeNull()
   })
 
+  it('prepends custom instructions to CLI argument prompts', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'claude',
+        prompt: 'Fix the bug',
+        personalizationPrompt: 'Keep the patch small.',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'claude',
+      launchCommand: "claude 'Custom instructions:\nKeep the patch small.\n\nTask:\nFix the bug'",
+      expectedProcess: 'claude',
+      followupPrompt: null
+    })
+  })
+
+  it('prepends custom instructions to follow-up prompt agents', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'aider',
+        prompt: 'Refactor the parser',
+        personalizationPrompt: 'Prefer pure functions.',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'aider',
+      launchCommand: 'aider',
+      expectedProcess: 'aider',
+      followupPrompt: 'Custom instructions:\nPrefer pure functions.\n\nTask:\nRefactor the parser'
+    })
+  })
+
+  it('does not launch solely because a custom instruction prompt is configured', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'codex',
+        prompt: '   ',
+        personalizationPrompt: 'Keep changes small.',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
   it('uses -i flag for copilot to start an interactive session with initial prompt', () => {
     expect(
       buildAgentStartupPlan({
@@ -206,6 +252,23 @@ describe('buildAgentDraftLaunchPlan', () => {
     ).toEqual({
       agent: 'claude',
       launchCommand: "claude --prefill 'https://github.com/acme/repo/issues/42'",
+      expectedProcess: 'claude'
+    })
+  })
+
+  it('prepends custom instructions to native draft prefill prompts', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'claude',
+        draft: 'https://github.com/acme/repo/issues/42',
+        personalizationPrompt: 'Focus on accessibility.',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'claude',
+      launchCommand:
+        "claude --prefill 'Custom instructions:\nFocus on accessibility.\n\nTask:\nhttps://github.com/acme/repo/issues/42'",
       expectedProcess: 'claude'
     })
   })

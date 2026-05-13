@@ -468,6 +468,9 @@ type RuntimeStore = {
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
     voice?: VoiceSettings
+    personalizationPrompt?: GlobalSettings['personalizationPrompt']
+    personalizationPromptMode?: GlobalSettings['personalizationPromptMode']
+    agentPersonalizationPrompts?: GlobalSettings['agentPersonalizationPrompts']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
@@ -3659,6 +3662,10 @@ export class OrcaRuntimeService {
       return null
     }
     return Math.min(Math.max(raw, MOBILE_AUTO_RESTORE_FIT_MIN_MS), MOBILE_AUTO_RESTORE_FIT_MAX_MS)
+  }
+
+  getPersonalizationPrompt(): string {
+    return this.store?.getSettings().personalizationPrompt?.trim() ?? ''
   }
 
   // Why: invoked when the user changes mobileAutoRestoreFitMs to `null`

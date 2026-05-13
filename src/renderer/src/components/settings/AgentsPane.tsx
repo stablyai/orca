@@ -11,6 +11,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import { AgentPersonalizationSection } from './AgentPersonalizationSection'
 import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import {
   SettingsBadge,
@@ -413,6 +414,12 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
 
       <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+
+      <AgentPersonalizationSection
+        settings={settings}
+        updateSettings={updateSettings}
+        detectedAgents={detectedAgents}
+      />
 
       {detectedAgents.length > 0 && (
         <section className="space-y-3">

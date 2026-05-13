@@ -11,6 +11,10 @@ import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import {
+  buildPersonalizedAgentPrompt,
+  resolveAgentPersonalizationPrompt
+} from '../../../shared/agent-personalization'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 
@@ -90,8 +94,12 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const personalizationPrompt = resolveAgentPersonalizationPrompt(store.settings, agent)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
+  const personalizedPrompt = hasPrompt
+    ? buildPersonalizedAgentPrompt({ prompt: trimmedPrompt, personalizationPrompt })
+    : ''
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
 
   // Why: argv/flag agents fold the prompt into the launch command and
@@ -115,7 +123,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
-    pasteDraftAfterLaunch = trimmedPrompt
+    pasteDraftAfterLaunch = personalizedPrompt
     submitPastedPrompt = true
     forcePasteAfterLaunch = true
   } else if (hasPrompt && promptDelivery === 'draft') {
@@ -123,7 +131,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: CLIENT_PLATFORM
+      platform: CLIENT_PLATFORM,
+      personalizationPrompt
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -141,7 +150,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         platform: CLIENT_PLATFORM,
         allowEmptyPromptLaunch: true
       })
-      pasteDraftAfterLaunch = trimmedPrompt
+      pasteDraftAfterLaunch = personalizedPrompt
     }
   } else if (hasPrompt && isFollowupPath) {
     startupPlan = buildAgentStartupPlan({
@@ -149,16 +158,21 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      personalizationPrompt
     })
-    pasteDraftAfterLaunch = trimmedPrompt
+    pasteDraftAfterLaunch = buildPersonalizedAgentPrompt({
+      prompt: trimmedPrompt,
+      personalizationPrompt
+    })
   } else {
     startupPlan = buildAgentStartupPlan({
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: !hasPrompt
+      allowEmptyPromptLaunch: !hasPrompt,
+      personalizationPrompt
     })
   }
 
@@ -237,7 +251,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         if (agent === 'command-code' && submitPastedPrompt) {
           // Why: Command Code has no prompt-submit hook; when Orca submits a
           // generated prompt after readiness, seed working at delivery time.
-          seedCommandCodeSubmittedPromptStatus(tabId, pasteDraftAfterLaunch)
+          seedCommandCodeSubmittedPromptStatus(tabId, trimmedPrompt)
         }
         onPromptDelivered?.()
       }

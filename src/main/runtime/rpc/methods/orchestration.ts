@@ -408,7 +408,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: 'ctx_dryrun',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          devMode: params.devMode
+          devMode: params.devMode,
+          personalizationPrompt: runtime.getPersonalizationPrompt()
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
@@ -448,7 +449,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         dispatchId: ctx.id,
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
-        devMode: params.devMode
+        devMode: params.devMode,
+        personalizationPrompt: runtime.getPersonalizationPrompt()
       })
 
       let injected = false
@@ -499,7 +501,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          devMode: params.devMode
+          devMode: params.devMode,
+          personalizationPrompt: runtime.getPersonalizationPrompt()
         })
         return { dispatch: ctx ?? null, preamble }
       }
