@@ -2131,26 +2131,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'file') {
-      if (target.relativePath !== undefined) {
-        // Why: explicit file:// links inside the active worktree should behave
-        // like relative file links and open in Orca, including image files.
-        get().openFile(
-          {
-            filePath: target.absolutePath,
-            relativePath: target.relativePath,
-            worktreeId: ctx.worktreeId,
-            language: detectLanguage(target.absolutePath),
-            mode: 'edit'
-          },
-          {
-            preview: true,
-            targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
-            recordReplacedPreview: true
-          }
-        )
-        return
+      if (target.relativePath === undefined) {
+        // Why: terminal file links already authorize clicked external paths
+        // before opening them in Orca. Markdown file:// links need the same
+        // user-gesture authorization so /tmp screenshots can use ImageViewer.
+        await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
       }
-      void window.api.shell.openFileUri(target.uri)
+
+      get().openFile(
+        {
+          filePath: target.absolutePath,
+          relativePath: target.relativePath ?? target.absolutePath,
+          worktreeId: ctx.worktreeId,
+          language: detectLanguage(target.absolutePath),
+          mode: 'edit'
+        },
+        {
+          preview: true,
+          targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+          recordReplacedPreview: true
+        }
+      )
       return
     }
 

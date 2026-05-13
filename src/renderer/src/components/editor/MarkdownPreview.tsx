@@ -26,7 +26,6 @@ import { detectLanguage } from '@/lib/language-detect'
 import type { MarkdownDocument, Worktree } from '../../../../shared/types'
 import {
   fileUrlToAbsolutePath,
-  getMarkdownPreviewImageOpenTarget,
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewOpenModifier,
   resolveMarkdownPreviewHref
@@ -49,6 +48,7 @@ import {
 } from './markdown-preview-search'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 
 type MarkdownPreviewProps = {
   content: string
@@ -62,6 +62,14 @@ type MarkdownPreviewProps = {
 const markdownPreviewSanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
+  protocols: {
+    ...defaultSchema.protocols,
+    // Why: markdown preview owns file:// click routing and authorizes the
+    // user-selected path before opening it in Orca. Sanitization must preserve
+    // the target so the click handler can make that security decision.
+    href: [...(defaultSchema.protocols?.href ?? []), 'file'],
+    src: [...(defaultSchema.protocols?.src ?? []), 'file']
+  },
   attributes: {
     ...defaultSchema.attributes,
     '*': [...(defaultSchema.attributes?.['*'] ?? []), 'id'],
@@ -169,11 +177,13 @@ export default function MarkdownPreview({
   const [activeMatchIndex, setActiveMatchIndex] = useState(-1)
   const isMac = navigator.userAgent.includes('Mac')
   const openFile = useAppStore((s) => s.openFile)
+  const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const worktreeRoot = findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)?.path ?? null
+  const sourceWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+  const worktreeRoot = sourceWorktree?.path ?? null
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
@@ -534,6 +544,14 @@ export default function MarkdownPreview({
 
           const targetWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath)
           if (!targetWorktree) {
+            if (sourceWorktree) {
+              void activateMarkdownLink(href, {
+                sourceFilePath: filePath,
+                worktreeId: sourceWorktree.id,
+                worktreeRoot: sourceWorktree.path
+              })
+              return
+            }
             void window.api.shell.openFileUri(target.toString())
             return
           }
@@ -613,41 +631,16 @@ export default function MarkdownPreview({
             return
           }
 
-          const target = getMarkdownPreviewImageOpenTarget(src, filePath)
-          if (!target) {
+          if (!src || !sourceWorktree) {
             return
           }
 
           event.preventDefault()
           event.stopPropagation()
-
-          if (target.protocol === 'http:' || target.protocol === 'https:') {
-            void window.api.shell.openUrl(target.toString())
-            return
-          }
-
-          if (target.protocol !== 'file:') {
-            return
-          }
-
-          const absolutePath = fileUrlToAbsolutePath(target)
-          if (!absolutePath) {
-            return
-          }
-
-          const targetWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath)
-          if (!targetWorktree) {
-            void window.api.shell.openFileUri(target.toString())
-            return
-          }
-
-          const relativePath = absolutePath.slice(targetWorktree.path.length + 1)
-          openFile({
-            filePath: absolutePath,
-            relativePath,
-            worktreeId: targetWorktree.id,
-            language: detectLanguage(absolutePath),
-            mode: 'edit'
+          void activateMarkdownLink(src, {
+            sourceFilePath: filePath,
+            worktreeId: sourceWorktree.id,
+            worktreeRoot: sourceWorktree.path
           })
         }
 
@@ -739,6 +732,7 @@ export default function MarkdownPreview({
     // cover every value the overrides actually close over; slugger is a ref.
   }, [
     filePath,
+    activateMarkdownLink,
     isDark,
     isMac,
     markdownDocumentIndex,
@@ -748,6 +742,7 @@ export default function MarkdownPreview({
     scrollToAnchor,
     setMarkdownViewMode,
     setPendingEditorReveal,
+    sourceWorktree,
     worktreeRoot,
     worktreesByRepo
   ])
@@ -847,6 +842,9 @@ export default function MarkdownPreview({
         )}
         <Markdown
           components={components}
+          // Why: react-markdown filters file:// after rehype-sanitize; preview
+          // click handlers need the target so they can authorize and open it.
+          urlTransform={markdownPreviewUrlTransform}
           remarkPlugins={[
             remarkGfm,
             remarkBreaks,
