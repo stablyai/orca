@@ -91,6 +91,8 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.experimentalActivity).toBe(true)
+    expect(settings.floatingTerminalEnabled).toBe(true)
+    expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
   })
 
@@ -164,6 +166,41 @@ describe('Store', () => {
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
+  })
+
+  it('migrates the legacy floating terminal disabled default to enabled', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { floatingTerminalEnabled: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().floatingTerminalEnabled).toBe(true)
+    expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
+  })
+
+  it('preserves a post-migration floating terminal opt-out', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalEnabled: false,
+        floatingTerminalDefaultedForAllUsers: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().floatingTerminalEnabled).toBe(false)
+    expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
   })
 
   it('preserves custom notification sound paths from persisted settings', async () => {

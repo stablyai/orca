@@ -277,6 +277,14 @@ export class Store {
           : rawOptionAsAlt === undefined || rawOptionAsAlt === 'true'
             ? 'auto'
             : rawOptionAsAlt
+        const floatingTerminalDefaultedForAllUsers =
+          parsed.settings?.floatingTerminalDefaultedForAllUsers === true
+        // Why: early floating-terminal builds persisted the old off-by-default
+        // value into user profiles. Flip only unmigrated profiles so a later
+        // deliberate opt-out still survives reload.
+        const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
+          ? (parsed.settings?.floatingTerminalEnabled ?? true)
+          : true
         result = {
           ...defaults,
           ...parsed,
@@ -293,6 +301,8 @@ export class Store {
             experimentalActivity: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            floatingTerminalEnabled: migratedFloatingTerminalEnabled,
+            floatingTerminalDefaultedForAllUsers: true,
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications

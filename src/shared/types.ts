@@ -1176,14 +1176,18 @@ export type GlobalSettings = {
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */
   showTasksButton: boolean
-  /** Why: Floating Terminal is a global terminal surface. Keep it opt-in until
-   *  users explicitly want a global shell outside repo/worktree context. */
+  /** Why: Floating Terminal is the default global shell surface so users can
+   *  reach a terminal outside repo/worktree context immediately. */
   floatingTerminalEnabled: boolean
+  /** One-shot migration flag for the default-on rollout. Before this field
+   *  landed, the floating terminal defaulted off and many profiles persisted
+   *  that inherited false. Once migrated, an explicit off choice sticks. */
+  floatingTerminalDefaultedForAllUsers?: boolean
   /** Where new Floating Terminal tabs start. Defaults to '~' so the visible
    *  setting matches the shell-oriented directory users expect. */
   floatingTerminalCwd: string
   /** Where the Floating Terminal toggle is shown. Defaults to the floating
-   *  button for discoverability after the user opts into the feature. */
+   *  button for discoverability. */
   floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings
