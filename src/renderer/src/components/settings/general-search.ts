@@ -15,6 +15,11 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Skip Delete Worktree Confirmation',
     description: 'Delete worktrees from the context menu without a confirmation dialog.',
     keywords: ['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']
+  },
+  {
+    title: 'Auto-Close After Merge',
+    description: 'Automatically delete a worktree once its pull request is merged.',
+    keywords: ['auto', 'close', 'merge', 'pr', 'worktree', 'delete', 'cleanup']
   }
 ]
 

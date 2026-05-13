@@ -266,6 +266,38 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             </button>
           </SearchableSetting>
         </div>
+
+        <SearchableSetting
+          title="Auto-Close After Merge"
+          description="Automatically delete a worktree once its pull request is merged."
+          keywords={['auto', 'close', 'merge', 'pr', 'worktree', 'delete', 'cleanup']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Auto-Close After Merge</Label>
+            <p className="text-xs text-muted-foreground">
+              Automatically delete a worktree once its pull request is merged.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.autoCloseAfterMerge}
+            onClick={() =>
+              updateSettings({
+                autoCloseAfterMerge: !settings.autoCloseAfterMerge
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.autoCloseAfterMerge ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.autoCloseAfterMerge ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (

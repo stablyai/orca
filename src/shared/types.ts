@@ -1219,6 +1219,16 @@ export type GlobalSettings = {
    *  again" checkbox inside it or from the General settings pane. We keep this
    *  defaulted to false so first-time behavior stays safe. */
   skipDeleteWorktreeConfirm: boolean
+  /** Why: when true, Orca auto-runs the standard delete-worktree flow as soon as
+   *  a worktree's linked PR transitions to `merged`. Default false because the
+   *  deletion is destructive and users may want to keep the worktree around
+   *  after merge (e.g. to verify CI on main, cherry-pick to a release branch).
+   *  Enabling this setting is itself the user's standing confirmation, so the
+   *  auto-close path skips the usual delete-worktree dialog and goes straight
+   *  through `runWorktreeDeleteWithToast`. Non-forced: if the worktree has
+   *  uncommitted changes the toast surfaces a "Force Delete" recovery action
+   *  instead of wiping local work silently. */
+  autoCloseAfterMerge: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
