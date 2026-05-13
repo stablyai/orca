@@ -6,7 +6,7 @@ import { useAppStore } from '../../store'
 import { MobilePane, MOBILE_PANE_SEARCH_ENTRIES } from './MobilePane'
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.2'
+const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.7'
 
 const MOBILE_ENABLE_SEARCH_ENTRY: SettingsSearchEntry = {
   title: 'Mobile',
@@ -69,10 +69,9 @@ export function MobileSettingsPane({
                 or the Android APK from{' '}
                 <button
                   type="button"
-                  // Why: Android still ships from the current mobile release tag rather than
-                  // the generic /releases page, which is dominated by desktop
-                  // releases and forces the user to scroll. Update this URL
-                  // when cutting a new mobile-v* tag.
+                  // Why: Android is moving to Google Play soon, but until then
+                  // link directly to the current mobile release tag instead of
+                  // the noisy desktop-dominated releases index.
                   onClick={() => void window.api.shell.openUrl(ORCA_ANDROID_RELEASE_URL)}
                   className="cursor-pointer underline underline-offset-2 hover:text-foreground"
                 >
