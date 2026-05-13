@@ -922,6 +922,7 @@ export default function ChecksPanel(): React.JSX.Element {
     const isQueuedPRRefresh = prRefreshState?.status === 'queued'
     const isInFlightPRRefresh = prRefreshState?.status === 'in-flight'
     const isPausedPRRefresh = prRefreshState?.status === 'paused'
+    const isErroredPRRefresh = prRefreshState?.status === 'error'
 
     const canCreate = hostedReviewCreation?.canCreate
     const canPushCreate = hostedReviewCreation?.blockedReason === 'needs_push'
@@ -946,24 +947,26 @@ export default function ChecksPanel(): React.JSX.Element {
           <div className="text-sm font-medium text-foreground">
             {operationInProgress
               ? `${operationLabel} in progress`
-              : isQueuedPRRefresh
-                ? 'Checking for pull request'
-                : isInFlightPRRefresh
+              : isErroredPRRefresh
+                ? 'Could not refresh pull request'
+                : isQueuedPRRefresh || isInFlightPRRefresh
                   ? 'Checking for pull request'
                   : 'No pull request found'}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {operationInProgress
               ? 'PR checks will be available after the operation completes'
-              : isQueuedPRRefresh
-                ? 'Waiting to refresh GitHub status for this branch'
-                : isInFlightPRRefresh
-                  ? 'Refreshing GitHub status for this branch'
-                  : isPausedPRRefresh
-                    ? 'GitHub refresh is paused by the current rate-limit budget'
-                    : canPushCreate
-                      ? 'Push your branch before creating a pull request.'
-                      : 'Create a pull request to start checks and review.'}
+              : isErroredPRRefresh
+                ? 'GitHub status could not be refreshed. Existing cached data was preserved.'
+                : isQueuedPRRefresh
+                  ? 'Waiting to refresh GitHub status for this branch'
+                  : isInFlightPRRefresh
+                    ? 'Refreshing GitHub status for this branch'
+                    : isPausedPRRefresh
+                      ? 'GitHub refresh is paused by the current rate-limit budget'
+                      : canPushCreate
+                        ? 'Push your branch before creating a pull request.'
+                        : 'Create a pull request to start checks and review.'}
           </div>
           {!operationInProgress && (
             <div className="mt-3 flex flex-wrap gap-2">

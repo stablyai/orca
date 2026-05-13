@@ -1872,48 +1872,56 @@ export async function getPRChecks(
   }
 
   if (ownerRepo && headSha) {
-    await assertRateLimitBudget('core')
-    await acquire()
+    let canUseRestChecks = true
     try {
-      // Why: --cache 60s saves rate-limit budget during polling, but when the
-      // user explicitly clicks refresh we must skip it so gh fetches fresh data.
-      const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
-      const { stdout } = await ghExecFileAsync(
-        [
-          'api',
-          ...cacheArgs,
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`
-        ],
-        ghOptions
-      )
-      noteRateLimitSpend('core')
-      const data = JSON.parse(stdout) as {
-        check_runs: {
-          id?: number
-          name: string
-          status: string
-          conclusion: string | null
-          html_url: string
-          details_url: string | null
-        }[]
-      }
-      if (data.check_runs.length > 0) {
-        return data.check_runs.map((d) => ({
-          name: d.name,
-          status: mapCheckRunRESTStatus(d.status),
-          conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
-          url: d.details_url || d.html_url || null,
-          ...(typeof d.id === 'number' ? { checkRunId: d.id } : {}),
-          workflowRunId: parseActionsRunId(d.details_url || d.html_url || null)
-        }))
-      }
+      await assertRateLimitBudget('core')
     } catch (err) {
-      // Why: a PR can outlive the cached head SHA after force-pushes or remote
-      // rewrites. Falling back to `gh pr checks` keeps the panel populated
-      // instead of rendering a false "no checks" state from a stale commit.
-      console.warn('getPRChecks via head SHA failed, falling back to gh pr checks:', err)
-    } finally {
-      release()
+      canUseRestChecks = false
+      console.warn('getPRChecks skipped REST check-runs, falling back to gh pr checks:', err)
+    }
+    if (canUseRestChecks) {
+      await acquire()
+      try {
+        // Why: --cache 60s saves rate-limit budget during polling, but when the
+        // user explicitly clicks refresh we must skip it so gh fetches fresh data.
+        const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
+        const { stdout } = await ghExecFileAsync(
+          [
+            'api',
+            ...cacheArgs,
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`
+          ],
+          ghOptions
+        )
+        noteRateLimitSpend('core')
+        const data = JSON.parse(stdout) as {
+          check_runs: {
+            id?: number
+            name: string
+            status: string
+            conclusion: string | null
+            html_url: string
+            details_url: string | null
+          }[]
+        }
+        if (data.check_runs.length > 0) {
+          return data.check_runs.map((d) => ({
+            name: d.name,
+            status: mapCheckRunRESTStatus(d.status),
+            conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
+            url: d.details_url || d.html_url || null,
+            ...(typeof d.id === 'number' ? { checkRunId: d.id } : {}),
+            workflowRunId: parseActionsRunId(d.details_url || d.html_url || null)
+          }))
+        }
+      } catch (err) {
+        // Why: a PR can outlive the cached head SHA after force-pushes or remote
+        // rewrites. Falling back to `gh pr checks` keeps the panel populated
+        // instead of rendering a false "no checks" state from a stale commit.
+        console.warn('getPRChecks via head SHA failed, falling back to gh pr checks:', err)
+      } finally {
+        release()
+      }
     }
   }
 

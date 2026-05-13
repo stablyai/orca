@@ -18,6 +18,7 @@ const runtimeEnvironmentTransportCall = vi.fn()
 const mockApi = {
   gh: {
     prForBranch: vi.fn().mockResolvedValue(null),
+    refreshPRNow: vi.fn(),
     enqueuePRRefresh: vi.fn().mockResolvedValue(undefined),
     issue: vi.fn().mockResolvedValue(null),
     prChecks: vi.fn().mockResolvedValue([]),
@@ -575,6 +576,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
     mockApi.gh.prForBranch.mockResolvedValue(null)
+    mockApi.gh.refreshPRNow.mockReset()
+    mockApi.gh.refreshPRNow.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
   })
 
   it('lets a forced refresh bypass a non-forced inflight request and keeps the newer result', async () => {
@@ -582,6 +585,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
     const prCacheKey = `${repoPath}::${branch}`
+    const refreshPRNow = mockApi.gh.refreshPRNow
+    ;(mockApi.gh as unknown as { refreshPRNow?: typeof refreshPRNow }).refreshPRNow = undefined
 
     let resolveInitial: ((value: null) => void) | undefined
     const initialRequest = new Promise<null>((resolve) => {
@@ -592,17 +597,21 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       .mockReturnValueOnce(initialRequest)
       .mockResolvedValueOnce(makePR({ number: 99, title: 'Forced refresh PR' }))
 
-    const initialFetch = store.getState().fetchPRForBranch(repoPath, branch)
-    const forcedFetch = store.getState().fetchPRForBranch(repoPath, branch, { force: true })
+    try {
+      const initialFetch = store.getState().fetchPRForBranch(repoPath, branch)
+      const forcedFetch = store.getState().fetchPRForBranch(repoPath, branch, { force: true })
 
-    await expect(forcedFetch).resolves.toMatchObject({ number: 99, title: 'Forced refresh PR' })
-    expect(mockApi.gh.prForBranch).toHaveBeenCalledTimes(2)
-    expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
+      await expect(forcedFetch).resolves.toMatchObject({ number: 99, title: 'Forced refresh PR' })
+      expect(mockApi.gh.prForBranch).toHaveBeenCalledTimes(2)
+      expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
 
-    resolveInitial?.(null)
-    await expect(initialFetch).resolves.toBeNull()
+      resolveInitial?.(null)
+      await expect(initialFetch).resolves.toBeNull()
 
-    expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
+      expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
+    } finally {
+      mockApi.gh.refreshPRNow = refreshPRNow
+    }
   })
 
   it('does not call GitHub refresh IPC for SSH-backed repos', async () => {
@@ -633,6 +642,70 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     ).resolves.toMatchObject({ number: 44 })
     expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
     expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('preserves cached PR data when a forced coordinator refresh errors', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const cachedPR = makePR({ number: 12 })
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      prCache: {
+        [`${repoPath}::${branch}`]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'upstream-error',
+      errorType: 'network',
+      message: 'network unavailable',
+      fetchedAt: Date.now()
+    })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, { force: true })
+    ).resolves.toEqual(cachedPR)
+    expect(store.getState().prCache[`${repoPath}::${branch}`]?.data).toEqual(cachedPR)
+  })
+
+  it('records PR refresh errors without clearing cached PR data', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const cacheKey = `${repoPath}::${branch}`
+    const cachedPR = makePR({ number: 12 })
+
+    store.setState({
+      prCache: {
+        [cacheKey]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoPath, branch }],
+      reason: 'manual',
+      outcome: {
+        kind: 'upstream-error',
+        errorType: 'network',
+        message: 'network unavailable',
+        fetchedAt: Date.now()
+      }
+    })
+
+    expect(store.getState().prCache[cacheKey]?.data).toEqual(cachedPR)
+    expect(store.getState().prRefreshStates[cacheKey]).toMatchObject({
+      status: 'error',
+      reason: 'manual',
+      message: 'network unavailable'
+    })
   })
 })
 

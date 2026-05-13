@@ -311,10 +311,11 @@ type RepoScopedFetchOptions = FetchOptions & {
 }
 
 type PRRefreshState = {
-  status: 'queued' | 'in-flight' | 'paused' | 'skipped'
+  status: 'queued' | 'in-flight' | 'paused' | 'skipped' | 'error'
   reason: GitHubPRRefreshReason
   updatedAt: number
   pausedUntil?: number
+  message?: string
 }
 
 const CACHE_TTL = 300_000 // 5 minutes (stale data shown instantly, then refreshed)
@@ -1480,13 +1481,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             })()
         const pr: PRInfo | null =
           outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
+        if (outcome.kind === 'upstream-error') {
+          return cached?.data ?? null
+        }
         if (!usesRefreshCoordinator && prRequestGenerations.get(cacheKey) === generation) {
-          if (outcome.kind !== 'upstream-error') {
-            set((s) => ({
-              prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: outcome.fetchedAt } }
-            }))
-            debouncedSaveCache(get())
-          }
+          set((s) => ({
+            prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: outcome.fetchedAt } }
+          }))
+          debouncedSaveCache(get())
         }
         return pr ?? null
       } catch (err) {
@@ -1781,6 +1783,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (event.outcome) {
           delete nextStates[alias.cacheKey]
           if (event.outcome.kind === 'upstream-error') {
+            nextStates[alias.cacheKey] = {
+              status: 'error',
+              reason: event.reason,
+              updatedAt: Date.now(),
+              message: event.outcome.message
+            }
             continue
           }
           const data =
