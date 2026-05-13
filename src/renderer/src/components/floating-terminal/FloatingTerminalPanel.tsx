@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Minimize2, Pin, PinOff, TerminalSquare, X } from 'lucide-react'
+import { Maximize2, Minimize2, TerminalSquare, X } from 'lucide-react'
 import TabBar from '@/components/tab-bar/TabBar'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
@@ -73,7 +73,6 @@ export function FloatingTerminalPanel({
   const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '~')
 
   const [cwd, setCwd] = useState<string | null>(null)
-  const [pinned, setPinned] = useState(true)
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
   const [maximized, setMaximized] = useState(false)
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
@@ -116,30 +115,6 @@ export function FloatingTerminalPanel({
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
     setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tab.id)
   }, [createTab, open, setActiveTabForWorktree, tabs.length])
-
-  useEffect(() => {
-    if (!open || pinned) {
-      return
-    }
-    const handlePointerDown = (event: PointerEvent): void => {
-      const target = event.target
-      if (target instanceof Node && panelRef.current?.contains(target)) {
-        return
-      }
-      if (target instanceof HTMLElement && target.closest('[data-floating-terminal-toggle]')) {
-        return
-      }
-      if (
-        target instanceof HTMLElement &&
-        target.closest('[role="menu"], [data-radix-popper-content-wrapper]')
-      ) {
-        return
-      }
-      onOpenChange(false)
-    }
-    window.addEventListener('pointerdown', handlePointerDown)
-    return () => window.removeEventListener('pointerdown', handlePointerDown)
-  }, [onOpenChange, open, pinned])
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
@@ -308,23 +283,6 @@ export function FloatingTerminalPanel({
             />
           </div>
           <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={pinned ? 'Unpin floating terminal' : 'Pin floating terminal'}
-                  aria-pressed={pinned}
-                  onClick={() => setPinned((value) => !value)}
-                >
-                  {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {pinned ? 'Unpin floating terminal' : 'Pin floating terminal'}
-              </TooltipContent>
-            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

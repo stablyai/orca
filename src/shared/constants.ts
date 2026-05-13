@@ -200,6 +200,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showTasksButton: true,
     floatingTerminalEnabled: false,
     floatingTerminalCwd: '~',
+    floatingTerminalTriggerLocation: 'floating-button',
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
     promptCacheTimerEnabled: false,

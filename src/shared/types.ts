@@ -1180,6 +1180,9 @@ export type GlobalSettings = {
   /** Where new Floating Terminal tabs start. Defaults to '~' so the visible
    *  setting matches the shell-oriented directory users expect. */
   floatingTerminalCwd: string
+  /** Where the Floating Terminal toggle is shown. Defaults to the floating
+   *  button for discoverability after the user opts into the feature. */
+  floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
@@ -1434,6 +1437,7 @@ export type WorktreeCardProperty =
   | 'inline-agents'
 
 export type StatusBarItem = 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'ssh' | 'resource-usage'
+export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
 
 export type TaskResumeState = {
   githubMode?: 'items' | 'project'

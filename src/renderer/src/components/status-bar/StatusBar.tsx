@@ -1,7 +1,15 @@
 /* eslint-disable max-lines -- Why: the status bar keeps provider rendering,
 interaction menus, and compact-layout behavior together so the hover/click
 states stay consistent across Claude and Codex. */
-import { AlertTriangle, Activity, ChevronDown, ChevronRight, RefreshCw, Server } from 'lucide-react'
+import {
+  AlertTriangle,
+  Activity,
+  ChevronDown,
+  ChevronRight,
+  RefreshCw,
+  Server,
+  TerminalSquare
+} from 'lucide-react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -28,6 +36,11 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { PetStatusSegment } from './PetStatusSegment'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+
+type StatusBarProps = {
+  floatingTerminalOpen: boolean
+}
 
 function getCodexAccountLabel(
   state: CodexRateLimitAccountsState,
@@ -693,11 +706,15 @@ function ProviderDetailsMenu({
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
-function StatusBarInner(): React.JSX.Element | null {
+function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
   const rateLimits = useAppStore((s) => s.rateLimits)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
+  const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
+  const floatingTerminalTriggerLocation = useAppStore(
+    (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
+  )
   // Why: usage bars exist to surface CLI rate limits — showing one for an
   // agent that isn't on the user's PATH is just noise (e.g. a fresh Ubuntu
   // install showing "Gemini Usage" with no Gemini CLI installed). We gate
@@ -799,6 +816,8 @@ function StatusBarInner(): React.JSX.Element | null {
   const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
+  const showFloatingTerminalToggle =
+    floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
   const anyFetching =
     claude?.status === 'fetching' ||
@@ -808,6 +827,7 @@ function StatusBarInner(): React.JSX.Element | null {
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
+  const floatingTerminalActionLabel = floatingTerminalOpen ? 'Hide Terminal' : 'Show Terminal'
 
   return (
     <div
@@ -873,6 +893,34 @@ function StatusBarInner(): React.JSX.Element | null {
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         {petEnabled && <PetStatusSegment />}
+        {showFloatingTerminalToggle && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label={floatingTerminalActionLabel}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
+                }}
+              >
+                <TerminalSquare className="size-3.5" />
+                {!iconOnly && (
+                  <span className="inline-block w-[86px] whitespace-nowrap text-left">
+                    {floatingTerminalActionLabel}
+                  </span>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>
+              {floatingTerminalActionLabel} (
+              {typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+                ? '⌘⌥T'
+                : 'Ctrl+Alt+T'}
+              )
+            </TooltipContent>
+          </Tooltip>
+        )}
         {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
       </div>

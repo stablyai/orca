@@ -71,6 +71,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     showTasksButton: true,
     floatingTerminalEnabled: false,
     floatingTerminalCwd: '~',
+    floatingTerminalTriggerLocation: 'floating-button',
     diffDefaultView: 'inline',
     notifications: {
       enabled: true,

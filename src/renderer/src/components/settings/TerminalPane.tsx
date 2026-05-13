@@ -2,7 +2,11 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. Mirrors the same decision made for GeneralPane.tsx. */
 import { useState } from 'react'
-import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
+import type {
+  FloatingTerminalTriggerLocation,
+  GlobalSettings,
+  SetupScriptLaunchMode
+} from '../../../../shared/types'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT,
   TERMINAL_FONT_WEIGHT_MAX,
@@ -237,6 +241,29 @@ export function TerminalPane({
             </div>
             <p className="text-xs text-muted-foreground">
               Takes effect for new Floating Terminal tabs. Use ~ for your home directory.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Toggle Button Location</Label>
+            <ToggleGroup
+              type="single"
+              value={settings.floatingTerminalTriggerLocation ?? 'floating-button'}
+              onValueChange={(value) => {
+                if (!value) {
+                  return
+                }
+                updateSettings({
+                  floatingTerminalTriggerLocation: value as FloatingTerminalTriggerLocation
+                })
+              }}
+              className="justify-start"
+            >
+              <ToggleGroupItem value="floating-button">Floating Button</ToggleGroupItem>
+              <ToggleGroupItem value="status-bar">Status Bar</ToggleGroupItem>
+            </ToggleGroup>
+            <p className="text-xs text-muted-foreground">
+              The keyboard shortcut works regardless of where the toggle is shown.
             </p>
           </div>
         </SearchableSetting>

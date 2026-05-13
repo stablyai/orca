@@ -195,6 +195,9 @@ function App(): React.JSX.Element {
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
+  const floatingTerminalTriggerLocation = useAppStore(
+    (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
+  )
 
   useEffect(() => {
     const toggleFloatingTerminal = (): void => {
@@ -1128,13 +1131,15 @@ function App(): React.JSX.Element {
               open={floatingTerminalOpen}
               onOpenChange={setFloatingTerminalOpen}
             />
-            <FloatingTerminalToggleButton
-              open={floatingTerminalOpen}
-              onToggle={() => setFloatingTerminalOpen((open) => !open)}
-            />
+            {floatingTerminalTriggerLocation === 'floating-button' ? (
+              <FloatingTerminalToggleButton
+                open={floatingTerminalOpen}
+                onToggle={() => setFloatingTerminalOpen((open) => !open)}
+              />
+            ) : null}
           </>
         ) : null}
-        <StatusBar />
+        <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
         {/* Why: NewWorkspaceComposerCard renders Radix <Tooltip>s that crash
             when mounted outside a TooltipProvider ancestor. Keep the global
             composer modal inside this provider so the card renders safely

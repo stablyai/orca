@@ -81,8 +81,17 @@ export const TERMINAL_CURSOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 export const TERMINAL_FLOATING_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Floating Terminal',
-    description: 'Enable the global floating terminal and choose where new tabs start.',
-    keywords: ['terminal', 'global', 'floating', 'quick terminal', 'launch directory']
+    description:
+      'Enable the global floating terminal, choose where new tabs start, and choose where the toggle button appears.',
+    keywords: [
+      'terminal',
+      'global',
+      'floating',
+      'quick terminal',
+      'launch directory',
+      'toggle button',
+      'status bar'
+    ]
   }
 ]
 

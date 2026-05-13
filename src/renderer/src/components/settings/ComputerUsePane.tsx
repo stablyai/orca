@@ -69,11 +69,20 @@ function statusClass(status: ComputerUsePermissionStatus | undefined): string {
   return 'border-border bg-muted text-muted-foreground'
 }
 
+function isExpectedDevMissingHelperError(error: unknown): boolean {
+  return (
+    import.meta.env.DEV &&
+    error instanceof Error &&
+    error.message.includes('Orca Computer Use.app was not found')
+  )
+}
+
 export function ComputerUsePane(): React.JSX.Element {
   const [platform, setPlatform] = useState<NodeJS.Platform | null>(null)
   const [states, setStates] = useState<ComputerUsePermissionState[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<ComputerUsePermissionId | null>(null)
+  const [helperUnavailableInDev, setHelperUnavailableInDev] = useState(false)
 
   const stateById = useMemo(
     () => new Map(states.map((state) => [state.id, state.status] as const)),
@@ -86,7 +95,14 @@ export function ComputerUsePane(): React.JSX.Element {
       const result = await window.api.computerUsePermissions.getStatus()
       setPlatform(result.platform)
       setStates(result.permissions)
+      setHelperUnavailableInDev(false)
     } catch (error) {
+      if (isExpectedDevMissingHelperError(error)) {
+        setPlatform('darwin')
+        setStates(PERMISSIONS.map((permission) => ({ id: permission.id, status: 'not-granted' })))
+        setHelperUnavailableInDev(true)
+        return
+      }
       toast.error(
         error instanceof Error ? error.message : 'Could not load Computer Use permissions'
       )
@@ -152,6 +168,12 @@ export function ComputerUsePane(): React.JSX.Element {
                 Computer Use needs macOS privacy permissions before agents can inspect and operate
                 app windows.
               </p>
+              {helperUnavailableInDev ? (
+                <p className="text-xs text-muted-foreground">
+                  Computer Use permissions are unavailable in this dev build because the helper app
+                  has not been built.
+                </p>
+              ) : null}
             </div>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refresh()}>
               <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -188,7 +210,7 @@ export function ComputerUsePane(): React.JSX.Element {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={pending || status === 'unsupported'}
+                    disabled={pending || status === 'unsupported' || helperUnavailableInDev}
                     onClick={() => void openPermission(permission.id)}
                     className="shrink-0 gap-1.5"
                   >
