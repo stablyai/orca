@@ -12,7 +12,12 @@ import {
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 
+// Why: SessionStart is installed (not just listened for) so that resuming a
+// droid session via `droid --resume` resets the per-pane prompt/tool caches
+// without waiting for the next UserPromptSubmit. Mirrors the codex pattern in
+// src/main/codex/hook-service.ts.
 const DROID_EVENTS = [
+  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
   {

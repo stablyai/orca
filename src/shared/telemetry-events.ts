@@ -259,12 +259,13 @@ const workspaceCreateFailedSchema = z
   .strict()
 
 // Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
-// hook installation only targets these four agents and the labels here match
-// the `*HookService.install()` call sites in `src/main/index.ts`. `claude`
-// (not `claude-code`) is intentional — the failure is about Claude Code's
-// `~/.claude/settings.json`, not the broader product taxonomy. Sourced from
-// `AGENT_HOOK_TARGETS` so the wire enum and the IPC `AgentHookTarget` type
-// cannot drift if a fifth hook-install agent is added.
+// hook installation only targets the agents in `AGENT_HOOK_TARGETS` and the
+// labels here match the `*HookService.install()` call sites in
+// `src/main/index.ts`. `claude` (not `claude-code`) is intentional — the
+// failure is about Claude Code's `~/.claude/settings.json`, not the broader
+// product taxonomy. Sourced from `AGENT_HOOK_TARGETS` so the wire enum and
+// the IPC `AgentHookTarget` type cannot drift as new hook-install agents
+// are added.
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 

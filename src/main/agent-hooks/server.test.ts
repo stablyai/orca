@@ -911,6 +911,35 @@ describe('Droid hook normalization', () => {
     expect(ignored).toBeNull()
   })
 
+  it('PreToolUse maps to working and surfaces the tool name and input preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/example.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('Read')
+    expect(result?.payload.toolInput).toBe('/tmp/example.ts')
+  })
+
+  it('PreToolUse falls back to the `name` and `input` fields when tool_name/tool_input are absent', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        name: 'Bash',
+        input: { command: 'pnpm typecheck' }
+      }),
+      'production'
+    )
+    expect(result?.payload.toolName).toBe('Bash')
+    expect(result?.payload.toolInput).toBe('pnpm typecheck')
+  })
+
   it('SubagentStop does not close the primary session row', () => {
     const result = _internals.normalizeHookPayload(
       'droid',

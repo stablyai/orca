@@ -116,7 +116,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   opencode: 'OpenCode',
   cursor: 'Cursor',
   aider: 'Aider',
-  pi: 'Pi'
+  pi: 'Pi',
+  droid: 'Droid'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {

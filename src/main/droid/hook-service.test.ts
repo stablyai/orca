@@ -56,7 +56,14 @@ describe('DroidHookService', () => {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
     }
     expect(Object.keys(config.hooks).sort()).toEqual(
-      ['Notification', 'PostToolUse', 'PreToolUse', 'Stop', 'UserPromptSubmit'].sort()
+      [
+        'Notification',
+        'PostToolUse',
+        'PreToolUse',
+        'SessionStart',
+        'Stop',
+        'UserPromptSubmit'
+      ].sort()
     )
     expect(config.hooks.PreToolUse[0].matcher).toBe('*')
     expect(config.hooks.UserPromptSubmit[0].matcher).toBeUndefined()
