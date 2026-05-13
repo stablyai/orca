@@ -97,63 +97,24 @@ yay -S stably-orca-git
 
 ---
 
-## [新機能] すべての agent のライブステータスを表示
+## 機能ショーケース
 
-**各 agent が何をしているか、ひと目で把握。**
-
-すべての worktree にまたがる各 agent のライブステータスを 1 か所で追跡できます。タブを切り替えなくても、作業中・入力待ち・完了済みの agent を一目で把握できます。
+各タイルをクリックすると、そのワークフローを確認できます。
 
 <p align="center">
-  <img src="assets/agent-statuses.gif" alt="Orca Agent Statuses — worktree をまたいだ agent のライブステータスを表示" width="800" />
+  <a href="https://www.onorca.dev/docs/model/worktrees"><kbd><strong>並列ワークツリー</strong><br/><br/><picture><source srcset="assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="assets/feature-wall/parallel-worktrees.jpg" alt="並列ワークツリーのオーケストレーション" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/terminal"><kbd><strong>ターミナル分割</strong><br/><br/><picture><source srcset="assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="assets/feature-wall/terminal-splits.jpg" alt="Ghostty クラスのターミナル分割" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/browser/design-mode"><kbd><strong>デザインモード</strong><br/><br/><picture><source srcset="assets/feature-wall/design-mode.gif" type="image/gif"><img src="assets/feature-wall/design-mode.jpg" alt="組み込みブラウザとデザインモード" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/agents/supported"><kbd><strong>任意の CLI エージェント</strong><br/><br/><picture><source srcset="assets/feature-wall/cli-agents.gif" type="image/gif"><img src="assets/feature-wall/cli-agents.jpg" alt="任意の CLI エージェントに対応" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/ssh"><kbd><strong>SSH ワークツリー</strong><br/><br/><picture><source srcset="assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="assets/feature-wall/ssh-worktrees.jpg" alt="SSH 経由のリモートワークツリー" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/editing/file-explorer"><kbd><strong>ファイルをエージェントへ</strong><br/><br/><picture><source srcset="assets/feature-wall/file-drag.gif" type="image/gif"><img src="assets/feature-wall/file-drag.jpg" alt="ファイルや画像をエージェントのプロンプトへドラッグ" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><kbd><strong>AI Diff 注釈</strong><br/><br/><picture><source srcset="assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="assets/feature-wall/annotate-diff.jpg" alt="AI が生成した Diff への注釈" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/cli/overview"><kbd><strong>Orca CLI</strong><br/><br/><picture><source srcset="assets/feature-wall/orca-cli.gif" type="image/gif"><img src="assets/feature-wall/orca-cli.jpg" alt="CLI から Orca をスクリプト操作" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/settings"><kbd><strong>キーボード中心</strong><br/><br/><picture><source srcset="assets/feature-wall/keyboard-native.gif" type="image/gif"><img src="assets/feature-wall/keyboard-native.jpg" alt="キーボード中心のワークフローと再割り当て可能なショートカット" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/agents/usage-tracking"><kbd><strong>使用量トラッキング</strong><br/><br/><picture><source srcset="assets/feature-wall/codex-accounts.gif" type="image/gif"><img src="assets/feature-wall/codex-accounts.jpg" alt="使用量トラッキングと Codex アカウント切り替え" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/editing/markdown"><kbd><strong>リッチなリポジトリプレビュー</strong><br/><br/><picture><source srcset="assets/feature-wall/markdown-editor.gif" type="image/gif"><img src="assets/feature-wall/markdown-editor.jpg" alt="Markdown、画像、PDF、リポジトリ文書のプレビュー" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/model/tabs-panes-splits"><kbd><strong>何でも分割表示</strong><br/><br/><picture><source srcset="assets/feature-wall/split-screen.gif" type="image/gif"><img src="assets/feature-wall/split-screen.jpg" alt="エージェント、ターミナル、ブラウザ、ファイルの分割表示" width="390" /></picture><br/></kbd></a>
 </p>
-
----
-
-## [新機能] AI Diff への注釈
-
-**AI が生成した Diff に直接コメントできます。**
-
-AI が生成した Diff の任意の行にフィードバックを付け、そのままエージェントに返して修正させましょう。レビューのループを素早く保てます — 行番号をコピーする必要も、コンテキストを切り替える必要もありません。
-
-<p align="center">
-  <img src="assets/annotate-ai-diff.gif" alt="Orca AI Diff 注釈 — AI が生成した Diff にコメントしてエージェントにフィードバックを送信" width="800" />
-</p>
-
----
-
-## [新機能] Codex アカウントのホットスワップ
-
-**複数の Codex アカウントをお持ちですか？ワンクリックで切り替えできます。**
-
-最適なトークン条件を得るために複数の Codex アカウントを使っている場合、Orca なら再ログインも設定ファイルの編集も不要で、すぐにアカウントをホットスワップできます。アカウントを選んで、そのまま開発を続けられます。
-
-<p align="center">
-  <img src="assets/codex-account-switcher.gif" alt="Orca Codex アカウント切り替え — 複数の Codex アカウント間でホットスワップ" width="800" />
-</p>
-
----
-
-## [新機能] ワークツリーごとのブラウザとデザインモード
-
-**アプリを表示。任意の要素をクリック。チャットにそのまま投入。**
-
-Orca には、ワークツリー内で使える組み込みブラウザがあります。アプリを作りながらプレビューし、デザインモードに切り替えると、任意の UI 要素をクリックするだけで AI チャットにコンテキストとして直接入ります。スクリーンショットもセレクターのコピーも不要です。変更したい箇所を指して、エージェントに指示するだけです。
-
-<p align="center">
-  <img src="assets/orca-design-mode.gif" alt="Orca デザインモード — 任意の UI 要素をクリックしてチャットに投入" width="800" />
-</p>
-
----
-
-## [新機能] Orca CLI の紹介
-
-**ターミナルからのエージェントオーケストレーション。**
-
-AI エージェントに IDE を制御させましょう。AI を使って IDE にプロジェクトを追加し、ワークツリーを立ち上げ、現在のワークツリーのコメントを進捗チェックポイントとしてターミナルから直接更新できます。Orca IDE に同梱されています（設定からインストール）。
-
-```bash
-npx skills add https://github.com/stablyai/orca --skill orca-cli
-```
 
 ---
 
