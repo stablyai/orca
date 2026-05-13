@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import { buildActivityEvents } from './ActivityPrototypePage'
+import { buildActivityEvents, buildAgentPaneThreads } from './ActivityPrototypePage'
 
 function makeRepo(): Repo {
   return {
@@ -129,7 +129,18 @@ describe('buildActivityEvents', () => {
       timestamp: 1_000
     })
     expect(result.events[0].entry.prompt).toBe('First prompt')
-    expect(result.liveAgentStateByPaneKey['tab-1:1']).toBe('working')
+    expect(result.liveAgentByPaneKey['tab-1:1'].state).toBe('working')
+    expect(result.liveAgentByPaneKey['tab-1:1'].entry.prompt).toBe('Second prompt')
+
+    const threads = buildAgentPaneThreads({
+      events: result.events,
+      liveAgentByPaneKey: result.liveAgentByPaneKey
+    })
+
+    expect(threads).toHaveLength(1)
+    expect(threads[0].paneTitle).toBe('Second prompt')
+    expect(threads[0].latestTimestamp).toBe(2_000)
+    expect(threads[0].events[0].entry.prompt).toBe('First prompt')
   })
 
   it('does not keep showing a stale live agent as running', () => {
@@ -152,7 +163,43 @@ describe('buildActivityEvents', () => {
     })
 
     expect(result.events).toHaveLength(1)
-    expect(result.liveAgentStateByPaneKey['tab-1:1']).toBeUndefined()
+    expect(result.liveAgentByPaneKey['tab-1:1']).toBeUndefined()
+  })
+
+  it('creates a thread for a fresh running agent with no historical events', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab = makeTab()
+
+    const result = buildActivityEvents({
+      agentStatusByPaneKey: {
+        'tab-1:1': makeWorkingEntryWithoutHistory()
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: {
+        [worktree.id]: [tab]
+      },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 3_000
+    })
+
+    const threads = buildAgentPaneThreads({
+      events: result.events,
+      liveAgentByPaneKey: result.liveAgentByPaneKey
+    })
+
+    expect(result.events).toHaveLength(0)
+    expect(threads).toHaveLength(1)
+    expect(threads[0]).toMatchObject({
+      paneKey: 'tab-1:1',
+      paneTitle: 'New run',
+      currentAgentState: 'working',
+      latestTimestamp: 3_000,
+      latestEvent: null,
+      unread: false
+    })
   })
 
   it('overlays fresh live state onto retained-only activity for a reused pane key', () => {
@@ -182,6 +229,16 @@ describe('buildActivityEvents', () => {
       timestamp: 1_000
     })
     expect(result.events[0].entry.prompt).toBe('Retained prior run')
-    expect(result.liveAgentStateByPaneKey['tab-1:1']).toBe('working')
+    expect(result.liveAgentByPaneKey['tab-1:1'].state).toBe('working')
+
+    const threads = buildAgentPaneThreads({
+      events: result.events,
+      liveAgentByPaneKey: result.liveAgentByPaneKey
+    })
+
+    expect(threads).toHaveLength(1)
+    expect(threads[0].paneTitle).toBe('New run')
+    expect(threads[0].latestTimestamp).toBe(3_000)
+    expect(threads[0].events[0].entry.prompt).toBe('Retained prior run')
   })
 })

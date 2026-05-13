@@ -68,6 +68,16 @@ type ActivityEvent = {
   unread: boolean
 }
 
+type ActivityLiveAgentSnapshot = {
+  state: ActivityLiveAgentState
+  timestamp: number
+  worktree: Worktree
+  repo: Repo | null
+  entry: AgentStatusEntry
+  tab: TerminalTab
+  agentType: AgentType
+}
+
 // Why (per-pane thread): the activity feed is keyed on the agent pane (a
 // terminal tab + pane id) rather than on the workspace, so the left list
 // shows one entry per agent. paneKey is the stable identity (`${tabId}:${paneId}`).
@@ -76,9 +86,12 @@ type AgentPaneThread = {
   paneTitle: string
   worktree: Worktree
   repo: Repo | null
+  tab: TerminalTab
   agentType: AgentType
   currentAgentState: ActivityLiveAgentState | null
-  latestEvent: ActivityEvent
+  currentAgentEntry: AgentStatusEntry | null
+  latestTimestamp: number
+  latestEvent: ActivityEvent | null
   events: ActivityEvent[]
   unread: boolean
 }
@@ -295,13 +308,12 @@ function agentMeta(event: ActivityEvent): string {
 // prompt: agent CLIs set that title eagerly, so preferring it would pin every
 // row to the agent name and hide the actual turn. Fall back to a non-default
 // liveTitle only when there is no prompt at all.
-function paneTitleForEvent(event: ActivityEvent): string {
-  const tab = event.tab
+function paneTitleForEntry(entry: AgentStatusEntry, tab: TerminalTab): string {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
     return customTitle
   }
-  const prompt = event.entry.prompt.trim()
+  const prompt = entry.prompt.trim()
   if (prompt) {
     return prompt
   }
@@ -311,6 +323,10 @@ function paneTitleForEvent(event: ActivityEvent): string {
     return liveTitle
   }
   return defaultTitle || liveTitle || 'Terminal'
+}
+
+function paneTitleForEvent(event: ActivityEvent): string {
+  return paneTitleForEntry(event.entry, event.tab)
 }
 
 function isActivityEventState(state: AgentStatusState): state is ActivityEventState {
@@ -430,12 +446,12 @@ export function buildActivityEvents(args: {
   now: number
 }): {
   events: ActivityEvent[]
-  liveAgentStateByPaneKey: Record<string, ActivityLiveAgentState>
+  liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
 } {
   const events: ActivityEvent[] = []
   const seenEventIds = new Set<string>()
   const tabContext = new Map<string, { worktree: Worktree; tab: TerminalTab }>()
-  const liveAgentStateByPaneKey: Record<string, ActivityLiveAgentState> = {}
+  const liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot> = {}
 
   for (const worktree of args.worktreeMap.values()) {
     const tabs = args.tabsByWorktree[worktree.id] ?? []
@@ -455,13 +471,20 @@ export function buildActivityEvents(args: {
       continue
     }
     const ackAt = args.acknowledgedAgentsByPaneKey[paneKey] ?? 0
-    // Why: live state is a per-pane overlay computed once from the live entry,
-    // not a property duplicated onto every event in the thread. Retained-only
-    // panes don't contribute here — the agent is gone, so there is no live
-    // state to overlay.
+    // Why: live status is separate from historical events. A fresh working turn
+    // should update/create the pane thread without being counted as an unread
+    // done/blocked/waiting event.
     const liveState = freshActivityLiveAgentState(entry, args.now)
     if (liveState) {
-      liveAgentStateByPaneKey[paneKey] = liveState
+      liveAgentByPaneKey[paneKey] = {
+        state: liveState,
+        timestamp: entry.stateStartedAt,
+        worktree: context.worktree,
+        repo: args.repoMap.get(context.worktree.repoId) ?? null,
+        entry,
+        tab: context.tab,
+        agentType: entry.agentType ?? 'unknown'
+      }
     }
     appendActivityEventsForEntry({
       events,
@@ -510,15 +533,15 @@ export function buildActivityEvents(args: {
       break
     }
   }
-  return { events: capped, liveAgentStateByPaneKey }
+  return { events: capped, liveAgentByPaneKey }
 }
 
-function buildAgentPaneThreads(
-  events: ActivityEvent[],
-  liveAgentStateByPaneKey: Record<string, ActivityLiveAgentState>
-): AgentPaneThread[] {
+export function buildAgentPaneThreads(args: {
+  events: ActivityEvent[]
+  liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
+}): AgentPaneThread[] {
   const byPaneKey = new Map<string, AgentPaneThread>()
-  for (const event of events) {
+  for (const event of args.events) {
     const paneKey = event.entry.paneKey
     const existing = byPaneKey.get(paneKey)
     if (!existing) {
@@ -527,10 +550,11 @@ function buildAgentPaneThreads(
         paneTitle: paneTitleForEvent(event),
         worktree: event.worktree,
         repo: event.repo,
+        tab: event.tab,
         agentType: event.agentType,
-        // Why: live status is a per-pane overlay from the hook stream, looked
-        // up once by paneKey rather than merged across historical events.
-        currentAgentState: liveAgentStateByPaneKey[paneKey] ?? null,
+        currentAgentState: null,
+        currentAgentEntry: null,
+        latestTimestamp: event.timestamp,
         latestEvent: event,
         events: [event],
         unread: event.unread
@@ -539,11 +563,45 @@ function buildAgentPaneThreads(
     }
     existing.events.push(event)
     existing.unread = existing.unread || event.unread
-    if (event.timestamp > existing.latestEvent.timestamp) {
+    if (!existing.latestEvent || event.timestamp > existing.latestEvent.timestamp) {
       existing.latestEvent = event
       existing.paneTitle = paneTitleForEvent(event)
       existing.agentType = event.agentType
+      existing.tab = event.tab
+      existing.latestTimestamp = event.timestamp
     }
+  }
+
+  for (const [paneKey, liveAgent] of Object.entries(args.liveAgentByPaneKey)) {
+    const existing = byPaneKey.get(paneKey)
+    if (!existing) {
+      byPaneKey.set(paneKey, {
+        paneKey,
+        paneTitle: paneTitleForEntry(liveAgent.entry, liveAgent.tab),
+        worktree: liveAgent.worktree,
+        repo: liveAgent.repo,
+        tab: liveAgent.tab,
+        agentType: liveAgent.agentType,
+        currentAgentState: liveAgent.state,
+        currentAgentEntry: liveAgent.entry,
+        latestTimestamp: liveAgent.timestamp,
+        latestEvent: null,
+        events: [],
+        unread: false
+      })
+      continue
+    }
+    // Why: live metadata is the current thread identity. Historical events stay
+    // in the event list, but the row title/time/target must follow the active
+    // turn so a running agent never shows the previous prompt as primary.
+    existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab)
+    existing.worktree = liveAgent.worktree
+    existing.repo = liveAgent.repo
+    existing.tab = liveAgent.tab
+    existing.agentType = liveAgent.agentType
+    existing.currentAgentState = liveAgent.state
+    existing.currentAgentEntry = liveAgent.entry
+    existing.latestTimestamp = liveAgent.timestamp
   }
 
   return Array.from(byPaneKey.values())
@@ -551,7 +609,7 @@ function buildAgentPaneThreads(
       ...thread,
       events: [...thread.events].sort((a, b) => b.timestamp - a.timestamp)
     }))
-    .sort((a, b) => b.latestEvent.timestamp - a.latestEvent.timestamp)
+    .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
 }
 
 function EventTime({ timestamp }: { timestamp: number }): React.JSX.Element {
@@ -590,15 +648,25 @@ function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | nu
 }
 
 function threadAgentState(thread: AgentPaneThread): AgentStatusState {
-  return thread.currentAgentState ?? thread.latestEvent.state
+  return thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
 }
 
 function threadAgentStateLabel(thread: AgentPaneThread): string {
   const state = threadAgentState(thread)
-  if (!thread.currentAgentState && state === 'done' && thread.latestEvent.entry.interrupted) {
+  if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
     return 'Interrupted'
   }
   return agentStateLabel(state)
+}
+
+function threadSearchText(thread: AgentPaneThread): string {
+  const latest = thread.latestEvent
+  const stateLabel = threadAgentStateLabel(thread)
+  const currentSummary = thread.currentAgentEntry?.lastAssistantMessage?.trim() ?? ''
+  const latestEventText = latest
+    ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
+    : ''
+  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentSummary} ${latestEventText}`.toLowerCase()
 }
 
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
@@ -631,7 +699,6 @@ function ThreadRow({
   onJump: () => void
   onMarkUnread: () => void
 }): React.JSX.Element {
-  const latest = thread.latestEvent
   return (
     <div
       data-current={selected ? 'true' : undefined}
@@ -723,7 +790,7 @@ function ThreadRow({
               </Tooltip>
             )}
           </span>
-          <EventTime timestamp={latest.timestamp} />
+          <EventTime timestamp={thread.latestTimestamp} />
         </span>
       </div>
       <div className="flex min-w-0 items-center gap-1.5">
@@ -813,7 +880,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // even if no new PTY data arrives.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
 
-  const { events: allEvents, liveAgentStateByPaneKey } = useMemo(
+  const { events: allEvents, liveAgentByPaneKey } = useMemo(
     () =>
       buildActivityEvents({
         agentStatusByPaneKey: storeData.agentStatusByPaneKey,
@@ -833,8 +900,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   )
 
   const allThreads = useMemo(
-    () => buildAgentPaneThreads(allEvents, liveAgentStateByPaneKey),
-    [allEvents, liveAgentStateByPaneKey]
+    () => buildAgentPaneThreads({ events: allEvents, liveAgentByPaneKey }),
+    [allEvents, liveAgentByPaneKey]
   )
 
   const visibleThreads = useMemo(() => {
@@ -849,11 +916,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       if (!trimmedQuery) {
         return true
       }
-      const latest = thread.latestEvent
-      const stateLabel = threadAgentStateLabel(thread)
-      const text =
-        `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${stateLabel} ${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`.toLowerCase()
-      return text.includes(trimmedQuery)
+      return threadSearchText(thread).includes(trimmedQuery)
     })
   }, [allThreads, readFilter, query, selectedPaneKey])
 
@@ -866,7 +929,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const selectedThread = selectedPaneKey
     ? (allThreads.find((thread) => thread.paneKey === selectedPaneKey) ?? null)
     : null
-  const selectedTabId = selectedThread?.latestEvent.tab.id ?? null
+  const selectedTabId = selectedThread?.tab.id ?? null
   const selectedHasLiveTab =
     selectedThread && selectedTabId
       ? (storeData.tabsByWorktree[selectedThread.worktree.id] ?? []).some(
@@ -876,7 +939,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const displayedThread = displayedPaneKey
     ? (allThreads.find((thread) => thread.paneKey === displayedPaneKey) ?? null)
     : null
-  const displayedTabId = displayedThread?.latestEvent.tab.id ?? null
+  const displayedTabId = displayedThread?.tab.id ?? null
   const displayedHasLiveTab =
     displayedThread && displayedTabId
       ? (storeData.tabsByWorktree[displayedThread.worktree.id] ?? []).some(
@@ -887,7 +950,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     selectedThread &&
     displayedThread &&
     displayedThread.worktree.id === selectedThread.worktree.id &&
-    displayedThread.latestEvent.tab.id === selectedThread.latestEvent.tab.id
+    displayedThread.tab.id === selectedThread.tab.id
   const visibleThread =
     selectedThread && selectedHasLiveTab
       ? displayedThread && displayedHasLiveTab && displayedThread.paneKey !== selectedThread.paneKey
@@ -911,8 +974,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   } satisfies Record<ActivityTerminalPortalSlotId, HTMLElement | null>
   const activePortalTargetEl = portalTargetBySlot[activePortalSlotId]
   const inactivePortalTargetEl = portalTargetBySlot[inactivePortalSlotId]
-  const visibleTabId = visibleThread?.latestEvent.tab.id ?? null
-  const stagedTabId = stagedThread?.latestEvent.tab.id ?? null
+  const visibleTabId = visibleThread?.tab.id ?? null
+  const stagedTabId = stagedThread?.tab.id ?? null
   const visiblePortalReady = useActivityTerminalPortalReadiness(activePortalTargetEl, visibleTabId)
   const stagedPortalReady = useActivityTerminalPortalReadiness(inactivePortalTargetEl, stagedTabId)
   const showTerminalLoadingLabel = useActivityTerminalLoadingLabel(
@@ -946,7 +1009,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         slotId: activePortalSlotId,
         target: activePortalTargetEl,
         worktreeId: visibleThread.worktree.id,
-        tabId: visibleThread.latestEvent.tab.id,
+        tabId: visibleThread.tab.id,
         paneId: paneIdFromPaneKey(visibleThread.paneKey),
         active: true
       })
@@ -956,7 +1019,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         slotId: inactivePortalSlotId,
         target: inactivePortalTargetEl,
         worktreeId: stagedThread.worktree.id,
-        tabId: stagedThread.latestEvent.tab.id,
+        tabId: stagedThread.tab.id,
         paneId: paneIdFromPaneKey(stagedThread.paneKey),
         active: false
       })
@@ -1026,7 +1089,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     // right pane shows the empty-state placeholder; reorienting the workspace
     // and dispatching focus to a dead tab id would just confuse the user.
     const liveTabs = state.tabsByWorktree[thread.worktree.id] ?? []
-    const hasLiveTab = liveTabs.some((t) => t.id === thread.latestEvent.tab.id)
+    const hasLiveTab = liveTabs.some((t) => t.id === thread.tab.id)
     if (!hasLiveTab) {
       return
     }
@@ -1037,7 +1100,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       state.setActiveWorktree(thread.worktree.id)
     }
     state.setActiveTabType('terminal')
-    activateTabAndFocusPane(thread.latestEvent.tab.id, paneIdFromPaneKey(thread.paneKey))
+    activateTabAndFocusPane(thread.tab.id, paneIdFromPaneKey(thread.paneKey))
   }
 
   const selectThread = (thread: AgentPaneThread): void => {
