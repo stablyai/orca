@@ -6,15 +6,13 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { useAppStore } from '../../store'
+import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES, EXPERIMENTAL_SEARCH_ENTRY } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 
 export { EXPERIMENTAL_PANE_SEARCH_ENTRIES }
-
-const ORCHESTRATION_SKILL_INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill orchestration'
 
 type ExperimentalPaneProps = {
   settings: GlobalSettings

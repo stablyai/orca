@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Minimize2, Minus, TerminalSquare } from 'lucide-react'
+import { Maximize2, Minimize2, Network, X } from 'lucide-react'
 import TabBar from '@/components/tab-bar/TabBar'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
@@ -8,56 +8,20 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalTab } from '../../../../shared/types'
+import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
+export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
   clampFloatingTerminalBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
-import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 
 type FloatingTerminalPanelProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-export function FloatingTerminalToggleButton({
-  open,
-  onToggle
-}: {
-  open: boolean
-  onToggle: () => void
-}): React.JSX.Element {
-  const shortcutLabel =
-    typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac') ? '⌘⌥T' : 'Ctrl+Alt+T'
-  return (
-    <FloatingTerminalIconContextMenu
-      currentLocation="floating-button"
-      className="fixed bottom-8 right-3 z-40"
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            className="bg-card/95 shadow-xs"
-            aria-label={open ? 'Minimize floating terminal' : 'Show floating terminal'}
-            aria-pressed={open}
-            onClick={onToggle}
-          >
-            <TerminalSquare className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent
-          side="left"
-          sideOffset={6}
-        >{`${open ? 'Minimize' : 'Show'} floating terminal (${shortcutLabel})`}</TooltipContent>
-      </Tooltip>
-    </FloatingTerminalIconContextMenu>
-  )
 }
 
 export function FloatingTerminalPanel({
@@ -80,6 +44,7 @@ export function FloatingTerminalPanel({
   const [cwd, setCwd] = useState<string | null>(null)
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
   const [maximized, setMaximized] = useState(false)
+  const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -296,6 +261,16 @@ export function FloatingTerminalPanel({
             />
           </div>
           <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="h-6 gap-1.5 px-2 text-xs"
+              onClick={() => setOrchestrationDialogOpen(true)}
+            >
+              <Network className="size-3.5" />
+              Enable orchestration
+            </Button>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -363,6 +338,11 @@ export function FloatingTerminalPanel({
         </div>
       </div>
       {!maximized && <FloatingTerminalResizeHandles bounds={bounds} setBounds={setBounds} />}
+      <FloatingTerminalOrchestrationDialog
+        open={orchestrationDialogOpen}
+        activeTabId={activeTab?.id ?? null}
+        onOpenChange={setOrchestrationDialogOpen}
+      />
     </div>
   )
 }

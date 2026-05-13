@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
+  PASTE_TERMINAL_TEXT_EVENT,
   SYNC_FIT_PANES_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
-  type FocusTerminalPaneDetail
+  type FocusTerminalPaneDetail,
+  type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
@@ -127,6 +129,27 @@ export function useTerminalPaneGlobalEffects({
     }
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+  }, [tabId, managerRef])
+
+  useEffect(() => {
+    const onPasteText = (event: Event): void => {
+      const detail = (event as CustomEvent<PasteTerminalTextDetail | undefined>).detail
+      if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      pane.terminal.paste(detail.text)
+      pane.terminal.focus()
+    }
+    window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
+    return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
   }, [tabId, managerRef])
 
   // Why: sidebar open/close toggles dispatch SYNC_FIT_PANES_EVENT from a
