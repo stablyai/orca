@@ -38,6 +38,18 @@ export default function globalSetup(): void {
     console.log('[e2e] Build complete.')
   }
 
+  if (process.env.ORCA_E2E_SSH_LOCALHOST === '1') {
+    // Why: the localhost SSH spec deploys Orca's relay from out/relay. The
+    // normal Electron E2E build does not produce that bundle, so build it only
+    // for the explicit local-machine SSH run.
+    console.log('[e2e] Building SSH relay bundle for localhost SSH E2E...')
+    execSync('pnpm run build:relay', {
+      cwd: root,
+      stdio: 'inherit',
+      timeout: 120_000
+    })
+  }
+
   // ── 2. Create a seeded test git repo ───────────────────────────────
   // Why: each test run gets its own git repo so the suite is fully
   // idempotent. No test depends on whatever repos the user has open.
