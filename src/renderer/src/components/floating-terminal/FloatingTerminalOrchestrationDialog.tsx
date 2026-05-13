@@ -129,17 +129,12 @@ export function FloatingTerminalOrchestrationDialog({
                 <p className="text-sm font-medium">Orca CLI</p>
                 <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                   <span className="shrink-0">{cliLabel}</span>
-                  {cliStatus?.commandPath ? (
+                  {cliInstalled && cliStatus?.commandPath ? (
                     <code className="min-w-0 overflow-x-auto whitespace-nowrap rounded bg-background px-2 py-0.5 text-[11px] text-muted-foreground">
                       {cliStatus.commandPath}
                     </code>
                   ) : null}
                 </p>
-                {cliStatus?.platform === 'darwin' && !cliInstalled ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    macOS may ask for your password so Orca can create the shell command.
-                  </p>
-                ) : null}
               </div>
               <div className="shrink-0">
                 {cliInstalled ? (
@@ -155,11 +150,11 @@ export function FloatingTerminalOrchestrationDialog({
                   </Button>
                 ) : (
                   <Button
-                    variant="default"
-                    size="sm"
+                    variant="outline"
+                    size="xs"
                     onClick={() => void handleInstallCli()}
                     disabled={cliLoading || cliBusy || !cliSupported}
-                    className="gap-1.5"
+                    className="shrink-0 gap-1.5"
                   >
                     {cliBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
                     Add to PATH
