@@ -548,7 +548,7 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
       message: `Cannot refresh PR for this worktree: ${skippedReason}`,
       fetchedAt: Date.now()
     }
-    broadcast({ aliases, reason: 'manual', status: 'skipped', skippedReason })
+    broadcast({ aliases: [alias], reason: 'manual', status: 'skipped', skippedReason })
     return outcome
   }
 

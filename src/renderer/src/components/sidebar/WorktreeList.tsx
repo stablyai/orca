@@ -850,6 +850,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
 
   useEffect(() => {
+    if (document.visibilityState !== 'visible') {
+      lastVisibleRefreshKeyRef.current = '__document_hidden__'
+      return
+    }
     if (groupBy !== 'pr-status' && !cardProps.includes('pr') && !cardProps.includes('ci')) {
       if (lastVisibleRefreshKeyRef.current !== '__hidden__') {
         lastVisibleRefreshKeyRef.current = '__hidden__'

@@ -604,6 +604,36 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
   })
+
+  it('does not call GitHub refresh IPC for SSH-backed repos', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          connectionId: 'ssh-1'
+        }
+      ],
+      prCache: {
+        [`${repoPath}::${branch}`]: {
+          data: makePR({ number: 44 }),
+          fetchedAt: Date.now()
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, { force: true })
+    ).resolves.toMatchObject({ number: 44 })
+    expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+  })
 })
 
 describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
@@ -633,6 +663,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           }
         ]
       },
+      worktreeCardProperties: ['pr'],
       prCache: {
         [`${repoPath}::${branch}`]: {
           data: makePR({ state: 'open' }),
@@ -652,6 +683,158 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       }),
       reason: 'active',
       priority: 80
+    })
+  })
+
+  it('does not enqueue active PR refresh when no PR-related surface is visible', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: false,
+      rightSidebarTab: 'source-control',
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('skips active PR refresh IPC for SSH-backed repos', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          connectionId: 'ssh-1'
+        }
+      ],
+      groupBy: 'pr-status',
+      sshConnectionStates: new Map([['ssh-1', { status: 'connected' }]]),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('enqueues active PR refresh when source control is the visible PR surface', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: true,
+      rightSidebarTab: 'source-control',
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({ repoPath, branch }),
+      reason: 'active',
+      priority: 80
+    })
+  })
+})
+
+describe('createGitHubSlice.refreshAllGitHub', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('refreshes stale PR data when source control is the visible PR surface', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: true,
+      rightSidebarTab: 'source-control',
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            lastActivityAt: 1
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshAllGitHub()
+
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({ repoPath, branch }),
+      reason: 'swr',
+      priority: 10
     })
   })
 })

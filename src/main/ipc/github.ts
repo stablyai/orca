@@ -192,7 +192,13 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:refreshPRNow',
     async (_event, args: { candidate: GitHubPRRefreshCandidate }) => {
       const repo = assertRegisteredRepo(args.candidate.repoPath, store)
-      const outcome = await refreshPRNow({ ...args.candidate, repoPath: repo.path })
+      const outcome = await refreshPRNow({
+        ...args.candidate,
+        repoPath: repo.path,
+        repoId: repo.id,
+        connectionId: repo.connectionId ?? args.candidate.connectionId,
+        connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
+      })
       recordPRIfNeeded(repo, outcome)
       return outcome
     }
@@ -210,7 +216,13 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     ) => {
       const repo = assertRegisteredRepo(args.candidate.repoPath, store)
       enqueuePRRefresh(
-        { ...args.candidate, repoPath: repo.path, repoId: repo.id },
+        {
+          ...args.candidate,
+          repoPath: repo.path,
+          repoId: repo.id,
+          connectionId: repo.connectionId ?? args.candidate.connectionId,
+          connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
+        },
         args.reason,
         args.priority ?? 0
       )
@@ -223,7 +235,13 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     (event, args: { candidates: GitHubPRRefreshCandidate[]; generation: number }) => {
       const candidates = args.candidates.map((candidate) => {
         const repo = assertRegisteredRepo(candidate.repoPath, store)
-        return { ...candidate, repoPath: repo.path, repoId: repo.id }
+        return {
+          ...candidate,
+          repoPath: repo.path,
+          repoId: repo.id,
+          connectionId: repo.connectionId ?? candidate.connectionId,
+          connectionState: repo.connectionId ? 'connected' : candidate.connectionState
+        }
       })
       reportVisiblePRRefreshCandidates(candidates, args.generation, event.sender.id)
       return true

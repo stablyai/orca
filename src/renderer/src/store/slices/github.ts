@@ -468,6 +468,12 @@ function buildPRRefreshCandidate(
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
+  if (repo.connectionId) {
+    // Why: main currently runs gh against local repo paths only. Avoid sending
+    // remote worktrees into a queue that can only skip them until SSH gh support
+    // exists.
+    return null
+  }
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,
@@ -1414,6 +1420,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const repoId = options?.repoId ?? repo?.id
     const cacheKey = repoScopedCacheKey(repoPath, repoId, branch)
     const cached = get().prCache[cacheKey]
+    const repo = (get().repos ?? []).find((r) => r.path === repoPath)
+    if (repo?.connectionId) {
+      return cached?.data ?? null
+    }
     // Why: if a prior caller without a linkedPR cached `null` for this branch,
     // the worktree-card lookup (which has a linked PR fallback) would otherwise
     // return null forever. Refetch when the cached miss could now resolve via
@@ -1842,10 +1852,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const state = get()
     const now = Date.now()
     const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
+    const cardProps = state.worktreeCardProperties ?? []
+    const isPRStatusGrouping = state.groupBy === 'pr-status'
+    const rightSidebarShowsPR =
+      state.rightSidebarOpen &&
+      (state.rightSidebarTab === 'checks' || state.rightSidebarTab === 'source-control')
     const shouldRefreshPRs =
-      state.groupBy === 'pr-status' ||
-      state.worktreeCardProperties.includes('pr') ||
-      state.worktreeCardProperties.includes('ci')
+      isPRStatusGrouping ||
+      rightSidebarShowsPR ||
+      cardProps.includes('pr') ||
+      cardProps.includes('ci')
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
@@ -1879,7 +1895,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       }
     }
-    for (const { candidate } of stalePRCandidates.sort((a, b) => b.score - a.score).slice(0, 5)) {
+    const candidatesToRefresh = stalePRCandidates
+      .sort((a, b) => b.score - a.score)
+      .slice(0, isPRStatusGrouping ? stalePRCandidates.length : 5)
+    for (const { candidate } of candidatesToRefresh) {
       void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'swr', priority: 10 })
     }
   },
@@ -2088,8 +2107,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const now = Date.now()
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
+    const cardProps = state.worktreeCardProperties ?? []
+    const shouldRefreshPR =
+      state.groupBy === 'pr-status' ||
+      cardProps.includes('pr') ||
+      cardProps.includes('ci') ||
+      (state.rightSidebarOpen &&
+        (state.rightSidebarTab === 'checks' || state.rightSidebarTab === 'source-control'))
 
-    if (!worktree.isBare && branch) {
+    if (shouldRefreshPR && !worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)
       if (candidate) {
         void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'active', priority: 80 })
