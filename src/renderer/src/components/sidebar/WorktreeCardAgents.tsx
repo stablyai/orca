@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo } from 'react'
-import { ChevronDown } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -53,12 +52,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
-
-  // Why: per-worktree collapse is session-only UI state. Single-primitive
-  // subscription so the card only re-renders when THIS worktree's collapsed
-  // flag flips — not on any other worktree's toggle.
-  const isCollapsed = useAppStore((s) => s.collapsedInlineAgentsByWorktreeId[worktreeId] === true)
-  const toggleInlineAgentsCollapsed = useAppStore((s) => s.toggleInlineAgentsCollapsed)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
   // per-agent unvisited flags locally. Keeps the inline list's bold/mute
@@ -115,72 +108,49 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [worktreeId, acknowledgeAgents]
   )
 
-  const handleToggleCollapsed = useCallback(
-    (e: React.MouseEvent) => {
-      // Why: the header is inside WorktreeCard, whose outer click handler
-      // activates the worktree. Stop propagation so expanding/collapsing the
-      // list doesn't also navigate away — the user's intent is clearly the
-      // toggle, not a worktree switch.
-      e.stopPropagation()
-      toggleInlineAgentsCollapsed(worktreeId)
-    },
-    [toggleInlineAgentsCollapsed, worktreeId]
-  )
-
   // Why: own one 30s tick per non-empty inline list. Cards with zero agents
   // never mount this component (see WorktreeCardAgents), so idle worktrees
   // don't pay any timer cost.
   const now = useNow(30_000)
 
+  const stopBubble = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+  }, [])
+
   return (
+    // Why: swallow bubbling so clicks on the gutter around the agent rows
+    // don't reach WorktreeCard's activate / edit-meta handlers.
     <div
-      className={cn('flex flex-col mt-1', className)}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
+      className={cn('flex flex-col mt-1 divide-y divide-border/30', className)}
+      onClick={stopBubble}
+      onDoubleClick={stopBubble}
+      role="group"
+      aria-label="Agents"
     >
-      {/* Why: clickable header toggles the section open/closed. Using a real
-          <button> keeps keyboard + a11y semantics correct (Enter/Space
-          activate, proper focus ring, aria-expanded for screen readers). */}
-      <button
-        type="button"
-        onClick={handleToggleCollapsed}
-        aria-expanded={!isCollapsed}
-        aria-label={isCollapsed ? 'Expand agent activity' : 'Collapse agent activity'}
-        className="flex items-center gap-1 mb-0.5 px-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-      >
-        <ChevronDown
-          className={cn('size-2.5 transition-transform duration-150', isCollapsed && '-rotate-90')}
-        />
-        <span>Agents ({agents.length})</span>
-      </button>
-      {!isCollapsed && (
-        <div className="flex flex-col divide-y divide-border/30">
-          {agents.map((agent) => (
-            <div key={agent.paneKey} className="py-0.5">
-              <DashboardAgentRow
-                agent={agent}
-                onDismiss={handleDismissAgent}
-                onActivate={handleActivateAgentTab}
-                now={now}
-                // Why: bold an agent row until the user has visited its tab.
-                // useAutoAckViewedAgent acks automatically when the user
-                // focuses the agent's tab, which mutes the row in lockstep.
-                isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-                // Why: inline rows pack tighter than a full-panel layout;
-                // 'md' reads as a second ~12px glyph users confuse with the
-                // agent identity icon right next to it. 'sm' keeps the two
-                // distinguishable at a glance.
-                stateDotSize="sm"
-                // Why: in the per-card inline list clicking the row jumps
-                // directly to the agent, so the expand chevron is redundant.
-                // Keep the identity glyph (Claude/Gemini/…) so users can tell
-                // agents apart at a glance within a worktree.
-                hideExpand
-              />
-            </div>
-          ))}
+      {agents.map((agent) => (
+        <div key={agent.paneKey} className="py-0.5">
+          <DashboardAgentRow
+            agent={agent}
+            onDismiss={handleDismissAgent}
+            onActivate={handleActivateAgentTab}
+            now={now}
+            // Why: bold an agent row until the user has visited its tab.
+            // useAutoAckViewedAgent acks automatically when the user
+            // focuses the agent's tab, which mutes the row in lockstep.
+            isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
+            // Why: inline rows pack tighter than a full-panel layout;
+            // 'md' reads as a second ~12px glyph users confuse with the
+            // agent identity icon right next to it. 'sm' keeps the two
+            // distinguishable at a glance.
+            stateDotSize="sm"
+            // Why: in the per-card inline list clicking the row jumps
+            // directly to the agent, so the expand chevron is redundant.
+            // Keep the identity glyph (Claude/Gemini/…) so users can tell
+            // agents apart at a glance within a worktree.
+            hideExpand
+          />
         </div>
-      )}
+      ))}
     </div>
   )
 })
