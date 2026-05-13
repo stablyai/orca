@@ -1475,9 +1475,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
     })
 
-    // Why: force-refreshing GitHub data on every switch burned API rate limit
-    // quota and added 200-800ms latency. Only refresh when cache is actually
-    // stale (>5 min old). Users can still force-refresh via the sidebar button.
+    // Why: activation is explicit enough to revalidate PR state immediately;
+    // the GitHub coordinator still coalesces requests and applies rate guards.
     if (worktreeId) {
       get().refreshGitHubForWorktreeIfStale(worktreeId)
     }

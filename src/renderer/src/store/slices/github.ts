@@ -2056,9 +2056,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     })
   },
 
-  // Why: worktree switches previously force-refreshed GitHub data on every
-  // click, bypassing the 5-min TTL. This variant only fetches when stale,
-  // avoiding unnecessary API calls and latency during rapid switching.
+  // Why: activation is the user's strongest freshness signal. A PR can merge
+  // seconds after the last sidebar poll; enqueue through the coordinator so
+  // clicks revalidate PR state without bypassing coalescing/rate-limit guards.
   refreshGitHubForWorktreeIfStale: (worktreeId) => {
     const state = get()
     let worktree: Worktree | undefined
@@ -2079,11 +2079,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const now = Date.now()
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
-    const prKey = repoScopedCacheKey(repo.path, repo.id, branch)
-    const prEntry = state.prCache[prKey]
-    const prStale = !prEntry || now - prEntry.fetchedAt >= CACHE_TTL
 
-    if (!worktree.isBare && branch && prStale) {
+    if (!worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)
       if (candidate) {
         void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'active', priority: 80 })

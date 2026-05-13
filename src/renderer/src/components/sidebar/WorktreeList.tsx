@@ -849,7 +849,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
 
   useEffect(() => {
-    if (!cardProps.includes('pr') && !cardProps.includes('ci')) {
+    if (groupBy !== 'pr-status' && !cardProps.includes('pr') && !cardProps.includes('ci')) {
       if (lastVisibleRefreshKeyRef.current !== '__hidden__') {
         lastVisibleRefreshKeyRef.current = '__hidden__'
         reportVisibleGitHubPRRefreshCandidates([], Date.now())
@@ -879,6 +879,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     reportVisibleGitHubPRRefreshCandidates(visibleWorktreeIds, Date.now())
   }, [
     cardProps,
+    groupBy,
     renderRows,
     reportVisibleGitHubPRRefreshCandidates,
     sshConnectedGeneration,

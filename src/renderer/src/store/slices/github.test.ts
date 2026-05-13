@@ -18,6 +18,7 @@ const runtimeEnvironmentTransportCall = vi.fn()
 const mockApi = {
   gh: {
     prForBranch: vi.fn().mockResolvedValue(null),
+    enqueuePRRefresh: vi.fn().mockResolvedValue(undefined),
     issue: vi.fn().mockResolvedValue(null),
     prChecks: vi.fn().mockResolvedValue([]),
     prComments: vi.fn().mockResolvedValue([]),
@@ -602,6 +603,56 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(initialFetch).resolves.toBeNull()
 
     expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
+  })
+})
+
+describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('enqueues active PR refresh even when the cached PR is fresh', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      },
+      prCache: {
+        [`${repoPath}::${branch}`]: {
+          data: makePR({ state: 'open' }),
+          fetchedAt: Date.now()
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        repoPath,
+        branch,
+        cacheKey: `${repoPath}::${branch}`,
+        cachedPRState: 'open'
+      }),
+      reason: 'active',
+      priority: 80
+    })
   })
 })
 
