@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Minimize2, TerminalSquare, X } from 'lucide-react'
+import { Maximize2, Minimize2, Minus, TerminalSquare } from 'lucide-react'
 import TabBar from '@/components/tab-bar/TabBar'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ import {
   getMaximizedFloatingTerminalBounds,
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
+import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 
 type FloatingTerminalPanelProps = {
@@ -32,26 +33,30 @@ export function FloatingTerminalToggleButton({
   const shortcutLabel =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac') ? '⌘⌥T' : 'Ctrl+Alt+T'
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          className="fixed bottom-8 right-3 z-40 bg-card/95 shadow-xs"
-          data-floating-terminal-toggle
-          aria-label={open ? 'Hide floating terminal' : 'Show floating terminal'}
-          aria-pressed={open}
-          onClick={onToggle}
-        >
-          <TerminalSquare className="size-3.5" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent
-        side="left"
-        sideOffset={6}
-      >{`${open ? 'Hide' : 'Show'} floating terminal (${shortcutLabel})`}</TooltipContent>
-    </Tooltip>
+    <FloatingTerminalIconContextMenu
+      currentLocation="floating-button"
+      className="fixed bottom-8 right-3 z-40"
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className="bg-card/95 shadow-xs"
+            aria-label={open ? 'Minimize floating terminal' : 'Show floating terminal'}
+            aria-pressed={open}
+            onClick={onToggle}
+          >
+            <TerminalSquare className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="left"
+          sideOffset={6}
+        >{`${open ? 'Minimize' : 'Show'} floating terminal (${shortcutLabel})`}</TooltipContent>
+      </Tooltip>
+    </FloatingTerminalIconContextMenu>
   )
 }
 
@@ -312,14 +317,14 @@ export function FloatingTerminalPanel({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Hide floating terminal"
+                  aria-label="Minimize floating terminal"
                   onClick={() => onOpenChange(false)}
                 >
-                  <X className="size-3.5" />
+                  <Minus className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Hide floating terminal
+                Minimize
               </TooltipContent>
             </Tooltip>
           </div>
