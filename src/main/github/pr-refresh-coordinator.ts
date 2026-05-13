@@ -173,6 +173,58 @@ function visibleCandidateAfterOutcome(
   }
 }
 
+function setVisibleFollowUp(entry: QueueEntry): void {
+  const existing = queue.get(entry.key)
+  if (!existing) {
+    queue.set(entry.key, entry)
+    return
+  }
+
+  for (const alias of entry.aliases.values()) {
+    existing.aliases.set(alias.cacheKey, alias)
+  }
+
+  // Why: a user activation can arrive while a background refresh is awaiting gh.
+  // The background follow-up must not overwrite that pending active/manual work.
+  if (
+    bypassesFreshnessDelay(existing.reason) ||
+    existing.priority > entry.priority ||
+    existing.dueAt <= entry.dueAt
+  ) {
+    return
+  }
+
+  queue.set(entry.key, {
+    ...entry,
+    aliases: existing.aliases
+  })
+}
+
+function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefreshAlias): void {
+  const existing = queue.get(key)
+  if (!existing) {
+    return
+  }
+
+  existing.aliases.delete(alias.cacheKey)
+  const replacementAlias = existing.aliases.values().next().value
+  if (!replacementAlias) {
+    queue.delete(key)
+    return
+  }
+
+  if (existing.candidate.cacheKey === alias.cacheKey) {
+    existing.candidate = {
+      ...existing.candidate,
+      cacheKey: replacementAlias.cacheKey,
+      branch: replacementAlias.branch,
+      worktreeId: replacementAlias.worktreeId,
+      isArchived: false,
+      isBare: false
+    }
+  }
+}
+
 function scheduleVisibleFollowUp(
   key: string,
   candidate: GitHubPRRefreshCandidate,
@@ -189,7 +241,7 @@ function scheduleVisibleFollowUp(
     const retryAt =
       Date.now() + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(failures - 1, 4))
     errorBackoff.set(key, { failures, retryAt })
-    queue.set(key, {
+    setVisibleFollowUp({
       key,
       candidate,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
@@ -209,7 +261,7 @@ function scheduleVisibleFollowUp(
   // Why: coalesced linked-PR refreshes may represent several local branches.
   // Preserve every alias for the next visible follow-up so all cache entries
   // keep receiving periodic updates.
-  queue.set(key, {
+  setVisibleFollowUp({
     key,
     candidate: followUpCandidate,
     aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
@@ -400,8 +452,10 @@ export function enqueuePRRefresh(
     branch: candidate.branch,
     worktreeId: candidate.worktreeId
   }
+  const key = refreshKey(candidate)
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
+    removeQueuedAliasForInvalidCandidate(key, alias)
     broadcast({
       aliases: [alias],
       reason,
@@ -411,7 +465,6 @@ export function enqueuePRRefresh(
     return
   }
 
-  const key = refreshKey(candidate)
   const existing = queue.get(key)
   const freshDueAt = shouldSkipFresh(candidate, reason) ? freshRetryAt(candidate) : null
   const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
@@ -488,6 +541,7 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   }
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
+    removeQueuedAliasForInvalidCandidate(key, alias)
     const outcome: PRRefreshOutcome = {
       kind: 'upstream-error',
       errorType: 'unknown',

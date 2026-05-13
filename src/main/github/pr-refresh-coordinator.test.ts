@@ -55,6 +55,20 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
   }
 }
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 describe('pr-refresh-coordinator', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -165,6 +179,113 @@ describe('pr-refresh-coordinator', () => {
 
     expect(inFlightEvents.map((event) => event.reason)).toEqual(['active', 'active'])
     expect(queuedEvents).toHaveLength(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves an active refresh queued while a visible refresh is in flight', async () => {
+    const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    const visibleOutcome = deferred<{
+      kind: 'found'
+      pr: PRInfo
+      fetchedAt: number
+    }>()
+    getPRForBranchOutcomeMock.mockReturnValueOnce(visibleOutcome.promise).mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'success', state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    const candidate = makeCandidate()
+    reportVisiblePRRefreshCandidates([candidate], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+
+    enqueuePRRefresh({ ...candidate, cachedFetchedAt: Date.now() }, 'active', 80, 1)
+    visibleOutcome.resolve({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'pending' }),
+      fetchedAt: Date.now()
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    const inFlightEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.status === 'in-flight')
+
+    expect(inFlightEvents.map((event) => event.reason)).toEqual(['visible', 'active'])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels queued work when a later enqueue marks the candidate invalid', async () => {
+    const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'success' }),
+      fetchedAt: Date.now()
+    })
+
+    const candidate = makeCandidate()
+    reportVisiblePRRefreshCandidates([candidate], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+
+    enqueuePRRefresh(
+      { ...candidate, isArchived: true, cachedFetchedAt: Date.now() },
+      'active',
+      80,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+
+    const skippedEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.status === 'skipped')
+
+    expect(skippedEvents.at(-1)?.skippedReason).toBe('archived')
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not cancel other aliases when one coalesced PR alias becomes invalid', async () => {
+    const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', state: 'merged' }),
+        fetchedAt: Date.now()
+      })
+
+    const first = makeCandidate({
+      cacheKey: '/repo::feature/a',
+      branch: 'feature/a',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-a'
+    })
+    const second = makeCandidate({
+      cacheKey: '/repo::feature/b',
+      branch: 'feature/b',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-b'
+    })
+    reportVisiblePRRefreshCandidates([first, second], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+
+    enqueuePRRefresh({ ...first, isArchived: true, cachedFetchedAt: Date.now() }, 'active', 80, 1)
+    enqueuePRRefresh({ ...second, cachedFetchedAt: Date.now() }, 'active', 80, 1)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const outcomeEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.outcome)
+
+    expect(outcomeEvents.at(-1)?.aliases.map((alias) => alias.cacheKey)).toEqual([
+      '/repo::feature/b'
+    ])
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
