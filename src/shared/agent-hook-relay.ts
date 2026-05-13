@@ -12,18 +12,15 @@
 // - The relay normalizes; Orca routes. The envelope's `payload` field has
 //   already been through `normalizeHookPayload` (which calls
 //   `parseAgentStatusPayload` → `normalizeAgentStatusObject`) on the relay
-//   side, so Orca's `ingestRemote` trusts the wire payload and feeds it into
-//   the same `onAgentStatus` fanout the local HTTP path uses without
-//   re-normalizing. The safety net that keeps "trust the relay" defensible is
-//   that any malformed input on the relay side causes `normalizeHookPayload`
-//   to return null and `RelayAgentHookServer` to skip the forward — nothing
-//   ever reaches `ingestRemote`.
+//   side. Orca's `ingestRemote` re-runs the canonical payload normalizer at
+//   the SSH trust boundary before caching or persisting, so relay skew or a
+//   buggy remote process cannot poison main-process state.
 // - The wire `connectionId` is **always `null`**: a `connectionId` is Orca's
 //   local handle on an `ssh2` connection, not a wire identity. Orca stamps the
 //   real value on receive from `mux` identity inside `ingestRemote`.
-// - The wire `version` and `env` fields are forwarded verbatim from the agent
-//   CLI's POST body so Orca's existing warn-once cross-build / dev-vs-prod
-//   diagnostics still fire on remote-sourced events.
+// - The wire `version` and `env` fields are forwarded from the agent CLI's
+//   POST body so Orca's warn-once protocol diagnostics still fire. The relay
+//   default env is `remote`, a location marker ignored by dev-vs-prod checks.
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 
@@ -47,17 +44,14 @@ export type AgentHookRelayEnvelope = {
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */
   connectionId: null
-  /** Forwarded verbatim from the agent CLI POST body (e.g. 'production',
-   *  'development'). Lets Orca's warn-once env-mismatch diagnostic fire on
-   *  remote events the same as on local. */
+  /** Forwarded from the agent CLI POST body. The relay default is `remote`,
+   *  which marks transport location rather than dev/prod build env. */
   env?: string
   /** Forwarded verbatim from the agent CLI POST body. Lets Orca's warn-once
    *  protocol-version diagnostic fire on remote events the same as on local. */
   version?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
-   *  Orca's `ingestRemote` trusts this normalization — malformed events never
-   *  reach the wire because `normalizeHookPayload` returning null causes the
-   *  relay's `handleRequest` to skip the `forward()` call. */
+   *  Orca's `ingestRemote` validates it again at the SSH trust boundary. */
   payload: ParsedAgentStatusPayload
 }
 

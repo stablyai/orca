@@ -27,7 +27,11 @@ import {
   type AgentHookEventPayload,
   type HookListenerState
 } from '../shared/agent-hook-listener'
-import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
+import {
+  REMOTE_AGENT_HOOK_ENV,
+  type AgentHookRelayEnvelope,
+  type AgentHookSource
+} from '../shared/agent-hook-relay'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -51,8 +55,8 @@ function defaultEndpointDir(): string {
 export type RelayHookServerOptions = {
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
   endpointDir?: string
-  /** Env tag forwarded into hook payloads (warn-once cross-build diagnostic).
-   *  Defaults to "remote" — distinct from Orca's local 'production'/'development'. */
+  /** Env tag forwarded into hook payloads. Defaults to "remote", a relay
+   *  location marker that main excludes from dev-vs-prod mismatch warnings. */
   env?: string
   /** Called once per parsed payload. The relay wires this to
    *  `dispatcher.notify('agent.hook', envelope)`. */
@@ -82,7 +86,7 @@ export class RelayAgentHookServer {
   private forward: RelayHookForward
 
   constructor(options: RelayHookServerOptions) {
-    this.env = options.env ?? 'remote'
+    this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
     this.forward = options.forward

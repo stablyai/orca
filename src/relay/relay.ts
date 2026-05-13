@@ -134,7 +134,7 @@ function runConnectMode(sockPath: string): void {
 
 // ── Normal mode ──────────────────────────────────────────────────────
 
-function main(): void {
+async function main(): Promise<void> {
   const { graceTimeMs, connectMode, detached, sockPath } = parseArgs(process.argv)
 
   if (connectMode) {
@@ -243,32 +243,18 @@ function main(): void {
       )
     }
   })
-  // Why: start asynchronously so a hook-server bind failure does not crash
-  // the relay before the main JSON-RPC channel is up. If it fails the relay
-  // still functions for everything else; agent status just won't flow.
-  //
-  // Why register the augmenter inside .then(): if a pty.spawn arrives before
-  // the bind resolves, hookServer.buildPtyEnv() returns {} (port=0/token='')
-  // and the spawned shell would never get ORCA_AGENT_HOOK_* — env vars
-  // cannot be injected into a running process. Deferring registration to
-  // post-start() means a too-early spawn launches without an augmenter (the
-  // agent CLI is silently un-instrumented for that shell), which is the same
-  // failure mode as the bind-fails branch and matches the design "fail open"
-  // stance.
-  void hookServer
-    .start()
-    .then(() => {
-      // Why: every relay-spawned PTY needs the live ORCA_AGENT_HOOK_* coords.
-      // The augmenter is read on every spawn so a hook-server bind that
-      // succeeded late (or after a stop/start) lands in the next PTY's env
-      // without a restart.
-      ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
-    })
-    .catch((err) => {
-      process.stderr.write(
-        `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
-      )
-    })
+  // Why: wait for hook-server startup before the readiness sentinel. A PTY
+  // spawned before the augmenter exists can never receive ORCA_AGENT_HOOK_*
+  // later, so success registers the augmenter first; failure is the deliberate
+  // fail-open path where agent status is disabled for this relay process.
+  try {
+    await hookServer.start()
+    ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
+  } catch (err) {
+    process.stderr.write(
+      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
+    )
+  }
 
   // Why: evict the per-pane last-status cache when the backing PTY exits so
   // a terminated pane's last working/done payload cannot resurface as a
@@ -496,4 +482,9 @@ function cleanupSocket(sockPath: string): void {
   }
 }
 
-main()
+void main().catch((err) => {
+  process.stderr.write(
+    `[relay] Fatal startup error: ${err instanceof Error ? err.message : String(err)}\n`
+  )
+  process.exit(1)
+})

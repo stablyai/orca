@@ -435,6 +435,43 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
   })
 
+  it('revive restores pane identity env alongside hook-server coordinates', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      cols: 90,
+      rows: 30,
+      cwd: '/tmp',
+      env: {
+        ORCA_PANE_KEY: 'tab-5:1',
+        ORCA_TAB_ID: 'tab-5',
+        ORCA_WORKTREE_ID: 'wt-5'
+      }
+    })
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+
+    handler.dispose()
+    mockPtySpawn.mockClear()
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler.addEnvAugmenter(() => ({
+      ORCA_AGENT_HOOK_PORT: '12345',
+      ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
+    }))
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    expect(mockPtySpawn).toHaveBeenCalledTimes(1)
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_PANE_KEY).toBe('tab-5:1')
+    expect(callArgs.env.ORCA_TAB_ID).toBe('tab-5')
+    expect(callArgs.env.ORCA_WORKTREE_ID).toBe('wt-5')
+    expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
+    expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+  })
+
   it('invokes the exit listener with the spawn-time paneKey', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({

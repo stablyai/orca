@@ -43,6 +43,8 @@ type ManagedPty = {
    *  external observers (the relay-hook-server cache) can evict per-pane
    *  state when this PTY exits. Symmetric with Orca's local pty.ts. */
   paneKey?: string
+  tabId?: string
+  worktreeId?: string
 }
 
 function disposeManagedPty(managed: ManagedPty): void {
@@ -95,6 +97,8 @@ type SerializedPtyEntry = {
   rows: number
   cwd: string
   paneKey?: string
+  tabId?: string
+  worktreeId?: string
 }
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
@@ -280,7 +284,17 @@ export class PtyHandler {
     // separate ptyId→paneKey map. ORCA_PANE_KEY is shaped `${tabId}:${paneId}`
     // and is bounded by the renderer; the relay treats it as opaque.
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
-    const managed: ManagedPty = { id, pty: term, initialCwd: cwd, buffered: '', paneKey }
+    const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
+    const managed: ManagedPty = {
+      id,
+      pty: term,
+      initialCwd: cwd,
+      buffered: '',
+      paneKey,
+      tabId,
+      worktreeId
+    }
     this.wireAndStore(managed)
     if (context?.isStale()) {
       // Why: if the client reconnected while pty.spawn was in flight, the
@@ -485,7 +499,16 @@ export class PtyHandler {
         continue
       }
       const { pid, cols, rows } = managed.pty
-      entries.push({ id, pid, cols, rows, cwd: managed.initialCwd, paneKey: managed.paneKey })
+      entries.push({
+        id,
+        pid,
+        cols,
+        rows,
+        cwd: managed.initialCwd,
+        paneKey: managed.paneKey,
+        tabId: managed.tabId,
+        worktreeId: managed.worktreeId
+      })
     }
     return JSON.stringify(entries)
   }
@@ -508,25 +531,35 @@ export class PtyHandler {
       if (!ptyMod) {
         continue
       }
-      // Why: revive must apply the same env augmenters as spawn(), otherwise
-      // a relay restart (which rebinds the hook server on a fresh port/token)
-      // produces revived shells that lack ORCA_AGENT_HOOK_* and cannot reach
-      // the loopback receiver — silent end-to-end break of agent-status over
-      // SSH. No renderer env is passed: the revived shell wasn't spawned with
-      // a renderer-supplied env stash to replay.
+      // Why: revive must apply the same hook env as spawn(). The hook-server
+      // coords come from augmenters, while pane identity comes from the
+      // serialized PTY entry because managed hook scripts exit without
+      // ORCA_PANE_KEY.
+      const revivedEnv: Record<string, string> = {}
+      if (entry.paneKey) {
+        revivedEnv.ORCA_PANE_KEY = entry.paneKey
+      }
+      if (entry.tabId) {
+        revivedEnv.ORCA_TAB_ID = entry.tabId
+      }
+      if (entry.worktreeId) {
+        revivedEnv.ORCA_WORKTREE_ID = entry.worktreeId
+      }
       const term = ptyMod.spawn(resolveDefaultShell(), ['-l'], {
         name: 'xterm-256color',
         cols: entry.cols,
         rows: entry.rows,
         cwd: entry.cwd,
-        env: this.buildSpawnEnv()
+        env: this.buildSpawnEnv(revivedEnv)
       })
       this.wireAndStore({
         id: entry.id,
         pty: term,
         initialCwd: entry.cwd,
         buffered: '',
-        paneKey: entry.paneKey
+        paneKey: entry.paneKey,
+        tabId: entry.tabId,
+        worktreeId: entry.worktreeId
       })
 
       // Why: nextId starts at 1 and is only incremented by spawn(). Revived

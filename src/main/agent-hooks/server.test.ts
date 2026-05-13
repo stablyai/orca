@@ -1652,6 +1652,10 @@ describe('Endpoint file lifecycle', () => {
       server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
       // Missing payload state
       server.ingestRemote({ paneKey: 'tab-1:0', payload: { foo: 'bar' } }, 'conn-x')
+      // Invalid payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'nonsense' } }, 'conn-x')
+      // Empty connection id
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'working' } }, '  ')
       // Wrong types
       server.ingestRemote(
         { paneKey: 'tab-1:0', payload: 'not-an-object' as unknown } as never,

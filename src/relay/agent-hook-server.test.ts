@@ -44,8 +44,8 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
-      // Why: the relay forwards body env/version verbatim so Orca's existing
-      // warn-once cross-build / dev-vs-prod diagnostics still fire on remote.
+      // Why: the relay forwards body env/version so Orca's warn-once
+      // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
       expect(envelope.version).toBe('1')
     } finally {
@@ -100,8 +100,7 @@ describe('RelayAgentHookServer', () => {
       expect(forward).toHaveBeenCalledTimes(1)
       expect(forward.mock.calls[0][0].payload.prompt).toBe('cache me')
       // Why: replay must preserve the wire envelope's env/version (and source)
-      // so Orca's warn-once cross-build / dev-vs-prod diagnostics fire on
-      // replayed events the same as on live POST events.
+      // so protocol diagnostics and the remote-location marker survive replay.
       expect(forward.mock.calls[0][0].source).toBe('claude')
       expect(forward.mock.calls[0][0].env).toBe('remote')
       expect(forward.mock.calls[0][0].version).toBe('1')
@@ -137,13 +136,8 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  // Why: PR2 trusts the relay-side normalization and does NOT re-run the
-  // canonical normalizer in Orca's `ingestRemote`. The safety net that keeps
-  // that trust-model defensible is that a malformed event causes
-  // `normalizeHookPayload` to return null and `handleRequest` to skip the
-  // `forward()` call entirely — nothing reaches the wire. Pin that behavior
-  // so a future relay refactor cannot quietly start forwarding unnormalized
-  // payloads to Orca.
+  // Why: the relay should still drop malformed HTTP events before they reach
+  // the wire, even though Orca main re-validates at the SSH trust boundary.
   it('does not forward when normalizeHookPayload rejects the event', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
