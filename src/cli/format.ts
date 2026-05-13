@@ -17,6 +17,7 @@ import type {
   ComputerListWindowsResult,
   ComputerSnapshotResult,
   CliStatusResult,
+  RuntimeIssueCreateResult,
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
   RuntimeTerminalClose,
@@ -113,6 +114,13 @@ export function formatCliStatus(status: CliStatusResult): string {
 
 export function formatStatus(status: CliStatusResult): string {
   return formatCliStatus(status)
+}
+
+export function formatIssueCreate(result: RuntimeIssueCreateResult): string {
+  if (result.provider === 'github') {
+    return [`Created GitHub issue #${result.number}`, result.url].filter(Boolean).join('\n')
+  }
+  return [`Created Linear issue ${result.identifier}`, result.url].filter(Boolean).join('\n')
 }
 
 export function formatEnvironmentList(result: {

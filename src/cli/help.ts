@@ -93,6 +93,9 @@ Computer Use:
   computer paste-text       Paste text through the native clipboard path
   computer set-value        Set the value of a settable app element
 
+Issues:
+  issue create              Create a GitHub or Linear issue
+
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
   tab list                  List open browser tabs
@@ -190,6 +193,8 @@ Common Commands:
   orca repo show --repo <selector> [--json]
   orca repo set-base-ref --repo <selector> --ref <ref> [--json]
   orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]
+  orca issue create --provider github --repo <selector> --title <title> --body <text> [--json]
+  orca issue create --provider linear --team <team-id> --title <title> --body <text> [--json]
 
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
@@ -339,6 +344,7 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 export function formatFlagHelp(flag: string): string {
   const helpByFlag: Record<string, string> = {
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
+    body: '--body <text>          Issue body or Linear description',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
     cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
@@ -349,7 +355,7 @@ export function formatFlagHelp(flag: string): string {
       '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
     'display-name': '--display-name <name>  Override the Orca display name',
     'element-index': '--element-index <n>   Element index from get-app-state',
-    title: '--title <text>         Custom title for the terminal tab (omit to reset)',
+    title: '--title <text>         Terminal tab title or issue title',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
     focus: '--focus                Reveal the created terminal session in Orca',
@@ -372,12 +378,14 @@ export function formatFlagHelp(flag: string): string {
     'parent-worktree':
       '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
     path: '--path <path>          Path argument for the command',
+    provider: '--provider <name>      Issue provider or automation agent id',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
     repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
     'restore-window':
       '--restore-window     Bring the target app/window forward before the operation',
     session: '--session <id>        Snapshot namespace for a related computer-use workflow',
+    team: '--team <id>            Linear team ID',
     terminal: '--terminal <handle>  Runtime-issued terminal handle',
     text: '--text <text>          Text payload to send or type',
     'text-stdin': '--text-stdin          Read text payload from stdin',
@@ -390,7 +398,6 @@ export function formatFlagHelp(flag: string): string {
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
     prompt: '--prompt <text>        Automation prompt to pass to the agent',
     staged: '--staged               Open staged source-control changes',
-    provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
     trigger: '--trigger <schedule>   Automation schedule preset, cron, or RRULE',
     schedule: '--schedule <schedule>  Alias for --trigger',
     time: '--time <HH:MM>        Time used with daily/weekdays/weekly presets',

@@ -74,6 +74,34 @@ export type CliStatusResult = {
   }
 }
 
+export type RuntimeIssueCreateProvider = 'github' | 'linear'
+
+export type RuntimeIssueCreateRequest = {
+  provider: RuntimeIssueCreateProvider
+  repo?: string
+  team?: string
+  title: string
+  body: string
+}
+
+export type RuntimeIssueCreateResult =
+  | {
+      provider: 'github'
+      number: number
+      url: string
+      repo: {
+        id: string
+        path: string
+        displayName: string
+      }
+    }
+  | {
+      provider: 'linear'
+      id: string
+      identifier: string
+      url: string
+    }
+
 export type RuntimeSyncedTab = {
   tabId: string
   worktreeId: string
