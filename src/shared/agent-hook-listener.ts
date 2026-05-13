@@ -72,6 +72,11 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.lastStatusByPaneKey.delete(paneKey)
 }
 
+function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
+  state.lastPromptByPaneKey.delete(paneKey)
+  state.lastToolByPaneKey.delete(paneKey)
+}
+
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
@@ -679,7 +684,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'pi':
       return eventName === 'before_agent_start'
     case 'droid':
-      return eventName === 'UserPromptSubmit' || eventName === 'SessionStart'
+      return eventName === 'UserPromptSubmit'
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -996,11 +1001,17 @@ function normalizeDroidEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  if (eventName === 'SessionStart') {
+    // Why: Droid emits SessionStart when the TUI opens/resumes while still idle.
+    // Only UserPromptSubmit or tool activity should create a visible working row.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
   const notificationMessage = readString(hookPayload, 'message')
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
     eventName === 'UserPromptSubmit' ||
-    eventName === 'SessionStart' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'
   ) {

@@ -940,6 +940,44 @@ describe('Droid hook normalization', () => {
     expect(result?.payload.toolInput).toBe('pnpm typecheck')
   })
 
+  it('SessionStart resets turn caches without marking Droid working', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'old prompt' }),
+      'production'
+    )
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/old.ts' }
+      }),
+      'production'
+    )
+
+    const sessionStart = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'SessionStart' }),
+      'production'
+    )
+    expect(sessionStart).toBeNull()
+
+    const nextTool = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Execute',
+        tool_input: { command: 'pwd' }
+      }),
+      'production'
+    )
+    expect(nextTool?.payload.state).toBe('working')
+    expect(nextTool?.payload.prompt).toBe('')
+    expect(nextTool?.payload.toolName).toBe('Execute')
+    expect(nextTool?.payload.toolInput).toBe('pwd')
+  })
+
   it('SubagentStop does not close the primary session row', () => {
     const result = _internals.normalizeHookPayload(
       'droid',
