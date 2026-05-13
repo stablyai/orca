@@ -317,6 +317,14 @@ export default function RichMarkdownEditor({
         // Why: doc links are atom nodes (not marks), so resolve(pos).marks()
         // won't find them. Check nodeAt(pos) first for doc link navigation.
         const clickedNode = view.state.doc.nodeAt(pos)
+        if (clickedNode?.type.name === 'image') {
+          const src = (clickedNode.attrs.src as string | undefined) ?? ''
+          if (!src) {
+            return false
+          }
+          void activateMarkdownLink(src, { sourceFilePath: filePath, worktreeId, worktreeRoot })
+          return true
+        }
         if (clickedNode?.type.name === 'markdownDocLink') {
           const target = clickedNode.attrs.target as string
           if (target && onOpenDocLinkRef.current) {

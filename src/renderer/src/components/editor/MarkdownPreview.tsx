@@ -26,7 +26,9 @@ import { detectLanguage } from '@/lib/language-detect'
 import type { MarkdownDocument, Worktree } from '../../../../shared/types'
 import {
   fileUrlToAbsolutePath,
+  getMarkdownPreviewImageOpenTarget,
   getMarkdownPreviewLinkTarget,
+  isMarkdownPreviewOpenModifier,
   resolveMarkdownPreviewHref
 } from './markdown-preview-links'
 import {
@@ -606,7 +608,53 @@ export default function MarkdownPreview({
         // instantiates component overrides as regular React components, so hooks
         // are valid here despite the lowercase function name.
         const resolvedSrc = useLocalImageSrc(src, filePath)
-        return <img {...props} src={resolvedSrc} alt={alt ?? ''} />
+        const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
+          if (!isMarkdownPreviewOpenModifier(event, isMac)) {
+            return
+          }
+
+          const target = getMarkdownPreviewImageOpenTarget(src, filePath)
+          if (!target) {
+            return
+          }
+
+          event.preventDefault()
+          event.stopPropagation()
+
+          if (target.protocol === 'http:' || target.protocol === 'https:') {
+            void window.api.shell.openUrl(target.toString())
+            return
+          }
+
+          if (target.protocol !== 'file:') {
+            return
+          }
+
+          const absolutePath = fileUrlToAbsolutePath(target)
+          if (!absolutePath) {
+            return
+          }
+
+          const targetWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath)
+          if (!targetWorktree) {
+            void window.api.shell.openFileUri(target.toString())
+            return
+          }
+
+          const relativePath = absolutePath.slice(targetWorktree.path.length + 1)
+          openFile({
+            filePath: absolutePath,
+            relativePath,
+            worktreeId: targetWorktree.id,
+            language: detectLanguage(absolutePath),
+            mode: 'edit'
+          })
+        }
+
+        // Why: display uses IPC-backed blob URLs, but Cmd/Ctrl-click should open
+        // the original markdown target so local and SSH worktree images route
+        // through the same editor path as normal file links.
+        return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
       // Why: Intercept code elements to detect mermaid fenced blocks. rehype-highlight
       // sets className="language-mermaid" on the <code> inside <pre> for ```mermaid blocks.

@@ -5,6 +5,7 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { detectLanguage } from '@/lib/language-detect'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -2130,6 +2131,25 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'file') {
+      if (target.relativePath !== undefined) {
+        // Why: explicit file:// links inside the active worktree should behave
+        // like relative file links and open in Orca, including image files.
+        get().openFile(
+          {
+            filePath: target.absolutePath,
+            relativePath: target.relativePath,
+            worktreeId: ctx.worktreeId,
+            language: detectLanguage(target.absolutePath),
+            mode: 'edit'
+          },
+          {
+            preview: true,
+            targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+            recordReplacedPreview: true
+          }
+        )
+        return
+      }
       void window.api.shell.openFileUri(target.uri)
       return
     }

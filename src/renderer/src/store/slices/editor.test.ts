@@ -1114,14 +1114,50 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().openFiles).toEqual([])
   })
 
-  it('delegates outside-worktree files to shell.openFileUri', async () => {
+  it('opens in-worktree file links in Orca', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('./image.png', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openFileUriMock).toHaveBeenCalledTimes(1)
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('opens explicit file URLs inside the worktree in Orca', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///repo/docs/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('delegates outside-worktree files to shell.openFileUri', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(openFileUriMock).toHaveBeenCalledWith('file:///tmp/image.png')
     expect(store.getState().openFiles).toEqual([])
   })
 

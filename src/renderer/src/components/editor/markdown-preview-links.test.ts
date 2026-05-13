@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   fileUrlToAbsolutePath,
   getMarkdownPreviewImageSrc,
+  getMarkdownPreviewImageOpenTarget,
   getMarkdownPreviewLinkTarget,
+  isMarkdownPreviewOpenModifier,
   resolveMarkdownPreviewHref,
   resolveImageAbsolutePath
 } from './markdown-preview-links'
@@ -50,6 +52,39 @@ describe('getMarkdownPreviewImageSrc', () => {
     expect(getMarkdownPreviewImageSrc('data:image/png;base64,abc', '/repo/docs/README.md')).toBe(
       'data:image/png;base64,abc'
     )
+  })
+})
+
+describe('getMarkdownPreviewImageOpenTarget', () => {
+  it('resolves a relative image src to a file URL for opening', () => {
+    expect(
+      getMarkdownPreviewImageOpenTarget('../assets/diagram.png', '/repo/docs/guides/README.md')
+        ?.href
+    ).toBe('file:///repo/docs/assets/diagram.png')
+  })
+
+  it('preserves external image URLs for opening', () => {
+    expect(
+      getMarkdownPreviewImageOpenTarget('https://example.com/img.png', '/repo/README.md')?.href
+    ).toBe('https://example.com/img.png')
+  })
+
+  it('does not open data image URLs', () => {
+    expect(
+      getMarkdownPreviewImageOpenTarget('data:image/png;base64,abc', '/repo/README.md')
+    ).toBeNull()
+  })
+})
+
+describe('isMarkdownPreviewOpenModifier', () => {
+  it('uses Cmd on macOS', () => {
+    expect(isMarkdownPreviewOpenModifier({ metaKey: true, ctrlKey: false }, true)).toBe(true)
+    expect(isMarkdownPreviewOpenModifier({ metaKey: false, ctrlKey: true }, true)).toBe(false)
+  })
+
+  it('uses Ctrl on non-macOS platforms', () => {
+    expect(isMarkdownPreviewOpenModifier({ metaKey: false, ctrlKey: true }, false)).toBe(true)
+    expect(isMarkdownPreviewOpenModifier({ metaKey: true, ctrlKey: false }, false)).toBe(false)
   })
 })
 
