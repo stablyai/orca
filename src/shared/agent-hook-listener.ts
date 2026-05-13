@@ -620,6 +620,14 @@ function isDroidPermissionNotification(message: string | undefined): boolean {
   )
 }
 
+function isDroidIdleNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return lower.includes('waiting for your input') || lower.includes('waiting for input')
+}
+
 function extractDroidToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
@@ -989,17 +997,23 @@ function normalizeDroidEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const notificationMessage = readString(hookPayload, 'message')
-  const stateName =
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
     eventName === 'UserPromptSubmit' ||
     eventName === 'SessionStart' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'Stop'
-        ? 'done'
-        : eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)
-          ? 'waiting'
-          : null
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'Stop') {
+    stateName = 'done'
+  } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {
+    // Why: Factory does not emit Stop when the user interrupts Droid, but it
+    // does emit an idle notification when Droid is ready for input again.
+    stateName = 'done'
+  }
   if (!stateName) {
     return null
   }

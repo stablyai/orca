@@ -121,8 +121,13 @@ export class DroidHookService {
     let state: AgentHookInstallState
     let detail: string | null
     if (missing.length === 0) {
-      state = 'installed'
-      detail = null
+      if (config.hooksDisabled === true) {
+        state = 'partial'
+        detail = 'Droid hooks are disabled in Factory settings'
+      } else {
+        state = 'installed'
+        detail = null
+      }
     } else if (presentCount === 0) {
       state = 'not_installed'
       detail = null

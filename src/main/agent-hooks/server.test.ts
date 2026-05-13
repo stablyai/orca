@@ -879,7 +879,7 @@ describe('Droid hook normalization', () => {
     expect(result?.payload.prompt).toBe('ship this fix')
   })
 
-  it('Notification maps to waiting only for permission-like messages', () => {
+  it('Notification maps permission prompts to waiting and idle prompts to done', () => {
     const waiting = _internals.normalizeHookPayload(
       'droid',
       buildBody({
@@ -890,11 +890,21 @@ describe('Droid hook normalization', () => {
     )
     expect(waiting?.payload.state).toBe('waiting')
 
-    const ignored = _internals.normalizeHookPayload(
+    const done = _internals.normalizeHookPayload(
       'droid',
       buildBody({
         hook_event_name: 'Notification',
         message: 'Droid is waiting for your input'
+      }),
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+
+    const ignored = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Task completed successfully'
       }),
       'production'
     )
