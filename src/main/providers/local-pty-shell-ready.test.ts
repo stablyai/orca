@@ -4,7 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { spawnSync } from 'child_process'
 import type * as pty from 'node-pty'
 import type * as LocalPtyShellReadyModule from './local-pty-shell-ready'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready'
@@ -342,5 +343,195 @@ describePosix('local PTY shell-ready launch config', () => {
         process.env.ZDOTDIR = previousZdotdir
       }
     }
+  })
+
+  it('writes a zshenv that lets user .zshenv compute its own ZDOTDIR (XDG case)', async () => {
+    // Why: the bug being fixed is that the old wrapper captured ORCA_ORIG_ZDOTDIR
+    // before user .zshenv ran, so XDG-layout users (where .zshenv sets ZDOTDIR
+    // to ~/.config/zsh) ended up sourcing ~/.zshrc instead of the real one.
+    // Pin the new template's three load-bearing lines so a future refactor
+    // can't silently regress the contract.
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    expect(zshenv).toContain('unset ZDOTDIR')
+    expect(zshenv).toContain('__orca_source_user_zshenv()')
+    expect(zshenv).toContain(
+      'export ORCA_ORIG_ZDOTDIR="${ZDOTDIR:-${_orca_spawn_orig_zdotdir:-$HOME}}"'
+    )
+    // Why: re-pin must use the baked wrapper dir, not $ORCA_ORIG_ZDOTDIR — a
+    // captured-from-spawn-env approach would be empty if a caller forgot to
+    // set ZDOTDIR in the spawn env.
+    expect(zshenv).toContain(`export ZDOTDIR='${join(userDataPath, 'shell-ready', 'zsh')}'`)
+  })
+
+  it('attribution launch config produces the same zsh wrapper content', async () => {
+    // Why: getAttributionShellLaunchConfig is a separate public entry point
+    // (used for attribution-shim PTYs that don't emit the ready marker).
+    // It must go through the same ensureShellReadyWrappers path, so the
+    // wrapper files on disk are identical and the XDG fix applies there too.
+    const { getShellReadyLaunchConfig, getAttributionShellLaunchConfig } =
+      await importFreshLocalPtyShellReady()
+
+    const ready = getShellReadyLaunchConfig('/bin/zsh')
+    const zshenvAfterReady = readFileSync(
+      join(userDataPath, 'shell-ready', 'zsh', '.zshenv'),
+      'utf8'
+    )
+
+    const attribution = getAttributionShellLaunchConfig('/bin/zsh')
+    const zshenvAfterAttribution = readFileSync(
+      join(userDataPath, 'shell-ready', 'zsh', '.zshenv'),
+      'utf8'
+    )
+
+    expect(zshenvAfterAttribution).toBe(zshenvAfterReady)
+    expect(attribution.env.ZDOTDIR).toBe(ready.env.ZDOTDIR)
+    expect(attribution.env.ORCA_ORIG_ZDOTDIR).toBe(ready.env.ORCA_ORIG_ZDOTDIR)
+    expect(attribution.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(attribution.supportsReadyMarker).toBe(false)
+  })
+})
+
+const zshBinary = (() => {
+  const result = spawnSync('zsh', ['-c', 'echo zsh-ok'])
+  return result.status === 0 ? 'zsh' : null
+})()
+
+const describeWithZsh =
+  process.platform === 'win32' || zshBinary === null ? describe.skip : describe
+
+describeWithZsh('local PTY shell-ready wrapper sourced by real zsh', () => {
+  let userDataPath: string
+  let homeDir: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'local-pty-shell-ready-zsh-test-'))
+    homeDir = mkdtempSync(join(tmpdir(), 'local-pty-shell-ready-zsh-home-'))
+    mkdirSync(join(homeDir, '.config', 'zsh'), { recursive: true })
+    getUserDataPathMock.mockReturnValue(userDataPath)
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+    rmSync(homeDir, { recursive: true, force: true })
+    vi.restoreAllMocks()
+  })
+
+  function runWrapperZshenv(env: Record<string, string>): { stdout: string; stderr: string } {
+    const wrapperZdotdir = join(userDataPath, 'shell-ready', 'zsh')
+    // Why: env -i would also work but is harder to drive cross-platform from
+    // Node. Pass an explicit env that only carries what the wrapper needs,
+    // so the parent process's XDG_CONFIG_HOME / ZDOTDIR don't leak through
+    // the user's .zshenv default-expansion idioms.
+    const result = spawnSync(
+      zshBinary as string,
+      [
+        '-f',
+        '-c',
+        `source "$ZDOTDIR/.zshenv"; printf 'ZDOTDIR=%s\\nORCA_ORIG_ZDOTDIR=%s\\n' "$ZDOTDIR" "$ORCA_ORIG_ZDOTDIR"`
+      ],
+      {
+        env: {
+          PATH: process.env.PATH || '/usr/bin:/bin',
+          HOME: homeDir,
+          ZDOTDIR: wrapperZdotdir,
+          ...env
+        },
+        encoding: 'utf8'
+      }
+    )
+    if (result.status !== 0) {
+      throw new Error(`zsh exited ${result.status}: ${result.stderr}`)
+    }
+    return { stdout: result.stdout, stderr: result.stderr }
+  }
+
+  it('captures the XDG-resolved ZDOTDIR into ORCA_ORIG_ZDOTDIR', async () => {
+    // Why: real-zsh proof of the bug fix. With the old wrapper, ORCA_ORIG_ZDOTDIR
+    // would end up at $HOME because user .zshenv ran AFTER the capture.
+    writeFileSync(
+      join(homeDir, '.zshenv'),
+      'export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"\n' +
+        'export ZDOTDIR="${ZDOTDIR:-$XDG_CONFIG_HOME/zsh}"\n',
+      'utf8'
+    )
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const { stdout } = runWrapperZshenv({})
+
+    expect(stdout).toContain(`ZDOTDIR=${join(userDataPath, 'shell-ready', 'zsh')}\n`)
+    expect(stdout).toContain(`ORCA_ORIG_ZDOTDIR=${join(homeDir, '.config', 'zsh')}\n`)
+  })
+
+  it('survives early-return in user .zshenv and still re-pins ZDOTDIR to the wrapper', async () => {
+    // Why: user dotfiles often guard expensive .zshenv setup with an early
+    // return (`[[ -o interactive ]] || return`, `[[ -n $TMUX ]] && return`,
+    // etc.). Without the function wrapper, that return would exit our
+    // wrapper .zshenv too — leaving ZDOTDIR unset and breaking the OSC 133;A
+    // ready-marker contract.
+    writeFileSync(join(homeDir, '.zshenv'), 'return 0\nexport ZDOTDIR=/never/reached\n', 'utf8')
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const { stdout } = runWrapperZshenv({ ORCA_ORIG_ZDOTDIR: homeDir })
+
+    expect(stdout).toContain(`ZDOTDIR=${join(userDataPath, 'shell-ready', 'zsh')}\n`)
+    // spawn-env ORCA_ORIG_ZDOTDIR survives the early return.
+    expect(stdout).toContain(`ORCA_ORIG_ZDOTDIR=${homeDir}\n`)
+  })
+
+  it('preserves spawn-env ORCA_ORIG_ZDOTDIR when user .zshenv does not set ZDOTDIR', async () => {
+    writeFileSync(join(homeDir, '.zshenv'), 'export FOO=bar\n', 'utf8')
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const customZdotdir = join(homeDir, '.config', 'zsh')
+    const { stdout } = runWrapperZshenv({ ORCA_ORIG_ZDOTDIR: customZdotdir })
+
+    expect(stdout).toContain(`ORCA_ORIG_ZDOTDIR=${customZdotdir}\n`)
+  })
+
+  it('falls back to HOME when neither user .zshenv nor spawn env set ORCA_ORIG_ZDOTDIR', async () => {
+    writeFileSync(join(homeDir, '.zshenv'), '\n', 'utf8')
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    // No ORCA_ORIG_ZDOTDIR in spawn env, and ORCA_ORIG_ZDOTDIR will be
+    // empty after `_orca_spawn_orig_zdotdir="${ORCA_ORIG_ZDOTDIR:-}"`.
+    // Forcing it absent with empty string mimics the unset case at this layer.
+    const { stdout } = runWrapperZshenv({ ORCA_ORIG_ZDOTDIR: '' })
+
+    expect(stdout).toContain(`ORCA_ORIG_ZDOTDIR=${homeDir}\n`)
+  })
+
+  it('normalizes a self-loop ORCA_ORIG_ZDOTDIR back to HOME at runtime', async () => {
+    // Why: pairs with the Node-side normalizer test above, but covers the
+    // case where user .zshenv exports a wrapper-shaped ZDOTDIR itself
+    // (e.g. by echoing back an inherited one).
+    const fakeWrapper = '/some/other/orca/shell-ready/zsh'
+    writeFileSync(join(homeDir, '.zshenv'), `export ZDOTDIR='${fakeWrapper}'\n`, 'utf8')
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const { stdout } = runWrapperZshenv({})
+
+    expect(stdout).toContain(`ORCA_ORIG_ZDOTDIR=${homeDir}\n`)
+  })
+
+  it('normalizes a wrapper-shaped ZDOTDIR with multiple trailing slashes', async () => {
+    // Why: matches the Node-side normalizer that strips all trailing slashes.
+    // Without the loop in the wrapper, `${var%/}` only strips one and the
+    // suffix check misses, restoring the recursion bug.
+    const fakeWrapper = '/some/other/orca/shell-ready/zsh///'
+    writeFileSync(join(homeDir, '.zshenv'), `export ZDOTDIR='${fakeWrapper}'\n`, 'utf8')
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const { stdout } = runWrapperZshenv({})
+
+    expect(stdout).toContain(`ORCA_ORIG_ZDOTDIR=${homeDir}\n`)
   })
 })

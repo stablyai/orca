@@ -77,18 +77,11 @@ function getShellReadyWrapperRoot(): string {
   return `${app.getPath('userData')}/shell-ready`
 }
 
-// Why: if our own process inherited ZDOTDIR from a parent shell that was
-// itself an Orca PTY (e.g. the user launched `pn dev` from a terminal inside
-// a running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
-// Propagating it as the new PTY's ORCA_ORIG_ZDOTDIR makes the wrapper's
-// `source "$ORCA_ORIG_ZDOTDIR/.zshenv"` line source itself recursively —
-// zsh gives "job table full or recursion limit exceeded" and the shell
-// never reaches a usable prompt.
-//
-// Any path component ending in `/shell-ready/zsh` is an Orca wrapper dir
-// (regardless of whether it came from this app's userData, a packaged Orca,
-// or a different dev build). Treat it as if ZDOTDIR were unset so the caller
-// falls back to HOME for the user's real config root.
+// Why: a wrapper-shaped ZDOTDIR inherited from a parent Orca PTY would make
+// the new PTY's downstream rcfiles re-source $ORCA_ORIG_ZDOTDIR/.zshrc etc.,
+// which is the wrapper file itself — zsh hits "recursion limit exceeded"
+// before reaching a prompt. Strip wrapper-shaped values here so the spawn
+// env stays clean (the wrapper .zshenv has its own self-loop guard too).
 function normalizeOriginalZdotdirCandidate(value: string | undefined): string | null {
   if (!value) {
     return null
@@ -171,11 +164,34 @@ function ensureShellReadyWrappers(): void {
   const bashDir = `${root}/bash`
 
   const zshEnv = `# Orca zsh shell-ready wrapper
-export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${ORCA_ORIG_ZDOTDIR%/}" in
+_orca_spawn_orig_zdotdir="\${ORCA_ORIG_ZDOTDIR:-}"
+# Why: clearing ZDOTDIR lets user .zshenv use the canonical XDG idiom
+# \`export ZDOTDIR="\${ZDOTDIR:-$XDG_CONFIG_HOME/zsh}"\` to compute its
+# preferred dir; pre-setting it (even to HOME) defeats that default.
+unset ZDOTDIR
+# Why: function isolates user .zshenv \`return\` so it doesn't abort our wrapper.
+# Trade-off: top-level \`setopt LOCAL_OPTIONS\`/\`LOCAL_TRAPS\`, \`TRAPEXIT\`, and
+# bare \`local\`/\`typeset\` in user .zshenv become function-scoped; use \`typeset -g\`
+# or \`export\` to escape.
+__orca_source_user_zshenv() {
+  [[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"
+}
+__orca_source_user_zshenv
+unfunction __orca_source_user_zshenv
+# Why: prefer the ZDOTDIR user .zshenv resolved (XDG case); else preserve
+# the spawn-env value (an inherited resolution from a parent Orca PTY);
+# else HOME.
+export ORCA_ORIG_ZDOTDIR="\${ZDOTDIR:-\${_orca_spawn_orig_zdotdir:-$HOME}}"
+unset _orca_spawn_orig_zdotdir
+# Why: strip trailing slashes (matches Node-side normalizer) before the
+# self-loop check, so a wrapper-shaped ZDOTDIR with one or more trailing
+# slashes still gets normalized away from .zprofile/.zshrc/.zlogin.
+while [[ "\${ORCA_ORIG_ZDOTDIR}" == */ ]]; do
+  ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR%/}"
+done
+case "\${ORCA_ORIG_ZDOTDIR}" in
   */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
 esac
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
 export ZDOTDIR=${quotePosixSingle(zshDir)}
 `
   const zshProfile = `# Orca zsh shell-ready wrapper
