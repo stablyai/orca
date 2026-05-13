@@ -144,7 +144,11 @@ function shouldBroadcastQueued(reason: GitHubPRRefreshReason, dueAt: number): bo
   if (isBudgetedBackground(reason)) {
     return false
   }
-  return dueAt - Date.now() <= 5_000
+  const delay = dueAt - Date.now()
+  if (delay <= 0) {
+    return false
+  }
+  return delay <= 5_000
 }
 
 function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
@@ -413,7 +417,11 @@ export function enqueuePRRefresh(
   const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
   if (existing) {
     existing.aliases.set(alias.cacheKey, alias)
-    if (priority > existing.priority || isManual(reason)) {
+    const shouldPromoteExisting =
+      priority > existing.priority ||
+      isManual(reason) ||
+      (priority >= existing.priority && dueAt < existing.dueAt && bypassesFreshnessDelay(reason))
+    if (shouldPromoteExisting) {
       existing.priority = priority
       existing.reason = reason
       existing.dueAt = Math.min(existing.dueAt, dueAt)

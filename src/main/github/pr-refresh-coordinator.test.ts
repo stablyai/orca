@@ -126,6 +126,48 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
+  it('lets a repeated active refresh pull forward an equal-priority visible follow-up', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', state: 'merged' }),
+        fetchedAt: Date.now()
+      })
+
+    const candidate = makeCandidate()
+    enqueuePRRefresh(candidate, 'active', 80, 1)
+    await vi.runOnlyPendingTimersAsync()
+
+    enqueuePRRefresh(
+      {
+        ...candidate,
+        cachedFetchedAt: Date.now(),
+        cachedChecksStatus: 'success'
+      },
+      'active',
+      80,
+      1
+    )
+    await vi.runOnlyPendingTimersAsync()
+
+    const inFlightEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.status === 'in-flight')
+    const queuedEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.status === 'queued')
+
+    expect(inFlightEvents.map((event) => event.reason)).toEqual(['active', 'active'])
+    expect(queuedEvents).toHaveLength(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
   it('preserves coalesced aliases across visible follow-up refreshes', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock
