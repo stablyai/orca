@@ -662,11 +662,23 @@ function threadAgentStateLabel(thread: AgentPaneThread): string {
 function threadSearchText(thread: AgentPaneThread): string {
   const latest = thread.latestEvent
   const stateLabel = threadAgentStateLabel(thread)
+  const currentPrompt = thread.currentAgentEntry?.prompt.trim() ?? ''
   const currentSummary = thread.currentAgentEntry?.lastAssistantMessage?.trim() ?? ''
   const latestEventText = latest
     ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
     : ''
-  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentSummary} ${latestEventText}`.toLowerCase()
+  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${currentSummary} ${latestEventText}`.toLowerCase()
+}
+
+export function activityThreadMatchesSearchQuery({
+  thread,
+  searchQuery
+}: {
+  thread: AgentPaneThread
+  searchQuery: string
+}): boolean {
+  const trimmedQuery = searchQuery.trim().toLowerCase()
+  return !trimmedQuery || threadSearchText(thread).includes(trimmedQuery)
 }
 
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
@@ -913,10 +925,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       if (readFilter === 'unread' && !thread.unread && thread.paneKey !== selectedPaneKey) {
         return false
       }
-      if (!trimmedQuery) {
-        return true
-      }
-      return threadSearchText(thread).includes(trimmedQuery)
+      return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
     })
   }, [allThreads, readFilter, query, selectedPaneKey])
 

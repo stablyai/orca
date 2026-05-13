@@ -5,7 +5,11 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import { buildActivityEvents, buildAgentPaneThreads } from './ActivityPrototypePage'
+import {
+  activityThreadMatchesSearchQuery,
+  buildActivityEvents,
+  buildAgentPaneThreads
+} from './ActivityPrototypePage'
 
 function makeRepo(): Repo {
   return {
@@ -200,6 +204,43 @@ describe('buildActivityEvents', () => {
       latestEvent: null,
       unread: false
     })
+  })
+
+  it('matches a custom-titled live thread by its current prompt', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab = { ...makeTab(), customTitle: 'Pinned agent title' }
+    const entry = {
+      ...makeWorkingEntryWithoutHistory(),
+      prompt: 'Investigate activity live prompt search'
+    }
+
+    const result = buildActivityEvents({
+      agentStatusByPaneKey: {
+        'tab-1:1': entry
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: {
+        [worktree.id]: [tab]
+      },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 3_000
+    })
+
+    const threads = buildAgentPaneThreads({
+      events: result.events,
+      liveAgentByPaneKey: result.liveAgentByPaneKey
+    })
+
+    expect(threads[0].paneTitle).toBe('Pinned agent title')
+    expect(
+      activityThreadMatchesSearchQuery({
+        thread: threads[0],
+        searchQuery: 'live prompt search'
+      })
+    ).toBe(true)
   })
 
   it('overlays fresh live state onto retained-only activity for a reused pane key', () => {
