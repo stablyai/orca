@@ -76,6 +76,7 @@ docs/*.md
 !.stably/docs/
 .playwright-cli
 .validate-ui-screenshots/
+validation-screenshots/
 .stably-browser
 
 # Playwright
