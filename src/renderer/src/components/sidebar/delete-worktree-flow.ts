@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import type { Worktree } from '../../../../shared/types'
 
 // Why: a failed delete almost always means the worktree still has changes
 // that need attention (uncommitted work, unpushed commits, conflicts). The
@@ -125,4 +126,35 @@ export function runWorktreeDelete(worktreeId: string): void {
     return
   }
   state.openModal('delete-worktree', { worktreeId })
+}
+
+export function runWorktreeBatchDelete(worktreeIds: readonly string[]): void {
+  const state = useAppStore.getState()
+  const worktreeMap = getWorktreeMapFromState(state)
+  const targets = worktreeIds
+    .map((id) => worktreeMap.get(id) ?? null)
+    .filter((worktree): worktree is Worktree => worktree != null && !worktree.isMainWorktree)
+
+  if (targets.length === 0) {
+    return
+  }
+
+  for (const target of targets) {
+    state.clearWorktreeDeleteState(target.id)
+  }
+
+  const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
+  if (skipConfirm) {
+    for (const target of targets) {
+      runWorktreeDeleteWithToast(target.id, target.displayName)
+    }
+    return
+  }
+
+  if (targets.length === 1) {
+    state.openModal('delete-worktree', { worktreeId: targets[0].id })
+    return
+  }
+
+  state.openModal('delete-worktree', { worktreeIds: targets.map((target) => target.id) })
 }

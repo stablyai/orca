@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: SSH connection lifecycle, credential retries, reconnect policy, and transport fallback are intentionally co-located so state transitions stay auditable in one file. */
+import * as net from 'net'
 import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'child_process'
 import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
@@ -220,6 +221,22 @@ export class SshConnection {
         settled = true
         this.client = client
         this.proxyProcess = null
+        // Why: ssh2 leaves Nagle's algorithm on by default. For single-byte
+        // keystrokes through a remote PTY this stacks with the kernel's
+        // delayed-ACK timer and adds up to ~40 ms per keystroke. OpenSSH's
+        // `ssh` sets TCP_NODELAY whenever a PTY is allocated; we mirror that
+        // because every channel we open over this connection (PTY data,
+        // JSON-RPC requests, port-scan probes) is latency-sensitive. No-op
+        // for proxy-command / proxy-jump connections where _sock is a custom
+        // Duplex; that case relies on the proxy program's own TCP behavior,
+        // same as native ssh.
+        const sock = (client as unknown as { _sock?: { setNoDelay?: unknown } })._sock
+        if (sock instanceof net.Socket) {
+          console.warn(`[ssh] TCP_NODELAY enabled for ${this.target.label}`)
+        } else {
+          console.warn(`[ssh] TCP_NODELAY skipped for ${this.target.label} (proxy socket)`)
+        }
+        client.setNoDelay(true)
         this.setState('connected')
         this.setupDisconnectHandler(client)
         resolve()

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Github, List, Search } from 'lucide-react'
+import { Bell, Github, List, Search } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,7 @@ const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('
 
 const SidebarNav = React.memo(function SidebarNav() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
+  const openActivityPage = useAppStore((s) => s.openActivityPage)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
   const repos = useAppStore((s) => s.repos)
@@ -19,6 +20,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   // Why: the setting is opt-out (default true). `!== false` keeps the button
   // visible for users whose persisted settings predate this field.
   const showTasksButton = useAppStore((s) => s.settings?.showTasksButton !== false)
+  const showActivityButton = useAppStore((s) => s.settings?.experimentalActivity === true)
 
   // Why: warm the GitHub work-item cache on hover/focus so by the time the
   // user's click finishes the round-trip has either completed or is already
@@ -48,6 +50,37 @@ const SidebarNav = React.memo(function SidebarNav() {
   }, [activeRepoId, canBrowseTasks, defaultTaskViewPreset, prefetchWorkItems, repoMap, repos])
 
   const tasksActive = activeView === 'tasks'
+  const activityActive = activeView === 'activity'
+  const activityUnreadCount = useAppStore((s) => {
+    if (s.settings?.experimentalActivity !== true) {
+      return 0
+    }
+    let count = 0
+    for (const worktrees of Object.values(s.worktreesByRepo)) {
+      for (const worktree of worktrees) {
+        if (worktree.createdAt && worktree.isUnread) {
+          count += 1
+        }
+      }
+    }
+    for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
+      if (entry.state !== 'done' && entry.state !== 'blocked' && entry.state !== 'waiting') {
+        continue
+      }
+      if ((s.acknowledgedAgentsByPaneKey[paneKey] ?? 0) < entry.stateStartedAt) {
+        count += 1
+      }
+    }
+    for (const [paneKey, retained] of Object.entries(s.retainedAgentsByPaneKey)) {
+      if (retained.entry.state !== 'done') {
+        continue
+      }
+      if ((s.acknowledgedAgentsByPaneKey[paneKey] ?? 0) < retained.entry.stateStartedAt) {
+        count += 1
+      }
+    }
+    return count
+  })
 
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
@@ -107,6 +140,30 @@ const SidebarNav = React.memo(function SidebarNav() {
               <LinearIcon className="size-3.5" />
             </span>
           </span>
+        </button>
+      ) : null}
+      {showActivityButton ? (
+        <button
+          type="button"
+          onClick={openActivityPage}
+          aria-current={activityActive ? 'page' : undefined}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            activityActive
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+          )}
+        >
+          <Bell
+            className={cn('size-4 shrink-0', !activityActive && 'text-sidebar-foreground/30')}
+            strokeWidth={activityActive ? 2.25 : 1.75}
+          />
+          <span className="flex-1">Activity</span>
+          {activityUnreadCount > 0 ? (
+            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+              {activityUnreadCount}
+            </span>
+          ) : null}
         </button>
       ) : null}
       <button

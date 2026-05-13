@@ -277,30 +277,34 @@ function openMainWindow(): BrowserWindow {
     }
   })
   mainWindow = window
-  agentHookServer.setListener(({ paneKey, tabId, worktreeId, connectionId, payload }) => {
-    if (mainWindow?.isDestroyed()) {
-      return
+  agentHookServer.setListener(
+    ({ paneKey, tabId, worktreeId, connectionId, payload, receivedAt, stateStartedAt }) => {
+      if (mainWindow?.isDestroyed()) {
+        return
+      }
+      mainWindow?.webContents.send('agentStatus:set', {
+        ...payload,
+        paneKey,
+        tabId,
+        worktreeId,
+        connectionId,
+        receivedAt,
+        stateStartedAt
+      })
+      // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
+      // and opencode's stays bare "OpenCode" — neither carries a working/idle
+      // signal the title heuristic can read. Synthesize an OSC title update
+      // from the hook state and inject it into the pane's data stream so the
+      // existing renderer-side title tracker (which drives the sidebar
+      // spinner, unread badge, and worktree status dot for every other agent)
+      // lights up for these panes too. Braille prefix → working keyword path;
+      // "action required" → permission; bare label → idle.
+      const profile = SYNTHETIC_TITLE_PROFILES[payload.agentType ?? '']
+      if (profile) {
+        driveSyntheticTitleFromHook(paneKey, payload.state, profile)
+      }
     }
-    mainWindow?.webContents.send('agentStatus:set', {
-      ...payload,
-      paneKey,
-      tabId,
-      worktreeId,
-      connectionId
-    })
-    // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
-    // and opencode's stays bare "OpenCode" — neither carries a working/idle
-    // signal the title heuristic can read. Synthesize an OSC title update
-    // from the hook state and inject it into the pane's data stream so the
-    // existing renderer-side title tracker (which drives the sidebar
-    // spinner, unread badge, and worktree status dot for every other agent)
-    // lights up for these panes too. Braille prefix → working keyword path;
-    // "action required" → permission; bare label → idle.
-    const profile = SYNTHETIC_TITLE_PROFILES[payload.agentType ?? '']
-    if (profile) {
-      driveSyntheticTitleFromHook(paneKey, payload.state, profile)
-    }
-  })
+  )
   return window
 }
 

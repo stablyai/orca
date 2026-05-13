@@ -10,6 +10,14 @@ import type { RpcTransport } from './transport'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 const MAX_WS_CONNECTIONS = 32
+type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
+type WebSocketMessageHandler = {
+  bivarianceHack(
+    msg: WebSocketMessagePayload,
+    reply: (response: string) => void,
+    ws: WebSocket
+  ): void
+}['bivarianceHack']
 
 // Why: mobile clients (iOS/Android) regularly background-suspend their
 // sockets without the OS sending a TCP FIN/RST, leaving the server with
@@ -45,9 +53,7 @@ export class WebSocketTransport implements RpcTransport {
   // sweep. A socket missing from the set when the next sweep fires is
   // assumed dead and terminated.
   private wsAlive = new WeakSet<WebSocket>()
-  private messageHandler:
-    | ((msg: string, reply: (response: string) => void, ws: WebSocket) => void)
-    | null = null
+  private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler:
     | ((clientId: string, ws: WebSocket, hasOtherConnections: boolean) => void)
     | null = null
@@ -63,9 +69,7 @@ export class WebSocketTransport implements RpcTransport {
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
   }
 
-  onMessage(
-    handler: (msg: string, reply: (response: string) => void, ws: WebSocket) => void
-  ): void {
+  onMessage(handler: WebSocketMessageHandler): void {
     this.messageHandler = handler
   }
 
@@ -240,13 +244,18 @@ export class WebSocketTransport implements RpcTransport {
       this.wsAlive.add(ws)
     })
 
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
       // Why: any inbound traffic counts as proof of life, not just pongs.
       // RN's WebSocket runtime auto-pongs server pings transparently, but
       // app-level frames also count toward liveness so an actively-talking
       // client doesn't get terminated mid-request.
       this.wsAlive.add(ws)
-      const msg = typeof data === 'string' ? data : data.toString('utf-8')
+      const msg =
+        typeof data === 'string'
+          ? data
+          : isBinary
+            ? new Uint8Array(data as Buffer)
+            : data.toString()
       this.messageHandler?.(
         msg,
         (response) => {

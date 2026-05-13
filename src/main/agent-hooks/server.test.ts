@@ -74,17 +74,21 @@ describe('AgentHookServer listener replay', () => {
       server.setListener(listener)
 
       expect(listener).toHaveBeenCalledTimes(1)
-      expect(listener).toHaveBeenCalledWith({
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        connectionId: null,
-        payload: expect.objectContaining({
-          state: 'working',
-          prompt: 'replay me',
-          agentType: 'claude'
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: expect.any(Number),
+          stateStartedAt: expect.any(Number),
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'replay me',
+            agentType: 'claude'
+          })
         })
-      })
+      )
     } finally {
       server.stop()
     }
@@ -149,17 +153,21 @@ describe('AgentHookServer listener replay', () => {
       const listener = vi.fn()
       server.setListener(listener)
 
-      expect(listener).toHaveBeenCalledWith({
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'repo::/tmp/worktree with "quotes"',
-        connectionId: null,
-        payload: expect.objectContaining({
-          state: 'working',
-          prompt: 'form encoded',
-          agentType: 'claude'
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'repo::/tmp/worktree with "quotes"',
+          connectionId: null,
+          receivedAt: expect.any(Number),
+          stateStartedAt: expect.any(Number),
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'form encoded',
+            agentType: 'claude'
+          })
         })
-      })
+      )
     } finally {
       server.stop()
     }
@@ -1265,6 +1273,394 @@ describe('Endpoint file lifecycle', () => {
   })
 })
 
+describe('Last-status persistence', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-laststatus-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  function lastStatusPath(): string {
+    return join(userDataPath, 'agent-hooks', 'last-status.json')
+  }
+
+  // Why: hydrate now drops entries older than 7d (HYDRATE_MAX_AGE_MS). Use
+  // a recent-but-not-Date.now() timestamp in fixtures so the tests assert
+  // hydration behavior rather than racing the wall clock.
+  function recentTs(offsetMs = 0): number {
+    return Date.now() - 60 * 60 * 1000 + offsetMs
+  }
+
+  async function postHookEvent(
+    server: AgentHookServer,
+    body: Body,
+    path: string = '/hook/claude'
+  ): Promise<Response> {
+    const env = server.buildPtyEnv()
+    return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify(body)
+    })
+  }
+
+  it('writes last-status.json after a hook event', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persist me' })
+      )
+      // Synchronous flush via stop() captures the trailing-debounced write.
+      server.flushStatusPersistSync()
+      expect(existsSync(lastStatusPath())).toBe(true)
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(file.version).toBe(2)
+      expect(file.entries[PANE]).toMatchObject({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        receivedAt: expect.any(Number),
+        stateStartedAt: expect.any(Number),
+        payload: expect.objectContaining({ state: 'working', prompt: 'persist me' })
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('hydrates last-status.json into the cache before listener registration', async () => {
+    // Pre-populate the file directly to simulate a prior session.
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const stateStartedAt = recentTs(-1000)
+    const fileContents = {
+      version: 2,
+      entries: {
+        [PANE]: {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          receivedAt,
+          stateStartedAt,
+          payload: {
+            state: 'done',
+            prompt: 'survived restart',
+            agentType: 'claude'
+          }
+        }
+      }
+    }
+    writeFileSync(lastStatusPath(), JSON.stringify(fileContents), 'utf8')
+
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          receivedAt,
+          stateStartedAt,
+          payload: expect.objectContaining({
+            state: 'done',
+            prompt: 'survived restart',
+            agentType: 'claude'
+          })
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          receivedAt,
+          stateStartedAt,
+          state: 'done',
+          prompt: 'survived restart',
+          agentType: 'claude'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('treats a corrupt file as empty hydration without throwing', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(lastStatusPath(), 'not-json{{', 'utf8')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('rejects a stale version mismatch on hydrate', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 1,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            receivedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            payload: { state: 'done', prompt: 'old version', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('version mismatch'))
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('drops entries with malformed paneKeys but keeps valid ones', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          // Missing colon — drop.
+          'no-colon': {
+            paneKey: 'no-colon',
+            receivedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            payload: { state: 'done', prompt: 'bad', agentType: 'claude' }
+          },
+          // Embedded paneKey mismatch — drop.
+          [PANE]: {
+            paneKey: 'tab-x:99',
+            receivedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
+          },
+          // Valid.
+          'tab-good:0': {
+            paneKey: 'tab-good:0',
+            tabId: 'tab-good',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'done', prompt: 'survived', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: 'tab-good:0',
+          payload: expect.objectContaining({ prompt: 'survived' })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('drops hydrate entries older than the TTL cutoff', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const eightDaysAgoMs = Date.now() - 8 * 24 * 60 * 60 * 1000
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          // Stale — should be dropped.
+          'tab-old:0': {
+            paneKey: 'tab-old:0',
+            tabId: 'tab-old',
+            receivedAt: eightDaysAgoMs,
+            stateStartedAt: eightDaysAgoMs - 1000,
+            payload: { state: 'done', prompt: 'old', agentType: 'claude' }
+          },
+          // Recent — should survive.
+          'tab-fresh:0': {
+            paneKey: 'tab-fresh:0',
+            tabId: 'tab-fresh',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'done', prompt: 'fresh', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const snapshot = server.getStatusSnapshot()
+      expect(snapshot.map((e) => e.paneKey)).toEqual(['tab-fresh:0'])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('drops a hydrate entry whose tabId disagrees with the paneKey prefix', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab-A:0': {
+            paneKey: 'tab-A:0',
+            // Why: deliberately divergent — paneKey says tab-A, the entry
+            // claims tab-B. Sanitizer must drop rather than hydrate this
+            // inconsistent row.
+            tabId: 'tab-B',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('clearPaneState evicts the entry from the on-disk file', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'about to drop' })
+      )
+      server.flushStatusPersistSync()
+      let parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(parsed.entries[PANE]).toBeTruthy()
+
+      server.clearPaneState(PANE)
+      server.flushStatusPersistSync()
+      parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(parsed.entries[PANE]).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('skips a write when the serialized contents are byte-identical to the previous write', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
+      )
+      server.flushStatusPersistSync()
+      const firstMtime = statSync(lastStatusPath()).mtimeMs
+
+      // Why: a no-op clearPaneState on a paneKey not in the cache is a
+      // mutation site that should NOT trigger a redundant write. (clear was
+      // designed to bail when nothing was evicted.)
+      server.clearPaneState('non-existent:0')
+      server.flushStatusPersistSync()
+      // Touch back to the same mtime would let the test pass spuriously, so
+      // assert no rewrite happened by checking that mtime is unchanged after
+      // a forced sync flush.
+      const secondMtime = statSync(lastStatusPath()).mtimeMs
+      expect(secondMtime).toBe(firstMtime)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('stop() flushes pending debounced writes synchronously', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'flush me' })
+      )
+      // Note: do NOT call flushStatusPersistSync explicitly — let stop() do it.
+    } finally {
+      server.stop()
+    }
+    // Why: file written even though we never explicitly flushed before stop —
+    // stop() must synchronously drain the pending trailing-debounced timer.
+    expect(existsSync(lastStatusPath())).toBe(true)
+    const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')
+  })
+})
+
 describe('AgentHookServer ingestRemote', () => {
   it('stamps connectionId and forwards a valid relay envelope to the listener', () => {
     const server = new AgentHookServer()
@@ -1278,13 +1674,17 @@ describe('AgentHookServer ingestRemote', () => {
     server.setListener(listener)
     server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
     expect(listener).toHaveBeenCalledTimes(1)
-    expect(listener).toHaveBeenCalledWith({
-      paneKey: PANE,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      connectionId: 'conn-1',
-      payload
-    })
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: 'conn-1',
+        receivedAt: expect.any(Number),
+        stateStartedAt: expect.any(Number),
+        payload
+      })
+    )
   })
 
   it('drops envelopes whose payload state is not in AGENT_STATUS_STATES', () => {

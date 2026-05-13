@@ -529,6 +529,11 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'toggleFloatingTerminal') {
+      mainWindow.webContents.send('ui:toggleFloatingTerminal')
+      return
+    }
+
     if (action.type === 'openQuickOpen') {
       // Forward Cmd/Ctrl+P to trigger Quick Open
       mainWindow.webContents.send('ui:openQuickOpen')

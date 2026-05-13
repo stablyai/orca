@@ -8,7 +8,7 @@ import type {
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
 
-type WorkspaceSessionSnapshot = Pick<
+export type WorkspaceSessionSnapshot = Pick<
   AppState,
   | 'activeRepoId'
   | 'activeWorktreeId'
@@ -33,6 +33,44 @@ type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
 >
+
+// Why: the App-level Zustand subscriber that debounces session writes uses
+// this list as a shallow-equality gate so it only resets the timer when a
+// field that actually feeds buildWorkspaceSessionPayload changes. Keeping
+// the list co-located with WorkspaceSessionSnapshot means a future field
+// added to the snapshot type fails the _exhaustive check below at compile
+// time, preventing the gate from silently going stale.
+export const SESSION_RELEVANT_FIELDS = [
+  'activeRepoId',
+  'activeWorktreeId',
+  'activeTabId',
+  'tabsByWorktree',
+  'terminalLayoutsByTabId',
+  'activeTabIdByWorktree',
+  'openFiles',
+  'activeFileIdByWorktree',
+  'activeTabTypeByWorktree',
+  'browserTabsByWorktree',
+  'browserPagesByWorkspace',
+  'activeBrowserTabIdByWorktree',
+  'browserUrlHistory',
+  'unifiedTabsByWorktree',
+  'groupsByWorktree',
+  'layoutByWorktree',
+  'activeGroupIdByWorktree',
+  'sshConnectionStates',
+  'repos',
+  'worktreesByRepo',
+  'lastKnownRelayPtyIdByTabId',
+  'lastVisitedAtByWorktreeId'
+] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
+
+type _MissingSessionField = Exclude<
+  keyof WorkspaceSessionSnapshot,
+  (typeof SESSION_RELEVANT_FIELDS)[number]
+>
+const _exhaustive: [_MissingSessionField] extends [never] ? true : never = true
+void _exhaustive
 
 /** Build the editor-file portion of the workspace session for persistence.
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
@@ -132,13 +170,21 @@ export function buildBrowserSessionData(
 export function buildWorkspaceSessionPayload(
   snapshot: WorkspaceSessionSnapshot
 ): WorkspaceSessionState {
+  const tabsByWorktree = snapshot.tabsByWorktree
+  const activeTabIdByWorktree = snapshot.activeTabIdByWorktree
+  const unifiedTabsByWorktree = snapshot.unifiedTabsByWorktree
+  const groupsByWorktree = snapshot.groupsByWorktree
+  const layoutByWorktree = snapshot.layoutByWorktree
+  const activeGroupIdByWorktree = snapshot.activeGroupIdByWorktree
+  const terminalLayoutsByTabId = snapshot.terminalLayoutsByTabId
+
   // Why: lastKnownRelayPtyIdByTabId preserves session IDs across relay
   // disconnect/reconnect cycles. tab.ptyId is cleared on disconnect, but
   // the relay keeps the PTY alive — using the lastKnown fallback ensures
   // the session save captures the ID even when the mux is temporarily down.
   const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
 
-  const activeWorktreeIdsOnShutdown = Object.entries(snapshot.tabsByWorktree)
+  const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
     .filter(([, tabs]) => tabs.some((tab) => tab.ptyId || lastKnown[tab.id]))
     .map(([worktreeId]) => worktreeId)
 
@@ -153,7 +199,7 @@ export function buildWorkspaceSessionPayload(
   // here avoids a sync IPC round-trip during beforeunload, which is fragile
   // (can be dropped by Chromium under shutdown time pressure).
   const remoteSessionIdsByTabId: Record<string, string> = {}
-  for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const worktree = Object.values(snapshot.worktreesByRepo)
       .flat()
       .find((w) => w.id === worktreeId)
@@ -179,7 +225,7 @@ export function buildWorkspaceSessionPayload(
   // spawn from the sidebar's recency sort. Strip it here to enforce the
   // type-level invariant at the persistence boundary.
   const sanitizedTabsByWorktree = Object.fromEntries(
-    Object.entries(snapshot.tabsByWorktree).map(([worktreeId, tabs]) => [
+    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
         const { pendingActivationSpawn: _unused, ...rest } = tab
@@ -194,12 +240,12 @@ export function buildWorkspaceSessionPayload(
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: sanitizedTabsByWorktree,
-    terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
+    terminalLayoutsByTabId,
     // Why: session:set fully replaces the persisted object, so every write path
     // must carry forward which worktrees still had live PTYs. Dropping this
     // field silently disables eager terminal reconnect on the next restart.
     activeWorktreeIdsOnShutdown,
-    activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
+    activeTabIdByWorktree,
     ...buildEditorSessionData(
       snapshot.openFiles,
       snapshot.activeFileIdByWorktree,
@@ -211,10 +257,10 @@ export function buildWorkspaceSessionPayload(
       snapshot.activeBrowserTabIdByWorktree
     ),
     browserUrlHistory: snapshot.browserUrlHistory,
-    unifiedTabs: snapshot.unifiedTabsByWorktree,
-    tabGroups: snapshot.groupsByWorktree,
-    tabGroupLayouts: snapshot.layoutByWorktree,
-    activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree,
+    unifiedTabs: unifiedTabsByWorktree,
+    tabGroups: groupsByWorktree,
+    tabGroupLayouts: layoutByWorktree,
+    activeGroupIdByWorktree,
     activeConnectionIdsAtShutdown: connectedTargetIds.length > 0 ? connectedTargetIds : undefined,
     remoteSessionIdsByTabId:
       Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined,

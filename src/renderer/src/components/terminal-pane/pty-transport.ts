@@ -42,6 +42,7 @@ export { extractLastOscTitle } from '../../../../shared/agent-detection'
 // 1337=iTerm2, 9001=Warp). Agents report structured status by printing
 // printf '\x1b]9999;{"state":"working","prompt":"..."}\x07'
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
+const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 
 export type ProcessedAgentStatusChunk = {
   cleanData: string
@@ -400,6 +401,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return spawnResult.id
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        if (connectionId && options.sessionId && msg.includes(SSH_SESSION_EXPIRED_ERROR)) {
+          return {
+            id: options.sessionId,
+            sessionExpired: true
+          } satisfies PtyConnectResult
+        }
         // Why: after "Kill All" from Settings → Manage Sessions, mounted panes
         // can still trigger pty:spawn with the killed session ID (tab remount,
         // navigating back to the workspace). The main-side adapter correctly

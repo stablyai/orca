@@ -1,5 +1,6 @@
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
+import { join } from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
@@ -15,7 +16,8 @@ import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
-import { readRelayFileContent } from './fs-handler-file-read'
+import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
+import { RelayStreamRegistry } from './fs-stream-registry'
 
 type WatchState = {
   rootPath: string
@@ -24,9 +26,29 @@ type WatchState = {
   isStale: () => boolean
 }
 
+async function isDirectoryEntry(
+  dirPath: string,
+  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }
+): Promise<boolean> {
+  if (entry.isDirectory()) {
+    return true
+  }
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  try {
+    // Why: the file explorer needs target type for symlinked directories so a
+    // workspace link to an external folder expands instead of opening as a file.
+    return (await stat(join(dirPath, entry.name))).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 export class FsHandler {
   private dispatcher: RelayDispatcher
   private watches = new Map<string, WatchState>()
+  private streamRegistry = new RelayStreamRegistry()
 
   constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
     this.dispatcher = dispatcher
@@ -36,6 +58,7 @@ export class FsHandler {
   private registerHandlers(): void {
     this.dispatcher.onRequest('fs.readDir', (p) => this.readDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
+    this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
     this.dispatcher.onRequest('fs.writeFile', (p) => this.writeFile(p))
     this.dispatcher.onRequest('fs.stat', (p) => this.stat(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
@@ -48,28 +71,46 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
     this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p) => this.unwatch(p))
+    this.dispatcher.onNotification('fs.cancelStream', (p) => this.cancelStream(p))
   }
 
   private async readDir(params: Record<string, unknown>) {
     const dirPath = expandTilde(params.dirPath as string)
     const entries = await readdir(dirPath, { withFileTypes: true })
-    return entries
-      .map((entry) => ({
+    const mapped = await Promise.all(
+      entries.map(async (entry) => ({
         name: entry.name,
-        isDirectory: entry.isDirectory(),
+        isDirectory: await isDirectoryEntry(dirPath, entry),
         isSymlink: entry.isSymbolicLink()
       }))
-      .sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1
-        }
-        return a.name.localeCompare(b.name)
-      })
+    )
+    return mapped.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1
+      }
+      return a.name.localeCompare(b.name)
+    })
   }
 
   private async readFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
     return readRelayFileContent(filePath)
+  }
+
+  private async readFileStream(
+    params: Record<string, unknown>,
+    context?: { isStale: () => boolean }
+  ) {
+    const filePath = expandTilde(params.filePath as string)
+    const ctx = context ?? { isStale: () => false }
+    return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx)
+  }
+
+  private cancelStream(params: Record<string, unknown>): void {
+    const streamId = params.streamId as number | undefined
+    if (typeof streamId === 'number') {
+      this.streamRegistry.abort(streamId)
+    }
   }
 
   private async writeFile(params: Record<string, unknown>) {
@@ -90,15 +131,24 @@ export class FsHandler {
 
   private async stat(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    // Why: lstat is used instead of stat so that symlinks are reported as
-    // symlinks rather than being silently followed. stat() follows symlinks,
-    // meaning isSymbolicLink() would always return false.
     const stats = await lstat(filePath)
+    if (stats.isSymbolicLink()) {
+      try {
+        // Why: callers use stat to decide whether to read a path or enumerate
+        // it; symlink-to-directory must behave like its target for that choice.
+        const targetStats = await stat(filePath)
+        return {
+          size: targetStats.size,
+          type: targetStats.isDirectory() ? 'directory' : 'file',
+          mtime: targetStats.mtimeMs
+        }
+      } catch {
+        return { size: stats.size, type: 'symlink', mtime: stats.mtimeMs }
+      }
+    }
     let type: 'file' | 'directory' | 'symlink' = 'file'
     if (stats.isDirectory()) {
       type = 'directory'
-    } else if (stats.isSymbolicLink()) {
-      type = 'symlink'
     }
     return { size: stats.size, type, mtime: stats.mtimeMs }
   }
@@ -296,5 +346,6 @@ export class FsHandler {
       state.unwatchFn?.()
     }
     this.watches.clear()
+    void this.streamRegistry.disposeAll()
   }
 }

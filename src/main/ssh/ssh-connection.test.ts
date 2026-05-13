@@ -1,11 +1,26 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { Socket } from 'net'
 
 let eventHandlers: Map<string, (...args: unknown[]) => void>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
 
-vi.mock('ssh2', () => ({
-  Client: class MockSshClient {
+type MockSshClient = {
+  setNoDelay: ReturnType<typeof vi.fn>
+  _sock: Socket | undefined
+}
+let clientInstances: MockSshClient[] = []
+
+vi.mock('ssh2', () => {
+  class MockSshClient {
+    setNoDelay = vi.fn()
+    // Why: production code reads `client._sock` and checks `instanceof net.Socket`
+    // to decide which log line to emit. A real Socket instance lets the test
+    // exercise the "enabled" branch instead of the "skipped (proxy socket)" branch.
+    _sock: Socket | undefined = new Socket()
+    constructor() {
+      clientInstances.push(this)
+    }
     on(event: string, handler: (...args: unknown[]) => void) {
       eventHandlers?.set(event, handler)
     }
@@ -23,7 +38,8 @@ vi.mock('ssh2', () => ({
     exec() {}
     sftp() {}
   }
-}))
+  return { Client: MockSshClient }
+})
 
 vi.mock('./ssh-system-fallback', () => ({
   spawnSystemSsh: vi.fn().mockReturnValue({
@@ -67,6 +83,7 @@ describe('SshConnection', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    clientInstances = []
   })
 
   it('transitions to connected on successful connect', async () => {
@@ -80,6 +97,39 @@ describe('SshConnection', () => {
       'target-1',
       expect.objectContaining({ status: 'connected' })
     )
+  })
+
+  it('enables TCP_NODELAY on the ssh2 client after ready', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    expect(clientInstances).toHaveLength(1)
+    expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+  })
+
+  it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
+    // Why: guards the "Nagle is re-enabled because someone refactored only
+    // the initial connect path" regression class. attemptConnect bumps
+    // connectGeneration on every call, and both the initial connect and the
+    // explicit reconnect path go through doSsh2Connect → client.on('ready').
+    // The new client must also receive setNoDelay(true).
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    expect(clientInstances).toHaveLength(1)
+    expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+
+    // Simulate the reconnect path: a fresh attemptConnect run via the
+    // internal helper that scheduleReconnect uses. Easiest from the public
+    // API is to call connect() again — disposed/connected guard rejects, so
+    // we exercise the path via a private call. Use the bracket-access
+    // form to keep the test free of `any` casts.
+    const privateConn = conn as unknown as {
+      attemptConnect: () => Promise<void>
+    }
+    await privateConn.attemptConnect()
+
+    expect(clientInstances).toHaveLength(2)
+    expect(clientInstances[1].setNoDelay).toHaveBeenCalledWith(true)
   })
 
   it('transitions through connecting → connected states', async () => {
@@ -162,6 +212,7 @@ describe('SshConnectionManager', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    clientInstances = []
   })
 
   it('connect creates and stores a connection', async () => {

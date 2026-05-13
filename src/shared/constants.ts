@@ -26,6 +26,10 @@ export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // data URL while still rejecting arbitrary renderer-provided data URLs.
 export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
 
+// Why: Electron's invoke error path preserves message text, not arbitrary
+// custom Error fields. Keep this stable token shared across main/renderer.
+export const SSH_TERMINATE_RECONNECT_REQUIRED = 'SSH_TERMINATE_RECONNECT_REQUIRED'
+
 export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chrome: 'Google Chrome',
   chromium: 'Chromium',
@@ -198,6 +202,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     rightSidebarOpenByDefault: true,
     showTitlebarAppName: true,
     showTasksButton: true,
+    floatingTerminalEnabled: false,
+    floatingTerminalCwd: '~',
+    floatingTerminalTriggerLocation: 'floating-button',
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
     promptCacheTimerEnabled: false,
@@ -233,6 +240,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: off by default — opt-in cosmetic joke feature. Leaving the default
     // false keeps the overlay unmounted for users who never enable it.
     experimentalPet: false,
+    experimentalActivity: false,
     experimentalWorktreeSymlinks: false,
     // Why: hydrate an empty default so the renderer's optional-chained reads
     // (`settings?.githubProjects?.activeProject`) land on a stable shape
@@ -269,6 +277,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     githubCache: { pr: {}, issue: {} },
     workspaceSession: getDefaultWorkspaceSession(),
     sshTargets: [],
+    sshRemotePtyLeases: [],
     onboarding: getDefaultOnboardingState()
   }
 }
@@ -292,7 +301,8 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarVisible: true,
     dismissedUpdateVersion: null,
     lastUpdateCheckAt: null,
-    trustedOrcaHooks: {}
+    trustedOrcaHooks: {},
+    acknowledgedAgentsByPaneKey: {}
   }
 }
 

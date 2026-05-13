@@ -2,23 +2,6 @@ import type { SettingsSearchEntry } from './settings-search'
 
 export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Mobile Pairing',
-    description:
-      'Pair a mobile device to control Orca remotely. Experimental — requires the Orca mobile APK from GitHub Releases.',
-    keywords: [
-      'experimental',
-      'mobile',
-      'phone',
-      'pair',
-      'qr',
-      'code',
-      'scan',
-      'remote',
-      'android',
-      'apk'
-    ]
-  },
-  {
     title: 'Pet',
     description: 'Floating animated pet in the bottom-right corner.',
     keywords: [
@@ -48,6 +31,20 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'DAG',
       'worker',
       'coordinator'
+    ]
+  },
+  {
+    title: 'Activity Page',
+    description: 'Slack-style worktree activity feed for agent completions and blocking states.',
+    keywords: [
+      'experimental',
+      'activity',
+      'notifications',
+      'agents',
+      'worktrees',
+      'timeline',
+      'unread',
+      'bell'
     ]
   },
   {
@@ -81,8 +78,8 @@ function findEntry(title: string): SettingsSearchEntry {
 }
 
 export const EXPERIMENTAL_SEARCH_ENTRY = {
-  mobile: findEntry('Mobile Pairing'),
   pet: findEntry('Pet'),
   orchestration: findEntry('Agent Orchestration'),
+  activity: findEntry('Activity Page'),
   symlinks: findEntry('Symlinks on worktrees')
 } as const

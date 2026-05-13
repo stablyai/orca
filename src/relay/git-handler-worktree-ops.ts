@@ -14,7 +14,6 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   const branchName = params.branchName as string
   const targetDir = params.targetDir as string
   const base = params.base as string | undefined
-  const track = params.track as boolean | undefined
 
   // Why: a branchName starting with '-' would be interpreted as a git flag,
   // potentially changing the command's semantics (e.g. "--detach").
@@ -22,16 +21,48 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     throw new Error('Branch name and base ref must not start with "-"')
   }
 
-  const args = ['worktree', 'add']
-  if (track) {
-    args.push('--track')
-  }
-  args.push('-b', branchName, targetDir)
+  // Why: --no-track + push.autoSetupRemote=true mirrors the local
+  // addWorktree path (src/main/git/worktree.ts). Keeping the SSH path in
+  // sync prevents a transport-only divergence where "Orca creates a
+  // worktree" produces a different `git status` / `git push` UX based on
+  // whether the repo is local or SSH-mounted. See full design rationale
+  // (state machine, common-dir scope, old-git fallback) in the comments
+  // around src/main/git/worktree.ts addWorktree — those invariants apply
+  // identically here.
+  const args = ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
   if (base) {
     args.push(base)
   }
 
   await git(args, repoPath)
+
+  // Why: best-effort write so a deliberate user value (any scope) is
+  // preserved and a real read failure is not silently overwritten. Final
+  // catch is warn-only — if the remote host's git is <2.37 the value is
+  // ignored at push time and the user falls back to `git push -u` once.
+  // (Note: it is the SSH host's git that matters here, not the client's.)
+  // Mirrors local addWorktree exactly.
+  try {
+    let alreadySet = false
+    try {
+      await git(['config', '--get', 'push.autoSetupRemote'], targetDir)
+      alreadySet = true
+    } catch (readError) {
+      // Why: `git config --get` exits 1 only when the key is unset at every
+      // scope. Any other code is a real read failure (corrupt config,
+      // locked file) — surface it via the outer catch instead of falling
+      // through to overwrite the user's actual value.
+      const code = (readError as { code?: unknown })?.code
+      if (code !== 1) {
+        throw readError
+      }
+    }
+    if (!alreadySet) {
+      await git(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+    }
+  } catch (error) {
+    console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
+  }
 }
 
 export async function removeWorktreeOp(

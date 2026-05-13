@@ -15,6 +15,7 @@ import { homedir } from 'os'
 import { resolve, join } from 'path'
 import { unlinkSync, existsSync } from 'fs'
 import { RELAY_SENTINEL } from './protocol'
+import { readLaunchVersion, runConnectHandshake, setupDaemonHandshake } from './relay-handshake'
 import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { PtyHandler } from './pty-handler'
@@ -68,6 +69,7 @@ function parseArgs(argv: string[]): {
 // that owns the PTY sessions.
 
 function runConnectMode(sockPath: string): void {
+  const myVersion = readLaunchVersion()
   const sock = createConnection({ path: sockPath })
 
   const connectTimeout = setTimeout(() => {
@@ -78,13 +80,27 @@ function runConnectMode(sockPath: string): void {
 
   sock.on('connect', () => {
     clearTimeout(connectTimeout)
-    // Why: the client-side waitForSentinel expects this exact string
-    // before it starts sending framed data.  Emitting it here lets the
-    // deploy code use the same sentinel-detection path for both fresh
-    // launches and reconnects.
-    process.stdout.write(RELAY_SENTINEL)
-    process.stdin.pipe(sock)
-    sock.pipe(process.stdout)
+    runConnectHandshake(sock, myVersion, {
+      onAccepted: (leftover: Buffer) => {
+        // Why: RELAY_SENTINEL must be written AFTER the handshake passes; if it
+        // were written earlier, waitForSentinel on the client would resolve
+        // and start sending JSON-RPC over a socket the daemon was about to
+        // close on mismatch — surfacing as a generic channel drop and
+        // re-entering the backoff loop. Sequencing it post-handshake makes
+        // mismatch a clean exit-42 path with no false-positive sentinel.
+        process.stdout.write(RELAY_SENTINEL)
+        // Why: bytes that arrived in the same TCP send as the handshake-ok
+        // frame were buffered inside the handshake's FrameDecoder. Forward
+        // them to stdout BEFORE attaching sock.pipe(process.stdout), so the
+        // multiplexer downstream sees them in order and no daemon frames
+        // are silently dropped at the transition.
+        if (leftover.length > 0) {
+          process.stdout.write(leftover)
+        }
+        process.stdin.pipe(sock)
+        sock.pipe(process.stdout)
+      }
+    })
   })
 
   // Why: when the SSH channel closes, stdout becomes a broken pipe.
@@ -210,76 +226,80 @@ function main(): void {
 
   let activeSocket: Socket | null = null
   let socketServer: Server | null = null
+  const launchVersion = readLaunchVersion()
+
+  function attachAcceptedSocket(sock: Socket, leftover: Buffer): void {
+    // Why: only one client at a time. If a second reconnect arrives (e.g.
+    // user restarts again quickly), close the stale bridge so the new one
+    // takes over cleanly. We null activeSocket BEFORE destroying so the old
+    // socket's close handler sees it's been replaced and skips starting the
+    // grace timer.
+    if (activeSocket) {
+      process.stderr.write('[relay] Replacing existing socket client with new connection\n')
+      const replaced = activeSocket
+      activeSocket = null
+      replaced.destroy()
+    }
+    activeSocket = sock
+
+    // Why: stdin's data listener is still registered from the initial
+    // connection. If the old SSH channel hasn't fully closed yet (TCP FIN
+    // delayed), buffered stdin data would interleave with the new socket
+    // client's frames, corrupting the frame decoder.
+    process.stdin.pause()
+    process.stdin.removeAllListeners('data')
+
+    ptyHandler.cancelGraceTimer()
+
+    dispatcher.setWrite((data) => {
+      if (!sock.destroyed) {
+        sock.write(data)
+      }
+    })
+
+    // Why: bytes that arrived in the same TCP send as the handshake frame
+    // were buffered inside the handshake's FrameDecoder. Feed them into the
+    // dispatcher BEFORE wiring sock.on('data'), so frame ordering is
+    // preserved and no client data is silently dropped at the transition.
+    if (leftover.length > 0) {
+      dispatcher.feed(leftover)
+    }
+
+    sock.on('data', (chunk: Buffer) => {
+      if (activeSocket !== sock) {
+        return
+      }
+      ptyHandler.cancelGraceTimer()
+      dispatcher.feed(chunk)
+    })
+  }
 
   function startSocketServer(): Server {
     cleanupSocket(sockPath)
     const server = createServer((sock) => {
-      // Why: only one client at a time.  If a second reconnect arrives
-      // (e.g. user restarts again quickly), close the stale bridge so the
-      // new one takes over cleanly.  We null activeSocket BEFORE destroying
-      // so the old socket's close handler sees it's been replaced and
-      // skips starting the grace timer.
-      if (activeSocket) {
-        process.stderr.write('[relay] Replacing existing socket client with new connection\n')
-        const replaced = activeSocket
-        activeSocket = null
-        replaced.destroy()
-      }
-      activeSocket = sock
+      // Why: pre-dispatcher version handshake — see relay-handshake.ts.
+      setupDaemonHandshake(sock, { launchVersion, onAccepted: attachAcceptedSocket })
 
-      // Why: stdin's data listener is still registered from the initial
-      // connection. If the old SSH channel hasn't fully closed yet (TCP
-      // FIN delayed), buffered stdin data would interleave with the new
-      // socket client's frames, corrupting the frame decoder.
-      process.stdin.pause()
-      process.stdin.removeAllListeners('data')
-
-      ptyHandler.cancelGraceTimer()
-
-      dispatcher.setWrite((data) => {
-        if (!sock.destroyed) {
-          sock.write(data)
-        }
-      })
-
-      sock.on('data', (chunk: Buffer) => {
-        if (activeSocket !== sock) {
-          return
-        }
-        ptyHandler.cancelGraceTimer()
-        dispatcher.feed(chunk)
-      })
-
-      // Why: when the --connect bridge's SSH channel dies, stdin.pipe(sock)
-      // calls sock.end(), sending FIN to the relay. Without this handler
-      // the relay-side socket stays half-open — the relay keeps writing
-      // pty.data frames that the bridge can no longer forward, silently
-      // dropping output until the next --connect replaces the socket.
-      // Destroying on 'end' ensures the 'close' handler fires promptly.
+      // Why: when --connect's SSH channel dies, stdin.pipe(sock) calls
+      // sock.end(), sending FIN to the relay. Destroying on 'end' ensures
+      // the 'close' handler fires promptly so the daemon can enter grace.
       sock.on('end', () => {
         if (!sock.destroyed) {
           sock.destroy()
         }
       })
 
+      sock.on('error', () => {
+        // Why: Node emits 'error' then 'close'. The close handler owns
+        // activeSocket cleanup and grace startup.
+      })
+
       sock.on('close', () => {
-        // Why: only start the grace timer if THIS socket is still the
-        // active one.  If it was replaced by a newer connection (see
-        // above), activeSocket was already nulled and reassigned — starting
-        // the grace timer here would incorrectly begin shutdown while a
-        // live client is connected.
         if (activeSocket === sock) {
           activeSocket = null
           dispatcher.invalidateClient()
           startGrace()
         }
-      })
-
-      sock.on('error', () => {
-        // Why: Node emits 'error' then 'close'. The close handler owns
-        // activeSocket cleanup and grace startup; clearing activeSocket here
-        // would make close skip the grace timer and leave the relay alive
-        // indefinitely with no client.
       })
     })
 

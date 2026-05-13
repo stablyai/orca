@@ -9,6 +9,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
+import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -53,16 +54,19 @@ export function useTerminalPaneGlobalEffects({
       return
     }
     if (isVisible) {
+      // Why: background PTY output is throttled while a pane is not focused;
+      // flush it before fitting so newly visible terminals paint current state.
+      for (const pane of manager.getPanes()) {
+        flushTerminalOutput(pane.terminal)
+      }
       // Resume WebGL immediately so the terminal shows its last-known state
       // on the first painted frame. macOS context creation is ~5 ms; on
       // Windows (ANGLE → D3D11) it can be 100–500 ms but a deferred resume
       // would paint a stretched DOM-fallback flash, which is worse UX.
       manager.resumeRendering()
-      // Single fit on resume. xterm has been writing live the whole time
-      // (no visibility-gated buffering), so cols/rows are already correct
-      // for the new container; this fit is just to absorb any container
-      // dimension change that happened while we were hidden (e.g. sidebar
-      // toggle on another worktree).
+      // Single fit on resume. Background bytes have been pushed into xterm
+      // above, so this fit only absorbs container dimension changes that
+      // happened while hidden (e.g. sidebar toggle on another worktree).
       if (isActive) {
         fitAndFocusPanes(manager)
       } else {

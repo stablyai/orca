@@ -24,6 +24,7 @@ dist-electron/
 out/
 /build/
 release/
+native/**/.build/
 
 # pnpm
 .pnpm-store/

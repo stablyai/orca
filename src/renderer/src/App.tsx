@@ -26,6 +26,7 @@ import { useAppStore } from './store'
 import { useShallow } from 'zustand/react/shallow'
 import { useIpcEvents } from './hooks/useIpcEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
+import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
@@ -37,17 +38,26 @@ import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSu
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
+import {
+  FloatingTerminalPanel,
+  FloatingTerminalToggleButton
+} from './components/floating-terminal/FloatingTerminalPanel'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
+  getRuntimeMobileSessionSyncKey,
+  runtimeMobileSessionSyncKeysEqual,
+  scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import { buildWorkspaceSessionPayload } from './lib/workspace-session'
+import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
 import { applyDocumentTheme } from './lib/document-theme'
 import { isEditableTarget } from './lib/editable-target'
 import {
@@ -127,6 +137,7 @@ function WindowControls(): React.JSX.Element {
 
 const Landing = lazy(() => import('./components/Landing'))
 const TaskPage = lazy(() => import('./components/TaskPage'))
+const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
@@ -141,6 +152,7 @@ const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
+  const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
@@ -168,6 +180,7 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
+      setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
       seedActiveWorktreeLastVisitedIfMissing: s.seedActiveWorktreeLastVisitedIfMissing
@@ -182,6 +195,26 @@ function App(): React.JSX.Element {
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
+  const floatingTerminalTriggerLocation = useAppStore(
+    (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
+  )
+
+  useEffect(() => {
+    const toggleFloatingTerminal = (): void => {
+      if (floatingTerminalEnabled) {
+        setFloatingTerminalOpen((open) => !open)
+      }
+    }
+    window.addEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
+    return () => window.removeEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
+  }, [floatingTerminalEnabled])
+
+  useEffect(() => {
+    if (!floatingTerminalEnabled) {
+      setFloatingTerminalOpen(false)
+    }
+  }, [floatingTerminalEnabled])
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -189,12 +222,14 @@ function App(): React.JSX.Element {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
+  const activityEnabled = settings?.experimentalActivity === true
   const petVisible = useAppStore((s) => s.petVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
@@ -211,7 +246,7 @@ function App(): React.JSX.Element {
   // inline agents section. The retention hooks are hosted inside
   // <RetainedAgentsSyncGate /> (a leaf component that renders null) rather
   // than being called inline here so its high-churn store subscriptions
-  // (agentStatusByPaneKey + agentStatusEpoch tick at PTY event frequency)
+  // (agentStatusByPaneKey ticks at PTY event frequency)
   // do not re-render the App tree on every agent status update.
   // Why: git conflict-operation state also drives the worktree cards. Polling
   // cannot live under RightSidebar because App unmounts that subtree when the
@@ -398,6 +433,39 @@ function App(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
+    return useAppStore.subscribe((state, previousState) => {
+      // Why: skip the key build entirely when no input field has changed by
+      // reference. Mirrors every field used by getRuntimeMobileSessionSyncKey
+      // so this gate stays a strict superset of "could the key have changed?"
+      // — if any field's reference is unchanged, neither the projection
+      // serialized from it nor the reference-compared map can have changed.
+      if (
+        state.tabsByWorktree === previousState.tabsByWorktree &&
+        state.groupsByWorktree === previousState.groupsByWorktree &&
+        state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
+        state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
+        state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
+        state.activeFileId === previousState.activeFileId &&
+        state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+        state.openFiles === previousState.openFiles &&
+        state.editorDrafts === previousState.editorDrafts &&
+        state.activeTabId === previousState.activeTabId &&
+        state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
+        state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId
+      ) {
+        return
+      }
+      const nextKey = getRuntimeMobileSessionSyncKey(state)
+      if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
+        return
+      }
+      previousKey = nextKey
+      scheduleRuntimeGraphSync()
+    })
+  }, [])
+
   useEffect(() => registerUpdaterBeforeUnloadBypass(), [])
 
   useEffect(() => {
@@ -411,25 +479,10 @@ function App(): React.JSX.Element {
   // Using a Zustand subscribe() outside React removes ~15 subscriptions from
   // App's render cycle, eliminating re-renders on every tab/file/browser change.
   useEffect(() => {
-    let timer: number | null = null
-    const unsub = useAppStore.subscribe((state) => {
-      if (!state.workspaceSessionReady) {
-        return
-      }
-      if (timer) {
-        window.clearTimeout(timer)
-      }
-      timer = window.setTimeout(() => {
-        timer = null
-        void window.api.session.set(buildWorkspaceSessionPayload(state))
-      }, 150)
+    return createSessionWriteSubscriber({
+      store: useAppStore,
+      persist: (payload) => void window.api.session.set(payload)
     })
-    return () => {
-      unsub()
-      if (timer) {
-        window.clearTimeout(timer)
-      }
-    }
   }, [])
 
   // On shutdown, capture terminal scrollback buffers and flush to disk.
@@ -490,7 +543,13 @@ function App(): React.JSX.Element {
         sortBy,
         showActiveOnly,
         hideDefaultBranchWorkspace,
-        filterRepoIds
+        filterRepoIds,
+        // Why: rides the same debounced save so dashboard auto-acks (which fire
+        // on focus/visibility) and the in-memory ack cleanup paths in
+        // agent-status.ts (close/dismiss) both flow to disk through map
+        // identity changes. Without persisting, agent rows that survive
+        // restart come back bold even when the user had already visited them.
+        acknowledgedAgentsByPaneKey
       })
     }, 150)
 
@@ -503,7 +562,8 @@ function App(): React.JSX.Element {
     sortBy,
     showActiveOnly,
     hideDefaultBranchWorkspace,
-    filterRepoIds
+    filterRepoIds,
+    acknowledgedAgentsByPaneKey
   ])
 
   // Apply theme to document
@@ -560,14 +620,18 @@ function App(): React.JSX.Element {
     activeWorktreeId !== null &&
     !hasTabBar &&
     effectiveActiveTabExpanded
-  const showSidebar = activeView !== 'settings'
-  // Why: when a worktree is active (split groups always enabled), the
-  // full-width titlebar is replaced by a sidebar-width left header so the
-  // terminal + tab groups extend to the very top of the window.
-  const workspaceActive = activeView !== 'settings' && activeWorktreeId !== null
-  // Why: suppress right sidebar controls on the tasks page since that surface
-  // is intentionally distraction-free (no right sidebar).
-  const showRightSidebarControls = activeView !== 'settings' && activeView !== 'tasks'
+  // Why: Activity is a full-page navigation surface — same treatment as
+  // Settings — so the worktree sidebar is removed for that view, letting the
+  // thread list + agent terminal span edge-to-edge.
+  const showSidebar = activeView !== 'settings' && activeView !== 'activity'
+  // Why: only the terminal workspace replaces the full-width titlebar with
+  // split-column chrome. Full-page navigation views keep the draggable app
+  // titlebar so their page-level controls can live in that window strip.
+  const workspaceActive = activeView === 'terminal' && activeWorktreeId !== null
+  // Why: suppress right sidebar controls on full-page navigation surfaces
+  // since those surfaces intentionally own the full content area.
+  const showRightSidebarControls =
+    activeView !== 'settings' && activeView !== 'tasks' && activeView !== 'activity'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -652,9 +716,9 @@ function App(): React.JSX.Element {
       // (contentEditable) or a browser guest webContents, both of which bypass
       // this renderer-side window keydown listener.
 
-      // Why: the tasks page should not be able to reveal the right sidebar at
-      // all, because that surface is intentionally distraction-free.
-      if (activeView === 'tasks') {
+      // Why: full-page navigation surfaces should not reveal the right sidebar;
+      // they are designed as distraction-free content areas.
+      if (activeView === 'tasks' || activeView === 'activity') {
         return
       }
 
@@ -828,7 +892,9 @@ function App(): React.JSX.Element {
       </div>
       {/* Why: Back/Forward traverse mixed worktree + Tasks history, so the
           cluster is shown wherever the history shortcut is live (terminal or
-          tasks). Hidden in Settings to keep that view modal-ish. */}
+          tasks). Hidden in Settings to keep that view modal-ish, and in
+          Activity since that page owns its own back-out via the Close button
+          in ActivityTitlebarControls. */}
       {(activeView === 'terminal' || activeView === 'tasks') && (
         <div className="ml-auto mr-3 flex items-center">
           <Tooltip>
@@ -884,12 +950,18 @@ function App(): React.JSX.Element {
   ) : null
 
   useEffect(() => {
-    if (activeView === 'tasks' && rightSidebarOpen) {
-      // Why: hide the right sidebar immediately when entering the tasks page
-      // so a previous open state can't bleed into that distraction-free view.
+    if ((activeView === 'tasks' || activeView === 'activity') && rightSidebarOpen) {
+      // Why: hide the right sidebar immediately when entering full-page
+      // navigation views so previous side-panel state cannot occlude them.
       actions.setRightSidebarOpen(false)
     }
   }, [activeView, rightSidebarOpen, actions])
+
+  useEffect(() => {
+    if (settings && !activityEnabled && activeView === 'activity') {
+      actions.setActiveView('terminal')
+    }
+  }, [activeView, activityEnabled, actions, settings])
 
   return (
     <div
@@ -908,9 +980,8 @@ function App(): React.JSX.Element {
       }
     >
       <TooltipProvider delayDuration={400}>
-        {/* Why: leaf-mounted retention sync — hosting useDashboardData() +
-            useRetainedAgentsSync() inside a null-rendering leaf keeps their
-            high-churn store subscriptions from re-rendering the App tree. */}
+        {/* Why: leaf-mounted retention sync keeps agent-status retention
+            subscriptions from re-rendering the App tree. */}
         <RetainedAgentsSyncGate />
         <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
           {/* Why: the non-workspace titlebar lives inside this left+center
@@ -931,10 +1002,14 @@ function App(): React.JSX.Element {
                 >
                   {titlebarLeftControls}
                 </div>
-                <div
-                  id="titlebar-tabs"
-                  className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
-                />
+                {activeView === 'activity' && activityEnabled ? (
+                  <ActivityTitlebarControls />
+                ) : (
+                  <div
+                    id="titlebar-tabs"
+                    className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+                  />
+                )}
                 {showTitlebarExpandButton && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1047,6 +1122,9 @@ function App(): React.JSX.Element {
                   <Suspense fallback={null}>
                     {activeView === 'settings' ? <Settings /> : null}
                     {activeView === 'tasks' ? <TaskPage /> : null}
+                    {activeView === 'activity' && activityEnabled ? (
+                      <ActivityPrototypePage />
+                    ) : null}
                     {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
                   </Suspense>
                 </div>
@@ -1060,7 +1138,21 @@ function App(): React.JSX.Element {
               surface is intentionally distraction-free. */}
           {showRightSidebarControls ? <RightSidebar /> : null}
         </div>
-        <StatusBar />
+        {floatingTerminalEnabled ? (
+          <>
+            <FloatingTerminalPanel
+              open={floatingTerminalOpen}
+              onOpenChange={setFloatingTerminalOpen}
+            />
+            {floatingTerminalTriggerLocation === 'floating-button' ? (
+              <FloatingTerminalToggleButton
+                open={floatingTerminalOpen}
+                onToggle={() => setFloatingTerminalOpen((open) => !open)}
+              />
+            ) : null}
+          </>
+        ) : null}
+        <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
         {/* Why: NewWorkspaceComposerCard renders Radix <Tooltip>s that crash
             when mounted outside a TooltipProvider ancestor. Keep the global
             composer modal inside this provider so the card renders safely

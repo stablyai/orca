@@ -152,6 +152,66 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'back' })
   })
 
+  it('resolves the floating terminal chord despite carrying Alt', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'KeyT',
+          key: 't',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toEqual({ type: 'toggleFloatingTerminal' })
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'KeyT',
+          key: 't',
+          meta: false,
+          control: true,
+          alt: true,
+          shift: false
+        },
+        'linux'
+      )
+    ).toEqual({ type: 'toggleFloatingTerminal' })
+  })
+
+  it('rejects floating terminal chord variants with Shift or opposite primary modifier', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'KeyT',
+          key: 't',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: true
+        },
+        'darwin'
+      )
+    ).toBeNull()
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'KeyT',
+          key: 't',
+          meta: true,
+          control: true,
+          alt: true,
+          shift: false
+        },
+        'linux'
+      )
+    ).toBeNull()
+  })
+
   it('rejects the history chord when Shift is also held', () => {
     expect(
       resolveWindowShortcutAction(
@@ -253,13 +313,13 @@ describe('resolveWindowShortcutAction', () => {
   it('still returns null for other Cmd/Ctrl+Alt combos (not an allowlist escape)', () => {
     // Why: regression guard — the history early-return must not swallow
     // unrelated primary+alt chords in a way that changes their old null
-    // result. A future addition that intentionally consumes e.g. Cmd+Alt+KeyT
+    // result. A future addition that intentionally consumes e.g. Cmd+Alt+KeyY
     // must add a new branch explicitly.
     expect(
       resolveWindowShortcutAction(
         {
-          code: 'KeyB',
-          key: 'b',
+          code: 'KeyY',
+          key: 'y',
           meta: true,
           control: false,
           alt: true,

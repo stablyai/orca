@@ -19,6 +19,7 @@ import { registerRuntimeHandlers } from './runtime'
 import { registerNotificationHandlers } from './notifications'
 import { registerOnboardingHandlers } from './onboarding'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
+import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
@@ -86,6 +87,7 @@ export function registerCoreHandlers(
   registerNotificationHandlers(store, runtime)
   registerOnboardingHandlers(store)
   registerDeveloperPermissionHandlers()
+  registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store)
   registerTelemetryHandlers(store)
   registerBrowserHandlers()

@@ -5,6 +5,7 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { detectLanguage } from '@/lib/language-detect'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -2130,7 +2131,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'file') {
-      void window.api.shell.openFileUri(target.uri)
+      if (target.relativePath === undefined) {
+        // Why: terminal file links already authorize clicked external paths
+        // before opening them in Orca. Markdown file:// links need the same
+        // user-gesture authorization so /tmp screenshots can use ImageViewer.
+        await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
+      }
+
+      get().openFile(
+        {
+          filePath: target.absolutePath,
+          relativePath: target.relativePath ?? target.absolutePath,
+          worktreeId: ctx.worktreeId,
+          language: detectLanguage(target.absolutePath),
+          mode: 'edit'
+        },
+        {
+          preview: true,
+          targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+          recordReplacedPreview: true
+        }
+      )
       return
     }
 

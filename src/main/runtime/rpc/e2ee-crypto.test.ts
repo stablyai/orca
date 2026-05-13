@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from './e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+  encryptBytes,
+  decryptBytes
+} from './e2ee-crypto'
 
 describe('e2ee-crypto', () => {
   it('encrypt/decrypt round-trips with shared key', () => {
@@ -75,5 +82,18 @@ describe('e2ee-crypto', () => {
     const tampered = bytes.toString('base64')
 
     expect(decrypt(tampered, shared)).toBeNull()
+  })
+
+  it('encrypt/decrypt round-trips raw bytes for binary terminal frames', () => {
+    const server = generateKeyPair()
+    const client = generateKeyPair()
+    const serverShared = deriveSharedKey(server.secretKey, client.publicKey)
+    const clientShared = deriveSharedKey(client.secretKey, server.publicKey)
+    const payload = new Uint8Array([0, 1, 2, 127, 128, 255])
+
+    const encrypted = encryptBytes(payload, clientShared)
+    const decrypted = decryptBytes(encrypted, serverShared)
+
+    expect(decrypted).toEqual(payload)
   })
 })

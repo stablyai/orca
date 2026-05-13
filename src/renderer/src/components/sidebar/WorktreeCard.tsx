@@ -48,7 +48,11 @@ type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
+  isMultiSelected?: boolean
+  selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  onSelectionGesture?: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
+  onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
 }
 
 function formatSparseDirectoryPreview(directories: string[]): string {
@@ -60,6 +64,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
+  isMultiSelected = false,
+  selectedWorktrees,
+  onSelectionGesture,
+  onContextMenuSelect,
   hideRepoBadge
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
@@ -339,6 +347,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
           return
         }
       }
+      const selectionOnly = onSelectionGesture?.(event, worktree.id) ?? false
+      if (selectionOnly) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
       // Why: route sidebar clicks through the shared activation path so the
       // back/forward stack stays complete for the primary worktree navigation
       // surface instead of only recording palette-driven switches.
@@ -347,7 +361,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         setShowDisconnectedDialog(true)
       }
     },
-    [worktree.id, isSshDisconnected]
+    [worktree.id, isSshDisconnected, onSelectionGesture]
   )
 
   const handleDoubleClick = useCallback(() => {
@@ -378,10 +392,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cardBody = (
     <div
       className={cn(
-        'group relative flex items-start gap-1.5 px-2 py-2 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none ml-1',
+        'group relative flex items-start gap-1.5 px-2 py-2 cursor-pointer transition-all duration-200 outline-none select-none ml-1',
+        isMultiSelected ? 'rounded-sm' : 'rounded-lg',
         isActive
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-          : 'border border-transparent hover:bg-accent/40',
+          : isMultiSelected
+            ? 'border border-sidebar-ring/35 bg-sidebar-accent/70 ring-1 ring-sidebar-ring/30'
+            : 'border border-transparent hover:bg-sidebar-accent/40',
+        isActive && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
       )}
@@ -624,7 +642,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   return (
     <>
-      <WorktreeContextMenu worktree={worktree}>{cardBody}</WorktreeContextMenu>
+      <WorktreeContextMenu
+        worktree={worktree}
+        selectedWorktrees={selectedWorktrees}
+        onContextMenuSelect={onContextMenuSelect}
+      >
+        {cardBody}
+      </WorktreeContextMenu>
 
       {repo?.connectionId && (
         <SshDisconnectedDialog

@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Copy, Maximize2, RefreshCw, Smartphone, Trash2, Wifi } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  Maximize2,
+  RefreshCw,
+  Smartphone,
+  Trash2,
+  Wifi
+} from 'lucide-react'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -17,6 +27,8 @@ const AUTO_RESTORE_FIT_OPTIONS: { value: string; label: string; ms: number | nul
   { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
   { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
 ]
+
+const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
 function autoRestoreValueFromMs(ms: number | null | undefined): string {
   if (ms == null) {
@@ -40,7 +52,19 @@ export const MOBILE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Network Interface',
     description: 'Choose which network address to use for mobile pairing.',
-    keywords: ['network', 'interface', 'tailscale', 'vpn', 'overlay', 'ip', 'address', 'wifi']
+    keywords: [
+      'network',
+      'interface',
+      'tailscale',
+      'tailnet',
+      'vpn',
+      'overlay',
+      'ip',
+      'address',
+      'wifi',
+      'lan',
+      'remote'
+    ]
   },
   {
     title: 'When you leave the mobile app',
@@ -227,6 +251,40 @@ export function MobilePane(): React.JSX.Element {
             {qrDataUrl ? 'Regenerate' : 'Generate QR Code'}
           </Button>
         </div>
+        <Accordion type="single" collapsible className="mt-4 border-t border-border/60 pt-2">
+          <AccordionItem value="remote-pairing-guide">
+            <AccordionTrigger className="py-2 text-xs">
+              Connect outside your Wi-Fi with a tailnet
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3 text-xs text-muted-foreground">
+              <p>
+                Orca Mobile connects directly to this computer. To use it away from the same local
+                network, put your computer and phone on the same private overlay network, then
+                generate the QR code with that network address selected.
+              </p>
+              <ol className="list-decimal space-y-1 pl-4">
+                <li>
+                  Install{' '}
+                  <button
+                    type="button"
+                    onClick={() => void window.api.shell.openUrl(TAILSCALE_DOWNLOAD_URL)}
+                    className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
+                  >
+                    Tailscale
+                    <ExternalLink className="size-3" />
+                  </button>{' '}
+                  on your computer and phone.
+                </li>
+                <li>Sign in to the same tailnet on both devices.</li>
+                <li>
+                  In this Network Interface menu, choose the Tailscale address, usually a 100.x.y.z
+                  IP.
+                </li>
+                <li>Regenerate the QR code and scan it from the Orca mobile app.</li>
+              </ol>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
 
       {/* QR code display */}

@@ -78,6 +78,7 @@ globalThis.window = { api: mockApi }
 import type { WorkspaceSessionState } from '../../../../shared/types'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 import { canGoBackWorktreeHistory } from './worktree-nav-history'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '@/lib/floating-terminal'
 
 describe('hydrateWorkspaceSession', () => {
   beforeEach(() => {
@@ -119,6 +120,39 @@ describe('hydrateWorkspaceSession', () => {
       ptyIdsByLeafId: { 'pane:1': 'daemon-session-1' },
       buffersByLeafId: { 'pane:1': 'buffer' }
     })
+  })
+
+  it('hydrates floating terminal tabs even though they are not repo worktrees', () => {
+    const store = createTestStore()
+    const session: WorkspaceSessionState = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeTab({
+            id: 'floating-tab-1',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            ptyId: 'floating-pty-1'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'floating-tab-1': makeLayout()
+      },
+      activeTabIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-tab-1'
+      },
+      activeWorktreeIdsOnShutdown: [FLOATING_TERMINAL_WORKTREE_ID]
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      'floating-tab-1'
+    )
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([FLOATING_TERMINAL_WORKTREE_ID])
   })
 
   it('resets persisted agent titles to the fallback label on hydration', () => {

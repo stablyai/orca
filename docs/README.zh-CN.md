@@ -97,6 +97,18 @@ yay -S stably-orca-git
 
 ---
 
+## [全新] 查看所有 agent 的实时状态
+
+**一眼看清每个 agent 在做什么。**
+
+在一个地方追踪所有 worktree 中每个 agent 的实时状态。无需点开各个标签页，即可发现哪些 agent 在工作、等待输入或已完成。
+
+<p align="center">
+  <img src="assets/agent-statuses.gif" alt="Orca Agent Statuses — 查看所有 worktree 中 agent 的实时状态" width="800" />
+</p>
+
+---
+
 ## [全新] 标注 AI Diff
 
 **直接在 AI 生成的 diff 上评论。**

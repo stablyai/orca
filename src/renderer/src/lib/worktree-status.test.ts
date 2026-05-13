@@ -79,11 +79,7 @@ describe('getWorktreeStatus', () => {
 })
 
 describe('resolveWorktreeStatus', () => {
-  // Why: WorktreeCard layers permission > working > done > heuristic on top
-  // of the title-heuristic base. The slept-with-retained-done case is the
-  // specific UX rule: retained `done` rows survive in the inline agents
-  // list, but the worktree dot must be grey when nothing is alive.
-  it('returns inactive when no tab has a live pty, even if a retained-done row exists', () => {
+  it('returns inactive when no tab has a live pty and no explicit agent row exists', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [done]' }],
       browserTabs: [],
@@ -91,13 +87,26 @@ describe('resolveWorktreeStatus', () => {
       ptyIdsByTabId: { 'tab-1': [] },
       hasPermission: false,
       hasLiveDone: false,
-      hasRetainedDone: true
+      hasRetainedDone: false
     })
 
     expect(status).toBe('inactive')
   })
 
-  it('returns inactive on slept worktree even when hasPermission is true (precondition wins)', () => {
+  it('promotes to done when a retained done row is visible, even without a live pty', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: { 'tab-1': [] },
+      hasPermission: false,
+      hasLiveDone: false,
+      hasRetainedDone: true
+    })
+
+    expect(status).toBe('done')
+  })
+
+  it('promotes to permission when an explicit agent row needs input, even without a live pty', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [permission]' }],
       browserTabs: [],
@@ -107,7 +116,7 @@ describe('resolveWorktreeStatus', () => {
       hasRetainedDone: false
     })
 
-    expect(status).toBe('inactive')
+    expect(status).toBe('permission')
   })
 
   it('promotes to permission when live and hasPermission', () => {

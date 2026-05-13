@@ -2,7 +2,11 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. Mirrors the same decision made for GeneralPane.tsx. */
 import { useState } from 'react'
-import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
+import type {
+  FloatingTerminalTriggerLocation,
+  GlobalSettings,
+  SetupScriptLaunchMode
+} from '../../../../shared/types'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT,
   TERMINAL_FONT_WEIGHT_MAX,
@@ -19,7 +23,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
-import { Minus, Plus } from 'lucide-react'
+import { FolderOpen, Minus, Plus } from 'lucide-react'
 import {
   clampNumber,
   resolveEffectiveTerminalAppearance,
@@ -38,6 +42,7 @@ import {
   TERMINAL_DARK_THEME_SEARCH_ENTRIES,
   TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
+  TERMINAL_FLOATING_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
   TERMINAL_RENDERING_SEARCH_ENTRIES,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
@@ -117,6 +122,13 @@ export function TerminalPane({
   const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const showWindowsPowerShellImplementation = isWindows && windowsShell === 'powershell.exe'
+  const pickFloatingTerminalDirectory = async (): Promise<void> => {
+    const path = await window.api.repos.pickFolder()
+    if (!path) {
+      return
+    }
+    updateSettings({ floatingTerminalCwd: path })
+  }
 
   const visibleSections = [
     isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
@@ -158,6 +170,102 @@ export function TerminalPane({
           <p className="text-xs text-muted-foreground">
             Shell used when opening a new terminal pane. Takes effect for new terminals.
           </p>
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_FLOATING_SEARCH_ENTRIES) ? (
+      <section key="floating-terminal" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Floating Terminal</h3>
+          <p className="text-xs text-muted-foreground">
+            Global floating terminal tabs outside any repo or worktree.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="Floating Terminal"
+          description="Enable the global floating terminal and choose where new tabs start."
+          keywords={['terminal', 'global', 'floating', 'quick terminal', 'launch directory']}
+          className="space-y-3"
+        >
+          <div className="flex items-center justify-between gap-4 px-1 py-2">
+            <div className="space-y-0.5">
+              <Label>Enable Floating Terminal</Label>
+              <p className="text-xs text-muted-foreground">
+                Shows the global terminal button and floating terminal panel.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.floatingTerminalEnabled}
+              onClick={() =>
+                updateSettings({
+                  floatingTerminalEnabled: !settings.floatingTerminalEnabled
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.floatingTerminalEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                  settings.floatingTerminalEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Default Directory</Label>
+            <div className="flex max-w-xl gap-2">
+              <Input
+                value={settings.floatingTerminalCwd || '~'}
+                onChange={(event) =>
+                  updateSettings({
+                    floatingTerminalCwd: event.target.value
+                  })
+                }
+                placeholder="~"
+                className="min-w-0 flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Choose floating terminal directory"
+                onClick={() => void pickFloatingTerminalDirectory()}
+              >
+                <FolderOpen className="size-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Takes effect for new Floating Terminal tabs. Use ~ for your home directory.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Toggle Button Location</Label>
+            <ToggleGroup
+              type="single"
+              value={settings.floatingTerminalTriggerLocation ?? 'floating-button'}
+              onValueChange={(value) => {
+                if (!value) {
+                  return
+                }
+                updateSettings({
+                  floatingTerminalTriggerLocation: value as FloatingTerminalTriggerLocation
+                })
+              }}
+              className="justify-start"
+            >
+              <ToggleGroupItem value="floating-button">Floating Button</ToggleGroupItem>
+              <ToggleGroupItem value="status-bar">Status Bar</ToggleGroupItem>
+            </ToggleGroup>
+            <p className="text-xs text-muted-foreground">
+              The keyboard shortcut works regardless of where the toggle is shown.
+            </p>
+          </div>
         </SearchableSetting>
       </section>
     ) : null,

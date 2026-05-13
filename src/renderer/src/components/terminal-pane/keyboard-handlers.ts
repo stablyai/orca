@@ -4,6 +4,7 @@ import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -65,6 +66,7 @@ export function matchSearchNavigate(
 
 type KeyboardHandlersDeps = {
   isActive: boolean
+  keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneCwdRef: React.RefObject<PaneCwdMap>
@@ -85,6 +87,7 @@ type KeyboardHandlersDeps = {
 
 export function useTerminalKeyboardShortcuts({
   isActive,
+  keyboardScopeRef,
   managerRef,
   paneTransportsRef,
   paneCwdRef,
@@ -127,6 +130,10 @@ export function useTerminalKeyboardShortcuts({
     const onKeyDown = (e: KeyboardEvent): void => {
       const manager = managerRef.current
       if (!manager) {
+        return
+      }
+      const keyboardScope = keyboardScopeRef.current
+      if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
 
@@ -333,6 +340,7 @@ export function useTerminalKeyboardShortcuts({
     }
   }, [
     isActive,
+    keyboardScopeRef,
     managerRef,
     paneTransportsRef,
     paneCwdRef,

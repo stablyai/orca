@@ -9,7 +9,7 @@
  * is actually doing: env-shadow vs. plain missing-scope vs. not-installed.
  */
 import { useEffect, useState } from 'react'
-import { Copy, ExternalLink } from 'lucide-react'
+import { Copy, ExternalLink, RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import type { GitHubProjectViewError } from '@/../../shared/github-project-types'
@@ -224,6 +224,15 @@ export function GhAuthErrorHelp({
               <ExternalLink className="size-3" /> Docs
             </button>
           ) : null}
+          {/* Why: after running the refresh command in a terminal, users need to
+              reload the renderer to pick up the new gh token state. */}
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
+          >
+            <RotateCw className="size-3" /> Reload
+          </button>
         </div>
       </div>
     )
@@ -250,6 +259,11 @@ export function GhAuthErrorHelp({
             <ExternalLink className="mr-1 size-3.5" /> Docs
           </Button>
         ) : null}
+        {/* Why: after running the refresh command in a terminal, users need to
+            reload the renderer to pick up the new gh token state. */}
+        <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+          <RotateCw className="mr-1 size-3.5" /> Reload
+        </Button>
       </div>
     </div>
   )

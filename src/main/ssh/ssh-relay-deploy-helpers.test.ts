@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { RELAY_SENTINEL } from './relay-protocol'
+import {
+  RelayVersionMismatchError,
+  RELAY_EXIT_CODE_VERSION_MISMATCH
+} from './ssh-relay-version-mismatch-error'
 
 function createMockChannel(): ClientChannel {
   return Object.assign(new EventEmitter(), {
@@ -59,6 +63,51 @@ describe('waitForSentinel', () => {
 
     expect(() => channel.emit('error', new Error('remote host rebooted'))).not.toThrow()
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('translates a pre-sentinel exit-42 + close into RelayVersionMismatchError', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.stderr.emit(
+      'data',
+      Buffer.from(
+        '[relay-connect] Handshake mismatch: expected=0.1.0+aaa, daemon=0.1.0+bbb; exiting 42\n'
+      )
+    )
+    channel.emit('exit', RELAY_EXIT_CODE_VERSION_MISMATCH)
+    channel.emit('close')
+
+    await expect(transportPromise).rejects.toBeInstanceOf(RelayVersionMismatchError)
+    await transportPromise.catch((err: RelayVersionMismatchError) => {
+      expect(err.expected).toBe('0.1.0+aaa')
+      expect(err.got).toBe('0.1.0+bbb')
+    })
+  })
+
+  it('translates a pre-sentinel exit-42 even when the version detail is missing', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.stderr.emit('data', Buffer.from('boom\n'))
+    channel.emit('exit', RELAY_EXIT_CODE_VERSION_MISMATCH)
+    channel.emit('close')
+
+    await expect(transportPromise).rejects.toBeInstanceOf(RelayVersionMismatchError)
+  })
+
+  it('rejects with a generic error (not RelayVersionMismatchError) on a non-42 exit code', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.stderr.emit('data', Buffer.from('node: bad bytecode\n'))
+    channel.emit('exit', 1)
+    channel.emit('close')
+
+    await expect(transportPromise).rejects.toThrow(/Relay process exited before ready/)
+    await transportPromise.catch((err: unknown) => {
+      expect(err).not.toBeInstanceOf(RelayVersionMismatchError)
+    })
   })
 })
 

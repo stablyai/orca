@@ -7,12 +7,15 @@ import {
   FlaskConical,
   GitBranch,
   Globe,
+  Info,
   Keyboard,
   Lock,
+  MousePointerClick,
   ShieldCheck,
   Palette,
   Server,
   SlidersHorizontal,
+  Smartphone,
   Blocks,
   SquareTerminal,
   UserCog
@@ -32,6 +35,7 @@ import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { useGhosttyImport } from './useGhosttyImport'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
 import { getTerminalPaneSearchEntries } from './terminal-search'
@@ -47,6 +51,8 @@ import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
 } from './DeveloperPermissionsPane'
+import { ComputerUsePane, COMPUTER_USE_PANE_SEARCH_ENTRIES } from './ComputerUsePane'
+import { MobileSettingsPane, MOBILE_SETTINGS_PANE_SEARCH_ENTRIES } from './MobileSettingsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
@@ -62,6 +68,7 @@ type SettingsNavTarget =
   | 'appearance'
   | 'terminal'
   | 'notifications'
+  | 'computer-use'
   | 'developer-permissions'
   | 'privacy'
   | 'shortcuts'
@@ -90,6 +97,16 @@ function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): s
 
 function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavSection | undefined {
   return sections.at(0)
+}
+
+function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }): string {
+  if (args.isWindows) {
+    return 'Windows'
+  }
+  if (!args.isMac) {
+    return 'Linux'
+  }
+  return 'This platform'
 }
 
 // Why: after a sidebar jump the target section is now in the viewport center
@@ -157,6 +174,8 @@ function Settings(): React.JSX.Element {
   const systemPrefersDark = useSystemPrefersDark()
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
+  const showComputerUsePreviewTooltip = !isMac
+  const computerUsePlatform = computerUsePlatformLabel({ isWindows, isMac })
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
   // reveals controls that the renderer will intentionally hide.
@@ -413,6 +432,22 @@ function Settings(): React.JSX.Element {
         description: 'Native desktop notifications for agent and terminal events.',
         icon: Bell,
         searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'mobile',
+        title: 'Mobile',
+        description: 'Pair and manage mobile devices.',
+        icon: Smartphone,
+        searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
+        badge: 'Beta'
+      },
+      {
+        id: 'computer-use',
+        title: 'Computer Use',
+        description: 'Enable agents to control any app on your computer.',
+        icon: MousePointerClick,
+        searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+        badge: 'Beta'
       },
       ...(isMac
         ? [
@@ -754,6 +789,49 @@ function Settings(): React.JSX.Element {
                   searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
                 >
                   <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="mobile"
+                  title="Mobile"
+                  badge="Beta"
+                  description="Pair and manage mobile devices."
+                  searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
+                >
+                  <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="computer-use"
+                  title="Computer Use"
+                  badge="Beta"
+                  badgeAccessory={
+                    showComputerUsePreviewTooltip ? (
+                      <TooltipProvider delayDuration={250}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="text-muted-foreground transition-colors hover:text-foreground"
+                              aria-label={`${computerUsePlatform} Computer Use preview details`}
+                            >
+                              <Info className="size-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                            <span>
+                              {computerUsePlatform} Computer Use is an early preview. Some apps and
+                              desktop environments may behave inconsistently.
+                            </span>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : null
+                  }
+                  description="Enable agents to control any app on your computer."
+                  searchEntries={COMPUTER_USE_PANE_SEARCH_ENTRIES}
+                >
+                  <ComputerUsePane />
                 </SettingsSection>
 
                 {isMac ? (

@@ -177,8 +177,7 @@ export async function createRemoteWorktree(
   // Create worktree via relay
   try {
     await provider.addWorktree(repo.path, branchName, remotePath, {
-      base: baseBranch,
-      track: baseBranch.includes('/')
+      base: baseBranch
     })
   } catch (err) {
     if (

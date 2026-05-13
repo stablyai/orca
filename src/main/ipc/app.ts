@@ -1,11 +1,43 @@
 import { execFile } from 'node:child_process'
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
 import { promisify } from 'node:util'
 import { app, ipcMain } from 'electron'
+import type { FloatingTerminalCwdRequest } from '../../shared/types'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 
 const execFileAsync = promisify(execFile)
+
+function expandHomePath(input: string, home: string): string {
+  if (input === '~') {
+    return home
+  }
+  if (input.startsWith(`~${path.sep}`)) {
+    return path.join(home, input.slice(2))
+  }
+  if (process.platform === 'win32' && input.startsWith('~/')) {
+    return path.join(home, input.slice(2))
+  }
+  return input
+}
+
+async function resolveFloatingTerminalCwd(args?: FloatingTerminalCwdRequest): Promise<string> {
+  const home = app.getPath('home')
+  const configuredPath = args?.path?.trim()
+  if (!configuredPath) {
+    return home
+  }
+  const expanded = expandHomePath(configuredPath, home)
+  const cwd = path.isAbsolute(expanded) ? expanded : path.resolve(home, expanded)
+  try {
+    await mkdir(cwd, { recursive: true })
+    return cwd
+  } catch {
+    return home
+  }
+}
 
 export function registerAppHandlers(): void {
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
@@ -71,4 +103,8 @@ export function registerAppHandlers(): void {
   ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
     setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
   })
+
+  ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
+    resolveFloatingTerminalCwd(args)
+  )
 }

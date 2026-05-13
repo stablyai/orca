@@ -242,6 +242,13 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
 
+    if (action?.type === 'toggleFloatingTerminal') {
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:toggleFloatingTerminal')
+      return
+    }
+
     // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
     // the generic modifier-chord gate below because that gate rejects Alt.
     // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.

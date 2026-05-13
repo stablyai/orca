@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import type { SshTarget } from './ssh-types'
+import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
 
@@ -1079,6 +1079,10 @@ export type TerminalColorOverrides = {
   bold?: string
 }
 
+export type FloatingTerminalCwdRequest = {
+  path?: string
+}
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -1170,6 +1174,15 @@ export type GlobalSettings = {
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */
   showTasksButton: boolean
+  /** Why: Floating Terminal is a global terminal surface. Keep it opt-in until
+   *  users explicitly want a global shell outside repo/worktree context. */
+  floatingTerminalEnabled: boolean
+  /** Where new Floating Terminal tabs start. Defaults to '~' so the visible
+   *  setting matches the shell-oriented directory users expect. */
+  floatingTerminalCwd: string
+  /** Where the Floating Terminal toggle is shown. Defaults to the floating
+   *  button for discoverability after the user opts into the feature. */
+  floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
@@ -1269,6 +1282,10 @@ export type GlobalSettings = {
   /** Legacy persisted key from before the sidekick -> pet rename. Read only
    *  during migration; new writes use experimentalPet. */
   experimentalSidekick?: boolean
+  /** Experimental: Slack-style Activity page that groups agent/worktree status
+   *  events by worktree. Opt-in while the UI and backend event model are still
+   *  being refined. */
+  experimentalActivity: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the
@@ -1420,6 +1437,7 @@ export type WorktreeCardProperty =
   | 'inline-agents'
 
 export type StatusBarItem = 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'ssh' | 'resource-usage'
+export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
 
 export type TaskResumeState = {
   githubMode?: 'items' | 'project'
@@ -1461,6 +1479,14 @@ export type PersistedUIState = {
   /** Once the user has seen the "your sessions won't be interrupted"
    *  reassurance card, we never show it again. */
   updateReassuranceSeen?: boolean
+  /** Per-paneKey "user has visited this row" timestamps, used by the inline
+   *  agents list to mute rows the user has already seen. Persisted because
+   *  agent rows themselves now survive restart; without persisting acks too,
+   *  rows you'd already clicked come back bold on relaunch. Stale entries
+   *  keyed on dead panes are inert: a future paneKey reuse stamps a fresh
+   *  stateStartedAt that beats the old ack via the existing comparison in
+   *  WorktreeCardAgents. Renderer-owned, written through ui:set. */
+  acknowledgedAgentsByPaneKey?: Record<string, number>
   /** URL to navigate to when a new browser tab is opened. Null means blank tab.
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null
@@ -1622,6 +1648,7 @@ export type PersistedState = {
   }
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
+  sshRemotePtyLeases: SshRemotePtyLease[]
   onboarding: OnboardingState
 }
 

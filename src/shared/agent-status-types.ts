@@ -103,6 +103,28 @@ export type AgentStatusPayload = {
  */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
 
+/**
+ * Wire shape for agent-status IPC. Both the push channel `agentStatus:set` and the
+ * pull channel `agentStatus:getSnapshot` produce this shape so renderer call sites
+ * can apply entries through a single `setAgentStatus` path. Flattens the parsed
+ * payload onto pane identity + timing because the renderer's slice expects them
+ * destructured.
+ */
+export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  paneKey: string
+  tabId?: string
+  worktreeId?: string
+  /** Identifies the SSH connection the event arrived on, or null for local.
+   *  Stamped only on the remote-ingest path (Orca's `ingestRemote`); the
+   *  HTTP path always sets null because it cannot know which mux a request
+   *  came from. See docs/design/agent-status-over-ssh.md §5. */
+  connectionId: string | null
+  /** Timestamp (ms) when the hook server received this latest status event. */
+  receivedAt: number
+  /** Timestamp (ms) when the current state first appeared for this pane. */
+  stateStartedAt: number
+}
+
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
 /** Maximum character length for the toolName field. */

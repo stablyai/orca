@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,17 +21,19 @@ import {
   Trash2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useRepoById } from '@/store/selectors'
+import { useRepoById, useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { runWorktreeDelete } from './delete-worktree-flow'
-import { runSleepWorktree } from './sleep-worktree-flow'
+import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
+import { runSleepWorktrees } from './sleep-worktree-flow'
 
 type Props = {
   worktree: Worktree
   children: React.ReactNode
   contentClassName?: string
+  selectedWorktrees?: readonly Worktree[]
+  onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -39,7 +41,9 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
-  contentClassName
+  contentClassName,
+  selectedWorktrees = [worktree],
+  onContextMenuSelect
 }: Props) {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const openModal = useAppStore((s) => s.openModal)
@@ -47,8 +51,46 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+  const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(selectedWorktrees)
   const isDeleting = deleteState?.isDeleting ?? false
   const isFolder = repo ? isFolderRepo(repo) : false
+  const repoMap = useRepoMap()
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
+  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const activeContextWorktrees = menuOpen ? contextWorktrees : selectedWorktrees
+  const isMultiContext = activeContextWorktrees.length > 1
+  const sleepableWorktrees = useMemo(
+    () =>
+      activeContextWorktrees.filter((item) => {
+        const tabs = tabsByWorktree[item.id] ?? []
+        const hasLiveTerminal = tabs.some((tab) => ptyIdsByTabId[tab.id] != null)
+        const hasBrowser = (browserTabsByWorktree[item.id] ?? []).length > 0
+        return hasLiveTerminal || hasBrowser
+      }),
+    [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
+  )
+  const deletingContext = useMemo(
+    () => activeContextWorktrees.some((item) => deleteStateByWorktreeId[item.id]?.isDeleting),
+    [activeContextWorktrees, deleteStateByWorktreeId]
+  )
+  const batchDeleteWorktrees = useMemo(
+    () =>
+      activeContextWorktrees.filter((item) => {
+        const itemRepo = repoMap.get(item.repoId)
+        return !item.isMainWorktree && itemRepo != null && !isFolderRepo(itemRepo)
+      }),
+    [activeContextWorktrees, repoMap]
+  )
+  const sleepLabel =
+    isMultiContext && sleepableWorktrees.length > 0
+      ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
+      : 'Sleep'
+  const deleteLabel =
+    isMultiContext && batchDeleteWorktrees.length > 0
+      ? `Delete ${batchDeleteWorktrees.length} Workspace${batchDeleteWorktrees.length === 1 ? '' : 's'}`
+      : 'Delete Selected'
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -103,13 +145,17 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
 
   const handleCloseTerminals = useCallback(async () => {
-    await runSleepWorktree(worktree.id)
-  }, [worktree.id])
+    await runSleepWorktrees(sleepableWorktrees.map((item) => item.id))
+  }, [sleepableWorktrees])
 
   const handleDelete = useCallback(() => {
     // Folder mode handled inline because it routes to a different modal;
     // standard delete delegates to the shared runWorktreeDelete helper.
     setMenuOpen(false)
+    if (isMultiContext) {
+      runWorktreeBatchDelete(batchDeleteWorktrees.map((item) => item.id))
+      return
+    }
     if (isFolder) {
       // Why: folder mode reuses the worktree row UI for a synthetic root entry,
       // but users still expect "remove" to disconnect the folder from Orca,
@@ -125,7 +171,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     // popover's inline Delete action. Folder mode short-circuits above
     // because the confirm-remove-folder modal is unique to this caller.
     runWorktreeDelete(worktree.id)
-  }, [worktree.id, worktree.repoId, worktree.displayName, isFolder, openModal])
+  }, [
+    batchDeleteWorktrees,
+    isFolder,
+    isMultiContext,
+    openModal,
+    worktree.displayName,
+    worktree.id,
+    worktree.repoId
+  ])
 
   return (
     <>
@@ -134,6 +188,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+          setContextWorktrees(onContextMenuSelect?.(event) ?? selectedWorktrees)
           const bounds = event.currentTarget.getBoundingClientRect()
           setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
           setMenuOpen(true)
@@ -152,45 +207,58 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent className={cn('w-52', contentClassName)} sideOffset={0} align="start">
-          <DropdownMenuItem onSelect={handleOpenInFinder} disabled={isDeleting}>
-            <FolderOpen className="size-3.5" />
-            Open in Finder
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
-            <Copy className="size-3.5" />
-            Copy Path
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
-            {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-            {worktree.isPinned ? 'Unpin' : 'Pin'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
-            <Pencil className="size-3.5" />
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-            {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-            {worktree.isUnread ? 'Mark Read' : 'Mark Unread'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleLinkIssue} disabled={isDeleting}>
-            <Link className="size-3.5" />
-            {worktree.linkedIssue ? 'Edit GH Issue' : 'Link GH Issue'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleComment} disabled={isDeleting}>
-            <MessageSquare className="size-3.5" />
-            {worktree.comment ? 'Edit Comment' : 'Add Comment'}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {!isMultiContext && (
+            <>
+              <DropdownMenuItem onSelect={handleOpenInFinder} disabled={isDeleting}>
+                <FolderOpen className="size-3.5" />
+                Open in Finder
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
+                <Copy className="size-3.5" />
+                Copy Path
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
+                {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+                {worktree.isPinned ? 'Unpin' : 'Pin'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
+                <Pencil className="size-3.5" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
+                {worktree.isUnread ? (
+                  <BellOff className="size-3.5" />
+                ) : (
+                  <Bell className="size-3.5" />
+                )}
+                {worktree.isUnread ? 'Mark Read' : 'Mark Unread'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleLinkIssue} disabled={isDeleting}>
+                <Link className="size-3.5" />
+                {worktree.linkedIssue ? 'Edit GH Issue' : 'Link GH Issue'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleComment} disabled={isDeleting}>
+                <MessageSquare className="size-3.5" />
+                {worktree.comment ? 'Edit Comment' : 'Add Comment'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <DropdownMenuItem onSelect={handleCloseTerminals} disabled={isDeleting}>
+              <DropdownMenuItem
+                onSelect={handleCloseTerminals}
+                disabled={deletingContext || sleepableWorktrees.length === 0}
+              >
                 <Moon className="size-3.5" />
-                Sleep
+                {sleepLabel}
               </DropdownMenuItem>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
-              Close all active panels in this workspace to free up memory and CPU.
+              {isMultiContext
+                ? 'Close all active panels in the selected workspaces to free up memory and CPU.'
+                : 'Close all active panels in this workspace to free up memory and CPU.'}
             </TooltipContent>
           </Tooltip>
           {/* Why: `git worktree remove` always rejects the main worktree, so we
@@ -200,15 +268,25 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           <DropdownMenuItem
             variant="destructive"
             onSelect={handleDelete}
-            disabled={isDeleting || (!isFolder && worktree.isMainWorktree)}
+            disabled={
+              deletingContext ||
+              (!isMultiContext && !isFolder && worktree.isMainWorktree) ||
+              (isMultiContext && batchDeleteWorktrees.length === 0)
+            }
             title={
-              !isFolder && worktree.isMainWorktree
+              !isMultiContext && !isFolder && worktree.isMainWorktree
                 ? 'The main worktree cannot be deleted'
                 : undefined
             }
           >
             <Trash2 className="size-3.5" />
-            {isDeleting ? 'Deleting…' : isFolder ? 'Remove Folder from Orca' : 'Delete'}
+            {deletingContext
+              ? 'Deleting…'
+              : isMultiContext
+                ? deleteLabel
+                : isFolder
+                  ? 'Remove Folder from Orca'
+                  : 'Delete'}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -28,8 +28,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
 
     const flag = token.slice(2)
+    const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
-    if (!next || next.startsWith('--')) {
+    if (!hasNext || next.startsWith('--')) {
       flags.set(flag, true)
       continue
     }
@@ -61,7 +62,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   if (['open', 'status'].includes(commandPath[0])) {
     return false
   }
-  if (['repo', 'worktree', 'terminal'].includes(commandPath[0])) {
+  if (['repo', 'worktree', 'terminal', 'computer'].includes(commandPath[0])) {
     return false
   }
   return ![
@@ -90,7 +91,8 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'clipboard',
         'dialog',
         'storage',
-        'orchestration'
+        'orchestration',
+        'computer'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&

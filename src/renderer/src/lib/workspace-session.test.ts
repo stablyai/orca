@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorkspaceSessionPayload } from './workspace-session'
+import {
+  buildWorkspaceSessionPayload,
+  SESSION_RELEVANT_FIELDS,
+  type WorkspaceSessionSnapshot
+} from './workspace-session'
 import type { AppState } from '../store'
+import { FLOATING_TERMINAL_WORKTREE_ID } from './floating-terminal'
 
 function createSnapshot(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -88,6 +93,34 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.activeWorktreeIdsOnShutdown).toEqual(['wt-1'])
   })
 
+  it('persists floating terminal tabs for daemon reattach after restart', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            {
+              id: 'floating-tab-1',
+              title: 'Terminal 1',
+              ptyId: 'floating-pty-1',
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+            } as never
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'floating-tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
+        },
+        activeTabIdByWorktree: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-tab-1'
+        }
+      })
+    )
+
+    expect(payload.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(payload.activeTabIdByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID]).toBe('floating-tab-1')
+    expect(payload.terminalLayoutsByTabId['floating-tab-1']).toBeDefined()
+    expect(payload.activeWorktreeIdsOnShutdown).toEqual([FLOATING_TERMINAL_WORKTREE_ID])
+  })
+
   it('persists only edit-mode files and resets browser loading state', () => {
     const payload = buildWorkspaceSessionPayload(createSnapshot())
 
@@ -138,5 +171,51 @@ describe('buildWorkspaceSessionPayload', () => {
 
     expect(payload.activeFileIdByWorktree).toEqual({})
     expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'terminal' })
+  })
+})
+
+describe('SESSION_RELEVANT_FIELDS', () => {
+  // Why: this list gates the App-level session-write debounce subscriber.
+  // If a future field is added to WorkspaceSessionSnapshot but not to the
+  // gate, the subscriber would silently stop noticing changes to that field
+  // and persist stale data. Listing every key here as a fixture and asserting
+  // the gate covers them catches the drift at test time. The compile-time
+  // _exhaustive check in workspace-session.ts is the primary line of defense;
+  // this test is the runtime backstop.
+  const fixture: Record<keyof WorkspaceSessionSnapshot, true> = {
+    activeRepoId: true,
+    activeWorktreeId: true,
+    activeTabId: true,
+    tabsByWorktree: true,
+    terminalLayoutsByTabId: true,
+    activeTabIdByWorktree: true,
+    openFiles: true,
+    activeFileIdByWorktree: true,
+    activeTabTypeByWorktree: true,
+    browserTabsByWorktree: true,
+    browserPagesByWorkspace: true,
+    activeBrowserTabIdByWorktree: true,
+    browserUrlHistory: true,
+    unifiedTabsByWorktree: true,
+    groupsByWorktree: true,
+    layoutByWorktree: true,
+    activeGroupIdByWorktree: true,
+    sshConnectionStates: true,
+    repos: true,
+    worktreesByRepo: true,
+    lastKnownRelayPtyIdByTabId: true,
+    lastVisitedAtByWorktreeId: true
+  }
+
+  it('contains every key of WorkspaceSessionSnapshot', () => {
+    const fixtureKeys = Object.keys(fixture)
+    expect(
+      fixtureKeys.every((k) => (SESSION_RELEVANT_FIELDS as readonly string[]).includes(k))
+    ).toBe(true)
+    expect(SESSION_RELEVANT_FIELDS.length).toBe(fixtureKeys.length)
+  })
+
+  it('has no duplicate entries', () => {
+    expect(new Set(SESSION_RELEVANT_FIELDS).size).toBe(SESSION_RELEVANT_FIELDS.length)
   })
 })

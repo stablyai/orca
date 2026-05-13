@@ -124,7 +124,7 @@ export class SshGitProvider implements IGitProvider {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; track?: boolean }
+    options?: { base?: string }
   ): Promise<void> {
     await this.mux.request('git.addWorktree', {
       repoPath,

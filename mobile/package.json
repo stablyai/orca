@@ -7,6 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "test": "vitest run",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "mock-server": "npx tsx scripts/mock-server.ts"
@@ -50,6 +51,7 @@
     "oxfmt": "^0.47.0",
     "oxlint": "^1.63.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
   }
 }

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -20,6 +21,10 @@ import {
   type HoveredTabInsertion,
   type TabDropZone
 } from './useTabDragSplit'
+import {
+  findActivityTerminalPortal,
+  type ActivityTerminalPortalTarget
+} from '../activity/activity-terminal-portal'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -35,7 +40,8 @@ export default function TabGroupPanel({
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
   activeDropZone = null,
-  hoveredTabInsertion = null
+  hoveredTabInsertion = null,
+  activityTerminalPortals = []
 }: {
   groupId: string
   worktreeId: string
@@ -49,6 +55,7 @@ export default function TabGroupPanel({
   isTabDragActive?: boolean
   activeDropZone?: TabDropZone | null
   hoveredTabInsertion?: HoveredTabInsertion | null
+  activityTerminalPortals?: ActivityTerminalPortalTarget[]
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
@@ -351,36 +358,51 @@ export default function TabGroupPanel({
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {model.groupTabs
           .filter((item) => item.contentType === 'terminal')
-          .map((item) => (
-            <TerminalPane
-              key={`${item.entityId}-${runtimeTerminalTabById.get(item.entityId)?.generation ?? 0}`}
-              tabId={item.entityId}
-              worktreeId={worktreeId}
-              cwd={worktreePath}
-              isActive={
-                isFocused && activeTab?.id === item.id && activeTab.contentType === 'terminal'
-              }
-              // Why: in multi-group splits, the active terminal in each group
-              // must remain visible (display:flex) so the user sees its output,
-              // but only the focused group's terminal should receive keyboard
-              // input. Hidden worktrees stay mounted offscreen, so `isVisible`
-              // must also respect worktree visibility or those detached panes
-              // keep their WebGL renderers alive and exhaust Chromium's context
-              // budget across worktrees.
-              isVisible={
-                isWorktreeActive &&
-                activeTab?.id === item.id &&
-                activeTab.contentType === 'terminal'
-              }
-              onPtyExit={(ptyId) => {
-                if (commands.consumeSuppressedPtyExit(ptyId)) {
-                  return
-                }
-                commands.closeItem(item.id)
-              }}
-              onCloseTab={() => commands.closeItem(item.id)}
-            />
-          ))}
+          .map((item) => {
+            const activityTerminalPortal = findActivityTerminalPortal(
+              activityTerminalPortals,
+              worktreeId,
+              item.entityId
+            )
+            const isActivityPortalTab = activityTerminalPortal !== null
+            const isActiveTerminalTab =
+              isFocused && activeTab?.id === item.id && activeTab.contentType === 'terminal'
+            const isVisibleTerminalTab =
+              isWorktreeActive && activeTab?.id === item.id && activeTab.contentType === 'terminal'
+            const terminalPane = (
+              <TerminalPane
+                key={`${item.entityId}-${runtimeTerminalTabById.get(item.entityId)?.generation ?? 0}`}
+                tabId={item.entityId}
+                worktreeId={worktreeId}
+                cwd={worktreePath}
+                isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
+                // Why: the Activity page shows the selected agent's existing
+                // terminal while the workspace group stays hidden. The portaled
+                // tab must still be visible so xterm fits against the activity
+                // pane and continues foreground output scheduling.
+                isVisible={isVisibleTerminalTab || isActivityPortalTab}
+                // Why: when portaled to Activity for a specific agent pane,
+                // isolate that leaf so split siblings stay hidden. Workspace
+                // renders pass null → no override.
+                isolatedPaneId={activityTerminalPortal?.paneId ?? null}
+                onPtyExit={(ptyId) => {
+                  if (commands.consumeSuppressedPtyExit(ptyId)) {
+                    return
+                  }
+                  commands.closeItem(item.id)
+                }}
+                onCloseTab={() => commands.closeItem(item.id)}
+              />
+            )
+            if (activityTerminalPortal) {
+              return createPortal(
+                terminalPane,
+                activityTerminalPortal.target,
+                `activity-terminal-${item.entityId}`
+              )
+            }
+            return terminalPane
+          })}
 
         {activeTab &&
           activeTab.contentType !== 'terminal' &&

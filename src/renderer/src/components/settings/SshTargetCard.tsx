@@ -49,6 +49,7 @@ type SshTargetCardProps = {
   testing: boolean
   onConnect: (targetId: string) => void
   onDisconnect: (targetId: string) => void
+  onTerminateSessions: (targetId: string) => void
   onTest: (targetId: string) => void
   onEdit: (target: SshTarget) => void
   onRemove: (targetId: string) => void
@@ -60,12 +61,15 @@ export function SshTargetCard({
   testing,
   onConnect,
   onDisconnect,
+  onTerminateSessions,
   onTest,
   onEdit,
   onRemove
 }: SshTargetCardProps): React.JSX.Element {
   const status: SshConnectionStatus = state?.status ?? 'disconnected'
-  const [actionInFlight, setActionInFlight] = useState<'connect' | 'disconnect' | null>(null)
+  const [actionInFlight, setActionInFlight] = useState<
+    'connect' | 'disconnect' | 'terminate' | null
+  >(null)
 
   const handleConnect = (): void => {
     if (actionInFlight) {
@@ -81,6 +85,14 @@ export function SshTargetCard({
     }
     setActionInFlight('disconnect')
     Promise.resolve(onDisconnect(target.id)).finally(() => setActionInFlight(null))
+  }
+
+  const handleTerminateSessions = (): void => {
+    if (actionInFlight) {
+      return
+    }
+    setActionInFlight('terminate')
+    Promise.resolve(onTerminateSessions(target.id)).finally(() => setActionInFlight(null))
   }
 
   return (
@@ -104,16 +116,32 @@ export function SshTargetCard({
 
       <div className="flex shrink-0 items-center gap-1">
         {status === 'connected' ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={handleDisconnect}
-            className="gap-1.5"
-            disabled={actionInFlight !== null}
-          >
-            <ServerOff className="size-3" />
-            Disconnect
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleDisconnect}
+              className="gap-1.5"
+              disabled={actionInFlight !== null}
+            >
+              <ServerOff className="size-3" />
+              Disconnect
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleTerminateSessions}
+              className="gap-1.5 text-muted-foreground hover:text-red-400"
+              disabled={actionInFlight !== null}
+            >
+              {actionInFlight === 'terminate' ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Trash2 className="size-3" />
+              )}
+              Terminate
+            </Button>
+          </>
         ) : isConnecting(status) ? (
           <Button variant="ghost" size="xs" disabled className="gap-1.5">
             <Loader2 className="size-3 animate-spin" />
@@ -148,6 +176,20 @@ export function SshTargetCard({
                 <MonitorSmartphone className="size-3" />
               )}
               Test
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleTerminateSessions}
+              className="gap-1.5 text-muted-foreground hover:text-red-400"
+              disabled={actionInFlight !== null}
+            >
+              {actionInFlight === 'terminate' ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Trash2 className="size-3" />
+              )}
+              Terminate
             </Button>
           </>
         )}

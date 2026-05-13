@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
-import { extname } from 'path'
+import { extname, join } from 'path'
 import type { ChildProcess } from 'child_process'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
@@ -104,6 +104,27 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
   }
 }
 
+async function isDirectoryEntry(
+  dirPath: string,
+  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
+  resolveEntryPath: (entryPath: string) => Promise<string>
+): Promise<boolean> {
+  if (entry.isDirectory()) {
+    return true
+  }
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  try {
+    // Why: directory symlinks inside a workspace should navigate like folders
+    // without bypassing the local authorized-path boundary.
+    const entryPath = await resolveEntryPath(join(dirPath, entry.name))
+    return (await stat(entryPath)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 export function registerFilesystemHandlers(store: Store): void {
   const activeTextSearches = new Map<string, ChildProcess>()
 
@@ -120,18 +141,21 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const dirPath = await resolveAuthorizedPath(args.dirPath, store)
       const entries = await readdir(dirPath, { withFileTypes: true })
-      return entries
-        .map((entry) => ({
+      const mapped = await Promise.all(
+        entries.map(async (entry) => ({
           name: entry.name,
-          isDirectory: entry.isDirectory(),
+          isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
+            resolveAuthorizedPath(entryPath, store)
+          ),
           isSymlink: entry.isSymbolicLink()
         }))
-        .sort((a, b) => {
-          if (a.isDirectory !== b.isDirectory) {
-            return a.isDirectory ? -1 : 1
-          }
-          return a.name.localeCompare(b.name)
-        })
+      )
+      return mapped.sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) {
+          return a.isDirectory ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      })
     }
   )
 

@@ -10,8 +10,8 @@ import type { AgentStatus } from '../../shared/agent-detection'
 import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
-import { join } from 'path'
-import { rm } from 'fs/promises'
+import { join, posix, win32 } from 'path'
+import { open, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
@@ -24,6 +24,7 @@ import type {
   WorktreeStartupLaunch
 } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
@@ -49,6 +50,17 @@ import type {
   RuntimeTerminalSummary,
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
+  RuntimeMarkdownReadTabResult,
+  RuntimeMarkdownSaveTabResult,
+  RuntimeMobileSessionCreateTerminalResult,
+  RuntimeMobileSessionClientTab,
+  RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionTabsRemovedResult,
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeFileListResult,
+  RuntimeFileOpenResult,
+  RuntimeFileReadResult,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
   BrowserSnapshotResult,
@@ -112,6 +124,8 @@ import {
   getRecentDriftSubjects
 } from '../git/repo'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
+import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
+import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -141,6 +155,7 @@ import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IPtyProvider } from '../providers/types'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
@@ -217,6 +232,10 @@ type RuntimePtyWorktreeRecord = {
   ptyId: string
   worktreeId: string
   connected: boolean
+  lastExitCode: number | null
+  lastAgentStatus: AgentStatus | null
+  lastOscTitle: string | null
+  title: string | null
   lastOutputAt: number | null
   tailBuffer: string[]
   tailPartialLine: string
@@ -231,9 +250,20 @@ type RuntimeHeadlessTerminal = {
 }
 
 type RuntimePtyController = {
+  spawn?(opts: {
+    cols: number
+    rows: number
+    cwd?: string
+    command?: string
+    env?: Record<string, string>
+    connectionId?: string | null
+    worktreeId?: string
+    preAllocatedHandle?: string
+  }): Promise<{ id: string }>
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
   getForegroundProcess(ptyId: string): Promise<string | null>
+  clearBuffer?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
   listProcesses?(): Promise<{ id: string; cwd: string; title: string }[]>
   serializeBuffer?(
@@ -247,6 +277,25 @@ type RuntimePtyController = {
   getSize?(ptyId: string): { cols: number; rows: number } | null
 }
 
+const MOBILE_FILE_LIST_LIMIT = 5000
+const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
+const MOBILE_BINARY_EXTENSIONS = new Set([
+  '.avif',
+  '.bmp',
+  '.gif',
+  '.heic',
+  '.ico',
+  '.jpeg',
+  '.jpg',
+  '.mov',
+  '.mp3',
+  '.mp4',
+  '.pdf',
+  '.png',
+  '.webp',
+  '.zip'
+])
+
 type RuntimeNotifier = {
   worktreesChanged(repoId: string): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
@@ -259,13 +308,30 @@ type RuntimeNotifier = {
     startup?: WorktreeStartupLaunch
   ): void
   createTerminal(worktreeId: string, opts: { command?: string; title?: string }): void
+  revealTerminalSession?(
+    worktreeId: string,
+    opts: { ptyId: string; title?: string | null; activate?: boolean }
+  ):
+    | Promise<{ tabId: string; title?: string | null }>
+    | { tabId: string; title?: string | null }
+    | void
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
     opts: { direction: 'horizontal' | 'vertical'; command?: string }
   ): void
   renameTerminal(tabId: string, title: string | null): void
-  focusTerminal(tabId: string, worktreeId: string): void
+  focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
+  focusEditorTab?(tabId: string, worktreeId: string): void
+  closeSessionTab?(tabId: string, worktreeId: string): void
+  openFile?(worktreeId: string, filePath: string, relativePath: string): void
+  readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
+  saveMobileMarkdownTab?(
+    worktreeId: string,
+    tabId: string,
+    baseVersion: string,
+    content: string
+  ): Promise<RuntimeMarkdownSaveTabResult>
   closeTerminal(tabId: string, paneRuntimeId?: number): void
   sleepWorktree(worktreeId: string): void
   terminalFitOverrideChanged(
@@ -404,6 +470,8 @@ export class OrcaRuntimeService {
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
   private tabs = new Map<string, RuntimeSyncedTab>()
+  private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
   private leaves = new Map<string, RuntimeLeafRecord>()
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
@@ -415,6 +483,7 @@ export class OrcaRuntimeService {
   private notifier: RuntimeNotifier | null = null
   private agentBrowserBridge: AgentBrowserBridge | null = null
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
+  private resolvedWorktreeInFlight: Promise<ResolvedWorktree[]> | null = null
   private agentDetector: AgentDetector | null = null
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
@@ -735,6 +804,7 @@ export class OrcaRuntimeService {
     }
 
     this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
+    this.syncMobileSessionTabs(graph.mobileSessionTabs)
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
 
     // Why: renderer reloads can briefly republish the same leaf with no ptyId;
@@ -812,6 +882,7 @@ export class OrcaRuntimeService {
     }
 
     this.leaves = nextLeaves
+    this.notifyMobileSessionTabSnapshots()
     this.graphStatus = 'ready'
     this.refreshWritableFlags()
     for (const leaf of this.leaves.values()) {
@@ -825,6 +896,199 @@ export class OrcaRuntimeService {
     }
 
     return this.getStatus()
+  }
+
+  async listMobileSessionTabs(worktreeSelector: string): Promise<RuntimeMobileSessionTabsResult> {
+    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    if (explicitWorktreeId) {
+      return this.getMobileSessionTabsForWorktree(explicitWorktreeId)
+    }
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    return this.getMobileSessionTabsForWorktree(worktree.id)
+  }
+
+  async activateMobileSessionTab(
+    worktreeSelector: string,
+    tabId: string
+  ): Promise<RuntimeMobileSessionTabsResult> {
+    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
+    if (!tab) {
+      throw new Error('tab_not_found')
+    }
+
+    if (tab.type === 'terminal') {
+      this.notifier?.focusTerminal(tab.parentTabId, worktreeId, tab.leafId)
+    } else {
+      this.notifier?.focusEditorTab?.(tab.id, worktreeId)
+    }
+    return this.getMobileSessionTabsForWorktree(worktreeId)
+  }
+
+  async closeMobileSessionTab(worktreeSelector: string, tabId: string): Promise<{ closed: true }> {
+    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
+    if (!tab) {
+      throw new Error('tab_not_found')
+    }
+    if (tab.type === 'terminal') {
+      this.notifier?.closeTerminal(tab.parentTabId)
+    } else {
+      this.notifier?.closeSessionTab?.(tab.id, worktreeId)
+    }
+    return { closed: true }
+  }
+
+  async readMobileMarkdownTab(
+    worktreeSelector: string,
+    tabId: string
+  ): Promise<RuntimeMarkdownReadTabResult> {
+    const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
+    if (!this.notifier?.readMobileMarkdownTab) {
+      throw new Error('renderer_unavailable')
+    }
+    return await this.notifier.readMobileMarkdownTab(worktreeId, tabId)
+  }
+
+  async saveMobileMarkdownTab(
+    worktreeSelector: string,
+    tabId: string,
+    baseVersion: string,
+    content: string
+  ): Promise<RuntimeMarkdownSaveTabResult> {
+    const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
+    if (!this.notifier?.saveMobileMarkdownTab) {
+      throw new Error('renderer_unavailable')
+    }
+    return await this.notifier.saveMobileMarkdownTab(worktreeId, tabId, baseVersion, content)
+  }
+
+  async listMobileFiles(worktreeSelector: string): Promise<RuntimeFileListResult> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const repo = this.store.getRepo(worktree.repoId)
+    const connectionId = repo?.connectionId ?? undefined
+    const files = connectionId
+      ? await this.listRemoteMobileFiles(worktree.path, connectionId)
+      : await listQuickOpenFiles(worktree.path, this.store as unknown as Store)
+    const entries = files
+      .filter((relativePath) => isSafeMobileRelativePath(relativePath))
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, MOBILE_FILE_LIST_LIMIT)
+      .map((relativePath) => ({
+        relativePath,
+        basename: basenameFromRelativePath(relativePath),
+        kind: isMobileBinaryPath(relativePath) ? ('binary' as const) : ('text' as const)
+      }))
+
+    return {
+      worktree: worktree.id,
+      rootPath: worktree.path,
+      files: entries,
+      totalCount: files.length,
+      truncated: files.length > MOBILE_FILE_LIST_LIMIT
+    }
+  }
+
+  async openMobileFile(
+    worktreeSelector: string,
+    relativePath: string
+  ): Promise<RuntimeFileOpenResult> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    if (!isSafeMobileRelativePath(relativePath)) {
+      throw new Error('invalid_relative_path')
+    }
+    const kind = isMobileBinaryPath(relativePath)
+      ? 'binary'
+      : isMobileMarkdownPath(relativePath)
+        ? 'markdown'
+        : 'text'
+    if (kind === 'binary') {
+      return { worktree: worktree.id, relativePath, kind, opened: false }
+    }
+    if (!this.notifier?.openFile) {
+      throw new Error('renderer_unavailable')
+    }
+    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
+    this.notifier.openFile(worktree.id, filePath, relativePath)
+    return { worktree: worktree.id, relativePath, kind, opened: true }
+  }
+
+  async readMobileFile(
+    worktreeSelector: string,
+    relativePath: string
+  ): Promise<RuntimeFileReadResult> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    if (!isSafeMobileRelativePath(relativePath)) {
+      throw new Error('invalid_relative_path')
+    }
+    if (isMobileBinaryPath(relativePath)) {
+      throw new Error('binary_file')
+    }
+
+    const repo = this.store.getRepo(worktree.repoId)
+    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
+    const content = repo?.connectionId
+      ? await this.readRemoteMobileFile(filePath, repo.connectionId)
+      : await readLocalMobileFile(filePath, this.store as unknown as Store)
+    const truncated = truncateMobileFilePreview(content)
+
+    return {
+      worktree: worktree.id,
+      relativePath,
+      content: truncated.content,
+      truncated: truncated.truncated,
+      byteLength: truncated.byteLength
+    }
+  }
+
+  private async listRemoteMobileFiles(rootPath: string, connectionId: string): Promise<string[]> {
+    const provider = getSshFilesystemProvider(connectionId)
+    if (!provider) {
+      return []
+    }
+    return provider.listFiles(rootPath)
+  }
+
+  private async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {
+    const provider = getSshFilesystemProvider(connectionId)
+    if (!provider) {
+      throw new Error('remote_filesystem_unavailable')
+    }
+    const fileStat = await provider.stat(filePath)
+    // Why: the SSH filesystem API does not expose ranged reads here, so reject
+    // oversized remote previews instead of streaming a large file just to trim it.
+    if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
+      throw new Error('file_too_large')
+    }
+    const result = await provider.readFile(filePath)
+    if (result.isBinary) {
+      throw new Error('binary_file')
+    }
+    return result.content
+  }
+
+  onMobileSessionTabsChanged(
+    listener: (snapshot: RuntimeMobileSessionTabsResult) => void
+  ): () => void {
+    this.mobileSessionTabListeners.add(listener)
+    return () => {
+      this.mobileSessionTabListeners.delete(listener)
+    }
   }
 
   // Why: terminal handles are normally created lazily when first referenced via
@@ -903,6 +1167,14 @@ export class OrcaRuntimeService {
       pty.tailTruncated = pty.tailTruncated || nextTail.truncated
       pty.tailLinesTotal += nextTail.newCompleteLines
       pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
+      if (oscTitle !== null) {
+        const prevStatus = pty.lastAgentStatus
+        pty.lastOscTitle = oscTitle
+        pty.lastAgentStatus = agentStatus
+        if (agentStatus === 'idle' && prevStatus !== 'idle') {
+          this.resolvePtyTuiIdleWaiters(pty, ptyId)
+        }
+      }
     }
 
     for (const leaf of this.leaves.values()) {
@@ -1014,6 +1286,20 @@ export class OrcaRuntimeService {
     opts: { scrollbackRows?: number } = {}
   ): Promise<{ data: string; cols: number; rows: number } | null> {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
+  }
+
+  async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
+    const leaf = this.resolveLeafForHandle(handle)
+    if (!leaf?.ptyId) {
+      throw new Error('terminal_not_found')
+    }
+    // Why: clear is a terminal UI action (Cmd+K on desktop), not shell input.
+    // Route through the controller so renderer-owned xterm buffers, daemon
+    // sessions, and SSH relay sessions all drop scrollback before the next
+    // mobile snapshot.
+    await this.ptyController?.clearBuffer?.(leaf.ptyId)
+    await this.clearHeadlessTerminalBuffer(leaf.ptyId)
+    return { handle, cleared: true }
   }
 
   getTerminalSize(ptyId: string): { cols: number; rows: number } | null {
@@ -1172,6 +1458,18 @@ export class OrcaRuntimeService {
 
   private resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
     this.headlessTerminals.get(ptyId)?.emulator.resize(cols, rows)
+  }
+
+  private async clearHeadlessTerminalBuffer(ptyId: string): Promise<void> {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return
+    }
+    // Why: headless writes are queued to preserve xterm parser order. Clear
+    // must join that same chain or an earlier PTY chunk can finish after the
+    // clear request and repopulate mobile scrollback.
+    state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
+    await state.writeChain
   }
 
   private async serializeTerminalBufferFromAvailableState(
@@ -1717,6 +2015,8 @@ export class OrcaRuntimeService {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       pty.connected = false
+      pty.lastExitCode = exitCode
+      this.resolvePtyExitWaiters(pty, ptyId)
     }
 
     for (const leaf of this.leaves.values()) {
@@ -2799,7 +3099,8 @@ export class OrcaRuntimeService {
     }
     const graphEpoch = this.captureReadyGraphEpoch()
     const targetWorktreeId = worktreeSelector
-      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      ? (getExplicitWorktreeIdSelector(worktreeSelector) ??
+        (await this.resolveWorktreeSelector(worktreeSelector)).id)
       : null
     const worktreesById = await this.getResolvedWorktreeMap()
     this.assertStableReadyGraph(graphEpoch)
@@ -2969,10 +3270,7 @@ export class OrcaRuntimeService {
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
-      const wrote = this.ptyController?.write(pty.pty.ptyId, payload) ?? false
-      if (!wrote) {
-        throw new Error('terminal_not_writable')
-      }
+      await this.writeTerminalAction(pty.pty.ptyId, action, payload)
       return {
         handle,
         accepted: true,
@@ -2989,36 +3287,42 @@ export class OrcaRuntimeService {
       throw new Error('invalid_terminal_send')
     }
 
-    // Why: TUI apps (Claude Code, etc.) treat a single large write as a paste
-    // event. If \r is included in the same write as multi-line text, the TUI
-    // interprets it as part of the paste rather than a discrete Enter keypress.
-    // Splitting the text and the trailing control characters into separate
-    // writes with a small delay ensures the TUI processes the paste first,
-    // then receives Enter as a distinct input event.
-    const hasText = typeof action.text === 'string' && action.text.length > 0
-    const hasSuffix = action.enter || action.interrupt
-    if (hasText && hasSuffix) {
-      const textWrote = this.ptyController?.write(leaf.ptyId, action.text!) ?? false
-      if (!textWrote) {
-        throw new Error('terminal_not_writable')
-      }
-      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const suffixWrote = this.ptyController?.write(leaf.ptyId, suffix) ?? false
-      if (!suffixWrote) {
-        throw new Error('terminal_not_writable')
-      }
-    } else {
-      const wrote = this.ptyController?.write(leaf.ptyId, payload) ?? false
-      if (!wrote) {
-        throw new Error('terminal_not_writable')
-      }
-    }
+    await this.writeTerminalAction(leaf.ptyId, action, payload)
 
     return {
       handle,
       accepted: true,
       bytesWritten: Buffer.byteLength(payload, 'utf8')
+    }
+  }
+
+  private async writeTerminalAction(
+    ptyId: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    payload: string
+  ): Promise<void> {
+    // Why: TUI apps (Claude Code, etc.) treat a single large write as a paste
+    // event. Keep Enter/interrupt as a second write for both visible and
+    // background PTYs so CLI automation behaves the same either way.
+    const hasText = typeof action.text === 'string' && action.text.length > 0
+    const hasSuffix = action.enter || action.interrupt
+    if (hasText && hasSuffix) {
+      const textWrote = this.ptyController?.write(ptyId, action.text!) ?? false
+      if (!textWrote) {
+        throw new Error('terminal_not_writable')
+      }
+      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      const suffixWrote = this.ptyController?.write(ptyId, suffix) ?? false
+      if (!suffixWrote) {
+        throw new Error('terminal_not_writable')
+      }
+      return
+    }
+
+    const wrote = this.ptyController?.write(ptyId, payload) ?? false
+    if (!wrote) {
+      throw new Error('terminal_not_writable')
     }
   }
 
@@ -3030,6 +3334,52 @@ export class OrcaRuntimeService {
     }
   ): Promise<RuntimeTerminalWait> {
     const condition = options?.condition ?? 'exit'
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      if (condition === 'exit' && !pty.pty.connected) {
+        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      }
+      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      }
+      return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
+        const effectiveTimeoutMs =
+          typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
+            ? options.timeoutMs
+            : condition === 'tui-idle'
+              ? TUI_IDLE_DEFAULT_TIMEOUT_MS
+              : 0
+        const waiter: TerminalWaiter = {
+          handle,
+          condition,
+          resolve,
+          reject,
+          timeout: null,
+          pollInterval: null
+        }
+        if (effectiveTimeoutMs > 0) {
+          waiter.timeout = setTimeout(() => {
+            this.removeWaiter(waiter)
+            reject(new Error('timeout'))
+          }, effectiveTimeoutMs)
+        }
+        let waiters = this.waitersByHandle.get(handle)
+        if (!waiters) {
+          waiters = new Set()
+          this.waitersByHandle.set(handle, waiters)
+        }
+        waiters.add(waiter)
+        const live = this.getLivePtyForHandle(handle)
+        if (!live) {
+          this.removeWaiter(waiter)
+          reject(new Error('terminal_handle_stale'))
+        } else if (condition === 'exit' && !live.pty.connected) {
+          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+        } else if (condition === 'tui-idle' && live.pty.lastAgentStatus === 'idle') {
+          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+        }
+      })
+    }
     const { leaf } = this.getLiveLeafForHandle(handle)
 
     if (condition === 'exit' && getTerminalState(leaf) === 'exited') {
@@ -3389,6 +3739,7 @@ export class OrcaRuntimeService {
     linkedIssue?: number | null
     comment?: string
     runHooks?: boolean
+    activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
     startup?: WorktreeStartupLaunch
   }): Promise<CreateWorktreeResult> {
@@ -3529,16 +3880,6 @@ export class OrcaRuntimeService {
       console.warn(`[hooks] ${warning}`)
     }
 
-    this.notifier?.worktreesChanged(repo.id)
-    // Why: the editor currently creates the first Orca-managed terminal as a
-    // renderer-side consequence of activating a worktree. CLI-created
-    // worktrees must trigger that same activation path or they will exist on
-    // disk without becoming the active workspace in the UI.
-    if (args.startup) {
-      this.notifier?.activateWorktree(repo.id, worktree.id, setup, args.startup)
-    } else {
-      this.notifier?.activateWorktree(repo.id, worktree.id, setup)
-    }
     this.invalidateResolvedWorktreeCache()
     // Why: the filesystem-auth layer maintains a separate cache of registered
     // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
@@ -3546,6 +3887,38 @@ export class OrcaRuntimeService {
     // are not recognized and all git operations fail with "Access denied:
     // unknown repository or worktree path".
     invalidateAuthorizedRootsCache()
+    this.notifier?.worktreesChanged(repo.id)
+    const shouldActivate = args.activate === true || args.runHooks === true || Boolean(args.startup)
+    if (shouldActivate) {
+      // Why: plain CLI creates should not steal the user's current workspace.
+      // Startup launches still use renderer activation because they are an
+      // explicit request to start visible work in the new worktree.
+      if (args.startup) {
+        this.notifier?.activateWorktree(repo.id, worktree.id, setup, args.startup)
+      } else {
+        this.notifier?.activateWorktree(repo.id, worktree.id, setup)
+      }
+    } else if (this.ptyController?.spawn) {
+      try {
+        await this.createTerminal(`path:${worktree.path}`)
+        if (setup) {
+          await this.createTerminal(`path:${worktree.path}`, {
+            title: 'Setup',
+            command: buildSetupRunnerCommand(
+              setup.runnerScriptPath,
+              process.platform === 'win32' ? 'windows' : 'posix'
+            ),
+            env: setup.envVars
+          })
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        warning = warning
+          ? `${warning} Also failed to create the initial terminal for ${worktreePath}: ${message}`
+          : `Failed to create the initial terminal for ${worktreePath}: ${message}`
+        console.warn(`[worktree-create] ${warning}`)
+      }
+    }
     return {
       worktree,
       ...(setup ? { setup } : {}),
@@ -4007,6 +4380,17 @@ export class OrcaRuntimeService {
 
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
     this.assertGraphReady()
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      pty.pty.title = title
+      for (const leaf of this.leaves.values()) {
+        if (leaf.ptyId === pty.pty.ptyId) {
+          this.notifier?.renameTerminal(leaf.tabId, title)
+          return { handle, tabId: leaf.tabId, title }
+        }
+      }
+      return { handle, tabId: pty.record.tabId, title }
+    }
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
@@ -4014,8 +4398,53 @@ export class OrcaRuntimeService {
 
   async createTerminal(
     worktreeSelector?: string,
-    opts: { command?: string; title?: string } = {}
+    opts: { command?: string; env?: Record<string, string>; title?: string; focus?: boolean } = {}
   ): Promise<RuntimeTerminalCreate> {
+    if (opts.focus !== true) {
+      if (!worktreeSelector) {
+        throw new Error('MISSING_WORKTREE')
+      }
+      if (!this.ptyController?.spawn) {
+        throw new Error('runtime_unavailable')
+      }
+      const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+      const repo = this.store?.getRepo(worktree.repoId)
+      const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+      const result = await this.ptyController.spawn({
+        cols: 120,
+        rows: 40,
+        cwd: worktree.path,
+        command: opts.command,
+        env: opts.env,
+        connectionId: repo?.connectionId ?? null,
+        worktreeId: worktree.id,
+        preAllocatedHandle
+      })
+      this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+      this.registerPty(result.id, worktree.id)
+      const pty = this.getOrCreatePtyWorktreeRecord(result.id)
+      if (pty) {
+        pty.title = opts.title ?? null
+      }
+      const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+      let surface: RuntimeTerminalCreate['surface'] = 'background'
+      if (this.notifier?.revealTerminalSession) {
+        try {
+          // Why: after the PTY is spawned, renderer tab adoption is best-effort;
+          // failing here must not strand a live process without returning a handle.
+          await this.notifier.revealTerminalSession(worktree.id, {
+            ptyId: result.id,
+            title: opts.title ?? null,
+            activate: false
+          })
+          surface = 'visible'
+        } catch (err) {
+          console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
+        }
+      }
+      return { handle, worktreeId: worktree.id, title: opts.title ?? null, surface }
+    }
+
     this.assertGraphReady()
     const win = this.getAuthoritativeWindow()
     // Why: mirrors browserTabCreate — when no worktree is specified, pass
@@ -4062,7 +4491,118 @@ export class OrcaRuntimeService {
     // populates this.leaves may not have arrived yet. Wait for the leaf to
     // appear so we can return a valid handle the caller can use right away.
     const handle = await this.waitForTerminalHandle(reply.tabId)
-    return { handle, worktreeId: worktreeId ?? '', title: reply.title }
+    return { handle, worktreeId: worktreeId ?? '', title: reply.title, surface: 'visible' }
+  }
+
+  async createMobileSessionTerminal(
+    worktreeSelector: string,
+    opts: { afterTabId?: string; activate?: boolean } = {}
+  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    this.assertGraphReady()
+    const worktreeId = (await this.resolveWorktreeSelector(worktreeSelector)).id
+    let afterDesktopTabId: string | undefined
+    if (opts.afterTabId) {
+      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+      const anchor = snapshot?.tabs.find((tab) => tab.id === opts.afterTabId)
+      if (!anchor) {
+        throw new Error('after_tab_not_found')
+      }
+      afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
+    }
+
+    const win = this.getAuthoritativeWindow()
+    const requestId = randomUUID()
+    const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        ipcMain.removeListener('terminal:tabCreateReply', handler)
+        reject(new Error('Terminal creation timed out'))
+      }, 10_000)
+
+      const handler = (
+        _event: Electron.IpcMainEvent,
+        r: { requestId: string; tabId?: string; title?: string; error?: string }
+      ): void => {
+        if (r.requestId !== requestId) {
+          return
+        }
+        clearTimeout(timer)
+        ipcMain.removeListener('terminal:tabCreateReply', handler)
+        if (r.error) {
+          reject(new Error(r.error))
+        } else {
+          resolve({ tabId: r.tabId!, title: r.title ?? '' })
+        }
+      }
+      ipcMain.on('terminal:tabCreateReply', handler)
+      win.webContents.send('terminal:requestTabCreate', {
+        requestId,
+        worktreeId,
+        afterTabId: afterDesktopTabId
+      })
+    })
+
+    if (opts.activate !== false) {
+      this.notifier?.focusTerminal(reply.tabId, worktreeId, 'pane:1')
+    }
+    return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+  }
+
+  private waitForMobileTerminalSurface(
+    worktreeId: string,
+    parentTabId: string,
+    timeoutMs = 10_000
+  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    const existing = this.findMobileTerminalSurface(worktreeId, parentTabId)
+    if (existing) {
+      return Promise.resolve(existing)
+    }
+
+    return new Promise<RuntimeMobileSessionCreateTerminalResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this.graphSyncCallbacks.indexOf(check)
+        if (idx !== -1) {
+          this.graphSyncCallbacks.splice(idx, 1)
+        }
+        reject(new Error('Timed out waiting for terminal surface after creation'))
+      }, timeoutMs)
+
+      const check = (): void => {
+        const next = this.findMobileTerminalSurface(worktreeId, parentTabId)
+        if (!next) {
+          return
+        }
+        clearTimeout(timer)
+        const idx = this.graphSyncCallbacks.indexOf(check)
+        if (idx !== -1) {
+          this.graphSyncCallbacks.splice(idx, 1)
+        }
+        resolve(next)
+      }
+      this.graphSyncCallbacks.push(check)
+      check()
+    })
+  }
+
+  private findMobileTerminalSurface(
+    worktreeId: string,
+    parentTabId: string
+  ): RuntimeMobileSessionCreateTerminalResult | null {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      return null
+    }
+    const result = this.toMobileSessionTabsResult(snapshot)
+    const tab = result.tabs.find(
+      (candidate) => candidate.type === 'terminal' && candidate.parentTabId === parentTabId
+    )
+    if (!tab || tab.type !== 'terminal') {
+      return null
+    }
+    return {
+      tab,
+      publicationEpoch: result.publicationEpoch,
+      snapshotVersion: result.snapshotVersion
+    }
   }
 
   private waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
@@ -4173,7 +4713,18 @@ export class OrcaRuntimeService {
     this.assertGraphReady()
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
-      return { handle, tabId: pty.record.tabId, worktreeId: pty.pty.worktreeId }
+      if (!pty.pty.connected) {
+        throw new Error('terminal_exited')
+      }
+      const revealed = await this.notifier?.revealTerminalSession?.(pty.pty.worktreeId, {
+        ptyId: pty.pty.ptyId,
+        title: pty.pty.title ?? pty.pty.lastOscTitle
+      })
+      return {
+        handle,
+        tabId: revealed?.tabId ?? pty.record.tabId,
+        worktreeId: pty.pty.worktreeId
+      }
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId)
@@ -4182,6 +4733,11 @@ export class OrcaRuntimeService {
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
     this.assertGraphReady()
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
+      return { handle, tabId: pty.record.tabId, ptyKilled }
+    }
     const { leaf } = this.getLiveLeafForHandle(handle)
     let ptyKilled = false
     if (leaf.ptyId) {
@@ -4281,6 +4837,11 @@ export class OrcaRuntimeService {
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === worktree.id && leaf.ptyId) {
         ptyIds.add(leaf.ptyId)
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId === worktree.id && pty.connected) {
+        ptyIds.add(pty.ptyId)
       }
     }
 
@@ -4438,32 +4999,56 @@ export class OrcaRuntimeService {
     if (this.resolvedWorktreeCache && this.resolvedWorktreeCache.expiresAt > now) {
       return this.resolvedWorktreeCache.worktrees
     }
-
-    const metaById = this.store.getAllWorktreeMeta()
-    const worktrees: ResolvedWorktree[] = []
-    for (const repo of this.store.getRepos()) {
-      const gitWorktrees = await listRepoWorktrees(repo)
-      for (const gitWorktree of gitWorktrees) {
-        const worktreeId = `${repo.id}::${gitWorktree.path}`
-        const merged = mergeWorktree(repo.id, gitWorktree, metaById[worktreeId], repo.displayName)
-        worktrees.push({
-          id: merged.id,
-          repoId: repo.id,
-          path: merged.path,
-          branch: merged.branch,
-          linkedIssue: metaById[worktreeId]?.linkedIssue ?? null,
-          git: {
-            path: gitWorktree.path,
-            head: gitWorktree.head,
-            branch: gitWorktree.branch,
-            isBare: gitWorktree.isBare,
-            isMainWorktree: gitWorktree.isMainWorktree
-          },
-          displayName: merged.displayName,
-          comment: merged.comment
-        })
-      }
+    if (this.resolvedWorktreeInFlight) {
+      return this.resolvedWorktreeInFlight
     }
+
+    this.resolvedWorktreeInFlight = this.computeResolvedWorktrees()
+    try {
+      return await this.resolvedWorktreeInFlight
+    } finally {
+      this.resolvedWorktreeInFlight = null
+    }
+  }
+
+  private async computeResolvedWorktrees(): Promise<ResolvedWorktree[]> {
+    if (!this.store) {
+      return []
+    }
+    const now = Date.now()
+    const metaById = this.store.getAllWorktreeMeta()
+    const perRepoWorktrees = await Promise.all(
+      this.store.getRepos().map(async (repo) => {
+        // Why: mobile startup RPCs share this path. A slow repo scan should
+        // degrade one repo's metadata, not block all terminal/session loading.
+        const gitWorktrees = await withTimeout(
+          listRepoWorktrees(repo),
+          RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
+          []
+        )
+        return gitWorktrees.map((gitWorktree) => {
+          const worktreeId = `${repo.id}::${gitWorktree.path}`
+          const merged = mergeWorktree(repo.id, gitWorktree, metaById[worktreeId], repo.displayName)
+          return {
+            id: merged.id,
+            repoId: repo.id,
+            path: merged.path,
+            branch: merged.branch,
+            linkedIssue: metaById[worktreeId]?.linkedIssue ?? null,
+            git: {
+              path: gitWorktree.path,
+              head: gitWorktree.head,
+              branch: gitWorktree.branch,
+              isBare: gitWorktree.isBare,
+              isMainWorktree: gitWorktree.isMainWorktree
+            },
+            displayName: merged.displayName,
+            comment: merged.comment
+          }
+        })
+      })
+    )
+    const worktrees = perRepoWorktrees.flat()
     // Why: terminal polling can be frequent, but git worktree state is still
     // allowed to change outside Orca. A short TTL avoids shelling out on every
     // read without pretending the cache is authoritative for long.
@@ -4493,6 +5078,10 @@ export class OrcaRuntimeService {
         ptyId,
         worktreeId,
         connected: state.connected ?? true,
+        lastExitCode: null,
+        lastAgentStatus: null,
+        lastOscTitle: null,
+        title: null,
         lastOutputAt: state.lastOutputAt ?? null,
         tailBuffer: [],
         tailPartialLine: '',
@@ -4537,7 +5126,11 @@ export class OrcaRuntimeService {
     if (!this.ptyController?.listProcesses) {
       return
     }
-    const sessions = await this.ptyController.listProcesses().catch(() => [])
+    const sessions = await withTimeout(
+      this.ptyController.listProcesses(),
+      PTY_CONTROLLER_LIST_TIMEOUT_MS,
+      []
+    )
     const livePtyIds = new Set(sessions.map((session) => session.id))
     for (const session of sessions) {
       const worktreeId =
@@ -4603,6 +5196,127 @@ export class OrcaRuntimeService {
       writable: leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
       preview: leaf.preview
+    }
+  }
+
+  private syncMobileSessionTabs(snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined): void {
+    if (snapshots === undefined) {
+      return
+    }
+    const nextWorktrees = new Set<string>()
+    for (const snapshot of snapshots) {
+      nextWorktrees.add(snapshot.worktree)
+      const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
+      if (
+        !existing ||
+        snapshot.publicationEpoch !== existing.publicationEpoch ||
+        snapshot.snapshotVersion >= existing.snapshotVersion
+      ) {
+        this.mobileSessionTabsByWorktree.set(snapshot.worktree, snapshot)
+      }
+    }
+    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
+      if (!nextWorktrees.has(worktreeId)) {
+        this.mobileSessionTabsByWorktree.delete(worktreeId)
+        this.notifyMobileSessionTabsRemoved(worktreeId)
+      }
+    }
+  }
+
+  private notifyMobileSessionTabsRemoved(worktreeId: string): void {
+    const removed: RuntimeMobileSessionTabsRemovedResult = {
+      worktree: worktreeId,
+      publicationEpoch: `removed:${Date.now().toString(36)}`,
+      snapshotVersion: 0,
+      removed: true,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    }
+    for (const listener of this.mobileSessionTabListeners) {
+      listener(removed)
+    }
+  }
+
+  private notifyMobileSessionTabSnapshots(): void {
+    if (this.mobileSessionTabListeners.size === 0) {
+      return
+    }
+    for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
+      const result = this.toMobileSessionTabsResult(snapshot)
+      for (const listener of this.mobileSessionTabListeners) {
+        listener(result)
+      }
+    }
+  }
+
+  private getMobileSessionTabsForWorktree(worktreeId: string): RuntimeMobileSessionTabsResult {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      return {
+        worktree: worktreeId,
+        publicationEpoch: 'none',
+        snapshotVersion: 0,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    }
+    return this.toMobileSessionTabsResult(snapshot)
+  }
+
+  private async resolveMobileMarkdownWorktreeId(
+    worktreeSelector: string,
+    tabId: string
+  ): Promise<string> {
+    const worktreeId =
+      getExplicitWorktreeIdSelector(worktreeSelector) ??
+      (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tab = snapshot?.tabs.find(
+      (candidate): candidate is RuntimeMobileSessionMarkdownTab =>
+        candidate.type === 'markdown' && candidate.id === tabId
+    )
+    if (!tab) {
+      throw new Error('tab_not_found')
+    }
+    return worktreeId
+  }
+
+  private toMobileSessionTabsResult(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsResult {
+    const tabs: RuntimeMobileSessionClientTab[] = []
+    for (const tab of snapshot.tabs) {
+      if (tab.type === 'markdown' || tab.type === 'file') {
+        tabs.push(tab)
+        continue
+      }
+      const syncedTab = this.tabs.get(tab.parentTabId)
+      const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
+      tabs.push({
+        type: 'terminal',
+        id: tab.id,
+        parentTabId: tab.parentTabId,
+        leafId: tab.leafId,
+        title: leaf?.paneTitle ?? syncedTab?.title ?? tab.title,
+        isActive: tab.isActive,
+        ...(leaf
+          ? { status: 'ready' as const, terminal: this.issueHandle(leaf) }
+          : { status: 'pending-handle' as const, terminal: null })
+      })
+    }
+    const active = tabs.find((tab) => tab.isActive) ?? null
+    return {
+      worktree: snapshot.worktree,
+      publicationEpoch: snapshot.publicationEpoch,
+      snapshotVersion: snapshot.snapshotVersion,
+      activeGroupId: snapshot.activeGroupId,
+      activeTabId: active?.id ?? null,
+      activeTabType: active?.type ?? null,
+      tabs
     }
   }
 
@@ -4756,7 +5470,7 @@ export class OrcaRuntimeService {
       branch: worktree?.branch ?? '',
       tabId: `pty:${pty.ptyId}`,
       leafId: `pty:${pty.ptyId}`,
-      title: null,
+      title: pty.title ?? pty.lastOscTitle,
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
@@ -4788,7 +5502,19 @@ export class OrcaRuntimeService {
     record: TerminalHandleRecord
     pty: RuntimePtyWorktreeRecord
   } | null {
-    const record = this.handles.get(handle)
+    let record = this.handles.get(handle)
+    if (!record) {
+      const ptyId = [...this.handleByPtyId.entries()].find(
+        ([, mappedHandle]) => mappedHandle === handle
+      )?.[0]
+      const pty = ptyId ? this.ptysById.get(ptyId) : null
+      if (pty) {
+        // Why: graph reload/unavailability clears renderer handle records, but
+        // runtime-owned PTY handles remain the caller's control identity.
+        this.issuePtyHandle(pty)
+        record = this.handles.get(handle)
+      }
+    }
     if (!record || record.runtimeId !== this.runtimeId || !record.tabId.startsWith('pty:')) {
       return null
     }
@@ -4799,6 +5525,10 @@ export class OrcaRuntimeService {
     if (!pty || pty.ptyId !== record.ptyId) {
       return null
     }
+    // Why: renderer adoption can race with CLI reads. If this synthetic PTY
+    // handle is valid, keep ptyId -> handle populated so summaries do not mint
+    // a second handle for the same terminal.
+    this.handleByPtyId.set(record.ptyId, handle)
     return { record, pty }
   }
 
@@ -4824,7 +5554,7 @@ export class OrcaRuntimeService {
 
     return {
       handle,
-      status: pty.connected ? 'running' : 'unknown',
+      status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
       tail,
       truncated,
       nextCursor: String(pty.tailLinesTotal)
@@ -4888,7 +5618,8 @@ export class OrcaRuntimeService {
   }
 
   private issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
-    const existingHandle = this.handleByPtyId.get(pty.ptyId)
+    const existingHandle =
+      this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
     if (existingHandle) {
       const existingRecord = this.handles.get(existingHandle)
       if (
@@ -4896,11 +5627,12 @@ export class OrcaRuntimeService {
         existingRecord.runtimeId === this.runtimeId &&
         existingRecord.ptyId === pty.ptyId
       ) {
+        this.handleByPtyId.set(pty.ptyId, existingHandle)
         return existingHandle
       }
     }
 
-    const handle = `term_${randomUUID()}`
+    const handle = existingHandle ?? `term_${randomUUID()}`
     const syntheticId = `pty:${pty.ptyId}`
     this.handles.set(handle, {
       handle,
@@ -4914,6 +5646,19 @@ export class OrcaRuntimeService {
     })
     this.handleByPtyId.set(pty.ptyId, handle)
     return handle
+  }
+
+  private findHandleForPtyRecord(ptyId: string): string | null {
+    for (const [handle, record] of this.handles) {
+      if (
+        record.runtimeId === this.runtimeId &&
+        record.ptyId === ptyId &&
+        record.tabId.startsWith('pty:')
+      ) {
+        return handle
+      }
+    }
+    return null
   }
 
   private refreshWritableFlags(): void {
@@ -4976,6 +5721,41 @@ export class OrcaRuntimeService {
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
+      }
+    }
+  }
+
+  private resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    const handle = this.handleByPtyId.get(ptyId)
+    if (!handle) {
+      return
+    }
+    const waiters = this.waitersByHandle.get(handle)
+    if (!waiters || waiters.size === 0) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      if (waiter.condition === 'exit') {
+        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
+      } else {
+        this.removeWaiter(waiter)
+        waiter.reject(new Error('terminal_exited'))
+      }
+    }
+  }
+
+  private resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    const handle = this.handleByPtyId.get(ptyId)
+    if (!handle) {
+      return
+    }
+    const waiters = this.waitersByHandle.get(handle)
+    if (!waiters || waiters.size === 0) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      if (waiter.condition === 'tui-idle') {
+        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }
   }
@@ -6464,6 +7244,8 @@ const DEFAULT_TERMINAL_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
+const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
+const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
 // Why (§3.3): 30s freshness window. A second worktree-create or dispatch-probe
 // against the same repo+remote within this window reuses the previous successful
 // fetch instead of repeating the round-trip. Chosen so rapid "new worktree"
@@ -6471,6 +7253,30 @@ const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 // short enough that a genuinely-changed remote is observed on the next action.
 const FETCH_FRESHNESS_MS = 30_000
 const DRIFT_PROBE_SUBJECT_LIMIT = 5
+
+function getExplicitWorktreeIdSelector(selector: string | undefined): string | null {
+  if (!selector?.startsWith('id:')) {
+    return null
+  }
+  const id = selector.slice(3)
+  return id.length > 0 ? id : null
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  return new Promise<T>((resolve) => {
+    timeout = setTimeout(() => resolve(fallback), timeoutMs)
+    promise.then(
+      (value) => resolve(value),
+      () => resolve(fallback)
+    )
+  }).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  })
+}
+
 function buildPreview(lines: string[], partialLine: string): string {
   const previewLines = buildTailLines(lines, partialLine)
     .map((line) => line.trim())
@@ -6587,6 +7393,20 @@ function buildTerminalWaitResult(
     satisfied: true,
     status: getTerminalState(leaf),
     exitCode: leaf.lastExitCode
+  }
+}
+
+function buildPtyTerminalWaitResult(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  pty: RuntimePtyWorktreeRecord
+): RuntimeTerminalWait {
+  return {
+    handle,
+    condition,
+    satisfied: true,
+    status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
+    exitCode: pty.lastExitCode
   }
 }
 
@@ -6711,6 +7531,72 @@ function maxTimestamp(left: number | null, right: number | null): number | null 
     return left
   }
   return Math.max(left, right)
+}
+
+function isSafeMobileRelativePath(relativePath: string): boolean {
+  if (!relativePath || relativePath.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(relativePath)) {
+    return false
+  }
+  const parts = relativePath.replace(/\\/g, '/').split('/')
+  return parts.every((part) => part !== '' && part !== '.' && part !== '..')
+}
+
+function isMobileMarkdownPath(relativePath: string): boolean {
+  return /\.(md|mdx|markdown)$/i.test(relativePath)
+}
+
+function isMobileBinaryPath(relativePath: string): boolean {
+  const basename = basenameFromRelativePath(relativePath)
+  const dotIndex = basename.lastIndexOf('.')
+  if (dotIndex <= 0) {
+    return false
+  }
+  return MOBILE_BINARY_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
+}
+
+function basenameFromRelativePath(relativePath: string): string {
+  const normalized = relativePath.replace(/\\/g, '/')
+  return normalized.slice(normalized.lastIndexOf('/') + 1)
+}
+
+function joinWorktreeRelativePath(rootPath: string, relativePath: string): string {
+  const normalizedRelativePath = relativePath.replace(/\\/g, '/')
+  if (/^[a-zA-Z]:[\\/]/.test(rootPath) || rootPath.startsWith('\\\\')) {
+    return win32.join(rootPath, ...normalizedRelativePath.split('/'))
+  }
+  return posix.join(rootPath, ...normalizedRelativePath.split('/'))
+}
+
+async function readLocalMobileFile(filePath: string, store: Store): Promise<string> {
+  const authorizedPath = await resolveAuthorizedPath(filePath, store)
+  const fileStat = await stat(authorizedPath)
+  // Why: mobile file previews are read-only convenience views; cap the read so
+  // opening a generated log or bundle cannot block the WebSocket like oversized scrollback.
+  const readLimit = Math.min(fileStat.size, MOBILE_FILE_READ_MAX_BYTES + 1)
+  const handle = await open(authorizedPath, 'r')
+  try {
+    const buffer = Buffer.alloc(readLimit)
+    const { bytesRead } = await handle.read(buffer, 0, readLimit, 0)
+    return buffer.subarray(0, bytesRead).toString('utf8')
+  } finally {
+    await handle.close()
+  }
+}
+
+function truncateMobileFilePreview(content: string): {
+  content: string
+  truncated: boolean
+  byteLength: number
+} {
+  const buffer = Buffer.from(content, 'utf8')
+  if (buffer.byteLength <= MOBILE_FILE_READ_MAX_BYTES) {
+    return { content, truncated: false, byteLength: buffer.byteLength }
+  }
+  return {
+    content: buffer.subarray(0, MOBILE_FILE_READ_MAX_BYTES).toString('utf8'),
+    truncated: true,
+    byteLength: buffer.byteLength
+  }
 }
 
 function compareWorktreePs(

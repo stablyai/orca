@@ -69,6 +69,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     rightSidebarOpenByDefault: true,
     showTitlebarAppName: true,
     showTasksButton: true,
+    floatingTerminalEnabled: false,
+    floatingTerminalCwd: '~',
+    floatingTerminalTriggerLocation: 'floating-button',
     diffDefaultView: 'inline',
     notifications: {
       enabled: true,
@@ -99,6 +102,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalMobile: false,
     mobileAutoRestoreFitMs: null,
     experimentalPet: false,
+    experimentalActivity: false,
     experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',

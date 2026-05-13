@@ -76,16 +76,11 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
 
 /**
  * Apply the WorktreeCard priority overlay (permission > working > done >
- * heuristic) on top of the title-heuristic base. The live-pty precondition is
- * inherited via getWorktreeStatus: when no tab in this worktree has a live
- * PTY and no browser tab exists, getWorktreeStatus returns 'inactive' and
- * none of the promotion paths fire — so the worktree dot stays grey across
- * sleep, renderer crash + rehydration, and any other path where wake-hint
- * sessionIds outlive the actual PTY. On sleep specifically,
- * `dropAgentStatusByWorktree` also clears retained rows for the worktree, so
- * this precondition is the second line of defense; the rehydration-from-disk
- * path is where retained 'done' rows can outlive the live PTY and the
- * precondition does the load-bearing work.
+ * heuristic) on top of the title-heuristic base. Live PTY liveness still gates
+ * title-derived working/permission, but explicit agent rows are allowed to
+ * promote the dot: if the sidebar shows a completed/blocking inline agent row,
+ * the worktree status must agree with that visible row. Sleep cleanup owns
+ * removing stale retained rows; once they are gone, no promotion occurs.
  *
  * Argument semantics (sourced by the WorktreeCard caller from the store):
  * - `tabs`, `browserTabs`: the worktree's terminal and browser tabs.
@@ -113,12 +108,6 @@ export function resolveWorktreeStatus(args: {
     args.ptyIdsByTabId,
     args.runtimePaneTitlesByTabId ?? {}
   )
-  // Why: liveness precondition. Without any live PTY (and no browser tab),
-  // agent-state hooks and retained-done snapshots must not promote the dot
-  // off grey — the agent process is gone the instant pty.kill fires.
-  if (heuristic === 'inactive') {
-    return 'inactive'
-  }
   if (args.hasPermission) {
     return 'permission'
   }

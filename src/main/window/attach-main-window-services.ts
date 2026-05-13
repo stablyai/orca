@@ -1,5 +1,7 @@
+/* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { app, clipboard, ipcMain, nativeImage, session } from 'electron'
 import type { BrowserWindow } from 'electron'
@@ -26,6 +28,11 @@ import { scheduleHistoryGc } from '../terminal-history'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
+import type {
+  RuntimeMarkdownReadTabResult,
+  RuntimeMarkdownSaveTabResult
+} from '../../shared/mobile-markdown-document'
+import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -228,6 +235,37 @@ function registerRuntimeWindowLifecycle(
     },
     createTerminal: (worktreeId, opts) =>
       send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+    revealTerminalSession: (worktreeId, opts) =>
+      new Promise((resolve, reject) => {
+        const requestId = randomUUID()
+        const timer = setTimeout(() => {
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('Terminal reveal timed out'))
+        }, 10_000)
+        const handler = (
+          _event: Electron.IpcMainEvent,
+          reply: { requestId: string; tabId?: string; title?: string; error?: string }
+        ): void => {
+          if (reply.requestId !== requestId) {
+            return
+          }
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          if (reply.error) {
+            reject(new Error(reply.error))
+            return
+          }
+          resolve({ tabId: reply.tabId!, title: reply.title })
+        }
+        ipcMain.on('terminal:tabCreateReply', handler)
+        send('ui:createTerminal', {
+          requestId,
+          worktreeId,
+          ptyId: opts.ptyId,
+          title: opts.title ?? undefined,
+          activate: opts.activate !== false
+        })
+      }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
       send('ui:splitTerminal', {
         tabId,
@@ -237,7 +275,26 @@ function registerRuntimeWindowLifecycle(
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
-    focusTerminal: (tabId, worktreeId) => send('ui:focusTerminal', { tabId, worktreeId }),
+    focusTerminal: (tabId, worktreeId, leafId) =>
+      send('ui:focusTerminal', { tabId, worktreeId, leafId }),
+    focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
+    closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
+    openFile: (worktreeId, filePath, relativePath) =>
+      send('ui:openFileFromMobile', { worktreeId, filePath, relativePath }),
+    readMobileMarkdownTab: (worktreeId, tabId) =>
+      requestMobileMarkdownFromRenderer(mainWindow, {
+        operation: 'read',
+        worktreeId,
+        tabId
+      }) as Promise<RuntimeMarkdownReadTabResult>,
+    saveMobileMarkdownTab: (worktreeId, tabId, baseVersion, content) =>
+      requestMobileMarkdownFromRenderer(mainWindow, {
+        operation: 'save',
+        worktreeId,
+        tabId,
+        baseVersion,
+        content
+      }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>

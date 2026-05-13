@@ -37,6 +37,12 @@ import {
 } from './visible-worktrees'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoHeaderDrag } from './repo-header-drag'
+import {
+  areWorktreeSelectionsEqual,
+  getWorktreeSelectionIntent,
+  pruneWorktreeSelection,
+  updateWorktreeSelection
+} from './worktree-multi-selection'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -79,6 +85,13 @@ type VirtualizedWorktreeViewportProps = {
   pendingRevealWorktreeId: string | null
   clearPendingRevealWorktreeId: () => void
   worktrees: Worktree[]
+  selectedWorktreeIds: ReadonlySet<string>
+  selectedWorktrees: readonly Worktree[]
+  onSelectionGesture: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
+  onContextMenuSelect: (
+    event: React.MouseEvent<HTMLDivElement>,
+    worktree: Worktree
+  ) => readonly Worktree[]
   repoMap: Map<string, Repo>
   repoOrder: Map<string, number>
   // The full canonical state.repos id ordering — the drag controller commits
@@ -108,6 +121,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   pendingRevealWorktreeId,
   clearPendingRevealWorktreeId,
   worktrees,
+  selectedWorktreeIds,
+  selectedWorktrees,
+  onSelectionGesture,
+  onContextMenuSelect,
   repoMap,
   repoOrder,
   allRepoIds,
@@ -376,10 +393,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   return (
     <div
       ref={scrollRef}
+      data-worktree-sidebar
       tabIndex={0}
       role="listbox"
       aria-label="Worktrees"
       aria-orientation="vertical"
+      aria-multiselectable="true"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
       className="worktree-sidebar-scrollbar flex-1 overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
@@ -510,7 +529,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               key={vItem.key}
               id={getWorktreeOptionId(row.worktree.id)}
               role="option"
-              aria-selected={activeWorktreeId === row.worktree.id}
+              aria-selected={selectedWorktreeIds.has(row.worktree.id)}
+              aria-current={activeWorktreeId === row.worktree.id ? 'page' : undefined}
               data-index={vItem.index}
               ref={virtualizer.measureElement}
               className="absolute left-0 right-0"
@@ -520,6 +540,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 worktree={row.worktree}
                 repo={row.repo}
                 isActive={activeWorktreeId === row.worktree.id}
+                isMultiSelected={selectedWorktreeIds.has(row.worktree.id)}
+                selectedWorktrees={selectedWorktrees}
+                onSelectionGesture={onSelectionGesture}
+                onContextMenuSelect={(event) => onContextMenuSelect(event, row.worktree)}
                 hideRepoBadge={groupBy === 'repo'}
               />
             </div>
@@ -799,17 +823,96 @@ const WorktreeList = React.memo(function WorktreeList() {
         .map((r) => r.worktree),
     [rows]
   )
-  // Why: when the tasks page is active, no sidebar card should appear selected
-  // — the user hasn't picked a worktree yet.
-  const selectedSidebarWorktreeId = activeView === 'tasks' ? null : activeWorktreeId
+  const renderedWorktreeIds = useMemo(
+    () => renderedWorktrees.map((worktree) => worktree.id),
+    [renderedWorktrees]
+  )
+  const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSelectedWorktreeIds((previous) => {
+      const pruned = pruneWorktreeSelection(previous, selectionAnchorId, renderedWorktreeIds)
+      if (pruned.anchorId !== selectionAnchorId) {
+        setSelectionAnchorId(pruned.anchorId)
+      }
+      return areWorktreeSelectionsEqual(previous, pruned.selectedIds)
+        ? previous
+        : pruned.selectedIds
+    })
+  }, [renderedWorktreeIds, selectionAnchorId])
+
+  const selectedWorktrees = useMemo(() => {
+    if (selectedWorktreeIds.size === 0) {
+      return []
+    }
+    return renderedWorktrees.filter((worktree) => selectedWorktreeIds.has(worktree.id))
+  }, [renderedWorktrees, selectedWorktreeIds])
+
+  useEffect(() => {
+    if (selectedWorktreeIds.size === 0) {
+      return
+    }
+
+    const clearSelectionOutsideSidebar = (event: PointerEvent): void => {
+      const target = event.target
+      const sidebar = document.querySelector('[data-worktree-sidebar]')
+      if (target instanceof Node && sidebar?.contains(target)) {
+        return
+      }
+      setSelectedWorktreeIds(new Set())
+      setSelectionAnchorId(null)
+    }
+
+    document.addEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
+    return () => {
+      document.removeEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
+    }
+  }, [selectedWorktreeIds.size])
+
+  const updateSelectionForGesture = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>, worktreeId: string): boolean => {
+      const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
+      const result = updateWorktreeSelection({
+        visibleIds: renderedWorktreeIds,
+        previousSelectedIds: selectedWorktreeIds,
+        previousAnchorId: selectionAnchorId,
+        targetId: worktreeId,
+        intent
+      })
+      setSelectedWorktreeIds(result.selectedIds)
+      setSelectionAnchorId(result.anchorId)
+      // Plain click keeps its existing navigation behavior; modifier gestures
+      // are selection-only so users can build a batch without switching away.
+      return intent !== 'replace'
+    },
+    [renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId]
+  )
+
+  const selectForContextMenu = useCallback(
+    (_event: React.MouseEvent<HTMLDivElement>, worktree: Worktree): readonly Worktree[] => {
+      if (selectedWorktreeIds.has(worktree.id) && selectedWorktreeIds.size > 1) {
+        return selectedWorktrees
+      }
+      setSelectedWorktreeIds(new Set([worktree.id]))
+      setSelectionAnchorId(worktree.id)
+      return [worktree]
+    },
+    [selectedWorktreeIds, selectedWorktrees]
+  )
+
+  // Why: full-page navigation views are not scoped to one worktree, so no
+  // sidebar card should appear selected while one of them is active.
+  const selectedSidebarWorktreeId =
+    activeView === 'tasks' || activeView === 'activity' ? null : activeWorktreeId
 
   // Why layout effect instead of effect: the global Cmd/Ctrl+1–9 key handler
   // can fire immediately after React commits the new grouped/collapsed order.
   // Publishing after paint leaves a brief window where the sidebar shows the
   // new numbering but the shortcut cache still points at the previous order.
   useLayoutEffect(() => {
-    setVisibleWorktreeIds(renderedWorktrees.map((w) => w.id))
-  }, [renderedWorktrees])
+    setVisibleWorktreeIds(renderedWorktreeIds)
+  }, [renderedWorktreeIds])
 
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
@@ -877,6 +980,10 @@ const WorktreeList = React.memo(function WorktreeList() {
       pendingRevealWorktreeId={pendingRevealWorktreeId}
       clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
       worktrees={worktrees}
+      selectedWorktreeIds={selectedWorktreeIds}
+      selectedWorktrees={selectedWorktrees}
+      onSelectionGesture={updateSelectionForGesture}
+      onContextMenuSelect={selectForContextMenu}
       repoMap={repoMap}
       repoOrder={repoOrder}
       allRepoIds={allRepoIds}

@@ -119,6 +119,25 @@ describe('FsHandler', () => {
     expect(result.find((e) => e.name === 'aaa.txt')).toBeDefined()
   })
 
+  it('readDir reports symlinked directories as directories', async () => {
+    const targetDir = path.join(tmpDir, 'external-models')
+    const linkPath = path.join(tmpDir, 'Model')
+    mkdirSync(targetDir)
+    symlinkSync(targetDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = (await dispatcher.callRequest('fs.readDir', { dirPath: tmpDir })) as {
+      name: string
+      isDirectory: boolean
+      isSymlink: boolean
+    }[]
+
+    expect(result.find((e) => e.name === 'Model')).toEqual({
+      name: 'Model',
+      isDirectory: true,
+      isSymlink: true
+    })
+  })
+
   it('readFile returns text content for text files', async () => {
     const filePath = path.join(tmpDir, 'test.txt')
     writeFileSync(filePath, 'hello world')
@@ -209,6 +228,19 @@ describe('FsHandler', () => {
     const result = (await dispatcher.callRequest('fs.stat', { filePath: tmpDir })) as {
       type: string
     }
+    expect(result.type).toBe('directory')
+  })
+
+  it('stat returns directory type for symlinked directories', async () => {
+    const targetDir = path.join(tmpDir, 'external-models')
+    const linkPath = path.join(tmpDir, 'Model')
+    mkdirSync(targetDir)
+    symlinkSync(targetDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = (await dispatcher.callRequest('fs.stat', { filePath: linkPath })) as {
+      type: string
+    }
+
     expect(result.type).toBe('directory')
   })
 

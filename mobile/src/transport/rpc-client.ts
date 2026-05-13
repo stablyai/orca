@@ -11,8 +11,15 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64,
   encrypt,
-  decrypt
+  decrypt,
+  decryptBytes
 } from './e2ee'
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamJson,
+  decodeTerminalStreamText
+} from './terminal-stream-protocol'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -25,6 +32,12 @@ type StreamRequest = {
   method: string
   params: unknown
   listener: StreamingListener
+}
+
+type TerminalSnapshotState = {
+  streamId: number
+  meta: Record<string, unknown>
+  chunks: string[]
 }
 
 export type RpcClient = {
@@ -144,6 +157,9 @@ export function connect(
 
   const pending = new Map<string, PendingRequest>()
   const streamListeners = new Map<string, StreamRequest>()
+  const terminalStreamListeners = new Map<number, StreamingListener>()
+  const terminalStreamIdsByRequest = new Map<string, Set<number>>()
+  const terminalSnapshots = new Map<number, TerminalSnapshotState>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   const connectWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = []
 
@@ -293,14 +309,21 @@ export function connect(
     }
 
     ws.onmessage = (event) => {
+      void handleSocketMessage(event.data)
+    }
+
+    async function handleSocketMessage(rawData: unknown) {
       // Why: track last-inbound for the openConnection diagnostic. Server
       // pongs and stream events both bump this — anything from the wire.
       lastInboundAt = Date.now()
-      const raw = typeof event.data === 'string' ? event.data : String(event.data)
+      const raw = typeof rawData === 'string' ? rawData : null
 
       // Why: during handshaking, e2ee_ready is plaintext because it precedes
       // encrypted auth; e2ee_authenticated/e2ee_error are encrypted.
       if (state === 'handshaking') {
+        if (raw === null) {
+          return
+        }
         try {
           const msg = JSON.parse(raw)
           if (msg.type === 'e2ee_ready') {
@@ -362,6 +385,19 @@ export function connect(
         return
       }
 
+      if (raw === null) {
+        const bytes = await websocketPayloadToUint8(rawData)
+        if (!bytes) {
+          return
+        }
+        const plaintextBytes = decryptBytes(bytes, sharedKey)
+        if (!plaintextBytes) {
+          return
+        }
+        handleTerminalBinaryFrame(plaintextBytes)
+        return
+      }
+
       const plaintext = decrypt(raw, sharedKey)
       if (plaintext === null) {
         return
@@ -390,7 +426,17 @@ export function connect(
       if (isStreaming) {
         const stream = streamListeners.get(response.id)
         if (stream && response.ok) {
-          stream.listener((response as RpcSuccess).result)
+          const result = (response as RpcSuccess).result
+          if (isTerminalSubscribedResult(result)) {
+            let ids = terminalStreamIdsByRequest.get(response.id)
+            if (!ids) {
+              ids = new Set()
+              terminalStreamIdsByRequest.set(response.id, ids)
+            }
+            ids.add(result.streamId)
+            terminalStreamListeners.set(result.streamId, stream.listener)
+          }
+          stream.listener(result)
         }
         return
       }
@@ -654,6 +700,75 @@ export function connect(
     }
   }
 
+  function handleTerminalBinaryFrame(bytes: Uint8Array) {
+    const frame = decodeTerminalStreamFrame(bytes)
+    if (!frame) {
+      return
+    }
+    const listener = terminalStreamListeners.get(frame.streamId)
+    if (!listener) {
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.Output) {
+      listener({
+        type: 'data',
+        streamId: frame.streamId,
+        chunk: decodeTerminalStreamText(frame.payload)
+      })
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
+      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
+      if (!meta) {
+        return
+      }
+      terminalSnapshots.set(frame.streamId, { streamId: frame.streamId, meta, chunks: [] })
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
+      const snapshot = terminalSnapshots.get(frame.streamId)
+      if (!snapshot) {
+        return
+      }
+      snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
+      const snapshot = terminalSnapshots.get(frame.streamId)
+      if (!snapshot) {
+        return
+      }
+      terminalSnapshots.delete(frame.streamId)
+      const kind = snapshot.meta.kind === 'resized' ? 'resized' : 'scrollback'
+      listener({
+        ...snapshot.meta,
+        type: kind,
+        streamId: frame.streamId,
+        serialized: snapshot.chunks.join('')
+      })
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.Resized) {
+      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
+      if (!meta) {
+        return
+      }
+      listener({
+        ...meta,
+        type: 'resized',
+        streamId: frame.streamId
+      })
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.Error) {
+      listener({
+        type: 'error',
+        streamId: frame.streamId,
+        message: decodeTerminalStreamText(frame.payload)
+      })
+    }
+  }
+
   function sendEncrypted(request: unknown): boolean {
     if (ws && ws.readyState === WebSocket.OPEN && sharedKey) {
       ws.send(encrypt(JSON.stringify(request), sharedKey))
@@ -740,6 +855,14 @@ export function connect(
       return () => {
         const stream = streamListeners.get(id)
         streamListeners.delete(id)
+        const terminalStreamIds = terminalStreamIdsByRequest.get(id)
+        if (terminalStreamIds) {
+          for (const streamId of terminalStreamIds) {
+            terminalStreamListeners.delete(streamId)
+            terminalSnapshots.delete(streamId)
+          }
+          terminalStreamIdsByRequest.delete(id)
+        }
         if (
           stream?.method === 'terminal.subscribe' &&
           stream.params &&
@@ -769,6 +892,18 @@ export function connect(
               subscriptionId,
               ...(clientId ? { client: { id: clientId } } : {})
             }
+          })
+        } else if (
+          stream?.method === 'session.tabs.subscribe' &&
+          stream.params &&
+          typeof stream.params === 'object' &&
+          typeof (stream.params as { worktree?: unknown }).worktree === 'string'
+        ) {
+          sendEncrypted({
+            id: nextId(),
+            deviceToken,
+            method: 'session.tabs.unsubscribe',
+            params: { worktree: (stream.params as { worktree: string }).worktree }
           })
         }
       }
@@ -812,4 +947,39 @@ export function connect(
       rejectAllPending('Client closed')
     }
   }
+}
+
+function isTerminalSubscribedResult(
+  value: unknown
+): value is { type: 'subscribed'; streamId: number } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    (value as { type?: unknown }).type === 'subscribed' &&
+    typeof (value as { streamId?: unknown }).streamId === 'number'
+  )
+}
+
+async function websocketPayloadToUint8(value: unknown): Promise<Uint8Array | null> {
+  if (value instanceof Uint8Array) {
+    return value
+  }
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value)
+  }
+  if (value && typeof value === 'object' && 'arrayBuffer' in value) {
+    const blob = value as { arrayBuffer: () => Promise<ArrayBuffer> }
+    return new Uint8Array(await blob.arrayBuffer())
+  }
+  if (typeof FileReader !== 'undefined' && value instanceof Blob) {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        resolve(reader.result instanceof ArrayBuffer ? new Uint8Array(reader.result) : null)
+      }
+      reader.onerror = () => resolve(null)
+      reader.readAsArrayBuffer(value)
+    })
+  }
+  return null
 }

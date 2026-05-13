@@ -27,6 +27,7 @@ type PendingRequest = {
 }
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
+export type MethodNotificationHandler = (params: Record<string, unknown>) => void
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -40,6 +41,10 @@ export class SshChannelMultiplexer {
   private lastReceivedAt = Date.now()
   private pendingRequests = new Map<number, PendingRequest>()
   private notificationHandlers: NotificationHandler[] = []
+  // Why: per-method dispatch map keeps streaming consumers (fs.streamChunk,
+  // fs.streamEnd, fs.streamError) from accreting string-match logic in the
+  // generic notification listener that already serves fs.changed.
+  private methodNotificationHandlers = new Map<string, Set<MethodNotificationHandler>>()
   private disposeHandlers: ((reason: 'shutdown' | 'connection_lost') => void)[] = []
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
   private timeoutTimer: ReturnType<typeof setInterval> | null = null
@@ -81,6 +86,25 @@ export class SshChannelMultiplexer {
       const idx = this.notificationHandlers.indexOf(handler)
       if (idx !== -1) {
         this.notificationHandlers.splice(idx, 1)
+      }
+    }
+  }
+
+  onNotificationByMethod(method: string, handler: MethodNotificationHandler): () => void {
+    let set = this.methodNotificationHandlers.get(method)
+    if (!set) {
+      set = new Set()
+      this.methodNotificationHandlers.set(method, set)
+    }
+    set.add(handler)
+    return () => {
+      const current = this.methodNotificationHandlers.get(method)
+      if (!current) {
+        return
+      }
+      current.delete(handler)
+      if (current.size === 0) {
+        this.methodNotificationHandlers.delete(method)
       }
     }
   }
@@ -178,6 +202,7 @@ export class SshChannelMultiplexer {
     }
 
     this.unackedTimestamps.clear()
+    this.methodNotificationHandlers.clear()
     this.decoder.reset()
     this.transport.close?.()
 
@@ -286,11 +311,18 @@ export class SshChannelMultiplexer {
   private handleNotification(msg: JsonRpcNotification): void {
     const params = msg.params ?? {}
     // Why: handlers may unsubscribe during iteration (via the returned disposer
-    // from onNotification), which splices the live array and skips the next handler.
-    // Iterating a snapshot prevents that.
+    // from onNotification / onNotificationByMethod), which mutates the live
+    // collection and skips the next handler. Iterating a snapshot prevents that.
     const snapshot = Array.from(this.notificationHandlers)
     for (const handler of snapshot) {
       handler(msg.method, params)
+    }
+    const methodHandlers = this.methodNotificationHandlers.get(msg.method)
+    if (methodHandlers && methodHandlers.size > 0) {
+      const methodSnapshot = Array.from(methodHandlers)
+      for (const handler of methodSnapshot) {
+        handler(params)
+      }
     }
   }
 

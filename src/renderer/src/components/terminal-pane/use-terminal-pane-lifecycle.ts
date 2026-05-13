@@ -239,21 +239,34 @@ export function useTerminalPaneLifecycle({
   }
 
   const pushMode2031ForPane = (paneId: number): void => {
-    const transport = paneTransportsRef.current.get(paneId)
-    if (!transport?.isConnected()) {
-      return
+    let attempts = 0
+    const send = (): void => {
+      if (!managerRef.current?.getPanes().some((pane) => pane.id === paneId)) {
+        return
+      }
+      const transport = paneTransportsRef.current.get(paneId)
+      if (!transport?.isConnected()) {
+        // Why: TUIs can subscribe before pty:spawn resolves. Retry briefly so
+        // the recorded subscription still receives the initial dark/light seed.
+        attempts += 1
+        if (attempts < 8) {
+          window.setTimeout(send, 25)
+        }
+        return
+      }
+      const currentSettings = settingsRef.current
+      if (!currentSettings) {
+        return
+      }
+      const { mode } = resolveEffectiveTerminalAppearance(
+        currentSettings,
+        systemPrefersDarkRef.current
+      )
+      if (transport.sendInput(mode2031SequenceFor(mode))) {
+        paneLastThemeModeRef.current.set(paneId, mode)
+      }
     }
-    const currentSettings = settingsRef.current
-    if (!currentSettings) {
-      return
-    }
-    const { mode } = resolveEffectiveTerminalAppearance(
-      currentSettings,
-      systemPrefersDarkRef.current
-    )
-    if (transport.sendInput(mode2031SequenceFor(mode))) {
-      paneLastThemeModeRef.current.set(paneId, mode)
-    }
+    send()
   }
 
   // Initialize PaneManager instance once

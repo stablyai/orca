@@ -9,17 +9,25 @@ export type TerminalModes = {
   altScreen: boolean
 }
 
+export type TerminalKeyboardAvoidanceMetrics = {
+  cursorY: number
+  rows: number
+  altScreen: boolean
+}
+
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
   onSelectionCopy?: (text: string) => void
   onSelectionEvicted?: () => void
   onModesChanged?: (modes: TerminalModes) => void
+  onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
 }
 
 export type TerminalWebViewHandle = {
   write: (data: string) => void
   init: (cols: number, rows: number, initialData?: string) => void
+  resize: (cols: number, rows: number) => void
   clear: () => void
   measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
   resetZoom: () => void
@@ -40,6 +48,7 @@ type Props = {
 type TerminalMessage =
   | { type: 'write'; id?: number; data: string }
   | { type: 'init'; id?: number; cols: number; rows: number; initialData?: string }
+  | { type: 'resize'; id?: number; cols: number; rows: number }
   | { type: 'clear'; id?: number }
   | { type: 'measure'; id?: number; containerHeight?: number }
   | { type: 'reset-zoom'; id?: number }
@@ -432,7 +441,20 @@ const XTERM_HTML = `<!DOCTYPE html>
     firstDataPending = true;
     var replayData = normalizeInitialData(initialData);
     activeAltScreenSnapshot = isAltScreenActive(replayData);
-    if (term) term.dispose();
+    var oldTerm = term;
+    var oldSurface = surface;
+    var nextSurface = null;
+    if (oldTerm) {
+      nextSurface = document.createElement('div');
+      nextSurface.id = 'terminal-surface';
+      nextSurface.style.visibility = 'hidden';
+      nextSurface.style.position = 'absolute';
+      nextSurface.style.left = '0';
+      nextSurface.style.top = '0';
+      document.getElementById('terminal-container').appendChild(nextSurface);
+      surface = nextSurface;
+      oldSurface.removeAttribute('id');
+    }
 
     term = new Terminal({
       cols: cols || 80,
@@ -485,6 +507,14 @@ const XTERM_HTML = `<!DOCTYPE html>
       ready = true;
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
+        if (nextSurface && oldSurface) {
+          nextSurface.style.visibility = 'visible';
+          nextSurface.style.position = '';
+          nextSurface.style.left = '';
+          nextSurface.style.top = '';
+          oldSurface.remove();
+          if (oldTerm) oldTerm.dispose();
+        }
         applyFitScale('init-replay');
         notify({ type: 'ready', cols: cols, rows: rows });
       });
@@ -506,6 +536,14 @@ const XTERM_HTML = `<!DOCTYPE html>
         applyFitScale('first-data');
       });
     }
+  }
+
+  function resize(cols, rows) {
+    if (!term) return;
+    initRows = rows || initRows;
+    term.resize(cols || term.cols, rows || term.rows);
+    applyFitScale('resize-msg');
+    notify({ type: 'ready', cols: cols, rows: rows });
   }
 
   function notify(msg) {
@@ -576,6 +614,8 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
     if (msg.type === 'init') {
       init(msg.cols, msg.rows, msg.initialData);
+    } else if (msg.type === 'resize') {
+      resize(msg.cols, msg.rows);
     } else if (msg.type === 'write') {
       write(msg.data);
     } else if (msg.type === 'clear') {
@@ -683,14 +723,34 @@ const XTERM_HTML = `<!DOCTYPE html>
   }
   var lastEmittedModes = { bracketedPasteMode: false, altScreen: false };
 
+  function emitKeyboardAvoidanceMetrics() {
+    if (!term) return;
+    var alt = false;
+    try { alt = term.buffer && term.buffer.active && term.buffer.active.type === 'alternate'; } catch (e) {}
+    notify({
+      type: 'keyboard-avoidance-metrics',
+      cursorY: term.buffer && term.buffer.active ? term.buffer.active.cursorY : 0,
+      rows: term.rows || 0,
+      altScreen: alt
+    });
+  }
+
   function attachTermObservers() {
     if (!term) return;
     try { term.onLineFeed(logFeedAndEvict); } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
-    try { term.onWriteParsed && term.onWriteParsed(emitModesIfChanged); } catch (e) {}
+    try {
+      term.onWriteParsed && term.onWriteParsed(function() {
+        emitModesIfChanged();
+        emitKeyboardAvoidanceMetrics();
+      });
+    } catch (e) {}
     // Initial emit once buffer settles.
-    afterWritesDrained(function() { emitModesIfChanged(); });
+    afterWritesDrained(function() {
+      emitModesIfChanged();
+      emitKeyboardAvoidanceMetrics();
+    });
   }
 
   function viewportToCell(clientX, clientY) {
@@ -1249,6 +1309,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onSelectionCopy,
     onSelectionEvicted,
     onModesChanged,
+    onKeyboardAvoidanceMetrics,
     onHaptic
   },
   ref
@@ -1338,6 +1399,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           bracketedPasteMode: !!msg.bracketedPasteMode,
           altScreen: !!msg.altScreen
         })
+      } else if (msg.type === 'keyboard-avoidance-metrics') {
+        const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
+        const rows = typeof msg.rows === 'number' ? msg.rows : 0
+        onKeyboardAvoidanceMetrics?.({
+          cursorY,
+          rows,
+          altScreen: !!msg.altScreen
+        })
       } else if (msg.type === 'haptic') {
         const kind = msg.kind
         if (
@@ -1360,6 +1429,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onSelectionCopy,
       onSelectionEvicted,
       onModesChanged,
+      onKeyboardAvoidanceMetrics,
       onHaptic
     ]
   )
@@ -1392,6 +1462,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           readyResolveRef.current = resolve
         })
         postMessage({ type: 'init', cols, rows, initialData })
+      },
+      resize(cols: number, rows: number) {
+        postMessage({ type: 'resize', cols, rows })
       },
       clear() {
         postMessage({ type: 'clear' })

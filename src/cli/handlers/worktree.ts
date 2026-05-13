@@ -59,7 +59,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         baseBranch: getOptionalStringFlag(flags, 'base-branch'),
         linkedIssue: getOptionalNumberFlag(flags, 'issue'),
         comment: getOptionalStringFlag(flags, 'comment'),
-        runHooks: flags.get('run-hooks') === true
+        runHooks: flags.get('run-hooks') === true,
+        activate: flags.get('activate') === true || flags.get('run-hooks') === true
       }
     )
     printHookWarning(result.result, json)
