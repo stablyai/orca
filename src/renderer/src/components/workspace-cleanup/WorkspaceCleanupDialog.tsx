@@ -163,6 +163,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     candidate.blockers.includes('dismissed')
   ).length
   const readyCount = groups.ready.length
+  const initialLoading = loading && !scan
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -249,19 +250,22 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex h-[min(760px,88vh)] max-w-[1040px] flex-col overflow-hidden p-0">
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-[min(760px,88vh)] max-w-[1040px] flex-col overflow-hidden p-0"
+      >
         {!confirming ? (
           <>
             <DialogHeader className="border-b border-border px-5 py-4">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <DialogTitle className="text-base">Workspace Cleanup</DialogTitle>
+                <div className="min-w-0">
+                  <DialogTitle className="text-base">Clean Up Old Workspaces</DialogTitle>
                   <DialogDescription className="mt-1 text-xs">
-                    Review old workspaces before removing their local Orca state and working tree
-                    folders.
+                    Remove inactive workspaces after Orca checks git, terminals, editors, and
+                    agents.
                   </DialogDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
                     <RefreshCcw className={cn('size-3.5', loading && 'animate-spin')} />
                     Refresh
@@ -279,43 +283,59 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               </div>
             </DialogHeader>
 
-            <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline">{readyCount} ready</Badge>
-                <span>{groups.review.length} needs review</span>
-                <span>{groups.protected.length} protected</span>
-                {hiddenByKeepCount > 0 && !showKept ? (
-                  <span>{hiddenByKeepCount} kept hidden</span>
-                ) : null}
+            {initialLoading ? (
+              <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-5 py-3 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Scanning workspaces
               </div>
-              <div className="flex items-center gap-2">
-                {hiddenByKeepCount > 0 ? (
-                  <Button variant="ghost" size="xs" onClick={() => setShowKept((value) => !value)}>
-                    {showKept ? 'Hide kept' : 'Show kept workspaces'}
+            ) : (
+              <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-5 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline">{readyCount} ready</Badge>
+                  <Badge variant="outline">{groups.review.length} review</Badge>
+                  <Badge variant="outline">{groups.protected.length} protected</Badge>
+                  {hiddenByKeepCount > 0 && !showKept ? (
+                    <span>{hiddenByKeepCount} kept hidden</span>
+                  ) : null}
+                </div>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {hiddenByKeepCount > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setShowKept((value) => !value)}
+                    >
+                      {showKept ? 'Hide kept' : 'Show kept'}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={selectReady}
+                    disabled={readyCount === 0}
+                  >
+                    Select ready
                   </Button>
-                ) : null}
-                <Button variant="ghost" size="xs" onClick={selectReady} disabled={readyCount === 0}>
-                  Select ready
-                </Button>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={keepSelected}
-                  disabled={selectedCount === 0}
-                >
-                  Keep selected
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setConfirming(true)}
-                  disabled={selectedCount === 0}
-                >
-                  <Trash2 className="size-3.5" />
-                  Remove {selectedCount}
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={keepSelected}
+                    disabled={selectedCount === 0}
+                  >
+                    Keep selected
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setConfirming(true)}
+                    disabled={selectedCount === 0}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Remove {selectedCount}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
 
             {error ? (
               <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-xs text-destructive">
@@ -331,7 +351,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-4 p-5">
-                {loading && !scan ? <SkeletonRows /> : null}
+                {initialLoading ? <SkeletonRows /> : null}
                 {!loading && scan && candidates.length === 0 ? (
                   <EmptyState title="No cleanup candidates." />
                 ) : null}
@@ -520,7 +540,7 @@ function CandidateRow({
   const blockers = candidate.blockers.map((blocker) => BLOCKER_LABELS[blocker])
 
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-3 text-card-foreground">
+    <div className="rounded-md border border-border bg-card px-3 py-3 text-card-foreground">
       <div className="flex items-start gap-3">
         <button
           type="button"
@@ -538,9 +558,11 @@ function CandidateRow({
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-semibold">{candidate.displayName}</span>
+            <span className="min-w-0 truncate text-sm font-semibold">{candidate.displayName}</span>
             <span className="shrink-0 text-xs text-muted-foreground">·</span>
-            <span className="truncate text-xs text-muted-foreground">{candidate.repoName}</span>
+            <span className="shrink-0 truncate text-xs text-muted-foreground">
+              {candidate.repoName}
+            </span>
             <Badge
               variant={
                 candidate.tier === 'ready'
@@ -607,30 +629,30 @@ function CandidateRow({
               {failure}
             </div>
           ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="xs" onClick={() => onView(candidate.worktreeId)}>
-            <Search className="size-3.5" />
-            View
-          </Button>
-          {hasLiveSurfaces ? (
-            <Button variant="ghost" size="xs" onClick={() => onSleep(candidate)}>
-              <Moon className="size-3.5" />
-              Sleep
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <Button variant="ghost" size="xs" onClick={() => onView(candidate.worktreeId)}>
+              <Search className="size-3.5" />
+              View
             </Button>
-          ) : null}
-          <Button variant="ghost" size="xs" onClick={() => onKeep(candidate)}>
-            Keep
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="text-destructive hover:text-destructive"
-            disabled={!selectable}
-            onClick={() => onRemove(candidate)}
-          >
-            Remove
-          </Button>
+            {hasLiveSurfaces ? (
+              <Button variant="ghost" size="xs" onClick={() => onSleep(candidate)}>
+                <Moon className="size-3.5" />
+                Sleep
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="xs" onClick={() => onKeep(candidate)}>
+              Keep
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-destructive hover:text-destructive"
+              disabled={!selectable}
+              onClick={() => onRemove(candidate)}
+            >
+              Remove
+            </Button>
+          </div>
         </div>
       </div>
     </div>

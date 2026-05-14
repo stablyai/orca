@@ -1283,7 +1283,7 @@ export function ResourceUsageStatusSegment({
             className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
           >
             <ArchiveX className="size-3.5" />
-            Review workspace cleanup
+            Clean up old workspaces
           </button>
           {orphanCount > 0 ? (
             <button
