@@ -14,6 +14,7 @@
 // re-check string length.
 
 import { z } from 'zod'
+import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
@@ -260,7 +261,7 @@ const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 const featureWallOpenedSchema = z.object({}).strict()
 const featureWallClosedSchema = z
   .object({
-    dwell_ms: z.number().int().min(0).max(86_400_000)
+    dwell_ms: z.number().int().min(0).max(FEATURE_WALL_MAX_DWELL_MS)
   })
   .strict()
 const featureWallTileFocusedSchema = z

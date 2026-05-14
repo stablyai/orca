@@ -5,6 +5,7 @@ import {
   isFeatureWallMediaTile,
   type FeatureWallTileId
 } from '../../../../shared/feature-wall-tiles'
+import { FEATURE_WALL_MAX_DWELL_MS } from '../../../../shared/feature-wall-telemetry'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -174,7 +175,10 @@ export default function FeatureWallModal(): JSX.Element | null {
     if (!telemetryRef.current.open) {
       return
     }
-    const dwellMs = Math.max(0, Math.round(performance.now() - telemetryRef.current.openedAtMs))
+    const dwellMs = Math.min(
+      FEATURE_WALL_MAX_DWELL_MS,
+      Math.max(0, Math.round(performance.now() - telemetryRef.current.openedAtMs))
+    )
     track('feature_wall_closed', {
       dwell_ms: dwellMs
     })

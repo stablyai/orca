@@ -22,7 +22,10 @@ module.exports = {
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
-    '!config/*'
+    '!config/*',
+    // Why: feature-wall media is copied via extraResources so runtime can read
+    // it from process.resourcesPath; exclude the source copy from app.asar.
+    '!resources/onboarding/feature-wall/**'
   ],
   // Why: the CLI entry-point lives in out/cli/ but imports shared modules
   // from out/shared/ (e.g. runtime-bootstrap). Both directories must be
