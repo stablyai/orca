@@ -2,7 +2,6 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 import { router } from 'expo-router'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
-import { MOBILE_PROTOCOL_VERSION } from '../transport/protocol-version'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
@@ -23,10 +22,12 @@ export function ProtocolBlockScreen({ verdict }: Props) {
       : null
     : { label: 'Open GitHub Releases', url: RELEASES_URL }
 
-  const title = isMobileTooOld ? 'Update Orca Mobile' : 'Update Orca desktop'
+  const title = isMobileTooOld ? 'Update Orca Mobile' : 'Update Orca on your computer'
   const body = isMobileTooOld
-    ? `The Orca desktop on this host requires Orca Mobile v${verdict.requiredMobileVersion ?? '?'}+. You have v${MOBILE_PROTOCOL_VERSION}.\n\nUpdate Orca Mobile from ${mobileUpdateTarget.storeName} to continue.`
-    : `Orca Mobile requires Orca desktop v${verdict.requiredDesktopVersion ?? '?'}+ to use this host. The desktop is reporting v${verdict.desktopVersion}.`
+    ? `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${mobileUpdateTarget.storeName}, then try this host again.`
+    : 'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+  const recoveryNote =
+    'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
 
   return (
     <View style={styles.container}>
@@ -53,8 +54,9 @@ export function ProtocolBlockScreen({ verdict }: Props) {
             router.replace('/')
           }}
         >
-          <Text style={styles.secondaryButtonText}>Pair a different host</Text>
+          <Text style={styles.secondaryButtonText}>Back to hosts</Text>
         </Pressable>
+        <Text style={styles.recoveryNote}>{recoveryNote}</Text>
       </View>
     </View>
   )
@@ -108,6 +110,12 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600',
     color: colors.textPrimary
+  },
+  recoveryNote: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    lineHeight: 17,
+    marginTop: spacing.md
   },
   pressed: {
     opacity: 0.7
