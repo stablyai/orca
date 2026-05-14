@@ -458,7 +458,11 @@ export class OrcaRuntimeRpcServer {
     }
 
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
-    await this.dispatcher.dispatchStreaming(request, reply, { connectionId, sendBinary })
+    await this.dispatcher.dispatchStreaming(request, reply, {
+      connectionId,
+      clientId: token,
+      sendBinary
+    })
   }
 
   private buildError(id: string, code: string, message: string): RpcResponse {

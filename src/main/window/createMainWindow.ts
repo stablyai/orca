@@ -128,6 +128,10 @@ export function createMainWindow(
   })()
 
   const settings = store?.getSettings()
+  browserManager.setDictationShortcutForwardingPredicate(() => {
+    const voice = store?.getSettings().voice
+    return Boolean(voice?.enabled && voice.sttModel && voice.dictationMode !== 'hold')
+  })
   const blur = settings?.windowBackgroundBlur ?? false
   // Why: native blur requires platform-specific Electron APIs. macOS uses
   // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
@@ -502,6 +506,9 @@ export function createMainWindow(
     if (input.type !== 'keyDown') {
       return
     }
+    if (input.isAutoRepeat) {
+      return
+    }
 
     // Why: in hold mode, Cmd+E must NOT be intercepted here. Calling
     // preventDefault() in before-input-event suppresses ALL subsequent DOM
@@ -510,7 +517,11 @@ export function createMainWindow(
     // capture-phase DOM listeners handle both keydown and keyup normally.
     // Toggle mode still uses the IPC path since it doesn't need keyUp.
     if (action.type === 'dictationKeyDown') {
-      const dictationMode = store?.getSettings().voice?.dictationMode ?? 'toggle'
+      const voiceSettings = store?.getSettings().voice
+      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+        return
+      }
+      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
       if (dictationMode === 'hold') {
         return
       }
@@ -698,6 +709,7 @@ export function createMainWindow(
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
+    browserManager.setDictationShortcutForwardingPredicate(null)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
     ipcMain.removeHandler(isMaximizedChannel)

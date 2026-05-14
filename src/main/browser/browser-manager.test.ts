@@ -58,6 +58,7 @@ describe('browserManager', () => {
     guestOpenDevToolsMock.mockReset()
     webContentsFromIdMock.mockReset()
     browserManager.unregisterAll()
+    browserManager.setDictationShortcutForwardingPredicate(null)
   })
 
   afterEach(() => {

@@ -1,6 +1,7 @@
 {
   "name": "@orca/expo-two-way-audio",
   "version": "0.0.1",
+  "private": true,
   "description": "Native module for two way audio streaming",
   "keywords": [
     "ExpoTwoWayAudio",
@@ -8,13 +9,17 @@
     "expo-two-way-audio",
     "react-native"
   ],
-  "homepage": "https://github.com/boudra/expo-two-way-audio",
+  "homepage": "https://github.com/stablyai/orca/tree/main/mobile/packages/expo-two-way-audio",
   "bugs": {
-    "url": "https://github.com/speechmatics/expo-two-way-audio/issues"
+    "url": "https://github.com/stablyai/orca/issues"
   },
   "license": "MIT",
-  "author": "Speechmatics <devrel@speechmatics.com> (https://github.com/speechmatics)",
-  "repository": "https://github.com/boudra/expo-two-way-audio",
+  "author": "Orca contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stablyai/orca.git",
+    "directory": "mobile/packages/expo-two-way-audio"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {

@@ -73,6 +73,8 @@ export function DictationController() {
 
   const dictationStateRef = useRef(dictationState)
   dictationStateRef.current = dictationState
+  const dictationRunRef = useRef(0)
+  const holdGestureActiveRef = useRef(false)
 
   const startDictation = useCallback(async () => {
     if (dictationStateRef.current !== 'idle') {
@@ -98,15 +100,29 @@ export function DictationController() {
       return
     }
 
+    const runId = dictationRunRef.current + 1
+    dictationRunRef.current = runId
     setDictationState('starting')
 
     const hotwords = collectHotwords()
 
     try {
       await window.api.speech.startDictation(modelId, hotwords.length > 0 ? hotwords : undefined)
+      if (dictationRunRef.current !== runId) {
+        await window.api.speech.stopDictation().catch(() => undefined)
+        return
+      }
       await startCapture()
+      if (dictationRunRef.current !== runId) {
+        stopCapture()
+        await window.api.speech.stopDictation().catch(() => undefined)
+        return
+      }
       setDictationState('listening')
     } catch (err) {
+      if (dictationRunRef.current !== runId) {
+        return
+      }
       setDictationState('error')
       const message = String(err)
       if (message.includes('Permission') || message.includes('NotAllowed')) {
@@ -135,6 +151,7 @@ export function DictationController() {
     if (dictationStateRef.current !== 'listening' && dictationStateRef.current !== 'starting') {
       return
     }
+    dictationRunRef.current += 1
     setDictationState('stopping')
     stopCapture()
     try {
@@ -155,6 +172,13 @@ export function DictationController() {
     }
 
     const handleKeyDown = (): void => {
+      if (
+        !settings?.voice?.enabled ||
+        !settings.voice.sttModel ||
+        dictationStateRef.current === 'stopping'
+      ) {
+        return
+      }
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
         void stopDictation()
       } else {
@@ -164,7 +188,13 @@ export function DictationController() {
 
     const cleanup = window.api.ui.onDictationKeyDown(handleKeyDown)
     return cleanup
-  }, [settings?.voice?.dictationMode, startDictation, stopDictation])
+  }, [
+    settings?.voice?.dictationMode,
+    settings?.voice?.enabled,
+    settings?.voice?.sttModel,
+    startDictation,
+    stopDictation
+  ])
 
   // Why: hold mode uses renderer-side DOM events instead of the IPC path
   // (before-input-event). When before-input-event calls preventDefault()
@@ -182,8 +212,12 @@ export function DictationController() {
     const handleKeyDown = (e: KeyboardEvent): void => {
       const mod = IS_MAC ? e.metaKey : e.ctrlKey
       if (mod && e.code === 'KeyE' && !e.shiftKey && !e.altKey) {
+        if (!settings?.voice?.enabled || !settings.voice.sttModel) {
+          return
+        }
         e.preventDefault()
         e.stopPropagation()
+        holdGestureActiveRef.current = true
         if (dictationStateRef.current === 'idle') {
           void startDictation()
         }
@@ -191,21 +225,53 @@ export function DictationController() {
     }
 
     const handleKeyUp = (e: KeyboardEvent): void => {
+      if (!holdGestureActiveRef.current) {
+        return
+      }
       if (dictationStateRef.current === 'idle' || dictationStateRef.current === 'stopping') {
+        holdGestureActiveRef.current = false
         return
       }
       if (e.code === 'KeyE' || e.key === 'Meta' || e.key === 'Control') {
+        holdGestureActiveRef.current = false
         void stopDictation()
+      }
+    }
+
+    const handleBlur = (): void => {
+      if (!holdGestureActiveRef.current) {
+        return
+      }
+      holdGestureActiveRef.current = false
+      if (dictationStateRef.current !== 'idle' && dictationStateRef.current !== 'stopping') {
+        void stopDictation()
+      }
+    }
+
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState !== 'visible') {
+        handleBlur()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('keyup', handleKeyUp, true)
+    window.addEventListener('blur', handleBlur)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
+      handleBlur()
       window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('keyup', handleKeyUp, true)
+      window.removeEventListener('blur', handleBlur)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [settings?.voice?.dictationMode, startDictation, stopDictation])
+  }, [
+    settings?.voice?.dictationMode,
+    settings?.voice?.enabled,
+    settings?.voice?.sttModel,
+    startDictation,
+    stopDictation
+  ])
 
   useEffect(() => {
     const cleanupPartial = window.api.speech.onPartialTranscript((text) => {

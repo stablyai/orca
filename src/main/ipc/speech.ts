@@ -96,7 +96,8 @@ export function registerSpeechHandlers(store: Store): void {
               break
           }
         },
-        resolvedHotwordsPath
+        resolvedHotwordsPath,
+        'desktop'
       )
     } catch (err) {
       if (resolvedHotwordsPath) {
@@ -110,11 +111,11 @@ export function registerSpeechHandlers(store: Store): void {
     // Why: the preload sends audio as a Buffer to avoid Float32Array data
     // being zeroed out during contextBridge + IPC serialization.
     const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
-    getSpeechSttService(store).feedAudio(samples, sampleRate)
+    getSpeechSttService(store).feedAudio(samples, sampleRate, 'desktop')
   })
 
   ipcMain.handle('speech:stopDictation', async () => {
-    await getSpeechSttService(store).stopDictation()
+    await getSpeechSttService(store).stopDictation('desktop')
     unlink(hotwordsFilePath).catch(() => {})
   })
 }

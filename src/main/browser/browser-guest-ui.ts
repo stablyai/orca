@@ -10,6 +10,7 @@ import {
 } from '../../shared/window-shortcut-policy'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
+type ShouldForwardDictationShortcut = () => boolean
 
 function isTerminalTabSwitchChord(input: Electron.Input): boolean {
   return (
@@ -217,10 +218,14 @@ export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
+  shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
 }): () => void {
-  const { browserTabId, guest, resolveRenderer } = args
+  const { browserTabId, guest, resolveRenderer, shouldForwardDictationShortcut } = args
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     if (input.type !== 'keyDown') {
+      return
+    }
+    if (input.isAutoRepeat) {
       return
     }
     // Why: resolve the policy action once per keystroke. The history-navigate
@@ -331,6 +336,9 @@ export function setupGuestShortcutForwarding(args: {
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else if (action?.type === 'dictationKeyDown') {
+      if (!shouldForwardDictationShortcut?.()) {
+        return
+      }
       renderer.send('ui:dictationKeyDown')
     } else {
       return

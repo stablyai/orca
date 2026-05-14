@@ -21,7 +21,8 @@ export const SPEECH_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'speech.dictation.start',
     params: DictationStart,
-    handler: async (params, { runtime }) => runtime.startMobileDictation(params)
+    handler: async (params, { runtime, clientId }) =>
+      runtime.startMobileDictation({ ...params, clientId })
   }),
   defineMethod({
     name: 'speech.dictation.chunk',

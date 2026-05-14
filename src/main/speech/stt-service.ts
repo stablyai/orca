@@ -17,6 +17,8 @@ export class SttService {
   private worker: Worker | null = null
   private modelManager: ModelManager
   private activeModelId: string | null = null
+  private activeOwner: string | null = null
+  private startingOwner: string | null = null
   private starting = false
 
   constructor(modelManager: ModelManager) {
@@ -26,27 +28,38 @@ export class SttService {
   async startDictation(
     modelId: string,
     sink: SttEventSink,
-    hotwordsFilePath?: string
+    hotwordsFilePath?: string,
+    owner = 'desktop'
   ): Promise<void> {
     if (this.starting) {
+      if (this.startingOwner !== owner) {
+        throw new Error('dictation_already_active')
+      }
       return
     }
+    if (this.worker && this.activeOwner !== owner) {
+      throw new Error('dictation_already_active')
+    }
     this.starting = true
+    this.startingOwner = owner
 
     try {
-      await this._startDictation(modelId, sink, hotwordsFilePath)
+      await this._startDictation(modelId, sink, hotwordsFilePath, owner)
+      this.activeOwner = owner
     } finally {
       this.starting = false
+      this.startingOwner = null
     }
   }
 
   private async _startDictation(
     modelId: string,
     sink: SttEventSink,
-    hotwordsFilePath?: string
+    hotwordsFilePath?: string,
+    owner = 'desktop'
   ): Promise<void> {
     if (this.worker) {
-      await this.stopDictation()
+      await this.stopDictation(owner)
     }
 
     const manifest = getCatalogModel(modelId)
@@ -89,11 +102,13 @@ export class SttService {
       sink({ type: 'error', error: String(err) })
       this.worker = null
       this.activeModelId = null
+      this.activeOwner = null
     })
 
     this.worker.on('exit', () => {
       this.worker = null
       this.activeModelId = null
+      this.activeOwner = null
     })
 
     const modelDir = this.modelManager.getModelDir(modelId)
@@ -108,16 +123,33 @@ export class SttService {
       modelingUnit: manifest.modelingUnit
     })
 
-    await readyPromise
+    try {
+      await readyPromise
+    } catch (error) {
+      this.worker?.removeAllListeners()
+      void this.worker?.terminate()
+      this.worker = null
+      this.activeModelId = null
+      this.activeOwner = null
+      throw error
+    }
   }
 
-  feedAudio(samples: Float32Array, sampleRate: number): void {
+  feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): void {
+    const currentOwner = this.activeOwner ?? this.startingOwner
+    if (currentOwner && currentOwner !== owner) {
+      throw new Error('dictation_owner_mismatch')
+    }
     this.worker?.postMessage({ type: 'feed', samples, sampleRate }, [samples.buffer as ArrayBuffer])
   }
 
-  async stopDictation(): Promise<void> {
+  async stopDictation(owner = 'desktop'): Promise<void> {
     if (!this.worker) {
       return
+    }
+    const currentOwner = this.activeOwner ?? this.startingOwner
+    if (currentOwner && currentOwner !== owner) {
+      throw new Error('dictation_owner_mismatch')
     }
 
     this.worker.postMessage({ type: 'stop' })
@@ -142,6 +174,7 @@ export class SttService {
     this.worker.removeAllListeners()
     this.worker = null
     this.activeModelId = null
+    this.activeOwner = null
   }
 
   isActive(): boolean {

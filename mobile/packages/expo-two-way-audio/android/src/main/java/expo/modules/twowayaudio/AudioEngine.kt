@@ -1,3 +1,5 @@
+package expo.modules.twowayaudio
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioAttributes
@@ -29,6 +31,7 @@ class AudioEngine (context: Context) {
     private lateinit var audioManager: AudioManager
     private lateinit var audioTrack: AudioTrack
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var audioFocusChangeListener: AudioManager.OnAudioFocusChangeListener? = null
     private val audioSampleQueue: Queue<ByteArray> = LinkedList()
     private var echoCanceler: AcousticEchoCanceler? = null
     private var noiseSuppressor: NoiseSuppressor? = null
@@ -169,27 +172,39 @@ class AudioEngine (context: Context) {
 
     @SuppressLint("NewApi")
     private fun requestAudioFocus() {
-        val focusRequest =
-            AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                .setAcceptsDelayedFocusGain(true)
-                .setOnAudioFocusChangeListener { focusChange ->
-                    when (focusChange) {
-                        AudioManager.AUDIOFOCUS_LOSS -> {
-                            Log.d("AudioEngine", "Audio focus lost")
-                            onAudioInterruptionCallback?.let { it("blocked") }
-                        }
-                    }
+        val listener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+            when (focusChange) {
+                AudioManager.AUDIOFOCUS_LOSS -> {
+                    Log.d("AudioEngine", "Audio focus lost")
+                    onAudioInterruptionCallback?.let { it("blocked") }
                 }
-                .build()
+            }
+        }
+        audioFocusChangeListener = listener
 
-        audioFocusRequest = focusRequest
-        val result = audioManager.requestAudioFocus(focusRequest)
+        val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val focusRequest =
+                AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener(listener)
+                    .build()
+
+            audioFocusRequest = focusRequest
+            audioManager.requestAudioFocus(focusRequest)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                listener,
+                AudioManager.STREAM_VOICE_CALL,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+            )
+        }
 
         if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
             throw RuntimeException("Audio focus request failed")
@@ -385,8 +400,13 @@ class AudioEngine (context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
         }
-        audioFocusRequest?.let { request ->
-            audioManager.abandonAudioFocusRequest(request)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { request ->
+                audioManager.abandonAudioFocusRequest(request)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(audioFocusChangeListener)
         }
         executorServiceMicrophone.shutdownNow()
     }

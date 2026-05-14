@@ -735,6 +735,9 @@ export class OrcaRuntimeService {
   private _notesStore: NotesMarkdownStore | null = null
   private mobileDictation: {
     id: string
+    owner: string
+    clientId?: string
+    state: 'starting' | 'active' | 'closing'
     partialText: string
     finalTexts: string[]
     errors: string[]
@@ -1693,7 +1696,11 @@ export class OrcaRuntimeService {
     this.accountServices = services
   }
 
-  async startMobileDictation(params: { dictationId: string; modelId?: string }): Promise<{
+  async startMobileDictation(params: {
+    dictationId: string
+    modelId?: string
+    clientId?: string
+  }): Promise<{
     dictationId: string
     modelId: string
   }> {
@@ -1716,30 +1723,53 @@ export class OrcaRuntimeService {
       throw new Error(`voice_model_not_ready:${modelState.status}`)
     }
 
+    if (this.mobileDictation && this.mobileDictation.state !== 'closing') {
+      throw new Error('dictation_already_active')
+    }
+
+    const owner = `mobile:${params.dictationId}`
     this.mobileDictation = {
       id: params.dictationId,
+      owner,
+      clientId: params.clientId,
+      state: 'starting',
       partialText: '',
       finalTexts: [],
       errors: []
     }
 
-    await getSpeechSttService(this.store).startDictation(modelId, (event) => {
-      const session = this.mobileDictation
-      if (!session || session.id !== params.dictationId) {
-        return
+    try {
+      await getSpeechSttService(this.store).startDictation(
+        modelId,
+        (event) => {
+          const session = this.mobileDictation
+          if (!session || session.id !== params.dictationId) {
+            return
+          }
+          if (event.type === 'partial') {
+            session.partialText = event.text ?? ''
+          } else if (event.type === 'final') {
+            const text = event.text?.trim()
+            if (text) {
+              session.finalTexts.push(text)
+              session.partialText = ''
+            }
+          } else if (event.type === 'error') {
+            session.errors.push(event.error ?? 'Speech worker error')
+          }
+        },
+        undefined,
+        owner
+      )
+      if (this.mobileDictation?.id === params.dictationId) {
+        this.mobileDictation.state = 'active'
       }
-      if (event.type === 'partial') {
-        session.partialText = event.text ?? ''
-      } else if (event.type === 'final') {
-        const text = event.text?.trim()
-        if (text) {
-          session.finalTexts.push(text)
-          session.partialText = ''
-        }
-      } else if (event.type === 'error') {
-        session.errors.push(event.error ?? 'Speech worker error')
+    } catch (error) {
+      if (this.mobileDictation?.id === params.dictationId) {
+        this.mobileDictation = null
       }
-    })
+      throw error
+    }
 
     return { dictationId: params.dictationId, modelId }
   }
@@ -1751,6 +1781,9 @@ export class OrcaRuntimeService {
     if (!session || session.id !== params.dictationId) {
       throw new Error('dictation_stream_not_started')
     }
+    if (session.state !== 'active') {
+      throw new Error('dictation_stream_closing')
+    }
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
@@ -1760,7 +1793,7 @@ export class OrcaRuntimeService {
     for (let i = 0; i < samples.length; i += 1) {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
-    getSpeechSttService(this.store!).feedAudio(samples, params.sampleRate)
+    getSpeechSttService(this.store!).feedAudio(samples, params.sampleRate, session.owner)
     return { dictationId: params.dictationId }
   }
 
@@ -1772,23 +1805,45 @@ export class OrcaRuntimeService {
     if (!session || session.id !== params.dictationId) {
       throw new Error('dictation_stream_not_started')
     }
-    await getSpeechSttService(this.store!).stopDictation()
-    if (session.errors.length > 0) {
-      const error = session.errors[0]
+    session.state = 'closing'
+    try {
+      await getSpeechSttService(this.store!).stopDictation(session.owner)
+      if (session.errors.length > 0) {
+        throw new Error(session.errors[0])
+      }
+      const text = [...session.finalTexts, session.partialText].join(' ').trim()
+      return { dictationId: params.dictationId, text }
+    } finally {
       this.mobileDictation = null
-      throw new Error(error)
     }
-    const text = [...session.finalTexts, session.partialText].join(' ').trim()
-    this.mobileDictation = null
-    return { dictationId: params.dictationId, text }
   }
 
   async cancelMobileDictation(params: { dictationId: string }): Promise<{ dictationId: string }> {
-    if (this.mobileDictation?.id === params.dictationId) {
-      await getSpeechSttService(this.store!).stopDictation()
-      this.mobileDictation = null
+    const session = this.mobileDictation
+    if (session?.id === params.dictationId) {
+      session.state = 'closing'
+      try {
+        await getSpeechSttService(this.store!).stopDictation(session.owner)
+      } finally {
+        this.mobileDictation = null
+      }
     }
     return { dictationId: params.dictationId }
+  }
+
+  private cancelMobileDictationForClient(clientId: string): void {
+    const session = this.mobileDictation
+    if (!session || session.clientId !== clientId) {
+      return
+    }
+    session.state = 'closing'
+    void getSpeechSttService(this.store!)
+      .stopDictation(session.owner)
+      .finally(() => {
+        if (this.mobileDictation?.id === session.id) {
+          this.mobileDictation = null
+        }
+      })
   }
 
   private requireAccountServices(): RuntimeAccountServices {
@@ -1976,6 +2031,8 @@ export class OrcaRuntimeService {
   }
 
   onClientDisconnected(clientId: string): void {
+    this.cancelMobileDictationForClient(clientId)
+
     // (1) Cancel pending restore-debounce timers owned by this client.
     for (const [ptyId, entry] of this.pendingRestoreTimers) {
       if (entry.clientId === clientId) {

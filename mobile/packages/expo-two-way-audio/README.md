@@ -1,6 +1,6 @@
-# Speechmatics Two Way Audio
+# Orca Two Way Audio
 
-Expo module for capturing and playing pcm audio data in react-native apps (iOS and Android).
+Vendored Expo module for capturing and playing PCM audio data in the Orca mobile app (iOS and Android).
 
 The aim of the module is to facilitate creating real-time conversational apps. The following features are provided:
 
@@ -15,7 +15,7 @@ Check out our [examples/](./examples) to see the module in action.
 ## Installation
 
 ```
-npm i @speechmatics/expo-two-way-audio
+npm i @orca/expo-two-way-audio
 ```
 
 ## Usage
@@ -25,7 +25,7 @@ Please check out our [examples/](./examples) to get full sample code.
 1. Request permissions for recording audio
 
    ```JSX
-   import {useMicrophonePermissions} from "@speechmatics/expo-two-way-audio";
+   import {useMicrophonePermissions} from "@orca/expo-two-way-audio";
 
    const [micPermission, requestMicPermission] = useMicrophonePermissions();
    console.log(micPermission);
