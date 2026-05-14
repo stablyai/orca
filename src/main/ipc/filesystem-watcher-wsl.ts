@@ -9,6 +9,7 @@
  * balance between responsiveness and CPU cost — nobody stares at the file
  * explorer waiting for instant refresh.
  */
+import type { Dirent } from 'fs'
 import { readdir } from 'fs/promises'
 import * as path from 'path'
 import type { WebContents } from 'electron'
@@ -40,9 +41,9 @@ const POLL_INTERVAL_MS = 2000
 
 type DirSnapshot = Map<string, Set<string>>
 
-async function readDirSafe(dirPath: string): Promise<string[]> {
+async function readDirEntriesSafe(dirPath: string): Promise<Dirent[]> {
   try {
-    const entries = await readdir(dirPath)
+    const entries = await readdir(dirPath, { withFileTypes: true })
     return entries
   } catch {
     return []
@@ -60,25 +61,24 @@ function shouldIgnore(name: string, ignoreDirs: string[]): boolean {
 async function takeSnapshot(rootPath: string, ignoreDirs: string[]): Promise<DirSnapshot> {
   const snapshot: DirSnapshot = new Map()
 
-  const rootEntries = await readDirSafe(rootPath)
-  const filtered = rootEntries.filter((name) => !shouldIgnore(name, ignoreDirs))
-  snapshot.set(rootPath, new Set(filtered))
+  const rootEntries = await readDirEntriesSafe(rootPath)
+  const filtered = rootEntries.filter((entry) => !shouldIgnore(entry.name, ignoreDirs))
+  snapshot.set(rootPath, new Set(filtered.map((entry) => entry.name)))
 
   // Why: poll one level of subdirectories so changes inside immediate
-  // children are detected (e.g. editing src/foo.ts).  Going deeper
-  // would be too expensive for large repos.  The renderer requests
-  // deeper directories explicitly via readDir when the user expands.
+  // children are detected, but use Dirent metadata to avoid probing every
+  // root-level file with a failing readdir on each WSL poll.
   await Promise.all(
-    filtered.map(async (name) => {
-      const childPath = path.join(rootPath, name)
-      try {
-        const childEntries = await readDirSafe(childPath)
-        const childFiltered = childEntries.filter((n) => !shouldIgnore(n, ignoreDirs))
+    filtered
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map(async (entry) => {
+        const childPath = path.join(rootPath, entry.name)
+        const childEntries = await readDirEntriesSafe(childPath)
+        const childFiltered = childEntries
+          .filter((childEntry) => !shouldIgnore(childEntry.name, ignoreDirs))
+          .map((childEntry) => childEntry.name)
         snapshot.set(childPath, new Set(childFiltered))
-      } catch {
-        // Not a directory or inaccessible — skip
-      }
-    })
+      })
   )
 
   return snapshot

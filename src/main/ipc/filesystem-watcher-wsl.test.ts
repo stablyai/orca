@@ -1,3 +1,4 @@
+import * as path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { readdirMock } = vi.hoisted(() => ({
@@ -33,8 +34,8 @@ describe('createWslWatcher', () => {
   }
 
   function releasePollWith(
-    releasePoll: ((entries: string[]) => void) | null,
-    entries: string[]
+    releasePoll: ((entries: ReturnType<typeof dirent>[]) => void) | null,
+    entries: ReturnType<typeof dirent>[]
   ): void {
     if (!releasePoll) {
       throw new Error('expected an in-flight poll')
@@ -42,10 +43,18 @@ describe('createWslWatcher', () => {
     releasePoll(entries)
   }
 
+  function dirent(name: string, type: 'dir' | 'file' | 'symlink' = 'file') {
+    return {
+      name,
+      isDirectory: () => type === 'dir',
+      isSymbolicLink: () => type === 'symlink'
+    }
+  }
+
   it('does not overlap polling when a WSL snapshot scan is still in flight', async () => {
     const scheduleBatchFlush = vi.fn()
     let rootReads = 0
-    let releasePoll: ((entries: string[]) => void) | null = null
+    let releasePoll: ((entries: ReturnType<typeof dirent>[]) => void) | null = null
 
     readdirMock.mockImplementation((dirPath: string) => {
       if (dirPath !== rootPath) {
@@ -53,14 +62,14 @@ describe('createWslWatcher', () => {
       }
       rootReads += 1
       if (rootReads === 1) {
-        return Promise.resolve(['src'])
+        return Promise.resolve([dirent('src', 'dir')])
       }
       if (rootReads === 2) {
-        return new Promise<string[]>((resolve) => {
+        return new Promise<ReturnType<typeof dirent>[]>((resolve) => {
           releasePoll = resolve
         })
       }
-      return Promise.resolve(['src'])
+      return Promise.resolve([dirent('src', 'dir')])
     })
 
     const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
@@ -71,7 +80,7 @@ describe('createWslWatcher', () => {
     await vi.advanceTimersByTimeAsync(4_000)
     expect(rootReads).toBe(2)
 
-    releasePollWith(releasePoll, ['src', 'new-file.ts'])
+    releasePollWith(releasePoll, [dirent('src', 'dir'), dirent('new-file.ts')])
     await vi.advanceTimersByTimeAsync(0)
 
     expect(scheduleBatchFlush).toHaveBeenCalledOnce()
@@ -81,7 +90,7 @@ describe('createWslWatcher', () => {
   it('does not flush a poll that completes after unsubscribe', async () => {
     const scheduleBatchFlush = vi.fn()
     let rootReads = 0
-    let releasePoll: ((entries: string[]) => void) | null = null
+    let releasePoll: ((entries: ReturnType<typeof dirent>[]) => void) | null = null
 
     readdirMock.mockImplementation((dirPath: string) => {
       if (dirPath !== rootPath) {
@@ -89,9 +98,9 @@ describe('createWslWatcher', () => {
       }
       rootReads += 1
       if (rootReads === 1) {
-        return Promise.resolve(['src'])
+        return Promise.resolve([dirent('src', 'dir')])
       }
-      return new Promise<string[]>((resolve) => {
+      return new Promise<ReturnType<typeof dirent>[]>((resolve) => {
         releasePoll = resolve
       })
     })
@@ -100,9 +109,37 @@ describe('createWslWatcher', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     await root.subscription.unsubscribe()
 
-    releasePollWith(releasePoll, ['src', 'late-file.ts'])
+    releasePollWith(releasePoll, [dirent('src', 'dir'), dirent('late-file.ts')])
     await vi.advanceTimersByTimeAsync(0)
 
     expect(scheduleBatchFlush).not.toHaveBeenCalled()
+  })
+
+  it('does not probe root-level files during WSL snapshots', async () => {
+    const scheduleBatchFlush = vi.fn()
+
+    readdirMock.mockImplementation((dirPath: string) => {
+      if (dirPath === rootPath) {
+        return Promise.resolve([
+          dirent('src', 'dir'),
+          dirent('README.md'),
+          dirent('package.json'),
+          dirent('linked-dir', 'symlink')
+        ])
+      }
+      return Promise.resolve([])
+    })
+
+    const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
+
+    const readPaths = readdirMock.mock.calls.map(([dirPath]) => dirPath)
+    expect(readPaths).toEqual([
+      rootPath,
+      path.join(rootPath, 'src'),
+      path.join(rootPath, 'linked-dir')
+    ])
+    expect(readPaths).not.toContain(path.join(rootPath, 'README.md'))
+    expect(readPaths).not.toContain(path.join(rootPath, 'package.json'))
+    await root.subscription.unsubscribe()
   })
 })
