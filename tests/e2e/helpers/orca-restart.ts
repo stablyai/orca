@@ -19,6 +19,7 @@ import { execSync } from 'child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import os from 'os'
 import path from 'path'
+import { closeElectronApp } from './electron-process-cleanup'
 
 type LaunchedOrca = {
   app: ElectronApplication
@@ -101,23 +102,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
     // Why: mirror the shared fixture's shutdown race — give Electron 10s to run
     // before-quit/will-quit (which drives the beforeunload → session.setSync
     // flush this suite relies on) and only then fall back to SIGKILL.
-    const proc = app.process()
-    try {
-      await Promise.race([
-        app.close(),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Timed out closing Electron app')), 10_000)
-        })
-      ])
-    } catch {
-      if (proc) {
-        try {
-          proc.kill('SIGKILL')
-        } catch {
-          /* already dead */
-        }
-      }
-    }
+    await closeElectronApp(app)
   }
 
   const dispose = (): void => {
