@@ -52,7 +52,7 @@ export default function OnboardingFlow({
     (currentStep.id === 'notifications' && flow.featureSetupTerminalCommand
       ? 'Continue to project setup'
       : currentStep.id === 'notifications' && flow.hasSelectedFeatureSetup
-        ? 'Set up & continue'
+        ? 'Set up'
         : 'Continue')
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).

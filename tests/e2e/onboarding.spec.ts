@@ -221,7 +221,7 @@ test.describe('Onboarding flow', () => {
     await expect(computerUse).toHaveAttribute('aria-checked', 'true')
     await expect(orchestration).toHaveAttribute('aria-checked', 'true')
 
-    await orcaPage.getByRole('button', { name: 'Set up & continue' }).click()
+    await orcaPage.getByRole('button', { name: 'Set up' }).click()
     await expectSkillSetupTerminalReady(orcaPage)
     await expect(orcaPage.getByRole('button', { name: 'Continue to project setup' })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
@@ -337,7 +337,7 @@ test.describe('Onboarding flow', () => {
     await expect(bellSwitch).toHaveAttribute('aria-checked', 'false')
 
     await installSafeOnboardingFeatureSetupDeps(orcaPage)
-    await orcaPage.getByRole('button', { name: 'Set up & continue' }).click()
+    await orcaPage.getByRole('button', { name: 'Set up' }).click()
     await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
@@ -415,7 +415,7 @@ test.describe('Onboarding flow', () => {
     await expect(computerUse).toHaveAttribute('aria-checked', 'false')
     await expect(orchestration).toHaveAttribute('aria-checked', 'true')
 
-    await orcaPage.getByRole('button', { name: 'Set up & continue' }).click()
+    await orcaPage.getByRole('button', { name: 'Set up' }).click()
     await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
