@@ -3,6 +3,7 @@ task source controls, and GitHub task list co-located so the wiring between the
 selected repo, the task filters, and the work-item list stays readable in one
 place while this surface is still evolving. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   ArrowRight,
   ChevronDown,
@@ -24,11 +25,6 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
-import {
-  workItemsCacheKey,
-  type WorkItemsCacheSources,
-  type WorkItemsCacheError
-} from '@/store/slices/github'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -74,6 +70,13 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
+import {
+  buildTaskPageRepoSourceState,
+  findTaskPageDialogWorkItem,
+  findTaskPageLinearDrawerIssue,
+  selectTaskPageWorkItemsCacheEntries,
+  type TaskPageRepoSourceState
+} from '@/components/task-page-cache-selectors'
 import type {
   GitHubOwnerRepo,
   GitHubWorkItem,
@@ -617,23 +620,12 @@ function PaginationBar({
   )
 }
 
-// Why: feature 1 — shape of the per-repo view derived from `workItemsCache`,
-// used by both the indicator render and the `hasDivergentSources` guard.
-// Hoisted to module scope so the type isn't re-parsed per render and so the
-// guard below can narrow it without a forward reference.
-type RepoSourceState = {
-  repoId: string
-  repoPath: string
-  sources: WorkItemsCacheSources | null
-  error: WorkItemsCacheError | null
-}
-
 // Why: type-guard predicate used to filter `perRepoSourceState` down to rows
 // whose issue-source and PR-source slugs differ. Hoisted to module scope so
 // the predicate isn't re-allocated on every TaskPage render.
 const hasDivergentSources = (
-  s: RepoSourceState
-): s is RepoSourceState & {
+  s: TaskPageRepoSourceState
+): s is TaskPageRepoSourceState & {
   sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
 } => !!s.sources?.issues && !!s.sources.prs && !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
 
@@ -643,8 +635,8 @@ const hasDivergentSources = (
 // somewhere different from origin is always a candidate for the toggle,
 // regardless of the current effective preference.
 const hasUpstreamCandidateDivergence = (
-  s: RepoSourceState
-): s is RepoSourceState & {
+  s: TaskPageRepoSourceState
+): s is TaskPageRepoSourceState & {
   sources: { prs: GitHubOwnerRepo; upstreamCandidate: GitHubOwnerRepo }
 } =>
   !!s.sources?.prs &&
@@ -836,9 +828,20 @@ export default function TaskPage(): React.JSX.Element {
   } | null>(null)
   const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
 
-  const workItemsCache = useAppStore((s) => s.workItemsCache)
-  const linearIssueCache = useAppStore((s) => s.linearIssueCache)
-  const linearSearchCache = useAppStore((s) => s.linearSearchCache)
+  const appliedWorkItemsCacheQuery = useMemo(
+    () => stripRepoQualifiers(appliedTaskSearch.trim()),
+    [appliedTaskSearch]
+  )
+  const selectedWorkItemsCacheEntries = useAppStore(
+    useShallow((s) =>
+      selectTaskPageWorkItemsCacheEntries(
+        s.workItemsCache,
+        selectedRepos,
+        PER_REPO_FETCH_LIMIT,
+        appliedWorkItemsCacheQuery
+      )
+    )
+  )
 
   // Why: derive the dialog's work item from the store cache so it reflects
   // optimistic patches (e.g. table-cell status toggle). Falls back to the
@@ -846,20 +849,10 @@ export default function TaskPage(): React.JSX.Element {
   // Disambiguates by repoId so issues with the same number fetched from
   // multiple repos (e.g. fork + non-fork, both routed through the same
   // upstream) resolve to the clicked row's repo, not the first one scanned.
-  const dialogWorkItem = useMemo(() => {
-    if (!dialogWorkItemKey) {
-      return null
-    }
-    for (const entry of Object.values(workItemsCache)) {
-      const found = entry?.data?.find(
-        (wi) => wi.id === dialogWorkItemKey.id && wi.repoId === dialogWorkItemKey.repoId
-      )
-      if (found) {
-        return found
-      }
-    }
-    return dialogWorkItemFallback
-  }, [dialogWorkItemKey, workItemsCache, dialogWorkItemFallback])
+  const cachedDialogWorkItem = useAppStore((s) =>
+    findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
+  )
+  const dialogWorkItem = dialogWorkItemKey ? (cachedDialogWorkItem ?? dialogWorkItemFallback) : null
 
   const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
     setDialogWorkItemKey(item ? { id: item.id, repoId: item.repoId } : null)
@@ -870,33 +863,15 @@ export default function TaskPage(): React.JSX.Element {
   // selected repo whose issue-source and PR-source slugs differ, and surface
   // a per-repo retryable banner when the issue-side fetch failed. Both derive
   // from the same `workItemsCache` entry the list already consumes, so no
-  // extra IPC round-trip is needed. The `RepoSourceState` shape itself lives
-  // at module scope so the type isn't re-parsed per render.
-  // Why: subscribe to `workItemsCache` directly (already bound above) and
-  // memoize the derived per-repo view. The alternative —
-  // `useAppStore(useShallow(...))` — doesn't help here because the selector
-  // would allocate a wrapper object per repo and zustand's shallow compare
-  // uses `Object.is` on each element, so every cache mutation would still
-  // force a re-render. Memoizing over stable inputs re-derives only when the
-  // cache, selection, or query changes. The dialog's `WorkItemIssueSourceIndicator`
-  // subscribes to a single `getWorkItemsAnySourcesForRepo(repoPath, limit)`
-  // selector that returns a stable `WorkItemsCacheSources | null` reference,
-  // so it doesn't need `useShallow` — unrelated cache writes don't force a
-  // re-render because the selector result's reference identity is preserved
-  // between unchanged entries.
-  const perRepoSourceState = useMemo<RepoSourceState[]>(() => {
-    const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
-    return selectedRepos.map((r) => {
-      const key = workItemsCacheKey(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
-      const entry = workItemsCache[key]
-      return {
-        repoId: r.id,
-        repoPath: r.path,
-        sources: entry?.sources ?? null,
-        error: entry?.error ?? null
-      }
-    })
-  }, [selectedRepos, appliedTaskSearch, workItemsCache])
+  // extra IPC round-trip is needed. The `TaskPageRepoSourceState` shape lives
+  // with the cache selectors so the render and guard code share one contract.
+  // Why: subscribe only to the cache entries this page can render. The selector
+  // returns entry references so Zustand shallow equality filters unrelated
+  // cache writes before they re-render the full tasks page.
+  const perRepoSourceState = useMemo<TaskPageRepoSourceState[]>(
+    () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
+    [selectedRepos, selectedWorkItemsCacheEntries]
+  )
 
   // Why: surface a one-time toast per session per repo when the user's
   // preferred `'upstream'` is no longer configured and we fell back to
@@ -908,10 +883,8 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSource !== 'github') {
       return
     }
-    const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
-    for (const r of selectedRepos) {
-      const key = workItemsCacheKey(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
-      const entry = workItemsCache[key]
+    for (const [index, r] of selectedRepos.entries()) {
+      const entry = selectedWorkItemsCacheEntries[index]
       if (!entry?.issueSourceFellBack) {
         continue
       }
@@ -926,7 +899,7 @@ export default function TaskPage(): React.JSX.Element {
       )
       fellBackToastedRef.current.add(r.id)
     }
-  }, [selectedRepos, appliedTaskSearch, workItemsCache, taskSource])
+  }, [selectedRepos, selectedWorkItemsCacheEntries, taskSource])
 
   // Why: on a partial-failure retry the cache still holds successful-side
   // data, so `tasksLoading` (which is gated on `anyUncached`) never flips
@@ -979,27 +952,14 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   // Why: the Linear table keeps its own fetched array, while cell edits patch
-  // the shared caches. Deriving the drawer item from those caches prevents a
-  // stale row snapshot from mounting in the drawer after status/priority edits.
-  const drawerLinearIssue = useMemo(() => {
-    if (!drawerLinearIssueId) {
-      return null
-    }
-
-    const cachedIssue = linearIssueCache[drawerLinearIssueId]?.data
-    if (cachedIssue) {
-      return cachedIssue
-    }
-
-    for (const entry of Object.values(linearSearchCache)) {
-      const found = entry?.data?.find((issue) => issue.id === drawerLinearIssueId)
-      if (found) {
-        return found
-      }
-    }
-
-    return drawerLinearIssueFallback
-  }, [drawerLinearIssueId, linearIssueCache, linearSearchCache, drawerLinearIssueFallback])
+  // the shared caches. The selector returns null while the drawer is closed, so
+  // unrelated Linear cache writes don't re-render the whole Tasks page.
+  const cachedDrawerLinearIssue = useAppStore((s) =>
+    findTaskPageLinearDrawerIssue(s.linearIssueCache, s.linearSearchCache, drawerLinearIssueId)
+  )
+  const drawerLinearIssue = drawerLinearIssueId
+    ? (cachedDrawerLinearIssue ?? drawerLinearIssueFallback)
+    : null
 
   const setDrawerLinearIssue = useCallback((issue: LinearIssue | null) => {
     setDrawerLinearIssueId(issue?.id ?? null)
