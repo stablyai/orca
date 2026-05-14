@@ -68,7 +68,7 @@ function makeSession(
     cols: 80,
     rows: 24,
     createdAt: 0,
-    protocolVersion: 4,
+    protocolVersion: 5,
     ...overrides
   }
 }
@@ -119,7 +119,7 @@ describe('pty:management IPC handlers', () => {
 
   describe('listSessions', () => {
     it('merges sessions across current + legacy adapters with protocolVersion', async () => {
-      const current = makeAdapter(4, [makeSession('new-1'), makeSession('new-2')])
+      const current = makeAdapter(5, [makeSession('new-1'), makeSession('new-2')])
       const legacy = makeAdapter(3, [makeSession('old-1', { protocolVersion: 3 })])
       const { registerDaemonManagementHandlers } = await importFresh()
       getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
@@ -132,8 +132,8 @@ describe('pty:management IPC handlers', () => {
 
       expect(result.sessions).toHaveLength(3)
       const byId = new Map(result.sessions.map((s) => [s.sessionId, s]))
-      expect(byId.get('new-1')?.protocolVersion).toBe(4)
-      expect(byId.get('new-2')?.protocolVersion).toBe(4)
+      expect(byId.get('new-1')?.protocolVersion).toBe(5)
+      expect(byId.get('new-2')?.protocolVersion).toBe(5)
       expect(byId.get('old-1')?.protocolVersion).toBe(3)
     })
 
@@ -152,7 +152,7 @@ describe('pty:management IPC handlers', () => {
     })
 
     it('tolerates a failing adapter by skipping its sessions', async () => {
-      const current = makeAdapter(4, [makeSession('new-1')])
+      const current = makeAdapter(5, [makeSession('new-1')])
       const legacy = makeAdapter(3, [])
       legacy.listSessions = vi.fn(async () => {
         throw new Error('legacy socket dead')
@@ -205,7 +205,7 @@ describe('pty:management IPC handlers', () => {
     it('fires one shutdown per initial session and polls until empty', async () => {
       const currentSessions = [makeSession('new-1'), makeSession('new-2')]
       const legacySessions = [makeSession('old-1', { protocolVersion: 3 })]
-      const current = makeAdapter(4, [])
+      const current = makeAdapter(5, [])
       const legacy = makeAdapter(3, [])
       // Why: shutdown removes the session from the adapter's backing list so
       // the next poll observes the shrinking set — mirrors a daemon that
@@ -246,7 +246,7 @@ describe('pty:management IPC handlers', () => {
 
     it('reports remainingCount when sessions refuse to die after the poll window', async () => {
       const sessions = [makeSession('stuck')]
-      const current = makeAdapter(4, [])
+      const current = makeAdapter(5, [])
       current.listSessions = vi.fn(async () =>
         sessions.map(({ protocolVersion: _pv, ...rest }) => rest)
       )
@@ -275,7 +275,7 @@ describe('pty:management IPC handlers', () => {
       // "refused to exit" count — the user asked to kill what was alive
       // when the button was pressed, not to chase new spawns.
       const liveSessions = [makeSession('a'), makeSession('b')]
-      const current = makeAdapter(4, [])
+      const current = makeAdapter(5, [])
       let pollCalls = 0
       current.listSessions = vi.fn(async () => {
         pollCalls += 1
@@ -301,7 +301,7 @@ describe('pty:management IPC handlers', () => {
 
     it('swallows per-session shutdown rejections without stopping the batch', async () => {
       const sessionsList = [makeSession('a'), makeSession('b')]
-      const current = makeAdapter(4, [])
+      const current = makeAdapter(5, [])
       current.listSessions = vi.fn(async () =>
         sessionsList.map(({ protocolVersion: _pv, ...rest }) => rest)
       )
@@ -336,7 +336,7 @@ describe('pty:management IPC handlers', () => {
 
   describe('killOne', () => {
     it('routes to the adapter whose protocolVersion owns the session', async () => {
-      const current = makeAdapter(4, [makeSession('new-1')])
+      const current = makeAdapter(5, [makeSession('new-1')])
       const legacy = makeAdapter(3, [makeSession('old-1', { protocolVersion: 3 })])
       const { registerDaemonManagementHandlers } = await importFresh()
       getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
@@ -353,7 +353,7 @@ describe('pty:management IPC handlers', () => {
     })
 
     it('returns success=false for unknown sessionId', async () => {
-      const current = makeAdapter(4, [makeSession('new-1')])
+      const current = makeAdapter(5, [makeSession('new-1')])
       const { registerDaemonManagementHandlers } = await importFresh()
       getDaemonProviderMock.mockReturnValue(await makeRouter(current))
       registerDaemonManagementHandlers()
@@ -368,7 +368,7 @@ describe('pty:management IPC handlers', () => {
     })
 
     it('rejects empty/missing sessionId without hitting the adapter', async () => {
-      const current = makeAdapter(4, [makeSession('new-1')])
+      const current = makeAdapter(5, [makeSession('new-1')])
       const { registerDaemonManagementHandlers } = await importFresh()
       getDaemonProviderMock.mockReturnValue(await makeRouter(current))
       registerDaemonManagementHandlers()

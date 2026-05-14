@@ -46,6 +46,7 @@ function createPane(): ManagedPaneInternal {
     gpuRenderingEnabled: true,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    hasComplexScriptOutput: false,
     fitAddon: {
       fit: vi.fn(),
       proposeDimensions: vi.fn(() => ({ cols: 80, rows: 24 }))

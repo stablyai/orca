@@ -2,7 +2,7 @@
 // It owns the handshake state machine and transparent encrypt/decrypt so the RPC
 // handler only sees plaintext JSON, identical to the Unix socket path.
 import type { WebSocket } from 'ws'
-import { deriveSharedKey, encrypt, decrypt } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, decrypt, encryptBytes, decryptBytes } from './e2ee-crypto'
 
 type ChannelState = 'awaiting_hello' | 'awaiting_auth' | 'ready'
 
@@ -40,7 +40,11 @@ export class E2EEChannel {
   // can forward decrypted messages. Kept as a callback rather than constructor
   // param because the handler needs the encrypt function for replies.
   private messageHandler:
-    | ((plaintext: string, encryptedReply: (response: string) => void) => void)
+    | ((
+        plaintext: string,
+        encryptedReply: (response: string) => void,
+        encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => void
+      ) => void)
     | null = null
 
   deviceToken: string | null = null
@@ -58,13 +62,21 @@ export class E2EEChannel {
   }
 
   onMessage(
-    handler: (plaintext: string, encryptedReply: (response: string) => void) => void
+    handler: (
+      plaintext: string,
+      encryptedReply: (response: string) => void,
+      encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => void
+    ) => void
   ): void {
     this.messageHandler = handler
   }
 
-  handleRawMessage(raw: string): void {
+  handleRawMessage(raw: string | Uint8Array<ArrayBufferLike>): void {
     if (this.state === 'awaiting_hello') {
+      if (typeof raw !== 'string') {
+        this.onError(4001, 'Invalid handshake message')
+        return
+      }
       this.handleHello(raw)
       return
     }
@@ -73,12 +85,17 @@ export class E2EEChannel {
       return
     }
 
+    if (typeof raw !== 'string') {
+      const plaintextBytes = decryptBytes(raw, this.sharedKey)
+      if (plaintextBytes === null) {
+        this.trackDecryptFailure()
+      }
+      return
+    }
+
     const plaintext = decrypt(raw, this.sharedKey)
     if (plaintext === null) {
-      this.consecutiveFailures++
-      if (this.consecutiveFailures >= MAX_CONSECUTIVE_DECRYPT_FAILURES) {
-        this.onError(4003, 'Too many decryption failures')
-      }
+      this.trackDecryptFailure()
       return
     }
 
@@ -100,7 +117,20 @@ export class E2EEChannel {
       }
       this.ws.send(encrypt(response, this.sharedKey))
     }
-    this.messageHandler?.(plaintext, encryptedReply)
+    const encryptedBinaryReply = (response: Uint8Array<ArrayBufferLike>) => {
+      if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
+        return
+      }
+      this.ws.send(Buffer.from(encryptBytes(response, this.sharedKey)), { binary: true })
+    }
+    this.messageHandler?.(plaintext, encryptedReply, encryptedBinaryReply)
+  }
+
+  private trackDecryptFailure(): void {
+    this.consecutiveFailures++
+    if (this.consecutiveFailures >= MAX_CONSECUTIVE_DECRYPT_FAILURES) {
+      this.onError(4003, 'Too many decryption failures')
+    }
   }
 
   private handleHello(raw: string): void {

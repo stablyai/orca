@@ -3,6 +3,19 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import type { Worktree } from '../../../../shared/types'
+
+// Why: a failed delete almost always means the worktree still has changes
+// that need attention (uncommitted work, unpushed commits, conflicts). The
+// "View" affordance should surface those changes directly, not just bring
+// the worktree into focus, so the user lands on the diff panel where the
+// blocking work is visible.
+function viewWorktreeDiff(worktreeId: string): void {
+  activateAndRevealWorktree(worktreeId)
+  const state = useAppStore.getState()
+  state.setRightSidebarTab('source-control')
+  state.setRightSidebarOpen(true)
+}
 
 /**
  * Shared delete-with-toast flow used by both DeleteWorktreeDialog (confirm
@@ -34,7 +47,7 @@ export function runWorktreeDeleteWithToast(worktreeId: string, worktreeName: str
         duration: 10000,
         cancel: {
           label: 'View',
-          onClick: () => activateAndRevealWorktree(worktreeId)
+          onClick: () => viewWorktreeDiff(worktreeId)
         },
         action: canForceDelete
           ? {
@@ -49,7 +62,7 @@ export function runWorktreeDeleteWithToast(worktreeId: string, worktreeName: str
                         description: forceResult.error,
                         action: {
                           label: 'View',
-                          onClick: () => activateAndRevealWorktree(worktreeId)
+                          onClick: () => viewWorktreeDiff(worktreeId)
                         }
                       })
                     }
@@ -59,7 +72,7 @@ export function runWorktreeDeleteWithToast(worktreeId: string, worktreeName: str
                       description: err instanceof Error ? err.message : String(err),
                       action: {
                         label: 'View',
-                        onClick: () => activateAndRevealWorktree(worktreeId)
+                        onClick: () => viewWorktreeDiff(worktreeId)
                       }
                     })
                   })
@@ -113,4 +126,35 @@ export function runWorktreeDelete(worktreeId: string): void {
     return
   }
   state.openModal('delete-worktree', { worktreeId })
+}
+
+export function runWorktreeBatchDelete(worktreeIds: readonly string[]): void {
+  const state = useAppStore.getState()
+  const worktreeMap = getWorktreeMapFromState(state)
+  const targets = worktreeIds
+    .map((id) => worktreeMap.get(id) ?? null)
+    .filter((worktree): worktree is Worktree => worktree != null && !worktree.isMainWorktree)
+
+  if (targets.length === 0) {
+    return
+  }
+
+  for (const target of targets) {
+    state.clearWorktreeDeleteState(target.id)
+  }
+
+  const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
+  if (skipConfirm) {
+    for (const target of targets) {
+      runWorktreeDeleteWithToast(target.id, target.displayName)
+    }
+    return
+  }
+
+  if (targets.length === 1) {
+    state.openModal('delete-worktree', { worktreeId: targets[0].id })
+    return
+  }
+
+  state.openModal('delete-worktree', { worktreeIds: targets.map((target) => target.id) })
 }

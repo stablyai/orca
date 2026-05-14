@@ -37,6 +37,7 @@ import {
   type RepoSlug
 } from '@/lib/github-links'
 import { cn } from '@/lib/utils'
+import { LinearIcon } from '@/components/icons/LinearIcon'
 import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
 
 type SmartNameMode = 'smart' | 'github' | 'branches' | 'linear' | 'text'
@@ -894,11 +895,7 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  return (
-    <span className="size-3.5 shrink-0 rounded-sm bg-muted text-[8px] font-semibold leading-3.5 text-muted-foreground">
-      L
-    </span>
-  )
+  return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
 function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }): React.JSX.Element {
@@ -911,11 +908,7 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
   if (kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  return (
-    <span className="size-3.5 shrink-0 rounded-sm bg-muted text-center text-[8px] font-semibold leading-3.5 text-muted-foreground">
-      L
-    </span>
-  )
+  return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
 function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {

@@ -12,6 +12,7 @@ import {
   activateEditorFile,
   toggleTerminalPaneExpand
 } from './terminal-tab-actions'
+import { shouldRepairActiveTerminalTab } from './active-terminal-repair'
 
 export type UnifiedTerminalItem = {
   type: 'terminal' | 'editor'
@@ -114,14 +115,11 @@ export function useTerminalTabs() {
   )
 
   useEffect(() => {
-    if (tabs.length === 0) {
-      return
-    }
-    if (activeTabId && tabs.some((tab) => tab.id === activeTabId)) {
+    if (!shouldRepairActiveTerminalTab({ activeTabType, activeTabId, tabs })) {
       return
     }
     setActiveTab(tabs[0].id)
-  }, [activeTabId, setActiveTab, tabs])
+  }, [activeTabId, activeTabType, setActiveTab, tabs])
 
   useEffect(() => {
     if (!workspaceSessionReady) {

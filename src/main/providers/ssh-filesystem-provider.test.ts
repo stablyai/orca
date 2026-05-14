@@ -5,17 +5,43 @@ type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
   notify: ReturnType<typeof vi.fn>
   onNotification: ReturnType<typeof vi.fn>
+  onNotificationByMethod: ReturnType<typeof vi.fn>
+  onDispose: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   isDisposed: ReturnType<typeof vi.fn>
+  _methodHandlers: Map<string, Set<(params: Record<string, unknown>) => void>>
+  _emitMethod: (method: string, params: Record<string, unknown>) => void
 }
 
 function createMockMux(): MockMultiplexer {
+  const methodHandlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
   return {
     request: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
     onNotification: vi.fn(),
+    onNotificationByMethod: vi.fn(
+      (method: string, handler: (params: Record<string, unknown>) => void) => {
+        let set = methodHandlers.get(method)
+        if (!set) {
+          set = new Set()
+          methodHandlers.set(method, set)
+        }
+        set.add(handler)
+        return () => set!.delete(handler)
+      }
+    ),
+    onDispose: vi.fn(() => () => {}),
     dispose: vi.fn(),
-    isDisposed: vi.fn().mockReturnValue(false)
+    isDisposed: vi.fn().mockReturnValue(false),
+    _methodHandlers: methodHandlers,
+    _emitMethod: (method, params) => {
+      const set = methodHandlers.get(method)
+      if (set) {
+        for (const handler of Array.from(set)) {
+          handler(params)
+        }
+      }
+    }
   }
 }
 
@@ -47,13 +73,10 @@ describe('SshFilesystemProvider', () => {
   })
 
   describe('readFile', () => {
-    it('sends fs.readFile request', async () => {
-      const fileResult = { content: 'hello world', isBinary: false }
-      mux.request.mockResolvedValue(fileResult)
-
-      const result = await provider.readFile('/home/user/file.txt')
-      expect(mux.request).toHaveBeenCalledWith('fs.readFile', { filePath: '/home/user/file.txt' })
-      expect(result).toEqual(fileResult)
+    it('short-circuits on empty:true metadata without subscribing to chunks', async () => {
+      mux.request.mockResolvedValue({ totalSize: 0, isBinary: false, empty: true })
+      const result = await provider.readFile('/home/user/empty.txt')
+      expect(result).toEqual({ content: '', isBinary: false })
     })
   })
 

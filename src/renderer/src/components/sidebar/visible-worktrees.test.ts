@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
@@ -42,42 +43,54 @@ function makeWorktree(id: string, repoId = 'repo1'): Worktree {
   }
 }
 
+function makeRepo(id: string, displayName: string, badgeColor: string): Repo {
+  return { id, path: `/${id}`, displayName, badgeColor, addedAt: 0 }
+}
+
 const repoMap = new Map<string, Repo>([
-  [
-    'repo1',
-    {
-      id: 'repo1',
-      path: '/repo1',
-      displayName: 'Repo 1',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-  ],
-  [
-    'repo2',
-    {
-      id: 'repo2',
-      path: '/repo2',
-      displayName: 'Repo 2',
-      badgeColor: '#111',
-      addedAt: 0
-    }
-  ]
+  ['repo1', makeRepo('repo1', 'Repo 1', '#000')],
+  ['repo2', makeRepo('repo2', 'Repo 2', '#111')]
 ])
+
+type VisibleOptions = Parameters<typeof computeVisibleWorktreeIds>[2]
+
+function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions {
+  return {
+    filterRepoIds: [],
+    showActiveOnly: false,
+    tabsByWorktree: {},
+    ptyIdsByTabId: {},
+    browserTabsByWorktree: {},
+    activeWorktreeId: null,
+    hideDefaultBranchWorkspace: false,
+    repoMap,
+    ...overrides
+  }
+}
+
+type FilterState = Parameters<typeof sidebarHasActiveFilters>[0]
+
+function filterState(overrides: Partial<FilterState> = {}): FilterState {
+  return {
+    showActiveOnly: false,
+    filterRepoIds: [],
+    hideDefaultBranchWorkspace: false,
+    ...overrides
+  }
+}
 
 describe('computeVisibleWorktreeIds', () => {
   it('treats browser-tab worktrees as active for the active-only filter', () => {
     const wt = makeWorktree('wt-browser')
 
-    const result = computeVisibleWorktreeIds({ repo1: [wt] }, [wt.id], {
-      filterRepoIds: [],
-      showActiveOnly: true,
-      tabsByWorktree: {},
-      browserTabsByWorktree: { [wt.id]: [{ id: 'browser-1' }] },
-      activeWorktreeId: null,
-      hideDefaultBranchWorkspace: false,
-      repoMap
-    })
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showActiveOnly: true,
+        browserTabsByWorktree: { [wt.id]: [{ id: 'browser-1' }] }
+      })
+    )
 
     expect(result).toEqual([wt.id])
   })
@@ -85,17 +98,33 @@ describe('computeVisibleWorktreeIds', () => {
   it('keeps the currently active worktree visible even without PTYs', () => {
     const wt = makeWorktree('wt-active')
 
-    const result = computeVisibleWorktreeIds({ repo1: [wt] }, [wt.id], {
-      filterRepoIds: [],
-      showActiveOnly: true,
-      tabsByWorktree: {},
-      browserTabsByWorktree: {},
-      activeWorktreeId: wt.id,
-      hideDefaultBranchWorkspace: false,
-      repoMap
-    })
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showActiveOnly: true,
+        activeWorktreeId: wt.id
+      })
+    )
 
     expect(result).toEqual([wt.id])
+  })
+
+  it('does not treat slept wake-hint tabs as active terminals', () => {
+    const wt = makeWorktree('wt-slept')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showActiveOnly: true,
+        tabsByWorktree: { [wt.id]: [makeTab('tab-slept', wt.id, 'wake-hint-session')] },
+        // Sleep preserves tab.ptyId as the wake hint but clears live PTY ids.
+        ptyIdsByTabId: { 'tab-slept': [] }
+      })
+    )
+
+    expect(result).toEqual([])
   })
 
   it('hides branch-backed main worktrees when default branch workspaces are hidden', () => {
@@ -103,15 +132,14 @@ describe('computeVisibleWorktreeIds', () => {
     const feature = makeWorktree('feature')
     main.isMainWorktree = true
 
-    const result = computeVisibleWorktreeIds({ repo1: [main, feature] }, [main.id, feature.id], {
-      filterRepoIds: [],
-      showActiveOnly: false,
-      tabsByWorktree: {},
-      browserTabsByWorktree: {},
-      activeWorktreeId: main.id,
-      hideDefaultBranchWorkspace: true,
-      repoMap
-    })
+    const result = computeVisibleWorktreeIds(
+      { repo1: [main, feature] },
+      [main.id, feature.id],
+      visibleOptions({
+        activeWorktreeId: main.id,
+        hideDefaultBranchWorkspace: true
+      })
+    )
 
     expect(result).toEqual([feature.id])
   })
@@ -121,15 +149,11 @@ describe('computeVisibleWorktreeIds', () => {
     folder.isMainWorktree = true
     folder.branch = ''
 
-    const result = computeVisibleWorktreeIds({ repo1: [folder] }, [folder.id], {
-      filterRepoIds: [],
-      showActiveOnly: false,
-      tabsByWorktree: {},
-      browserTabsByWorktree: {},
-      activeWorktreeId: null,
-      hideDefaultBranchWorkspace: true,
-      repoMap
-    })
+    const result = computeVisibleWorktreeIds(
+      { repo1: [folder] },
+      [folder.id],
+      visibleOptions({ hideDefaultBranchWorkspace: true })
+    )
 
     expect(result).toEqual([folder.id])
   })
@@ -145,15 +169,7 @@ describe('computeVisibleWorktreeIds', () => {
     const result = computeVisibleWorktreeIds(
       { repo1: [main1, feature1], repo2: [main2, feature2] },
       [main1.id, feature1.id, main2.id, feature2.id],
-      {
-        filterRepoIds: [],
-        showActiveOnly: false,
-        tabsByWorktree: {},
-        browserTabsByWorktree: {},
-        activeWorktreeId: null,
-        hideDefaultBranchWorkspace: true,
-        repoMap
-      }
+      visibleOptions({ hideDefaultBranchWorkspace: true })
     )
 
     expect(result).toEqual([feature1.id, feature2.id])
@@ -168,15 +184,17 @@ describe('computeVisibleWorktreeIds', () => {
     // main doesn't slip back in via the "active worktree is always visible"
     // exception that showActiveOnly grants. Feature stays because it has a
     // live PTY.
-    const result = computeVisibleWorktreeIds({ repo1: [main, feature] }, [main.id, feature.id], {
-      filterRepoIds: [],
-      showActiveOnly: true,
-      tabsByWorktree: { [feature.id]: [makeTab('t1', feature.id, 'p1')] },
-      browserTabsByWorktree: {},
-      activeWorktreeId: main.id,
-      hideDefaultBranchWorkspace: true,
-      repoMap
-    })
+    const result = computeVisibleWorktreeIds(
+      { repo1: [main, feature] },
+      [main.id, feature.id],
+      visibleOptions({
+        showActiveOnly: true,
+        tabsByWorktree: { [feature.id]: [makeTab('t1', feature.id, 'p1')] },
+        ptyIdsByTabId: { t1: ['p1'] },
+        activeWorktreeId: main.id,
+        hideDefaultBranchWorkspace: true
+      })
+    )
 
     expect(result).toEqual([feature.id])
   })
@@ -197,15 +215,10 @@ describe('computeVisibleWorktreeIds', () => {
     const result = computeVisibleWorktreeIds(
       { repo1: [main1, feature1], repo2: [main2, feature2] },
       [main1.id, feature1.id, main2.id, feature2.id],
-      {
+      visibleOptions({
         filterRepoIds: ['repo2'],
-        showActiveOnly: false,
-        tabsByWorktree: {},
-        browserTabsByWorktree: {},
-        activeWorktreeId: null,
-        hideDefaultBranchWorkspace: true,
-        repoMap
-      }
+        hideDefaultBranchWorkspace: true
+      })
     )
 
     expect(result).toEqual([feature2.id])
@@ -234,58 +247,28 @@ describe('isDefaultBranchWorkspace', () => {
 
 describe('sidebarHasActiveFilters', () => {
   it('returns false when no filters are active', () => {
-    expect(
-      sidebarHasActiveFilters({
-        showActiveOnly: false,
-        filterRepoIds: [],
-        hideDefaultBranchWorkspace: false
-      })
-    ).toBe(false)
+    expect(sidebarHasActiveFilters(filterState())).toBe(false)
   })
 
   it('returns true when only hideDefaultBranchWorkspace is active', () => {
     // Why: regression guard for the empty-sidebar escape hatch. If hide is
     // omitted from the filter union, a user whose only worktree is the
     // default-branch row sees "No worktrees found" with no way back.
-    expect(
-      sidebarHasActiveFilters({
-        showActiveOnly: false,
-        filterRepoIds: [],
-        hideDefaultBranchWorkspace: true
-      })
-    ).toBe(true)
+    expect(sidebarHasActiveFilters(filterState({ hideDefaultBranchWorkspace: true }))).toBe(true)
   })
 
   it('returns true when only showActiveOnly is active', () => {
-    expect(
-      sidebarHasActiveFilters({
-        showActiveOnly: true,
-        filterRepoIds: [],
-        hideDefaultBranchWorkspace: false
-      })
-    ).toBe(true)
+    expect(sidebarHasActiveFilters(filterState({ showActiveOnly: true }))).toBe(true)
   })
 
   it('returns true when only filterRepoIds is non-empty', () => {
-    expect(
-      sidebarHasActiveFilters({
-        showActiveOnly: false,
-        filterRepoIds: ['repo1'],
-        hideDefaultBranchWorkspace: false
-      })
-    ).toBe(true)
+    expect(sidebarHasActiveFilters(filterState({ filterRepoIds: ['repo1'] }))).toBe(true)
   })
 })
 
 describe('computeClearFilterActions', () => {
   it('returns no-op actions when nothing is set', () => {
-    expect(
-      computeClearFilterActions({
-        showActiveOnly: false,
-        filterRepoIds: [],
-        hideDefaultBranchWorkspace: false
-      })
-    ).toEqual({
+    expect(computeClearFilterActions(filterState())).toEqual({
       resetShowActiveOnly: false,
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: false
@@ -296,13 +279,7 @@ describe('computeClearFilterActions', () => {
     // Why: verifies the empty-sidebar escape hatch actually clears the hide
     // flag. A regression here would leave users stuck on "No worktrees found"
     // because the only active filter would never clear.
-    expect(
-      computeClearFilterActions({
-        showActiveOnly: false,
-        filterRepoIds: [],
-        hideDefaultBranchWorkspace: true
-      })
-    ).toEqual({
+    expect(computeClearFilterActions(filterState({ hideDefaultBranchWorkspace: true }))).toEqual({
       resetShowActiveOnly: false,
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: true
@@ -312,11 +289,12 @@ describe('computeClearFilterActions', () => {
   it('does not flag hideDefaultBranchWorkspace when it is already off', () => {
     // Why: avoids issuing a pointless IPC write on every Clear Filters click
     // in the common case where hide was never on.
-    const actions = computeClearFilterActions({
-      showActiveOnly: true,
-      filterRepoIds: ['repo1'],
-      hideDefaultBranchWorkspace: false
-    })
+    const actions = computeClearFilterActions(
+      filterState({
+        showActiveOnly: true,
+        filterRepoIds: ['repo1']
+      })
+    )
     expect(actions.resetHideDefaultBranchWorkspace).toBe(false)
     expect(actions.resetShowActiveOnly).toBe(true)
     expect(actions.resetFilterRepoIds).toBe(true)
@@ -324,11 +302,13 @@ describe('computeClearFilterActions', () => {
 
   it('flags every active filter simultaneously', () => {
     expect(
-      computeClearFilterActions({
-        showActiveOnly: true,
-        filterRepoIds: ['repo1', 'repo2'],
-        hideDefaultBranchWorkspace: true
-      })
+      computeClearFilterActions(
+        filterState({
+          showActiveOnly: true,
+          filterRepoIds: ['repo1', 'repo2'],
+          hideDefaultBranchWorkspace: true
+        })
+      )
     ).toEqual({
       resetShowActiveOnly: true,
       resetFilterRepoIds: true,

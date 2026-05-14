@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import type { SshTarget } from '../../../../shared/ssh-types'
+import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import {
@@ -52,6 +53,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
   const [pendingRemove, setPendingRemove] = useState<{ id: string; label: string } | null>(null)
+  const [pendingTerminate, setPendingTerminate] = useState<{ id: string; label: string } | null>(
+    null
+  )
 
   const setSshTargetLabels = useAppStore((s) => s.setSshTargetLabels)
 
@@ -130,15 +134,26 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     }
   }
 
+  const terminateSessionsWithReconnect = async (targetId: string): Promise<void> => {
+    try {
+      await window.api.ssh.terminateSessions({ targetId })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!message.includes(SSH_TERMINATE_RECONNECT_REQUIRED)) {
+        throw err
+      }
+      // Why: disconnect is now non-destructive, so preserved remote PTYs may
+      // require a fresh relay attachment before they can be explicitly killed.
+      await window.api.ssh.connect({ targetId })
+      await window.api.ssh.terminateSessions({ targetId })
+    }
+  }
+
   const handleRemove = async (id: string): Promise<void> => {
     try {
-      // Why: disconnect any non-disconnected connection, including transitional
-      // states (connecting, reconnecting, deploying-relay). Leaving these alive
-      // would orphan SSH connections with providers registered for a removed target.
-      const state = sshConnectionStates.get(id)
-      if (state && state.status !== 'disconnected') {
-        await window.api.ssh.disconnect({ targetId: id })
-      }
+      // Why: removing a target is destructive even after non-destructive
+      // disconnect, when remote PTYs can still be alive in the grace window.
+      await terminateSessionsWithReconnect(id)
       await window.api.ssh.removeTarget({ id })
       toast.success('Target removed')
       await loadTargets()
@@ -176,6 +191,15 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       await window.api.ssh.disconnect({ targetId })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Disconnect failed')
+    }
+  }
+
+  const handleTerminateSessions = async (targetId: string): Promise<void> => {
+    try {
+      await terminateSessionsWithReconnect(targetId)
+      toast.success('Remote sessions terminated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to terminate sessions')
     }
   }
 
@@ -272,6 +296,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
               testing={testingIds.has(target.id)}
               onConnect={(id) => void handleConnect(id)}
               onDisconnect={(id) => void handleDisconnect(id)}
+              onTerminateSessions={(id) => setPendingTerminate({ id, label: target.label })}
               onTest={(id) => void handleTest(id)}
               onEdit={handleEdit}
               onRemove={(id) => setPendingRemove({ id, label: target.label })}
@@ -304,7 +329,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
           <DialogHeader>
             <DialogTitle className="text-sm">Remove SSH Target</DialogTitle>
             <DialogDescription className="text-xs">
-              This will remove the target and disconnect any active sessions.
+              This will remove the target and terminate any active remote sessions.
             </DialogDescription>
           </DialogHeader>
 
@@ -328,6 +353,48 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
               }}
             >
               Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Terminate confirmation dialog */}
+      <Dialog
+        open={!!pendingTerminate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingTerminate(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-sm">Terminate Remote Sessions</DialogTitle>
+            <DialogDescription className="text-xs">
+              This will kill active remote terminals for this SSH target.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingTerminate ? (
+            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
+              <div className="break-all text-muted-foreground">{pendingTerminate.label}</div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingTerminate(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (pendingTerminate) {
+                  void handleTerminateSessions(pendingTerminate.id)
+                  setPendingTerminate(null)
+                }
+              }}
+            >
+              Terminate
             </Button>
           </DialogFooter>
         </DialogContent>

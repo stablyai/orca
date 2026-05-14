@@ -66,6 +66,45 @@ export async function getTerminalContent(page: Page, charLimit = 4000): Promise<
   )
 }
 
+export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Promise<string> {
+  await expect
+    .poll(
+      async () => {
+        const tabId = await resolveActiveTabId(page)
+        if (!tabId) {
+          return null
+        }
+
+        return page.evaluate((tabId) => {
+          const manager = window.__paneManagers?.get(tabId)
+          const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+          return activePane?.container?.dataset?.ptyId ?? null
+        }, tabId)
+      },
+      {
+        timeout: timeoutMs,
+        message: 'Active terminal pane did not receive a PTY binding'
+      }
+    )
+    .not.toBeNull()
+
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    throw new Error('waitForActivePanePtyId: no active terminal tab')
+  }
+
+  const ptyId = await page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    return activePane?.container?.dataset?.ptyId ?? null
+  }, tabId)
+
+  if (!ptyId) {
+    throw new Error('waitForActivePanePtyId: active pane has no PTY binding')
+  }
+  return ptyId
+}
+
 // Why: PTY IDs are opaque integers not exposed in the DOM. Probe each
 // candidate with a unique marker and read back via SerializeAddon.
 export async function discoverActivePtyId(page: Page): Promise<string> {
@@ -102,8 +141,10 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
 
   await page.evaluate(
     ({ marker, candidateIds }) => {
-      for (const id of candidateIds) {
-        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${id}\r`)
+      // Why: daemon PTY IDs can contain path separators and shell metacharacters.
+      // Echo a numeric probe index, then map it back to the opaque ID in Node.
+      for (const [index, id] of candidateIds.entries()) {
+        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${index}\r`)
       }
     },
     { marker, candidateIds }
@@ -117,7 +158,8 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
         const markerRe = new RegExp(`${marker}_(\\d+)`, 'g')
         const matches = [...content.matchAll(markerRe)]
         if (matches.length > 0) {
-          foundPtyId = matches.at(-1)?.[1] ?? null
+          const index = Number(matches.at(-1)?.[1] ?? Number.NaN)
+          foundPtyId = Number.isInteger(index) ? (candidateIds[index] ?? null) : null
           return true
         }
         return false

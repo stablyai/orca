@@ -1,5 +1,6 @@
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
+export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
 
@@ -24,6 +25,11 @@ export type ToggleTerminalPaneExpandDetail = {
 export type FocusTerminalPaneDetail = {
   tabId: string
   paneId: number
+}
+
+export type PasteTerminalTextDetail = {
+  tabId: string
+  text: string
 }
 
 export type SplitTerminalPaneDetail = {

@@ -153,9 +153,16 @@ export function buildAgentDraftLaunchPlan(args: {
     // Why: the env var is set on the PTY-spawn env (not embedded in the
     // shell command) so the value never has to be shell-escaped and the
     // user doesn't see a `FOO='...'` prefix typed into their terminal.
+    // Append a clear-var command so the var is unset from the shell env
+    // once the agent exits — otherwise re-running the agent in the same
+    // terminal would inherit the stale value and re-prefill with the old URL.
+    const clearVar =
+      platform === 'win32'
+        ? `set "${config.draftPromptEnvVar}="`
+        : `unset ${config.draftPromptEnvVar}`
     return {
       agent,
-      launchCommand: baseCommand,
+      launchCommand: `${baseCommand}; ${clearVar}`,
       expectedProcess: config.expectedProcess,
       env: { [config.draftPromptEnvVar]: trimmed }
     }

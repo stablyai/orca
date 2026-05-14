@@ -23,6 +23,11 @@ const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
  */
 export async function getStatus(worktreePath: string): Promise<GitStatusResult> {
   const entries: GitStatusEntry[] = []
+  let head: string | undefined
+  let branch: string | undefined
+  let upstreamName: string | undefined
+  let upstreamAheadBehind: { ahead: number; behind: number } | null = null
+  let statusSucceeded = false
 
   // Why: detectConflictOperation (4 existsSync + readFile) and git status are
   // independent. Running them concurrently saves one round-trip of I/O latency.
@@ -32,7 +37,7 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
   // in double quotes. Without it, the parsed entry.path is unreadable in the
   // sidebar and downstream `git show :"docs/\346..."` lookups silently miss.
   const statusPromise = gitExecFileAsync(
-    ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--untracked-files=all'],
+    ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--branch', '--untracked-files=all'],
     { cwd: worktreePath }
   )
   const conflictOperation = await conflictPromise
@@ -44,6 +49,30 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
     // avoiding trailing \r characters in parsed paths.
     for (const line of stdout.split(/\r?\n/)) {
       if (!line) {
+        continue
+      }
+
+      if (line.startsWith('# branch.oid ')) {
+        head = line.slice('# branch.oid '.length).trim()
+        continue
+      }
+
+      if (line.startsWith('# branch.head ')) {
+        const branchHead = line.slice('# branch.head '.length).trim()
+        // Why: undefined (not '') for detached/empty so renderer's
+        // `identity.branch ?? worktree.branch` preserves the prior branch
+        // value when git can't report one, instead of overwriting it with ''.
+        branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
+        continue
+      }
+
+      if (line.startsWith('# branch.upstream ')) {
+        upstreamName = line.slice('# branch.upstream '.length).trim() || undefined
+        continue
+      }
+
+      if (line.startsWith('# branch.ab ')) {
+        upstreamAheadBehind = parseBranchAheadBehind(line)
         continue
       }
 
@@ -91,11 +120,40 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
         }
       }
     }
+    statusSucceeded = true
   } catch {
     // Not a git repo or git not available
   }
 
-  return { entries, conflictOperation }
+  return {
+    entries,
+    conflictOperation,
+    head,
+    branch,
+    ...(statusSucceeded
+      ? {
+          upstreamStatus: upstreamName
+            ? {
+                hasUpstream: true,
+                upstreamName,
+                ahead: upstreamAheadBehind?.ahead ?? 0,
+                behind: upstreamAheadBehind?.behind ?? 0
+              }
+            : { hasUpstream: false, ahead: 0, behind: 0 }
+        }
+      : {})
+  }
+}
+
+function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {
+  const match = line.match(/^# branch\.ab \+(\d+) -(\d+)$/)
+  if (!match) {
+    return null
+  }
+  return {
+    ahead: Number.parseInt(match[1], 10),
+    behind: Number.parseInt(match[2], 10)
+  }
 }
 
 function parseStatusChar(char: string): GitFileStatus {

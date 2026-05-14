@@ -1,11 +1,16 @@
 import type {
   CreateWorktreeResult,
   CreateSparseCheckoutRequest,
+  GitPushTarget,
   SetupDecision,
+  TuiAgent,
   WorkspaceCreateTelemetrySource,
   Worktree,
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
+export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
@@ -17,6 +22,8 @@ export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   activeWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
+  baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
+  remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
   /**
    * Monotonically increasing counter that signals when the sidebar sort order
    * should be recomputed.  Only bumped by events that represent meaningful
@@ -64,7 +71,12 @@ export type WorktreeSlice = {
     /** Telemetry-only: which renderer surface initiated this create. Optional
      *  so existing callers default to `unknown`; specify when the surface
      *  matters for the activation funnel. */
-    telemetrySource?: WorkspaceCreateTelemetrySource
+    telemetrySource?: WorkspaceCreateTelemetrySource,
+    displayName?: string,
+    linkedIssue?: number,
+    linkedPR?: number,
+    pushTarget?: GitPushTarget,
+    createdWithAgent?: TuiAgent
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -108,6 +120,12 @@ export type WorktreeSlice = {
    * one-shot at hydration time. See design §4.4.
    */
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
+  updateWorktreeGitIdentity: (
+    worktreeId: string,
+    identity: { head?: string; branch?: string }
+  ) => void
+  updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
+  updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void
 }
 
 export function findWorktreeById(
@@ -149,9 +167,4 @@ export function applyWorktreeUpdates(
   }
 
   return changed ? next : worktreesByRepo
-}
-
-export function getRepoIdFromWorktreeId(worktreeId: string): string {
-  const sepIdx = worktreeId.indexOf('::')
-  return sepIdx === -1 ? worktreeId : worktreeId.slice(0, sepIdx)
 }

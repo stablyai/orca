@@ -4,7 +4,7 @@ import type { AppState } from '../types'
 import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
-  CustomSidekick,
+  CustomPet,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
@@ -14,26 +14,23 @@ import type {
   UpdateStatus,
   WorktreeCardProperty
 } from '../../../../shared/types'
-import {
-  SIDEKICK_SIZE_DEFAULT,
-  SIDEKICK_SIZE_MAX,
-  SIDEKICK_SIZE_MIN
-} from '../../../../shared/types'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
+import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
-import { DEFAULT_SIDEKICK_ID, isBundledSidekickId } from '../../components/sidekick/sidekick-models'
-import { revokeCustomSidekickBlobUrl } from '../../components/sidekick/sidekick-blob-cache'
+import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
+import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 
-function clampSidekickSize(size: number): number {
+function clampPetSize(size: number): number {
   if (!Number.isFinite(size)) {
-    return SIDEKICK_SIZE_DEFAULT
+    return PET_SIZE_DEFAULT
   }
-  return Math.max(SIDEKICK_SIZE_MIN, Math.min(SIDEKICK_SIZE_MAX, Math.round(size)))
+  return Math.max(PET_SIZE_MIN, Math.min(PET_SIZE_MAX, Math.round(size)))
 }
 
 // Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
@@ -55,6 +52,7 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
       return 'is:open'
   }
 }
+
 // Why: persisted UI state pre-dated the consolidation of `memory` + `sessions`
 // into a single `resource-usage` entry. Rewrite legacy ids in place and
 // de-duplicate. We leave unknown ids alone so a downgrade→upgrade cycle
@@ -78,6 +76,12 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+// Why: bound disk growth for acknowledgedAgentsByPaneKey across hard quits —
+// in-session cleanup (agent-status.ts) prunes on pane lifecycle, but crash/
+// forced-kill paths leave entries pinned. Mirrors HYDRATE_MAX_AGE_MS in
+// src/main/agent-hooks/server.ts for parallel reasoning with the sibling
+// hook-status entries these acks pair with.
+const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
   'issues',
@@ -111,6 +115,34 @@ function sanitizePersistedSidebarWidth(width: unknown, fallback: number, maxWidt
     return fallback
   }
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
+}
+
+// Why: persisted JSON can be tampered with or carry legacy/corrupt shapes.
+// Reject arrays (typeof [] === 'object'), prototype-pollution keys, and
+// non-positive-finite values; drop entries past the TTL so hard-quit leaks
+// don't accumulate forever.
+function sanitizeAcknowledgedAgentsByPaneKey(value: unknown): Record<string, number> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const cutoff = Date.now() - HYDRATE_MAX_AGE_MS
+  const out: Record<string, number> = {}
+  for (const [key, ackAt] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof key !== 'string') {
+      continue
+    }
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue
+    }
+    if (typeof ackAt !== 'number' || !Number.isFinite(ackAt) || ackAt <= 0) {
+      continue
+    }
+    if (ackAt < cutoff) {
+      continue
+    }
+    out[key] = ackAt
+  }
+  return out
 }
 
 function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
@@ -156,20 +188,17 @@ export type UISlice = {
    *  the user clicks an agent row or its parent workspace card from the
    *  dashboard. A row is considered unvisited when no ack exists OR the
    *  agent's current stateStartedAt is newer than the last ack (i.e. the
-   *  agent has transitioned state since the user last saw it). Session-only
-   *  — restart resets everyone to unvisited, which is harmless since the
-   *  first visit after launch is a legitimate "need to see" moment. */
+   *  agent has transitioned state since the user last saw it). Persisted
+   *  via PersistedUIState because agent rows themselves now survive restart —
+   *  without this, rows you'd already visited come back bold on relaunch. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
-  /** Per-worktree collapsed state for the inline agents section shown inside
-   *  each workspace card. Session-only — a restart defaults back to expanded,
-   *  which matches the expected default (people rarely want agents hidden
-   *  across launches). */
-  collapsedInlineAgentsByWorktreeId: Record<string, boolean>
-  toggleInlineAgentsCollapsed: (worktreeId: string) => void
-  activeView: 'terminal' | 'settings' | 'tasks'
-  previousViewBeforeTasks: 'terminal' | 'settings'
-  previousViewBeforeSettings: 'terminal' | 'tasks'
+  unacknowledgeAgents: (paneKeys: string[]) => void
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
+  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations'
+  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations'
+  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -199,6 +228,12 @@ export type UISlice = {
   } | null
   openTaskPage: (data?: UISlice['taskPageData']) => void
   closeTaskPage: () => void
+  openActivityPage: () => void
+  closeActivityPage: () => void
+  selectedAutomationId: string | null
+  setSelectedAutomationId: (id: string | null) => void
+  openAutomationsPage: () => void
+  closeAutomationsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -209,12 +244,14 @@ export type UISlice = {
       | 'browser'
       | 'appearance'
       | 'terminal'
+      | 'computer-use'
       | 'developer-permissions'
       | 'shortcuts'
       | 'repo'
       | 'agents'
       | 'accounts'
       | 'experimental'
+      | 'mobile'
       | 'ssh'
     repoId: string | null
     sectionId?: string
@@ -262,28 +299,34 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
-  /** Whether the experimental sidekick overlay is currently visible. Persisted
-   *  so "Hide sidekick" from the status-bar menu survives reload. Independent
-   *  of the experimentalSidekick settings flag — the feature flag gates
+  /** Whether the experimental pet overlay is currently visible. Persisted
+   *  so "Hide pet" from the status-bar menu survives reload. Independent
+   *  of the experimentalPet settings flag — the feature flag gates
    *  whether the overlay can ever render; this controls whether it does now. */
-  sidekickVisible: boolean
-  setSidekickVisible: (v: boolean) => void
-  /** Which sidekick is active — either a bundled id or a custom UUID.
-   *  Persisted alongside sidekickVisible via the PersistedUIState pipeline. */
-  sidekickId: string
-  setSidekickId: (id: string) => void
-  /** User-uploaded sidekick images. Metadata only — bytes live in main's userData. */
-  customSidekicks: CustomSidekick[]
-  addCustomSidekick: (model: CustomSidekick) => void
-  removeCustomSidekick: (id: string) => void
-  /** Sidekick overlay size in CSS pixels (square). User-adjustable from the
+  petVisible: boolean
+  setPetVisible: (v: boolean) => void
+  /** Which pet is active — either a bundled id or a custom UUID.
+   *  Persisted alongside petVisible via the PersistedUIState pipeline. */
+  petId: string
+  setPetId: (id: string) => void
+  /** User-uploaded pet images. Metadata only — bytes live in main's userData. */
+  customPets: CustomPet[]
+  addCustomPet: (model: CustomPet) => void
+  removeCustomPet: (id: string) => void
+  /** Pet overlay size in CSS pixels (square). User-adjustable from the
    *  status-bar menu so a too-big imported sprite isn't a stuck-on-screen
    *  problem. */
-  sidekickSize: number
-  setSidekickSize: (size: number) => void
+  petSize: number
+  setPetSize: (size: number) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
+  // Why: lets the SourceControl sidebar request that the diff editor scroll
+  // to a specific note. Cleared by the diff decorator after it reveals the
+  // line, so the same id can be requested again later without the surface
+  // seeing a stale value.
+  scrollToDiffCommentId: string | null
+  setScrollToDiffCommentId: (id: string | null) => void
   persistedUIReady: boolean
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
@@ -310,8 +353,10 @@ export type UISlice = {
   /** URL opened when a new browser tab is created. Null = blank tab (default). */
   browserDefaultUrl: string | null
   setBrowserDefaultUrl: (url: string | null) => void
-  browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | null
-  setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | null) => void
+  browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
+  setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null) => void
+  browserKagiSessionLink: string | null
+  setBrowserKagiSessionLink: (link: string | null) => void
 }
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
@@ -347,22 +392,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
     }),
-  collapsedInlineAgentsByWorktreeId: {},
-  toggleInlineAgentsCollapsed: (worktreeId) =>
+  unacknowledgeAgents: (paneKeys) =>
     set((s) => {
-      const current = s.collapsedInlineAgentsByWorktreeId[worktreeId] === true
-      const next = { ...s.collapsedInlineAgentsByWorktreeId }
-      if (current) {
-        delete next[worktreeId]
-      } else {
-        next[worktreeId] = true
+      if (paneKeys.length === 0) {
+        return s
       }
-      return { collapsedInlineAgentsByWorktreeId: next }
+      let next: Record<string, number> | null = null
+      for (const key of paneKeys) {
+        if (s.acknowledgedAgentsByPaneKey[key] !== undefined) {
+          if (next === null) {
+            next = { ...s.acknowledgedAgentsByPaneKey }
+          }
+          delete next[key]
+        }
+      }
+      return next ? { acknowledgedAgentsByPaneKey: next } : s
     }),
 
   activeView: 'terminal',
   previousViewBeforeTasks: 'terminal',
   previousViewBeforeSettings: 'terminal',
+  previousViewBeforeActivity: 'terminal',
+  previousViewBeforeAutomations: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -454,6 +505,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),
+  openActivityPage: () =>
+    set((state) => ({
+      activeView: 'activity',
+      previousViewBeforeActivity:
+        state.activeView === 'activity' ? state.previousViewBeforeActivity : state.activeView
+    })),
+  closeActivityPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeActivity
+    })),
+  selectedAutomationId: null,
+  setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
+  openAutomationsPage: () =>
+    set((state) => ({
+      activeView: 'automations',
+      previousViewBeforeAutomations:
+        state.activeView === 'automations' ? state.previousViewBeforeAutomations : state.activeView
+    })),
+  closeAutomationsPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeAutomations
+    })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () =>
@@ -584,65 +657,65 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ statusBarVisible: v })
   },
 
-  // Why: default true so a user who enables experimentalSidekick sees the
-  // sidekick immediately. Hide sidekick from the status-bar menu flips this
+  // Why: default true so a user who enables experimentalPet sees the
+  // pet immediately. Hide pet from the status-bar menu flips this
   // to false; the value is persisted via the standard PersistedUIState pipeline.
-  sidekickVisible: true,
-  setSidekickVisible: (v) => {
-    window.api.ui.set({ sidekickVisible: v }).catch(console.error)
-    set({ sidekickVisible: v })
+  petVisible: true,
+  setPetVisible: (v) => {
+    window.api.ui.set({ petVisible: v }).catch(console.error)
+    set({ petVisible: v })
   },
 
-  sidekickId: DEFAULT_SIDEKICK_ID,
-  setSidekickId: (id) => {
-    window.api.ui.set({ sidekickId: id }).catch(console.error)
-    set({ sidekickId: id })
+  petId: DEFAULT_PET_ID,
+  setPetId: (id) => {
+    window.api.ui.set({ petId: id }).catch(console.error)
+    set({ petId: id })
   },
 
-  sidekickSize: SIDEKICK_SIZE_DEFAULT,
-  setSidekickSize: (size) => {
-    const clamped = clampSidekickSize(size)
-    window.api.ui.set({ sidekickSize: clamped }).catch(console.error)
-    set({ sidekickSize: clamped })
+  petSize: PET_SIZE_DEFAULT,
+  setPetSize: (size) => {
+    const clamped = clampPetSize(size)
+    window.api.ui.set({ petSize: clamped }).catch(console.error)
+    set({ petSize: clamped })
   },
 
-  customSidekicks: [],
-  addCustomSidekick: (model) =>
+  customPets: [],
+  addCustomPet: (model) =>
     set((s) => {
-      const next = [...s.customSidekicks.filter((m) => m.id !== model.id), model]
-      window.api.ui.set({ customSidekicks: next }).catch(console.error)
-      return { customSidekicks: next }
+      const next = [...s.customPets.filter((m) => m.id !== model.id), model]
+      window.api.ui.set({ customPets: next }).catch(console.error)
+      return { customPets: next }
     }),
-  removeCustomSidekick: (id) =>
+  removeCustomPet: (id) =>
     set((s) => {
-      const target = s.customSidekicks.find((m) => m.id === id)
+      const target = s.customPets.find((m) => m.id === id)
       if (!target) {
         return s
       }
-      const next = s.customSidekicks.filter((m) => m.id !== id)
-      // Why: if the user removes the currently-active custom sidekick, fall
+      const next = s.customPets.filter((m) => m.id !== id)
+      // Why: if the user removes the currently-active custom pet, fall
       // back to the bundled default so the overlay doesn't render nothing.
-      const fallback = s.sidekickId === id ? DEFAULT_SIDEKICK_ID : s.sidekickId
-      // Why: send a single combined IPC update so customSidekicks and
-      // sidekickId persist atomically when both change.
-      const ipcPayload: { customSidekicks: CustomSidekick[]; sidekickId?: string } = {
-        customSidekicks: next
+      const fallback = s.petId === id ? DEFAULT_PET_ID : s.petId
+      // Why: send a single combined IPC update so customPets and
+      // petId persist atomically when both change.
+      const ipcPayload: { customPets: CustomPet[]; petId?: string } = {
+        customPets: next
       }
-      if (fallback !== s.sidekickId) {
-        ipcPayload.sidekickId = fallback
+      if (fallback !== s.petId) {
+        ipcPayload.petId = fallback
       }
       window.api.ui.set(ipcPayload).catch(console.error)
       // Why: revoke the cached blob: URL so the underlying Blob is released;
       // otherwise it stays in memory for the rest of the session.
-      revokeCustomSidekickBlobUrl(id)
+      revokeCustomPetBlobUrl(id)
       // Why: best-effort — the bytes are owned by main. If the disk delete
       // fails, the orphaned image stays in userData; each import uses a fresh
       // UUID so the file won't be hit again, and the renderer's metadata
       // index no longer references it.
-      window.api.sidekick.delete(id, target.fileName, target.kind).catch(console.error)
-      const partial: Partial<UISlice> = { customSidekicks: next }
-      if (fallback !== s.sidekickId) {
-        partial.sidekickId = fallback
+      window.api.pet.delete(id, target.fileName, target.kind).catch(console.error)
+      const partial: Partial<UISlice> = { customPets: next }
+      if (fallback !== s.petId) {
+        partial.petId = fallback
       }
       return partial
     }),
@@ -650,6 +723,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   pendingRevealWorktreeId: null,
   revealWorktreeInSidebar: (worktreeId) => set({ pendingRevealWorktreeId: worktreeId }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktreeId: null }),
+  scrollToDiffCommentId: null,
+  setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
   uiZoomLevel: 0,
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
@@ -659,6 +734,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   hydratePersistedUI: (ui) =>
     set((s) => {
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+      // Why: persisted UI from pre-rename builds used sidekick* keys. Read
+      // those only as fallbacks so new pet* writes win immediately after upgrade.
+      const customPets = Array.isArray(ui.customPets)
+        ? ui.customPets
+        : Array.isArray(ui.customSidekicks)
+          ? ui.customSidekicks
+          : []
+      const petId = ui.petId ?? ui.sidekickId
       // Migration history:
       // v1: sort was called 'smart' internally
       // v2: renamed 'smart' → 'recent' (same weighted-score behavior)
@@ -698,37 +781,47 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
         statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
-        // Why: absent → true so existing users see the sidekick the first time
-        // they enable the experimental flag. Only an explicit Hide sidekick
+        // Why: absent → true so existing users see the pet the first time
+        // they enable the experimental flag. Only an explicit Hide pet
         // dismissal persists a `false` value.
-        sidekickVisible: ui.sidekickVisible ?? true,
-        sidekickSize: clampSidekickSize(ui.sidekickSize ?? SIDEKICK_SIZE_DEFAULT),
-        customSidekicks: Array.isArray(ui.customSidekicks) ? ui.customSidekicks : [],
-        // Why: accept the persisted id if it matches a bundled sidekick or a
+        petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
+        petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),
+        customPets,
+        // Why: accept the persisted id if it matches a bundled pet or a
         // known custom one; otherwise fall back so the overlay never renders
-        // nothing (e.g. custom sidekick was removed by another session).
-        sidekickId: ((): string => {
-          const id = ui.sidekickId
+        // nothing (e.g. custom pet was removed by another session).
+        petId: ((): string => {
+          const id = petId
           if (typeof id !== 'string') {
-            return DEFAULT_SIDEKICK_ID
+            return DEFAULT_PET_ID
           }
-          if (isBundledSidekickId(id)) {
+          if (isBundledPetId(id)) {
             return id
           }
-          const custom = Array.isArray(ui.customSidekicks) ? ui.customSidekicks : []
-          if (custom.some((m) => m.id === id)) {
+          if (customPets.some((m) => m.id === id)) {
             return id
           }
-          return DEFAULT_SIDEKICK_ID
+          return DEFAULT_PET_ID
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
           ui.trustedOrcaHooks ?? {},
           validRepoIds
+        ),
+        // Why: restore visited-row acks alongside the persisted hook entries
+        // they pair with. Stale acks for paneKeys whose tab/PTY no longer
+        // exists are inert (no row references them); a paneKey reuse stamps a
+        // fresh stateStartedAt that beats the old ack via the ackAt <
+        // stateStartedAt comparison in WorktreeCardAgents. Sanitizer drops
+        // entries past HYDRATE_MAX_AGE_MS so hard-quit/crash paths that miss
+        // the in-session cleanup in agent-status.ts can't accumulate forever.
+        acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
+          ui.acknowledgedAgentsByPaneKey
         ),
         persistedUIReady: true
       }
@@ -809,5 +902,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setBrowserDefaultSearchEngine: (engine) => {
     void window.api.ui.set({ browserDefaultSearchEngine: engine }).catch(console.error)
     set({ browserDefaultSearchEngine: engine })
+  },
+  browserKagiSessionLink: null,
+  setBrowserKagiSessionLink: (link) => {
+    const normalized = link ? normalizeKagiSessionLink(link) : null
+    void window.api.ui.set({ browserKagiSessionLink: normalized }).catch(console.error)
+    set({ browserKagiSessionLink: normalized })
   }
 })

@@ -1,6 +1,7 @@
 // Why: E2EE primitives for the mobile side. Uses tweetnacl for Curve25519 ECDH
-// key exchange and XSalsa20-Poly1305 authenticated encryption. Wire format is
-// base64([24-byte nonce][ciphertext]) over WebSocket text frames.
+// key exchange and XSalsa20-Poly1305 authenticated encryption. JSON RPC uses
+// base64([24-byte nonce][ciphertext]) over WebSocket text frames; terminal
+// stream frames use the raw byte bundle.
 import nacl from 'tweetnacl'
 import * as ExpoCrypto from 'expo-crypto'
 
@@ -62,19 +63,28 @@ export function publicKeyToBase64(key: Uint8Array): string {
 }
 
 export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
-  const nonce = u8(nacl.randomBytes(nacl.box.nonceLength))
   const messageBytes = u8(new TextEncoder().encode(plaintext))
-  const ciphertext = nacl.box.after(messageBytes, nonce, u8(sharedKey))
+  return uint8ToBase64(encryptBytes(messageBytes, sharedKey))
+}
+
+export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
+  const bundle = base64ToUint8(encrypted)
+  const plaintext = decryptBytes(bundle, sharedKey)
+  return plaintext ? new TextDecoder().decode(plaintext) : null
+}
+
+export function encryptBytes(plaintext: Uint8Array, sharedKey: Uint8Array): Uint8Array {
+  const nonce = u8(nacl.randomBytes(nacl.box.nonceLength))
+  const ciphertext = nacl.box.after(u8(plaintext), nonce, u8(sharedKey))
 
   const bundle = new Uint8Array(nonce.length + ciphertext.length)
   bundle.set(nonce)
   bundle.set(ciphertext, nonce.length)
 
-  return uint8ToBase64(bundle)
+  return bundle
 }
 
-export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
-  const bundle = base64ToUint8(encrypted)
+export function decryptBytes(bundle: Uint8Array, sharedKey: Uint8Array): Uint8Array | null {
   if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) {
     return null
   }
@@ -87,5 +97,5 @@ export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null
     return null
   }
 
-  return new TextDecoder().decode(plaintext)
+  return u8(plaintext)
 }

@@ -1,5 +1,6 @@
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 
@@ -79,6 +80,7 @@ export function computeVisibleWorktreeIds(
     filterRepoIds: string[]
     showActiveOnly: boolean
     tabsByWorktree: Record<string, TerminalTab[]> | null
+    ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
     activeWorktreeId?: string | null
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
@@ -108,7 +110,9 @@ export function computeVisibleWorktreeIds(
   if (opts.showActiveOnly) {
     all = all.filter((w) => {
       const tabs = opts.tabsByWorktree?.[w.id] ?? []
-      const hasLiveTerminal = tabs.some((t) => t.ptyId)
+      const hasLiveTerminal = tabs.some((tab) =>
+        opts.ptyIdsByTabId ? tabHasLivePty(opts.ptyIdsByTabId, tab.id) : false
+      )
       const hasBrowserTabs = (opts.browserTabsByWorktree?.[w.id] ?? []).length > 0
       // Why: "Active only" should reflect the surfaces Orca can actually
       // restore into, not just PTY-backed terminals. A browser-tab worktree is
@@ -175,18 +179,14 @@ export function getVisibleWorktreeIds(): string[] {
 
   let sortedIds: string[]
 
-  // Why: matches WorktreeList's gate — when the experimental agent-activity
-  // feature is off, the agent-status map is not populated, so fall back to
-  // the non-status sort heuristics instead of scoring against an empty map.
-  const agentStatusForSort =
-    state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
   if (state.sortBy === 'smart') {
     sortedIds = sortWorktreesSmart(
       allWorktrees,
       state.tabsByWorktree,
       repoMap,
       state.prCache,
-      agentStatusForSort
+      state.agentStatusByPaneKey,
+      state.ptyIdsByTabId
     ).map((w) => w.id)
   } else {
     const sorted = [...allWorktrees].sort(
@@ -197,7 +197,10 @@ export function getVisibleWorktreeIds(): string[] {
         state.prCache,
         Date.now(),
         null,
-        agentStatusForSort
+        state.agentStatusByPaneKey,
+        undefined,
+        undefined,
+        state.ptyIdsByTabId
       )
     )
     sortedIds = sorted.map((w) => w.id)
@@ -207,6 +210,7 @@ export function getVisibleWorktreeIds(): string[] {
     filterRepoIds: state.filterRepoIds,
     showActiveOnly: state.showActiveOnly,
     tabsByWorktree: state.tabsByWorktree,
+    ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
     activeWorktreeId: state.activeWorktreeId,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,

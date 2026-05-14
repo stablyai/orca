@@ -38,6 +38,8 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Test
+        run: pnpm test
+
       - name: Lint
         run: pnpm lint
-

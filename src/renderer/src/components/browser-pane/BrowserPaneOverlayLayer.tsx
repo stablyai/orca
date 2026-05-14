@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
 import BrowserPane from './BrowserPane'
-import { browserSlotAnchorName } from './browser-pane-slots'
+import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 
 // Why: Electron `<webview>` destroys its guest contents whenever its DOM
 // parent changes. Rendering one BrowserPane per tab at the worktree level
@@ -51,7 +51,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   isActive,
   onFocusOwningGroup
 }: BrowserOverlaySlotProps): React.JSX.Element {
-  const anchorName = groupId !== undefined ? browserSlotAnchorName(groupId) : undefined
+  const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   // Why: each overlay pins itself to the owning TabGroupPanel's body via CSS
   // anchor positioning. `anchor()` resolves top/left relative to the viewport,
   // and the overlay's own `position: absolute` inside a positioned ancestor

@@ -27,6 +27,7 @@ export type SerializeFn = (
 // matches its captured token.
 type SerializerEntry = {
   fn: SerializeFn
+  clear?: () => void
   owner: symbol
 }
 
@@ -40,9 +41,13 @@ const serializersByPtyId = new Map<string, SerializerEntry>()
 const lastTitleByPtyId = new Map<string, TitleEntry>()
 let listenerAttached = false
 
-export function registerPtySerializer(ptyId: string, serialize: SerializeFn): () => void {
+export function registerPtySerializer(
+  ptyId: string,
+  serialize: SerializeFn,
+  clear?: () => void
+): () => void {
   const owner = Symbol(ptyId)
-  serializersByPtyId.set(ptyId, { fn: serialize, owner })
+  serializersByPtyId.set(ptyId, { fn: serialize, clear, owner })
   ensureSerializerListener()
   return () => {
     const current = serializersByPtyId.get(ptyId)
@@ -108,6 +113,13 @@ function ensureSerializerListener(): void {
     return
   }
   listenerAttached = true
+
+  window.api.pty.onClearBufferRequest((request) => {
+    // Why: mobile clear is a terminal action, not a PTY byte. Clearing the
+    // renderer-owned xterm keeps future mobile snapshots from rehydrating
+    // scrollback that the user explicitly removed.
+    serializersByPtyId.get(request.ptyId)?.clear?.()
+  })
 
   window.api.pty.onSerializeBufferRequest((request) => {
     const entry = serializersByPtyId.get(request.ptyId)

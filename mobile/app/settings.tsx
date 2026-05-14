@@ -8,7 +8,8 @@ import {
   Bell,
   Wrench,
   Shield,
-  LifeBuoy
+  LifeBuoy,
+  Terminal as TerminalIcon
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 
@@ -26,6 +27,15 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={() => router.push('/terminal-settings')}
+        >
+          <TerminalIcon size={16} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Terminal</Text>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </Pressable>
+        <View style={styles.separator} />
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           onPress={() => router.push('/notifications')}

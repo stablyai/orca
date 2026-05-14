@@ -215,6 +215,31 @@ describe('handleOscLink', () => {
       expect.objectContaining({ filePath: '/tmp/test.txt' })
     )
   })
+
+  it('opens relative OSC file links against the terminal cwd', async () => {
+    setPlatform('Macintosh')
+
+    handleOscLink(
+      'docs/README.md',
+      { metaKey: true, ctrlKey: false },
+      {
+        ...deps,
+        startupCwd: '/tmp/project'
+      }
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '/tmp/project/docs/README.md'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/project/docs/README.md',
+        relativePath: 'project/docs/README.md'
+      })
+    )
+  })
 })
 
 describe('createFilePathLinkProvider range bounds', () => {

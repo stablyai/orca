@@ -442,7 +442,11 @@ function WorktreeRow({
           disabled={!isNavigable}
         >
           <span className="text-xs font-medium truncate">{rowLabel}</span>
-          {!worktree.hasLocalSamples && (
+          {/* Why: chip is gated on the repo's SSH connectionId, not on
+              missing data. Warm-reattached local PTYs used to land here
+              with hasLocalSamples=false even though they're plainly
+              local. */}
+          {worktree.isRemote && (
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
               · remote
             </span>
@@ -697,22 +701,36 @@ export function ResourceUsageStatusSegment({
     }
     void fetchSnapshot()
     void refreshSessions()
+    // Why: sessions already have an always-on poll in the effect below; only
+    // the memory snapshot is gated on the popover being open. Stacking a
+    // second sessions interval here doubled IPC traffic while the popover
+    // was open.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
-    const sessTimer = window.setInterval(() => {
-      void refreshSessions()
-    }, SESSIONS_POLL_MS)
     return () => {
       window.clearInterval(memTimer)
-      window.clearInterval(sessTimer)
     }
   }, [open, fetchSnapshot, refreshSessions])
 
   useEffect(() => {
-    const interval = setInterval(() => void refreshSessions(), SESSIONS_POLL_MS)
+    const refreshIfVisible = (): void => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        void refreshSessions()
+      }
+    }
     void refreshSessions()
-    return () => clearInterval(interval)
+    // Why: the closed-popover badge is informational. Polling daemon sessions
+    // while the whole window is hidden keeps IPC and daemon list calls hot for
+    // no visible UI; focus/visibility refreshes catch the badge up immediately.
+    const interval = setInterval(refreshIfVisible, SESSIONS_POLL_MS)
+    window.addEventListener('focus', refreshIfVisible)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', refreshIfVisible)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+    }
   }, [refreshSessions])
 
   const repoDisplayNameById = useMemo(() => {
@@ -722,6 +740,19 @@ export function ResourceUsageStatusSegment({
       if (display) {
         map.set(repo.id, display)
       }
+    }
+    return map
+  }, [repos])
+
+  // Why: drives the `· remote` chip predicate. A repo with a non-null
+  // connectionId is SSH-backed and its PTYs run on a remote host; that's
+  // the only honest signal for "remote." Building the map from the
+  // canonical store list avoids re-deriving remoteness from a missing
+  // memory sample.
+  const repoConnectionIdById = useMemo(() => {
+    const map = new Map<string, string | null>()
+    for (const repo of repos) {
+      map.set(repo.id, repo.connectionId ?? null)
     }
     return map
   }, [repos])
@@ -739,7 +770,8 @@ export function ResourceUsageStatusSegment({
             ptyIdsByTabId,
             runtimePaneTitlesByTabId,
             workspaceSessionReady,
-            repoDisplayNameById
+            repoDisplayNameById,
+            repoConnectionIdById
           })
         : [],
     [
@@ -750,7 +782,8 @@ export function ResourceUsageStatusSegment({
       ptyIdsByTabId,
       runtimePaneTitlesByTabId,
       workspaceSessionReady,
-      repoDisplayNameById
+      repoDisplayNameById,
+      repoConnectionIdById
     ]
   )
 
@@ -791,7 +824,12 @@ export function ResourceUsageStatusSegment({
     }
   }, [snapshot])
 
-  const daemonUnreachable = sessionsError && memorySnapshotError !== null
+  // Why: memorySnapshotError is null both for "last fetch succeeded" and
+  // "never fetched". When the segment is mounted but the popover hasn't
+  // been opened, fetchMemorySnapshot has never run, so a sessions IPC
+  // failure on the always-on poll would otherwise be silent. Treat the
+  // absence of any snapshot plus a sessions error as unreachable too.
+  const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
   // Why: a partial failure where the sessions IPC fails but the snapshot
   // IPC still works was silently invisible after the merge — the old
   // SessionsTabPanel surfaced it as "Terminal sessions unavailable". Show
@@ -878,10 +916,17 @@ export function ResourceUsageStatusSegment({
       // bulk "Kill orphan terminals" button. Bound sessions still confirm.
       if (!session.bound) {
         setSessions((prev) => prev.filter((s) => s.id !== session.sessionId))
-        void window.api.pty.kill(session.sessionId).catch(() => {
-          /* already dead */
-        })
-        void refreshSessions()
+        // Why: await the kill before refreshing — otherwise the optimistic
+        // removal races a refresh that re-reads the daemon list before the
+        // kill lands and re-adds the row that was just removed.
+        void (async () => {
+          try {
+            await window.api.pty.kill(session.sessionId)
+          } catch {
+            /* already dead */
+          }
+          await refreshSessions()
+        })()
         return
       }
       setKillConfirm(session)
@@ -1235,62 +1280,66 @@ export function ResourceUsageStatusSegment({
             </button>
           </div>
         )}
-
-        <Dialog
-          open={killConfirm !== null}
-          onOpenChange={(next) => {
-            if (next) {
-              return
-            }
+      </PopoverContent>
+      {/* Why: Radix Dialog must not be a descendant of PopoverContent — when
+          the popover unmounts (e.g. clicking outside, focus moving to the
+          confirm dialog), the Dialog unmounts mid-interaction and the kill
+          confirm flow disappears. Hoist it to a sibling so its lifetime is
+          independent of the popover. */}
+      <Dialog
+        open={killConfirm !== null}
+        onOpenChange={(next) => {
+          if (next) {
+            return
+          }
+          if (killing) {
+            return
+          }
+          setKillConfirm(null)
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={!killing}
+          onPointerDownOutside={(e) => {
             if (killing) {
-              return
+              e.preventDefault()
             }
-            setKillConfirm(null)
+          }}
+          onEscapeKeyDown={(e) => {
+            if (killing) {
+              e.preventDefault()
+            }
           }}
         >
-          <DialogContent
-            className="max-w-md"
-            showCloseButton={!killing}
-            onPointerDownOutside={(e) => {
-              if (killing) {
-                e.preventDefault()
-              }
-            }}
-            onEscapeKeyDown={(e) => {
-              if (killing) {
-                e.preventDefault()
-              }
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle className="text-sm">
-                Kill{' '}
-                <span className="font-medium text-foreground">
-                  {killConfirm?.label ?? 'this session'}
-                </span>
-                ?
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                Force-quits this terminal. Any unsaved work in the pane is lost. This can&apos;t be
-                undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setKillConfirm(null)} disabled={killing}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => void runKillConfirmed()}
-                disabled={killing}
-              >
-                {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                {killing ? 'Killing…' : 'Kill session'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </PopoverContent>
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Kill{' '}
+              <span className="font-medium text-foreground">
+                {killConfirm?.label ?? 'this session'}
+              </span>
+              ?
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Force-quits this terminal. Any unsaved work in the pane is lost. This can&apos;t be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setKillConfirm(null)} disabled={killing}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void runKillConfirmed()}
+              disabled={killing}
+            >
+              {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              {killing ? 'Killing…' : 'Kill session'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <DaemonActionDialog api={daemonActions} />
     </Popover>
   )

@@ -4,7 +4,6 @@
    readable in one file. */
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
 import { basename, joinPath } from '@/lib/path'
 import { normalizeAbsolutePath } from '@/components/right-sidebar/file-explorer-paths'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
@@ -66,6 +65,13 @@ type ExternalWatchNotification = {
   relativePath: string
 }
 
+export function getWatchedTargetKey(target: WatchedTarget): string {
+  // Why: SSH worktrees can exist in the store before their remote filesystem
+  // provider is ready. Include connectionId so a local/unknown placeholder
+  // watch is replaced by the real SSH watch when the repo metadata hydrates.
+  return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}`
+}
+
 // Why: macOS atomic writes (Claude Code Edit, vim :w, VSCode save) deliver a
 // delete event immediately followed by a create event for the same path. When
 // those two land in separate fs:changed payloads a few ms apart, the tab
@@ -98,6 +104,7 @@ type PendingDeleteTimer = {
 export function useEditorExternalWatch(): void {
   const openFiles = useAppStore((s) => s.openFiles)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const repos = useAppStore((s) => s.repos)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
 
   // Why: unify the target computation and the dependency key into one memo so
@@ -123,15 +130,17 @@ export function useEditorExternalWatch(): void {
       if (!wt) {
         continue
       }
-      nextTargets.push({
+      const repo = repos.find((r) => r.id === wt.repoId)
+      const target = {
         worktreeId: id,
         worktreePath: wt.path,
-        connectionId: getConnectionId(id) ?? undefined
-      })
-      parts.push(`${id}::${wt.path}`)
+        connectionId: repo?.connectionId ?? undefined
+      }
+      nextTargets.push(target)
+      parts.push(getWatchedTargetKey(target))
     }
     return { targets: nextTargets, targetsKey: parts.join('|') }
-  }, [openFiles, worktreesByRepo, activeWorktreeId])
+  }, [openFiles, worktreesByRepo, repos, activeWorktreeId])
 
   const targetsRef = useRef<WatchedTarget[]>([])
   const latestTargetsRef = useRef<WatchedTarget[]>(targets)
@@ -144,10 +153,10 @@ export function useEditorExternalWatch(): void {
   useEffect(() => {
     const nextTargets = latestTargetsRef.current
     const prev = targetsRef.current
-    const prevIds = new Set(prev.map((t) => t.worktreeId))
-    const nextIds = new Set(nextTargets.map((t) => t.worktreeId))
-    const removed = prev.filter((t) => !nextIds.has(t.worktreeId))
-    const added = nextTargets.filter((t) => !prevIds.has(t.worktreeId))
+    const prevKeys = new Set(prev.map(getWatchedTargetKey))
+    const nextKeys = new Set(nextTargets.map(getWatchedTargetKey))
+    const removed = prev.filter((t) => !nextKeys.has(getWatchedTargetKey(t)))
+    const added = nextTargets.filter((t) => !prevKeys.has(getWatchedTargetKey(t)))
 
     for (const target of removed) {
       void window.api.fs.unwatchWorktree({

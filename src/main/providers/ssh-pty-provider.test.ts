@@ -83,12 +83,12 @@ describe('SshPtyProvider', () => {
       })
     })
 
-    it('falls back to fresh spawn when session reattach fails', async () => {
-      mux.request
-        .mockRejectedValueOnce(new Error('not found'))
-        .mockResolvedValueOnce({ id: 'pty-new' })
+    it('does not fresh-spawn over an expired reattach session', async () => {
+      mux.request.mockRejectedValueOnce(new Error('PTY "pty-old" not found'))
 
-      const result = await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
+      await expect(provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })).rejects.toThrow(
+        'SSH_SESSION_EXPIRED: pty-old'
+      )
 
       expect(mux.request).toHaveBeenNthCalledWith(1, 'pty.attach', {
         id: 'pty-old',
@@ -96,13 +96,17 @@ describe('SshPtyProvider', () => {
         rows: 24,
         suppressReplayNotification: true
       })
-      expect(mux.request).toHaveBeenNthCalledWith(2, 'pty.spawn', {
-        cols: 80,
-        rows: 24,
-        cwd: undefined,
-        env: undefined
-      })
-      expect(result).toEqual({ id: 'pty-new', sessionExpired: true })
+      expect(mux.request).toHaveBeenCalledTimes(1)
+    })
+
+    it('preserves transient reattach failures for retry handling', async () => {
+      mux.request.mockRejectedValueOnce(new Error('SSH connection lost, reconnecting...'))
+
+      await expect(provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })).rejects.toThrow(
+        'SSH connection lost, reconnecting...'
+      )
+
+      expect(mux.request).toHaveBeenCalledTimes(1)
     })
   })
 

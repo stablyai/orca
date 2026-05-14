@@ -27,7 +27,6 @@ describe('GitHandler — commit & staging', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-git-staging-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    ctx.registerRoot(tmpDir)
     // eslint-disable-next-line no-new
     new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
   })

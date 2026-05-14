@@ -19,7 +19,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
-import { runSleepWorktree } from './sleep-worktree-flow'
+import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
 
 describe('runSleepWorktree', () => {
   beforeEach(() => {
@@ -78,5 +78,45 @@ describe('runSleepWorktree', () => {
       'Failed to sleep workspace',
       expect.objectContaining({ description: 'boom' })
     )
+  })
+
+  it('continues sleeping later worktrees when one selected worktree fails', async () => {
+    mocks.state.shutdownWorktreeBrowsers.mockImplementation((worktreeId: string) => {
+      if (worktreeId === 'wt-1') {
+        return Promise.reject(new Error('first failed'))
+      }
+      return Promise.resolve()
+    })
+
+    await runSleepWorktrees(['wt-1', 'wt-2'])
+
+    expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalledWith('wt-1', {
+      keepIdentifiers: true
+    })
+    expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledWith('wt-2')
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-2', {
+      keepIdentifiers: true
+    })
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Failed to sleep some workspaces',
+      expect.objectContaining({ description: 'first failed' })
+    )
+  })
+
+  it('sleeps multiple worktrees and clears active only once when included', async () => {
+    mocks.state.activeWorktreeId = 'wt-2'
+
+    await runSleepWorktrees(['wt-1', 'wt-2'])
+
+    expect(mocks.state.setActiveWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.state.setActiveWorktree).toHaveBeenCalledWith(null)
+    expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenNthCalledWith(1, 'wt-1')
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenNthCalledWith(1, 'wt-1', {
+      keepIdentifiers: true
+    })
+    expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenNthCalledWith(2, 'wt-2')
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenNthCalledWith(2, 'wt-2', {
+      keepIdentifiers: true
+    })
   })
 })

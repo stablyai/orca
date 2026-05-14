@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve as resolvePath } from 'path'
-import type { RuntimeWorktreeListResult } from '../shared/runtime-types'
+import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
@@ -7,6 +7,12 @@ import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
 export type BrowserCliTarget = {
   worktree?: string
   page?: string
+}
+
+export type ComputerCliTarget = {
+  session?: string
+  worktree?: string
+  app?: ComputerAppQuery
 }
 
 export function buildCurrentWorktreeSelector(cwd: string): string {
@@ -148,5 +154,21 @@ export async function getBrowserCommandTarget(
   return {
     page,
     worktree: normalizeWorktreeSelector(explicitWorktree, cwd)
+  }
+}
+
+export async function getComputerCommandTarget(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<ComputerCliTarget> {
+  const app = getOptionalStringFlag(flags, 'app')
+  const session = getOptionalStringFlag(flags, 'session')
+  if (session) {
+    return { session, app }
+  }
+  return {
+    app,
+    worktree: await getBrowserWorktreeSelector(flags, cwd, client)
   }
 }

@@ -3,26 +3,28 @@ import { describe, expect, it } from 'vitest'
 import { getMermaidConfig } from './mermaid-config'
 
 describe('getMermaidConfig', () => {
-  it('keeps Mermaid HTML labels enabled by default', () => {
+  it('uses strict Mermaid rendering defaults', () => {
     expect(getMermaidConfig(false)).toMatchObject({
       startOnLoad: false,
+      securityLevel: 'strict',
+      suppressErrorRendering: true,
       theme: 'default',
-      htmlLabels: true
+      htmlLabels: false
     })
   })
 
-  it('can disable HTML labels for sanitized preview paths', () => {
-    expect(getMermaidConfig(false, false)).toMatchObject({
+  it('can enable HTML labels for callers that explicitly need them', () => {
+    expect(getMermaidConfig(false, true)).toMatchObject({
       startOnLoad: false,
       theme: 'default',
-      htmlLabels: false
+      htmlLabels: true
     })
   })
 
   it('switches to the dark mermaid theme when the preview is dark', () => {
     expect(getMermaidConfig(true)).toMatchObject({
       theme: 'dark',
-      htmlLabels: true
+      htmlLabels: false
     })
   })
 })

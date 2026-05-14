@@ -45,19 +45,22 @@ export const Scroll = BrowserTarget.extend({
   amount: z
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
-    .pipe(z.number().optional())
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional()
 })
 
 export const Screenshot = BrowserTarget.extend({
   format: z
     .unknown()
     .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
-    .pipe(z.enum(['png', 'jpeg']).optional())
+    .pipe(z.union([z.enum(['png', 'jpeg']), z.undefined()]))
+    .optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()
+    .optional()
     .transform((v) => (v === 'jpeg' ? 'jpeg' : 'png'))
     .pipe(z.enum(['png', 'jpeg']))
 })
@@ -73,11 +76,19 @@ export const TabList = z.object({
 // Why: --index xor --page must be present. The refine guards that invariant
 // so the dispatcher surfaces a single legible error instead of either shape
 // leaking into the runtime.
+//
+// `focus` is opt-in: when true, the runtime sends `browser:pane-focus` to
+// the renderer after the switch lands. The renderer surfaces the browser
+// pane only if the user is already on the targeted worktree; otherwise it
+// pre-stages per-worktree state silently. This avoids cross-worktree screen
+// theft when multiple agents drive browsers in parallel worktrees.
 export const TabSwitch = BrowserTarget.extend({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional())
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional(),
+  focus: z.boolean().optional()
 }).refine(
   (val) => {
     if (val.page !== undefined) {
@@ -107,7 +118,8 @@ export const TabClose = z.object({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional(),
   page: OptionalString,
   worktree: OptionalString
 })
@@ -149,7 +161,8 @@ export const Wait = BrowserTarget.extend({
   timeout: z
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional(),
   text: OptionalPlainString,
   url: OptionalPlainString,
   load: OptionalPlainString,
@@ -161,6 +174,7 @@ export const Check = BrowserTarget.extend({
   element: requiredString('Missing required --element'),
   checked: z
     .unknown()
+    .optional()
     .transform((v) => v !== false)
     .pipe(z.boolean())
 })
@@ -261,7 +275,8 @@ export const InterceptEnable = BrowserTarget.extend({
   patterns: z
     .unknown()
     .transform((v) => (Array.isArray(v) ? (v as string[]) : undefined))
-    .pipe(z.array(z.string()).optional())
+    .pipe(z.union([z.array(z.string()), z.undefined()]))
+    .optional()
 })
 
 export const MouseXY = BrowserTarget.extend({

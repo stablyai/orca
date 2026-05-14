@@ -7,7 +7,8 @@ import { randomUUID } from 'node:crypto'
 import { shell, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl
+  normalizeExternalBrowserUrl,
+  redactKagiSessionToken
 } from '../../shared/browser-url'
 import type {
   BrowserDownloadFinishedEvent,
@@ -131,6 +132,7 @@ export class BrowserManager {
   // further re-attach attempts.
   private injectAntiDetection(guest: Electron.WebContents): () => void {
     let disposed = false
+    let reattachTimer: ReturnType<typeof setTimeout> | null = null
 
     const attach = (): void => {
       if (disposed || guest.isDestroyed()) {
@@ -159,8 +161,11 @@ export class BrowserManager {
     // sessions end. The 500ms delay avoids racing with the proxy/bridge if
     // it is mid-restart (detach → re-attach).
     const onDetach = (): void => {
-      if (!disposed && !guest.isDestroyed()) {
-        setTimeout(attach, 500)
+      if (!disposed && !guest.isDestroyed() && reattachTimer === null) {
+        reattachTimer = setTimeout(() => {
+          reattachTimer = null
+          attach()
+        }, 500)
       }
     }
 
@@ -173,6 +178,10 @@ export class BrowserManager {
 
     return () => {
       disposed = true
+      if (reattachTimer !== null) {
+        clearTimeout(reattachTimer)
+        reattachTimer = null
+      }
       try {
         guest.debugger.off('detach', onDetach)
       } catch {
@@ -445,7 +454,10 @@ export class BrowserManager {
           action: 'opened-in-orca'
         })
       } else if (externalUrl) {
-        void shell.openExternal(externalUrl)
+        // Why: a target=_blank click on a Kagi search result page produces a
+        // popup URL that still contains the bearer token; redact before
+        // handing the URL to the OS default browser.
+        void shell.openExternal(redactKagiSessionToken(externalUrl))
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(externalUrl),
           action: 'opened-external'
@@ -1425,9 +1437,15 @@ export class BrowserManager {
       return
     }
 
+    // Why: redact Kagi session tokens before the validated URL is persisted
+    // by the renderer into BrowserPage.loadError (saved to disk via the
+    // workspace session writer).
     renderer.send('browser:guest-load-failed', {
       browserPageId: browserTabId,
-      loadError
+      loadError: {
+        ...loadError,
+        validatedUrl: redactKagiSessionToken(loadError.validatedUrl)
+      }
     })
   }
 

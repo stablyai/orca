@@ -6,6 +6,7 @@ import {
   createManagedCommandMatcher,
   readHooksJson,
   removeManagedCommands,
+  wrapPosixHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -48,13 +49,16 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  // Why: on Windows, Claude Code runs hooks through Git Bash (`/usr/bin/bash`).
-  // A path with single backslashes (e.g. `C:\Users\…\claude-hook.cmd`) is
-  // interpreted by bash as a string with escape sequences, so `\U`, `\A`, etc.
-  // collapse and the launcher fails with `command not found`. Emit forward
-  // slashes — Windows accepts them in path arguments and bash leaves them
-  // intact, so the same JSON value works through every shell layer.
-  return process.platform === 'win32' ? scriptPath.replaceAll('\\', '/') : `/bin/sh "${scriptPath}"`
+  if (process.platform === 'win32') {
+    // Why: on Windows, Claude Code runs hooks through Git Bash (`/usr/bin/bash`).
+    // A path with single backslashes (e.g. `C:\Users\…\claude-hook.cmd`) is
+    // interpreted by bash as a string with escape sequences, so `\U`, `\A`, etc.
+    // collapse and the launcher fails with `command not found`. Emit forward
+    // slashes — Windows accepts them in path arguments and bash leaves them
+    // intact, so the same JSON value works through every shell layer.
+    return scriptPath.replaceAll('\\', '/')
+  }
+  return wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(): string {

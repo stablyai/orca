@@ -33,12 +33,14 @@ const WorktreeCreate = z.object({
   linkedIssue: TriStateLinkedIssue,
   comment: OptionalString,
   runHooks: OptionalBoolean,
+  activate: OptionalBoolean,
   setupDecision: z
     .unknown()
     .transform((v) =>
       typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
     )
-    .pipe(z.enum(['run', 'skip', 'inherit']).optional()),
+    .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
+    .optional(),
   // Why: mobile clients pass a startup command (e.g. 'claude') so the first
   // terminal pane launches the selected agent instead of an idle shell.
   startupCommand: OptionalString
@@ -95,6 +97,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedIssue: params.linkedIssue,
         comment: params.comment,
         runHooks: params.runHooks === true,
+        activate: params.activate === true,
         setupDecision: params.setupDecision,
         startup: params.startupCommand ? { command: params.startupCommand } : undefined
       })

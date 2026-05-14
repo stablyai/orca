@@ -294,12 +294,67 @@ describe('getStatus', () => {
     // wrapped in double quotes) and the parser would store that literal
     // string as entry.path, breaking sidebar display + downstream blob reads.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--untracked-files=all'],
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all'
+      ],
       { cwd: '/repo' }
     )
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', area: 'unstaged' }
     ])
+  })
+
+  it('parses branch identity from porcelain v2 branch headers', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n1 .M N... 100644 100644 100644 ce013625030ba8dba906f756967f9e9ca394464a ce013625030ba8dba906f756967f9e9ca394464a src/app.ts\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result).toMatchObject({
+      head: 'abcdef1234567890',
+      branch: 'refs/heads/feature/prompts'
+    })
+  })
+
+  it('folds upstream ahead/behind from porcelain v2 into the status result', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/feature/prompts\n# branch.ab +2 -3\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(result.upstreamStatus).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/feature/prompts',
+      ahead: 2,
+      behind: 3
+    })
+  })
+
+  it('reports no upstream from porcelain v2 status without an extra git call', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
   })
 })
 

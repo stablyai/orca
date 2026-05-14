@@ -114,16 +114,16 @@ describe('buildRgArgsForQuickOpen', () => {
     expect(primary).not.toContain('--follow')
   })
 
-  it('.env* pass includes --no-ignore-vcs and both root + nested globs, no --follow', () => {
-    const { envPass } = buildRgArgsForQuickOpen({
+  it('ignored pass includes --no-ignore-vcs without .env* whitelist globs, no --follow', () => {
+    const { ignoredPass } = buildRgArgsForQuickOpen({
       searchRoot: '/root',
       excludePathPrefixes: [],
       forceSlashSeparator: false
     })
-    expect(envPass).toContain('--no-ignore-vcs')
-    expect(envPass).toContain('.env*')
-    expect(envPass).toContain('**/.env*')
-    expect(envPass).not.toContain('--follow')
+    expect(ignoredPass).toContain('--no-ignore-vcs')
+    expect(ignoredPass).not.toContain('.env*')
+    expect(ignoredPass).not.toContain('**/.env*')
+    expect(ignoredPass).not.toContain('--follow')
   })
 
   it('forceSlashSeparator emits --path-separator /', () => {
@@ -203,21 +203,22 @@ describe('buildGitLsFilesArgsForQuickOpen', () => {
     expect(primary).toEqual(['--cached', '--others', '--exclude-standard'])
   })
 
-  it('env pass surfaces gitignored .env at root and nested, without --exclude-standard', () => {
-    const { envPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(envPass).toContain('--others')
-    expect(envPass).toContain('.env*')
-    expect(envPass).toContain(':(glob)**/.env*')
-    expect(envPass).not.toContain('--exclude-standard')
+  it('ignored pass surfaces ignored files without .env* pathspec whitelist', () => {
+    const { ignoredPass } = buildGitLsFilesArgsForQuickOpen()
+    expect(ignoredPass).toEqual(['--others', '--ignored', '--exclude-standard'])
+    expect(ignoredPass).not.toContain('.env*')
+    expect(ignoredPass).not.toContain(':(glob)**/.env*')
   })
 
   it('exclude prefixes prepend positive "." pathspec', () => {
-    const { primary } = buildGitLsFilesArgsForQuickOpen(['packages/app'])
+    const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(['packages/app'])
     const dashDashIdx = primary.indexOf('--')
     expect(dashDashIdx).toBeGreaterThanOrEqual(0)
     // Positive pathspec must appear before any exclude pathspec.
     expect(primary[dashDashIdx + 1]).toBe('.')
     expect(primary).toContain(':(exclude,glob)packages/app')
     expect(primary).toContain(':(exclude,glob)packages/app/**')
+    expect(ignoredPass).toContain(':(exclude,glob)packages/app')
+    expect(ignoredPass).toContain(':(exclude,glob)packages/app/**')
   })
 })

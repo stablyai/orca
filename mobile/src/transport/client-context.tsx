@@ -37,6 +37,11 @@ type ContextValue = {
   closeHost: (hostId: string) => void
   getState: (hostId: string) => ConnectionState
   getReconnectAttempt: (hostId: string) => number
+  // Why: timestamp (ms epoch) of the last successful 'connected' state
+  // transition for this host, or null if never connected this session.
+  // Used by the UI to escalate "Reconnecting…" into a "host appears
+  // unreachable, re-pair?" prompt.
+  getLastConnectedAt: (hostId: string) => number | null
   subscribeHostState: (hostId: string, listener: (state: ConnectionState) => void) => () => void
   getAllClients: () => Array<{ hostId: string; client: RpcClient }>
   subscribeAllHosts: (listener: () => void) => () => void
@@ -230,6 +235,10 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     return storeRef.current.get(hostId)?.client.getReconnectAttempt() ?? 0
   }, [])
 
+  const getLastConnectedAt = useCallback((hostId: string): number | null => {
+    return storeRef.current.get(hostId)?.client.getLastConnectedAt() ?? null
+  }, [])
+
   const subscribeHostState = useCallback(
     (hostId: string, listener: (state: ConnectionState) => void) => {
       let set = stateListenersRef.current.get(hostId)
@@ -289,6 +298,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       closeHost: closeEntry,
       getState,
       getReconnectAttempt,
+      getLastConnectedAt,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts,
@@ -301,6 +311,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       closeEntry,
       getState,
       getReconnectAttempt,
+      getLastConnectedAt,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts,
@@ -447,4 +458,19 @@ export function useReconnectAttempt(hostId: string | undefined): number {
     return ctx.subscribeHostState(hostId, () => force((n) => n + 1))
   }, [ctx, hostId])
   return hostId ? ctx.getReconnectAttempt(hostId) : 0
+}
+
+// Why: timestamp of last successful connect for this host, or null if
+// the client has never connected. Combined with reconnectAttempt this
+// distinguishes "transient blip" (recently connected) from "host
+// appears unreachable" (never connected, or hasn't connected in N
+// seconds despite many retry attempts).
+export function useLastConnectedAt(hostId: string | undefined): number | null {
+  const ctx = useCtx()
+  const [, force] = useState(0)
+  useEffect(() => {
+    if (!hostId) return
+    return ctx.subscribeHostState(hostId, () => force((n) => n + 1))
+  }, [ctx, hostId])
+  return hostId ? ctx.getLastConnectedAt(hostId) : null
 }

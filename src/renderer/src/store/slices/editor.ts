@@ -5,6 +5,7 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { detectLanguage } from '@/lib/language-detect'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -12,6 +13,7 @@ import type {
   GitConflictOperation,
   GitConflictResolutionStatus,
   GitConflictStatusSource,
+  GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus,
@@ -295,10 +297,16 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     publish?: boolean,
-    connectionId?: string
+    connectionId?: string,
+    pushTarget?: GitPushTarget
   ) => Promise<void>
   pullBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
-  syncBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
+  syncBranch: (
+    worktreeId: string,
+    worktreePath: string,
+    connectionId?: string,
+    pushTarget?: GitPushTarget
+  ) => Promise<void>
   fetchBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
@@ -622,16 +630,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
-        if (
-          existing.mode === file.mode &&
-          existing.diffSource === file.diffSource &&
-          existing.branchCompare?.compareVersion === file.branchCompare?.compareVersion &&
-          existing.conflict?.kind === file.conflict?.kind &&
-          existing.conflict?.conflictKind === file.conflict?.conflictKind &&
-          existing.conflict?.conflictStatus === file.conflict?.conflictStatus &&
-          existing.conflictReview?.snapshotTimestamp === file.conflictReview?.snapshotTimestamp &&
-          existing.isPreview === updatedPreview
-        ) {
+        const needsExistingUpdate =
+          existing.mode !== file.mode ||
+          existing.diffSource !== file.diffSource ||
+          existing.branchCompare?.compareVersion !== file.branchCompare?.compareVersion ||
+          existing.conflict?.kind !== file.conflict?.kind ||
+          existing.conflict?.conflictKind !== file.conflict?.conflictKind ||
+          existing.conflict?.conflictStatus !== file.conflict?.conflictStatus ||
+          existing.conflictReview?.snapshotTimestamp !== file.conflictReview?.snapshotTimestamp ||
+          existing.isPreview !== updatedPreview ||
+          existing.language !== file.language ||
+          existing.relativePath !== file.relativePath ||
+          existing.worktreeId !== file.worktreeId
+        if (!needsExistingUpdate) {
           return activeResult
         }
         return {
@@ -639,6 +650,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             f.id === id
               ? {
                   ...f,
+                  relativePath: file.relativePath,
+                  worktreeId: file.worktreeId,
+                  language: file.language,
                   mode: file.mode,
                   diffSource: file.diffSource,
                   branchCompare: file.branchCompare,
@@ -1899,7 +1913,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       console.error('fetchUpstreamStatus failed', error)
     }
   },
-  pushBranch: async (worktreeId, worktreePath, publish = false, connectionId) => {
+  pushBranch: async (worktreeId, worktreePath, publish = false, connectionId, pushTarget) => {
     // Why: don't *await* a post-op git status / upstream refresh here.
     // Chaining awaited refreshes inside the mutation extends the gap before
     // compound flows (runCompoundCommitAction → runRemoteAction) reach the
@@ -1911,7 +1925,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     // store as soon as the IPC resolves.
     get().beginRemoteOperation(publish ? 'publish' : 'push')
     try {
-      await window.api.git.push({ worktreePath, publish, connectionId })
+      await window.api.git.push({ worktreePath, publish, connectionId, pushTarget })
     } catch (error) {
       toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
@@ -1932,7 +1946,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
     void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
   },
-  syncBranch: async (worktreeId, worktreePath, connectionId) => {
+  syncBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
     // Why: same shape as pushBranch / pullBranch — fire-and-forget the
     // post-op upstream refresh after the busy flag clears so the primary
     // button label rotates immediately when the IPC resolves.
@@ -1955,7 +1969,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       })
       if (upstreamStatus.ahead > 0) {
         try {
-          await window.api.git.push({ worktreePath, connectionId })
+          await window.api.git.push({
+            worktreePath,
+            connectionId,
+            pushTarget
+          })
         } catch (error) {
           // Why: format under the user-facing operation (sync) rather than
           // the inner step (push) — the user clicked Sync and shouldn't see
@@ -2130,7 +2148,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'file') {
-      void window.api.shell.openFileUri(target.uri)
+      if (target.relativePath === undefined) {
+        // Why: terminal file links already authorize clicked external paths
+        // before opening them in Orca. Markdown file:// links need the same
+        // user-gesture authorization so /tmp screenshots can use ImageViewer.
+        await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
+      }
+
+      get().openFile(
+        {
+          filePath: target.absolutePath,
+          relativePath: target.relativePath ?? target.absolutePath,
+          worktreeId: ctx.worktreeId,
+          language: detectLanguage(target.absolutePath),
+          mode: 'edit'
+        },
+        {
+          preview: true,
+          targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+          recordReplacedPreview: true
+        }
+      )
       return
     }
 
@@ -2222,7 +2260,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             filePath: pf.filePath,
             relativePath: pf.relativePath,
             worktreeId,
-            language: pf.language,
+            // Why: sessions can contain language ids from older Orca builds.
+            // Re-detect on hydrate so newly-supported extensions like .ipynb
+            // stop reopening as raw JSON/plain text after the upgrade.
+            language: detectLanguage(pf.relativePath || pf.filePath),
             isDirty: false,
             isPreview: pf.isPreview,
             mode: 'edit'

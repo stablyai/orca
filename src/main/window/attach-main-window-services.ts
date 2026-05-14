@@ -1,5 +1,7 @@
+/* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { app, clipboard, ipcMain, nativeImage, session } from 'electron'
 import type { BrowserWindow } from 'electron'
@@ -23,8 +25,14 @@ import {
   dismissNudge
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
+import type {
+  RuntimeMarkdownReadTabResult,
+  RuntimeMarkdownSaveTabResult
+} from '../../shared/mobile-markdown-document'
+import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -50,20 +58,22 @@ export function attachMainWindowServices(
   // and ensures the handlers are re-installed on macOS app re-activation when
   // the main window is recreated.
   registerDaemonManagementHandlers()
-  // Why: GC runs on a 10s delay so live worktree enumeration completes first.
-  // Uses git worktree list (not store.getWorktreeMeta) because untouched
-  // worktrees have no metadata entries — see design doc §7.6.
+  // Why: do not enumerate repo paths from background GC. `git worktree list`
+  // can re-touch protected folders on macOS and trigger folder-access prompts.
   scheduleHistoryGc(async () => {
-    const repos = store.getRepos()
-    const ids = new Set<string>()
-    for (const repo of repos) {
-      const worktrees = await listRepoWorktrees(repo)
-      for (const wt of worktrees) {
-        ids.add(`${repo.id}::${wt.path}`)
-      }
-    }
-    return ids
+    return getKnownWorktreeIdsForHistoryGc(store)
   })
+  // Why: warm-reattach gap.
+  // Daemon-hosted PTYs survive renderer restarts on purpose, so on a fresh
+  // Orca launch the daemon's `listSessions()` returns sessions that
+  // `pty:spawn` hasn't re-registered yet. Without this hydration, the
+  // memory snapshot omits those PTYs and the renderer mislabels their
+  // workspaces as `· REMOTE` while showing `—` for CPU/Memory.
+  // `hydrateLocalPtyRegistryAtBoot` is idempotent (no-op after the first
+  // call), so calling it on every macOS dock re-activation — when this
+  // function re-runs as the main window is recreated — does not redo the
+  // git I/O or daemon RPC.
+  void hydrateLocalPtyRegistryAtBoot(store)
   registerSshHandlers(store, () => mainWindow, runtime)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
@@ -207,6 +217,8 @@ function registerRuntimeWindowLifecycle(
   }
   runtime.setNotifier({
     worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
+    worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
     activateWorktree: (
       repoId,
@@ -223,6 +235,41 @@ function registerRuntimeWindowLifecycle(
     },
     createTerminal: (worktreeId, opts) =>
       send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+    revealTerminalSession: (worktreeId, opts) =>
+      new Promise((resolve, reject) => {
+        const requestId = randomUUID()
+        const timer = setTimeout(() => {
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('Terminal reveal timed out'))
+        }, 10_000)
+        const handler = (
+          _event: Electron.IpcMainEvent,
+          reply: { requestId: string; tabId?: string; title?: string; error?: string }
+        ): void => {
+          if (reply.requestId !== requestId) {
+            return
+          }
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          if (reply.error) {
+            reject(new Error(reply.error))
+            return
+          }
+          resolve({ tabId: reply.tabId!, title: reply.title })
+        }
+        ipcMain.on('terminal:tabCreateReply', handler)
+        send('ui:createTerminal', {
+          requestId,
+          worktreeId,
+          ptyId: opts.ptyId,
+          title: opts.title ?? undefined,
+          activate: opts.activate !== false,
+          // Why: pre-minted tabId from main keeps the renderer's tab id aligned
+          // with the paneKey baked into the PTY env at spawn time, so hook
+          // events route to the right slot. See docs/cli-terminal-hook-pane-key.md.
+          ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {})
+        })
+      }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
       send('ui:splitTerminal', {
         tabId,
@@ -232,7 +279,26 @@ function registerRuntimeWindowLifecycle(
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
-    focusTerminal: (tabId, worktreeId) => send('ui:focusTerminal', { tabId, worktreeId }),
+    focusTerminal: (tabId, worktreeId, leafId) =>
+      send('ui:focusTerminal', { tabId, worktreeId, leafId }),
+    focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
+    closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
+    openFile: (worktreeId, filePath, relativePath) =>
+      send('ui:openFileFromMobile', { worktreeId, filePath, relativePath }),
+    readMobileMarkdownTab: (worktreeId, tabId) =>
+      requestMobileMarkdownFromRenderer(mainWindow, {
+        operation: 'read',
+        worktreeId,
+        tabId
+      }) as Promise<RuntimeMarkdownReadTabResult>,
+    saveMobileMarkdownTab: (worktreeId, tabId, baseVersion, content) =>
+      requestMobileMarkdownFromRenderer(mainWindow, {
+        operation: 'save',
+        worktreeId,
+        tabId,
+        baseVersion,
+        content
+      }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
@@ -259,7 +325,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
       _event,
       args:
         | { paths: string[]; target: 'editor' }
-        | { paths: string[]; target: 'terminal' }
+        | { paths: string[]; target: 'terminal'; tabId?: string }
         | { paths: string[]; target: 'composer' }
         | { paths: string[]; target: 'file-explorer'; destinationDir: string }
     ) => {

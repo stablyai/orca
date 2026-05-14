@@ -8,23 +8,44 @@ import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'node:crypto'
 import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationDispatchResult,
+  AutomationRun,
+  AutomationRunTrigger,
+  AutomationUpdateInput
+} from '../shared/automations-types'
+import {
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from '../shared/automation-schedules'
+import type {
   PersistedState,
   Repo,
   SparsePreset,
   WorktreeMeta,
-  GlobalSettings
+  GlobalSettings,
+  OnboardingChecklistState,
+  OnboardingOutcome,
+  OnboardingState,
+  TerminalPaneLayoutNode
 } from '../shared/types'
-import type { SshTarget } from '../shared/ssh-types'
+import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
+  getDefaultOnboardingState,
   getDefaultUIState,
   getDefaultRepoHookSettings,
-  getDefaultWorkspaceSession
+  getDefaultWorkspaceSession,
+  ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
+import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -53,6 +74,14 @@ function decrypt(ciphertext: string): string {
     )
     return ciphertext
   }
+}
+
+function encryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? encrypt(value) : null
+}
+
+function decryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? decrypt(value) : null
 }
 
 // Why: the data-file path must not be a module-level constant. Module-level
@@ -95,6 +124,115 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
 }
 
+// Why: shared by load-time merge and the IPC update handler so the same
+// strict whitelist guards every entry into onboarding state — arbitrary
+// renderer/disk input cannot inject unknown keys or wrong-typed values.
+// Returns only validated fields; unknown keys are dropped silently.
+// Why: returns Partial<...> with a partial checklist so the IPC update path
+// merges over current state without wiping previously-true keys. Invalid
+// top-level fields are OMITTED (not coerced to fallbacks) so partial updates
+// don't clobber valid persisted state; the load-path caller spreads defaults.
+export function sanitizeOnboardingUpdate(
+  input: unknown
+): Partial<Omit<OnboardingState, 'checklist'>> & { checklist?: Partial<OnboardingChecklistState> } {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+  const raw = input as Record<string, unknown>
+  const out: Partial<Omit<OnboardingState, 'checklist'>> & {
+    checklist?: Partial<OnboardingChecklistState>
+  } = {}
+
+  if ('closedAt' in raw) {
+    // Why: `typeof raw.closedAt === 'number'` would let NaN/Infinity through;
+    // JSON.stringify writes those as `null` on save, which silently reverts
+    // closedAt and re-opens the wizard on next load. Require a finite,
+    // non-negative timestamp so live state matches what disk can persist.
+    if (typeof raw.closedAt === 'number' && Number.isFinite(raw.closedAt) && raw.closedAt >= 0) {
+      out.closedAt = raw.closedAt
+    } else if (raw.closedAt === null) {
+      out.closedAt = null
+    }
+    // else: omit — preserve existing persisted value on merge.
+  }
+  if ('outcome' in raw) {
+    const v = raw.outcome
+    if (v === 'completed' || v === 'dismissed') {
+      out.outcome = v as OnboardingOutcome
+    } else if (v === null) {
+      out.outcome = null
+    }
+    // else: omit.
+  }
+  if ('lastCompletedStep' in raw) {
+    const v = raw.lastCompletedStep
+    if (typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP) {
+      out.lastCompletedStep = v
+    }
+    // else: omit.
+  }
+  if ('checklist' in raw) {
+    const rawChecklist = raw.checklist
+    if (rawChecklist && typeof rawChecklist === 'object' && !Array.isArray(rawChecklist)) {
+      // Why: copy ONLY caller-sent boolean keys so partial updates (e.g.
+      // `{ addedRepo: true }`) don't reset other checklist items to false.
+      const defaults = getDefaultOnboardingState().checklist
+      const rc = rawChecklist as Record<string, unknown>
+      const checklist: Partial<OnboardingChecklistState> = {}
+      for (const key of Object.keys(defaults) as (keyof OnboardingChecklistState)[]) {
+        if (key in rc && typeof rc[key] === 'boolean') {
+          checklist[key] = rc[key] as boolean
+        }
+      }
+      out.checklist = checklist
+    }
+  }
+  return out
+}
+
+// Why: read a settings field that was removed from the GlobalSettings type
+// but still round-trips on disk via the ...parsed.settings spread. One-shot
+// use only — for the inline-agents default-on migration's Case B discriminator.
+// Delete with the migration in the cleanup release (2+ stable releases after
+// _inlineAgentsDefaultedForAllUsers ships).
+function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
+  return (
+    (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
+      ?.experimentalAgentDashboard === true
+  )
+}
+
+function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | undefined {
+  return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
+}
+
+function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const raw = value as Partial<SshRemotePtyLease>
+  if (typeof raw.targetId !== 'string' || typeof raw.ptyId !== 'string') {
+    return null
+  }
+  const state = raw.state ?? 'detached'
+  if (!['attached', 'detached', 'terminated', 'expired'].includes(state)) {
+    return null
+  }
+  const now = Date.now()
+  return {
+    targetId: raw.targetId,
+    ptyId: raw.ptyId,
+    ...(typeof raw.worktreeId === 'string' ? { worktreeId: raw.worktreeId } : {}),
+    ...(typeof raw.tabId === 'string' ? { tabId: raw.tabId } : {}),
+    ...(typeof raw.leafId === 'string' ? { leafId: raw.leafId } : {}),
+    state,
+    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
+    ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
+    ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
+  }
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -128,6 +266,9 @@ export class Store {
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
         }
+        if (parsed.ui?.browserKagiSessionLink) {
+          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
+        }
 
         // Merge with defaults in case new fields were added
         const defaults = getDefaultPersistedState(homedir())
@@ -151,14 +292,32 @@ export class Store {
           : rawOptionAsAlt === undefined || rawOptionAsAlt === 'true'
             ? 'auto'
             : rawOptionAsAlt
+        const floatingTerminalDefaultedForAllUsers =
+          parsed.settings?.floatingTerminalDefaultedForAllUsers === true
+        // Why: early floating-terminal builds persisted the old off-by-default
+        // value into user profiles. Flip only unmigrated profiles so a later
+        // deliberate opt-out still survives reload.
+        const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
+          ? (parsed.settings?.floatingTerminalEnabled ?? true)
+          : true
         result = {
           ...defaults,
           ...parsed,
           settings: {
             ...defaults.settings,
             ...parsed.settings,
+            // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
+            // the old persisted flag forward once so enabled users don't lose it.
+            experimentalPet:
+              parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
+            // Why: Activity graduated from its experimental gate. Force the
+            // legacy flag on so existing profiles and rollback builds see the
+            // same default-on behavior as fresh installs.
+            experimentalActivity: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            floatingTerminalEnabled: migratedFloatingTerminalEnabled,
+            floatingTerminalDefaultedForAllUsers: true,
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications
@@ -175,24 +334,42 @@ export class Store {
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
             // Why: the 'inline-agents' card property was added after the
-            // experimentalAgentDashboard toggle. Users who had the toggle on
-            // in a prior rc already had worktreeCardProperties persisted
-            // without the new entry, so a simple defaults merge wouldn't
-            // reach them and the inline agent list stayed hidden after
-            // upgrade. One-shot append 'inline-agents' to their persisted
-            // array when the experimental toggle is true; the flag prevents
-            // re-firing so a deliberate uncheck from the Workspaces view
-            // options menu sticks across restarts.
-            // The flag is stamped on every successful load — including when
-            // the experiment is off — so that a later flip-on is handled by
-            // the renderer's ExperimentalPane handler rather than re-firing
-            // this migration.
+            // feature shipped behind an experimental toggle. Now that the
+            // feature is default-on for everyone, every existing user needs
+            // 'inline-agents' appended to their persisted
+            // worktreeCardProperties on first load after upgrade so the
+            // inline agent rows render without further opt-in. A flag
+            // prevents re-firing so a deliberate uncheck from the Workspaces
+            // view options menu sticks across restarts.
+            //
+            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
+            // That legacy flag was stamped unconditionally on every successful
+            // load() in prior builds, regardless of whether the experiment was
+            // toggled on. Every prior-RC user therefore already has it set to
+            // true on disk, including the opt-out cohort this widened
+            // migration was specifically written to reach. Gating on the
+            // legacy flag would silently skip exactly those users. The
+            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
+            // the new default-on migration can distinguish "already migrated
+            // under the new rules" from "happened to launch a prior build".
+            //
+            // Case B preservation: a user who turned the experiment on and then
+            // deliberately unchecked 'inline-agents' from the sidebar options
+            // menu has the same on-disk shape as a never-touched user. The
+            // discriminator below reads the deprecated `experimentalAgentDashboard`
+            // value as a one-shot signal. Both branches of the migration stamp
+            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
+            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
-            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForExperiment === true
-            const experimentOn = parsed.settings?.experimentalAgentDashboard === true
+            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
+            const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
+            const deliberateUncheck =
+              hadExperimentOn &&
+              Array.isArray(rawCardProps) &&
+              !rawCardProps.includes('inline-agents')
             const needsInlineAgentsMigration =
               !inlineAgentsMigrated &&
-              experimentOn &&
+              !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
             const migratedCardProps =
@@ -207,7 +384,11 @@ export class Store {
               ...(migratedCardProps !== undefined
                 ? { worktreeCardProperties: migratedCardProps }
                 : {}),
-              _inlineAgentsDefaultedForExperiment: true
+              // Why: keep stamping the legacy flag for forward-compat with
+              // a rollback to a pre-default-on build that still reads it.
+              // The new flag is the one that actually gates the migration.
+              _inlineAgentsDefaultedForExperiment: true,
+              _inlineAgentsDefaultedForAllUsers: true
             }
           })(),
           // Why: the workspace session is the most volatile persisted surface
@@ -231,7 +412,42 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
-          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget)
+          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
+            .map(normalizeSshRemotePtyLease)
+            .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          automations: Array.isArray(parsed.automations) ? parsed.automations : [],
+          automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
+          onboarding: (() => {
+            // Why: if we successfully parsed an existing orca-data.json that
+            // lacks an onboarding block, this is an upgrade-cohort user —
+            // backfill as completed (not dismissed) so they don't get dropped
+            // into the wizard regardless of whether they currently have repos,
+            // SSH targets, or just non-default settings. Analytics still
+            // distinguish this from users who explicitly bailed mid-funnel.
+            if (!parsed.onboarding) {
+              return {
+                ...defaults.onboarding,
+                closedAt: Date.now(),
+                outcome: 'completed' as const,
+                lastCompletedStep: ONBOARDING_FINAL_STEP
+              }
+            }
+            // Why: validate every persisted onboarding key explicitly via the
+            // shared sanitizer instead of spreading raw values. A type-flipped
+            // field on disk (string where number expected, unknown checklist
+            // key) is dropped or coerced to the default rather than poisoning
+            // in-memory state.
+            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding)
+            return {
+              ...defaults.onboarding,
+              ...sanitized,
+              checklist: {
+                ...defaults.onboarding.checklist,
+                ...sanitized.checklist
+              }
+            }
+          })()
         }
       }
     } catch (err) {
@@ -245,6 +461,13 @@ export class Store {
     // must see the opt-in banner, not the default-on toast.
     if (result === null) {
       result = getDefaultPersistedState(homedir())
+    }
+
+    result = {
+      ...result,
+      workspaceSession: pruneWorkspaceSessionBrowserHistory(
+        pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+      )
     }
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
@@ -348,6 +571,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -389,6 +616,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -417,6 +648,16 @@ export class Store {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
   }
 
+  /**
+   * O(1) read of the persisted repo count. Use this when you only need the
+   * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
+   * may run a synchronous git subprocess via `getGitUsername()`, which is
+   * wasteful when the caller only reads `.length`.
+   */
+  getRepoCount(): number {
+    return this.state.repos.length
+  }
+
   getRepo(id: string): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
     return repo ? this.hydrateRepo(repo) : undefined
@@ -425,6 +666,38 @@ export class Store {
   addRepo(repo: Repo): void {
     this.state.repos.push(repo)
     this.scheduleSave()
+  }
+
+  // Why: returns false on a stale permutation (concurrent add/remove races
+  // the renderer's drag) so the caller can tell the renderer to resync rather
+  // than persist an order that drops or duplicates ids.
+  reorderRepos(orderedIds: string[]): boolean {
+    const current = this.state.repos
+    if (orderedIds.length !== current.length) {
+      return false
+    }
+    const seen = new Set<string>()
+    for (const id of orderedIds) {
+      if (typeof id !== 'string' || seen.has(id)) {
+        return false
+      }
+      seen.add(id)
+    }
+    const byId = new Map<string, Repo>()
+    for (const r of current) {
+      byId.set(r.id, r)
+    }
+    const next: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = byId.get(id)
+      if (!repo) {
+        return false
+      }
+      next.push(repo)
+    }
+    this.state.repos = next
+    this.scheduleSave()
+    return true
   }
 
   removeRepo(id: string): void {
@@ -526,6 +799,186 @@ export class Store {
     this.scheduleSave()
   }
 
+  // ── Automations ───────────────────────────────────────────────────
+
+  listAutomations(): Automation[] {
+    return [...(this.state.automations ?? [])].sort((left, right) =>
+      left.name.localeCompare(right.name)
+    )
+  }
+
+  listAutomationRuns(automationId?: string): AutomationRun[] {
+    const runs = this.state.automationRuns ?? []
+    return [
+      ...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)
+    ].sort((left, right) => right.createdAt - left.createdAt)
+  }
+
+  createAutomation(input: AutomationCreateInput): Automation {
+    const repo = this.state.repos.find((entry) => entry.id === input.projectId)
+    const now = Date.now()
+    const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const automation: Automation = {
+      id: randomUUID(),
+      name: input.name.trim() || 'Untitled automation',
+      prompt: input.prompt,
+      agentId: input.agentId,
+      projectId: input.projectId,
+      executionTargetType,
+      executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
+      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      workspaceMode: input.workspaceMode,
+      workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
+      baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      timezone: input.timezone,
+      rrule: input.rrule,
+      dtstart: input.dtstart,
+      enabled: input.enabled ?? true,
+      nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
+      missedRunPolicy: 'run_once_within_grace',
+      missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.automations = [...(this.state.automations ?? []), automation]
+    this.flush()
+    return automation
+  }
+
+  updateAutomation(id: string, updates: AutomationUpdateInput): Automation {
+    const index = (this.state.automations ?? []).findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation not found.')
+    }
+    const current = this.state.automations[index]
+    const repoId = updates.projectId ?? current.projectId
+    const repo = this.state.repos.find((entry) => entry.id === repoId)
+    const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const rrule = updates.rrule ?? current.rrule
+    const dtstart = updates.dtstart ?? current.dtstart
+    const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
+    const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+    const updated: Automation = {
+      ...current,
+      ...updates,
+      name:
+        updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
+      projectId: repoId,
+      executionTargetType,
+      executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
+      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      workspaceMode,
+      workspaceId:
+        workspaceMode === 'existing'
+          ? Object.hasOwn(updates, 'workspaceId')
+            ? (updates.workspaceId ?? null)
+            : current.workspaceId
+          : null,
+      baseBranch:
+        workspaceMode === 'new_per_run'
+          ? Object.hasOwn(updates, 'baseBranch')
+            ? (updates.baseBranch ?? null)
+            : (current.baseBranch ?? null)
+          : null,
+      rrule,
+      dtstart,
+      nextRunAt: scheduleChanged
+        ? nextAutomationOccurrenceAfter(rrule, dtstart, Date.now())
+        : current.nextRunAt,
+      updatedAt: Date.now()
+    }
+    this.state.automations[index] = updated
+    this.flush()
+    return updated
+  }
+
+  deleteAutomation(id: string): void {
+    this.state.automations = (this.state.automations ?? []).filter((entry) => entry.id !== id)
+    this.state.automationRuns = (this.state.automationRuns ?? []).filter(
+      (entry) => entry.automationId !== id
+    )
+    this.flush()
+  }
+
+  createAutomationRun(
+    automation: Automation,
+    scheduledFor: number,
+    trigger: AutomationRunTrigger = 'scheduled'
+  ): AutomationRun {
+    const existing = (this.state.automationRuns ?? []).find(
+      (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
+    )
+    if (existing) {
+      return existing
+    }
+    const now = Date.now()
+    const runNumber =
+      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id).length +
+      1
+    const run: AutomationRun = {
+      id: randomUUID(),
+      automationId: automation.id,
+      title: `${automation.name} run ${runNumber}`,
+      scheduledFor,
+      status: 'pending',
+      trigger,
+      workspaceId: automation.workspaceId,
+      sessionKind: 'terminal',
+      chatSessionId: null,
+      terminalSessionId: null,
+      error: null,
+      startedAt: null,
+      dispatchedAt: null,
+      createdAt: now
+    }
+    this.state.automationRuns = [...(this.state.automationRuns ?? []), run]
+    this.flush()
+    return run
+  }
+
+  updateAutomationRun(result: AutomationDispatchResult): AutomationRun {
+    const index = (this.state.automationRuns ?? []).findIndex((entry) => entry.id === result.runId)
+    if (index === -1) {
+      throw new Error('Automation run not found.')
+    }
+    const now = Date.now()
+    const current = this.state.automationRuns[index]
+    const updated: AutomationRun = {
+      ...current,
+      status: result.status,
+      workspaceId: result.workspaceId ?? current.workspaceId,
+      terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      error: result.error ?? null,
+      startedAt: current.startedAt ?? now,
+      dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
+    }
+    this.state.automationRuns[index] = updated
+    const automation = this.state.automations.find((entry) => entry.id === updated.automationId)
+    if (automation) {
+      automation.lastRunAt = now
+      automation.updatedAt = now
+    }
+    this.flush()
+    return updated
+  }
+
+  advanceAutomationNextRun(id: string, now = Date.now()): Automation {
+    const index = (this.state.automations ?? []).findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation not found.')
+    }
+    const current = this.state.automations[index]
+    const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
+    const updated = { ...current, nextRunAt, updatedAt: Date.now() }
+    this.state.automations[index] = updated
+    this.flush()
+    return updated
+  }
+
+  getLatestAutomationOccurrence(automation: Automation, now = Date.now()): number | null {
+    return latestAutomationOccurrenceAtOrBefore(automation.rrule, automation.dtstart, now)
+  }
+
   // ── Worktree Meta ──────────────────────────────────────────────────
 
   getWorktreeMeta(worktreeId: string): WorktreeMeta | undefined {
@@ -600,6 +1053,38 @@ export class Store {
     this.scheduleSave()
   }
 
+  // ── Onboarding ────────────────────────────────────────────────────
+
+  getOnboarding(): PersistedState['onboarding'] {
+    const defaults = getDefaultOnboardingState()
+    return {
+      ...defaults,
+      ...this.state.onboarding,
+      checklist: {
+        ...defaults.checklist,
+        ...this.state.onboarding?.checklist
+      }
+    }
+  }
+
+  updateOnboarding(
+    updates: Partial<Omit<PersistedState['onboarding'], 'checklist'>> & {
+      checklist?: Partial<OnboardingChecklistState>
+    }
+  ): PersistedState['onboarding'] {
+    const current = this.getOnboarding()
+    this.state.onboarding = {
+      ...current,
+      ...updates,
+      checklist: {
+        ...current.checklist,
+        ...updates.checklist
+      }
+    }
+    this.scheduleSave()
+    return this.getOnboarding()
+  }
+
   // ── GitHub Cache ──────────────────────────────────────────────────
 
   getGitHubCache(): PersistedState['githubCache'] {
@@ -618,8 +1103,193 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    session = pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    )
+
+    // Why: closes the second half of the SIGKILL race (Issue #217). The
+    // renderer's debounced session writer captures its state BEFORE pty:spawn
+    // returns, so the snapshot it later flushes via session:set has no
+    // tab.ptyId / ptyIdsByLeafId for the just-spawned PTY. If that stale
+    // snapshot lands AFTER persistPtyBinding's sync flush, it would overwrite
+    // the durable binding and re-open the orphan window. Merge in any
+    // existing bindings whenever the incoming snapshot's binding is empty.
+    const prior = this.state.workspaceSession
+    if (session && prior) {
+      const priorTabs = prior.tabsByWorktree ?? {}
+      const nextTabs = session.tabsByWorktree ?? {}
+      const worktreeIdByTabId = new Map<string, string>()
+      for (const [worktreeId, tabs] of Object.entries({ ...priorTabs, ...nextTabs })) {
+        for (const tab of tabs) {
+          worktreeIdByTabId.set(tab.id, worktreeId)
+        }
+      }
+      for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
+        const priorList = priorTabs[worktreeId]
+        if (!priorList) {
+          continue
+        }
+        for (const tab of tabs) {
+          if (tab.ptyId) {
+            continue
+          }
+          const priorTab = priorList.find((t) => t.id === tab.id)
+          if (
+            priorTab?.ptyId &&
+            this.isRestorablePtyBinding({
+              ptyId: priorTab.ptyId,
+              worktreeId,
+              targetId: this.getConnectionIdForWorktree(worktreeId),
+              tabId: tab.id
+            })
+          ) {
+            tab.ptyId = priorTab.ptyId
+          }
+        }
+      }
+      const priorLayouts = prior.terminalLayoutsByTabId ?? {}
+      const nextLayouts = session.terminalLayoutsByTabId ?? {}
+      for (const [tabId, layout] of Object.entries(nextLayouts)) {
+        const priorLayout = priorLayouts[tabId]
+        if (!priorLayout?.ptyIdsByLeafId) {
+          continue
+        }
+        const incoming = layout.ptyIdsByLeafId ?? {}
+        const incomingHasAnyBinding = Object.keys(incoming).length > 0
+        const liveLeafIds = this.getTerminalLayoutLeafIds(layout.root)
+        const worktreeId = worktreeIdByTabId.get(tabId)
+        const targetId = worktreeId ? this.getConnectionIdForWorktree(worktreeId) : null
+        const restorableBindings = Object.fromEntries(
+          Object.entries(priorLayout.ptyIdsByLeafId).filter(
+            ([leafId, ptyId]) =>
+              liveLeafIds.has(leafId) &&
+              incoming[leafId] === undefined &&
+              // Why: an empty layout map can be a stale pre-spawn snapshot; a
+              // partial map is intentional unless a durable SSH lease proves it.
+              (incomingHasAnyBinding
+                ? this.hasRestorableSshRemotePtyLease({
+                    ptyId,
+                    targetId,
+                    worktreeId,
+                    tabId,
+                    leafId
+                  })
+                : this.isRestorablePtyBinding({ ptyId, targetId, worktreeId, tabId, leafId }))
+          )
+        )
+        if (Object.keys(restorableBindings).length > 0) {
+          layout.ptyIdsByLeafId = { ...restorableBindings, ...incoming }
+        }
+      }
+    }
     this.state.workspaceSession = session
     this.scheduleSave()
+  }
+
+  private getTerminalLayoutLeafIds(root: TerminalPaneLayoutNode | null): Set<string> {
+    const leafIds = new Set<string>()
+    const visit = (node: TerminalPaneLayoutNode | null): void => {
+      if (!node) {
+        return
+      }
+      if (node.type === 'leaf') {
+        leafIds.add(node.leafId)
+        return
+      }
+      visit(node.first)
+      visit(node.second)
+    }
+    visit(root)
+    return leafIds
+  }
+
+  private isRestorablePtyBinding(binding: {
+    ptyId: string
+    targetId?: string | null
+    worktreeId?: string
+    tabId?: string
+    leafId?: string
+  }): boolean {
+    const leases = this.state.sshRemotePtyLeases?.filter((entry) =>
+      this.sshRemotePtyLeaseMatchesBinding(entry, binding)
+    )
+    return !leases?.some((lease) => lease.state === 'terminated' || lease.state === 'expired')
+  }
+
+  private sshRemotePtyLeaseMatchesBinding(
+    lease: SshRemotePtyLease,
+    binding: {
+      ptyId: string
+      targetId?: string | null
+      worktreeId?: string
+      tabId?: string
+      leafId?: string
+    }
+  ): boolean {
+    if (lease.ptyId !== binding.ptyId) {
+      return false
+    }
+    // Why: remote PTY ids are scoped to a relay target. Workspace PTY bindings
+    // only store the id, so derive target/context when possible and require
+    // stored lease context to match instead of treating missing fields as
+    // wildcards that can tombstone unrelated panes.
+    return (
+      (binding.targetId === undefined ||
+        binding.targetId === null ||
+        lease.targetId === binding.targetId) &&
+      (binding.worktreeId === undefined || lease.worktreeId === binding.worktreeId) &&
+      (binding.tabId === undefined || lease.tabId === binding.tabId) &&
+      (binding.leafId === undefined || lease.leafId === binding.leafId)
+    )
+  }
+
+  private hasRestorableSshRemotePtyLease(binding: {
+    ptyId: string
+    targetId?: string | null
+    worktreeId?: string
+    tabId?: string
+    leafId?: string
+  }): boolean {
+    return (
+      this.state.sshRemotePtyLeases?.some(
+        (lease) =>
+          this.sshRemotePtyLeaseMatchesBinding(lease, binding) &&
+          lease.state !== 'terminated' &&
+          lease.state !== 'expired'
+      ) ?? false
+    )
+  }
+
+  private sshRemotePtyLeaseMayReferenceBinding(
+    lease: SshRemotePtyLease,
+    binding: {
+      ptyId: string
+      targetId: string
+      worktreeId?: string
+      tabId?: string
+      leafId?: string
+    }
+  ): boolean {
+    if (lease.targetId !== binding.targetId || lease.ptyId !== binding.ptyId) {
+      return false
+    }
+    // Why: target removal is destructive. Legacy/contextless leases should
+    // scrub matching workspace bindings before the lease record is deleted,
+    // otherwise removing the tombstone can let stale PTY ids revive later.
+    return (
+      (binding.worktreeId === undefined ||
+        lease.worktreeId === undefined ||
+        lease.worktreeId === binding.worktreeId) &&
+      (binding.tabId === undefined || lease.tabId === undefined || lease.tabId === binding.tabId) &&
+      (binding.leafId === undefined ||
+        lease.leafId === undefined ||
+        lease.leafId === binding.leafId)
+    )
+  }
+
+  private getConnectionIdForWorktree(worktreeId: string): string | null {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
   // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217). The
@@ -702,6 +1372,149 @@ export class Store {
     }
     this.state.sshTargets = this.state.sshTargets.filter((t) => t.id !== id)
     this.scheduleSave()
+  }
+
+  // ── SSH Remote PTY Leases ──────────────────────────────────────────
+
+  getSshRemotePtyLeases(targetId?: string): SshRemotePtyLease[] {
+    const leases = this.state.sshRemotePtyLeases ?? []
+    return leases.filter((lease) => targetId === undefined || lease.targetId === targetId)
+  }
+
+  upsertSshRemotePtyLease(
+    lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
+      Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
+  ): void {
+    this.state.sshRemotePtyLeases ??= []
+    const now = Date.now()
+    const existingIndex = this.state.sshRemotePtyLeases.findIndex(
+      (entry) => entry.targetId === lease.targetId && entry.ptyId === lease.ptyId
+    )
+    const existing = existingIndex >= 0 ? this.state.sshRemotePtyLeases[existingIndex] : undefined
+    const next: SshRemotePtyLease = {
+      ...existing,
+      ...lease,
+      createdAt: existing?.createdAt ?? lease.createdAt ?? now,
+      updatedAt: lease.updatedAt ?? now
+    }
+    if (existingIndex >= 0) {
+      this.state.sshRemotePtyLeases[existingIndex] = next
+    } else {
+      this.state.sshRemotePtyLeases.push(next)
+    }
+    this.flush()
+  }
+
+  markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
+    const now = Date.now()
+    let changed = false
+    this.state.sshRemotePtyLeases ??= []
+    for (const lease of this.state.sshRemotePtyLeases) {
+      if (lease.targetId !== targetId || lease.state === state) {
+        continue
+      }
+      if (state === 'detached' && lease.state !== 'attached') {
+        continue
+      }
+      lease.state = state
+      lease.updatedAt = now
+      if (state === 'attached') {
+        lease.lastAttachedAt = now
+      } else if (state === 'detached') {
+        lease.lastDetachedAt = now
+      }
+      changed = true
+    }
+    if (changed) {
+      this.flush()
+    }
+  }
+
+  markSshRemotePtyLease(targetId: string, ptyId: string, state: SshRemotePtyLease['state']): void {
+    const lease = this.state.sshRemotePtyLeases?.find(
+      (entry) => entry.targetId === targetId && entry.ptyId === ptyId
+    )
+    if (!lease || lease.state === state) {
+      return
+    }
+    const now = Date.now()
+    lease.state = state
+    lease.updatedAt = now
+    if (state === 'attached') {
+      lease.lastAttachedAt = now
+    } else if (state === 'detached') {
+      lease.lastDetachedAt = now
+    }
+    this.flush()
+  }
+
+  removeSshRemotePtyLeases(targetId: string): void {
+    this.state.sshRemotePtyLeases ??= []
+    this.clearSshRemotePtyBindingsForTarget(targetId)
+    const before = this.state.sshRemotePtyLeases.length
+    this.state.sshRemotePtyLeases = this.state.sshRemotePtyLeases.filter(
+      (lease) => lease.targetId !== targetId
+    )
+    if (this.state.sshRemotePtyLeases.length !== before) {
+      this.flush()
+    }
+  }
+
+  private clearSshRemotePtyBindingsForTarget(targetId: string): void {
+    const leases = this.state.sshRemotePtyLeases?.filter((lease) => lease.targetId === targetId)
+    const session = this.state.workspaceSession
+    if (!leases?.length || !session) {
+      return
+    }
+    let changed = false
+    for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+      for (const tab of tabs) {
+        if (
+          tab.ptyId &&
+          leases.some((lease) =>
+            this.sshRemotePtyLeaseMayReferenceBinding(lease, {
+              ptyId: tab.ptyId!,
+              worktreeId,
+              targetId,
+              tabId: tab.id
+            })
+          )
+        ) {
+          tab.ptyId = null
+          changed = true
+        }
+      }
+    }
+    for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+      const bindings = layout.ptyIdsByLeafId
+      if (!bindings) {
+        continue
+      }
+      const worktreeId = Object.entries(session.tabsByWorktree ?? {}).find(([, tabs]) =>
+        tabs.some((tab) => tab.id === tabId)
+      )?.[0]
+      const nextBindings = Object.fromEntries(
+        Object.entries(bindings).filter(
+          ([leafId, ptyId]) =>
+            !leases.some((lease) =>
+              this.sshRemotePtyLeaseMayReferenceBinding(lease, {
+                ptyId,
+                targetId,
+                worktreeId,
+                tabId,
+                leafId
+              })
+            )
+        )
+      )
+      if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
+        layout.ptyIdsByLeafId = nextBindings
+        changed = true
+      }
+    }
+    if (changed) {
+      this.scheduleSave()
+    }
   }
 
   // ── Flush (for shutdown) ───────────────────────────────────────────

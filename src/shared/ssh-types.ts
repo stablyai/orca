@@ -52,6 +52,21 @@ export type SshConnectionState = {
   reconnectAttempt: number
 }
 
+export type SshRemotePtyLeaseState = 'attached' | 'detached' | 'terminated' | 'expired'
+
+export type SshRemotePtyLease = {
+  targetId: string
+  ptyId: string
+  worktreeId?: string
+  tabId?: string
+  leafId?: string
+  state: SshRemotePtyLeaseState
+  createdAt: number
+  updatedAt: number
+  lastAttachedAt?: number
+  lastDetachedAt?: number
+}
+
 // ─── Port Forwarding Types ─────────────────────────────────────────
 
 export type PortForwardEntry = {

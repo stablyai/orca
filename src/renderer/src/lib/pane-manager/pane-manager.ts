@@ -17,14 +17,8 @@ import {
   handlePaneDrop,
   updateMultiPaneState
 } from './pane-drag-reorder'
-import {
-  createPaneDOM,
-  openTerminal,
-  attachWebgl,
-  disposeWebgl,
-  setLigaturesEnabled,
-  disposePane
-} from './pane-lifecycle'
+import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
+import { disposeWebgl } from './pane-webgl-renderer'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import {
   findPaneChildren,
@@ -40,6 +34,13 @@ import { scheduleSplitScrollRestore } from './pane-split-scroll'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
+import {
+  markPaneComplexScriptOutput,
+  resumePaneRendering,
+  setPaneGpuRenderingState,
+  suspendPaneRendering
+} from './pane-rendering-control'
+import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
 
@@ -47,7 +48,7 @@ export class PaneManager {
   private root: HTMLElement
   private panes: Map<number, ManagedPaneInternal> = new Map()
   private activePaneId: number | null = null
-  private nextPaneId = 1
+  private nextPaneId = FIRST_PANE_ID
   private options: PaneManagerOptions
   private styleOptions: PaneStyleOptions = {}
   private destroyed = false
@@ -224,50 +225,25 @@ export class PaneManager {
   }
 
   setPaneGpuRendering(paneId: number, enabled: boolean): void {
-    const pane = this.panes.get(paneId)
-    if (!pane) {
-      return
-    }
-    pane.gpuRenderingEnabled = enabled
-    if (!enabled) {
-      disposeWebgl(pane, { refreshDimensions: true })
-      return
-    }
-    if (pane.webglAttachmentDeferred || pane.webglDisabledAfterContextLoss) {
-      return
-    }
-    if (!pane.webglAddon) {
-      attachWebgl(pane)
-      safeFit(pane)
-    }
+    setPaneGpuRenderingState(this.panes, paneId, enabled)
   }
 
   setTerminalGpuAcceleration(mode: PaneManagerOptions['terminalGpuAcceleration']): void {
     applyTerminalGpuAcceleration(this.panes.values(), this.options, mode)
   }
 
+  markPaneHasComplexScriptOutput(paneId: number): void {
+    markPaneComplexScriptOutput(this.panes, paneId)
+  }
+
   suspendRendering(): void {
     this.renderingSuspended = true
-    for (const pane of this.panes.values()) {
-      pane.webglAttachmentDeferred = true
-      disposeWebgl(pane)
-    }
+    suspendPaneRendering(this.panes.values())
   }
 
   resumeRendering(): void {
     this.renderingSuspended = false
-    for (const pane of this.panes.values()) {
-      pane.webglAttachmentDeferred = false
-      reattachWebglIfNeeded(pane)
-      // Why: fresh WebGL canvas has no content — refresh prevents frozen terminal.
-      if (pane.webglAddon) {
-        try {
-          pane.terminal.refresh(0, pane.terminal.rows - 1)
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+    resumePaneRendering(this.panes.values())
   }
 
   movePane(sourcePaneId: number, targetPaneId: number, zone: DropZone): void {

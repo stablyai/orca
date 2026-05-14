@@ -15,6 +15,7 @@ import type {
   TerminalPaneLayoutNode,
   WorkspaceSessionState
 } from './types'
+import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -182,6 +183,10 @@ const browserHistoryEntrySchema = z.object({
   visitCount: z.number()
 })
 
+const browserHistoryEntriesSchema = z
+  .array(browserHistoryEntrySchema)
+  .transform((entries) => normalizeBrowserHistoryEntries(entries))
+
 // ─── Workspace session ──────────────────────────────────────────────
 
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
@@ -197,7 +202,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   browserPagesByWorkspace: z.record(z.string(), z.array(browserPageSchema)).optional(),
   activeBrowserTabIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
   activeTabTypeByWorktree: z.record(z.string(), workspaceVisibleTabTypeSchema).optional(),
-  browserUrlHistory: z.array(browserHistoryEntrySchema).optional(),
+  browserUrlHistory: browserHistoryEntriesSchema.optional(),
   activeTabIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
   unifiedTabs: z.record(z.string(), z.array(tabSchema)).optional(),
   tabGroups: z.record(z.string(), z.array(tabGroupSchema)).optional(),

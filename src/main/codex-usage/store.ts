@@ -2,7 +2,6 @@
 import { app } from 'electron'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
-import type { Repo } from '../../shared/types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -13,11 +12,10 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
-import { listRepoWorktrees } from '../repo-worktrees'
 import type { Store } from '../persistence'
-import { mergeWorktree } from '../ipc/worktree-logic'
+import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
-import { createWorktreeRefs, getDefaultWorktreeLabel, scanCodexUsageFiles } from './scanner'
+import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
 
 const SCHEMA_VERSION = 2
 const STALE_MS = 5 * 60_000
@@ -26,8 +24,11 @@ let _codexUsageFile: string | null = null
 
 const MODEL_PRICING: Record<string, { input: number; cachedInput: number; output: number }> = {
   'gpt-5': { input: 1.25, cachedInput: 0.125, output: 10 },
-  'gpt-5.2-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
-  'gpt-5.3-codex': { input: 1.9, cachedInput: 0.19, output: 15 }
+  'gpt-5.1': { input: 1.25, cachedInput: 0.125, output: 10 },
+  'gpt-5.2': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.3-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.4': { input: 2.5, cachedInput: 0.25, output: 15 },
+  'gpt-5.5': { input: 5, cachedInput: 0.5, output: 30 }
 }
 
 function getDefaultState(): CodexUsagePersistedState {
@@ -80,14 +81,23 @@ function normalizeModelForPricing(model: string | null): string | null {
   }
 
   const lower = model.toLowerCase()
-  if (lower === 'gpt-5' || lower === 'gpt-5-codex' || lower.startsWith('gpt-5.4')) {
+  if (lower === 'gpt-5' || lower === 'gpt-5-codex') {
     return 'gpt-5'
   }
-  if (lower.startsWith('gpt-5.2-codex')) {
-    return 'gpt-5.2-codex'
+  if (lower.startsWith('gpt-5.1')) {
+    return 'gpt-5.1'
+  }
+  if (lower.startsWith('gpt-5.2')) {
+    return 'gpt-5.2'
   }
   if (lower.startsWith('gpt-5.3-codex')) {
     return 'gpt-5.3-codex'
+  }
+  if (lower.startsWith('gpt-5.4')) {
+    return 'gpt-5.4'
+  }
+  if (lower.startsWith('gpt-5.5')) {
+    return 'gpt-5.5'
   }
   return null
 }
@@ -141,12 +151,6 @@ function getLocalDay(timestamp: string): string | null {
   return `${year}-${month}-${day}`
 }
 
-type CodexUsageWorktree = {
-  worktreeId: string
-  path: string
-  displayName: string
-}
-
 type ScopedCodexUsageModelRow = {
   modelKey: string
   modelLabel: string
@@ -159,7 +163,7 @@ type ScopedCodexUsageModelRow = {
   totalTokens: number
 }
 
-function getWorktreeFingerprint(worktreesByRepo: Map<string, CodexUsageWorktree[]>): string {
+function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
   const rows = [...worktreesByRepo.entries()]
     .flatMap(([repoId, worktrees]) =>
       worktrees.map((worktree) =>
@@ -259,7 +263,7 @@ export class CodexUsageStore {
     this.scanPromise = (async () => {
       try {
         const repos = this.store.getRepos()
-        const worktreesByRepo = await this.loadWorktreesByRepo(repos)
+        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
         const result = await scanCodexUsageFiles(
           createWorktreeRefs(repos, worktreesByRepo),
@@ -591,28 +595,7 @@ export class CodexUsageStore {
 
   private async getCurrentWorktreeFingerprint(): Promise<string> {
     const repos = this.store.getRepos()
-    const worktreesByRepo = await this.loadWorktreesByRepo(repos)
+    const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
     return getWorktreeFingerprint(worktreesByRepo)
-  }
-
-  private async loadWorktreesByRepo(repos: Repo[]): Promise<Map<string, CodexUsageWorktree[]>> {
-    const worktreesByRepo = new Map<string, CodexUsageWorktree[]>()
-
-    for (const repo of repos) {
-      const gitWorktrees = await listRepoWorktrees(repo)
-      const mapped = gitWorktrees.map((worktree) => {
-        const worktreeId = `${repo.id}::${worktree.path}`
-        const meta = this.store.getWorktreeMeta(worktreeId)
-        const merged = mergeWorktree(repo.id, worktree, meta, repo.displayName)
-        return {
-          worktreeId,
-          path: worktree.path,
-          displayName: merged.displayName || getDefaultWorktreeLabel(worktree.path)
-        }
-      })
-      worktreesByRepo.set(repo.id, mapped)
-    }
-
-    return worktreesByRepo
   }
 }

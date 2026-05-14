@@ -1,11 +1,17 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { PathSource, ShellHydrationFailureReason, TuiAgent } from '../../../../shared/types'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
   isDetectingAgents: boolean
   isRefreshingAgents: boolean
+  /** Telemetry classification of the most recent refreshAgents() run. `null`
+   *  before the first refresh resolves. Read by the wizard at agent-pick time
+   *  to attach `path_source` / `path_failure_reason` to `onboarding_agent_picked`
+   *  — see docs/agent-on-path-detection.md. */
+  pathSource: PathSource | null
+  pathFailureReason: ShellHydrationFailureReason | null
   /** Runs `preflight.detectAgents` once per session. Subsequent callers reuse
    *  the in-flight promise so every surface sees the same result. */
   ensureDetectedAgents: () => Promise<TuiAgent[]>
@@ -36,6 +42,8 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   detectedAgentIds: null,
   isDetectingAgents: false,
   isRefreshingAgents: false,
+  pathSource: null,
+  pathFailureReason: null,
 
   ensureDetectedAgents: () => {
     const existing = get().detectedAgentIds
@@ -73,7 +81,12 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       .refreshAgents()
       .then((result) => {
         const typed = result.agents as TuiAgent[]
-        set({ detectedAgentIds: typed, isRefreshingAgents: false })
+        set({
+          detectedAgentIds: typed,
+          isRefreshingAgents: false,
+          pathSource: result.pathSource,
+          pathFailureReason: result.pathFailureReason
+        })
         // Why: once refresh has run, treat its result as the current detection
         // snapshot so `ensureDetectedAgents` short-circuits.
         detectPromise = Promise.resolve(typed)

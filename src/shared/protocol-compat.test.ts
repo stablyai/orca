@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateCompat } from './protocol-compat'
+import { DESKTOP_PROTOCOL_VERSION, MIN_COMPATIBLE_MOBILE_VERSION } from './protocol-version'
 
 const MOBILE_V = 1
 
@@ -103,5 +104,21 @@ describe('evaluateCompat', () => {
         })
       ).toEqual({ kind: 'ok' })
     }
+  })
+
+  it('hard-blocks protocol-1 mobile for the binary terminal stream cutover', () => {
+    const verdict = evaluateCompat({
+      mobileProtocolVersion: 1,
+      minCompatibleDesktopVersion: DESKTOP_PROTOCOL_VERSION,
+      desktopProtocolVersion: DESKTOP_PROTOCOL_VERSION,
+      desktopMinCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION
+    })
+
+    expect(verdict).toEqual({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: DESKTOP_PROTOCOL_VERSION,
+      requiredMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION
+    })
   })
 })

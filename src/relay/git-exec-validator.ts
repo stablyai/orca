@@ -17,6 +17,7 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'symbolic-ref',
   'merge-base',
   'ls-files',
+  'for-each-ref',
   'config'
 ])
 const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])

@@ -65,6 +65,7 @@ export default function BrowserAddressBar({
   const [selectedValue, setSelectedValue] = useState('')
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
+  const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const closingRef = useRef(false)
   const openedAtRef = useRef(0)
 
@@ -103,7 +104,9 @@ export default function BrowserAddressBar({
     const isQuery = looksLikeSearchQuery(trimmed)
     const topAction: SuggestionEntry = isQuery
       ? {
-          url: buildSearchUrl(trimmed, searchEngine),
+          url: buildSearchUrl(trimmed, searchEngine, {
+            kagiSessionLink: browserKagiSessionLink
+          }),
           title: trimmed,
           subtitle: `${SEARCH_ENGINE_LABELS[searchEngine]} Search`,
           lastVisitedAt: 0,
@@ -111,7 +114,10 @@ export default function BrowserAddressBar({
           isSearch: true
         }
       : {
-          url: normalizeBrowserNavigationUrl(trimmed, searchEngine) ?? trimmed,
+          url:
+            normalizeBrowserNavigationUrl(trimmed, searchEngine, {
+              kagiSessionLink: browserKagiSessionLink
+            }) ?? trimmed,
           title: trimmed,
           subtitle: '',
           lastVisitedAt: 0,
@@ -129,7 +135,7 @@ export default function BrowserAddressBar({
     }
 
     return [topAction, ...historySuggestions].slice(0, MAX_SUGGESTIONS)
-  }, [browserUrlHistory, value, searchEngine])
+  }, [browserUrlHistory, value, searchEngine, browserKagiSessionLink])
 
   const handleFocus = useCallback(() => {
     if (closingRef.current) {

@@ -1,4 +1,5 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
 import type { IFilesystemProvider, FileStat, FileReadResult } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
 
@@ -13,6 +14,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   // multiplexer. Without this, notification callbacks keep firing after
   // the provider is torn down on disconnect, routing events to stale state.
   private unsubscribeNotifications: (() => void) | null = null
+  // Why: relays from a previous build may not implement fs.readFileStream.
+  // We log the fallback once per session at warn level so users on stale
+  // relays get diagnosed quickly without per-read log spam.
+  private loggedStreamFallback = false
 
   constructor(connectionId: string, mux: SshChannelMultiplexer) {
     this.connectionId = connectionId
@@ -48,7 +53,25 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   }
 
   async readFile(filePath: string): Promise<FileReadResult> {
-    return (await this.mux.request('fs.readFile', { filePath })) as FileReadResult
+    // Why: streaming is the default path so previews above the legacy single-
+    // frame budget (~12 MB after base64) don't hit MAX_MESSAGE_SIZE. Old relays
+    // that don't implement fs.readFileStream surface as MethodNotFound; we fall
+    // back to the legacy single-shot fs.readFile (which retains the old 10 MB
+    // cap on those hosts).
+    try {
+      return await readFileViaStream(this.mux, filePath)
+    } catch (err) {
+      if (isMethodNotFoundError(err)) {
+        if (!this.loggedStreamFallback) {
+          this.loggedStreamFallback = true
+          console.warn(
+            '[ssh-fs] Relay does not implement fs.readFileStream; falling back to fs.readFile (10 MB cap)'
+          )
+        }
+        return (await this.mux.request('fs.readFile', { filePath })) as FileReadResult
+      }
+      throw err
+    }
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {

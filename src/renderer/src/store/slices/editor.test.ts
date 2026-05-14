@@ -108,6 +108,33 @@ describe('createEditorSlice openDiff', () => {
 })
 
 describe('createEditorSlice markdown view state', () => {
+  it('updates stale language metadata when reopening an existing file', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/notebooks/example.ipynb',
+      relativePath: 'notebooks/example.ipynb',
+      worktreeId: 'wt-1',
+      language: 'json',
+      mode: 'edit'
+    })
+
+    store.getState().openFile({
+      filePath: '/repo/notebooks/example.ipynb',
+      relativePath: 'notebooks/example.ipynb',
+      worktreeId: 'wt-1',
+      language: 'notebook',
+      mode: 'edit'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/notebooks/example.ipynb',
+        language: 'notebook'
+      })
+    ])
+  })
+
   it('drops markdown view mode for a replaced preview tab', () => {
     const store = createEditorStore()
 
@@ -1019,12 +1046,14 @@ describe('createEditorSlice activateMarkdownLink', () => {
   const openUrlMock = vi.fn()
   const openFileUriMock = vi.fn()
   const pathExistsMock = vi.fn()
+  const authorizeExternalPathMock = vi.fn()
 
   beforeEach(() => {
     toastErrorMock.mockReset()
     openUrlMock.mockReset()
     openFileUriMock.mockReset()
     pathExistsMock.mockReset()
+    authorizeExternalPathMock.mockReset()
     openHttpLinkMock.mockReset()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).window = (globalThis as any).window ?? {}
@@ -1034,6 +1063,9 @@ describe('createEditorSlice activateMarkdownLink', () => {
         openUrl: openUrlMock,
         openFileUri: openFileUriMock,
         pathExists: pathExistsMock
+      },
+      fs: {
+        authorizeExternalPath: authorizeExternalPathMock
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1114,15 +1146,59 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().openFiles).toEqual([])
   })
 
-  it('delegates outside-worktree files to shell.openFileUri', async () => {
+  it('opens in-worktree file links in Orca', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('./image.png', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openFileUriMock).toHaveBeenCalledTimes(1)
-    expect(store.getState().openFiles).toEqual([])
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('opens explicit file URLs inside the worktree in Orca', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///repo/docs/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('opens explicit file URLs outside the worktree in Orca after authorizing them', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/image.png' })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/tmp/image.png',
+        relativePath: '/tmp/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
   it('activates same-file line anchors via setActiveFile without opening a new tab', async () => {

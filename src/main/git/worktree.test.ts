@@ -207,12 +207,117 @@ describe('addWorktree', () => {
   })
 
   it('creates the worktree without touching the local base ref by default', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'], { cwd: '/repo' }]
+      [
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        { cwd: '/repo' }
+      ],
+      [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }],
+      [['config', '--local', 'push.autoSetupRemote', 'true'], { cwd: '/repo-feature' }]
+    ])
+  })
+
+  it('warns but does not throw when push.autoSetupRemote config fails', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get (unset, expected)
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('config locked')) // config --local set fails
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    ).resolves.toBeUndefined()
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'addWorktree: failed to set push.autoSetupRemote for /repo-feature',
+      expect.any(Error)
+    )
+    warnSpy.mockRestore()
+  })
+
+  it('warns and skips --local set when --get fails with non-unset error (e.g. corrupt config)', async () => {
+    // Why: exit 1 from `git config --get` means "key unset" — anything else
+    // is a real read failure (parse error, locked file). We must NOT fall
+    // through to `--local set true`, which would silently overwrite whatever
+    // value the user actually has.
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('parse error'), { code: 3 })) // --get fails non-unset
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    ).resolves.toBeUndefined()
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'addWorktree: failed to set push.autoSetupRemote for /repo-feature',
+      expect.any(Error)
+    )
+    // No --local set was attempted: only worktree add + the failing --get.
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        { cwd: '/repo' }
+      ],
+      [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }]
+    ])
+    warnSpy.mockRestore()
+  })
+
+  it('preserves existing push.autoSetupRemote value (does not overwrite user-set false)', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'false\n' }) // config --get returns existing value
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+
+    // No --local set: --get succeeded so we preserve the user's value.
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        { cwd: '/repo' }
+      ],
+      [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }]
+    ])
+  })
+
+  it('treats --get success with empty stdout as "already set" (key present but blank)', async () => {
+    // Why: `git config --get key` exits 0 if the key has any value at any
+    // scope, including the unusual case of an explicitly empty string. We
+    // must not fall through to `--local set true` and overwrite that.
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --get succeeds with empty value
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        { cwd: '/repo' }
+      ],
+      [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }]
+    ])
+  })
+
+  it('does not probe or write config when worktree add itself fails', async () => {
+    // Why: a refactor that moves the config block earlier could try to write
+    // push.autoSetupRemote against a worktree directory that was never
+    // created. Pin the current ordering invariant: config calls happen only
+    // after worktree add succeeds.
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('worktree add failed'))
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    ).rejects.toThrow('worktree add failed')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        { cwd: '/repo' }
+      ]
     ])
   })
 
@@ -225,6 +330,8 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: '' }) // status --porcelain (in /repo)
       .mockResolvedValueOnce({ stdout: '' }) // reset --hard (in /repo)
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -233,7 +340,12 @@ describe('addWorktree', () => {
       [['worktree', 'list', '--porcelain'], { cwd: '/repo' }],
       [['status', '--porcelain', '--untracked-files=no'], { cwd: '/repo' }],
       [['reset', '--hard', 'origin/main'], { cwd: '/repo' }],
-      [['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'], { cwd: '/repo' }]
+      [
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        { cwd: '/repo' }
+      ],
+      [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }],
+      [['config', '--local', 'push.autoSetupRemote', 'true'], { cwd: '/repo-feature' }]
     ])
   })
 
@@ -246,6 +358,8 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: '' }) // status --porcelain (in /repo-main-wt)
       .mockResolvedValueOnce({ stdout: '' }) // reset --hard (in /repo-main-wt)
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -266,6 +380,8 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
       .mockResolvedValueOnce({ stdout: '' }) // update-ref
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -282,24 +398,40 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
       .mockResolvedValueOnce({ stdout: ' M package.json\n' }) // status --porcelain (dirty)
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    // No reset --hard or update-ref — just merge-base, worktree list, status, worktree add
-    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(4)
+    // No reset --hard or update-ref — just merge-base, worktree list, status, worktree add, config --get, config --local set
+    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(6)
     expect(gitExecFileAsyncMock.mock.calls[3]?.[0]).toEqual([
       'worktree',
       'add',
+      '--no-track',
       '-b',
       'feature/test',
       '/repo-feature',
       'origin/main'
     ])
+    expect(gitExecFileAsyncMock.mock.calls[4]?.[0]).toEqual([
+      'config',
+      '--get',
+      'push.autoSetupRemote'
+    ])
+    expect(gitExecFileAsyncMock.mock.calls[5]?.[0]).toEqual([
+      'config',
+      '--local',
+      'push.autoSetupRemote',
+      'true'
+    ])
   })
 
   it('skips updating the local branch when it has diverged', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not a fast-forward'))
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -309,8 +441,16 @@ describe('addWorktree', () => {
         expect.objectContaining({ cwd: '/repo' })
       ],
       [
-        ['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/repo-feature', 'origin/main'],
         expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        ['config', '--get', 'push.autoSetupRemote'],
+        expect.objectContaining({ cwd: '/repo-feature' })
+      ],
+      [
+        ['config', '--local', 'push.autoSetupRemote', 'true'],
+        expect.objectContaining({ cwd: '/repo-feature' })
       ]
     ])
   })
@@ -323,6 +463,8 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: '' }) // status --porcelain
       .mockResolvedValueOnce({ stdout: '' }) // reset --hard
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'upstream/main', true)
 

@@ -193,6 +193,57 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  it('skips the open-file scan for unrelated store mutations', () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    const openFiles = store.getState().openFiles
+    const originalMap = openFiles.map.bind(openFiles)
+    let mapCalls = 0
+    Object.defineProperty(openFiles, 'map', {
+      configurable: true,
+      value: (...args: Parameters<typeof openFiles.map>) => {
+        mapCalls += 1
+        return originalMap(...args)
+      }
+    })
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      expect(mapCalls).toBe(1)
+      mapCalls = 0
+
+      store.setState({ activeWorktreeId: 'wt-2' } as Partial<AppState>)
+      expect(mapCalls).toBe(0)
+
+      store.getState().setEditorDraft('/repo/file.ts', 'edited')
+      expect(mapCalls).toBe(1)
+    } finally {
+      cleanup()
+    }
+  })
+
   it('flushes mounted rich-editor changes before quiescing or direct saves', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const eventTarget = new EventTarget()

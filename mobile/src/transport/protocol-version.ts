@@ -16,5 +16,5 @@
 // desktop feature added at a specific desktop protocol version. This
 // triggers a hard-block screen for users paired to older desktops.
 
-export const MOBILE_PROTOCOL_VERSION = 1
-export const MIN_COMPATIBLE_DESKTOP_VERSION = 0
+export const MOBILE_PROTOCOL_VERSION = 2
+export const MIN_COMPATIBLE_DESKTOP_VERSION = 2

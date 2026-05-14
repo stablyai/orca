@@ -108,4 +108,27 @@ describe('mobile rpc-client connection timeout', () => {
 
     client.close()
   })
+
+  it('sends session tabs unsubscribe when a session tab stream is disposed', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    const unsubscribe = client.subscribe(
+      'session.tabs.subscribe',
+      { worktree: 'id:wt-1' },
+      () => {}
+    )
+    unsubscribe()
+
+    expect(
+      socket.sent.some((payload) => payload.includes('"method":"session.tabs.unsubscribe"'))
+    ).toBe(true)
+    expect(socket.sent.some((payload) => payload.includes('"worktree":"id:wt-1"'))).toBe(true)
+
+    client.close()
+  })
 })

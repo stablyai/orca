@@ -1,5 +1,6 @@
 import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import { splitWorktreeId } from '../../shared/worktree-id'
 import { getWslHome, parseWslPath } from '../wsl'
 
 /**
@@ -7,11 +8,13 @@ import { getWslHome, parseWslPath } from '../wsl'
  * Strips unsafe characters and collapses runs of special chars to a single hyphen.
  */
 export function sanitizeWorktreeName(input: string): string {
+  // Why: keep Unicode letters/numbers (CJK, accented Latin, etc.) so users can
+  // name workspaces in their own language. Git ref-format permits non-ASCII
+  // bytes, and modern filesystems handle UTF-8 paths. Only strip characters
+  // git or the filesystem actually rejects.
   const sanitized = input
     .trim()
-    .replace(/[\\/]+/g, '-')
-    .replace(/\s+/g, '-')
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
     // Why: git check-ref-format rejects any ref containing `..`, so a prompt
     // like "../../foo" that survives slugification as `..-..-foo` would
@@ -26,6 +29,23 @@ export function sanitizeWorktreeName(input: string): string {
   }
 
   return sanitized
+}
+
+export function sanitizeWorktreeDisplayName(input: string): string | undefined {
+  const withoutControls = Array.from(input, (char) => {
+    const code = char.charCodeAt(0)
+    return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
+  }).join('')
+  const sanitized = withoutControls
+    // Why: titles come from external systems. Strip bidi override controls so a
+    // malicious title cannot visually reorder adjacent sidebar text.
+    .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+    .trim()
+
+  return sanitized || undefined
 }
 
 /**
@@ -173,6 +193,7 @@ export function mergeWorktree(
     sortOrder: meta?.sortOrder ?? 0,
     lastActivityAt: meta?.lastActivityAt ?? 0,
     ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
+    ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     ...(git.isSparse === true
       ? {
           sparseDirectories: meta?.sparseDirectories,
@@ -180,6 +201,8 @@ export function mergeWorktree(
           sparsePresetId: meta?.sparsePresetId
         }
       : {}),
+    ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
+    ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
     // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
     // shared/types) and forwarded verbatim so the renderer store mirrors
     // on-disk state. `undefined` here means the worktree has no comments yet.
@@ -191,14 +214,11 @@ export function mergeWorktree(
  * Parse a composite worktreeId ("repoId::worktreePath") into its parts.
  */
 export function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
-  const sepIdx = worktreeId.indexOf('::')
-  if (sepIdx === -1) {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed) {
     throw new Error(`Invalid worktreeId: ${worktreeId}`)
   }
-  return {
-    repoId: worktreeId.slice(0, sepIdx),
-    worktreePath: worktreeId.slice(sepIdx + 2)
-  }
+  return parsed
 }
 
 /**

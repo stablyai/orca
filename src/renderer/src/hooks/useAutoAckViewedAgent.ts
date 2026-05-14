@@ -57,9 +57,9 @@ export function computeAutoAckTargets(
 // The effect subscribes directly to the store (not via React selectors) so it
 // sees every state change with no re-render amplification up the component
 // tree. A reference-equality guard inside the callback bails out immediately
-// when none of the six slices we care about (activeView, activeTabId,
-// agentStatusByPaneKey, retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey,
-// settings) have changed — so the Object.entries walk only runs for updates
+// when none of the five slices we care about (activeView, activeTabId,
+// agentStatusByPaneKey, retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey)
+// have changed — so the Object.entries walk only runs for updates
 // that could legitimately affect the ack decision.
 //
 // It acks whenever:
@@ -102,14 +102,6 @@ export function useAutoAckViewedAgent(): void {
     let lastAgentStatus: unknown = undefined
     let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
-    // Why: settings is tracked so flipping `experimentalAgentDashboard`
-    // alone re-evaluates the feature gate below — without this, a pure
-    // settings change would be swallowed by the fast-path until some other
-    // tracked slice changed. Tracking the whole settings reference (rather
-    // than the one specific boolean) is acceptable because settings changes
-    // are rare compared to agent-status updates, and it matches the existing
-    // pattern of tracking whole slice references.
-    let lastSettings: unknown = undefined
 
     const maybeAck = (): void => {
       const s = useAppStore.getState()
@@ -118,20 +110,8 @@ export function useAutoAckViewedAgent(): void {
         s.activeTabId === lastActiveTabId &&
         s.agentStatusByPaneKey === lastAgentStatus &&
         s.retainedAgentsByPaneKey === lastRetained &&
-        s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
-        s.settings === lastSettings
+        s.acknowledgedAgentsByPaneKey === lastAcknowledged
       ) {
-        return
-      }
-
-      // Why: mirror the inline agents' visibility gate — when the
-      // experimental agent-activity feature is off, nothing in the UI reads
-      // the ack map, so accumulating entries for unseen agents is wasted
-      // memory and the Object.entries scan below is pure overhead. The
-      // subscribe callback fires on any store change, so flipping the
-      // setting naturally re-evaluates this guard without a separate
-      // subscription.
-      if (s.settings?.experimentalAgentDashboard !== true) {
         return
       }
 
@@ -156,19 +136,18 @@ export function useAutoAckViewedAgent(): void {
       if (!activeTabId) {
         return
       }
-      // Why: advance the refs ONLY after all gates have passed — if the visibility
-      // or feature gate caused an early return, we must leave the refs stale so
-      // the next call (e.g. triggered by the focus listener on return) sees a
-      // diff and actually runs the scan. Updating refs before the gates would
-      // consume the diff silently and leave the user returning to cards whose
-      // bold-until-viewed rows stay bold until some unrelated store change
-      // happens to bump the refs again.
+      // Why: advance the refs ONLY after all gates have passed — if the
+      // visibility gate (window hidden/unfocused or no activeTabId) caused an
+      // early return, leave the refs stale so the next call (e.g. triggered by
+      // the focus listener on return) sees a diff and actually runs the scan.
+      // Updating refs before the gates would consume the diff silently and
+      // leave the user returning to cards whose bold-until-viewed rows stay
+      // bold until some unrelated store change happens to bump the refs.
       lastActiveView = s.activeView
       lastActiveTabId = s.activeTabId
       lastAgentStatus = s.agentStatusByPaneKey
       lastRetained = s.retainedAgentsByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
-      lastSettings = s.settings
       const toAck = computeAutoAckTargets(s, activeTabId)
       if (toAck.length > 0) {
         s.acknowledgeAgents(toAck)
@@ -180,7 +159,7 @@ export function useAutoAckViewedAgent(): void {
     // Why: store.subscribe fires on every state change. The reference-
     // equality guard above bails out immediately for the common case
     // (terminal output, timers, etc.) so the Object.entries walk only runs
-    // when one of the six slices we read has actually changed.
+    // when one of the five slices we read has actually changed.
     const unsubscribe = useAppStore.subscribe(maybeAck)
     // Why: focus/visibility don't flow through the zustand store, so a
     // late-arriving transition that failed the gate above never re-evaluates

@@ -184,9 +184,15 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     // Why: createLocalWorktree routes `git fetch` through
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). Stub it for path tests.
     const runtimeStub = {
-      fetchRemoteWithCache: async () => {
-        /* noop */
-      }
+      resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
+      hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
+      isRemoteFetchFresh: vi.fn().mockResolvedValue(false),
+      getOrStartRemoteFetch: vi.fn().mockResolvedValue({ ok: true }),
+      fetchRemoteWithCache: vi.fn().mockResolvedValue(undefined),
+      emitWorktreeBaseStatus: vi.fn(),
+      recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
+      reconcileWorktreeBaseStatus: vi.fn(),
+      clearOptimisticReconcileToken: vi.fn()
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -237,29 +243,31 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       isBare: false,
       isMainWorktree: false
     }
-    // Three calls: (1) worktrees:create finds the new worktree,
-    // (2) rebuildAuthorizedRootsCache enumerates worktrees for the repo,
-    // (3) worktrees:list enumerates worktrees again.
-    listWorktreesMock
-      .mockResolvedValueOnce([worktreeEntry])
-      .mockResolvedValueOnce([worktreeEntry])
-      .mockResolvedValueOnce([worktreeEntry])
+    // Two calls: (1) worktrees:create finds the new worktree,
+    // (2) worktrees:list enumerates worktrees again.
+    listWorktreesMock.mockResolvedValueOnce([worktreeEntry]).mockResolvedValueOnce([worktreeEntry])
     store.setWorktreeMeta.mockReturnValue({
       lastActivityAt: 123,
-      displayName: 'Improve Dashboard'
+      displayName: 'Improve Dashboard',
+      linkedIssue: 123,
+      linkedPR: 456
     })
     store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
       worktreeId === 'repo-1::C:/workspaces/improve-dashboard'
         ? {
             lastActivityAt: 123,
-            displayName: 'Improve Dashboard'
+            displayName: 'Improve Dashboard',
+            linkedIssue: 123,
+            linkedPR: 456
           }
         : undefined
     )
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
-      name: 'Improve Dashboard'
+      name: 'Improve Dashboard',
+      linkedIssue: 123,
+      linkedPR: 456
     })
     const listed = await handlers['worktrees:list'](null, {
       repoId: 'repo-1'
@@ -269,6 +277,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       {
         id: 'repo-1::C:/workspaces/improve-dashboard',
         displayName: 'Improve Dashboard',
+        linkedIssue: 123,
+        linkedPR: 456,
         lastActivityAt: 123
       }
     ])

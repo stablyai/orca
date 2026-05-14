@@ -1,6 +1,6 @@
 // Why: shared E2EE primitives for the desktop side. Wraps tweetnacl to provide
-// encrypt/decrypt with the NaCl box format: [24-byte nonce][ciphertext], encoded
-// as base64 for transmission over WebSocket text frames.
+// encrypt/decrypt with the NaCl box format: [24-byte nonce][ciphertext]. JSON
+// RPC uses base64 text frames; terminal streams use the raw byte bundle.
 import nacl from 'tweetnacl'
 
 export function generateKeyPair(): nacl.BoxKeyPair {
@@ -12,19 +12,31 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
 }
 
 export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
-  const nonce = nacl.randomBytes(nacl.box.nonceLength)
   const messageBytes = new TextEncoder().encode(plaintext)
-  const ciphertext = nacl.box.after(messageBytes, nonce, sharedKey)
+  return Buffer.from(encryptBytes(messageBytes, sharedKey)).toString('base64')
+}
+
+export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
+  const bundle = Uint8Array.from(Buffer.from(encrypted, 'base64'))
+  const plaintext = decryptBytes(bundle, sharedKey)
+  return plaintext ? new TextDecoder().decode(plaintext) : null
+}
+
+export function encryptBytes(
+  plaintext: Uint8Array<ArrayBufferLike>,
+  sharedKey: Uint8Array
+): Uint8Array {
+  const nonce = nacl.randomBytes(nacl.box.nonceLength)
+  const ciphertext = nacl.box.after(plaintext, nonce, sharedKey)
 
   const bundle = new Uint8Array(nonce.length + ciphertext.length)
   bundle.set(nonce)
   bundle.set(ciphertext, nonce.length)
 
-  return Buffer.from(bundle).toString('base64')
+  return bundle
 }
 
-export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
-  const bundle = Uint8Array.from(Buffer.from(encrypted, 'base64'))
+export function decryptBytes(bundle: Uint8Array, sharedKey: Uint8Array): Uint8Array | null {
   if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) {
     return null
   }
@@ -37,5 +49,5 @@ export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null
     return null
   }
 
-  return new TextDecoder().decode(plaintext)
+  return plaintext
 }

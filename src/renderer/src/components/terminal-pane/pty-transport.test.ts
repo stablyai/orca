@@ -92,6 +92,25 @@ describe('createIpcPtyTransport', () => {
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
   })
 
+  it('keeps exit sidecars after eager-buffered PTYs attach to a terminal', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer, subscribeToPtyExit } =
+      await import('./pty-transport')
+    const eagerExit = vi.fn()
+    const sidecarExit = vi.fn()
+
+    registerEagerPtyBuffer('pty-restored', eagerExit)
+    subscribeToPtyExit('pty-restored', sidecarExit)
+
+    createIpcPtyTransport().attach({
+      existingPtyId: 'pty-restored',
+      callbacks: {}
+    })
+    onExit?.({ id: 'pty-restored', code: 0 })
+
+    expect(eagerExit).not.toHaveBeenCalled()
+    expect(sidecarExit).toHaveBeenCalledWith(0)
+  })
+
   it('fires onBell for bare BELs but ignores BELs inside OSC sequences', async () => {
     // Why: Claude's OSC titles end with a BEL terminator (`\e]0;…\a`). The
     // stateful bell detector must know it is inside an OSC when that BEL

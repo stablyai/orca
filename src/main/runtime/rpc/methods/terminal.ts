@@ -2,6 +2,13 @@
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  TerminalStreamOpcode,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  encodeTerminalStreamText
+} from '../../../../shared/terminal-stream-protocol'
 
 // Why: when a mobile client subscribes the server resizes the PTY to phone
 // dims and serializes the buffer. Sending only the visible screen meant
@@ -10,6 +17,87 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 // agent runs (Claude Code chats, command output) reachable. The mobile
 // WebView's xterm has a 5000-row buffer so this fits comfortably.
 const MOBILE_SUBSCRIBE_SCROLLBACK_ROWS = 1000
+const MOBILE_SNAPSHOT_BYTE_BUDGET = 512 * 1024
+const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
+let nextTerminalStreamId = 1
+
+type SnapshotFrameOptions = {
+  kind: 'scrollback' | 'resized'
+  cols: number
+  rows: number
+  data: string
+  displayMode?: string
+  reason?: string
+  seq?: number
+  truncated?: boolean
+  truncatedByByteBudget?: boolean
+}
+
+type SerializedSnapshot = {
+  data: string
+  cols: number
+  rows: number
+  scrollbackRows: number
+  truncatedByByteBudget: boolean
+} | null
+
+function sendSnapshotFrames(
+  sendFrame: (opcode: TerminalStreamOpcode, payload?: Uint8Array<ArrayBufferLike>) => void,
+  options: SnapshotFrameOptions
+): { bytes: number; chunks: number } {
+  sendFrame(
+    TerminalStreamOpcode.SnapshotStart,
+    encodeTerminalStreamJson({
+      kind: options.kind,
+      cols: options.cols,
+      rows: options.rows,
+      displayMode: options.displayMode,
+      reason: options.reason,
+      seq: options.seq,
+      truncated: options.truncated === true,
+      truncatedByByteBudget: options.truncatedByByteBudget === true
+    })
+  )
+  const bytes = encodeTerminalStreamText(options.data)
+  let chunks = 0
+  for (let offset = 0; offset < bytes.length; offset += TERMINAL_STREAM_CHUNK_BYTES) {
+    chunks++
+    sendFrame(
+      TerminalStreamOpcode.SnapshotChunk,
+      bytes.slice(offset, offset + TERMINAL_STREAM_CHUNK_BYTES)
+    )
+  }
+  sendFrame(TerminalStreamOpcode.SnapshotEnd)
+  return { bytes: bytes.byteLength, chunks }
+}
+
+async function serializeBudgetedMobileSnapshot(
+  runtime: OrcaRuntimeService,
+  ptyId: string,
+  isMobile: boolean
+): Promise<SerializedSnapshot> {
+  if (!isMobile) {
+    const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: 0 })
+    return serialized ? { ...serialized, scrollbackRows: 0, truncatedByByteBudget: false } : null
+  }
+  const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
+  for (const rows of candidates) {
+    const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: rows })
+    if (!serialized) {
+      return null
+    }
+    const bytes = new TextEncoder().encode(serialized.data).byteLength
+    if (bytes <= MOBILE_SNAPSHOT_BYTE_BUDGET || rows === 0) {
+      return {
+        ...serialized,
+        scrollbackRows: rows,
+        truncatedByByteBudget:
+          rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || bytes > MOBILE_SNAPSHOT_BYTE_BUDGET
+      }
+    }
+  }
+  return null
+}
 
 const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
@@ -44,6 +132,7 @@ const TerminalRead = TerminalHandle.extend({
           message: 'Cursor must be a non-negative integer'
         })
     )
+    .optional()
 })
 
 // Why: the legacy handler allowed `title: string | null` and rejected every
@@ -82,14 +171,16 @@ const TerminalWait = TerminalHandle.extend({
 const TerminalCreateParams = z.object({
   worktree: OptionalString,
   command: OptionalString,
-  title: OptionalString
+  title: OptionalString,
+  focus: z.unknown().optional()
 })
 
 const TerminalSplit = TerminalHandle.extend({
   direction: z
     .unknown()
     .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
-    .pipe(z.enum(['vertical', 'horizontal']).optional()),
+    .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
+    .optional(),
   command: OptionalString
 })
 
@@ -124,17 +215,38 @@ const TerminalSubscribe = TerminalHandle.extend({
       cols: z.number().int().min(20).max(240),
       rows: z.number().int().min(8).max(120)
     })
+    .optional(),
+  capabilities: z
+    .object({
+      terminalBinaryStream: z.literal(1).optional()
+    })
     .optional()
 })
 
 const TerminalSetDisplayMode = TerminalHandle.extend({
-  mode: z.enum(['auto', 'phone', 'desktop']),
+  // Why: 'phone' was previously a "stay at phone dims after unsubscribe"
+  // mode that the toggle UI never produced and nothing in product
+  // depended on. Removed in favor of two clean modes: 'auto' (mobile
+  // drives dims while subscribed, desktop restores on last-leave) and
+  // 'desktop' (no resize, mobile scales the wide canvas down to fit).
+  mode: z.enum(['auto', 'desktop']),
   // Why: identifies the caller for the driver state machine. Optional for
   // backward compatibility with older mobile clients.
   client: z
     .object({
       id: requiredString('Missing client ID'),
       type: z.enum(['mobile', 'desktop']).default('desktop').optional()
+    })
+    .optional(),
+  // Why: subscribers that registered before viewport was measured have
+  // a null viewport on their record. Toggling to 'auto' would no-op
+  // because applyMobileDisplayMode skips phone-fit when viewport is
+  // missing. Allow the toggle to carry the latest measured viewport so
+  // the server can store it on the subscriber record before fitting.
+  viewport: z
+    .object({
+      cols: z.number().int().positive(),
+      rows: z.number().int().positive()
     })
     .optional()
 })
@@ -169,6 +281,13 @@ const TerminalUpdateViewport = TerminalHandle.extend({
     cols: z.number().int().min(20).max(240),
     rows: z.number().int().min(8).max(120)
   })
+})
+
+// Why: phone-fit auto-restore preference (docs/mobile-fit-hold.md). `null`
+// means Indefinite; finite millisecond values are clamped server-side
+// into [5_000, 60min] before persistence.
+const TerminalSetAutoRestoreFit = z.object({
+  ms: z.number().nullable()
 })
 
 export const TERMINAL_METHODS: RpcAnyMethod[] = [
@@ -206,6 +325,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.clearBuffer',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      clear: await runtime.clearTerminalBuffer(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
     handler: async (params, { runtime }) => {
@@ -217,14 +343,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       // Why: deliberate mobile input is a take-floor action. Drives the
       // `* → mobile{clientId}` driver transition so the desktop banner
       // remounts (if previously reclaimed) and active phone-fit dims follow
-      // the most recent actor. Only mobile-typed callers take the floor;
-      // desktop callers (CLI / agents) do not. Older mobile builds without
-      // a `client` field continue to work — the runtime then keeps the
-      // current driver state.
+      // the most recent actor. Only mobile-typed callers take the floor.
       if (params.client && params.client.type === 'mobile') {
         const leaf = runtime.resolveLeafForHandle(params.terminal)
         if (leaf?.ptyId) {
-          runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+          await runtime.mobileTookFloor(leaf.ptyId, params.client.id)
         }
       }
       return { send: result }
@@ -246,7 +369,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.createTerminal(params.worktree, {
         command: params.command,
-        title: params.title
+        title: params.title,
+        focus: params.focus === true
       })
     })
   }),
@@ -273,7 +397,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
-      const result = runtime.resizeForClient(
+      const result = await runtime.resizeForClient(
         leaf.ptyId,
         params.mode,
         params.clientId,
@@ -310,16 +434,22 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
+      // Why: late-bind viewport for callers that subscribed in desktop
+      // mode (no viewport stored). Without this, a 'auto' toggle on a
+      // viewport-less record skips phone-fit and the user sees no resize.
+      if (params.viewport && params.client?.id) {
+        runtime.updateMobileSubscriberViewport(leaf.ptyId, params.client.id, params.viewport)
+      }
       runtime.setMobileDisplayMode(leaf.ptyId, params.mode)
-      runtime.applyMobileDisplayMode(leaf.ptyId)
+      await runtime.applyMobileDisplayMode(leaf.ptyId)
       // Why: a deliberate mobile mode change is a take-floor action when
       // moving to auto/phone (the user explicitly chose to drive at phone
       // dims). Setting mode to desktop is intentionally NOT a take-floor
       // action — that's a "watch from desktop dims" gesture.
       if (params.client && params.client.type === 'mobile' && params.mode !== 'desktop') {
-        runtime.mobileTookFloor(leaf.ptyId, params.client.id)
+        await runtime.mobileTookFloor(leaf.ptyId, params.client.id)
       }
-      return { mode: params.mode }
+      return { mode: params.mode, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),
   defineMethod({
@@ -340,8 +470,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
-      const updated = runtime.updateMobileViewport(leaf.ptyId, params.client.id, params.viewport)
-      return { updated }
+      const updated = await runtime.updateMobileViewport(
+        leaf.ptyId,
+        params.client.id,
+        params.viewport
+      )
+      return { updated, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),
   // Why: terminal.subscribe streams live terminal output over WebSocket.
@@ -350,9 +484,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'terminal.subscribe',
     params: TerminalSubscribe,
-    handler: async (params, { runtime }, emit) => {
+    handler: async (params, { runtime, connectionId, sendBinary }, emit) => {
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
+      const useBinaryStream = isMobile && params.capabilities?.terminalBinaryStream === 1
 
       // Why: the left pane's PTY spawns asynchronously after the tab is created.
       // Mobile clients that subscribe before the PTY is ready would get a bare
@@ -369,69 +504,197 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
       if (!leaf?.ptyId) {
         const read = await runtime.readTerminal(params.terminal)
-        emit({
-          type: 'scrollback',
-          lines: read.tail,
-          truncated: read.truncated,
-          serialized: undefined,
-          cols: undefined,
-          rows: undefined
-        })
+        emit({ type: 'subscribed', streamId: null, lines: read.tail, truncated: read.truncated })
         emit({ type: 'end' })
         return
       }
 
-      const ptyId = leaf.ptyId
-      const clientId = params.client?.id
-
-      // Server-side auto-fit: resize PTY to phone dims before serializing scrollback
-      if (isMobile && clientId) {
-        runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+      if (isMobile && (!useBinaryStream || !sendBinary)) {
+        throw new Error('binary_terminal_stream_required')
       }
 
-      const read = await runtime.readTerminal(params.terminal)
-      const serialized = await runtime.serializeTerminalBuffer(ptyId, {
-        scrollbackRows: isMobile ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS : 0
-      })
-      const size = runtime.getTerminalSize(ptyId)
-      const displayMode = runtime.getMobileDisplayMode(ptyId)
-      emit({
-        type: 'scrollback',
-        lines: read.tail,
-        truncated: read.truncated,
-        serialized: serialized?.data,
-        cols: serialized?.cols ?? size?.cols,
-        rows: serialized?.rows ?? size?.rows,
-        displayMode
-      })
-
-      await new Promise<void>((resolve) => {
-        const unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data) => {
-          emit({ type: 'data', chunk: data })
+      const ptyId = leaf.ptyId
+      const clientId = params.client?.id
+      if (!isMobile) {
+        const read = await runtime.readTerminal(params.terminal)
+        const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+        const size = runtime.getTerminalSize(ptyId)
+        const displayMode = runtime.getMobileDisplayMode(ptyId)
+        const seq = runtime.getLayout(ptyId)?.seq
+        emit({
+          type: 'scrollback',
+          lines: read.tail,
+          truncated: read.truncated,
+          serialized: serialized?.data,
+          cols: serialized?.cols ?? size?.cols,
+          rows: serialized?.rows ?? size?.rows,
+          displayMode,
+          seq
         })
 
-        // Inline resize events replace the old fit-override-changed event for
-        // mobile clients. They include fresh serialized scrollback so the client
-        // can reinitialize xterm without resubscribing.
-        const unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, async (event) => {
-          // Why: mobile subscriptions need the same scrollback on inline
-          // resize as on initial subscribe — without it, toggling phone/desktop
-          // mode or the keyboard-driven refit would silently wipe history.
-          const fresh = await runtime.serializeTerminalBuffer(ptyId, {
-            scrollbackRows: isMobile ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS : 0
+        await new Promise<void>((resolve) => {
+          const unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data) => {
+            emit({ type: 'data', chunk: data })
           })
-          emit({
-            type: 'resized',
-            cols: event.cols,
-            rows: event.rows,
-            serialized: fresh?.data,
-            displayMode: event.displayMode,
-            reason: event.reason
+          const unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+            emit({
+              type: 'fit-override-changed',
+              mode: event.mode,
+              cols: event.cols,
+              rows: event.rows
+            })
           })
+          runtime.registerSubscriptionCleanup(
+            params.terminal,
+            () => {
+              unsubscribeData()
+              unsubscribeFit()
+              emit({ type: 'end' })
+              resolve()
+            },
+            connectionId
+          )
+        })
+        return
+      }
+
+      const streamId = nextTerminalStreamId++
+      let cursor = 0
+      let closed = false
+      let buffering = true
+      const pendingOutput: string[] = []
+      let unsubscribeData = (): void => {}
+      let unsubscribeResize = (): void => {}
+      let unsubscribeFit = (): void => {}
+      let resolveStream = (): void => {}
+      const streamClosed = new Promise<void>((resolve) => {
+        resolveStream = resolve
+      })
+      // Why: register cleanup before any mobile-fit or snapshot await. A phone
+      // can disconnect mid-subscribe; cleanup must still remove mobile presence.
+      const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
+      runtime.registerSubscriptionCleanup(
+        subscriptionId,
+        () => {
+          closed = true
+          unsubscribeData()
+          unsubscribeResize()
+          unsubscribeFit()
+          if (isMobile && clientId) {
+            runtime.handleMobileUnsubscribe(ptyId, clientId)
+          }
+          emit({ type: 'end' })
+          resolveStream()
+        },
+        connectionId
+      )
+      const sendFrame = (
+        opcode: TerminalStreamOpcode,
+        payload: Uint8Array<ArrayBufferLike> = new Uint8Array()
+      ): void => {
+        if (closed || !sendBinary) {
+          return
+        }
+        sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: cursor++, payload }))
+      }
+      // Server-side auto-fit: resize PTY to phone dims before serializing scrollback
+      try {
+        if (isMobile && clientId) {
+          await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+        }
+        if (closed) {
+          return
+        }
+
+        unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data) => {
+          if (closed) {
+            return
+          }
+          if (buffering) {
+            pendingOutput.push(data)
+            return
+          }
+          sendBinary!(
+            encodeTerminalStreamFrame({
+              opcode: TerminalStreamOpcode.Output,
+              streamId,
+              seq: cursor++,
+              payload: encodeTerminalStreamText(data)
+            })
+          )
+        })
+
+        const read = await runtime.readTerminal(params.terminal)
+        const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
+        if (closed) {
+          return
+        }
+        const size = runtime.getTerminalSize(ptyId)
+        const displayMode = runtime.getMobileDisplayMode(ptyId)
+        // Why: emit the current layout seq with the initial scrollback so
+        // the mobile client's stale-event filter knows the high-water mark.
+        // Undefined when the PTY has never transitioned (filter is fail-open).
+        // See docs/mobile-terminal-layout-state-machine.md.
+        const seq = runtime.getLayout(ptyId)?.seq
+        emit({
+          type: 'subscribed',
+          streamId,
+          lines: read.tail,
+          truncated: read.truncated,
+          cols: serialized?.cols ?? size?.cols,
+          rows: serialized?.rows ?? size?.rows,
+          displayMode,
+          seq
+        })
+        const snapshotStats = sendSnapshotFrames(sendFrame, {
+          kind: 'scrollback',
+          cols: serialized?.cols ?? size?.cols ?? 80,
+          rows: serialized?.rows ?? size?.rows ?? 24,
+          displayMode,
+          seq,
+          truncated: read.truncated,
+          truncatedByByteBudget: serialized?.truncatedByByteBudget,
+          data: serialized?.data ?? ''
+        })
+        console.log('[mobile-terminal-stream] snapshot', {
+          terminal: params.terminal,
+          streamId,
+          kind: 'scrollback',
+          bytes: snapshotStats.bytes,
+          chunks: snapshotStats.chunks,
+          scrollbackRows: serialized?.scrollbackRows,
+          truncatedByByteBudget: serialized?.truncatedByByteBudget === true
+        })
+        buffering = false
+        for (const item of pendingOutput.splice(0)) {
+          sendBinary!(
+            encodeTerminalStreamFrame({
+              opcode: TerminalStreamOpcode.Output,
+              streamId,
+              seq: cursor++,
+              payload: encodeTerminalStreamText(item)
+            })
+          )
+        }
+
+        unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
+          // Why: true PTY geometry changes should be followed by the TUI's
+          // redraw output, not a full scrollback replay. The client resizes
+          // xterm geometry and consumes subsequent live output on this stream.
+          sendFrame(
+            TerminalStreamOpcode.Resized,
+            encodeTerminalStreamJson({
+              cols: event.cols,
+              rows: event.rows,
+              displayMode: event.displayMode,
+              reason: event.reason,
+              seq: event.seq
+            })
+          )
         })
 
         // Legacy fit-override-changed for non-mobile (desktop) subscribers
-        const unsubscribeFit = !isMobile
+        unsubscribeFit = !isMobile
           ? runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
               emit({
                 type: 'fit-override-changed',
@@ -441,23 +704,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               })
             })
           : () => {}
+      } catch (error) {
+        runtime.cleanupSubscription(subscriptionId)
+        throw error
+      }
 
-        // Why: composite subscriptionId per (terminal, clientId) so two
-        // mobile clients subscribing to the same terminal handle do not
-        // evict each other via registerSubscriptionCleanup's
-        // duplicate-key cleanup. See docs/mobile-presence-lock.md.
-        const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
-        runtime.registerSubscriptionCleanup(subscriptionId, () => {
-          unsubscribeData()
-          unsubscribeResize()
-          unsubscribeFit()
-          if (isMobile && clientId) {
-            runtime.handleMobileUnsubscribe(ptyId, clientId)
-          }
-          emit({ type: 'end' })
-          resolve()
-        })
-      })
+      await streamClosed
     }
   }),
   defineMethod({
@@ -476,5 +728,19 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       return { unsubscribed: true }
     }
+  }),
+  defineMethod({
+    name: 'terminal.getAutoRestoreFit',
+    params: z.object({}),
+    handler: async (_params, { runtime }) => ({
+      ms: runtime.getMobileAutoRestoreFitMs()
+    })
+  }),
+  defineMethod({
+    name: 'terminal.setAutoRestoreFit',
+    params: TerminalSetAutoRestoreFit,
+    handler: async (params, { runtime }) => ({
+      ms: runtime.setMobileAutoRestoreFitMs(params.ms)
+    })
   })
 ]

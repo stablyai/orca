@@ -23,10 +23,9 @@ export type DashboardAgentRow = {
   startedAt: number
 }
 
-// Why: the shape here is deliberately minimal — just what useRetainedAgentsSync
-// needs to diff liveGroups and decide which vanished agents to retain. The
-// per-card rendering pipeline is separate (WorktreeCardAgents +
-// useWorktreeAgentRows read retained entries directly from the store).
+// Why: the shape here is deliberately minimal. The per-card rendering pipeline
+// is separate (WorktreeCardAgents + useWorktreeAgentRows read retained entries
+// directly from the store).
 export type DashboardWorktreeCard = {
   repo: Repo
   worktree: Worktree
@@ -133,17 +132,8 @@ function buildDashboardData(
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-// Why: stable empty array reference so the memo returns the same
-// value each call when the feature is off. Without this, fresh [] per
-// memo run churns downstream effect deps and re-fires them on every
-// PTY agent-status tick purely to early-return.
-const EMPTY_GROUPS: DashboardRepoGroup[] = []
-
 /**
- * Cross-worktree aggregate of live agent rows. Used by useRetainedAgentsSync
- * to drive retention: when a previously-live 'done' agent disappears from
- * this set, its snapshot is moved into retainedAgentsByPaneKey so the inline
- * per-card list can still render it.
+ * Cross-worktree aggregate of live agent rows.
  *
  * Not used to render anything directly — the inline list reads its own
  * worktree-scoped slice via useWorktreeAgentRows.
@@ -157,38 +147,15 @@ export function useDashboardData(): DashboardRepoGroup[] {
   // computation itself) so the memo recomputes when freshness boundaries expire,
   // even if no new PTY data arrives.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const dashboardEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
 
   return useMemo(
     // Why: Date.now() is read inside the memo (not as a dep) so stale-decay
     // recalculates whenever agentStatusEpoch ticks. The epoch bumps when the
     // freshness boundary crosses, driving re-evaluation without coupling to
     // wall-clock time directly.
-    () => {
-      // Why: experimental-setting gate inside the memo avoids the
-      // O(repos × worktrees × agents) rebuild on every store update when the
-      // feature is disabled. Store selectors still subscribe to keep
-      // rules-of-hooks satisfied and so flipping the setting re-renders
-      // consumers.
-      if (!dashboardEnabled) {
-        return EMPTY_GROUPS
-      }
-      return buildDashboardData(
-        repos,
-        worktreesByRepo,
-        tabsByWorktree,
-        agentStatusByPaneKey,
-        Date.now()
-      )
-    },
+    () =>
+      buildDashboardData(repos, worktreesByRepo, tabsByWorktree, agentStatusByPaneKey, Date.now()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      repos,
-      worktreesByRepo,
-      tabsByWorktree,
-      agentStatusByPaneKey,
-      agentStatusEpoch,
-      dashboardEnabled
-    ]
+    [repos, worktreesByRepo, tabsByWorktree, agentStatusByPaneKey, agentStatusEpoch]
   )
 }

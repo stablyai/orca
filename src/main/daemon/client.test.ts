@@ -51,6 +51,7 @@ describe('DaemonClient', () => {
     onControlMessage?: (msg: unknown) => string | null
     onStreamHello?: (msg: HelloMessage) => void
     rejectVersion?: boolean
+    ignoreHello?: boolean
   }): Promise<void> {
     return new Promise((resolve) => {
       server = createServer((socket) => {
@@ -69,6 +70,9 @@ describe('DaemonClient', () => {
 
             if (msg.type === 'hello') {
               const hello = msg as HelloMessage
+              if (opts?.ignoreHello) {
+                return
+              }
               if (opts?.rejectVersion) {
                 socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Version mismatch' }))
                 return
@@ -112,6 +116,13 @@ describe('DaemonClient', () => {
       client = new DaemonClient({ socketPath, tokenPath })
       await expect(client.ensureConnected()).rejects.toThrow()
     })
+
+    it('rejects when the daemon accepts a socket but never answers hello', async () => {
+      await startMockDaemon({ ignoreHello: true })
+
+      client = new DaemonClient({ socketPath, tokenPath, handshakeTimeoutMs: 10 })
+      await expect(client.ensureConnected()).rejects.toThrow('Hello timed out')
+    })
   })
 
   describe('RPC', () => {
@@ -154,6 +165,27 @@ describe('DaemonClient', () => {
 
       await expect(client.request('listSessions', undefined)).rejects.toThrow(
         'Something went wrong'
+      )
+    })
+
+    it('adds recovery hints to node-pty daemon diagnostics', async () => {
+      await startMockDaemon({
+        onControlMessage: (msg) => {
+          const req = msg as { id: string; type: string }
+          return encodeNdjson({
+            id: req.id,
+            ok: false,
+            error:
+              "node-pty: posix_spawn failed: ENOENT (errno 2, No such file or directory) - helper='/tmp/deleted/spawn-helper'"
+          })
+        }
+      })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+
+      await expect(client.request('listSessions', undefined)).rejects.toThrow(
+        "Daemon's node-pty install is gone (worktree deleted?). Restart Orca. node-pty: posix_spawn failed: ENOENT"
       )
     })
   })

@@ -140,11 +140,10 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await expect(back).toBeEnabled()
     await expect(forward).toBeDisabled()
 
-    // Why: use the sidebar's `role="option"` + `aria-selected="true"` as the
-    // DOM signal for "this worktree is currently active". A store-only
-    // `activeWorktreeId` check would pass even if the sidebar stopped
-    // re-painting the selected row — exactly the kind of render-layer
-    // regression the AGENTS.md rule targets.
+    // Why: use the sidebar's option `aria-current` as the DOM signal for "this
+    // worktree is currently active". `aria-selected` is reserved for batch
+    // multi-select state, so a store-only `activeWorktreeId` check would miss
+    // render-layer regressions in the active row.
     const primaryRow = orcaPage.locator(
       `[id="worktree-list-option-${encodeURIComponent(primaryId)}"]`
     )
@@ -158,8 +157,8 @@ test.describe('Workspace Back/Forward Navigation', () => {
         message: 'Back click did not activate the previous worktree'
       })
       .toBe(primaryId)
-    await expect(primaryRow).toHaveAttribute('aria-selected', 'true')
-    await expect(secondaryRow).toHaveAttribute('aria-selected', 'false')
+    await expect(primaryRow).toHaveAttribute('aria-current', 'page')
+    await expect(secondaryRow).not.toHaveAttribute('aria-current', 'page')
     await expect(back).toBeDisabled()
     await expect(forward).toBeEnabled()
 
@@ -169,8 +168,8 @@ test.describe('Workspace Back/Forward Navigation', () => {
         message: 'Forward click did not re-activate the next worktree'
       })
       .toBe(secondaryId)
-    await expect(secondaryRow).toHaveAttribute('aria-selected', 'true')
-    await expect(primaryRow).toHaveAttribute('aria-selected', 'false')
+    await expect(secondaryRow).toHaveAttribute('aria-current', 'page')
+    await expect(primaryRow).not.toHaveAttribute('aria-current', 'page')
     await expect(forward).toBeDisabled()
   })
 

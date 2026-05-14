@@ -2,7 +2,7 @@
 the repo-path validation, preference-threading, and stats wiring patterns are
 reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
-import { ipcMain } from 'electron'
+import { ipcMain, webContents } from 'electron'
 import { resolve } from 'path'
 import type { Repo, GitHubIssueUpdate } from '../../shared/types'
 import type { Store } from '../persistence'
@@ -72,6 +72,31 @@ import type {
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
 } from '../../shared/github-project-types'
+
+// Why: notify every renderer (each window has its own SWR cache instance)
+// that a work item was mutated locally so they can drop their cached entry
+// and refetch on the next open. Only emitted after a successful mutation.
+// We skip the originating webContents because that renderer already updated
+// its cache optimistically — re-broadcasting would race the optimistic write
+// and erase it.
+function broadcastWorkItemMutated(
+  payload: {
+    repoPath: string
+    type: 'issue' | 'pr'
+    number: number
+  },
+  senderId?: number
+): void {
+  for (const wc of webContents.getAllWebContents()) {
+    if (wc.isDestroyed()) {
+      continue
+    }
+    if (senderId !== undefined && wc.id === senderId) {
+      continue
+    }
+    wc.send('gh:workItemMutated', payload)
+  }
+}
 
 // Why: returns the full Repo object instead of just the path string so that
 // callers have access to repo.id for stat tracking and other context.
@@ -231,16 +256,21 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:resolveReviewThread',
-    (_event, args: { repoPath: string; threadId: string; resolve: boolean }) => {
+    async (_event, args: { repoPath: string; threadId: string; resolve: boolean }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
+      // Why: thread resolve doesn't carry the PR number, so we cannot target
+      // a specific cache entry. The renderer cache stores per-(repo, type, number)
+      // entries — emitting a path-wide invalidation here would require a new
+      // event shape; instead, the drawer's existing thread-resolve UI updates
+      // its local state immediately and the next reopen pays one fresh fetch.
       return resolveReviewThread(repo.path, args.threadId, args.resolve)
     }
   )
 
   ipcMain.handle(
     'gh:addPRReviewCommentReply',
-    (
-      _event,
+    async (
+      event,
       args: {
         repoPath: string
         prNumber: number
@@ -269,7 +299,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
-      return addPRReviewCommentReply(
+      const result = await addPRReviewCommentReply(
         repo.path,
         args.prNumber,
         args.commentId,
@@ -278,13 +308,20 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.path,
         args.line
       )
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
     }
   )
 
   ipcMain.handle(
     'gh:addPRReviewComment',
-    (
-      _event,
+    async (
+      event,
       args: {
         repoPath: string
         prNumber: number
@@ -324,7 +361,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
-      return addPRReviewComment({
+      const result = await addPRReviewComment({
         repoPath: repo.path,
         prNumber: args.prNumber,
         commitId: args.commitId.trim(),
@@ -333,31 +370,52 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         startLine: args.startLine,
         body: args.body.trim()
       })
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
     }
   )
 
   ipcMain.handle(
     'gh:updatePRTitle',
-    (_event, args: { repoPath: string; prNumber: number; title: string }) => {
+    async (event, args: { repoPath: string; prNumber: number; title: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return updatePRTitle(repo.path, args.prNumber, args.title)
+      const ok = await updatePRTitle(repo.path, args.prNumber, args.title)
+      if (ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return ok
     }
   )
 
   ipcMain.handle(
     'gh:mergePR',
-    (
-      _event,
+    async (
+      event,
       args: { repoPath: string; prNumber: number; method?: 'merge' | 'squash' | 'rebase' }
     ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return mergePR(repo.path, args.prNumber, args.method)
+      const result = await mergePR(repo.path, args.prNumber, args.method)
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
     }
   )
 
   ipcMain.handle(
     'gh:updateIssue',
-    (_event, args: { repoPath: string; number: number; updates: GitHubIssueUpdate }) => {
+    async (event, args: { repoPath: string; number: number; updates: GitHubIssueUpdate }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
@@ -365,13 +423,23 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.updates || typeof args.updates !== 'object') {
         return { ok: false, error: 'Updates object is required' }
       }
-      return updateIssue(repo.path, args.number, args.updates)
+      const result = await updateIssue(repo.path, args.number, args.updates)
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, type: 'issue', number: args.number },
+          event.sender.id
+        )
+      }
+      return result
     }
   )
 
   ipcMain.handle(
     'gh:addIssueComment',
-    (_event, args: { repoPath: string; number: number; body: string }) => {
+    async (
+      event,
+      args: { repoPath: string; number: number; body: string; type?: 'issue' | 'pr' }
+    ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
@@ -379,7 +447,19 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
-      return addIssueComment(repo.path, args.number, args.body.trim())
+      const result = await addIssueComment(repo.path, args.number, args.body.trim())
+      if (result.ok) {
+        // Why: PR conversation comments hit `/issues/N/comments` too, but the
+        // drawer's cache key uses type='pr'. The caller passes through which
+        // drawer they're posting from so we only invalidate the matching key
+        // — broadcasting both would evict an unrelated PR/issue that happens
+        // to share the number.
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, type: args.type ?? 'issue', number: args.number },
+          event.sender.id
+        )
+      }
+      return result
     }
   )
 

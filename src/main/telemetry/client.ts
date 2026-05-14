@@ -33,6 +33,7 @@ import { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { getCohortAtEmit } from './cohort-classifier'
 import { resolveConsent, type ConsentState } from './consent'
 import { commonPropsSchema, validate } from './validator'
 
@@ -436,7 +437,10 @@ export function trackAppOpenedOnce(): void {
     return
   }
   appOpenedTrackedThisSession = true
-  track('app_opened', {})
+  // Why: `nth_repo_added: 0` on `app_opened` is the canonical session-zero
+  // / pre-repo cohort signal — a user who has launched but never added a
+  // repo. See docs/onboarding-funnel-cohort-addendum.md.
+  track('app_opened', { ...getCohortAtEmit() })
 }
 
 export async function shutdownTelemetry(): Promise<void> {

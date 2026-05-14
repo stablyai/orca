@@ -58,6 +58,9 @@ export function applyDocumentTheme(
   }
 
   root.classList.toggle('dark', shouldUseDarkTheme)
+  // Mirror with `light` so consumers can observe the resolved theme
+  // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
+  root.classList.toggle('light', !shouldUseDarkTheme)
 
   if (!disableTransitions) {
     return
