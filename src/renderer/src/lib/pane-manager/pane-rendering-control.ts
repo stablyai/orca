@@ -47,13 +47,5 @@ export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void 
   for (const pane of panes) {
     pane.webglAttachmentDeferred = false
     reattachWebglIfNeeded(pane)
-    // Why: fresh WebGL canvas has no content — refresh prevents frozen terminal.
-    if (pane.webglAddon) {
-      try {
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
-      } catch {
-        /* ignore */
-      }
-    }
   }
 }
