@@ -49,6 +49,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const onErrorRef = useRef(onError)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const acceptingChunksRef = useRef(false)
+  const generationRef = useRef(0)
 
   useEffect(() => {
     clientRef.current = client
@@ -65,9 +66,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   }, [])
 
   const failActiveDictation = useCallback(
-    (err: unknown) => {
+    (dictationId: string, err: unknown) => {
       const client = clientRef.current
-      const dictationId = activeIdRef.current
+      if (activeIdRef.current !== dictationId) {
+        return
+      }
       activeIdRef.current = null
       acceptingChunksRef.current = false
       pendingChunksRef.current.clear()
@@ -100,7 +103,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
             throw new Error(response.error.message)
           }
         })
-        .catch(failActiveDictation)
+        .catch((err) => failActiveDictation(dictationId, err))
         .finally(() => {
           pendingChunksRef.current.delete(sendChunk)
         })
@@ -115,13 +118,22 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       return
     }
 
+    const generation = generationRef.current + 1
+    generationRef.current = generation
     setError(null)
     const permission = await requestMicrophonePermissionsAsync()
+    if (generationRef.current !== generation || !enabledRef.current) {
+      return
+    }
     if (!permission.granted) {
       throw new Error('Microphone permission denied')
     }
 
     const initialized = await initialize()
+    if (generationRef.current !== generation || !enabledRef.current) {
+      void tearDown()
+      return
+    }
     if (!initialized) {
       throw new Error('Failed to initialize microphone')
     }
@@ -130,6 +142,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     const response = await client.sendRequest('speech.dictation.start', { dictationId })
     if (!response.ok) {
       throw new Error(response.error.message)
+    }
+    if (generationRef.current !== generation || !enabledRef.current) {
+      await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+      return
     }
 
     activeIdRef.current = dictationId
@@ -147,6 +163,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
 
     setStatus('processing')
+    generationRef.current += 1
     acceptingChunksRef.current = false
     toggleRecording(false)
     try {
@@ -164,13 +181,14 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         onTranscriptRef.current(text)
       }
     } catch (err) {
-      reportError(err)
+      failActiveDictation(dictationId, err)
     }
-  }, [reportError])
+  }, [failActiveDictation])
 
   const cancel = useCallback(async () => {
     const client = clientRef.current
     const dictationId = activeIdRef.current
+    generationRef.current += 1
     activeIdRef.current = null
     acceptingChunksRef.current = false
     pendingChunksRef.current.clear()
@@ -191,6 +209,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   useEffect(() => {
     return () => {
       const dictationId = activeIdRef.current
+      generationRef.current += 1
       activeIdRef.current = null
       acceptingChunksRef.current = false
       pendingChunksRef.current.clear()

@@ -408,7 +408,7 @@ describe('createMainWindow', () => {
       { preventDefault: repeatPreventDefault } as never,
       { ...dictationInput, isAutoRepeat: true } as never
     )
-    expect(repeatPreventDefault).not.toHaveBeenCalled()
+    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).not.toHaveBeenCalled()
   })
 

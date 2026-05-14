@@ -225,15 +225,18 @@ export function setupGuestShortcutForwarding(args: {
     if (input.type !== 'keyDown') {
       return
     }
-    if (input.isAutoRepeat) {
-      return
-    }
     // Why: resolve the policy action once per keystroke. The history-navigate
     // chord (Cmd/Ctrl+Alt+Arrow) is the only allowlisted chord that carries
     // Alt and must be handled before the generic modifier-chord gate below,
     // which rejects Alt. Every other chord handled further down can reuse
     // the same `action` rather than re-running the full predicate chain.
     const action = resolveWindowShortcutAction(input, process.platform)
+    if (input.isAutoRepeat) {
+      if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
+        event.preventDefault()
+      }
+      return
+    }
     if (action?.type === 'worktreeHistoryNavigate') {
       // Why: preventDefault unconditionally — if we cannot resolve the
       // renderer (torn-down tab or teardown race), dropping the keystroke

@@ -30,10 +30,8 @@
     "test": "expo-module test",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
-    "typecheck": "tsgo --noEmit",
-    "expo-module": "expo-module",
-    "open:ios": "xed examples/basic-usage/ios",
-    "open:android": "open -a \"Android Studio\" examples/basic-usage/android"
+    "typecheck": "pnpm --dir ../.. exec tsc --noEmit",
+    "expo-module": "expo-module"
   },
   "devDependencies": {
     "@types/react": "^18.0.25",

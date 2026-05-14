@@ -154,8 +154,7 @@
     "sherpa-onnx-darwin-x64": "^1.12.28",
     "sherpa-onnx-linux-arm64": "^1.12.28",
     "sherpa-onnx-linux-x64": "^1.12.28",
-    "sherpa-onnx-win32-arm64": "^1.12.28",
-    "sherpa-onnx-win32-x64": "^1.12.28"
+    "sherpa-onnx-win-x64": "^1.12.28"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mts,cts}": [

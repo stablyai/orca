@@ -20,6 +20,14 @@ export function registerSpeechHandlers(store: Store): void {
     if (!window) {
       return
     }
+    const cleanupOnWindowClosed = (): void => {
+      void getSpeechSttService(store)
+        .stopDictation('desktop')
+        .finally(() => {
+          unlink(hotwordsFilePath).catch(() => {})
+        })
+    }
+    window.once('closed', cleanupOnWindowClosed)
 
     manager.setProgressCallback((id, progress) => {
       if (!window.isDestroyed()) {
@@ -45,6 +53,14 @@ export function registerSpeechHandlers(store: Store): void {
     if (!window) {
       return
     }
+    const cleanupOnWindowClosed = (): void => {
+      void getSpeechSttService(store)
+        .stopDictation('desktop')
+        .finally(() => {
+          unlink(hotwordsFilePath).catch(() => {})
+        })
+    }
+    window.once('closed', cleanupOnWindowClosed)
 
     // Why: on macOS, the Electron binary needs explicit TCC permission for
     // the microphone. Without it, getUserMedia succeeds but returns a silent
@@ -100,6 +116,7 @@ export function registerSpeechHandlers(store: Store): void {
         'desktop'
       )
     } catch (err) {
+      window.off('closed', cleanupOnWindowClosed)
       if (resolvedHotwordsPath) {
         unlink(hotwordsFilePath).catch(() => {})
       }

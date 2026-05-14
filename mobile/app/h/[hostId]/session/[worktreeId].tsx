@@ -530,7 +530,7 @@ export default function SessionScreen() {
 
   const dictation = useMobileDictation({
     client,
-    enabled: connState === 'connected',
+    enabled: canSend,
     onTranscript: (text) => {
       setInput((current) => {
         if (!current.trim()) {

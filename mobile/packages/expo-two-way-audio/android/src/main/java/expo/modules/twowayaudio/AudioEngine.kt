@@ -91,19 +91,21 @@ class AudioEngine (context: Context) {
         // Route audio to external device if connected, otherwise route to speaker
         updateAudioRouting()
 
-        // Listen for changes in audio routing
-        audioManager.registerAudioDeviceCallback(object:android.media.AudioDeviceCallback(){
-            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
-                Log.d("AudioEngine", "onAudioDevicesAdded")
-                super.onAudioDevicesAdded(addedDevices)
-                updateAudioRouting()
-            }
-            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
-                Log.d("AudioEngine", "onAudioDevicesRemoved")
-                super.onAudioDevicesRemoved(removedDevices)
-                updateAudioRouting()
-            }
-        }, null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Listen for changes in audio routing
+            audioManager.registerAudioDeviceCallback(object:android.media.AudioDeviceCallback(){
+                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                    Log.d("AudioEngine", "onAudioDevicesAdded")
+                    super.onAudioDevicesAdded(addedDevices)
+                    updateAudioRouting()
+                }
+                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                    Log.d("AudioEngine", "onAudioDevicesRemoved")
+                    super.onAudioDevicesRemoved(removedDevices)
+                    updateAudioRouting()
+                }
+            }, null)
+        }
 
         val bufferSize = AudioTrack.getMinBufferSize(
             SAMPLE_RATE,

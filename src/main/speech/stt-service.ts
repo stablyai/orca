@@ -78,41 +78,75 @@ export class SttService {
     this.worker = new Worker(workerPath, {
       workerData: { sherpaModulePath }
     })
+    const worker = this.worker
 
     this.activeModelId = modelId
 
     const readyPromise = new Promise<void>((resolve, reject) => {
+      let settled = false
+      const cleanup = () => {
+        worker.off('message', onReadyOrError)
+        worker.off('error', onStartupError)
+        worker.off('exit', onStartupExit)
+      }
       const onReadyOrError = (msg: { type: string; text?: string; error?: string }) => {
+        if (settled) {
+          return
+        }
         if (msg.type === 'ready') {
-          this.worker?.off('message', onReadyOrError)
+          settled = true
+          cleanup()
           resolve()
         } else if (msg.type === 'error') {
-          this.worker?.off('message', onReadyOrError)
+          settled = true
+          cleanup()
           reject(new Error(msg.error ?? 'Speech worker failed to initialize'))
         }
       }
-      this.worker?.on('message', onReadyOrError)
+      const onStartupError = (err: Error) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(err)
+      }
+      const onStartupExit = (code: number) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(new Error(`Speech worker exited before ready: ${code}`))
+      }
+      worker.on('message', onReadyOrError)
+      worker.on('error', onStartupError)
+      worker.on('exit', onStartupExit)
     })
 
-    this.worker.on('message', (msg: SttEvent) => {
+    worker.on('message', (msg: SttEvent) => {
       sink(msg)
     })
 
-    this.worker.on('error', (err) => {
+    worker.on('error', (err) => {
       sink({ type: 'error', error: String(err) })
-      this.worker = null
-      this.activeModelId = null
-      this.activeOwner = null
+      if (this.worker === worker) {
+        this.worker = null
+        this.activeModelId = null
+        this.activeOwner = null
+      }
     })
 
-    this.worker.on('exit', () => {
-      this.worker = null
-      this.activeModelId = null
-      this.activeOwner = null
+    worker.on('exit', () => {
+      if (this.worker === worker) {
+        this.worker = null
+        this.activeModelId = null
+        this.activeOwner = null
+      }
     })
 
     const modelDir = this.modelManager.getModelDir(modelId)
-    this.worker.postMessage({
+    worker.postMessage({
       type: 'init',
       modelDir,
       modelType: manifest.type,
@@ -126,11 +160,13 @@ export class SttService {
     try {
       await readyPromise
     } catch (error) {
-      this.worker?.removeAllListeners()
-      void this.worker?.terminate()
-      this.worker = null
-      this.activeModelId = null
-      this.activeOwner = null
+      worker.removeAllListeners()
+      void worker.terminate()
+      if (this.worker === worker) {
+        this.worker = null
+        this.activeModelId = null
+        this.activeOwner = null
+      }
       throw error
     }
   }
@@ -152,29 +188,32 @@ export class SttService {
       throw new Error('dictation_owner_mismatch')
     }
 
-    this.worker.postMessage({ type: 'stop' })
+    const worker = this.worker
+    worker.postMessage({ type: 'stop' })
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
-        this.worker?.terminate()
+        worker.terminate()
         resolve()
       }, 3000)
 
       const onStopped = (msg: { type: string; text?: string; error?: string }) => {
         if (msg.type === 'stopped') {
           clearTimeout(timeout)
-          this.worker?.off('message', onStopped)
-          this.worker?.postMessage({ type: 'teardown' })
+          worker.off('message', onStopped)
+          worker.postMessage({ type: 'teardown' })
           resolve()
         }
       }
-      this.worker?.on('message', onStopped)
+      worker.on('message', onStopped)
     })
 
-    this.worker.removeAllListeners()
-    this.worker = null
-    this.activeModelId = null
-    this.activeOwner = null
+    worker.removeAllListeners()
+    if (this.worker === worker) {
+      this.worker = null
+      this.activeModelId = null
+      this.activeOwner = null
+    }
   }
 
   isActive(): boolean {
@@ -198,7 +237,10 @@ export class SttService {
     // addon (e.g. sherpa-onnx-darwin-arm64) has direct filesystem access
     // and better performance. We resolve its absolute path here because
     // the worker runs from out/main/ where bare require() can't find it.
-    const nativePkg = `sherpa-onnx-${process.platform}-${process.arch}`
+    const nativePkg =
+      process.platform === 'win32' && process.arch === 'x64'
+        ? 'sherpa-onnx-win-x64'
+        : `sherpa-onnx-${process.platform}-${process.arch}`
 
     if (app.isPackaged) {
       return join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', nativePkg)

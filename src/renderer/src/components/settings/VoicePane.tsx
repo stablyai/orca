@@ -31,11 +31,6 @@ export const VOICE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Speech Model',
     description: 'Select which speech-to-text model to use for dictation.',
     keywords: ['voice', 'model', 'speech', 'stt', 'download']
-  },
-  {
-    title: 'Terminal Confirm Before Insert',
-    description: 'Show a preview before injecting dictated text into the terminal.',
-    keywords: ['voice', 'terminal', 'confirm', 'preview']
   }
 ]
 
@@ -141,37 +136,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
             </button>
           ))}
         </div>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between gap-4 px-1 py-2">
-        <div className="space-y-0.5">
-          <Label>Terminal Confirm Before Insert</Label>
-          <p className="text-xs text-muted-foreground">
-            Show a preview before injecting dictated text into the terminal.
-          </p>
-        </div>
-        <button
-          role="switch"
-          aria-checked={voiceSettings.terminalConfirmBeforeInsert}
-          aria-label="Terminal Confirm Before Insert"
-          disabled={!voiceSettings.enabled}
-          onClick={() =>
-            updateVoiceSettings({
-              terminalConfirmBeforeInsert: !voiceSettings.terminalConfirmBeforeInsert
-            })
-          }
-          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-            voiceSettings.terminalConfirmBeforeInsert ? 'bg-foreground' : 'bg-muted-foreground/30'
-          } ${!voiceSettings.enabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              voiceSettings.terminalConfirmBeforeInsert ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
       </div>
 
       <Separator />

@@ -119,13 +119,23 @@ export class ModelManager {
       }
 
       this.updateState(modelId, 'extracting')
-      await this.extractArchive(archivePath, this.modelsDir, modelId)
+      await this.extractArchive(archivePath, this.modelsDir, modelId, () => aborted)
+
+      if (aborted) {
+        this.cleanup(modelId, archivePath)
+        return
+      }
 
       if (!this.validateModelFiles(manifest, modelDir)) {
         // Why: some archives nest files inside a subdirectory matching the
         // archive name. If the expected files aren't at the top-level model
         // dir, scan one level down and move them up.
         await this.flattenNestedDir(modelDir, manifest)
+      }
+
+      if (aborted) {
+        this.cleanup(modelId, archivePath)
+        return
       }
 
       if (!this.validateModelFiles(manifest, modelDir)) {
@@ -154,7 +164,6 @@ export class ModelManager {
     const handle = this.activeDownloads.get(modelId)
     if (handle) {
       handle.abort()
-      this.activeDownloads.delete(modelId)
       this.updateState(modelId, 'not-downloaded')
     }
   }
@@ -240,7 +249,12 @@ export class ModelManager {
     })
   }
 
-  private extractArchive(archivePath: string, destDir: string, modelId: string): Promise<void> {
+  private extractArchive(
+    archivePath: string,
+    destDir: string,
+    modelId: string,
+    isAborted: () => boolean
+  ): Promise<void> {
     const modelDir = join(destDir, modelId)
     mkdirSync(modelDir, { recursive: true })
 
@@ -262,9 +276,16 @@ export class ModelManager {
         child.kill('SIGKILL')
         reject(new Error('Extraction timed out after 10 minutes'))
       }, 600_000)
+      const abortPoll = setInterval(() => {
+        if (isAborted()) {
+          child.kill('SIGKILL')
+          reject(new Error('Aborted'))
+        }
+      }, 250)
 
       child.on('close', (code) => {
         clearTimeout(timeout)
+        clearInterval(abortPoll)
         if (code === 0) {
           resolve()
         } else {
@@ -274,6 +295,7 @@ export class ModelManager {
 
       child.on('error', (err) => {
         clearTimeout(timeout)
+        clearInterval(abortPoll)
         reject(err)
       })
     })

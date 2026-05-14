@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import AVFoundation
 
 let ON_MIC_DATA_EVENT_NAME = "onMicrophoneData"
 let ON_INPUT_VOLUME_LEVEL_EVENT_NAME = "onInputVolumeLevelData"

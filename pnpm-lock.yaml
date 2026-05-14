@@ -336,6 +336,9 @@ importers:
       sherpa-onnx-linux-x64:
         specifier: ^1.12.28
         version: 1.13.0
+      sherpa-onnx-win-x64:
+        specifier: ^1.12.28
+        version: 1.13.1
 
 packages:
 
@@ -5708,6 +5711,11 @@ packages:
     resolution: {integrity: sha512-GYiXTe4lWAICZvJiIvqacCGlxe7A/QveLcgSWHkRidlJfuZ5skLTe4gA/7KoMaxcdhE+SXnlwDUSjVdOgzcOmQ==}
     cpu: [x64]
     os: [linux]
+
+  sherpa-onnx-win-x64@1.13.1:
+    resolution: {integrity: sha512-BLj/P8vUYVwiAl3/mLuMRhTIIZofpjV9xdbf9SuDbTpPX9Iv9SK7kDO1e0Uoag1r07dzwjV6mmaR00Riu9N2EQ==}
+    cpu: [x64]
+    os: [win32]
 
   sherpa-onnx@1.12.37:
     resolution: {integrity: sha512-3luwSdHwR8BtJiiFwqHfb15FE2FX0KsN4aOBbfq9Ma23r3w9C3bprFc/WBusXk56nUbzcEN5YczN7t9w1JwdtQ==}
@@ -12229,6 +12237,9 @@ snapshots:
     optional: true
 
   sherpa-onnx-linux-x64@1.13.0:
+    optional: true
+
+  sherpa-onnx-win-x64@1.13.1:
     optional: true
 
   sherpa-onnx@1.12.37: {}

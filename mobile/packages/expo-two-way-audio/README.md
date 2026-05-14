@@ -10,8 +10,6 @@ The aim of the module is to facilitate creating real-time conversational apps. T
 - Provide volume level both for the input and output samples. Float between 0 and 1.
 - [iOS only] Get microphone mode and prompt user to select a microphone mode.
 
-Check out our [examples/](./examples) to see the module in action.
-
 ## Installation
 
 ```
@@ -19,8 +17,6 @@ npm i @orca/expo-two-way-audio
 ```
 
 ## Usage
-
-Please check out our [examples/](./examples) to get full sample code.
 
 1. Request permissions for recording audio
 
@@ -52,8 +48,7 @@ Please check out our [examples/](./examples) to get full sample code.
    ```JSX
     import { Buffer } from "buffer";
 
-    // As an example, let's play pcm data hardcoded in a variable.
-    // The examples/basic-usage does this. Check it out for real base64 data.
+    // As an example, play pcm data hardcoded in a variable.
     const audioChunk = "SOME PCM DATA BASE64 ENCODED HERE"
     const buffer = Buffer.from(audioChunk, "base64");
     const pcmData = new Uint8Array(buffer);
@@ -78,7 +73,7 @@ Please check out our [examples/](./examples) to get full sample code.
 
 ## Notes
 
-Some audio features of expo-two-way-audio like Acoustic Echo Cancelling, noise reduction or microphone modes (iOS) don't work on simulator. Run the example on a real device to test these features.
+Some audio features of expo-two-way-audio like Acoustic Echo Cancelling, noise reduction or microphone modes (iOS) don't work on simulator. Run the Orca mobile app on a real device to test these features.
 
 ```bash
 # iOS

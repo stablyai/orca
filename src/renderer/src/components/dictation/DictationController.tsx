@@ -102,12 +102,15 @@ export function DictationController() {
 
     const runId = dictationRunRef.current + 1
     dictationRunRef.current = runId
+    dictationStateRef.current = 'starting'
     setDictationState('starting')
 
     const hotwords = collectHotwords()
+    let speechStarted = false
 
     try {
       await window.api.speech.startDictation(modelId, hotwords.length > 0 ? hotwords : undefined)
+      speechStarted = true
       if (dictationRunRef.current !== runId) {
         await window.api.speech.stopDictation().catch(() => undefined)
         return
@@ -118,11 +121,16 @@ export function DictationController() {
         await window.api.speech.stopDictation().catch(() => undefined)
         return
       }
+      dictationStateRef.current = 'listening'
       setDictationState('listening')
     } catch (err) {
       if (dictationRunRef.current !== runId) {
         return
       }
+      if (speechStarted) {
+        await window.api.speech.stopDictation().catch(() => undefined)
+      }
+      dictationStateRef.current = 'error'
       setDictationState('error')
       const message = String(err)
       if (message.includes('Permission') || message.includes('NotAllowed')) {
@@ -143,6 +151,7 @@ export function DictationController() {
         toast.error(`Dictation failed: ${message}`)
       }
       stopCapture()
+      dictationStateRef.current = 'idle'
       setDictationState('idle')
     }
   }, [settings, setDictationState, startCapture, stopCapture])
@@ -152,6 +161,7 @@ export function DictationController() {
       return
     }
     dictationRunRef.current += 1
+    dictationStateRef.current = 'stopping'
     setDictationState('stopping')
     stopCapture()
     try {
@@ -159,6 +169,7 @@ export function DictationController() {
     } catch {
       // Swallow stop errors — the worker may already be torn down.
     }
+    dictationStateRef.current = 'idle'
     setDictationState('idle')
     setPartialTranscript('')
   }, [setDictationState, setPartialTranscript, stopCapture])
@@ -286,6 +297,7 @@ export function DictationController() {
     const cleanupError = window.api.speech.onError((error) => {
       toast.error(`Speech error: ${error}`)
       stopCapture()
+      dictationStateRef.current = 'idle'
       setDictationState('idle')
       setPartialTranscript('')
     })
@@ -324,19 +336,36 @@ function insertText(text: string): void {
   }
 
   if (activeElement instanceof HTMLElement && activeElement.isContentEditable) {
-    const selection = window.getSelection()
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0)
-      range.deleteContents()
-      const textNode = document.createTextNode(text)
-      range.insertNode(textNode)
-      range.setStartAfter(textNode)
-      range.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(range)
+    const editorElement = findClosestEditorElement(activeElement) ?? activeElement
+    editorElement.dispatchEvent(
+      new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      })
+    )
+    if (!document.execCommand('insertText', false, text)) {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        range.deleteContents()
+        const textNode = document.createTextNode(text)
+        range.insertNode(textNode)
+        range.setStartAfter(textNode)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+      editorElement.dispatchEvent(
+        new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })
+      )
     }
     return
   }
 
   document.dispatchEvent(new CustomEvent('dictation:insertText', { detail: text }))
+}
+function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
+  return element.closest('.ProseMirror, [contenteditable="true"]')
 }

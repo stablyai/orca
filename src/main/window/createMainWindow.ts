@@ -129,8 +129,10 @@ export function createMainWindow(
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    const voice = store?.getSettings().voice
-    return Boolean(voice?.enabled && voice.sttModel && voice.dictationMode !== 'hold')
+    // Why: focused webview guests do not expose a safe transcript insertion
+    // target yet. Let Cmd/Ctrl+E continue to the page instead of starting a
+    // dictation session whose final text would be dropped.
+    return false
   })
   const blur = settings?.windowBackgroundBlur ?? false
   // Why: native blur requires platform-specific Electron APIs. macOS uses
@@ -506,9 +508,6 @@ export function createMainWindow(
     if (input.type !== 'keyDown') {
       return
     }
-    if (input.isAutoRepeat) {
-      return
-    }
 
     // Why: in hold mode, Cmd+E must NOT be intercepted here. Calling
     // preventDefault() in before-input-event suppresses ALL subsequent DOM
@@ -523,6 +522,10 @@ export function createMainWindow(
       }
       const dictationMode = voiceSettings.dictationMode ?? 'toggle'
       if (dictationMode === 'hold') {
+        return
+      }
+      if (input.isAutoRepeat) {
+        event.preventDefault()
         return
       }
       event.preventDefault()

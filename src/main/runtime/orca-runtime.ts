@@ -1723,7 +1723,11 @@ export class OrcaRuntimeService {
       throw new Error(`voice_model_not_ready:${modelState.status}`)
     }
 
-    if (this.mobileDictation && this.mobileDictation.state !== 'closing') {
+    if (!params.clientId) {
+      throw new Error('dictation_requires_mobile_client')
+    }
+
+    if (this.mobileDictation) {
       throw new Error('dictation_already_active')
     }
 
@@ -1774,12 +1778,20 @@ export class OrcaRuntimeService {
     return { dictationId: params.dictationId, modelId }
   }
 
-  feedMobileDictation(params: { dictationId: string; audioBase64: string; sampleRate: number }): {
+  feedMobileDictation(params: {
+    dictationId: string
+    audioBase64: string
+    sampleRate: number
+    clientId?: string
+  }): {
     dictationId: string
   } {
     const session = this.mobileDictation
     if (!session || session.id !== params.dictationId) {
       throw new Error('dictation_stream_not_started')
+    }
+    if (!params.clientId || session.clientId !== params.clientId) {
+      throw new Error('dictation_owner_mismatch')
     }
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
@@ -1797,13 +1809,16 @@ export class OrcaRuntimeService {
     return { dictationId: params.dictationId }
   }
 
-  async finishMobileDictation(params: { dictationId: string }): Promise<{
+  async finishMobileDictation(params: { dictationId: string; clientId?: string }): Promise<{
     dictationId: string
     text: string
   }> {
     const session = this.mobileDictation
     if (!session || session.id !== params.dictationId) {
       throw new Error('dictation_stream_not_started')
+    }
+    if (!params.clientId || session.clientId !== params.clientId) {
+      throw new Error('dictation_owner_mismatch')
     }
     session.state = 'closing'
     try {
@@ -1814,18 +1829,29 @@ export class OrcaRuntimeService {
       const text = [...session.finalTexts, session.partialText].join(' ').trim()
       return { dictationId: params.dictationId, text }
     } finally {
-      this.mobileDictation = null
+      if (this.mobileDictation?.id === session.id) {
+        this.mobileDictation = null
+      }
     }
   }
 
-  async cancelMobileDictation(params: { dictationId: string }): Promise<{ dictationId: string }> {
+  async cancelMobileDictation(params: {
+    dictationId: string
+    clientId?: string
+  }): Promise<{ dictationId: string }> {
     const session = this.mobileDictation
-    if (session?.id === params.dictationId) {
+    if (
+      session?.id === params.dictationId &&
+      params.clientId &&
+      session.clientId === params.clientId
+    ) {
       session.state = 'closing'
       try {
         await getSpeechSttService(this.store!).stopDictation(session.owner)
       } finally {
-        this.mobileDictation = null
+        if (this.mobileDictation?.id === session.id) {
+          this.mobileDictation = null
+        }
       }
     }
     return { dictationId: params.dictationId }
