@@ -737,6 +737,7 @@ export class OrcaRuntimeService {
     id: string
     owner: string
     clientId?: string
+    connectionId?: string
     state: 'starting' | 'active' | 'closing'
     partialText: string
     finalTexts: string[]
@@ -1700,6 +1701,7 @@ export class OrcaRuntimeService {
     dictationId: string
     modelId?: string
     clientId?: string
+    connectionId?: string
   }): Promise<{
     dictationId: string
     modelId: string
@@ -1736,6 +1738,7 @@ export class OrcaRuntimeService {
       id: params.dictationId,
       owner,
       clientId: params.clientId,
+      connectionId: params.connectionId,
       state: 'starting',
       partialText: '',
       finalTexts: [],
@@ -1765,9 +1768,10 @@ export class OrcaRuntimeService {
         undefined,
         owner
       )
-      if (this.mobileDictation?.id === params.dictationId) {
-        this.mobileDictation.state = 'active'
+      if (this.mobileDictation?.id !== params.dictationId) {
+        throw new Error('dictation_canceled')
       }
+      this.mobileDictation.state = 'active'
     } catch (error) {
       if (this.mobileDictation?.id === params.dictationId) {
         this.mobileDictation = null
@@ -1783,6 +1787,7 @@ export class OrcaRuntimeService {
     audioBase64: string
     sampleRate: number
     clientId?: string
+    connectionId?: string
   }): {
     dictationId: string
   } {
@@ -1791,6 +1796,9 @@ export class OrcaRuntimeService {
       throw new Error('dictation_stream_not_started')
     }
     if (!params.clientId || session.clientId !== params.clientId) {
+      throw new Error('dictation_owner_mismatch')
+    }
+    if (session.connectionId && session.connectionId !== params.connectionId) {
       throw new Error('dictation_owner_mismatch')
     }
     if (session.state !== 'active') {
@@ -1809,7 +1817,11 @@ export class OrcaRuntimeService {
     return { dictationId: params.dictationId }
   }
 
-  async finishMobileDictation(params: { dictationId: string; clientId?: string }): Promise<{
+  async finishMobileDictation(params: {
+    dictationId: string
+    clientId?: string
+    connectionId?: string
+  }): Promise<{
     dictationId: string
     text: string
   }> {
@@ -1818,6 +1830,9 @@ export class OrcaRuntimeService {
       throw new Error('dictation_stream_not_started')
     }
     if (!params.clientId || session.clientId !== params.clientId) {
+      throw new Error('dictation_owner_mismatch')
+    }
+    if (session.connectionId && session.connectionId !== params.connectionId) {
       throw new Error('dictation_owner_mismatch')
     }
     session.state = 'closing'
@@ -1838,12 +1853,14 @@ export class OrcaRuntimeService {
   async cancelMobileDictation(params: {
     dictationId: string
     clientId?: string
+    connectionId?: string
   }): Promise<{ dictationId: string }> {
     const session = this.mobileDictation
     if (
       session?.id === params.dictationId &&
       params.clientId &&
-      session.clientId === params.clientId
+      session.clientId === params.clientId &&
+      (!session.connectionId || session.connectionId === params.connectionId)
     ) {
       session.state = 'closing'
       try {
@@ -1857,9 +1874,8 @@ export class OrcaRuntimeService {
     return { dictationId: params.dictationId }
   }
 
-  private cancelMobileDictationForClient(clientId: string): void {
-    const session = this.mobileDictation
-    if (!session || session.clientId !== clientId) {
+  private cancelMobileDictationSession(session: NonNullable<typeof this.mobileDictation>): void {
+    if (session.state === 'closing') {
       return
     }
     session.state = 'closing'
@@ -1870,6 +1886,22 @@ export class OrcaRuntimeService {
           this.mobileDictation = null
         }
       })
+  }
+
+  cancelMobileDictationForConnection(connectionId: string): void {
+    const session = this.mobileDictation
+    if (!session || session.connectionId !== connectionId) {
+      return
+    }
+    this.cancelMobileDictationSession(session)
+  }
+
+  private cancelMobileDictationForClient(clientId: string): void {
+    const session = this.mobileDictation
+    if (!session || session.clientId !== clientId) {
+      return
+    }
+    this.cancelMobileDictationSession(session)
   }
 
   private requireAccountServices(): RuntimeAccountServices {

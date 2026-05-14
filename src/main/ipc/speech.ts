@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow, systemPreferences, app } from 'electron'
 import { join } from 'path'
 import { writeFile, unlink } from 'fs/promises'
-import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import { SPEECH_MODEL_CATALOG, getCatalogModel } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import type { Store } from '../persistence'
 
@@ -20,15 +20,6 @@ export function registerSpeechHandlers(store: Store): void {
     if (!window) {
       return
     }
-    const cleanupOnWindowClosed = (): void => {
-      void getSpeechSttService(store)
-        .stopDictation('desktop')
-        .finally(() => {
-          unlink(hotwordsFilePath).catch(() => {})
-        })
-    }
-    window.once('closed', cleanupOnWindowClosed)
-
     manager.setProgressCallback((id, progress) => {
       if (!window.isDestroyed()) {
         window.webContents.send('speech:downloadProgress', { modelId: id, progress })
@@ -43,6 +34,9 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
+    if (!getCatalogModel(modelId)) {
+      throw new Error(`Unknown model: ${modelId}`)
+    }
     await getSpeechModelManager(store).deleteModel(modelId)
   })
 

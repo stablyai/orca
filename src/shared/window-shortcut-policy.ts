@@ -200,7 +200,7 @@ export function resolveWindowShortcutAction(
   // on Linux/Windows when the global window matches first. The renderer's
   // dictation controller is responsible for forwarding the chord through to
   // the PTY when dictation is intentionally disabled or the user is mid-input.
-  if (input.code === 'KeyE' && !input.shift) {
+  if (matchesLetterShortcut(input, 'e', 'KeyE') && !input.shift) {
     return { type: 'dictationKeyDown' }
   }
 

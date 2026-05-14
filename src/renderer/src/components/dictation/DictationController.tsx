@@ -6,6 +6,11 @@ import { DictationIndicator } from './DictationIndicator'
 
 const IS_MAC = navigator.userAgent.includes('Mac')
 
+type DictationInsertionTarget =
+  | { kind: 'terminal'; tabId: string; paneId: number }
+  | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
+  | { kind: 'contentEditable'; element: HTMLElement }
+
 // Why: splits compound identifiers into space-separated lowercase words
 // so hotwords match natural speech (e.g., "DictationController" → "dictation controller").
 function splitIdentifier(name: string): string | undefined {
@@ -75,6 +80,7 @@ export function DictationController() {
   dictationStateRef.current = dictationState
   const dictationRunRef = useRef(0)
   const holdGestureActiveRef = useRef(false)
+  const insertionTargetRef = useRef<DictationInsertionTarget | null>(null)
 
   const startDictation = useCallback(async () => {
     if (dictationStateRef.current !== 'idle') {
@@ -102,6 +108,7 @@ export function DictationController() {
 
     const runId = dictationRunRef.current + 1
     dictationRunRef.current = runId
+    insertionTargetRef.current = captureInsertionTarget()
     dictationStateRef.current = 'starting'
     setDictationState('starting')
 
@@ -112,11 +119,13 @@ export function DictationController() {
       await window.api.speech.startDictation(modelId, hotwords.length > 0 ? hotwords : undefined)
       speechStarted = true
       if (dictationRunRef.current !== runId) {
+        insertionTargetRef.current = null
         await window.api.speech.stopDictation().catch(() => undefined)
         return
       }
       await startCapture()
       if (dictationRunRef.current !== runId) {
+        insertionTargetRef.current = null
         stopCapture()
         await window.api.speech.stopDictation().catch(() => undefined)
         return
@@ -222,7 +231,7 @@ export function DictationController() {
 
     const handleKeyDown = (e: KeyboardEvent): void => {
       const mod = IS_MAC ? e.metaKey : e.ctrlKey
-      if (mod && e.code === 'KeyE' && !e.shiftKey && !e.altKey) {
+      if (mod && (e.key.toLowerCase() === 'e' || e.code === 'KeyE') && !e.shiftKey && !e.altKey) {
         if (!settings?.voice?.enabled || !settings.voice.sttModel) {
           return
         }
@@ -243,7 +252,12 @@ export function DictationController() {
         holdGestureActiveRef.current = false
         return
       }
-      if (e.code === 'KeyE' || e.key === 'Meta' || e.key === 'Control') {
+      if (
+        e.key.toLowerCase() === 'e' ||
+        e.code === 'KeyE' ||
+        e.key === 'Meta' ||
+        e.key === 'Control'
+      ) {
         holdGestureActiveRef.current = false
         void stopDictation()
       }
@@ -255,6 +269,7 @@ export function DictationController() {
       }
       holdGestureActiveRef.current = false
       if (dictationStateRef.current !== 'idle' && dictationStateRef.current !== 'stopping') {
+        insertionTargetRef.current = null
         void stopDictation()
       }
     }
@@ -291,12 +306,17 @@ export function DictationController() {
 
     const cleanupFinal = window.api.speech.onFinalTranscript((text) => {
       setPartialTranscript('')
-      insertText(text)
+      const target = insertionTargetRef.current
+      insertionTargetRef.current = null
+      if (target) {
+        insertText(text, target)
+      }
     })
 
     const cleanupError = window.api.speech.onError((error) => {
       toast.error(`Speech error: ${error}`)
       stopCapture()
+      insertionTargetRef.current = null
       dictationStateRef.current = 'idle'
       setDictationState('idle')
       setPartialTranscript('')
@@ -312,31 +332,63 @@ export function DictationController() {
   return <DictationIndicator />
 }
 
-function insertText(text: string): void {
+function captureInsertionTarget(): DictationInsertionTarget | null {
   const activeElement = document.activeElement
 
   if (!activeElement) {
-    return
+    return null
   }
 
-  // Why: xterm.js uses a hidden textarea for keyboard input. When it has
-  // focus, we write directly to the PTY via the terminal's input mechanism
-  // rather than inserting into the textarea (which xterm ignores).
   if (activeElement.classList.contains('xterm-helper-textarea')) {
-    document.dispatchEvent(new CustomEvent('dictation:insertText', { detail: text }))
-    return
+    const paneElement = activeElement.closest('.pane[data-pane-id]') as HTMLElement | null
+    const tabElement = activeElement.closest('[data-terminal-tab-id]') as HTMLElement | null
+    const paneId = Number(paneElement?.dataset.paneId)
+    const tabId = tabElement?.dataset.terminalTabId
+    if (tabId && Number.isFinite(paneId)) {
+      return { kind: 'terminal', tabId, paneId }
+    }
+    return null
   }
 
   if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
-    const start = activeElement.selectionStart ?? activeElement.value.length
-    const end = activeElement.selectionEnd ?? start
-    activeElement.setRangeText(text, start, end, 'end')
-    activeElement.dispatchEvent(new Event('input', { bubbles: true }))
-    return
+    return { kind: 'text', element: activeElement }
   }
 
   if (activeElement instanceof HTMLElement && activeElement.isContentEditable) {
-    const editorElement = findClosestEditorElement(activeElement) ?? activeElement
+    return { kind: 'contentEditable', element: activeElement }
+  }
+
+  return null
+}
+
+function insertText(text: string, target: DictationInsertionTarget): void {
+  if (target.kind === 'terminal') {
+    document.dispatchEvent(
+      new CustomEvent('dictation:insertText', {
+        detail: { text, tabId: target.tabId, paneId: target.paneId }
+      })
+    )
+    return
+  }
+
+  if (target.kind === 'text') {
+    const element = target.element
+    if (!element.isConnected) {
+      return
+    }
+    const start = element.selectionStart ?? element.value.length
+    const end = element.selectionEnd ?? start
+    element.setRangeText(text, start, end, 'end')
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+    return
+  }
+
+  if (target.kind === 'contentEditable') {
+    const element = target.element
+    if (!element.isConnected || !element.contains(document.activeElement)) {
+      return
+    }
+    const editorElement = findClosestEditorElement(element) ?? element
     editorElement.dispatchEvent(
       new InputEvent('beforeinput', {
         bubbles: true,
@@ -361,10 +413,7 @@ function insertText(text: string): void {
         new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })
       )
     }
-    return
   }
-
-  document.dispatchEvent(new CustomEvent('dictation:insertText', { detail: text }))
 }
 function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
   return element.closest('.ProseMirror, [contenteditable="true"]')

@@ -21,24 +21,25 @@ export const SPEECH_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'speech.dictation.start',
     params: DictationStart,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.startMobileDictation({ ...params, clientId })
+    handler: async (params, { runtime, clientId, connectionId }) =>
+      runtime.startMobileDictation({ ...params, clientId, connectionId })
   }),
   defineMethod({
     name: 'speech.dictation.chunk',
     params: DictationChunk,
-    handler: (params, { runtime, clientId }) => runtime.feedMobileDictation({ ...params, clientId })
+    handler: (params, { runtime, clientId, connectionId }) =>
+      runtime.feedMobileDictation({ ...params, clientId, connectionId })
   }),
   defineMethod({
     name: 'speech.dictation.finish',
     params: DictationHandle,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.finishMobileDictation({ ...params, clientId })
+    handler: async (params, { runtime, clientId, connectionId }) =>
+      runtime.finishMobileDictation({ ...params, clientId, connectionId })
   }),
   defineMethod({
     name: 'speech.dictation.cancel',
     params: DictationHandle,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.cancelMobileDictation({ ...params, clientId })
+    handler: async (params, { runtime, clientId, connectionId }) =>
+      runtime.cancelMobileDictation({ ...params, clientId, connectionId })
   })
 ]

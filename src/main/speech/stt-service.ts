@@ -20,6 +20,7 @@ export class SttService {
   private activeOwner: string | null = null
   private startingOwner: string | null = null
   private starting = false
+  private canceledOwners = new Set<string>()
 
   constructor(modelManager: ModelManager) {
     this.modelManager = modelManager
@@ -45,10 +46,15 @@ export class SttService {
 
     try {
       await this._startDictation(modelId, sink, hotwordsFilePath, owner)
+      if (this.canceledOwners.delete(owner)) {
+        await this.stopDictation(owner)
+        throw new Error('dictation_canceled')
+      }
       this.activeOwner = owner
     } finally {
       this.starting = false
       this.startingOwner = null
+      this.canceledOwners.delete(owner)
     }
   }
 
@@ -181,6 +187,9 @@ export class SttService {
 
   async stopDictation(owner = 'desktop'): Promise<void> {
     if (!this.worker) {
+      if (this.startingOwner === owner) {
+        this.canceledOwners.add(owner)
+      }
       return
     }
     const currentOwner = this.activeOwner ?? this.startingOwner

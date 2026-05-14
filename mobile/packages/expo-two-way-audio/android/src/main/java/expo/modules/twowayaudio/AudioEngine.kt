@@ -16,9 +16,10 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.RequiresApi
-import java.util.LinkedList
 import java.util.Queue
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 
@@ -32,7 +33,9 @@ class AudioEngine (context: Context) {
     private lateinit var audioTrack: AudioTrack
     private var audioFocusRequest: AudioFocusRequest? = null
     private var audioFocusChangeListener: AudioManager.OnAudioFocusChangeListener? = null
-    private val audioSampleQueue: Queue<ByteArray> = LinkedList()
+    private var audioDeviceCallback: android.media.AudioDeviceCallback? = null
+    private val audioSampleQueue: Queue<ByteArray> = ConcurrentLinkedQueue()
+    private val playbackRunning = AtomicBoolean(false)
     private var echoCanceler: AcousticEchoCanceler? = null
     private var noiseSuppressor: NoiseSuppressor? = null
     private val executorServiceMicrophone = Executors.newFixedThreadPool(1)
@@ -93,7 +96,7 @@ class AudioEngine (context: Context) {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // Listen for changes in audio routing
-            audioManager.registerAudioDeviceCallback(object:android.media.AudioDeviceCallback(){
+            val callback = object:android.media.AudioDeviceCallback(){
                 override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
                     Log.d("AudioEngine", "onAudioDevicesAdded")
                     super.onAudioDevicesAdded(addedDevices)
@@ -104,7 +107,9 @@ class AudioEngine (context: Context) {
                     super.onAudioDevicesRemoved(removedDevices)
                     updateAudioRouting()
                 }
-            }, null)
+            }
+            audioDeviceCallback = callback
+            audioManager.registerAudioDeviceCallback(callback, null)
         }
 
         val bufferSize = AudioTrack.getMinBufferSize(
@@ -178,6 +183,12 @@ class AudioEngine (context: Context) {
             when (focusChange) {
                 AudioManager.AUDIOFOCUS_LOSS -> {
                     Log.d("AudioEngine", "Audio focus lost")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        pauseRecordingAndPlayer()
+                    } else {
+                        stopRecording()
+                        stopPlayback()
+                    }
                     onAudioInterruptionCallback?.let { it("blocked") }
                 }
             }
@@ -310,7 +321,7 @@ class AudioEngine (context: Context) {
                 "head=${data.take(12).joinToString(" ") { byte -> "%02x".format(byte.toInt() and 0xff) }}"
         )
         flushBridgeStats("queue")
-        if (!isPlaying) {
+        if (playbackRunning.compareAndSet(false, true)) {
             playAudioFromSampleQueue()
         }
     }
@@ -319,22 +330,22 @@ class AudioEngine (context: Context) {
         executorServicePlayback.execute{
             isPlaying = true
             try {
-                while (audioSampleQueue.isNotEmpty()){
-                    val data = audioSampleQueue.poll()
-                    if (data != null){
-                        playSample(data)
-                        val audioVolume = calculateRMSLevel(data)
-                        onOutputVolumeCallback?.invoke(audioVolume)
-                    }else{
-                        break
-                    }
+                while (true){
+                    val data = audioSampleQueue.poll() ?: break
+                    playSample(data)
+                    val audioVolume = calculateRMSLevel(data)
+                    onOutputVolumeCallback?.invoke(audioVolume)
                 }
             }catch (e: Exception){
                 Log.e("AudioEngine", "Error playing audio", e)
                 e.printStackTrace()
             }finally {
+                playbackRunning.set(false)
                 isPlaying = false
                 onOutputVolumeCallback?.invoke(0.0F)
+                if (audioSampleQueue.isNotEmpty() && playbackRunning.compareAndSet(false, true)) {
+                    playAudioFromSampleQueue()
+                }
             }
         }
     }
@@ -379,6 +390,7 @@ class AudioEngine (context: Context) {
         audioSampleQueue.clear()
         audioTrack.pause()
         audioTrack.flush()
+        playbackRunning.set(false)
         isPlaying = false
         onOutputVolumeCallback?.invoke(0.0F)
         Log.d("AudioEngine", "Playback stopped")
@@ -397,8 +409,21 @@ class AudioEngine (context: Context) {
     @SuppressLint("NewApi")
     fun tearDown() {
         stopRecording()
-        audioTrack.stop()
+        if (::audioTrack.isInitialized) {
+            audioTrack.stop()
+            audioTrack.release()
+        }
+        echoCanceler?.release()
+        echoCanceler = null
+        noiseSuppressor?.release()
+        noiseSuppressor = null
+        audioSampleQueue.clear()
+        playbackRunning.set(false)
         audioManager.mode = AudioManager.MODE_NORMAL
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            audioDeviceCallback?.let { audioManager.unregisterAudioDeviceCallback(it) }
+            audioDeviceCallback = null
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
         }
@@ -411,6 +436,7 @@ class AudioEngine (context: Context) {
             audioManager.abandonAudioFocus(audioFocusChangeListener)
         }
         executorServiceMicrophone.shutdownNow()
+        executorServicePlayback.shutdownNow()
     }
 
 

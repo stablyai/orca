@@ -50,6 +50,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const acceptingChunksRef = useRef(false)
   const generationRef = useRef(0)
+  const finishingIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     clientRef.current = client
@@ -139,16 +140,31 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
 
     const dictationId = createDictationId()
-    const response = await client.sendRequest('speech.dictation.start', { dictationId })
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    if (generationRef.current !== generation || !enabledRef.current) {
+    activeIdRef.current = dictationId
+    try {
+      const response = await client.sendRequest('speech.dictation.start', { dictationId })
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+    } catch (err) {
+      if (activeIdRef.current === dictationId) {
+        activeIdRef.current = null
+      }
       await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+      throw err
+    }
+    if (
+      generationRef.current !== generation ||
+      !enabledRef.current ||
+      activeIdRef.current !== dictationId
+    ) {
+      await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+      if (activeIdRef.current === dictationId) {
+        activeIdRef.current = null
+      }
       return
     }
 
-    activeIdRef.current = dictationId
     acceptingChunksRef.current = true
     pendingChunksRef.current.clear()
     toggleRecording(true)
@@ -162,19 +178,38 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       return
     }
 
+    const generation = generationRef.current + 1
+    generationRef.current = generation
+    finishingIdRef.current = dictationId
     setStatus('processing')
-    generationRef.current += 1
     acceptingChunksRef.current = false
     toggleRecording(false)
     try {
       await Promise.allSettled(Array.from(pendingChunksRef.current))
+      if (
+        generationRef.current !== generation ||
+        activeIdRef.current !== dictationId ||
+        finishingIdRef.current !== dictationId ||
+        !enabledRef.current
+      ) {
+        return
+      }
       const response = await client.sendRequest('speech.dictation.finish', { dictationId })
       if (!response.ok) {
         throw new Error(response.error.message)
       }
+      if (
+        generationRef.current !== generation ||
+        activeIdRef.current !== dictationId ||
+        finishingIdRef.current !== dictationId ||
+        !enabledRef.current
+      ) {
+        return
+      }
       const result = response.result as { text?: unknown }
       const text = typeof result.text === 'string' ? result.text.trim() : ''
       activeIdRef.current = null
+      finishingIdRef.current = null
       pendingChunksRef.current.clear()
       setStatus('idle')
       if (text) {
@@ -182,6 +217,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       }
     } catch (err) {
       failActiveDictation(dictationId, err)
+    } finally {
+      if (finishingIdRef.current === dictationId) {
+        finishingIdRef.current = null
+      }
     }
   }, [failActiveDictation])
 
@@ -190,6 +229,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     const dictationId = activeIdRef.current
     generationRef.current += 1
     activeIdRef.current = null
+    finishingIdRef.current = null
     acceptingChunksRef.current = false
     pendingChunksRef.current.clear()
     toggleRecording(false)
@@ -199,6 +239,15 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     setStatus('idle')
     setError(null)
   }, [])
+
+  useEffect(() => {
+    const sub = addExpoTwoWayAudioEventListener('onAudioInterruption', (event) => {
+      if (event.data === 'began' || event.data === 'blocked') {
+        void cancel()
+      }
+    })
+    return () => sub.remove()
+  }, [cancel])
 
   useEffect(() => {
     if (!enabled) {
@@ -211,6 +260,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       const dictationId = activeIdRef.current
       generationRef.current += 1
       activeIdRef.current = null
+      finishingIdRef.current = null
       acceptingChunksRef.current = false
       pendingChunksRef.current.clear()
       toggleRecording(false)

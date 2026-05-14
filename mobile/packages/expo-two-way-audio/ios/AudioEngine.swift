@@ -243,7 +243,6 @@ class AudioEngine {
     func toggleRecording(_ val: Bool) -> Bool {
         isRecording = val
         if !isRecording {
-            wasRecordingBeforeInterruption = false
             avAudioEngine.inputNode.isVoiceProcessingInputMuted = true
             // Reset input buffer, so that volume levels report 0
             inputBuffer = [Float](repeating: 0, count: 2048)
@@ -256,7 +255,10 @@ class AudioEngine {
         return isRecording
     }
     
-    func stopRecordingAndPlayer(){
+    func stopRecordingAndPlayer(clearInterruptionResume: Bool = true){
+        if clearInterruptionResume {
+            wasRecordingBeforeInterruption = false
+        }
         do {
             try AVAudioSession.sharedInstance().setActive(false)
         } catch {
@@ -321,7 +323,7 @@ class AudioEngine {
         switch type {
         case .began:
             wasRecordingBeforeInterruption = isRecording
-            self.stopRecordingAndPlayer()
+            self.stopRecordingAndPlayer(clearInterruptionResume: false)
             onAudioInterruptionCallback?("began")
         case .ended:
             if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {

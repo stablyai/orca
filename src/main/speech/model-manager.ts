@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { join } from 'path'
+import { join, resolve, relative } from 'path'
 import { existsSync, mkdirSync, createWriteStream, rmSync } from 'fs'
 import { readdir, rm } from 'fs/promises'
 import { get as httpsGet } from 'https'
@@ -69,7 +69,21 @@ export class ModelManager {
   }
 
   getModelDir(modelId: string): string {
-    return join(this.modelsDir, modelId)
+    return this.getSafeModelDir(modelId)
+  }
+
+  private getSafeModelDir(modelId: string): string {
+    const manifest = getCatalogModel(modelId)
+    if (!manifest) {
+      throw new Error(`Unknown model: ${modelId}`)
+    }
+    const modelsRoot = resolve(this.modelsDir)
+    const modelDir = resolve(modelsRoot, modelId)
+    const rel = relative(modelsRoot, modelDir)
+    if (rel.startsWith('..') || rel === '' || rel.includes('..') || resolve(rel) === rel) {
+      throw new Error(`Invalid model id: ${modelId}`)
+    }
+    return modelDir
   }
 
   private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
@@ -169,6 +183,9 @@ export class ModelManager {
   }
 
   async deleteModel(modelId: string): Promise<void> {
+    if (!getCatalogModel(modelId)) {
+      throw new Error(`Unknown model: ${modelId}`)
+    }
     this.cancelDownload(modelId)
     const modelDir = this.getModelDir(modelId)
     if (existsSync(modelDir)) {

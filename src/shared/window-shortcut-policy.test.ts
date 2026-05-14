@@ -80,6 +80,22 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'toggleWorktreePalette' })
   })
 
+  it('resolves dictation using the layout-aware key value', () => {
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyD', key: 'e', meta: true, control: false, alt: false, shift: false },
+        'darwin'
+      )
+    ).toEqual({ type: 'dictationKeyDown' })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyE', key: 'd', meta: true, control: false, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBeNull()
+  })
+
   it('accepts all supported zoom key variants', () => {
     const zoomInCases: WindowShortcutInput[] = [
       { key: '=', meta: true, control: false, alt: false, shift: false },

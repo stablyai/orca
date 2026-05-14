@@ -235,7 +235,17 @@ export function useTerminalPaneGlobalEffects({
       if (!manager) {
         return
       }
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      const detail = (
+        event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
+      ).detail
+      const text = typeof detail === 'string' ? detail : detail?.text
+      if (typeof detail === 'object' && detail.tabId !== tabId) {
+        return
+      }
+      const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
+      const pane = requestedPaneId
+        ? manager.getPanes().find((candidate) => candidate.id === requestedPaneId)
+        : (manager.getActivePane() ?? manager.getPanes()[0])
       if (!pane) {
         return
       }
@@ -243,14 +253,13 @@ export function useTerminalPaneGlobalEffects({
       if (!transport) {
         return
       }
-      const text = (event as CustomEvent<string>).detail
       if (text) {
         transport.sendInput(text)
       }
     }
     document.addEventListener('dictation:insertText', onDictationInsert)
     return () => document.removeEventListener('dictation:insertText', onDictationInsert)
-  }, [isActiveRef, managerRef, paneTransportsRef])
+  }, [isActiveRef, managerRef, paneTransportsRef, tabId])
 
   // Why: visible but unfocused split-group terminals can still receive native
   // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy
