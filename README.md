@@ -97,16 +97,16 @@ yay -S stably-orca-git
 
 ---
 
-## Mobile Companion
+## Mobile Companion App
 
-Keep an eye on agents and usage from your phone.
+Control your agents from your phone.
 
 <p align="center">
   <picture><source srcset="docs/assets/feature-wall/mobile-companion-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-showcase.jpg" alt="Orca desktop with the mobile companion app" width="720" /></picture>
 </p>
 
-- **iOS:** [Download Orca IDE from the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download the APK from GitHub Releases](https://github.com/stablyai/orca/releases)
+- **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
+- **Android:** [Download from GH release (find latest mobile)](https://github.com/stablyai/orca/releases)
 
 ---
 

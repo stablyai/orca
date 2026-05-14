@@ -97,16 +97,16 @@ yay -S stably-orca-git
 
 ---
 
-## 移动 Companion
+## 移动 Companion 应用
 
-用手机查看智能体状态和用量。
+用手机控制你的智能体。
 
 <p align="center">
   <picture><source srcset="assets/feature-wall/mobile-companion-showcase.gif" type="image/gif"><img src="assets/feature-wall/mobile-companion-showcase.jpg" alt="Orca 桌面端与移动 companion 应用" width="720" /></picture>
 </p>
 
-- **iOS:** [从 App Store 下载 Orca IDE](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [从 GitHub Releases 下载 APK](https://github.com/stablyai/orca/releases)
+- **iOS:** [从 App Store 下载](https://apps.apple.com/us/app/orca-ide/id6766130217)
+- **Android:** [从 GH release 下载（查找最新 mobile 版本）](https://github.com/stablyai/orca/releases)
 
 ---
 

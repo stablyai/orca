@@ -97,16 +97,16 @@ yay -S stably-orca-git
 
 ---
 
-## モバイル Companion
+## モバイル Companion アプリ
 
-スマートフォンからエージェントと使用量を確認できます。
+スマートフォンからエージェントを操作できます。
 
 <p align="center">
   <picture><source srcset="assets/feature-wall/mobile-companion-showcase.gif" type="image/gif"><img src="assets/feature-wall/mobile-companion-showcase.jpg" alt="Orca デスクトップとモバイル companion アプリ" width="720" /></picture>
 </p>
 
-- **iOS:** [App Store から Orca IDE をダウンロード](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [GitHub Releases から APK をダウンロード](https://github.com/stablyai/orca/releases)
+- **iOS:** [App Store からダウンロード](https://apps.apple.com/us/app/orca-ide/id6766130217)
+- **Android:** [GH release からダウンロード (latest mobile を探してください)](https://github.com/stablyai/orca/releases)
 
 ---
 
