@@ -501,6 +501,34 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('keeps WSL UNC worktree terminals in the matching distro cwd on Windows', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
+        shellOverride: 'wsl.exe'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/alice/repo' && exec bash -l"],
+      expect.objectContaining({ cwd: expect.any(String) })
+    )
+  })
+
   // Why: node-pty's UnixTerminal.destroy() registers _socket.once('close', () =>
   // this.kill('SIGHUP')), and the socket 'close' event can fire concurrently
   // with onExit. If kill is not neutralized by the time close fires, SIGHUP

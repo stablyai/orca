@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'path'
+import { parseWslPath, toLinuxPath } from '../wsl'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -62,8 +63,17 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'wsl.exe') {
+    const wslInfo = parseWslPath(cwd)
+    if (wslInfo) {
+      const escapedLinuxCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
+      return {
+        shellArgs: ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`],
+        effectiveCwd: defaultCwd,
+        validationCwd: cwd
+      }
+    }
     const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
-    const linuxCwd = driveMatch ? `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}` : '/mnt/c'
+    const linuxCwd = driveMatch ? toLinuxPath(cwd) : '/mnt/c'
     const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
     return {
       shellArgs: ['--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`],
