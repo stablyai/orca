@@ -66,16 +66,8 @@ export function createManagedCommandMatcher(
   }
 }
 
-// Why: managed hook scripts live at a deterministic shared path so every Orca
-// instance (prod, dev, parallel build) writes the *same* JSON entry into
-// ~/.claude/settings.json (and the codex/cursor/gemini equivalents) instead of
-// each instance pointing the entry at its own <userData>/agent-hooks/ — which
-// caused multi-instance thrash where the last instance to install() wins, and
-// any other instance whose userData was wiped or moved leaves a stale entry
-// that fires `/bin/sh "<missing>"` on every tool call. The script body is
-// identical across versions (it just sources the per-PTY env var
-// ORCA_AGENT_HOOK_ENDPOINT to find the live port/token), so two installs
-// rewriting the same path is a no-op rather than a conflict.
+// Why: prod, dev, and parallel Orca instances must write the same managed
+// settings entry instead of racing between per-userData script paths.
 export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
@@ -123,6 +115,9 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   if (existsSync(scriptPath)) {
     try {
       if (readFileSync(scriptPath, 'utf-8') === content) {
+        if (process.platform !== 'win32') {
+          chmodSync(scriptPath, 0o755)
+        }
         return
       }
     } catch {
@@ -134,7 +129,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   try {
     writeScriptWithAclRetry(tmpPath, content)
     // Why: chmod before rename so the canonical path is never visible in a
-    // non-executable state — wrapPosixHookCommand's `[ -x ]` guard would
+    // non-executable state; wrapPosixHookCommand's `[ -x ]` guard would
     // silently skip the hook in that window.
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)

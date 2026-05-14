@@ -6,6 +6,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
   chmodSync
 } from 'fs'
@@ -16,6 +17,7 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   wrapPosixHookCommand,
+  writeManagedScript,
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
@@ -163,12 +165,8 @@ describe('createManagedCommandMatcher', () => {
   })
 
   it('matches the legacy per-userData script path AND the new shared ~/.orca path', () => {
-    // Why: this guarantees migration is automatic on next install(). When an
-    // older Orca instance had written `<userData>/agent-hooks/claude-hook.sh`
-    // into settings.json, the next install() must recognize that entry as
-    // managed and replace it with the new `~/.orca/agent-hooks/claude-hook.sh`
-    // entry — without leaving the dead pointer behind to fire exit 127 on
-    // every tool call.
+    // Why: install() must sweep old per-userData commands when migrating to
+    // the shared ~/.orca script path, or stale launchers keep failing.
     expect(
       match("/bin/sh '/Users/alice/Library/Application Support/orca/agent-hooks/claude-hook.sh'")
     ).toBe(true)
@@ -184,14 +182,27 @@ describe('getSharedManagedScriptPath', () => {
   })
 
   it('does not depend on Electron app.getPath, so two Orca instances resolve to the same path', () => {
-    // Why: the whole point of the shared path is that prod and any dev build
-    // produce the same string regardless of which userData they boot with.
-    // If this resolver ever drifted to be per-instance, the multi-instance
-    // settings.json thrash would silently come back.
+    // Why: using userData here would reintroduce dev/prod settings thrash.
     const a = getSharedManagedScriptPath('claude-hook.sh')
     const b = getSharedManagedScriptPath('claude-hook.sh')
     expect(a).toBe(b)
   })
+})
+
+describe('writeManagedScript', () => {
+  it.skipIf(process.platform === 'win32')(
+    'repairs executable bits even when script content is unchanged',
+    () => {
+      const scriptPath = join(tmpDir, 'agent-hooks', 'claude-hook.sh')
+
+      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
+      chmodSync(scriptPath, 0o644)
+
+      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
+
+      expect(statSync(scriptPath).mode & 0o111).not.toBe(0)
+    }
+  )
 })
 
 describe('wrapPosixHookCommand', () => {

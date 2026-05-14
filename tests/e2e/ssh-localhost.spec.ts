@@ -204,11 +204,9 @@ test.describe('Localhost SSH', () => {
     await execInTerminal(orcaPage, ptyId, emitMarkerCommand(terminalMarker))
     await waitForTerminalOutput(orcaPage, terminalMarker, 20_000)
 
-    const e2eConfig = await orcaPage.evaluate(() => window.api.e2e.getConfig())
-    if (!e2eConfig.userDataDir) {
-      throw new Error('E2E userDataDir unavailable')
-    }
-    const codexHookPath = path.join(e2eConfig.userDataDir, 'agent-hooks', 'codex-hook.sh')
+    // Why: managed hook scripts intentionally ignore Electron userData so
+    // dev/prod Orca instances converge on the same installed command.
+    const codexHookPath = path.join(os.homedir(), '.orca', 'agent-hooks', 'codex-hook.sh')
     const quotedCodexHookPath = shellQuote(codexHookPath)
     const codexHookStatus = await orcaPage.evaluate(() => window.api.agentHooks.codexStatus())
     expect(codexHookStatus.state).toBe('installed')
