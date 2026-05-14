@@ -25,8 +25,9 @@ const stepCopy = {
     subtitle: 'Pick the look you want to stare at for hours.'
   },
   notifications: {
-    title: 'Know when an agent needs you',
-    subtitle: 'Get a desktop notification when your agent finishes or asks a question.'
+    title: 'Set up Orca for agents',
+    subtitle:
+      'Get notifications when agents need you, and choose the capabilities Orca should enable on this computer.'
   },
   repo: {
     title: 'Point Orca at some code',

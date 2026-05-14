@@ -181,9 +181,7 @@ test.describe('Onboarding flow', () => {
       .toBe(oppositeTheme)
 
     await orcaPage.getByRole('button', { name: 'Continue' }).click()
-    await expect(
-      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
-    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
     await expect(orcaPage.getByText('3 of 4')).toBeVisible()
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
@@ -314,9 +312,7 @@ test.describe('Onboarding flow', () => {
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
-    await expect(
-      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
-    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
 
     // Why: NotificationStep buttons expose role="switch" + aria-checked. Flip
     // terminalBell off and verify the toggle reflects + persists. The other
@@ -352,9 +348,7 @@ test.describe('Onboarding flow', () => {
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
-    await expect(
-      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
-    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
 
     // Why: this flow validates the orchestration-only setup path without
     // touching Browser Use, Computer Use permission prompts, or real CLI mutation.
@@ -506,9 +500,7 @@ test.describe('Onboarding flow', () => {
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
-    await expect(
-      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
-    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
 
