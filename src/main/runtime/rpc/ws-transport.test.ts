@@ -14,12 +14,6 @@ function makeTls() {
   return loadOrCreateTlsCertificate(userDataPath)
 }
 
-function findFreePort(): number {
-  // Why: use port 0 to let the OS assign an available port, but the transport
-  // needs an explicit port. Use a high random port to minimize collisions.
-  return 30000 + Math.floor(Math.random() * 20000)
-}
-
 describe('WebSocketTransport', () => {
   const transports: WebSocketTransport[] = []
 
@@ -32,10 +26,11 @@ describe('WebSocketTransport', () => {
     handler?: (msg: string, reply: (response: string) => void) => void
   ) {
     const tls = makeTls()
-    const port = findFreePort()
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
-      port,
+      // Why: random "free" ports can still collide before listen() binds.
+      // Port 0 lets the OS reserve an available port atomically.
+      port: 0,
       tlsCert: tls.cert,
       tlsKey: tls.key
     })
@@ -43,7 +38,7 @@ describe('WebSocketTransport', () => {
       transport.onMessage(handler)
     }
     transports.push(transport)
-    return { transport, port, tls }
+    return { transport, tls }
   }
 
   function connectWs(port: number): Promise<WebSocket> {
@@ -73,14 +68,14 @@ describe('WebSocketTransport', () => {
   })
 
   it('handles request/response round-trip', async () => {
-    const { transport, port } = await createTransport((msg, reply) => {
+    const { transport } = await createTransport((msg, reply) => {
       const request = JSON.parse(msg)
       reply(JSON.stringify({ id: request.id, ok: true, result: { echo: true } }))
     })
 
     await transport.start()
 
-    const ws = await connectWs(port)
+    const ws = await connectWs(transport.resolvedPort)
     const response = await sendAndReceive(
       ws,
       JSON.stringify({ id: 'req-1', method: 'test', deviceToken: 'tok' })
@@ -96,14 +91,18 @@ describe('WebSocketTransport', () => {
   })
 
   it('supports multiple concurrent connections', async () => {
-    const { transport, port } = await createTransport((msg, reply) => {
+    const { transport } = await createTransport((msg, reply) => {
       const request = JSON.parse(msg)
       reply(JSON.stringify({ id: request.id, ok: true }))
     })
 
     await transport.start()
 
-    const clients = await Promise.all([connectWs(port), connectWs(port), connectWs(port)])
+    const clients = await Promise.all([
+      connectWs(transport.resolvedPort),
+      connectWs(transport.resolvedPort),
+      connectWs(transport.resolvedPort)
+    ])
 
     const responses = await Promise.all(
       clients.map((ws, i) => sendAndReceive(ws, JSON.stringify({ id: `req-${i}`, method: 'test' })))
@@ -119,14 +118,14 @@ describe('WebSocketTransport', () => {
   })
 
   it('multiplexes multiple requests on a single connection', async () => {
-    const { transport, port } = await createTransport((msg, reply) => {
+    const { transport } = await createTransport((msg, reply) => {
       const request = JSON.parse(msg)
       reply(JSON.stringify({ id: request.id, ok: true, result: { method: request.method } }))
     })
 
     await transport.start()
 
-    const ws = await connectWs(port)
+    const ws = await connectWs(transport.resolvedPort)
 
     const r1 = sendAndReceive(ws, JSON.stringify({ id: 'a', method: 'first' }))
     const resp1 = JSON.parse(await r1)
@@ -140,7 +139,7 @@ describe('WebSocketTransport', () => {
   })
 
   it('sends multiple streaming responses via reply callback', async () => {
-    const { transport, port } = await createTransport((msg, reply) => {
+    const { transport } = await createTransport((msg, reply) => {
       const request = JSON.parse(msg)
       reply(JSON.stringify({ id: request.id, ok: true, streaming: true, result: { chunk: 1 } }))
       reply(JSON.stringify({ id: request.id, ok: true, streaming: true, result: { chunk: 2 } }))
@@ -149,7 +148,7 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
 
-    const ws = await connectWs(port)
+    const ws = await connectWs(transport.resolvedPort)
     const messages: string[] = []
 
     await new Promise<void>((resolve) => {
@@ -170,11 +169,11 @@ describe('WebSocketTransport', () => {
   })
 
   it('rejects oversized messages by closing the connection', async () => {
-    const { transport, port } = await createTransport()
+    const { transport } = await createTransport()
 
     await transport.start()
 
-    const ws = await connectWs(port)
+    const ws = await connectWs(transport.resolvedPort)
 
     // Why: ws maxPayload is 1MB — sending >1MB should trigger close.
     const oversized = 'x'.repeat(1024 * 1024 + 100)
@@ -188,13 +187,13 @@ describe('WebSocketTransport', () => {
   it('does not crash when replying to a closed connection', async () => {
     let capturedReply: ((response: string) => void) | null = null
 
-    const { transport, port } = await createTransport((_msg, reply) => {
+    const { transport } = await createTransport((_msg, reply) => {
       capturedReply = reply
     })
 
     await transport.start()
 
-    const ws = await connectWs(port)
+    const ws = await connectWs(transport.resolvedPort)
     ws.send(JSON.stringify({ id: 'req-1', method: 'test' }))
 
     // Why: wait for the handler to capture the reply function.
@@ -231,15 +230,16 @@ describe('WebSocketTransport', () => {
   })
 
   it('falls back to OS-assigned port when preferred port is in use', async () => {
-    const { transport: first, port } = await createTransport()
+    const { transport: first } = await createTransport()
     await first.start()
+    const occupiedPort = first.resolvedPort
 
     // Why: second transport requests the same port, which is now occupied.
     // It should silently fall back to an OS-assigned port instead of throwing.
     const tls = makeTls()
     const second = new WebSocketTransport({
       host: '127.0.0.1',
-      port,
+      port: occupiedPort,
       tlsCert: tls.cert,
       tlsKey: tls.key
     })
@@ -247,7 +247,7 @@ describe('WebSocketTransport', () => {
 
     await second.start()
 
-    expect(second.resolvedPort).not.toBe(port)
+    expect(second.resolvedPort).not.toBe(occupiedPort)
     expect(second.resolvedPort).toBeGreaterThan(0)
 
     const ws = await connectWs(second.resolvedPort)
@@ -262,10 +262,9 @@ describe('WebSocketTransport', () => {
     // slot. Verifying via the server's connection-close handler, which
     // is what frees up the MAX_WS_CONNECTIONS budget in production.
     const tls = makeTls()
-    const port = findFreePort()
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
-      port,
+      port: 0,
       tlsCert: tls.cert,
       tlsKey: tls.key,
       heartbeatIntervalMs: 50
@@ -283,7 +282,7 @@ describe('WebSocketTransport', () => {
     // start so we can stamp every accepted ws with a token.
     await transport.start()
 
-    const ws = await connectWs(port)
+    const ws = await connectWs(transport.resolvedPort)
     // Why: pausing the underlying TCP socket halts both read (ping in)
     // and write (pong out) at the kernel level, so the `ws` library's
     // auto-pong can't actually be flushed back. From the server's
