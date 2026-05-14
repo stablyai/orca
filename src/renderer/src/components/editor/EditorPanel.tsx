@@ -68,9 +68,21 @@ type FileContent = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  loadError?: string
 }
 
 type DiffContent = GitDiffResult
+const FILE_LOAD_RETRY_DELAYS_MS = [250, 1000, 2500]
+
+function shouldRetryFileLoadError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    !lower.includes('access denied') &&
+    !lower.includes('enoent') &&
+    !lower.includes('no such file') &&
+    !lower.includes('file too large')
+  )
+}
 
 // Why: split-pane layouts mount one EditorPanel per pane, and each panel
 // attaches its own listener to `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT`.
@@ -180,7 +192,8 @@ function EditorPanelInner({
     !!activeFile &&
     activeFile.mode === 'edit' &&
     editorViewMode[activeFile.id] === 'changes' &&
-    !fileContents[activeFile.id]?.isBinary
+    !fileContents[activeFile.id]?.isBinary &&
+    !fileContents[activeFile.id]?.loadError
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
@@ -193,6 +206,7 @@ function EditorPanelInner({
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
   const panelRef = useRef<HTMLDivElement>(null)
+  const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
 
   const deleteCacheEntriesByPrefix = useCallback(<T,>(cache: Map<string, T>, prefix: string) => {
     for (const key of cache.keys()) {
@@ -350,6 +364,18 @@ function EditorPanelInner({
     async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
       try {
         const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
+        const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
+        if (
+          !connectionId &&
+          restoredOpenFile?.filePath === filePath &&
+          restoredOpenFile.relativePath === filePath
+        ) {
+          // Why: external files selected through OS/browser/drop flows are
+          // authorized in the main process, but that grant is in-memory. On
+          // session restore, re-authorize only tabs that were stored with an
+          // absolute relativePath because they came from outside a worktree.
+          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+        }
         const key = inFlightReadKey(connectionId, filePath)
         // Why: share the IPC round-trip across split-pane EditorPanels viewing
         // the same file. The first caller starts the read and registers the
@@ -371,15 +397,33 @@ function EditorPanelInner({
           })
         }
         const result = await pending
+        delete fileLoadRetryAttemptsRef.current[id]
         setFileContents((prev) => ({ ...prev, [id]: result }))
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
         setFileContents((prev) => ({
           ...prev,
-          [id]: { content: `Error loading file: ${err}`, isBinary: false }
+          [id]: { content: '', isBinary: false, loadError: message }
         }))
       }
     },
     []
+  )
+
+  const reloadFileContent = useCallback(
+    (file: OpenFile): void => {
+      delete fileLoadRetryAttemptsRef.current[file.id]
+      setFileContents((prev) => {
+        if (!prev[file.id]) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[file.id]
+        return next
+      })
+      void loadFileContent(file.filePath, file.id, file.worktreeId)
+    },
+    [loadFileContent]
   )
 
   const loadDiffContent = useCallback(async (file: OpenFile | null): Promise<void> => {
@@ -461,6 +505,49 @@ function EditorPanelInner({
       }))
     }
   }, [])
+
+  const activeFileLoadRetryId = activeFile?.id ?? null
+  const activeFileLoadError = activeFileLoadRetryId
+    ? fileContents[activeFileLoadRetryId]?.loadError
+    : undefined
+  useEffect(() => {
+    if (
+      !activeFileLoadRetryId ||
+      !activeFileLoadError ||
+      !shouldRetryFileLoadError(activeFileLoadError)
+    ) {
+      return
+    }
+    const retryCount = fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] ?? 0
+    if (retryCount >= FILE_LOAD_RETRY_DELAYS_MS.length) {
+      return
+    }
+    const delayMs = FILE_LOAD_RETRY_DELAYS_MS[retryCount] ?? FILE_LOAD_RETRY_DELAYS_MS[0]
+    fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] = retryCount + 1
+
+    // Why: restored tabs can race app/worktree startup and get a transient
+    // read failure. Retry briefly, but keep permanent filesystem errors quiet.
+    const timeoutId = window.setTimeout(() => {
+      const currentFile = openFilesRef.current.find((file) => file.id === activeFileLoadRetryId)
+      if (
+        !currentFile ||
+        (currentFile.mode !== 'edit' && currentFile.mode !== 'markdown-preview')
+      ) {
+        return
+      }
+      setFileContents((prev) => {
+        if (prev[currentFile.id]?.loadError !== activeFileLoadError) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[currentFile.id]
+        return next
+      })
+      void loadFileContent(currentFile.filePath, currentFile.id, currentFile.worktreeId)
+    }, delayMs)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [activeFileLoadRetryId, activeFileLoadError, loadFileContent])
 
   // Why: refetch the HEAD-side blob for Changes mode when the worktree's git
   // status array identity changes. A commit, pull, or rebase updates the
@@ -676,6 +763,11 @@ function EditorPanelInner({
 
   useEffect(() => {
     const openIds = new Set(openFiles.map((f) => f.id))
+    for (const fileId of Object.keys(fileLoadRetryAttemptsRef.current)) {
+      if (!openIds.has(fileId)) {
+        delete fileLoadRetryAttemptsRef.current[fileId]
+      }
+    }
     setFileContents((prev) => {
       const next: Record<string, FileContent> = {}
       for (const [k, v] of Object.entries(prev)) {
@@ -1254,6 +1346,7 @@ function EditorPanelInner({
           handleContentChange={handleContentChange}
           handleDirtyStateHint={handleDirtyStateHint}
           handleSave={handleSave}
+          reloadFileContent={reloadFileContent}
         />
       </Suspense>
       <UntitledFileRenameDialog

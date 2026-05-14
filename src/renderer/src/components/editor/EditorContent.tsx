@@ -5,8 +5,10 @@ to reason about than scattering the switch across per-mode wrappers. Individual
 renderers (MonacoEditor, DiffViewer, ChangesModeView, MarkdownPreview, etc.)
 already live in their own modules. */
 import React, { lazy } from 'react'
+import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
+import { Button } from '@/components/ui/button'
 import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
@@ -39,6 +41,31 @@ type FileContent = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  loadError?: string
+}
+
+function FileLoadErrorView({
+  message,
+  onRetry
+}: {
+  message: string
+  onRetry: () => void
+}): React.JSX.Element {
+  return (
+    <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm text-muted-foreground">
+      <div className="flex max-w-xl items-start gap-3 rounded-md border border-border bg-background p-4">
+        <AlertCircle className="mt-0.5 size-4 flex-shrink-0 text-destructive" />
+        <div className="min-w-0">
+          <div className="font-medium text-foreground">Unable to load file</div>
+          <div className="mt-1 break-words">{message}</div>
+          <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+            <RefreshCw className="size-3.5" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function EditorContent({
@@ -59,7 +86,8 @@ export function EditorContent({
   pendingEditorReveal,
   handleContentChange,
   handleDirtyStateHint,
-  handleSave
+  handleSave,
+  reloadFileContent
 }: {
   activeFile: OpenFile
   viewStateScopeId: string
@@ -84,6 +112,7 @@ export function EditorContent({
   handleContentChange: (content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<void>
+  reloadFileContent: (file: OpenFile) => void
 }): React.JSX.Element {
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
@@ -306,6 +335,11 @@ export function EditorContent({
         </div>
       )
     }
+    if (fc.loadError) {
+      return (
+        <FileLoadErrorView message={fc.loadError} onRetry={() => reloadFileContent(activeFile)} />
+      )
+    }
     if (fc.isBinary) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
@@ -339,6 +373,11 @@ export function EditorContent({
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
           Loading...
         </div>
+      )
+    }
+    if (fc.loadError) {
+      return (
+        <FileLoadErrorView message={fc.loadError} onRetry={() => reloadFileContent(activeFile)} />
       )
     }
     if (fc.isBinary) {
