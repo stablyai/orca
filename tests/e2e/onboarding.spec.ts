@@ -79,6 +79,25 @@ async function installSafeOnboardingFeatureSetupDeps(page: Page): Promise<void> 
   })
 }
 
+async function expectSkillSetupTerminalReady(page: Page): Promise<void> {
+  await expect(page.getByRole('region', { name: /Skill setup command/i })).toBeInViewport({
+    timeout: 10_000
+  })
+  await expect(
+    page.getByText(/Press Enter to run the command and confirm npm if asked/i)
+  ).toBeVisible()
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea')),
+      {
+        timeout: 10_000,
+        message: 'Skill setup command terminal did not receive keyboard focus'
+      }
+    )
+    .toBe(true)
+}
+
 test.describe('Onboarding flow', () => {
   // Why: the shared fixture pre-seeds onboarding as closed so non-onboarding
   // tests don't get blocked by the fullscreen overlay. Opt out here so this
@@ -203,6 +222,9 @@ test.describe('Onboarding flow', () => {
     await expect(orchestration).toHaveAttribute('aria-checked', 'true')
 
     await orcaPage.getByRole('button', { name: 'Set up & continue' }).click()
+    await expectSkillSetupTerminalReady(orcaPage)
+    await expect(orcaPage.getByRole('button', { name: 'Continue to project setup' })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Continue' })).toHaveCount(0)
@@ -316,6 +338,8 @@ test.describe('Onboarding flow', () => {
 
     await installSafeOnboardingFeatureSetupDeps(orcaPage)
     await orcaPage.getByRole('button', { name: 'Set up & continue' }).click()
+    await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
       .poll(
@@ -392,6 +416,8 @@ test.describe('Onboarding flow', () => {
     await expect(orchestration).toHaveAttribute('aria-checked', 'true')
 
     await orcaPage.getByRole('button', { name: 'Set up & continue' }).click()
+    await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
@@ -413,7 +439,7 @@ test.describe('Onboarding flow', () => {
           ),
         { timeout: 5_000 }
       )
-      .toEqual({ orchestration: '1', browserUse: null })
+      .toEqual({ orchestration: '1', browserUse: '0' })
   })
 
   test('typing in the clone-url input does not hijack Enter as a global shortcut', async ({

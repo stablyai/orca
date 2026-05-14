@@ -4,12 +4,13 @@ import type {
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
 import {
-  COMPUTER_USE_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_INSTALL_COMMAND
+  COMPUTER_USE_SKILL_NAME,
+  ORCA_CLI_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME,
+  buildAgentFeatureSkillInstallCommand
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
-import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -32,21 +33,11 @@ export const ONBOARDING_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[] =
   'orchestration'
 ]
 
-const FEATURE_SKILL_COMMANDS: Record<OnboardingFeatureSetupId, { label: string; command: string }> =
-  {
-    browserUse: {
-      label: 'Agent Browser Use',
-      command: ORCA_CLI_SKILL_INSTALL_COMMAND
-    },
-    computerUse: {
-      label: 'Computer Use',
-      command: COMPUTER_USE_SKILL_INSTALL_COMMAND
-    },
-    orchestration: {
-      label: 'Agent Orchestration',
-      command: ORCHESTRATION_SKILL_INSTALL_COMMAND
-    }
-  }
+const FEATURE_SKILL_NAMES: Record<OnboardingFeatureSetupId, string> = {
+  browserUse: ORCA_CLI_SKILL_NAME,
+  computerUse: COMPUTER_USE_SKILL_NAME,
+  orchestration: ORCHESTRATION_SKILL_NAME
+}
 
 export type OnboardingFeatureSetupWarning = {
   featureId: OnboardingFeatureSetupId | 'cli' | 'skills'
@@ -57,6 +48,7 @@ export type OnboardingFeatureSetupResult = {
   selectedIds: OnboardingFeatureSetupId[]
   cliTouched: boolean
   skillCommandsCopied: boolean
+  skillInstallCommand: string | null
   computerUsePermissionsOpened: boolean
   warnings: OnboardingFeatureSetupWarning[]
 }
@@ -87,13 +79,19 @@ export function selectedOnboardingFeatureSetupIds(
 export function buildOnboardingFeatureSetupClipboardText(
   selection: OnboardingFeatureSetupSelection
 ): string | null {
-  const commands = selectedOnboardingFeatureSetupIds(selection).map(
-    (id) => FEATURE_SKILL_COMMANDS[id]
+  return buildOnboardingFeatureSetupSkillCommand(selection)
+}
+
+export function buildOnboardingFeatureSetupSkillCommand(
+  selection: OnboardingFeatureSetupSelection
+): string | null {
+  const skillNames = selectedOnboardingFeatureSetupIds(selection).map(
+    (id) => FEATURE_SKILL_NAMES[id]
   )
-  if (commands.length === 0) {
+  if (skillNames.length === 0) {
     return null
   }
-  return commands.map(({ label, command }) => `# ${label}\n${command}`).join('\n\n')
+  return buildAgentFeatureSkillInstallCommand(skillNames)
 }
 
 export function createOnboardingFeatureSetupDeps(): OnboardingFeatureSetupDeps {
@@ -132,13 +130,22 @@ export async function runOnboardingFeatureSetup(
   const warnings: OnboardingFeatureSetupWarning[] = []
   let cliTouched = false
   let skillCommandsCopied = false
+  const skillInstallCommand = buildOnboardingFeatureSetupSkillCommand(selection)
   let computerUsePermissionsOpened = false
+
+  deps.setStorageItem(BROWSER_USE_ENABLED_STORAGE_KEY, selection.browserUse ? '1' : '0')
+  deps.setStorageItem(ORCHESTRATION_ENABLED_STORAGE_KEY, selection.orchestration ? '1' : '0')
+  if (selection.orchestration) {
+    deps.removeStorageItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
+  }
+  deps.notifyOrchestrationStateChanged()
 
   if (selectedIds.length === 0) {
     return {
       selectedIds,
       cliTouched,
       skillCommandsCopied,
+      skillInstallCommand,
       computerUsePermissionsOpened,
       warnings
     }
@@ -169,10 +176,6 @@ export async function runOnboardingFeatureSetup(
     warnings.push({ featureId: 'cli', message: formatFeatureSetupError(error) })
   }
 
-  if (selection.browserUse) {
-    deps.setStorageItem(BROWSER_USE_ENABLED_STORAGE_KEY, '1')
-  }
-
   if (selection.computerUse) {
     try {
       const status = await deps.getComputerUsePermissionStatus()
@@ -191,18 +194,13 @@ export async function runOnboardingFeatureSetup(
     }
   }
 
-  if (selection.orchestration) {
-    deps.setStorageItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
-    deps.removeStorageItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
-    deps.notifyOrchestrationStateChanged()
-  }
-
   skillCommandsCopied = await copySkillCommands(selection, deps, warnings)
 
   return {
     selectedIds,
     cliTouched,
     skillCommandsCopied,
+    skillInstallCommand,
     computerUsePermissionsOpened,
     warnings
   }

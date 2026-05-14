@@ -59,6 +59,9 @@ export function useOnboardingFlow(
   })
   const [featureSetupSelection, setFeatureSetupSelection] =
     useState<OnboardingFeatureSetupSelection>(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)
+  const [featureSetupTerminalCommand, setFeatureSetupTerminalCommand] = useState<string | null>(
+    null
+  )
   const [cloneUrl, setCloneUrl] = useState('')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -298,6 +301,13 @@ export function useOnboardingFlow(
     setError
   })
   const hasSelectedFeatureSetup = hasSelectedOnboardingFeatureSetup(featureSetupSelection)
+  const setFeatureSetupSelectionInteractive = useCallback(
+    (value: OnboardingFeatureSetupSelection) => {
+      setFeatureSetupSelection(value)
+      setFeatureSetupTerminalCommand(null)
+    },
+    []
+  )
 
   // Why: synchronous re-entry latch. `busyLabel` is React state and only
   // commits after the awaited persistCurrentStep round-trip resolves, so a
@@ -310,13 +320,28 @@ export function useOnboardingFlow(
       if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
         return
       }
+      if (currentStep.id === 'notifications' && featureSetupTerminalCommand) {
+        track('onboarding_step_completed', {
+          step: currentStep.stepNumber,
+          value_kind: currentStep.valueKind,
+          duration_ms: consumeStepDurationMs(),
+          advanced_via: advancedVia
+        })
+        setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+        return
+      }
       nextInFlightRef.current = true
       if (currentStep.id === 'notifications' && hasSelectedFeatureSetup) {
         setBusyLabel('Setting up features…')
       }
       try {
-        const ok = await persistCurrentStep()
-        if (ok) {
+        const result = await persistCurrentStep()
+        const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
+        if (currentStep.id === 'notifications' && nextCommand) {
+          setFeatureSetupTerminalCommand(nextCommand)
+          return
+        }
+        if (result.ok) {
           track('onboarding_step_completed', {
             step: currentStep.stepNumber,
             value_kind: currentStep.valueKind,
@@ -338,6 +363,7 @@ export function useOnboardingFlow(
       currentStep.id,
       currentStep.stepNumber,
       currentStep.valueKind,
+      featureSetupTerminalCommand,
       hasSelectedFeatureSetup,
       persistCurrentStep
     ]
@@ -464,7 +490,8 @@ export function useOnboardingFlow(
     notifications,
     setNotifications,
     featureSetupSelection,
-    setFeatureSetupSelection,
+    setFeatureSetupSelection: setFeatureSetupSelectionInteractive,
+    featureSetupTerminalCommand,
     hasSelectedFeatureSetup,
     cloneUrl,
     setCloneUrl,

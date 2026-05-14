@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { FeatureSetupInlineTerminal } from './FeatureSetupInlineTerminal'
 import { FeatureSetupChecklist } from './FeatureSetupChecklist'
 import type { OnboardingFeatureSetupSelection } from './onboarding-feature-setup'
 
@@ -15,13 +16,15 @@ type NotificationStepProps = {
   onChange: (value: NotificationDraft) => void
   featureSetup: OnboardingFeatureSetupSelection
   onFeatureSetupChange: (value: OnboardingFeatureSetupSelection) => void
+  featureSetupCommand: string | null
 }
 
 export function NotificationStep({
   value,
   onChange,
   featureSetup,
-  onFeatureSetupChange
+  onFeatureSetupChange,
+  featureSetupCommand
 }: NotificationStepProps) {
   const rows: { key: keyof NotificationDraft; title: string; description: string }[] = [
     {
@@ -81,6 +84,7 @@ export function NotificationStep({
         <span className="font-medium text-foreground">Settings → Notifications</span>.
       </p>
       <FeatureSetupChecklist value={featureSetup} onChange={onFeatureSetupChange} />
+      {featureSetupCommand ? <FeatureSetupInlineTerminal command={featureSetupCommand} /> : null}
     </>
   )
 }

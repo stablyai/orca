@@ -5,11 +5,12 @@ import type {
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
 import {
-  COMPUTER_USE_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_INSTALL_COMMAND
+  buildAgentFeatureSkillInstallCommand,
+  COMPUTER_USE_SKILL_NAME,
+  ORCA_CLI_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
-import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY
@@ -21,6 +22,15 @@ import {
   type OnboardingFeatureSetupDeps,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
+
+const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+  ORCA_CLI_SKILL_NAME,
+  COMPUTER_USE_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+])
+const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+  ORCHESTRATION_SKILL_NAME
+])
 
 const INSTALLED_CLI_STATUS: CliInstallStatus = {
   platform: 'darwin',
@@ -90,16 +100,17 @@ describe('onboarding feature setup runner', () => {
     })
   })
 
-  it('builds skill commands for the selected Browser Use, Computer Use, and Orchestration features', () => {
+  it('builds one skill command for the selected Browser Use, Computer Use, and Orchestration features', () => {
     const text = buildOnboardingFeatureSetupClipboardText({
       browserUse: true,
       computerUse: true,
       orchestration: true
     })
 
-    expect(text).toContain(ORCA_CLI_SKILL_INSTALL_COMMAND)
-    expect(text).toContain(COMPUTER_USE_SKILL_INSTALL_COMMAND)
-    expect(text).toContain(ORCHESTRATION_SKILL_INSTALL_COMMAND)
+    expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
+    expect(text).toBe(
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli computer-use orchestration --global'
+    )
   })
 
   it('runs selected Browser Use, Computer Use, and Orchestration setup through injected deps only', async () => {
@@ -124,6 +135,7 @@ describe('onboarding feature setup runner', () => {
       selectedIds: ['browserUse', 'computerUse', 'orchestration'],
       cliTouched: false,
       skillCommandsCopied: true,
+      skillInstallCommand: ALL_SKILL_INSTALL_COMMAND,
       computerUsePermissionsOpened: true,
       warnings: []
     })
@@ -135,13 +147,7 @@ describe('onboarding feature setup runner', () => {
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
     expect(deps.removeStorageItem).toHaveBeenCalledWith(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
     expect(deps.notifyOrchestrationStateChanged).toHaveBeenCalledTimes(1)
-    expect(deps.clipboardWrites).toEqual([
-      [
-        `# Agent Browser Use\n${ORCA_CLI_SKILL_INSTALL_COMMAND}`,
-        `# Computer Use\n${COMPUTER_USE_SKILL_INSTALL_COMMAND}`,
-        `# Agent Orchestration\n${ORCHESTRATION_SKILL_INSTALL_COMMAND}`
-      ].join('\n\n')
-    ])
+    expect(deps.clipboardWrites).toEqual([ALL_SKILL_INSTALL_COMMAND])
   })
 
   it('keeps invasive Browser Use and Computer Use setup untouched when only Orchestration is selected', async () => {
@@ -156,16 +162,38 @@ describe('onboarding feature setup runner', () => {
 
     expect(result.selectedIds).toEqual(['orchestration'])
     expect(result.skillCommandsCopied).toBe(true)
+    expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
     expect(result.computerUsePermissionsOpened).toBe(false)
     expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
     expect(deps.installCli).not.toHaveBeenCalled()
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
     expect(deps.openComputerUsePermissionSetup).not.toHaveBeenCalled()
-    expect(deps.storage.has(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe(false)
+    expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
-    expect(deps.clipboardWrites).toEqual([
-      `# Agent Orchestration\n${ORCHESTRATION_SKILL_INSTALL_COMMAND}`
-    ])
+    expect(deps.clipboardWrites).toEqual([ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND])
+  })
+
+  it('clears feature markers when no setup items are selected', async () => {
+    const deps = createDeps()
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: false, computerUse: false, orchestration: false },
+      deps
+    )
+
+    expect(result).toEqual({
+      selectedIds: [],
+      cliTouched: false,
+      skillCommandsCopied: false,
+      skillInstallCommand: null,
+      computerUsePermissionsOpened: false,
+      warnings: []
+    })
+    expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
+    expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('0')
+    expect(deps.getCliStatus).not.toHaveBeenCalled()
+    expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
+    expect(deps.clipboardWrites).toEqual([])
   })
 
   it('warns when selected skill commands cannot be copied', async () => {
@@ -181,6 +209,7 @@ describe('onboarding feature setup runner', () => {
     )
 
     expect(result.skillCommandsCopied).toBe(false)
+    expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
     expect(result.warnings).toEqual([
       {
         featureId: 'skills',

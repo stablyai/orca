@@ -7,6 +7,7 @@ import type { NotificationDraft } from './NotificationStep'
 import {
   hasSelectedOnboardingFeatureSetup,
   runOnboardingFeatureSetup,
+  type OnboardingFeatureSetupResult,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -123,6 +124,11 @@ type PersistCurrentStepDeps = {
   setError: (msg: string | null) => void
 }
 
+export type PersistCurrentStepResult = {
+  ok: boolean
+  featureSetupResult?: OnboardingFeatureSetupResult
+}
+
 export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
@@ -135,9 +141,9 @@ export function usePersistCurrentStep({
   onOnboardingChange,
   setError
 }: PersistCurrentStepDeps) {
-  return useCallback(async (): Promise<boolean> => {
+  return useCallback(async (): Promise<PersistCurrentStepResult> => {
     if (!settings) {
-      return false
+      return { ok: false }
     }
     try {
       if (currentStepId === 'agent') {
@@ -156,12 +162,12 @@ export function usePersistCurrentStep({
             time_since_completed_ms: 0
           })
         }
-        return true
+        return { ok: true }
       }
       if (currentStepId === 'theme') {
         await updateSettings({ theme })
         onOnboardingChange(await persistStep(2))
-        return true
+        return { ok: true }
       }
       if (currentStepId === 'notifications') {
         const enabled = notifications.agentTaskComplete || notifications.terminalBell
@@ -180,16 +186,18 @@ export function usePersistCurrentStep({
             suppressWhenFocused: !notifications.notifyWhenFocused
           }
         })
+        const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
+        const featureSetupResult: OnboardingFeatureSetupResult = setupResult
         if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
-          const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
           const firstWarning = setupResult.warnings[0]
           if (firstWarning) {
             toast.warning('Some feature setup needs attention', {
               description: firstWarning.message
             })
-          } else if (setupResult.skillCommandsCopied) {
+          }
+          if (setupResult.skillCommandsCopied) {
             toast.success('Feature setup ready', {
-              description: 'Skill install commands copied for review.'
+              description: 'Skill command copied and inserted below for review.'
             })
           }
           if (setupResult.computerUsePermissionsOpened) {
@@ -197,12 +205,12 @@ export function usePersistCurrentStep({
           }
         }
         onOnboardingChange(await persistStep(3))
-        return true
+        return { ok: true, featureSetupResult }
       }
-      return false
+      return { ok: false }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-      return false
+      return { ok: false }
     }
   }, [
     currentStepId,
