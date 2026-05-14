@@ -139,9 +139,18 @@ export async function createWslWatcher(
   // Take initial snapshot
   let prevSnapshot = await takeSnapshot(worktreePath, deps.ignoreDirs)
 
-  const intervalId = setInterval(async () => {
+  let polling = false
+  let disposed = false
+  const poll = async (): Promise<void> => {
+    if (polling || disposed) {
+      return
+    }
+    polling = true
     try {
       const nextSnapshot = await takeSnapshot(worktreePath, deps.ignoreDirs)
+      if (disposed) {
+        return
+      }
       const events = diffSnapshots(prevSnapshot, nextSnapshot)
       prevSnapshot = nextSnapshot
 
@@ -153,11 +162,21 @@ export async function createWslWatcher(
       // Why: if the WSL filesystem becomes temporarily unavailable
       // (e.g. WSL distro shuts down), skip this poll cycle rather
       // than crashing.  The next cycle will retry.
+    } finally {
+      polling = false
     }
+  }
+
+  const intervalId = setInterval(() => {
+    // Why: WSL UNC scans can exceed the poll interval on large repos or cold
+    // network filesystems. Run at most one tree diff at a time so a slow scan
+    // cannot stack concurrent readdir storms on the same root.
+    void poll()
   }, POLL_INTERVAL_MS)
 
   root.subscription = {
     unsubscribe: async () => {
+      disposed = true
       clearInterval(intervalId)
     }
   }
