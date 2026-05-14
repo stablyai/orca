@@ -122,6 +122,10 @@ export type Worktree = {
    *  grant newly-created worktrees a short grace window at the top of Recent,
    *  immune to ambient PTY-bump reordering in other worktrees. */
   createdAt?: number
+  /** Agent selected when Orca originally created the worktree. Used only to
+   *  seed a replacement terminal if the user later reopens the worktree after
+   *  closing every visible surface. */
+  createdWithAgent?: TuiAgent
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -154,6 +158,8 @@ export type WorktreeMeta = {
   lastActivityAt: number
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
+  /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */
+  createdWithAgent?: TuiAgent
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
@@ -881,6 +887,8 @@ export type CreateWorktreeArgs = {
   linkedIssue?: number
   linkedPR?: number
   pushTarget?: GitPushTarget
+  /** Agent selected in the create surface. Omitted for blank-shell creates. */
+  createdWithAgent?: TuiAgent
   /** Telemetry-only: which UI surface initiated this create. Threaded from
    *  the renderer entry point so main can emit `workspace_created` with the
    *  correct `source`. `unknown` is a valid wire value — an unrecognized

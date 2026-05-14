@@ -407,6 +407,37 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('persists the selected creation agent during local create', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      createdWithAgent: 'codex'
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        createdWithAgent: 'codex'
+      })
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        createdWithAgent: 'codex'
+      })
+    })
+  })
+
   it('configures a PR push target during local create', async () => {
     listWorktreesMock.mockResolvedValue([
       {
@@ -495,7 +526,7 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('persists linked issue and PR metadata during remote create', async () => {
+  it('persists linked issue, PR, and selected agent metadata during remote create', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -532,20 +563,23 @@ describe('registerWorktreeHandlers', () => {
       repoId: 'repo-ssh',
       name: 'improve-dashboard',
       linkedIssue: 123,
-      linkedPR: 456
+      linkedPR: 456,
+      createdWithAgent: 'codex'
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-ssh::/remote/improve-dashboard',
       expect.objectContaining({
         linkedIssue: 123,
-        linkedPR: 456
+        linkedPR: 456,
+        createdWithAgent: 'codex'
       })
     )
     expect(result).toEqual({
       worktree: expect.objectContaining({
         linkedIssue: 123,
-        linkedPR: 456
+        linkedPR: 456,
+        createdWithAgent: 'codex'
       })
     })
   })

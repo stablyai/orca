@@ -88,7 +88,11 @@ export function useAutomationDispatchEvents(): void {
                     'inherit',
                     undefined,
                     'unknown',
-                    run.title
+                    run.title,
+                    undefined,
+                    undefined,
+                    undefined,
+                    automation.agentId
                   )
               ).worktree
             : automation.workspaceId

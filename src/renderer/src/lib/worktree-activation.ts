@@ -1,13 +1,17 @@
-import type { SetupSplitDirection, WorktreeSetupLaunch } from '../../../shared/types'
+import type { SetupSplitDirection, Worktree, WorktreeSetupLaunch } from '../../../shared/types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
+import { buildAgentStartupPlan } from './tui-agent-startup'
+import { CLIENT_PLATFORM } from './new-workspace'
+import { tuiAgentToAgentKind } from './telemetry'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -72,6 +76,40 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
+function buildCreatedAgentReopenStartup(worktree: Worktree):
+  | {
+      command: string
+      env?: Record<string, string>
+      telemetry: AgentStartedTelemetry
+    }
+  | undefined {
+  const agent = worktree.createdWithAgent
+  if (!isTuiAgent(agent)) {
+    return undefined
+  }
+
+  const startupPlan = buildAgentStartupPlan({
+    agent,
+    prompt: '',
+    cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
+    platform: CLIENT_PLATFORM,
+    allowEmptyPromptLaunch: true
+  })
+  if (!startupPlan) {
+    return undefined
+  }
+
+  return {
+    command: startupPlan.launchCommand,
+    ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    telemetry: {
+      agent_kind: tuiAgentToAgentKind(agent),
+      launch_source: 'sidebar',
+      request_kind: 'resume'
+    }
+  }
+}
+
 export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: {
@@ -125,7 +163,7 @@ export function activateAndRevealWorktree(
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     useAppStore.getState(),
     worktreeId,
-    opts?.startup,
+    opts?.startup ?? buildCreatedAgentReopenStartup(wt),
     opts?.setup,
     opts?.issueCommand
   )

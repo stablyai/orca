@@ -3,6 +3,7 @@ import type {
   CreateSparseCheckoutRequest,
   GitPushTarget,
   SetupDecision,
+  TuiAgent,
   WorkspaceCreateTelemetrySource,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -74,7 +75,8 @@ export type WorktreeSlice = {
     displayName?: string,
     linkedIssue?: number,
     linkedPR?: number,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    createdWithAgent?: TuiAgent
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,

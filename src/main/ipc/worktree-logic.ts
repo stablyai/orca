@@ -193,6 +193,7 @@ export function mergeWorktree(
     sortOrder: meta?.sortOrder ?? 0,
     lastActivityAt: meta?.lastActivityAt ?? 0,
     ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
+    ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     ...(git.isSparse === true
       ? {
           sparseDirectories: meta?.sparseDirectories,

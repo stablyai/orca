@@ -1319,7 +1319,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         linkedWorkItem?.title,
         parsedLinkedIssueNumber ?? undefined,
         effectiveLinkedPR ?? undefined,
-        pushTarget
+        pushTarget,
+        tuiAgent
       )
       const worktree = result.worktree
 
@@ -1470,7 +1471,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           linkedWorkItem?.title,
           parsedLinkedIssueNumber ?? undefined,
           effectiveLinkedPR ?? undefined,
-          pushTarget
+          pushTarget,
+          agent ?? undefined
         )
         const worktree = result.worktree
 

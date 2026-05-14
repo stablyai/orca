@@ -31,6 +31,7 @@ import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } f
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
@@ -323,6 +324,7 @@ export async function createRemoteWorktree(
       : shouldSetDisplayName(requestedName, branchName, sanitizedName)
         ? { displayName: requestedName }
         : {}),
+    ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {})
   }
@@ -613,6 +615,7 @@ export async function createLocalWorktree(
           sparsePresetId
         }
       : {}),
+    ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {})
   }
