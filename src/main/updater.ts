@@ -422,33 +422,28 @@ function markMissingManifestPrereleaseFallbackPromiseHandled(message: string): v
   )
 }
 
-function shouldResolvePrereleaseFeed(): boolean {
+function shouldPinDefaultReleaseFeed(): boolean {
   // Why: if the user Shift-clicked the menu to opt into RC this process, we've
-  // already switched to the native github provider — leave that alone. The
-  // atom-feed resolver only applies to users *running* a prerelease build on
-  // the default generic feed.
-  return !includePrereleaseActive && isPrereleaseVersion(app.getVersion())
+  // already switched to the native github provider — leave that alone.
+  return !includePrereleaseActive
 }
 
-async function pinPrereleaseFeed(): Promise<void> {
-  // Why: for prerelease users we mine the atom feed ourselves and pin the
-  // generic feed at /releases/download/<tag>/ so the follow-up manifest fetch
-  // resolves against exactly that release. This handles BOTH RC→newer-RC and
-  // RC→stable, which is what a prerelease user wants. We avoid the native
-  // github provider because GitHubProvider.getLatestVersion() filters the feed
-  // by channel — when currentChannel is "rc", stable releases get skipped and
-  // the user never sees the GA (trapping them on the RC channel).
+async function pinDefaultReleaseFeed(): Promise<void> {
+  // Why: the /releases/latest/download/ redirect can move between the update
+  // check and the later manual download click. Pinning to the concrete tag
+  // keeps the manifest and ZIP asset on the same release.
   //
-  // If the resolver returns null (no newer release, or fetch failed), we fall
-  // back to the default /releases/latest/download/ URL. In the "no newer"
-  // case that feed will report the latest stable and compareVersions in the
-  // 'update-available' handler will correctly mark it as not-available.
+  // Prerelease users still need any-channel resolution so they can move to a
+  // newer RC or the next stable. Stable users should only resolve stable tags.
   const currentVersion = app.getVersion()
-  const releaseTags = await fetchNewerReleaseTags(currentVersion, 2)
+  const includePrerelease = isPrereleaseVersion(currentVersion)
+  const releaseTags = await fetchNewerReleaseTags(currentVersion, includePrerelease ? 2 : 1, {
+    includePrerelease
+  })
   const newerTag = releaseTags[0] ?? null
-  const fallbackTag = releaseTags[1] ?? null
+  const fallbackTag = includePrerelease ? (releaseTags[1] ?? null) : null
   pendingPrereleaseFallback =
-    newerTag && fallbackTag
+    includePrerelease && newerTag && fallbackTag
       ? {
           primaryTag: newerTag,
           fallbackTag,
@@ -464,16 +459,20 @@ async function pinPrereleaseFeed(): Promise<void> {
       : null
   // Why: console.info goes to stdout and is captured by Console.app on macOS
   // and by --enable-logging elsewhere. This is the only window we have into
-  // the updater on a user's machine when something goes wrong (issue: RC user
-  // not offered newer stable). Cheap to keep, invaluable when triaging.
+  // the updater on a user's machine when something goes wrong. Cheap to keep,
+  // invaluable when triaging.
   if (newerTag) {
     const url = getReleaseDownloadUrl(newerTag)
-    console.info(`[updater] prerelease feed pinned: current=${currentVersion} → ${url}`)
+    console.info(
+      `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+    )
     autoUpdater.setFeedURL({ provider: 'generic', url })
   } else {
     clearPrereleaseFallbackContext()
     const url = 'https://github.com/stablyai/orca/releases/latest/download'
-    console.info(`[updater] prerelease feed fallback: current=${currentVersion} → ${url}`)
+    console.info(
+      `[updater] release feed fallback: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+    )
     autoUpdater.setFeedURL({ provider: 'generic', url })
   }
 }
@@ -554,8 +553,8 @@ function runBackgroundUpdateCheck(
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldResolvePrereleaseFeed()
-    ? pinPrereleaseFeed().then(launch)
+  const run = shouldPinDefaultReleaseFeed()
+    ? pinDefaultReleaseFeed().then(launch)
     : launchWithoutPrereleaseFallback(launch)
   void Promise.resolve(run).catch((err) => {
     backgroundCheckLaunchPending = false
@@ -607,8 +606,8 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   // and sending it from both places causes duplicate notifications (issue #35).
 
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldResolvePrereleaseFeed()
-    ? pinPrereleaseFeed().then(launch)
+  const run = shouldPinDefaultReleaseFeed()
+    ? pinDefaultReleaseFeed().then(launch)
     : launchWithoutPrereleaseFallback(launch)
   void Promise.resolve(run).catch((err) => {
     userInitiatedCheck = false
@@ -776,19 +775,15 @@ export function setupAutoUpdater(
     ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
   }
 
-  // Use the generic provider with GitHub's /releases/latest/download/ URL so
-  // electron-updater always fetches the manifest (latest-mac.yml, latest.yml,
-  // latest-linux.yml) from the latest non-prerelease release. This sidesteps
-  // the broken /releases/latest API endpoint (returns 406) and automatically
-  // excludes RC/prerelease versions without client-side filtering.
+  // Use the generic provider with GitHub's /releases/latest/download/ URL as
+  // the startup fallback so electron-updater can fetch the manifest
+  // (latest-mac.yml, latest.yml, latest-linux.yml) from the latest
+  // non-prerelease release.
   //
-  // Why: for users already running a prerelease (e.g. 1.3.19-rc.6) we repin
-  // this URL to a specific /releases/download/<tag>/ before each check — see
-  // ensurePrereleaseFeedReady. That handles both RC→newer-RC AND RC→stable.
-  // We keep the generic provider (rather than switching to electron-updater's
-  // native github provider + allowPrerelease) because GitHubProvider filters
-  // the atom feed by channel and would silently skip stable releases when the
-  // running build is an RC — trapping the user on the RC channel.
+  // Why: before each default-channel check we repin this URL to a concrete
+  // /releases/download/<tag>/ URL. Keeping the generic provider avoids the
+  // native GitHub provider's RC channel filtering, and pinning avoids the
+  // moving /latest redirect changing between check and download.
   autoUpdater.setFeedURL({
     provider: 'generic',
     url: 'https://github.com/stablyai/orca/releases/latest/download'

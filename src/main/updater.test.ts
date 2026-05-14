@@ -309,7 +309,9 @@ describe('updater', () => {
       setLastUpdateCheckAt
     })
 
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
@@ -349,11 +351,13 @@ describe('updater', () => {
 
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(59 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
@@ -373,7 +377,9 @@ describe('updater', () => {
     appMock.emit('browser-window-focus')
     appMock.emit('browser-window-focus')
 
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('does not persist lastUpdateCheckAt when a focus-triggered check fails benignly', async () => {
@@ -432,14 +438,17 @@ describe('updater', () => {
       setLastUpdateCheckAt: vi.fn()
     })
 
-    await vi.runAllTicks()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    vi.advanceTimersByTime(59 * 60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('reschedules the next automatic check 24 hours after finding an available update', async () => {
@@ -465,10 +474,11 @@ describe('updater', () => {
       setLastUpdateCheckAt
     })
 
-    await vi.runAllTicks()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     expect(setLastUpdateCheckAt).toHaveBeenCalledTimes(1)
     expect(sendMock).toHaveBeenCalledWith('updater:status', {
       state: 'available',
@@ -476,11 +486,13 @@ describe('updater', () => {
       changelog: null
     })
 
-    vi.advanceTimersByTime(23 * 60 * 60 * 1000 + 59 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(23 * 60 * 60 * 1000 + 59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    vi.advanceTimersByTime(60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('does not leak a nudge marker into a later ordinary update cycle', async () => {
@@ -516,11 +528,13 @@ describe('updater', () => {
     sendMock.mockClear()
     checkForUpdatesFromMenu()
 
-    const statusCalls = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
+    await vi.waitFor(() => {
+      const statusCalls = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
 
-    expect(statusCalls).toContainEqual({ state: 'checking', userInitiated: true })
+      expect(statusCalls).toContainEqual({ state: 'checking', userInitiated: true })
+    })
 
     autoUpdaterMock.emit('update-available', { version: '1.0.62' })
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -795,7 +809,9 @@ describe('updater', () => {
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17-rc.1', 2)
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17-rc.1', 2, {
+        includePrerelease: true
+      })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
         url: 'https://github.com/stablyai/orca/releases/download/v1.3.17-rc.2'
@@ -1493,8 +1509,12 @@ describe('updater', () => {
     })
   })
 
-  it('does not invoke the atom-feed resolver for a stable user', async () => {
+  // Why: /releases/latest/download is a moving redirect. If a new stable
+  // release publishes between check and manual download, a relative ZIP URL
+  // from the old manifest can resolve against the new release and 404.
+  it('pins the generic feed to a concrete stable tag for a stable user', async () => {
     appMock.getVersion.mockReturnValue('1.3.17')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -1505,12 +1525,14 @@ describe('updater', () => {
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 1, {
+        includePrerelease: false
+      })
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
-    expect(fetchNewerReleaseTagsMock).not.toHaveBeenCalled()
-    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/latest/download'
+      url: 'https://github.com/stablyai/orca/releases/download/v1.3.18'
     })
   })
 

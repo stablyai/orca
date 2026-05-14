@@ -43,6 +43,18 @@ describe('fetchNewerReleaseTag', () => {
     expect(await fetchNewerReleaseTag('1.3.19-rc.4')).toBe('v1.3.19-rc.6')
   })
 
+  it('can exclude prerelease tags for stable-channel checks', async () => {
+    respondWithAtom(['v1.4.1-rc.0', 'v1.4.0', 'v1.3.52-rc.3', 'v1.3.51'])
+    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+    expect(await fetchNewerReleaseTag('1.3.51', { includePrerelease: false })).toBe('v1.4.0')
+  })
+
+  it('returns null for stable-channel checks when only prereleases are newer', async () => {
+    respondWithAtom(['v1.4.1-rc.0', 'v1.3.52-rc.3', 'v1.3.51'])
+    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+    expect(await fetchNewerReleaseTag('1.3.51', { includePrerelease: false })).toBe(null)
+  })
+
   it('returns null when nothing in the feed is newer than the current version', async () => {
     respondWithAtom(['v1.3.18', 'v1.3.17'])
     const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
