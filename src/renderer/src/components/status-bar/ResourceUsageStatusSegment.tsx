@@ -1305,10 +1305,13 @@ export function ResourceUsageStatusSegment({
           <button
             type="button"
             onClick={handleOpenWorkspaceCleanup}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+            className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
           >
-            <ArchiveX className="size-3.5" />
-            Clean up old workspaces ({oldWorkspaceCount})
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <ArchiveX className="size-3.5 shrink-0" />
+              <span className="truncate">Clean up old workspaces ({oldWorkspaceCount})</span>
+            </span>
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           </button>
           {orphanCount > 0 ? (
             <button
