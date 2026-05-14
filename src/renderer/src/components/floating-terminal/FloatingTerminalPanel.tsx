@@ -125,6 +125,14 @@ export function FloatingTerminalPanel({
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
     [activeTabId, tabs]
   )
+  const activeFloatingTabId = activeTab?.id ?? null
+
+  useEffect(() => {
+    if (!open || !activeFloatingTabId) {
+      return
+    }
+    focusTerminalTabSurface(activeFloatingTabId)
+  }, [activeFloatingTabId, open])
 
   const createFloatingTab = useCallback(() => {
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })

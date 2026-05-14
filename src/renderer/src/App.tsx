@@ -1,5 +1,14 @@
 /* eslint-disable max-lines */
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type SetStateAction
+} from 'react'
 import { getDefaultUIState } from '../../shared/constants'
 
 import {
@@ -199,22 +208,66 @@ function App(): React.JSX.Element {
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
+  // Why: the floating terminal is a transient overlay; hotkey minimize should
+  // return keyboard focus to the surface the user was working in before it.
+  const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
+
+  const rememberFloatingTerminalReturnFocus = useCallback((): void => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement)) {
+      floatingTerminalReturnFocusRef.current = null
+      return
+    }
+    if (
+      active.closest('[data-floating-terminal-panel]') ||
+      active.closest('[data-floating-terminal-toggle]')
+    ) {
+      return
+    }
+    floatingTerminalReturnFocusRef.current = active
+  }, [])
+
+  const restoreFloatingTerminalReturnFocus = useCallback((): void => {
+    const target = floatingTerminalReturnFocusRef.current
+    floatingTerminalReturnFocusRef.current = null
+    if (!target || !document.contains(target)) {
+      return
+    }
+    requestAnimationFrame(() => {
+      target.focus({ preventScroll: true })
+    })
+  }, [])
+
+  const setFloatingTerminalOpenWithFocus = useCallback(
+    (nextOpen: SetStateAction<boolean>): void => {
+      setFloatingTerminalOpen((currentOpen) => {
+        const resolvedOpen = typeof nextOpen === 'function' ? nextOpen(currentOpen) : nextOpen
+        if (resolvedOpen && !currentOpen) {
+          rememberFloatingTerminalReturnFocus()
+        } else if (!resolvedOpen && currentOpen) {
+          restoreFloatingTerminalReturnFocus()
+        }
+        return resolvedOpen
+      })
+    },
+    [rememberFloatingTerminalReturnFocus, restoreFloatingTerminalReturnFocus]
+  )
 
   useEffect(() => {
     const toggleFloatingTerminal = (): void => {
       if (floatingTerminalEnabled) {
-        setFloatingTerminalOpen((open) => !open)
+        setFloatingTerminalOpenWithFocus((open) => !open)
       }
     }
     window.addEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
     return () => window.removeEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
-  }, [floatingTerminalEnabled])
+  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
     if (!floatingTerminalEnabled) {
-      setFloatingTerminalOpen(false)
+      setFloatingTerminalOpenWithFocus(false)
     }
-  }, [floatingTerminalEnabled])
+  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -1133,12 +1186,12 @@ function App(): React.JSX.Element {
           <>
             <FloatingTerminalPanel
               open={floatingTerminalOpen}
-              onOpenChange={setFloatingTerminalOpen}
+              onOpenChange={setFloatingTerminalOpenWithFocus}
             />
             {floatingTerminalTriggerLocation === 'floating-button' ? (
               <FloatingTerminalToggleButton
                 open={floatingTerminalOpen}
-                onToggle={() => setFloatingTerminalOpen((open) => !open)}
+                onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
               />
             ) : null}
           </>
