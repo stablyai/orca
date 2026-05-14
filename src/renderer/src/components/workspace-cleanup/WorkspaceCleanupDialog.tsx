@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -101,6 +102,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const open = activeModal === 'workspace-cleanup'
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [showKept, setShowKept] = useState(false)
+  const [showSuggested, setShowSuggested] = useState(true)
   const [showReview, setShowReview] = useState(false)
   const [showProtected, setShowProtected] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -110,6 +112,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   useEffect(() => {
     if (open) {
       setRowFailures({})
+      setShowSuggested(true)
       setShowReview(false)
       setShowProtected(false)
       void scanWorkspaceCleanup().catch((err: unknown) => {
@@ -258,7 +261,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[1280px] xl:max-w-[1280px]"
+        className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[1040px] xl:max-w-[1040px]"
       >
         {!confirming ? (
           <>
@@ -271,10 +274,22 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   </DialogDescription>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-                    <RefreshCcw className={cn('size-3.5', loading && 'animate-spin')} />
-                    Refresh
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Refresh"
+                        onClick={refresh}
+                        disabled={loading}
+                      >
+                        <RefreshCcw className={cn('size-3.5', loading && 'animate-spin')} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={4}>
+                      Refresh
+                    </TooltipContent>
+                  </Tooltip>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -372,6 +387,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 <CandidateGroup
                   tier="ready"
                   rows={groups.ready}
+                  expanded={showSuggested}
+                  onExpandedChange={setShowSuggested}
                   selectedIds={selectedIds}
                   rowFailures={rowFailures}
                   onToggleSelected={(id) =>
@@ -385,73 +402,42 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     setConfirming(true)
                   }}
                 />
-                {/* Why: this opens from a compact status popover, so the first screen
-                    stays focused on removable workspaces instead of safety categories. */}
-                {groups.review.length > 0 ? (
-                  groups.ready.length === 0 || showReview ? (
-                    <CandidateGroup
-                      tier="review"
-                      rows={groups.review}
-                      selectedIds={selectedIds}
-                      rowFailures={rowFailures}
-                      onToggleSelected={(id) =>
-                        setSelectedIds((current) => toggleSetMember(current, id))
-                      }
-                      onView={closeAndView}
-                      onKeep={(candidate) => void dismissCandidates([candidate])}
-                      onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
-                      onRemove={(candidate) => {
-                        setSelectedIds(new Set([candidate.worktreeId]))
-                        setConfirming(true)
-                      }}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowReview(true)}
-                    >
-                      <ChevronRight className="size-3" />
-                      Show workspaces that need review
-                    </button>
-                  )
-                ) : null}
-                {groups.protected.length > 0 ? (
-                  <div>
-                    <button
-                      type="button"
-                      className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowProtected((value) => !value)}
-                    >
-                      {showProtected ? (
-                        <ChevronDown className="size-3" />
-                      ) : (
-                        <ChevronRight className="size-3" />
-                      )}
-                      {showProtected
-                        ? 'Hide workspaces not suggested for cleanup'
-                        : 'Show workspaces not suggested for cleanup'}
-                    </button>
-                    {showProtected ? (
-                      <CandidateGroup
-                        tier="protected"
-                        rows={groups.protected}
-                        selectedIds={selectedIds}
-                        rowFailures={rowFailures}
-                        onToggleSelected={(id) =>
-                          setSelectedIds((current) => toggleSetMember(current, id))
-                        }
-                        onView={closeAndView}
-                        onKeep={(candidate) => void dismissCandidates([candidate])}
-                        onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
-                        onRemove={(candidate) => {
-                          setSelectedIds(new Set([candidate.worktreeId]))
-                          setConfirming(true)
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
+                <CandidateGroup
+                  tier="review"
+                  rows={groups.review}
+                  expanded={showReview}
+                  onExpandedChange={setShowReview}
+                  selectedIds={selectedIds}
+                  rowFailures={rowFailures}
+                  onToggleSelected={(id) =>
+                    setSelectedIds((current) => toggleSetMember(current, id))
+                  }
+                  onView={closeAndView}
+                  onKeep={(candidate) => void dismissCandidates([candidate])}
+                  onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
+                  onRemove={(candidate) => {
+                    setSelectedIds(new Set([candidate.worktreeId]))
+                    setConfirming(true)
+                  }}
+                />
+                <CandidateGroup
+                  tier="protected"
+                  rows={groups.protected}
+                  expanded={showProtected}
+                  onExpandedChange={setShowProtected}
+                  selectedIds={selectedIds}
+                  rowFailures={rowFailures}
+                  onToggleSelected={(id) =>
+                    setSelectedIds((current) => toggleSetMember(current, id))
+                  }
+                  onView={closeAndView}
+                  onKeep={(candidate) => void dismissCandidates([candidate])}
+                  onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
+                  onRemove={(candidate) => {
+                    setSelectedIds(new Set([candidate.worktreeId]))
+                    setConfirming(true)
+                  }}
+                />
               </div>
             </ScrollArea>
 
@@ -489,6 +475,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
 function CandidateGroup({
   tier,
   rows,
+  expanded,
+  onExpandedChange,
   selectedIds,
   rowFailures,
   onToggleSelected,
@@ -499,6 +487,8 @@ function CandidateGroup({
 }: {
   tier: WorkspaceCleanupTier
   rows: WorkspaceCleanupCandidate[]
+  expanded: boolean
+  onExpandedChange: (expanded: boolean) => void
   selectedIds: Set<string>
   rowFailures: Record<string, string>
   onToggleSelected: (worktreeId: string) => void
@@ -512,26 +502,35 @@ function CandidateGroup({
   }
   return (
     <section className="space-y-2">
-      {tier !== 'protected' ? (
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          {TIER_LABELS[tier]}
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
+        aria-expanded={expanded}
+        onClick={() => onExpandedChange(!expanded)}
+      >
+        <span className="flex min-w-0 items-center gap-1">
+          {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          <span className="truncate">{TIER_LABELS[tier]}</span>
+        </span>
+        <span className="tabular-nums">{rows.length}</span>
+      </button>
+      {expanded ? (
+        <div className="space-y-2">
+          {rows.map((candidate) => (
+            <CandidateRow
+              key={candidate.worktreeId}
+              candidate={candidate}
+              selected={selectedIds.has(candidate.worktreeId)}
+              failure={rowFailures[candidate.worktreeId]}
+              onToggleSelected={onToggleSelected}
+              onView={onView}
+              onKeep={onKeep}
+              onSleep={onSleep}
+              onRemove={onRemove}
+            />
+          ))}
         </div>
       ) : null}
-      <div className="space-y-2">
-        {rows.map((candidate) => (
-          <CandidateRow
-            key={candidate.worktreeId}
-            candidate={candidate}
-            selected={selectedIds.has(candidate.worktreeId)}
-            failure={rowFailures[candidate.worktreeId]}
-            onToggleSelected={onToggleSelected}
-            onView={onView}
-            onKeep={onKeep}
-            onSleep={onSleep}
-            onRemove={onRemove}
-          />
-        ))}
-      </div>
     </section>
   )
 }
@@ -646,7 +645,7 @@ function CandidateRow({
             </Button>
           ) : null}
           <Button variant="ghost" size="xs" onClick={() => onKeep(candidate)}>
-            Keep
+            Hide
           </Button>
           <Button
             variant="ghost"
