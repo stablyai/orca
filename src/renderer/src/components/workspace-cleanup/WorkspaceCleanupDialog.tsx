@@ -36,9 +36,9 @@ import {
 } from '../../../../shared/workspace-cleanup'
 
 const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
-  ready: 'Old workspaces Orca can remove',
-  review: 'Other old workspaces',
-  protected: 'Workspaces Orca will not remove'
+  ready: 'Suggested cleanup',
+  review: 'Needs a closer look',
+  protected: 'Not suggested for cleanup'
 }
 
 const REASON_LABELS: Record<WorkspaceCleanupReason, string> = {
@@ -65,7 +65,7 @@ const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'unpushed-commits': 'Unpushed commits',
   'open-pr': 'Open PR',
   'unknown-base': 'No clean base proof',
-  dismissed: 'Kept'
+  dismissed: 'Hidden from cleanup'
 }
 
 function formatRelativeTime(timestamp: number): string {
@@ -203,11 +203,11 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       .then(() => {
         setSelectedIds(new Set())
         toast.success(
-          `Kept ${selectedCandidates.length} workspace${selectedCandidates.length === 1 ? '' : 's'}`
+          `Hidden ${selectedCandidates.length} workspace${selectedCandidates.length === 1 ? '' : 's'}`
         )
       })
       .catch((err: unknown) => {
-        toast.error('Could not keep selected workspaces', {
+        toast.error('Could not hide selected workspaces', {
           description: err instanceof Error ? err.message : String(err)
         })
       })
@@ -267,8 +267,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 <div className="min-w-0">
                   <DialogTitle className="text-base">Clean Up Old Workspaces</DialogTitle>
                   <DialogDescription className="mt-1 text-xs">
-                    Remove inactive workspaces after Orca checks git, terminals, editors, and
-                    agents.
+                    Review old workspaces before deleting their local files and Orca state.
                   </DialogDescription>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -302,17 +301,17 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       <span className="font-medium text-foreground">
                         {selectedCount} old workspace{selectedCount === 1 ? '' : 's'}
                       </span>{' '}
-                      selected for removal.
+                      selected.
                     </>
                   ) : readyCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">
                         {readyCount} old workspace{readyCount === 1 ? '' : 's'}
                       </span>{' '}
-                      can be removed.
+                      suggested for cleanup.
                     </>
                   ) : (
-                    'No old workspaces are selected for removal.'
+                    'No workspaces selected.'
                   )}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -322,7 +321,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       size="xs"
                       onClick={() => setShowKept((value) => !value)}
                     >
-                      {showKept ? 'Hide kept' : 'Show kept'}
+                      {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
                     </Button>
                   ) : null}
                   {readyCount > 0 && selectedCount < readyCount ? (
@@ -336,7 +335,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     onClick={keepSelected}
                     disabled={selectedCount === 0}
                   >
-                    Keep for now
+                    Hide selected
                   </Button>
                   <Button
                     variant="destructive"
@@ -361,12 +360,12 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               <div className="space-y-4 p-5">
                 {initialLoading ? <SkeletonRows /> : null}
                 {!loading && scan && candidates.length === 0 ? (
-                  <EmptyState title="No cleanup candidates." />
+                  <EmptyState title="No old workspaces to clean up." />
                 ) : null}
                 {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
                   <EmptyState
-                    title="No visible cleanup candidates."
-                    actionLabel="Show kept workspaces"
+                    title="All cleanup suggestions are hidden."
+                    actionLabel="Show hidden workspaces"
                     onAction={() => setShowKept(true)}
                   />
                 ) : null}
@@ -413,7 +412,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       onClick={() => setShowReview(true)}
                     >
                       <ChevronRight className="size-3" />
-                      Show workspaces that need a closer look
+                      Show workspaces that need review
                     </button>
                   )
                 ) : null}
@@ -430,8 +429,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                         <ChevronRight className="size-3" />
                       )}
                       {showProtected
-                        ? 'Hide workspaces Orca will not remove'
-                        : 'Show workspaces Orca will not remove'}
+                        ? 'Hide workspaces not suggested for cleanup'
+                        : 'Show workspaces not suggested for cleanup'}
                     </button>
                     {showProtected ? (
                       <CandidateGroup
@@ -464,7 +463,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   className="h-auto px-0 text-xs"
                   onClick={() => void resetDismissals()}
                 >
-                  Reset cleanup decisions
+                  Show all cleanup suggestions
                 </Button>
               </div>
             ) : null}
