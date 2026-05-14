@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { keybindingCatalog } from '../../shared/keybindings/keybinding-catalog'
+import { parseUserKeybindingConfigToml } from './user-keybinding-config'
 import {
   createUserKeybindingService,
   createUserKeybindingServiceFromDisk
@@ -41,7 +43,7 @@ describe('createUserKeybindingService', () => {
 })
 
 describe('createUserKeybindingServiceFromDisk', () => {
-  it('should create a starter config before opening a missing keybindings file', async () => {
+  it('should create a complete commented starter config before opening a missing keybindings file', async () => {
     // Arrange
     const files = new Map<string, string>()
     const openPath = vi.fn()
@@ -73,10 +75,17 @@ describe('createUserKeybindingServiceFromDisk', () => {
     // Assert
     const starter = files.get('/home/will/.orca/keybindings.toml')
     expect(starter).toContain('[keybindings.linux]')
-    expect(starter).toContain('"terminal.copySelection" = ["ctrl+insert", "ctrl+shift+c"]')
-    expect(starter).toContain('"terminal.paste" = ["shift+insert", "ctrl+shift+v"]')
+    expect(starter).toContain('# "terminal.paste" = ["ctrl+v", "ctrl+shift+v", "shift+insert"]')
+    expect(starter).toContain('# "terminal.input.lineStart" = "none"')
     expect(starter).toContain('[keybindings.macos]')
     expect(starter).toContain('[keybindings.windows]')
+    for (const entry of keybindingCatalog) {
+      expect(starter?.split(`# "${entry.id}" = `).length).toBe(4)
+    }
+    expect(parseUserKeybindingConfigToml(starter ?? '', 'linux')).toEqual({
+      overrides: {},
+      diagnostics: []
+    })
     expect(openPath).toHaveBeenCalledWith('/home/will/.orca/keybindings.toml')
     expect(showItemInFolder).toHaveBeenCalledWith('/home/will/.orca/keybindings.toml')
   })

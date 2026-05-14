@@ -156,7 +156,7 @@ export function ShortcutsPane(): React.JSX.Element {
           </div>
           <div className="text-xs text-muted-foreground">
             {keybindingSnapshot?.fileState === 'missing'
-              ? 'No keybindings file exists yet. Open will create a starter TOML file.'
+              ? 'No keybindings file exists yet. Open will create a complete commented TOML file.'
               : `Last loaded ${keybindingSnapshot?.keymap.diagnostics.length ?? 0} diagnostic(s).`}
           </div>
           {keybindingSnapshot && keybindingSnapshot.keymap.diagnostics.length > 0 ? (

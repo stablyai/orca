@@ -1,5 +1,10 @@
 import type { KeybindingSnapshot } from '../../shared/keybindings/keybinding-types'
 import { dirname } from 'path'
+import { keybindingCatalog } from '../../shared/keybindings/keybinding-catalog'
+import type {
+  KeybindingCatalogEntry,
+  KeybindingPlatform
+} from '../../shared/keybindings/keybinding-types'
 import {
   displayUserKeybindingConfigPath,
   loadUserKeybindingConfig,
@@ -8,20 +13,41 @@ import {
   type UserKeybindingConfigReadResult
 } from './user-keybinding-config'
 
-const STARTER_CONFIG = `# Orca keybindings
+const STARTER_CONFIG_PLATFORMS: KeybindingPlatform[] = ['linux', 'macos', 'windows']
+
+function renderStarterKeybindingConfig(catalog: KeybindingCatalogEntry[]): string {
+  const platformSections = STARTER_CONFIG_PLATFORMS.map((platform) =>
+    [
+      `[keybindings.${platform}]`,
+      ...catalog.flatMap((entry) => [
+        `# ${entry.title}`,
+        `# ${quoteTomlString(entry.id)} = ${formatDefaultOverrideValue(entry.defaults[platform])}`,
+        ''
+      ])
+    ].join('\n')
+  )
+
+  return `# Orca keybindings
 # Edit this file, then use Settings > Shortcuts > Reload Keybindings.
+# Uncomment an action to override it. Overrides replace the full chord set.
+# Use "none" to unbind an action.
 
-[keybindings.linux]
-# Omarchy's Super+C / Super+V universal shortcuts forward Ctrl+Insert / Shift+Insert.
-# "terminal.copySelection" = ["ctrl+insert", "ctrl+shift+c"]
-# "terminal.paste" = ["shift+insert", "ctrl+shift+v"]
+${platformSections.join('\n')}`
+}
 
-[keybindings.macos]
-# "terminal.paste" = "cmd+v"
+function formatDefaultOverrideValue(defaults: string[] | undefined): string {
+  if (!defaults || defaults.length === 0) {
+    return quoteTomlString('none')
+  }
+  if (defaults.length === 1) {
+    return quoteTomlString(defaults[0])
+  }
+  return `[${defaults.map(quoteTomlString).join(', ')}]`
+}
 
-[keybindings.windows]
-# "terminal.paste" = "ctrl+shift+v"
-`
+function quoteTomlString(value: string): string {
+  return JSON.stringify(value)
+}
 
 export type UserKeybindingService = {
   getSnapshot: () => KeybindingSnapshot
@@ -105,7 +131,7 @@ export function createUserKeybindingServiceFromDisk({
       return
     }
     mkdirSync(dirname(configPath), { recursive: true })
-    writeFileSync(configPath, STARTER_CONFIG, 'utf8')
+    writeFileSync(configPath, renderStarterKeybindingConfig(keybindingCatalog), 'utf8')
   }
 
   return createUserKeybindingService({
