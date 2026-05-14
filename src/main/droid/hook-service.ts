@@ -28,6 +28,12 @@ const DROID_EVENTS = [
     eventName: 'PostToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   },
+  // Why: Droid approval prompts are emitted at PermissionRequest, including
+  // low-impact Edit approvals that have no riskLevel marker on PreToolUse.
+  {
+    eventName: 'PermissionRequest',
+    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  },
   { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
 ] as const
 
@@ -44,10 +50,9 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  if (process.platform === 'win32') {
-    return scriptPath.replaceAll('\\', '/')
-  }
-  return wrapPosixHookCommand(scriptPath)
+  // Why: Factory invokes the .cmd directly via cmd.exe (no bash), so native
+  // backslashes are correct on Windows. Matches the codex/cursor pattern.
+  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(): string {
@@ -125,6 +130,10 @@ export class DroidHookService {
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+    // Why: surface hooksDisabled across every branch — without this, a
+    // disabled-AND-partially-installed (or disabled-AND-not-installed) state
+    // would silently swallow the disabled flag and the user would think a
+    // re-install fixed it.
     if (missing.length === 0) {
       if (config.hooksDisabled === true) {
         state = 'partial'
@@ -134,11 +143,19 @@ export class DroidHookService {
         detail = null
       }
     } else if (presentCount === 0) {
-      state = 'not_installed'
-      detail = null
+      if (config.hooksDisabled === true) {
+        state = 'partial'
+        detail = 'Droid hooks are disabled in Factory settings'
+      } else {
+        state = 'not_installed'
+        detail = null
+      }
     } else {
       state = 'partial'
-      detail = `Managed hook missing for events: ${missing.join(', ')}`
+      detail =
+        config.hooksDisabled === true
+          ? `Droid hooks are disabled in Factory settings; managed hook missing for events: ${missing.join(', ')}`
+          : `Managed hook missing for events: ${missing.join(', ')}`
     }
     return { agent: 'droid', state, configPath, managedHooksPresent, detail }
   }
@@ -160,6 +177,24 @@ export class DroidHookService {
     const command = getManagedCommand(scriptPath)
     const nextHooks = { ...config.hooks }
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    const managedEvents = new Set<string>(DROID_EVENTS.map((event) => event.eventName))
+
+    // Why: sweep managed entries out of events we no longer subscribe to.
+    for (const [eventName, definitions] of Object.entries(nextHooks)) {
+      if (managedEvents.has(eventName)) {
+        continue
+      }
+      if (!Array.isArray(definitions)) {
+        continue
+      }
+      const cleaned = removeManagedCommands(definitions, isManagedCommand)
+      if (cleaned.length === 0) {
+        delete nextHooks[eventName]
+      } else {
+        nextHooks[eventName] = cleaned
+      }
+    }
+
     for (const event of DROID_EVENTS) {
       const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)

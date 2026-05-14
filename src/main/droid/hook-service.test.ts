@@ -58,6 +58,7 @@ describe('DroidHookService', () => {
     expect(Object.keys(config.hooks).sort()).toEqual(
       [
         'Notification',
+        'PermissionRequest',
         'PostToolUse',
         'PreToolUse',
         'SessionStart',
@@ -66,6 +67,7 @@ describe('DroidHookService', () => {
       ].sort()
     )
     expect(config.hooks.PreToolUse[0].matcher).toBe('*')
+    expect(config.hooks.PermissionRequest[0].matcher).toBe('*')
     expect(config.hooks.UserPromptSubmit[0].matcher).toBeUndefined()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('droid-hook')
   })

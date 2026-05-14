@@ -361,6 +361,10 @@ export function getAgentLabel(title: string): string | null {
   if (lower.includes('cursor')) {
     return 'Cursor'
   }
+  // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.
+  if (lower.includes('droid')) {
+    return 'Droid'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }

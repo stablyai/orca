@@ -358,6 +358,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('⠋ Droid')).toBe('Droid')
   })
 
   it('labels GitHub Copilot CLI', () => {

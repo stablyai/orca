@@ -617,12 +617,9 @@ function isDroidPermissionNotification(message: string | undefined): boolean {
     return false
   }
   const lower = message.toLowerCase()
-  return (
-    lower.includes('permission') ||
-    lower.includes('approve') ||
-    lower.includes('approval') ||
-    lower.includes('confirm')
-  )
+  // Why: 'confirm' is excluded — it false-positives on benign messages like
+  // "Confirmed configuration loaded" / "task confirmed" that aren't permission prompts.
+  return lower.includes('permission') || lower.includes('approve') || lower.includes('approval')
 }
 
 function isDroidIdleNotification(message: string | undefined): boolean {
@@ -633,11 +630,46 @@ function isDroidIdleNotification(message: string | undefined): boolean {
   return lower.includes('waiting for your input') || lower.includes('waiting for input')
 }
 
+function isDroidAskUserTool(toolName: string | undefined): boolean {
+  if (!toolName) {
+    return false
+  }
+  return toolName.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuser'
+}
+
+function readDroidToolRiskLevel(hookPayload: Record<string, unknown>): string | undefined {
+  const directRisk = readString(hookPayload, 'riskLevel') ?? readString(hookPayload, 'risk_level')
+  if (directRisk) {
+    return directRisk
+  }
+
+  for (const key of ['tool_input', 'input', 'arguments'] as const) {
+    const value = hookPayload[key]
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      continue
+    }
+    const record = value as Record<string, unknown>
+    const nestedRisk = readString(record, 'riskLevel') ?? readString(record, 'risk_level')
+    if (nestedRisk) {
+      return nestedRisk
+    }
+  }
+  return undefined
+}
+
+function isDroidHighRiskToolUse(hookPayload: Record<string, unknown>): boolean {
+  return readDroidToolRiskLevel(hookPayload)?.trim().toLowerCase() === 'high'
+}
+
 function extractDroidToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
+  if (
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PermissionRequest'
+  ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
@@ -668,7 +700,7 @@ function extractDroidToolFields(
 }
 
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
   // typecheck here instead of silently falling through to `false`.
   switch (source) {
     case 'claude':
@@ -698,7 +730,7 @@ function extractToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
@@ -1009,8 +1041,16 @@ function normalizeDroidEvent(
   }
 
   const notificationMessage = readString(hookPayload, 'message')
+  const droidToolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
+    eventName === 'PreToolUse' &&
+    (isDroidAskUserTool(droidToolName) || isDroidHighRiskToolUse(hookPayload))
+  ) {
+    // Why: Droid surfaces both AskUser and high-risk approval prompts as
+    // PreToolUse events; the observed approval path emits no Notification hook.
+    stateName = 'waiting'
+  } else if (
     eventName === 'UserPromptSubmit' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'
@@ -1018,6 +1058,8 @@ function normalizeDroidEvent(
     stateName = 'working'
   } else if (eventName === 'Stop') {
     stateName = 'done'
+  } else if (eventName === 'PermissionRequest') {
+    stateName = 'waiting'
   } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
     stateName = 'waiting'
   } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {
@@ -1036,10 +1078,15 @@ function normalizeDroidEvent(
     { resetOnNewTurn: isNewTurnEvent('droid', eventName) }
   )
 
+  // Why: Droid's Notification.message contains status text (e.g. "Droid is
+  // waiting for your input"), not the user's prompt. Pass '' so resolvePrompt
+  // falls back to the cached UserPromptSubmit value instead of overwriting it.
+  const effectivePrompt = eventName === 'Notification' ? '' : promptText
+
   return parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
         resetOnNewTurn: isNewTurnEvent('droid', eventName)
       }),
       agentType: 'droid',
@@ -1123,7 +1170,7 @@ export function normalizeHookPayload(
   const eventName = (hookPayload as Record<string, unknown>).hook_event_name
   const promptText = extractPromptText(hookPayload as Record<string, unknown>)
   const hookPayloadRecord = hookPayload as Record<string, unknown>
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's normalizer.
   let payload: ParsedAgentStatusPayload | null
   switch (source) {

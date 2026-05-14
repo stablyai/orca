@@ -911,6 +911,39 @@ describe('Droid hook normalization', () => {
     expect(ignored).toBeNull()
   })
 
+  it('Notification preserves the cached user prompt instead of using status text as prompt', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'write tests' }),
+      'production'
+    )
+
+    const done = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Droid is waiting for your input'
+      }),
+      'production'
+    )
+
+    expect(done?.payload.state).toBe('done')
+    expect(done?.payload.prompt).toBe('write tests')
+  })
+
+  it('Notification ignores confirmation status text rather than treating it as permission', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Confirmed configuration loaded'
+      }),
+      'production'
+    )
+
+    expect(result).toBeNull()
+  })
+
   it('PreToolUse maps to working and surfaces the tool name and input preview', () => {
     const result = _internals.normalizeHookPayload(
       'droid',
@@ -938,6 +971,73 @@ describe('Droid hook normalization', () => {
     )
     expect(result?.payload.toolName).toBe('Bash')
     expect(result?.payload.toolInput).toBe('pnpm typecheck')
+  })
+
+  it('PreToolUse AskUser maps to waiting for human input', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUser',
+        tool_input: { question: 'Which permission-requiring action should I perform?' }
+      }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('AskUser')
+  })
+
+  it('PreToolUse high-risk Execute maps to waiting for approval', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Execute',
+        tool_input: {
+          command: 'echo "test modification" >> ~/.claude/config.json',
+          riskLevel: 'high',
+          riskLevelReason: "This command modifies the user's Claude Code config file."
+        }
+      }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('Execute')
+    expect(result?.payload.toolInput).toBe('echo "test modification" >> ~/.claude/config.json')
+  })
+
+  it('PermissionRequest maps low-impact Edit approvals to waiting and carries cached tool', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'edit it to none' }),
+      'production'
+    )
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: {
+          file_path: '/Users/thebr/.claude/settings.json',
+          old_str: '"preferredNotifChannel": "terminal_bell"',
+          new_str: '"preferredNotifChannel": "none"'
+        }
+      }),
+      'production'
+    )
+
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'PermissionRequest' }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.prompt).toBe('edit it to none')
+    expect(result?.payload.toolName).toBe('Edit')
+    expect(result?.payload.toolInput).toBe('/Users/thebr/.claude/settings.json')
   })
 
   it('SessionStart resets turn caches without marking Droid working', () => {
