@@ -261,7 +261,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[1040px] xl:max-w-[1040px]"
+        className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[800px] xl:max-w-[800px]"
       >
         {!confirming ? (
           <>
@@ -309,7 +309,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 Scanning workspaces
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
                 <div className="min-w-0 text-xs leading-5 text-muted-foreground">
                   {selectedCount > 0 ? (
                     <>
