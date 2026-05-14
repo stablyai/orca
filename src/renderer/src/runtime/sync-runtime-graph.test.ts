@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildMobileSessionTabSnapshots,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
@@ -227,5 +228,61 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     )
 
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+})
+
+describe('buildMobileSessionTabSnapshots', () => {
+  it('keeps duplicate file ids scoped to their worktree', () => {
+    const sharedRemotePath = '/home/dev/project/README.md'
+    const previewId = `markdown-preview::${sharedRemotePath}`
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: {
+        'wt-1': [sharedRemotePath, previewId],
+        'wt-2': [sharedRemotePath]
+      },
+      openFiles: [
+        {
+          id: sharedRemotePath,
+          filePath: sharedRemotePath,
+          relativePath: 'docs/wt-one.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          mode: 'edit',
+          isDirty: true
+        },
+        {
+          id: sharedRemotePath,
+          filePath: sharedRemotePath,
+          relativePath: 'docs/wt-two.md',
+          worktreeId: 'wt-2',
+          language: 'markdown',
+          mode: 'edit',
+          isDirty: false
+        },
+        {
+          id: previewId,
+          filePath: sharedRemotePath,
+          relativePath: 'docs/wt-one.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          mode: 'markdown-preview',
+          markdownPreviewSourceFileId: sharedRemotePath,
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshotsByWorktree = new Map(
+      buildMobileSessionTabSnapshots(state).map((snapshot) => [snapshot.worktree, snapshot])
+    )
+
+    expect(snapshotsByWorktree.get('wt-1')?.tabs).toMatchObject([
+      { type: 'markdown', title: 'wt-one.md', sourceRelativePath: 'docs/wt-one.md' },
+      { type: 'markdown', title: 'wt-one.md', sourceRelativePath: 'docs/wt-one.md' }
+    ])
+    expect(snapshotsByWorktree.get('wt-2')?.tabs).toMatchObject([
+      { type: 'markdown', title: 'wt-two.md', sourceRelativePath: 'docs/wt-two.md' }
+    ])
   })
 })
