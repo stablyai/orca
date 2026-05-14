@@ -36,6 +36,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Toggle } from '@/components/ui/toggle'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -55,6 +62,7 @@ import {
 } from '../../../../shared/agent-status-types'
 
 type ThreadReadFilter = 'all' | 'unread'
+type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
 type ActivityEventState = Extract<AgentStatusState, 'done' | 'blocked' | 'waiting'>
 type ActivityLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
 
@@ -112,6 +120,7 @@ type ActivityTerminalPortalDomStatus = {
 }
 
 type ActivityTerminalPortalSlotId = 'primary' | 'secondary'
+type ActivityThreadGroup = { key: string; label: string; threads: AgentPaneThread[] }
 
 const ACTIVITY_TERMINAL_LOADING_LABEL_DELAY_MS = 180
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
@@ -699,6 +708,47 @@ function threadAgentStateLabel(thread: AgentPaneThread): string {
   return agentStateLabel(state)
 }
 
+export function getActivityThreadGroup(
+  thread: AgentPaneThread,
+  groupBy: ActivityGroupBy
+): { key: string; label: string } {
+  if (groupBy === 'status') {
+    const state = threadAgentState(thread)
+    if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
+      return { key: 'done:interrupted', label: threadAgentStateLabel(thread) }
+    }
+    return { key: state, label: threadAgentStateLabel(thread) }
+  }
+  if (groupBy === 'project') {
+    return thread.repo
+      ? { key: `project:${thread.repo.id}`, label: thread.repo.displayName }
+      : { key: 'project:unknown', label: 'Unknown project' }
+  }
+  if (groupBy === 'worktree') {
+    return { key: `worktree:${thread.worktree.id}`, label: thread.worktree.displayName }
+  }
+  return { key: `agent:${thread.agentType}`, label: formatAgentTypeLabel(thread.agentType) }
+}
+
+export function buildActivityThreadGroups(
+  threads: AgentPaneThread[],
+  groupBy: ActivityGroupBy
+): ActivityThreadGroup[] {
+  const groups: ActivityThreadGroup[] = []
+  const groupIndexByKey = new Map<string, number>()
+  for (const thread of threads) {
+    const group = getActivityThreadGroup(thread, groupBy)
+    const existingIndex = groupIndexByKey.get(group.key)
+    if (existingIndex === undefined) {
+      groups.push({ key: group.key, label: group.label, threads: [thread] })
+      groupIndexByKey.set(group.key, groups.length - 1)
+      continue
+    }
+    groups[existingIndex].threads.push(thread)
+  }
+  return groups
+}
+
 function threadSearchText(thread: AgentPaneThread): string {
   const latest = thread.latestEvent
   const stateLabel = threadAgentStateLabel(thread)
@@ -934,6 +984,7 @@ function ThreadRow({
 
 export default function ActivityPrototypePage(): React.JSX.Element {
   const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
+  const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
@@ -1014,6 +1065,11 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
     })
   }, [allThreads, readFilter, query, selectedPaneKey])
+
+  const visibleThreadGroups = useMemo(
+    () => buildActivityThreadGroups(visibleThreads, groupBy),
+    [visibleThreads, groupBy]
+  )
 
   useEffect(() => {
     if (selectedPaneKey && !allThreads.some((thread) => thread.paneKey === selectedPaneKey)) {
@@ -1243,6 +1299,24 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                   className="h-8 w-full pl-7 text-xs"
                 />
               </div>
+              <Select
+                value={groupBy}
+                onValueChange={(value) => setGroupBy(value as ActivityGroupBy)}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="h-8 w-[128px] shrink-0 px-2 text-xs"
+                  aria-label="Group agent activity by"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="status">Status</SelectItem>
+                  <SelectItem value="project">Project</SelectItem>
+                  <SelectItem value="worktree">Worktree</SelectItem>
+                  <SelectItem value="agent">Agent</SelectItem>
+                </SelectContent>
+              </Select>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Toggle
@@ -1305,16 +1379,23 @@ export default function ActivityPrototypePage(): React.JSX.Element {
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
-            {visibleThreads.map((thread) => (
-              <ThreadRow
-                key={thread.paneKey}
-                thread={thread}
-                selected={thread.paneKey === selectedThread?.paneKey}
-                onSelect={() => selectThread(thread)}
-                onJump={() => jumpToWorkspace(thread)}
-                onMarkUnread={() => markThreadUnread(thread)}
-                compactMode={compactMode}
-              />
+            {visibleThreadGroups.map((group) => (
+              <div key={group.key}>
+                <div className="sticky top-0 z-10 border-y border-border bg-background/95 px-3 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase backdrop-blur-sm">
+                  {group.label}
+                </div>
+                {group.threads.map((thread) => (
+                  <ThreadRow
+                    key={thread.paneKey}
+                    thread={thread}
+                    selected={thread.paneKey === selectedThread?.paneKey}
+                    onSelect={() => selectThread(thread)}
+                    onJump={() => jumpToWorkspace(thread)}
+                    onMarkUnread={() => markThreadUnread(thread)}
+                    compactMode={compactMode}
+                  />
+                ))}
+              </div>
             ))}
             {visibleThreads.length === 0 ? (
               <div className="px-3 py-8 text-sm text-muted-foreground">
