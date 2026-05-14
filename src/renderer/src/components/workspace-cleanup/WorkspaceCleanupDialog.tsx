@@ -88,14 +88,23 @@ function formatRelativeTime(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-function formatScanErrorMessage(errors: { repoId: string; message: string }[]): string | null {
+function isRemoteWorkspaceScanNotice(message: string): boolean {
+  return (
+    message === 'SSH provider is unavailable.' ||
+    message === 'Remote workspaces are not connected. Reconnect and refresh to check them.'
+  )
+}
+
+function formatScanNoticeMessage(errors: { repoId: string; message: string }[]): string | null {
   if (errors.length === 0) {
     return null
   }
-  if (errors.length === 1) {
-    return errors[0].message
+  if (errors.every((entry) => isRemoteWorkspaceScanNotice(entry.message))) {
+    return 'Remote workspaces are not connected. Reconnect and refresh to check them.'
   }
-  return `${errors.length} repositories could not be scanned. ${errors[0].message}`
+  return errors.length === 1
+    ? 'Some workspaces could not be checked. Refresh to try again.'
+    : `${errors.length} repositories could not be checked. Refresh to try again.`
 }
 
 export default function WorkspaceCleanupDialog(): React.JSX.Element {
@@ -178,7 +187,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const hiddenByKeepCount = candidates.filter((candidate) =>
     candidate.blockers.includes('dismissed')
   ).length
-  const scanErrorMessage = useMemo(() => formatScanErrorMessage(scan?.errors ?? []), [scan?.errors])
+  const scanNoticeMessage = useMemo(
+    () => formatScanNoticeMessage(scan?.errors ?? []),
+    [scan?.errors]
+  )
   const readyCount = groups.ready.length
   const initialLoading = loading && !scan
 
@@ -326,14 +338,16 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   {selectedCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">
-                        {selectedCount} old workspace{selectedCount === 1 ? '' : 's'}
+                        {selectedCount} {scanNoticeMessage ? 'known ' : ''}old workspace
+                        {selectedCount === 1 ? '' : 's'}
                       </span>{' '}
                       selected.
                     </>
                   ) : readyCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">
-                        {readyCount} old workspace{readyCount === 1 ? '' : 's'}
+                        {readyCount} {scanNoticeMessage ? 'known ' : ''}old workspace
+                        {readyCount === 1 ? '' : 's'}
                       </span>{' '}
                       suggested for cleanup.
                     </>
@@ -377,20 +391,25 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               </div>
             )}
 
-            {error || scanErrorMessage ? (
+            {error ? (
               <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-xs text-destructive">
-                {error ?? scanErrorMessage}
+                {error}
+              </div>
+            ) : scanNoticeMessage ? (
+              <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-5 py-2 text-xs text-muted-foreground">
+                <AlertTriangle className="size-3.5 shrink-0" />
+                <span>{scanNoticeMessage}</span>
               </div>
             ) : null}
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-4 p-5">
                 {initialLoading ? <SkeletonRows /> : null}
-                {!loading && scan && candidates.length === 0 && !scanErrorMessage ? (
+                {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
                   <EmptyState title="No old workspaces to clean up." />
                 ) : null}
-                {!loading && scan && candidates.length === 0 && scanErrorMessage ? (
-                  <EmptyState title="Workspace cleanup scan could not complete." />
+                {!loading && scan && candidates.length === 0 && scanNoticeMessage ? (
+                  <EmptyState title="No connected old workspaces to clean up." />
                 ) : null}
                 {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
                   <EmptyState

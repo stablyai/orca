@@ -850,6 +850,15 @@ export function ResourceUsageStatusSegment({
     }
     return count
   }, [worktreesByRepo])
+  // Why: after restart, SSH-backed repos can be temporarily disconnected. An
+  // empty remote list means the local count is partial, so label it as known.
+  const hasUnloadedRemoteWorktrees = useMemo(
+    () => repos.some((repo) => repo.connectionId && (worktreesByRepo[repo.id]?.length ?? 0) === 0),
+    [repos, worktreesByRepo]
+  )
+  const oldWorkspaceCountLabel = hasUnloadedRemoteWorktrees
+    ? `${oldWorkspaceCount} known`
+    : String(oldWorkspaceCount)
 
   // Why: memorySnapshotError is null both for "last fetch succeeded" and
   // "never fetched". When the segment is mounted but the popover hasn't
@@ -1309,7 +1318,7 @@ export function ResourceUsageStatusSegment({
           >
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <ArchiveX className="size-3.5 shrink-0" />
-              <span className="truncate">Clean up old workspaces ({oldWorkspaceCount})</span>
+              <span className="truncate">Clean up old workspaces ({oldWorkspaceCountLabel})</span>
             </span>
             <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           </button>

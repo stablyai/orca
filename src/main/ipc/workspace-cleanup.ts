@@ -28,6 +28,8 @@ import {
 const GIT_READ_TIMEOUT_MS = 8_000
 const WORKTREE_SCAN_CONCURRENCY = 3
 const GITHUB_PR_CACHE_TTL_MS = 5 * 60_000
+const REMOTE_WORKSPACES_NOT_CONNECTED_MESSAGE =
+  'Remote workspaces are not connected. Reconnect and refresh to check them.'
 
 type PrCacheHit = {
   pr: PRInfo | null
@@ -121,7 +123,7 @@ async function scanRepoWorkspaces(args: {
     } else if (repo.connectionId) {
       provider = getSshGitProvider(repo.connectionId) ?? null
       if (!provider) {
-        errors.push({ repoId: repo.id, message: 'SSH provider is unavailable.' })
+        errors.push({ repoId: repo.id, message: REMOTE_WORKSPACES_NOT_CONNECTED_MESSAGE })
         return {
           scannedAt,
           candidates: synthesizeDisconnectedSshCandidates(store, repo, scannedAt, targetWorktreeId),

@@ -8,11 +8,13 @@ import type {
   Repo
 } from '../../shared/types'
 
-const { listRepoWorktreesMock, getStatusMock, getBranchCompareMock } = vi.hoisted(() => ({
-  listRepoWorktreesMock: vi.fn(),
-  getStatusMock: vi.fn(),
-  getBranchCompareMock: vi.fn()
-}))
+const { listRepoWorktreesMock, getStatusMock, getBranchCompareMock, getSshGitProviderMock } =
+  vi.hoisted(() => ({
+    listRepoWorktreesMock: vi.fn(),
+    getStatusMock: vi.fn(),
+    getBranchCompareMock: vi.fn(),
+    getSshGitProviderMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -32,7 +34,7 @@ vi.mock('../git/status', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: vi.fn()
+  getSshGitProvider: getSshGitProviderMock
 }))
 
 import { scanWorkspaceCleanup } from './workspace-cleanup'
@@ -97,6 +99,7 @@ describe('workspace cleanup scan', () => {
     listRepoWorktreesMock.mockReset()
     getStatusMock.mockReset()
     getBranchCompareMock.mockReset()
+    getSshGitProviderMock.mockReset()
     listRepoWorktreesMock.mockResolvedValue([
       {
         path: '/repo-feature',
@@ -123,6 +126,7 @@ describe('workspace cleanup scan', () => {
       },
       entries: []
     } satisfies GitBranchCompareResult)
+    getSshGitProviderMock.mockReturnValue(undefined)
   })
 
   afterEach(() => {
@@ -154,6 +158,22 @@ describe('workspace cleanup scan', () => {
         message: 'Could not scan workspace cleanup for this repository.'
       }
     ])
+  })
+
+  it('uses user-facing copy when remote workspaces are unavailable', async () => {
+    const result = await scanWorkspaceCleanup(
+      makeStore(NOW, {
+        repos: [{ ...REPO, connectionId: 'ssh-1' }]
+      })
+    )
+
+    expect(result.errors).toEqual([
+      {
+        repoId: 'repo-1',
+        message: 'Remote workspaces are not connected. Reconnect and refresh to check them.'
+      }
+    ])
+    expect(result.candidates).toEqual([])
   })
 
   it('does not default-select idle-only workspaces with local diff comments', async () => {
