@@ -3,7 +3,7 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { FilePlus, Globe, Plus, TerminalSquare, FileText } from 'lucide-react'
 import type {
@@ -188,47 +188,7 @@ function TabBarInner({
   }, [])
   const resolvedGroupId = groupId ?? worktreeId
   const targetNotesWorktreeId = notesWorktreeId ?? worktreeId
-  const resolveNotesContext = useCallback((): { projectId: string; worktreeId: string } | null => {
-    if (!targetNotesWorktreeId) {
-      return null
-    }
-    const state = useAppStore.getState()
-    const worktree = Object.values(state.worktreesByRepo)
-      .flat()
-      .find((candidate) => candidate.id === targetNotesWorktreeId)
-    if (!worktree) {
-      return null
-    }
-    const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
-    const projectId = repo?.id ?? worktree.repoId
-    return { projectId, worktreeId: targetNotesWorktreeId }
-  }, [targetNotesWorktreeId])
 
-  const refreshProjectNotes = useCallback(async (): Promise<void> => {
-    if (!onNewNotesTab) {
-      return
-    }
-    const context = resolveNotesContext()
-    if (!context) {
-      setProjectNotes([])
-      setProjectNotesError(null)
-      return
-    }
-    setProjectNotesLoading(true)
-    setProjectNotesError(null)
-    try {
-      const result = await window.api.notes.list({
-        projectId: context.projectId,
-        worktreeId: context.worktreeId,
-        limit: 100
-      })
-      setProjectNotes(result.notes)
-    } catch (err) {
-      setProjectNotesError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setProjectNotesLoading(false)
-    }
-  }, [onNewNotesTab, resolveNotesContext])
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
     [worktreeId, gitStatusByWorktree]
@@ -254,8 +214,43 @@ function TabBarInner({
       setProjectNotesMenuOpen(false)
       return
     }
+    const refreshProjectNotes = async (): Promise<void> => {
+      if (!onNewNotesTab) {
+        return
+      }
+      let context: { projectId: string; worktreeId: string } | null = null
+      if (targetNotesWorktreeId) {
+        const state = useAppStore.getState()
+        const worktree = Object.values(state.worktreesByRepo)
+          .flat()
+          .find((candidate) => candidate.id === targetNotesWorktreeId)
+        if (worktree) {
+          const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
+          context = { projectId: repo?.id ?? worktree.repoId, worktreeId: targetNotesWorktreeId }
+        }
+      }
+      if (!context) {
+        setProjectNotes([])
+        setProjectNotesError(null)
+        return
+      }
+      setProjectNotesLoading(true)
+      setProjectNotesError(null)
+      try {
+        const result = await window.api.notes.list({
+          projectId: context.projectId,
+          worktreeId: context.worktreeId,
+          limit: 100
+        })
+        setProjectNotes(result.notes)
+      } catch (err) {
+        setProjectNotesError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setProjectNotesLoading(false)
+      }
+    }
     void refreshProjectNotes()
-  }, [newTabMenuOpen, refreshProjectNotes])
+  }, [newTabMenuOpen, onNewNotesTab, targetNotesWorktreeId])
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(
