@@ -660,9 +660,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
 // unreachable (daemon died). Checking syscall avoids false positives from
 // token-file ENOENT (readFileSync), which has no syscall or syscall='open'.
 // "Connection lost" / "Not connected" mean the daemon died while we had an
-// active or stale connection. "Hello timed out" means the daemon accepted
-// the socket but did not complete the protocol handshake, which is also a
-// wedged-daemon state. All indicate a respawn should be attempted.
+// active or stale connection. All indicate the daemon is gone and a respawn
+// should be attempted.
 function isDaemonGoneError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false
@@ -672,5 +671,5 @@ function isDaemonGoneError(err: unknown): boolean {
     return true
   }
   const msg = err.message
-  return msg === 'Connection lost' || msg === 'Not connected' || msg === 'Hello timed out'
+  return msg === 'Connection lost' || msg === 'Not connected'
 }
