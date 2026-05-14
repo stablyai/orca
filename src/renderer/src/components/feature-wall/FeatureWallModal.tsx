@@ -239,16 +239,14 @@ export default function FeatureWallModal(): JSX.Element | null {
         }}
       >
         <DialogHeader className="gap-1">
-          <DialogTitle>Feature tour</DialogTitle>
-          <DialogDescription>
-            A quick look at the Orca features that are easy to miss.
-          </DialogDescription>
+          <DialogTitle>Explore some of Orca&apos;s features</DialogTitle>
+          <DialogDescription>Terminal, agents, browser, SSH, review, and more.</DialogDescription>
         </DialogHeader>
 
         <div
           ref={gridRef}
           role="list"
-          aria-label="Orca feature tour"
+          aria-label="Explore some of Orca's features"
           className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
         >
           {FEATURE_WALL_TILES.map((tile, index) => {

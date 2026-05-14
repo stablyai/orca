@@ -43,10 +43,14 @@ test.describe('Feature tour modal', () => {
   }) => {
     await openFeatureTourFromMenu(electronApp)
 
-    await expect(orcaPage.getByRole('dialog', { name: 'Feature tour' })).toBeVisible({
+    await expect(
+      orcaPage.getByRole('dialog', { name: "Explore some of Orca's features" })
+    ).toBeVisible({
       timeout: 10_000
     })
-    await expect(orcaPage.getByText('A quick look at the Orca features')).toBeVisible()
+    await expect(
+      orcaPage.getByText('Terminal, agents, browser, SSH, review, and more.')
+    ).toBeVisible()
     await expect(orcaPage.getByRole('listitem')).toHaveCount(12)
     await expect(
       orcaPage.getByRole('listitem', { name: /Remote worktrees over SSH/i })
@@ -115,7 +119,9 @@ test.describe('Feature tour modal', () => {
       .toBe('tile-02')
 
     await orcaPage.getByRole('button', { name: 'Close' }).click()
-    await expect(orcaPage.getByRole('dialog', { name: 'Feature tour' })).toHaveCount(0)
+    await expect(
+      orcaPage.getByRole('dialog', { name: "Explore some of Orca's features" })
+    ).toHaveCount(0)
     await expect.poll(async () => getStoreState<string>(orcaPage, 'activeModal')).toBe('none')
   })
 
@@ -128,13 +134,17 @@ test.describe('Feature tour modal', () => {
       store.getState().showFeatureTourNudge()
     })
 
-    const nudge = orcaPage.getByRole('complementary', { name: 'Orca feature tour' })
+    const nudge = orcaPage.getByRole('complementary', {
+      name: "Explore some of Orca's features"
+    })
     await expect(nudge).toBeVisible()
     await expect(nudge.getByText('Ghostty-class terminal')).toBeVisible()
     await expect(nudge.locator('img')).toHaveAttribute('src', /tile-02/)
 
     await nudge.getByRole('button', { name: /^Open tour$/ }).click()
-    await expect(orcaPage.getByRole('dialog', { name: 'Feature tour' })).toBeVisible()
+    await expect(
+      orcaPage.getByRole('dialog', { name: "Explore some of Orca's features" })
+    ).toBeVisible()
     await expect
       .poll(async () => getStoreState<boolean>(orcaPage, 'featureTourNudgeVisible'))
       .toBe(false)

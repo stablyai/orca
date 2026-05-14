@@ -74,14 +74,14 @@ export function FeatureTourNudge(): JSX.Element | null {
       <Card
         className="cursor-pointer gap-0 overflow-hidden py-0"
         role="complementary"
-        aria-label="Orca feature tour"
+        aria-label="Explore some of Orca's features"
         onClick={handleOpenTour}
       >
         <div className="flex flex-col gap-3 p-3.5">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 space-y-0.5">
               <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                Orca feature tour
+                Explore some of Orca&apos;s features
               </div>
               <h3 className="truncate text-sm font-semibold">{FEATURE_TOUR_NUDGE_TILE.title}</h3>
             </div>
