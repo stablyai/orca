@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { toast } from 'sonner'
 import { DictationIndicator } from './DictationIndicator'
-import { dispatchClearModifierHints } from '@/hooks/useModifierHint'
 
 const IS_MAC = navigator.userAgent.includes('Mac')
 
@@ -99,7 +98,6 @@ export function DictationController() {
       return
     }
 
-    dispatchClearModifierHints()
     setDictationState('starting')
 
     const hotwords = collectHotwords()

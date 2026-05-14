@@ -24,15 +24,19 @@ import {
   Folder,
   File,
   FileText,
+  LoaderCircle,
+  Mic,
   Monitor,
   Plus,
   RefreshCw,
-  Smartphone
+  Smartphone,
+  Square
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
 import { useHostClient } from '../../../../src/transport/client-context'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
+import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
   triggerMediumImpact,
   triggerSelection,
@@ -523,6 +527,24 @@ export default function SessionScreen() {
       }, durationMs)
     })
   }, [])
+
+  const dictation = useMobileDictation({
+    client,
+    enabled: connState === 'connected',
+    onTranscript: (text) => {
+      setInput((current) => {
+        if (!current.trim()) {
+          return text
+        }
+        return `${current.trimEnd()} ${text}`
+      })
+      showToast('Dictation inserted')
+    },
+    onError: (err) => {
+      triggerError()
+      showToast(err.message)
+    }
+  })
 
   useEffect(() => {
     activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
@@ -2472,6 +2494,44 @@ export default function SessionScreen() {
                 onSubmitEditing={() => void handleSend()}
               />
               <Pressable
+                style={[
+                  styles.dictationButton,
+                  dictation.isRecording && styles.dictationButtonActive,
+                  (!canSend || dictation.isProcessing) && styles.sendButtonDisabled
+                ]}
+                disabled={!canSend || dictation.isProcessing}
+                onPress={() => {
+                  if (dictation.isRecording) {
+                    void dictation.stop()
+                  } else {
+                    void dictation.start().catch((err) => {
+                      triggerError()
+                      showToast(err instanceof Error ? err.message : String(err))
+                    })
+                  }
+                }}
+                onLongPress={() => {
+                  if (dictation.isRecording || dictation.isProcessing) {
+                    void dictation.cancel()
+                  }
+                }}
+                accessibilityLabel={
+                  dictation.isRecording
+                    ? 'Stop voice dictation'
+                    : dictation.isProcessing
+                      ? 'Processing voice dictation'
+                      : 'Start voice dictation'
+                }
+              >
+                {dictation.isProcessing ? (
+                  <LoaderCircle size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                ) : dictation.isRecording ? (
+                  <Square size={15} color={colors.textPrimary} strokeWidth={2.4} />
+                ) : (
+                  <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                )}
+              </Pressable>
+              <Pressable
                 style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
                 disabled={!canSend}
                 onPress={() => void handleSend()}
@@ -3049,6 +3109,18 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  dictationButton: {
+    backgroundColor: colors.bgRaised,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm
+  },
+  dictationButtonActive: {
+    backgroundColor: colors.accentBlue
   },
   sendButtonDisabled: {
     opacity: 0.35

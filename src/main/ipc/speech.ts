@@ -1,29 +1,9 @@
 import { ipcMain, BrowserWindow, systemPreferences, app } from 'electron'
 import { join } from 'path'
 import { writeFile, unlink } from 'fs/promises'
-import { ModelManager } from '../speech/model-manager'
-import { SttService } from '../speech/stt-service'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import type { Store } from '../persistence'
-
-let modelManager: ModelManager | null = null
-let sttService: SttService | null = null
-
-function getModelManager(store: Store): ModelManager {
-  if (!modelManager) {
-    const settings = store.getSettings()
-    const customDir = settings.voice?.modelsDir || undefined
-    modelManager = new ModelManager(customDir || undefined)
-  }
-  return modelManager
-}
-
-function getSttService(store: Store): SttService {
-  if (!sttService) {
-    sttService = new SttService(getModelManager(store))
-  }
-  return sttService
-}
 
 export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getCatalog', () => {
@@ -31,11 +11,11 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:getModelStates', async () => {
-    return getModelManager(store).getModelStates()
+    return getSpeechModelManager(store).getModelStates()
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
-    const manager = getModelManager(store)
+    const manager = getSpeechModelManager(store)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
       return
@@ -51,11 +31,11 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:cancelDownload', async (_event, modelId: string) => {
-    getModelManager(store).cancelDownload(modelId)
+    getSpeechModelManager(store).cancelDownload(modelId)
   })
 
   ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
-    await getModelManager(store).deleteModel(modelId)
+    await getSpeechModelManager(store).deleteModel(modelId)
   })
 
   const hotwordsFilePath = join(app.getPath('userData'), 'speech-hotwords.txt')
@@ -92,7 +72,32 @@ export function registerSpeechHandlers(store: Store): void {
     }
 
     try {
-      await getSttService(store).startDictation(modelId, window, resolvedHotwordsPath)
+      await getSpeechSttService(store).startDictation(
+        modelId,
+        (msg) => {
+          if (window.isDestroyed()) {
+            return
+          }
+          switch (msg.type) {
+            case 'ready':
+              window.webContents.send('speech:ready')
+              break
+            case 'partial':
+              window.webContents.send('speech:partial', msg.text)
+              break
+            case 'final':
+              window.webContents.send('speech:final', msg.text)
+              break
+            case 'stopped':
+              window.webContents.send('speech:stopped')
+              break
+            case 'error':
+              window.webContents.send('speech:error', msg.error)
+              break
+          }
+        },
+        resolvedHotwordsPath
+      )
     } catch (err) {
       if (resolvedHotwordsPath) {
         unlink(hotwordsFilePath).catch(() => {})
@@ -105,11 +110,11 @@ export function registerSpeechHandlers(store: Store): void {
     // Why: the preload sends audio as a Buffer to avoid Float32Array data
     // being zeroed out during contextBridge + IPC serialization.
     const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
-    getSttService(store).feedAudio(samples, sampleRate)
+    getSpeechSttService(store).feedAudio(samples, sampleRate)
   })
 
   ipcMain.handle('speech:stopDictation', async () => {
-    await getSttService(store).stopDictation()
+    await getSpeechSttService(store).stopDictation()
     unlink(hotwordsFilePath).catch(() => {})
   })
 }

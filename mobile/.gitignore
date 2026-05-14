@@ -1,8 +1,8 @@
 node_modules/
 .expo/
 dist/
-android/
-ios/
+/android/
+/ios/
 *.jks
 *.p8
 *.p12

@@ -26,13 +26,19 @@ describe('resolveWindowShortcutAction', () => {
     const nonMacCases: WindowShortcutInput[] = [
       { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: false },
       { code: 'KeyU', key: 'u', meta: false, control: true, alt: false, shift: false },
-      { code: 'KeyE', key: 'e', meta: false, control: true, alt: false, shift: false },
       { code: 'KeyJ', key: 'j', meta: false, control: true, alt: false, shift: false }
     ]
 
     for (const input of nonMacCases) {
       expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
     }
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyE', key: 'e', meta: false, control: true, alt: false, shift: false },
+        'linux'
+      )
+    ).toEqual({ type: 'dictationKeyDown' })
   })
 
   it('resolves the explicit window shortcut allowlist on macOS', () => {

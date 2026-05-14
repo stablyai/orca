@@ -1,8 +1,17 @@
 import { Worker } from 'worker_threads'
 import { join } from 'path'
-import { app, type BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
+
+export type SttEvent =
+  | { type: 'ready' }
+  | { type: 'partial'; text?: string }
+  | { type: 'final'; text?: string }
+  | { type: 'stopped' }
+  | { type: 'error'; error?: string }
+
+export type SttEventSink = (event: SttEvent) => void
 
 export class SttService {
   private worker: Worker | null = null
@@ -16,7 +25,7 @@ export class SttService {
 
   async startDictation(
     modelId: string,
-    window: BrowserWindow,
+    sink: SttEventSink,
     hotwordsFilePath?: string
   ): Promise<void> {
     if (this.starting) {
@@ -25,7 +34,7 @@ export class SttService {
     this.starting = true
 
     try {
-      await this._startDictation(modelId, window, hotwordsFilePath)
+      await this._startDictation(modelId, sink, hotwordsFilePath)
     } finally {
       this.starting = false
     }
@@ -33,7 +42,7 @@ export class SttService {
 
   private async _startDictation(
     modelId: string,
-    window: BrowserWindow,
+    sink: SttEventSink,
     hotwordsFilePath?: string
   ): Promise<void> {
     if (this.worker) {
@@ -59,33 +68,25 @@ export class SttService {
 
     this.activeModelId = modelId
 
-    this.worker.on('message', (msg: { type: string; text?: string; error?: string }) => {
-      if (window.isDestroyed()) {
-        return
+    const readyPromise = new Promise<void>((resolve, reject) => {
+      const onReadyOrError = (msg: { type: string; text?: string; error?: string }) => {
+        if (msg.type === 'ready') {
+          this.worker?.off('message', onReadyOrError)
+          resolve()
+        } else if (msg.type === 'error') {
+          this.worker?.off('message', onReadyOrError)
+          reject(new Error(msg.error ?? 'Speech worker failed to initialize'))
+        }
       }
-      switch (msg.type) {
-        case 'ready':
-          window.webContents.send('speech:ready')
-          break
-        case 'partial':
-          window.webContents.send('speech:partial', msg.text)
-          break
-        case 'final':
-          window.webContents.send('speech:final', msg.text)
-          break
-        case 'stopped':
-          window.webContents.send('speech:stopped')
-          break
-        case 'error':
-          window.webContents.send('speech:error', msg.error)
-          break
-      }
+      this.worker?.on('message', onReadyOrError)
+    })
+
+    this.worker.on('message', (msg: SttEvent) => {
+      sink(msg)
     })
 
     this.worker.on('error', (err) => {
-      if (!window.isDestroyed()) {
-        window.webContents.send('speech:error', String(err))
-      }
+      sink({ type: 'error', error: String(err) })
       this.worker = null
       this.activeModelId = null
     })
@@ -106,6 +107,8 @@ export class SttService {
       hotwordsFilePath,
       modelingUnit: manifest.modelingUnit
     })
+
+    await readyPromise
   }
 
   feedAudio(samples: Float32Array, sampleRate: number): void {
@@ -125,13 +128,15 @@ export class SttService {
         resolve()
       }, 3000)
 
-      this.worker?.once('message', (msg: { type: string; text?: string; error?: string }) => {
+      const onStopped = (msg: { type: string; text?: string; error?: string }) => {
         if (msg.type === 'stopped') {
           clearTimeout(timeout)
+          this.worker?.off('message', onStopped)
           this.worker?.postMessage({ type: 'teardown' })
           resolve()
         }
-      })
+      }
+      this.worker?.on('message', onStopped)
     })
 
     this.worker.removeAllListeners()
