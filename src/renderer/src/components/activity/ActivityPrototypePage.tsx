@@ -7,6 +7,7 @@ import {
   Bell,
   BellDot,
   ExternalLink,
+  ListTree,
   MessageSquareText,
   MoreVertical,
   Search,
@@ -55,8 +56,10 @@ import {
 } from '../../../../shared/agent-status-types'
 
 type ThreadReadFilter = 'all' | 'unread'
+type ActivityGroupMode = 'recent' | 'status'
 type ActivityEventState = Extract<AgentStatusState, 'done' | 'blocked' | 'waiting'>
 type ActivityLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
+type ActivityStatusGroupId = 'working' | 'blocked' | 'waiting' | 'done' | 'interrupted'
 
 type ActivityEvent = {
   id: string
@@ -100,6 +103,13 @@ type AgentPaneThread = {
   unread: boolean
 }
 
+type ActivityThreadGroup = {
+  id: ActivityStatusGroupId
+  label: string
+  state: AgentStatusState
+  threads: AgentPaneThread[]
+}
+
 type ActivityTerminalPortalReadiness = {
   target: HTMLElement | null
   tabId: string | null
@@ -115,6 +125,13 @@ type ActivityTerminalPortalSlotId = 'primary' | 'secondary'
 
 const ACTIVITY_TERMINAL_LOADING_LABEL_DELAY_MS = 180
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
+const ACTIVITY_STATUS_GROUP_ORDER: ActivityStatusGroupId[] = [
+  'working',
+  'blocked',
+  'waiting',
+  'done',
+  'interrupted'
+]
 
 const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
@@ -699,6 +716,47 @@ function threadAgentStateLabel(thread: AgentPaneThread): string {
   return agentStateLabel(state)
 }
 
+function threadStatusGroupId(thread: AgentPaneThread): ActivityStatusGroupId {
+  const state = threadAgentState(thread)
+  if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
+    return 'interrupted'
+  }
+  return state === 'working' || state === 'blocked' || state === 'waiting' ? state : 'done'
+}
+
+function threadStatusGroupState(id: ActivityStatusGroupId): AgentStatusState {
+  return id === 'interrupted' ? 'done' : id
+}
+
+function threadStatusGroupLabel(id: ActivityStatusGroupId): string {
+  if (id === 'interrupted') {
+    return 'Interrupted'
+  }
+  return agentStateLabel(threadStatusGroupState(id))
+}
+
+export function groupActivityThreadsByStatus(threads: AgentPaneThread[]): ActivityThreadGroup[] {
+  const groups = new Map<ActivityStatusGroupId, AgentPaneThread[]>()
+  for (const thread of threads) {
+    const groupId = threadStatusGroupId(thread)
+    groups.set(groupId, [...(groups.get(groupId) ?? []), thread])
+  }
+  return ACTIVITY_STATUS_GROUP_ORDER.flatMap((id) => {
+    const groupThreads = groups.get(id) ?? []
+    if (groupThreads.length === 0) {
+      return []
+    }
+    return [
+      {
+        id,
+        label: threadStatusGroupLabel(id),
+        state: threadStatusGroupState(id),
+        threads: groupThreads
+      }
+    ]
+  })
+}
+
 function threadSearchText(thread: AgentPaneThread): string {
   const latest = thread.latestEvent
   const stateLabel = threadAgentStateLabel(thread)
@@ -735,6 +793,22 @@ function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): Rea
         {label}
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+function ActivityStatusGroupHeader({ group }: { group: ActivityThreadGroup }): React.JSX.Element {
+  return (
+    <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <span className="inline-flex size-4 shrink-0 items-center justify-center">
+        <AgentStateDot state={group.state} size="sm" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        {group.label}
+      </span>
+      <span className="rounded-full border border-border bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
+        {group.threads.length}
+      </span>
+    </div>
   )
 }
 
@@ -890,7 +964,7 @@ function ThreadRow({
           <EventTime timestamp={thread.latestTimestamp} />
         </span>
       </div>
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5 pl-[42px]">
         <EventRepoBadge repo={thread.repo} />
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
           {thread.worktree.displayName}
@@ -934,6 +1008,7 @@ function ThreadRow({
 
 export default function ActivityPrototypePage(): React.JSX.Element {
   const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
+  const [groupMode, setGroupMode] = useState<ActivityGroupMode>('recent')
   const [query, setQuery] = useState('')
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
@@ -1014,6 +1089,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
     })
   }, [allThreads, readFilter, query, selectedPaneKey])
+  const visibleThreadGroups = useMemo(
+    () => groupActivityThreadsByStatus(visibleThreads),
+    [visibleThreads]
+  )
 
   useEffect(() => {
     if (selectedPaneKey && !allThreads.some((thread) => thread.paneKey === selectedPaneKey)) {
@@ -1263,6 +1342,26 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Show unread threads only</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Toggle
+                    pressed={groupMode === 'status'}
+                    onPressedChange={(pressed) => setGroupMode(pressed ? 'status' : 'recent')}
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      'size-8 shrink-0 p-0',
+                      groupMode === 'status'
+                        ? '!border-primary !bg-primary !text-primary-foreground shadow-xs ring-2 ring-primary/35 hover:!bg-primary/90 hover:!text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                    aria-label="Group activity by status"
+                  >
+                    <ListTree className="size-3.5" />
+                  </Toggle>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Group by status</TooltipContent>
+              </Tooltip>
               {/* Why (overflow menu): "Mark all read" is a low-frequency,
                   destructive-feeling action — parking it behind a `…` keeps
                   the toolbar focused on the high-frequency Filter + unread
@@ -1305,17 +1404,34 @@ export default function ActivityPrototypePage(): React.JSX.Element {
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
-            {visibleThreads.map((thread) => (
-              <ThreadRow
-                key={thread.paneKey}
-                thread={thread}
-                selected={thread.paneKey === selectedThread?.paneKey}
-                onSelect={() => selectThread(thread)}
-                onJump={() => jumpToWorkspace(thread)}
-                onMarkUnread={() => markThreadUnread(thread)}
-                compactMode={compactMode}
-              />
-            ))}
+            {groupMode === 'status'
+              ? visibleThreadGroups.map((group) => (
+                  <section key={group.id} aria-label={`${group.label} activity`}>
+                    <ActivityStatusGroupHeader group={group} />
+                    {group.threads.map((thread) => (
+                      <ThreadRow
+                        key={thread.paneKey}
+                        thread={thread}
+                        selected={thread.paneKey === selectedThread?.paneKey}
+                        onSelect={() => selectThread(thread)}
+                        onJump={() => jumpToWorkspace(thread)}
+                        onMarkUnread={() => markThreadUnread(thread)}
+                        compactMode={compactMode}
+                      />
+                    ))}
+                  </section>
+                ))
+              : visibleThreads.map((thread) => (
+                  <ThreadRow
+                    key={thread.paneKey}
+                    thread={thread}
+                    selected={thread.paneKey === selectedThread?.paneKey}
+                    onSelect={() => selectThread(thread)}
+                    onJump={() => jumpToWorkspace(thread)}
+                    onMarkUnread={() => markThreadUnread(thread)}
+                    compactMode={compactMode}
+                  />
+                ))}
             {visibleThreads.length === 0 ? (
               <div className="px-3 py-8 text-sm text-muted-foreground">
                 No agent activity matches these filters.
@@ -1363,7 +1479,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                       {selectedThread.paneTitle}
                     </h2>
                   </div>
-                  <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 pl-11">
                     <EventRepoBadge repo={selectedThread.repo} />
                     <span className="truncate text-xs text-muted-foreground">
                       {selectedThread.worktree.displayName}

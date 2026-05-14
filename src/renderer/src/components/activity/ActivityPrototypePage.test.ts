@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Activity feed builders share realistic fixture
+coverage in one file so status grouping stays tied to the event/thread adapter. */
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -9,7 +11,8 @@ import {
   activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
   buildActivityEvents,
-  buildAgentPaneThreads
+  buildAgentPaneThreads,
+  groupActivityThreadsByStatus
 } from './ActivityPrototypePage'
 
 function makeRepo(): Repo {
@@ -327,5 +330,56 @@ describe('buildActivityEvents', () => {
     expect(threads[0].responsePreview).toBe('')
     expect(threads[0].latestTimestamp).toBe(3_000)
     expect(threads[0].events[0].entry.prompt).toBe('Retained prior run')
+  })
+
+  it('groups visible threads by current status order', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const workingTab = makeTab()
+    const blockedTab = { ...makeTab(), id: 'tab-2', ptyId: 'pty-2' }
+    const doneTab = { ...makeTab(), id: 'tab-3', ptyId: 'pty-3' }
+    const result = buildActivityEvents({
+      agentStatusByPaneKey: {
+        'tab-1:1': makeWorkingEntryWithoutHistory(),
+        'tab-2:1': {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'blocked',
+          prompt: 'Needs approval',
+          updatedAt: 4_000,
+          stateStartedAt: 4_000,
+          paneKey: 'tab-2:1'
+        },
+        'tab-3:1': {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'done',
+          prompt: 'Finished work',
+          updatedAt: 5_000,
+          stateStartedAt: 5_000,
+          paneKey: 'tab-3:1'
+        }
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: {
+        [worktree.id]: [workingTab, blockedTab, doneTab]
+      },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 5_000
+    })
+
+    const groups = groupActivityThreadsByStatus(
+      buildAgentPaneThreads({
+        events: result.events,
+        liveAgentByPaneKey: result.liveAgentByPaneKey
+      })
+    )
+
+    expect(groups.map((group) => group.id)).toEqual(['working', 'blocked', 'done'])
+    expect(groups.map((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
+      ['tab-1:1'],
+      ['tab-2:1'],
+      ['tab-3:1']
+    ])
   })
 })
