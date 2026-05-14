@@ -139,9 +139,6 @@ export type LaunchSource = z.infer<typeof launchSourceSchema>
 export const requestKindSchema = z.enum(['new', 'resume', 'followup'])
 export type RequestKind = z.infer<typeof requestKindSchema>
 
-export const featureWallSurfaceSchema = z.enum(['help_tour'])
-export type FeatureWallSurfaceTelemetry = z.infer<typeof featureWallSurfaceSchema>
-
 export const featureWallTileIdSchema = z.enum([
   'tile-01',
   'tile-02',
@@ -260,16 +257,14 @@ const settingsChangedSchema = z
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 
-const featureWallOpenedSchema = z.object({ surface: featureWallSurfaceSchema }).strict()
+const featureWallOpenedSchema = z.object({}).strict()
 const featureWallClosedSchema = z
   .object({
-    surface: featureWallSurfaceSchema,
     dwell_ms: z.number().int().min(0).max(86_400_000)
   })
   .strict()
 const featureWallTileFocusedSchema = z
   .object({
-    surface: featureWallSurfaceSchema,
     tile_id: featureWallTileIdSchema
   })
   .strict()
@@ -644,8 +639,12 @@ type _CohortExtendedRoster =
   | 'workspace_create_failed'
   | 'agent_started'
   | 'agent_error'
+// Why: `z.object({}).strict()` infers a string index signature, which would
+// make every key appear present. Ignore index-signature-only keys here so
+// strict empty event payloads do not get pulled into keyed telemetry rosters.
+type _KnownPayloadKeys<T> = string extends keyof T ? never : keyof T
 type _DerivedCohortExtendedEvents = {
-  [N in EventName]: 'nth_repo_added' extends keyof EventMap[N] ? N : never
+  [N in EventName]: 'nth_repo_added' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
 type _CohortExtendedRosterSync = _CohortExtendedRoster extends _DerivedCohortExtendedEvents
   ? _DerivedCohortExtendedEvents extends _CohortExtendedRoster
@@ -693,7 +692,7 @@ type _OnboardingCohortRoster =
   | 'onboarding_ghostty_import_clicked'
   | 'onboarding_ghostty_import_failed'
 type _DerivedOnboardingCohortEvents = {
-  [N in EventName]: 'cohort' extends keyof EventMap[N] ? N : never
+  [N in EventName]: 'cohort' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
 type _OnboardingCohortRosterSync = _OnboardingCohortRoster extends _DerivedOnboardingCohortEvents
   ? _DerivedOnboardingCohortEvents extends _OnboardingCohortRoster

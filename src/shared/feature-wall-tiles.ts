@@ -1,5 +1,3 @@
-export type FeatureWallSurface = 'help_tour'
-
 export type FeatureWallTileId =
   | 'tile-01'
   | 'tile-02'

@@ -99,7 +99,7 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onOpenFeatureTour(() => {
-        useAppStore.getState().openModal('feature-wall', { surface: 'help_tour' })
+        useAppStore.getState().openModal('feature-wall')
       })
     )
 

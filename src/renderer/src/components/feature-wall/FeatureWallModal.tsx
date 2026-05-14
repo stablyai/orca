@@ -3,7 +3,6 @@ import type { JSX, KeyboardEvent, RefObject } from 'react'
 import {
   FEATURE_WALL_TILES,
   isFeatureWallMediaTile,
-  type FeatureWallSurface,
   type FeatureWallTileId
 } from '../../../../shared/feature-wall-tiles'
 import { Button } from '@/components/ui/button'
@@ -35,10 +34,6 @@ const NAVIGATION_KEYS = new Set<string>([
   'Home',
   'End'
 ])
-
-function isFeatureWallSurface(value: unknown): value is FeatureWallSurface {
-  return value === 'help_tour'
-}
 
 function toAssetUrl(baseUrl: string | null, assetPath: string): string | null {
   if (!baseUrl) {
@@ -134,10 +129,8 @@ function useGridColumnCount(gridRef: RefObject<HTMLDivElement | null>, open: boo
 
 export default function FeatureWallModal(): JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
-  const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const isOpen = activeModal === 'feature-wall'
-  const surface = isFeatureWallSurface(modalData.surface) ? modalData.surface : 'help_tour'
   const assetBaseUrl = useFeatureWallAssetBaseUrl(isOpen)
   const prefersReducedMotion = usePrefersReducedMotion()
   const [autoIndex, setAutoIndex] = useState(0)
@@ -157,8 +150,7 @@ export default function FeatureWallModal(): JSX.Element | null {
   const telemetryRef = useRef<{
     open: boolean
     openedAtMs: number
-    surface: FeatureWallSurface
-  }>({ open: false, openedAtMs: 0, surface: 'help_tour' })
+  }>({ open: false, openedAtMs: 0 })
   const manualTileId = focusedTileId ?? hoveredTileId
   const autoTileId =
     isOpen && !prefersReducedMotion && manualTileId === null
@@ -184,7 +176,6 @@ export default function FeatureWallModal(): JSX.Element | null {
     }
     const dwellMs = Math.max(0, Math.round(performance.now() - telemetryRef.current.openedAtMs))
     track('feature_wall_closed', {
-      surface: telemetryRef.current.surface,
       dwell_ms: dwellMs
     })
     telemetryRef.current.open = false
@@ -194,16 +185,15 @@ export default function FeatureWallModal(): JSX.Element | null {
     if (isOpen && !telemetryRef.current.open) {
       telemetryRef.current = {
         open: true,
-        openedAtMs: performance.now(),
-        surface
+        openedAtMs: performance.now()
       }
-      track('feature_wall_opened', { surface })
+      track('feature_wall_opened', {})
       return
     }
     if (!isOpen) {
       emitCloseTelemetry()
     }
-  }, [emitCloseTelemetry, isOpen, surface])
+  }, [emitCloseTelemetry, isOpen])
 
   useEffect(() => {
     return () => emitCloseTelemetry()
@@ -232,12 +222,11 @@ export default function FeatureWallModal(): JSX.Element | null {
 
     const timer = window.setTimeout(() => {
       track('feature_wall_tile_focused', {
-        surface,
         tile_id: manualTileId
       })
     }, TILE_FOCUS_TELEMETRY_MS)
     return () => window.clearTimeout(timer)
-  }, [isOpen, manualTileId, surface])
+  }, [isOpen, manualTileId])
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) {

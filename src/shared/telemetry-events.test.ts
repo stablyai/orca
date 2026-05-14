@@ -11,7 +11,6 @@ import {
   commonPropsSchema,
   errorClassSchema,
   eventSchemas,
-  featureWallSurfaceSchema,
   featureWallTileIdSchema,
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
@@ -213,29 +212,27 @@ describe('settings_changed schema', () => {
 })
 
 describe('feature wall schemas', () => {
-  it('accepts the Help-menu open and close payloads', () => {
-    expect(eventSchemas.feature_wall_opened.safeParse({ surface: 'help_tour' }).success).toBe(true)
-    expect(
-      eventSchemas.feature_wall_closed.safeParse({ surface: 'help_tour', dwell_ms: 1200 }).success
-    ).toBe(true)
+  it('accepts the unconditional open and close payloads', () => {
+    expect(eventSchemas.feature_wall_opened.safeParse({}).success).toBe(true)
+    expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: 1200 }).success).toBe(true)
+  })
+
+  it('rejects stale surface variants via .strict()', () => {
+    expect(eventSchemas.feature_wall_opened.safeParse({ surface: 'help_tour' }).success).toBe(false)
   })
 
   it('rejects out-of-range dwell time', () => {
-    expect(
-      eventSchemas.feature_wall_closed.safeParse({ surface: 'help_tour', dwell_ms: -1 }).success
-    ).toBe(false)
+    expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: -1 }).success).toBe(false)
   })
 
   it('accepts only known tile ids for tile focus telemetry', () => {
     expect(
       eventSchemas.feature_wall_tile_focused.safeParse({
-        surface: 'help_tour',
         tile_id: 'tile-12'
       }).success
     ).toBe(true)
     expect(
       eventSchemas.feature_wall_tile_focused.safeParse({
-        surface: 'help_tour',
         tile_id: 'tile-99'
       }).success
     ).toBe(false)
@@ -318,7 +315,6 @@ describe('exported enum schemas', () => {
   })
 
   it('feature wall enum schemas accept known values', () => {
-    expect(featureWallSurfaceSchema.safeParse('help_tour').success).toBe(true)
     expect(featureWallTileIdSchema.safeParse('tile-01').success).toBe(true)
   })
 })
