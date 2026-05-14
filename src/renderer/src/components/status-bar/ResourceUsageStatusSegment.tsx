@@ -714,9 +714,23 @@ export function ResourceUsageStatusSegment({
   }, [open, fetchSnapshot, refreshSessions])
 
   useEffect(() => {
-    const interval = setInterval(() => void refreshSessions(), SESSIONS_POLL_MS)
+    const refreshIfVisible = (): void => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        void refreshSessions()
+      }
+    }
     void refreshSessions()
-    return () => clearInterval(interval)
+    // Why: the closed-popover badge is informational. Polling daemon sessions
+    // while the whole window is hidden keeps IPC and daemon list calls hot for
+    // no visible UI; focus/visibility refreshes catch the badge up immediately.
+    const interval = setInterval(refreshIfVisible, SESSIONS_POLL_MS)
+    window.addEventListener('focus', refreshIfVisible)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', refreshIfVisible)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+    }
   }, [refreshSessions])
 
   const repoDisplayNameById = useMemo(() => {

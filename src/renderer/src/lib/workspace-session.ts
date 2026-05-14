@@ -194,16 +194,24 @@ export function buildWorkspaceSessionPayload(
     .filter(([, state]) => state.status === 'connected')
     .map(([targetId]) => targetId)
 
+  const worktreeById = new Map(
+    Object.values(snapshot.worktreesByRepo)
+      .flat()
+      .map((worktree) => [worktree.id, worktree])
+  )
+  const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
+
   // Why: the renderer already has tab.ptyId for every terminal tab and knows
   // which worktrees are SSH-backed via repo.connectionId. Deriving the map
   // here avoids a sync IPC round-trip during beforeunload, which is fragile
   // (can be dropped by Chromium under shutdown time pressure).
+  // Why: this builder runs from the session-write debounce and beforeunload.
+  // Pre-index repo/worktree identity once so large workspaces don't rescan all
+  // repos/worktrees for every terminal tab while the renderer is trying to quit.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const worktree = Object.values(snapshot.worktreesByRepo)
-      .flat()
-      .find((w) => w.id === worktreeId)
-    const repo = worktree ? snapshot.repos.find((r) => r.id === worktree.repoId) : null
+    const worktree = worktreeById.get(worktreeId)
+    const repo = worktree ? repoById.get(worktree.repoId) : null
     if (!repo?.connectionId) {
       continue
     }
