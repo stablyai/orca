@@ -326,6 +326,31 @@ const onboardingChecklistItemSchema = z.enum([
   'openedFile',
   'ranAgentOnFile'
 ])
+const onboardingFeatureSetupFeatureSchema = z.enum(['browser_use', 'computer_use', 'orchestration'])
+const onboardingFeatureSetupSelectionSchema = {
+  browser_use: z.boolean(),
+  computer_use: z.boolean(),
+  orchestration: z.boolean(),
+  selected_count: z.number().int().min(0).max(3)
+} as const
+type OnboardingFeatureSetupSelectionTelemetry = {
+  browser_use: boolean
+  computer_use: boolean
+  orchestration: boolean
+  selected_count: number
+}
+const onboardingFeatureSetupSelectedCountRefinement = {
+  path: ['selected_count'],
+  message: 'selected_count must match selected feature flags'
+}
+
+function hasMatchingOnboardingFeatureSetupSelectedCount(
+  props: OnboardingFeatureSetupSelectionTelemetry
+): boolean {
+  const selectedCount =
+    (props.browser_use ? 1 : 0) + (props.computer_use ? 1 : 0) + (props.orchestration ? 1 : 0)
+  return props.selected_count === selectedCount
+}
 
 // Why: compile-time guard that the enum above stays in lockstep with the
 // activation keys of OnboardingChecklistState (everything except the UI-only
@@ -517,6 +542,51 @@ const onboardingGhosttyImportFailedSchema = z
     cohort: cohortSchema
   })
   .strict()
+const onboardingFeatureSetupToggledSchema = z
+  .object({
+    feature: onboardingFeatureSetupFeatureSchema,
+    selected: z.boolean(),
+    cohort: cohortSchema
+  })
+  .strict()
+const onboardingFeatureSetupRunSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    cli_touched: z.boolean(),
+    skill_commands_copied: z.boolean(),
+    skill_install_command_prepared: z.boolean(),
+    computer_use_permissions_opened: z.boolean(),
+    warning_count: z.number().int().nonnegative(),
+    cohort: cohortSchema
+  })
+  // Why: selected_count is derived analytics data; validate the relationship
+  // at the untrusted IPC boundary instead of trusting renderer callers.
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+const onboardingFeatureSetupTerminalOpenedSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    cohort: cohortSchema
+  })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+const onboardingFeatureSetupTerminalInteractedSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    method: z.enum(['keyboard', 'pointer']),
+    cohort: cohortSchema
+  })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
 
 // ── Event registry: the one record the validator consumes ───────────────
 //
@@ -561,6 +631,10 @@ export const eventSchemas = {
   onboarding_ghostty_discovered: onboardingGhosttyDiscoveredSchema,
   onboarding_ghostty_import_clicked: onboardingGhosttyImportClickedSchema,
   onboarding_ghostty_import_failed: onboardingGhosttyImportFailedSchema,
+  onboarding_feature_setup_toggled: onboardingFeatureSetupToggledSchema,
+  onboarding_feature_setup_run: onboardingFeatureSetupRunSchema,
+  onboarding_feature_setup_terminal_opened: onboardingFeatureSetupTerminalOpenedSchema,
+  onboarding_feature_setup_terminal_interacted: onboardingFeatureSetupTerminalInteractedSchema,
   activation_checklist_item_completed: activationChecklistItemCompletedSchema
 } as const
 
@@ -655,6 +729,10 @@ type _OnboardingCohortRoster =
   | 'onboarding_ghostty_discovered'
   | 'onboarding_ghostty_import_clicked'
   | 'onboarding_ghostty_import_failed'
+  | 'onboarding_feature_setup_toggled'
+  | 'onboarding_feature_setup_run'
+  | 'onboarding_feature_setup_terminal_opened'
+  | 'onboarding_feature_setup_terminal_interacted'
 type _DerivedOnboardingCohortEvents = {
   [N in EventName]: 'cohort' extends keyof EventMap[N] ? N : never
 }[EventName]

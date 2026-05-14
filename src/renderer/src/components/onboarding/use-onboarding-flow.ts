@@ -12,7 +12,9 @@ import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shar
 import type { NotificationDraft } from './NotificationStep'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
+  ONBOARDING_FEATURE_SETUP_IDS,
   hasSelectedOnboardingFeatureSetup,
+  onboardingFeatureSetupTelemetryFeature,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
@@ -62,6 +64,10 @@ export function useOnboardingFlow(
   const [featureSetupTerminalCommand, setFeatureSetupTerminalCommand] = useState<string | null>(
     null
   )
+  // Why: terminal telemetry must describe the selection that produced the
+  // command, even if the checklist changes while async setup is finishing.
+  const [featureSetupTerminalSelection, setFeatureSetupTerminalSelection] =
+    useState<OnboardingFeatureSetupSelection | null>(null)
   const [cloneUrl, setCloneUrl] = useState('')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -303,10 +309,19 @@ export function useOnboardingFlow(
   const hasSelectedFeatureSetup = hasSelectedOnboardingFeatureSetup(featureSetupSelection)
   const setFeatureSetupSelectionInteractive = useCallback(
     (value: OnboardingFeatureSetupSelection) => {
+      for (const id of ONBOARDING_FEATURE_SETUP_IDS) {
+        if (value[id] !== featureSetupSelection[id]) {
+          track('onboarding_feature_setup_toggled', {
+            feature: onboardingFeatureSetupTelemetryFeature(id),
+            selected: value[id]
+          })
+        }
+      }
       setFeatureSetupSelection(value)
       setFeatureSetupTerminalCommand(null)
+      setFeatureSetupTerminalSelection(null)
     },
-    []
+    [featureSetupSelection]
   )
 
   // Why: synchronous re-entry latch. `busyLabel` is React state and only
@@ -315,18 +330,13 @@ export function useOnboardingFlow(
   // the first call's setStepIndex has run, advancing twice and skipping a
   // step. A ref flips synchronously so re-entries bail immediately.
   const nextInFlightRef = useRef(false)
+  const notificationsStepCompletedTrackedRef = useRef(false)
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
       if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
         return
       }
       if (currentStep.id === 'notifications' && featureSetupTerminalCommand) {
-        track('onboarding_step_completed', {
-          step: currentStep.stepNumber,
-          value_kind: currentStep.valueKind,
-          duration_ms: consumeStepDurationMs(),
-          advanced_via: advancedVia
-        })
         setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
         return
       }
@@ -335,19 +345,33 @@ export function useOnboardingFlow(
         setBusyLabel('Setting up features…')
       }
       try {
-        const result = await persistCurrentStep()
-        const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
-        if (currentStep.id === 'notifications' && nextCommand) {
-          setFeatureSetupTerminalCommand(nextCommand)
-          return
-        }
-        if (result.ok) {
+        const trackCurrentStepCompleted = (): void => {
+          if (currentStep.id === 'notifications') {
+            if (notificationsStepCompletedTrackedRef.current) {
+              return
+            }
+            // Why: feature setup can keep the user on this already-persisted
+            // step to review a terminal command; later checklist edits must
+            // not double-count the same step completion.
+            notificationsStepCompletedTrackedRef.current = true
+          }
           track('onboarding_step_completed', {
             step: currentStep.stepNumber,
             value_kind: currentStep.valueKind,
             duration_ms: consumeStepDurationMs(),
             advanced_via: advancedVia
           })
+        }
+        const result = await persistCurrentStep()
+        const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
+        if (currentStep.id === 'notifications' && nextCommand) {
+          trackCurrentStepCompleted()
+          setFeatureSetupTerminalSelection(featureSetupSelection)
+          setFeatureSetupTerminalCommand(nextCommand)
+          return
+        }
+        if (result.ok) {
+          trackCurrentStepCompleted()
           setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
         }
       } finally {
@@ -363,6 +387,7 @@ export function useOnboardingFlow(
       currentStep.id,
       currentStep.stepNumber,
       currentStep.valueKind,
+      featureSetupSelection,
       featureSetupTerminalCommand,
       hasSelectedFeatureSetup,
       persistCurrentStep
@@ -492,6 +517,7 @@ export function useOnboardingFlow(
     featureSetupSelection,
     setFeatureSetupSelection: setFeatureSetupSelectionInteractive,
     featureSetupTerminalCommand,
+    featureSetupTerminalSelection,
     hasSelectedFeatureSetup,
     cloneUrl,
     setCloneUrl,

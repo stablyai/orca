@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
+import {
+  onboardingFeatureSetupTelemetrySelection,
+  type OnboardingFeatureSetupSelection
+} from './onboarding-feature-setup'
 
 const ONBOARDING_SETUP_TERMINAL_WORKTREE_ID = 'onboarding-setup-terminal'
 const AUTO_INSERT_DELAY_MS = 700
@@ -12,10 +17,12 @@ const READY_MAX_ATTEMPTS = 50
 
 type FeatureSetupInlineTerminalProps = {
   command: string
+  selection: OnboardingFeatureSetupSelection
 }
 
 export function FeatureSetupInlineTerminal({
-  command
+  command,
+  selection
 }: FeatureSetupInlineTerminalProps): React.JSX.Element {
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
@@ -25,6 +32,42 @@ export function FeatureSetupInlineTerminal({
   const [tabId, setTabId] = useState<string | null>(null)
   const terminalSectionRef = useRef<HTMLElement>(null)
   const autoInsertedRef = useRef<string | null>(null)
+  const terminalOpenedTrackedRef = useRef(false)
+  const terminalInteractedTrackedRef = useRef(false)
+
+  const selectionTelemetry = useMemo(
+    () => onboardingFeatureSetupTelemetrySelection(selection),
+    [selection]
+  )
+
+  useEffect(() => {
+    if (terminalOpenedTrackedRef.current) {
+      return
+    }
+    terminalOpenedTrackedRef.current = true
+    track('onboarding_feature_setup_terminal_opened', selectionTelemetry)
+  }, [selectionTelemetry])
+
+  const trackTerminalInteraction = useCallback(
+    (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => {
+      if (terminalInteractedTrackedRef.current) {
+        return
+      }
+      const isMac = navigator.userAgent.includes('Mac')
+      const isContinueShortcut = event?.key === 'Enter' && (isMac ? event.metaKey : event.ctrlKey)
+      if (isContinueShortcut) {
+        return
+      }
+      // Why: auto-insert focuses the terminal programmatically; only count
+      // direct terminal activity, not the global continue shortcut.
+      terminalInteractedTrackedRef.current = true
+      track('onboarding_feature_setup_terminal_interacted', {
+        ...selectionTelemetry,
+        method
+      })
+    },
+    [selectionTelemetry]
+  )
 
   useEffect(() => {
     void window.api.app.getFloatingTerminalCwd({ path: '~' }).then(setCwd)
@@ -117,7 +160,11 @@ export function FeatureSetupInlineTerminal({
           Settings.
         </p>
       </div>
-      <div className="relative h-[280px] min-h-0 bg-background">
+      <div
+        className="relative h-[280px] min-h-0 bg-background"
+        onKeyDownCapture={(event) => trackTerminalInteraction('keyboard', event)}
+        onPointerDownCapture={() => trackTerminalInteraction('pointer')}
+      >
         {cwd && tabId ? (
           <TerminalPane
             tabId={tabId}

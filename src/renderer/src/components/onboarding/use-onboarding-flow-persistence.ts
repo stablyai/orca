@@ -6,6 +6,7 @@ import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shar
 import type { NotificationDraft } from './NotificationStep'
 import {
   hasSelectedOnboardingFeatureSetup,
+  onboardingFeatureSetupRunTelemetry,
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupResult,
   type OnboardingFeatureSetupSelection
@@ -188,6 +189,9 @@ export function usePersistCurrentStep({
         })
         const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
         const featureSetupResult: OnboardingFeatureSetupResult = setupResult
+        track('onboarding_feature_setup_run', {
+          ...onboardingFeatureSetupRunTelemetry(featureSetupSelection, setupResult)
+        })
         if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
           const firstWarning = setupResult.warnings[0]
           if (firstWarning) {

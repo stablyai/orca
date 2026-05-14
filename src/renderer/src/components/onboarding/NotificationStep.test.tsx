@@ -19,6 +19,7 @@ describe('NotificationStep', () => {
         }}
         onFeatureSetupChange={vi.fn()}
         featureSetupCommand={null}
+        featureSetupCommandSelection={null}
       />
     )
 

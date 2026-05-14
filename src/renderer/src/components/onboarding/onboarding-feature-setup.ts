@@ -16,6 +16,7 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
+import type { EventProps } from '../../../../shared/telemetry-events'
 
 export type OnboardingFeatureSetupId = 'browserUse' | 'computerUse' | 'orchestration'
 
@@ -37,6 +38,15 @@ const FEATURE_SKILL_NAMES: Record<OnboardingFeatureSetupId, string> = {
   browserUse: ORCA_CLI_SKILL_NAME,
   computerUse: COMPUTER_USE_SKILL_NAME,
   orchestration: ORCHESTRATION_SKILL_NAME
+}
+
+const FEATURE_TELEMETRY_IDS: Record<
+  OnboardingFeatureSetupId,
+  EventProps<'onboarding_feature_setup_toggled'>['feature']
+> = {
+  browserUse: 'browser_use',
+  computerUse: 'computer_use',
+  orchestration: 'orchestration'
 }
 
 export type OnboardingFeatureSetupWarning = {
@@ -92,6 +102,37 @@ export function buildOnboardingFeatureSetupSkillCommand(
     return null
   }
   return buildAgentFeatureSkillInstallCommand(skillNames)
+}
+
+export function onboardingFeatureSetupTelemetryFeature(
+  id: OnboardingFeatureSetupId
+): EventProps<'onboarding_feature_setup_toggled'>['feature'] {
+  return FEATURE_TELEMETRY_IDS[id]
+}
+
+export function onboardingFeatureSetupTelemetrySelection(
+  selection: OnboardingFeatureSetupSelection
+): EventProps<'onboarding_feature_setup_terminal_opened'> {
+  return {
+    browser_use: selection.browserUse,
+    computer_use: selection.computerUse,
+    orchestration: selection.orchestration,
+    selected_count: selectedOnboardingFeatureSetupIds(selection).length
+  }
+}
+
+export function onboardingFeatureSetupRunTelemetry(
+  selection: OnboardingFeatureSetupSelection,
+  result: OnboardingFeatureSetupResult
+): EventProps<'onboarding_feature_setup_run'> {
+  return {
+    ...onboardingFeatureSetupTelemetrySelection(selection),
+    cli_touched: result.cliTouched,
+    skill_commands_copied: result.skillCommandsCopied,
+    skill_install_command_prepared: result.skillInstallCommand !== null,
+    computer_use_permissions_opened: result.computerUsePermissionsOpened,
+    warning_count: result.warnings.length
+  }
 }
 
 export function createOnboardingFeatureSetupDeps(): OnboardingFeatureSetupDeps {

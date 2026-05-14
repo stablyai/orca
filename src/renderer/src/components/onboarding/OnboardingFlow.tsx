@@ -167,6 +167,7 @@ export default function OnboardingFlow({
               featureSetup={flow.featureSetupSelection}
               onFeatureSetupChange={flow.setFeatureSetupSelection}
               featureSetupCommand={flow.featureSetupTerminalCommand}
+              featureSetupCommandSelection={flow.featureSetupTerminalSelection}
             />
           )}
           {currentStep.id === 'repo' && (

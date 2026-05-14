@@ -17,6 +17,7 @@ type NotificationStepProps = {
   featureSetup: OnboardingFeatureSetupSelection
   onFeatureSetupChange: (value: OnboardingFeatureSetupSelection) => void
   featureSetupCommand: string | null
+  featureSetupCommandSelection: OnboardingFeatureSetupSelection | null
 }
 
 export function NotificationStep({
@@ -24,7 +25,8 @@ export function NotificationStep({
   onChange,
   featureSetup,
   onFeatureSetupChange,
-  featureSetupCommand
+  featureSetupCommand,
+  featureSetupCommandSelection
 }: NotificationStepProps) {
   const rows: { key: keyof NotificationDraft; title: string; description: string }[] = [
     {
@@ -84,7 +86,12 @@ export function NotificationStep({
         <span className="font-medium text-foreground">Settings → Notifications</span>.
       </p>
       <FeatureSetupChecklist value={featureSetup} onChange={onFeatureSetupChange} />
-      {featureSetupCommand ? <FeatureSetupInlineTerminal command={featureSetupCommand} /> : null}
+      {featureSetupCommand ? (
+        <FeatureSetupInlineTerminal
+          command={featureSetupCommand}
+          selection={featureSetupCommandSelection ?? featureSetup}
+        />
+      ) : null}
     </>
   )
 }
