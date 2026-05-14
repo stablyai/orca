@@ -280,9 +280,8 @@ export default function FeatureWallModal(): JSX.Element | null {
 
         <div
           ref={gridRef}
-          role="grid"
+          role="list"
           aria-label="Orca feature tour"
-          aria-colcount={columnCount}
           className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
         >
           {FEATURE_WALL_TILES.map((tile, index) => {

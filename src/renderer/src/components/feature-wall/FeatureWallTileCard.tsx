@@ -44,7 +44,7 @@ export function FeatureWallTileCard(props: {
   return (
     <div
       ref={refCallback}
-      role="gridcell"
+      role="listitem"
       aria-label={`${tile.title}. ${tile.caption}`}
       tabIndex={tabIndex}
       data-feature-wall-tile-id={tile.id}

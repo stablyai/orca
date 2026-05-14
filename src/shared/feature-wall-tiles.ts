@@ -155,7 +155,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     kind: 'media',
     title: 'Keyboard-native',
     caption:
-      'Cmd-J jumps across worktrees, Cmd-P opens files, every shortcut is remappable. Move at the speed of your fingers.',
+      'Jump across worktrees, open files, and remap every shortcut. Move at the speed of your fingers.',
     gifPath: 'tile-10.gif',
     posterPath: 'tile-10.poster.jpg',
     recordedAtPath: 'tile-10.recorded-at.json',
