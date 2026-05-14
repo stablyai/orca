@@ -26,6 +26,34 @@ import {
 
 type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
+type AutosaveSubscriberInputs = {
+  openFiles: AppState['openFiles']
+  editorDrafts: AppState['editorDrafts']
+  editorAutoSave: boolean | undefined
+  editorAutoSaveDelayMs: number | undefined
+}
+
+function getAutosaveSubscriberInputs(state: AppState): AutosaveSubscriberInputs {
+  return {
+    openFiles: state.openFiles,
+    editorDrafts: state.editorDrafts,
+    editorAutoSave: state.settings?.editorAutoSave,
+    editorAutoSaveDelayMs: state.settings?.editorAutoSaveDelayMs
+  }
+}
+
+function autosaveSubscriberInputsEqual(
+  a: AutosaveSubscriberInputs,
+  b: AutosaveSubscriberInputs
+): boolean {
+  return (
+    a.openFiles === b.openFiles &&
+    a.editorDrafts === b.editorDrafts &&
+    a.editorAutoSave === b.editorAutoSave &&
+    a.editorAutoSaveDelayMs === b.editorAutoSaveDelayMs
+  )
+}
+
 function getDuplicateDirtySavePaths(files: OpenFile[]): string[] {
   const counts = new Map<string, number>()
   for (const file of files) {
@@ -319,7 +347,18 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     state.clearEditorDrafts(matchingFiles.map((file) => file.id))
   }
 
-  const unsubscribe = store.subscribe(syncAutoSave)
+  // Why: the root store subscriber fires for every terminal title/focus tick.
+  // Autosave only reads these four inputs, so skip the open-files scan when
+  // unrelated store slices change.
+  let previousAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
+  const unsubscribe = store.subscribe(() => {
+    const nextAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
+    if (autosaveSubscriberInputsEqual(previousAutosaveInputs, nextAutosaveInputs)) {
+      return
+    }
+    previousAutosaveInputs = nextAutosaveInputs
+    syncAutoSave()
+  })
   syncAutoSave()
 
   window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handleSaveDirtyFiles as EventListener)
