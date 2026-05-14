@@ -231,6 +231,41 @@ describe('buildRows repo grouping order', () => {
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
   })
+
+  it('orders repo headers by first encounter when caller uses visible worktree order', () => {
+    // Caller already sorted worktrees by recency: C is freshest, then A, then B.
+    // Even though repoOrder pins B, A, C, dynamic sorts must follow the freshest
+    // worktree out of each repo so a just-active worktree's parent group
+    // bubbles to the top of the sidebar.
+    const repoOrder = new Map([
+      [repoB.id, 0],
+      [repoA.id, 1],
+      [repoC.id, 2]
+    ])
+    const rows = buildRows(
+      'repo',
+      [wC, wA, wB],
+      map,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'visible-worktree-order'
+    )
+    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
+    expect(headerKeys).toEqual(['repo:repo-c', 'repo:repo-a', 'repo:repo-b'])
+  })
+
+  it('keeps repoOrder for manual repo group ordering', () => {
+    const repoOrder = new Map([
+      [repoB.id, 0],
+      [repoA.id, 1],
+      [repoC.id, 2]
+    ])
+    const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
+    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
+    expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
+  })
 })
 
 describe('WorktreeList header styles', () => {
