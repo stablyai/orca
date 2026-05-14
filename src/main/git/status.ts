@@ -17,6 +17,7 @@ import type {
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './runner'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
+const BULK_CHUNK_SIZE = 100
 
 /**
  * Parse `git status --porcelain=v2` output into structured entries.
@@ -779,6 +780,69 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
     : rm(resolvedTarget, { force: true, recursive: true }))
 }
 
+function normalizeGitPathForCompare(filePath: string): string {
+  return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
+  const normalized = normalizeGitPathForCompare(filePath)
+  return trackedPaths.some((trackedPath) => {
+    const normalizedTracked = normalizeGitPathForCompare(trackedPath)
+    return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
+  })
+}
+
+async function listTrackedPathSpecs(
+  worktreePath: string,
+  filePaths: readonly string[]
+): Promise<string[]> {
+  const trackedPaths: string[] = []
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+    const { stdout } = await gitExecFileAsync(['ls-files', '-z', '--', ...chunk], {
+      cwd: worktreePath
+    })
+    trackedPaths.push(...stdout.split('\0').filter(Boolean))
+  }
+  return trackedPaths
+}
+
+/**
+ * Discard working tree changes for many paths in a small number of subprocesses.
+ */
+export async function bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void> {
+  if (filePaths.length === 0) {
+    return
+  }
+
+  const resolvedWorktree = path.resolve(worktreePath)
+  for (const filePath of filePaths) {
+    const resolvedTarget = path.resolve(worktreePath, filePath)
+    if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
+      throw new Error(`Path "${filePath}" resolves outside the worktree`)
+    }
+  }
+
+  const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths)
+  const trackedPaths = filePaths.filter((filePath) => isTrackedPathSpec(filePath, trackedPathSpecs))
+  const untrackedPaths = filePaths.filter(
+    (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
+  )
+
+  for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+    await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
+      cwd: worktreePath
+    })
+  }
+
+  await Promise.all(
+    untrackedPaths.map((filePath) =>
+      rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
+    )
+  )
+}
+
 export function isWithinWorktree(
   pathApi: Pick<typeof path, 'isAbsolute' | 'relative' | 'sep'>,
   resolvedWorktree: string,
@@ -800,9 +864,8 @@ export async function bulkStageFiles(worktreePath: string, filePaths: string[]):
   if (filePaths.length === 0) {
     return
   }
-  const CHUNK_SIZE = 100
-  for (let i = 0; i < filePaths.length; i += CHUNK_SIZE) {
-    const chunk = filePaths.slice(i, i + CHUNK_SIZE)
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     await gitExecFileAsync(['add', '--', ...chunk], { cwd: worktreePath })
   }
 }
@@ -814,9 +877,8 @@ export async function bulkUnstageFiles(worktreePath: string, filePaths: string[]
   if (filePaths.length === 0) {
     return
   }
-  const CHUNK_SIZE = 100
-  for (let i = 0; i < filePaths.length; i += CHUNK_SIZE) {
-    const chunk = filePaths.slice(i, i + CHUNK_SIZE)
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     await gitExecFileAsync(['restore', '--staged', '--', ...chunk], { cwd: worktreePath })
   }
 }

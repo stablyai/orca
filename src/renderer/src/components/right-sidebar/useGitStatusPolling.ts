@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
-import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
+import type { GitConflictOperation } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
+import { refreshGitStatusForWorktree } from './git-status-refresh'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -52,23 +53,17 @@ export function useGitStatusPolling(): void {
     }
     try {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      const status = (await window.api.git.status({
+      await refreshGitStatusForWorktree({
+        worktreeId: activeWorktreeId,
         worktreePath,
-        connectionId
-      })) as GitStatusResult
-      setGitStatus(activeWorktreeId, status)
-      // Why: branch switches can happen inside a terminal. `git status
-      // --branch` gives us the new identity without a separate worktree-list
-      // poll that would repeatedly touch repo/worktree roots.
-      updateWorktreeGitIdentity(activeWorktreeId, {
-        head: status.head,
-        branch: status.branch
+        connectionId,
+        deps: {
+          setGitStatus,
+          updateWorktreeGitIdentity,
+          setUpstreamStatus,
+          fetchUpstreamStatus
+        }
       })
-      if (status.upstreamStatus) {
-        setUpstreamStatus(activeWorktreeId, status.upstreamStatus)
-      } else {
-        await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
-      }
     } catch {
       // ignore
     }

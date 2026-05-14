@@ -62,6 +62,12 @@ import {
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
+import {
+  getDiscardAreaConfirmationCopy,
+  getDiscardEntryConfirmationCopy,
+  type DiscardConfirmationCopy
+} from './source-control-discard-confirmation'
+import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { toast } from 'sonner'
 import {
   ContextMenu,
@@ -73,6 +79,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
@@ -151,6 +158,10 @@ const BRANCH_REFRESH_INTERVAL_MS = 5000
 
 type CommitDraftsByWorktree = Record<string, string>
 
+type PendingDiscardConfirmation =
+  | { kind: 'entry'; entry: GitStatusEntry }
+  | { kind: 'area'; area: DiscardAllArea; paths: readonly string[] }
+
 export function readCommitDraftForWorktree(
   drafts: CommitDraftsByWorktree,
   worktreeId: string | null | undefined
@@ -201,9 +212,12 @@ function SourceControlInner(): React.JSX.Element {
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
+  const setGitStatus = useAppStore((s) => s.setGitStatus)
+  const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const pushBranch = useAppStore((s) => s.pushBranch)
   const pullBranch = useAppStore((s) => s.pullBranch)
   const syncBranch = useAppStore((s) => s.syncBranch)
@@ -270,6 +284,7 @@ function SourceControlInner(): React.JSX.Element {
   const [scope, setScope] = useState<SourceControlScope>('all')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
+  const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Why: start null rather than 'origin/main' so branch compare doesn't fire
   // with a fabricated ref before the IPC resolves. effectiveBaseRef stays
   // falsy until we have a real answer from the main process.
@@ -320,6 +335,40 @@ function SourceControlInner(): React.JSX.Element {
   // this guard the branchCompare interval and PR fetch would keep running
   // with no visible consumer, wasting git process spawns and API calls.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
+
+  const refreshActiveGitStatus = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || isFolder) {
+      return
+    }
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    await refreshGitStatusForWorktree({
+      worktreeId: activeWorktreeId,
+      worktreePath,
+      connectionId,
+      deps: {
+        setGitStatus,
+        updateWorktreeGitIdentity,
+        setUpstreamStatus,
+        fetchUpstreamStatus
+      }
+    })
+  }, [
+    activeWorktreeId,
+    fetchUpstreamStatus,
+    isFolder,
+    setGitStatus,
+    setUpstreamStatus,
+    updateWorktreeGitIdentity,
+    worktreePath
+  ])
+
+  const refreshActiveGitStatusAfterMutation = useCallback(async (): Promise<void> => {
+    try {
+      await refreshActiveGitStatus()
+    } catch (error) {
+      console.warn('[SourceControl] post-mutation git status refresh failed', error)
+    }
+  }, [refreshActiveGitStatus])
 
   useEffect(() => {
     if (!activeRepo || isFolder) {
@@ -428,6 +477,15 @@ function SourceControlInner(): React.JSX.Element {
   }, [filteredGrouped, collapsedSections])
 
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
+  const pendingDiscardCopy = useMemo<DiscardConfirmationCopy | null>(() => {
+    if (!pendingDiscard) {
+      return null
+    }
+    if (pendingDiscard.kind === 'entry') {
+      return getDiscardEntryConfirmationCopy(pendingDiscard.entry)
+    }
+    return getDiscardAreaConfirmationCopy(pendingDiscard.area, pendingDiscard.paths.length)
+  }, [pendingDiscard])
 
   const unresolvedConflicts = useMemo(
     () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
@@ -479,6 +537,7 @@ function SourceControlInner(): React.JSX.Element {
     setScope('all')
     setCollapsedSections(new Set())
     setBaseRefDialogOpen(false)
+    setPendingDiscard(null)
     // Why: do NOT reset defaultBaseRef here. It is repo-scoped, not
     // worktree-scoped, and is resolved by the effect above on activeRepo
     // change. Resetting it to a hard-coded 'origin/main' on every worktree
@@ -543,6 +602,7 @@ function SourceControlInner(): React.JSX.Element {
         return writeCommitDraftForWorktree(prev, activeWorktreeId, '')
       })
       setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+      void refreshActiveGitStatusAfterMutation()
       // Why: flip branchSummary to 'loading' synchronously so the empty-state
       // guard
       //   (!hasUncommittedEntries && branchSummary.status === 'ready' &&
@@ -583,6 +643,7 @@ function SourceControlInner(): React.JSX.Element {
     commitMessage,
     effectiveBaseRef,
     grouped.staged.length,
+    refreshActiveGitStatusAfterMutation,
     unresolvedConflicts.length,
     worktreePath
   ])
@@ -850,11 +911,18 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths, connectionId })
+      await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, bulkStagePaths, clearSelection, activeWorktreeId])
+  }, [
+    worktreePath,
+    bulkStagePaths,
+    clearSelection,
+    activeWorktreeId,
+    refreshActiveGitStatusAfterMutation
+  ])
 
   const handleBulkUnstage = useCallback(async () => {
     if (!worktreePath || bulkUnstagePaths.length === 0) {
@@ -864,11 +932,18 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths, connectionId })
+      await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, bulkUnstagePaths, clearSelection, activeWorktreeId])
+  }, [
+    worktreePath,
+    bulkUnstagePaths,
+    clearSelection,
+    activeWorktreeId,
+    refreshActiveGitStatusAfterMutation
+  ])
 
   // Why: "Stage all" on the Changes section intentionally skips unresolved
   // conflict rows. `git add` on a conflicted file silently clears the `u`
@@ -887,12 +962,20 @@ function SourceControlInner(): React.JSX.Element {
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await window.api.git.bulkStage({ worktreePath, filePaths: paths, connectionId })
+        await refreshActiveGitStatusAfterMutation()
         clearSelection()
       } finally {
         setIsExecutingBulk(false)
       }
     },
-    [worktreePath, grouped, activeWorktreeId, isExecutingBulk, clearSelection]
+    [
+      worktreePath,
+      grouped,
+      activeWorktreeId,
+      isExecutingBulk,
+      clearSelection,
+      refreshActiveGitStatusAfterMutation
+    ]
   )
 
   // Why: 'stage' primary stages every unstaged + untracked path in one
@@ -914,11 +997,19 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await window.api.git.bulkStage({ worktreePath, filePaths, connectionId })
+      await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, isExecutingBulk, grouped, activeWorktreeId, clearSelection])
+  }, [
+    worktreePath,
+    isExecutingBulk,
+    grouped,
+    activeWorktreeId,
+    clearSelection,
+    refreshActiveGitStatusAfterMutation
+  ])
 
   // Why: PrimaryActionKind is narrowed to the single-action kinds the
   // primary can emit ('commit' | 'stage' | 'push' | 'pull' | 'sync' |
@@ -958,11 +1049,19 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+      await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, grouped.staged, activeWorktreeId, isExecutingBulk, clearSelection])
+  }, [
+    worktreePath,
+    grouped.staged,
+    activeWorktreeId,
+    isExecutingBulk,
+    clearSelection,
+    refreshActiveGitStatusAfterMutation
+  ])
 
   const refreshBranchCompare = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
@@ -1178,11 +1277,12 @@ function SourceControlInner(): React.JSX.Element {
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await window.api.git.stage({ worktreePath, filePath, connectionId })
+        await refreshActiveGitStatusAfterMutation()
       } catch {
         // git operation failed silently
       }
     },
-    [worktreePath, activeWorktreeId]
+    [worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
   )
 
   const handleUnstage = useCallback(
@@ -1193,11 +1293,12 @@ function SourceControlInner(): React.JSX.Element {
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await window.api.git.unstage({ worktreePath, filePath, connectionId })
+        await refreshActiveGitStatusAfterMutation()
       } catch {
         // git operation failed silently
       }
     },
-    [worktreePath, activeWorktreeId]
+    [worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
   )
 
   // Why: split into two variants — `discardSingle` throws so bulk callers can
@@ -1228,33 +1329,64 @@ function SourceControlInner(): React.JSX.Element {
     [activeWorktreeId, worktreePath]
   )
 
+  const discardMany = useCallback(
+    async (filePaths: string[]) => {
+      if (!worktreePath || !activeWorktreeId) {
+        return
+      }
+      // Why: bulk discard replaces many working-tree files at once. Quiesce
+      // any matching editor autosaves before git mutates the files so a delayed
+      // save cannot recreate edits after the restore.
+      await Promise.all(
+        filePaths.map((relativePath) =>
+          requestEditorSaveQuiesce({
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            relativePath
+          })
+        )
+      )
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      await window.api.git.bulkDiscard({ worktreePath, filePaths, connectionId })
+      for (const relativePath of filePaths) {
+        notifyEditorExternalFileChange({
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          relativePath
+        })
+      }
+    },
+    [activeWorktreeId, worktreePath]
+  )
+
   const handleDiscard = useCallback(
     async (filePath: string) => {
       try {
         await discardSingle(filePath)
+        await refreshActiveGitStatusAfterMutation()
       } catch {
         // Why: per-row discard is fire-and-forget for the UI; failures are not
         // surfaced individually. Bulk callers use `discardSingle` directly so
         // they can aggregate failures into a single toast.
       }
     },
-    [discardSingle]
+    [discardSingle, refreshActiveGitStatusAfterMutation]
   )
 
   // Why: "Discard all" mirrors the per-row discard rules — it skips unresolved
   // and resolved_locally rows because discarding those can silently re-create
   // the conflict or lose the resolution (no v1 UX to explain this clearly).
-  // There is no bulk discard IPC, so we serialize per-file discard calls that
-  // run the same editor-quiesce + external-change notification as the row action.
+  // The happy path uses bulk discard IPC; the sequencing helper falls back to
+  // per-file discard when an older SSH relay does not support that method yet.
   // The sequencing + filter rules live in discard-all-sequence.ts so they can
   // be unit-tested independently of the full component (staged area needs a
   // bulk-unstage first, and a failed unstage must skip the discard loop).
   const handleRevertAllInArea = useCallback(
-    async (area: DiscardAllArea) => {
+    async (area: DiscardAllArea, confirmedPaths?: readonly string[]) => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = getDiscardAllPaths(grouped[area], area)
+      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
@@ -1269,6 +1401,7 @@ function SourceControlInner(): React.JSX.Element {
         const result = await runDiscardAllForArea(area, paths, {
           bulkUnstage: (filePaths) =>
             window.api.git.bulkUnstage({ worktreePath, filePaths, connectionId }),
+          discardMany,
           discardOne: discardSingle,
           onError: (error) => {
             errors.push(error)
@@ -1294,14 +1427,61 @@ function SourceControlInner(): React.JSX.Element {
           )
         }
         if (!result.aborted) {
+          await refreshActiveGitStatusAfterMutation()
           clearSelection()
         }
       } finally {
         setIsExecutingBulk(false)
       }
     },
-    [worktreePath, activeWorktreeId, grouped, isExecutingBulk, clearSelection, discardSingle]
+    [
+      worktreePath,
+      activeWorktreeId,
+      grouped,
+      isExecutingBulk,
+      clearSelection,
+      discardMany,
+      discardSingle,
+      refreshActiveGitStatusAfterMutation
+    ]
   )
+
+  const requestDiscardAllInArea = useCallback(
+    (area: DiscardAllArea): void => {
+      if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
+        return
+      }
+      const paths = getDiscardAllPaths(grouped[area], area)
+      if (paths.length === 0) {
+        return
+      }
+      setPendingDiscard({ kind: 'area', area, paths })
+    },
+    [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
+  )
+
+  const requestDiscardEntry = useCallback(
+    (entry: GitStatusEntry): void => {
+      if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
+        return
+      }
+      setPendingDiscard({ kind: 'entry', entry })
+    },
+    [activeWorktreeId, isExecutingBulk, worktreePath]
+  )
+
+  const confirmPendingDiscard = useCallback((): void => {
+    const pending = pendingDiscard
+    if (!pending) {
+      return
+    }
+    setPendingDiscard(null)
+    if (pending.kind === 'entry') {
+      void handleDiscard(pending.entry.path)
+      return
+    }
+    void handleRevertAllInArea(pending.area, pending.paths)
+  }, [handleDiscard, handleRevertAllInArea, pendingDiscard])
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (
@@ -1326,6 +1506,7 @@ function SourceControlInner(): React.JSX.Element {
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
   const currentWorktreeId = activeWorktree.id
+  const PendingDiscardIcon = pendingDiscardCopy?.confirmLabel.startsWith('Delete') ? Trash : Undo2
 
   return (
     <>
@@ -1639,7 +1820,7 @@ function SourceControlInner(): React.JSX.Element {
                           <div className="flex items-center opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                             {canRevertAll && (
                               <ActionButton
-                                icon={Undo2}
+                                icon={area === 'untracked' ? Trash : Undo2}
                                 // Why: for untracked files, discard deletes the file
                                 // outright (rm -rf via git.discard's untracked branch).
                                 // A generic "Discard all" label hides that severity —
@@ -1649,7 +1830,7 @@ function SourceControlInner(): React.JSX.Element {
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  void handleRevertAllInArea(area)
+                                  requestDiscardAllInArea(area)
                                 }}
                                 disabled={isExecutingBulk}
                               />
@@ -1730,7 +1911,7 @@ function SourceControlInner(): React.JSX.Element {
                             onOpen={handleOpenDiff}
                             onStage={handleStage}
                             onUnstage={handleUnstage}
-                            onDiscard={handleDiscard}
+                            onDiscard={requestDiscardEntry}
                             commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                           />
                         )
@@ -1804,6 +1985,46 @@ function SourceControlInner(): React.JSX.Element {
           />
         )}
       </div>
+
+      <Dialog
+        open={pendingDiscard !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDiscard(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {pendingDiscardCopy?.title ?? 'Discard changes?'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {pendingDiscardCopy?.description ?? 'This cannot be undone.'}
+            </DialogDescription>
+          </DialogHeader>
+          {pendingDiscard?.kind === 'area' ? (
+            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
+              {pendingDiscard.paths.length} {pendingDiscard.paths.length === 1 ? 'file' : 'files'}
+            </div>
+          ) : pendingDiscard?.kind === 'entry' ? (
+            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
+              <div className="break-all font-medium text-foreground">
+                {pendingDiscard.entry.path}
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingDiscard(null)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmPendingDiscard}>
+              <PendingDiscardIcon className="size-4" />
+              {pendingDiscardCopy?.confirmLabel ?? 'Discard'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={baseRefDialogOpen} onOpenChange={setBaseRefDialogOpen}>
         <DialogContent className="max-w-xl">
@@ -2384,7 +2605,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onOpen: (entry: GitStatusEntry) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
-  onDiscard: (filePath: string) => Promise<void>
+  onDiscard: (entry: GitStatusEntry) => void
   commentCount: number
 }): React.JSX.Element {
   const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
@@ -2426,6 +2647,9 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
       }}
     >
       <div
+        data-testid="source-control-entry"
+        data-source-control-path={entry.path}
+        data-source-control-area={entry.area}
         className={cn(
           'group relative flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40',
           selected && 'bg-accent/60'
@@ -2483,11 +2707,17 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         <div className="absolute right-0 top-0 bottom-0 shrink-0 hidden group-hover:flex items-center gap-1.5 bg-accent pr-3 pl-2">
           {canDiscard && (
             <ActionButton
-              icon={Undo2}
-              title={entry.area === 'untracked' ? 'Revert untracked file' : 'Discard changes'}
+              icon={entry.area === 'untracked' ? Trash : Undo2}
+              title={
+                entry.area === 'untracked'
+                  ? 'Delete untracked file'
+                  : entry.status === 'deleted'
+                    ? 'Restore file'
+                    : 'Discard changes'
+              }
               onClick={(event) => {
                 event.stopPropagation()
-                void onDiscard(entry.path)
+                onDiscard(entry)
               }}
             />
           )}

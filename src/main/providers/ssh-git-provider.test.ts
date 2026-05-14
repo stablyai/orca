@@ -107,6 +107,14 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('bulkDiscardChanges sends git.bulkDiscard request', async () => {
+    await provider.bulkDiscardChanges('/home/user/repo', ['a.ts', 'b.ts'])
+    expect(mux.request).toHaveBeenCalledWith('git.bulkDiscard', {
+      worktreePath: '/home/user/repo',
+      filePaths: ['a.ts', 'b.ts']
+    })
+  })
+
   it('detectConflictOperation sends git.conflictOperation request', async () => {
     mux.request.mockResolvedValue('rebase')
     const result = await provider.detectConflictOperation('/home/user/repo')

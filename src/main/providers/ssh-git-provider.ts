@@ -72,6 +72,10 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.discard', { worktreePath, filePath })
   }
 
+  async bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void> {
+    await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
+  }
+
   async detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
     return (await this.mux.request('git.conflictOperation', {
       worktreePath
