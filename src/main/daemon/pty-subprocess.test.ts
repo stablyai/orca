@@ -27,6 +27,7 @@ const ORCA_SHELL_WRAPPER_ENV = [
 const POWERSHELL_PROFILE_COMMAND = expect.stringMatching(
   /ORCA_OPENCODE_CONFIG_DIR[\s\S]*ORCA_PI_CODING_AGENT_DIR[\s\S]*UTF8/
 )
+const ZSH_SHELL_READY_DIR = /shell-ready[\\/]zsh/
 
 function mockPtyProcess(pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
@@ -87,14 +88,22 @@ describe('createPtySubprocess', () => {
   it('spawns node-pty with correct options', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
 
-    createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24,
-      cwd: '/home/user',
-      env: { SHELL: '/bin/bash', FOO: 'bar' }
-    })
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        env: { SHELL: '/bin/bash', FOO: 'bar' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/bin/bash',
@@ -254,62 +263,86 @@ describe('createPtySubprocess', () => {
   it('uses shell wrapper when attribution shims must survive shell startup', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
 
-    createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24,
-      env: {
-        SHELL: '/bin/zsh',
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/orca-terminal-attribution/posix'
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/zsh',
+          ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/orca-terminal-attribution/posix'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
       }
-    })
+    }
 
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
-    expect(lastCall[2].env.ZDOTDIR).toContain('shell-ready/zsh')
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
   it('uses shell wrapper when OpenCode config must survive shell startup', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
 
-    createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24,
-      env: {
-        SHELL: '/bin/zsh',
-        OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay',
-        ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/zsh',
+          OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay',
+          ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
       }
-    })
+    }
 
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
-    expect(lastCall[2].env.ZDOTDIR).toContain('shell-ready/zsh')
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
   it('uses shell wrapper when Pi config must survive shell startup', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
 
-    createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24,
-      env: {
-        SHELL: '/bin/zsh',
-        PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay',
-        ORCA_PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay'
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/zsh',
+          PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay',
+          ORCA_PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
       }
-    })
+    }
 
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
-    expect(lastCall[2].env.ZDOTDIR).toContain('shell-ready/zsh')
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
@@ -501,10 +534,82 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('keeps WSL UNC worktree terminals in the matching distro cwd on Windows', () => {
+  it('rejects a missing explicit native Windows cwd before node-pty spawn', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\definitely-missing-orca-cwd',
+          shellOverride: 'powershell.exe'
+        })
+      ).toThrow(/Working directory "C:\\definitely-missing-orca-cwd" does not exist/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('validates the requested Windows cwd before launching WSL on Windows', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\definitely-missing-orca-wsl-cwd',
+          shellOverride: 'wsl.exe'
+        })
+      ).toThrow(/Working directory "C:\\definitely-missing-orca-wsl-cwd" does not exist/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('adds shell and cwd context when node-pty reports File not found on Windows', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    spawnMock.mockImplementation(() => {
+      throw new Error('File not found: ')
+    })
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          shellOverride: 'not-a-real-shell.exe'
+        })
+      ).toThrow(
+        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:/
+      )
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('falls back to /mnt/c before launching WSL when cwd is not a native Windows path', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const cwd = mkdtempSync(join(tmpdir(), 'daemon-pty-wsl-cwd-test-'))
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
@@ -513,18 +618,25 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
+        cwd,
         shellOverride: 'wsl.exe'
       })
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+      rmSync(cwd, { recursive: true, force: true })
     }
+
+    const normalizedCwd = cwd.replace(/\\/g, '/')
+    const driveMatch = normalizedCwd.match(/^([A-Za-z]):\/?(.*)$/)
+    const expectedLinuxCwd = driveMatch
+      ? `/mnt/${driveMatch[1].toLowerCase()}${driveMatch[2] ? `/${driveMatch[2]}` : ''}`
+      : '/mnt/c'
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/alice/repo' && exec bash -l"],
+      ['--', 'bash', '-c', `cd '${expectedLinuxCwd}' && exec bash -l`],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })

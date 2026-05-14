@@ -26,6 +26,7 @@ vi.mock('react', async () => {
     memo: <T>(component: T) => component,
     useEffect: () => {},
     useLayoutEffect: () => {},
+    useCallback: <T>(callback: T) => callback,
     useMemo: <T>(factory: () => T) => factory(),
     useRef: <T>(current: T) => ({ current }),
     useState: <T>(initial: T) => [initial, vi.fn()] as const
@@ -34,6 +35,9 @@ vi.mock('react', async () => {
 
 vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
+    return null
+  },
+  FileText: function FileText() {
     return null
   },
   Globe: function Globe() {
@@ -122,6 +126,15 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }

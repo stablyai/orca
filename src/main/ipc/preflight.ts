@@ -5,6 +5,7 @@ import path from 'path'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getActiveMultiplexer } from './ssh'
 
 const execFileAsync = promisify(execFile)
@@ -12,6 +13,12 @@ const execFileAsync = promisify(execFile)
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
+  // Why: optional so existing renderer call sites that only render git/gh
+  // status keep typechecking. Consumers that surface GitLab-specific
+  // affordances (the GitLab tab in the source picker, MR list, etc.)
+  // gate on `glab?.authenticated`.
+  glab?: { installed: boolean; authenticated: boolean }
+  bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
 }
 
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
@@ -118,21 +125,42 @@ async function isGhAuthenticated(): Promise<boolean> {
   }
 }
 
+// Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
+// status to stderr in some versions and stdout in others; check both.
+async function isGlabAuthenticated(): Promise<boolean> {
+  try {
+    await execFileAsync('glab', ['auth', 'status'], { encoding: 'utf-8' })
+    return true
+  } catch (error) {
+    const stdout = (error as { stdout?: string }).stdout ?? ''
+    const stderr = (error as { stderr?: string }).stderr ?? ''
+    const output = `${stdout}\n${stderr}`
+    return output.includes('Logged in')
+  }
+}
+
 export async function runPreflightCheck(force = false): Promise<PreflightStatus> {
   if (cached && !force) {
     return cached
   }
 
-  const [gitInstalled, ghInstalled] = await Promise.all([
+  const [gitInstalled, ghInstalled, glabInstalled] = await Promise.all([
     isCommandAvailable('git'),
-    isCommandAvailable('gh')
+    isCommandAvailable('gh'),
+    isCommandAvailable('glab')
   ])
 
-  const ghAuthenticated = ghInstalled ? await isGhAuthenticated() : false
+  const [ghAuthenticated, glabAuthenticated, bitbucket] = await Promise.all([
+    ghInstalled ? isGhAuthenticated() : Promise.resolve(false),
+    glabInstalled ? isGlabAuthenticated() : Promise.resolve(false),
+    getBitbucketAuthStatus()
+  ])
 
   cached = {
     git: { installed: gitInstalled },
-    gh: { installed: ghInstalled, authenticated: ghAuthenticated }
+    gh: { installed: ghInstalled, authenticated: ghAuthenticated },
+    glab: { installed: glabInstalled, authenticated: glabAuthenticated },
+    bitbucket
   }
 
   return cached

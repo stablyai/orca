@@ -38,10 +38,14 @@ const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
 ]
 
 const SORT_OPTIONS = [
-  { id: 'name', label: 'Name' },
-  { id: 'smart', label: 'Smart' },
-  { id: 'recent', label: 'Recent' },
-  { id: 'repo', label: 'Repo' }
+  { id: 'name', label: 'Name', description: null },
+  {
+    id: 'smart',
+    label: 'Smart',
+    description: 'Agents that need attention, then most recent activity.'
+  },
+  { id: 'recent', label: 'Recent', description: null },
+  { id: 'repo', label: 'Repo', description: null }
 ] as const
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -116,17 +120,30 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               value={sortBy}
               onValueChange={(v) => setSortBy(v as typeof sortBy)}
             >
-              {SORT_OPTIONS.map((opt) => (
-                <DropdownMenuRadioItem
-                  key={opt.id}
-                  value={opt.id}
-                  // Keep the menu open so people can compare sort modes and
-                  // toggle card properties without reopening the same panel.
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {opt.label}
-                </DropdownMenuRadioItem>
-              ))}
+              {SORT_OPTIONS.map((opt) => {
+                const radioItem = (
+                  <DropdownMenuRadioItem
+                    key={opt.id}
+                    value={opt.id}
+                    // Keep the menu open so people can compare sort modes and
+                    // toggle card properties without reopening the same panel.
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {opt.label}
+                  </DropdownMenuRadioItem>
+                )
+                if (!opt.description) {
+                  return radioItem
+                }
+                return (
+                  <Tooltip key={opt.id}>
+                    <TooltipTrigger asChild>{radioItem}</TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={6}>
+                      {opt.description}
+                    </TooltipContent>
+                  </Tooltip>
+                )
+              })}
             </DropdownMenuRadioGroup>
 
             <DropdownMenuSeparator />

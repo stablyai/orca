@@ -20,12 +20,14 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
   GitHubWorkItem,
   GitPushTarget,
+  GitLabWorkItem,
   LinearIssue,
   OrcaHooks,
   SetupDecision,
   SetupRunPolicy,
   SparsePreset,
   TuiAgent,
+  WorktreeMeta,
   WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
 import {
@@ -83,8 +85,11 @@ export type ComposerCardProps = {
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
+  onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  /** GitLab parallel of onBaseBranchPrSelect. */
+  onBaseBranchMrSelect?: (baseBranch: string, item: GitLabWorkItem) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   agentPrompt: string
@@ -287,6 +292,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       return newWorkspaceDraft.linkedPR
     }
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
+  })
+  // Why: GitLab parallels of linkedIssue/linkedPR. Kept as separate state
+  // (rather than reusing the GitHub slots with a provider discriminator) so
+  // the existing GitHub auto-name / linked-badge / persistence code paths
+  // stay untouched.
+  const [linkedGitLabIssue, setLinkedGitLabIssue] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGitLabIssue !== undefined) {
+      return newWorkspaceDraft.linkedGitLabIssue
+    }
+    return null
+  })
+  const [linkedGitLabMR, setLinkedGitLabMR] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGitLabMR !== undefined) {
+      return newWorkspaceDraft.linkedGitLabMR
+    }
+    return initialLinkedWorkItem?.type === 'mr' ? initialLinkedWorkItem.number : null
   })
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
@@ -603,6 +624,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       agent: tuiAgent,
       linkedIssue,
       linkedPR,
+      linkedGitLabIssue,
+      linkedGitLabMR,
       ...(baseBranch !== undefined ? { baseBranch } : {})
     })
   }, [
@@ -612,6 +635,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     baseBranch,
     linkedIssue,
     linkedPR,
+    linkedGitLabIssue,
+    linkedGitLabMR,
     linkedWorkItem,
     note,
     name,
@@ -867,6 +892,44 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [name]
   )
 
+  // Why: parallel of applyLinkedWorkItem for GitLab. Touches the GitLab
+  // state slots only — the GitHub linkedIssue/linkedPR remain unchanged
+  // so a workspace can in principle reference items from both providers.
+  // The auto-name logic mirrors the GitHub side (issue: number-and-title,
+  // MR: branch name) via getLinkedWorkItemSuggestedName, which already
+  // accepts both shapes structurally.
+  const applyLinkedGitLabWorkItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      if (item.type === 'issue') {
+        setLinkedGitLabIssue(item.number)
+        setLinkedGitLabMR(null)
+      } else {
+        setLinkedGitLabIssue(null)
+        setLinkedGitLabMR(item.number)
+      }
+      setLinkedWorkItem({
+        type: item.type,
+        number: item.number,
+        title: item.title,
+        url: item.url
+      })
+      // Why: GitLabWorkItem.branchName lines up with GitHubWorkItem.branchName
+      // structurally; cast to the suggested-name helper's input shape so we
+      // reuse the existing naming heuristic without forking it.
+      const suggestedName = getLinkedWorkItemSuggestedName({
+        type: item.type === 'mr' ? 'pr' : 'issue',
+        number: item.number,
+        title: item.title,
+        branchName: item.branchName
+      } as unknown as GitHubWorkItem)
+      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+    },
+    [name]
+  )
+
   const handleSelectLinkedItem = useCallback(
     (item: GitHubWorkItem): void => {
       applyLinkedWorkItem(item)
@@ -1067,12 +1130,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       let hint: string | null = null
       if (linkedWorkItem?.type === 'pr' && baseBranch) {
         hint = `was PR #${linkedWorkItem.number}`
+      } else if (linkedWorkItem?.type === 'mr' && baseBranch) {
+        // Why: GitLab MR convention is `!N`, not `#N` — match the
+        // upstream UI so the reset hint is recognizable.
+        hint = `was MR !${linkedWorkItem.number}`
       } else if (baseBranch) {
         hint = `was ${baseBranch}`
       }
       setRepoId(value)
       setLinkedIssue('')
       setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
       setLinkedWorkItem(null)
       setSparseEnabled(false)
       setSparseDirectories('')
@@ -1132,6 +1201,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [applyLinkedWorkItem]
   )
 
+  // Why: GitLab parallel of handleBaseBranchPrSelect. Same shape, same
+  // semantics — except the note prefill uses GitLab's `!N` MR convention
+  // so a glance at the worktree sidebar makes the provider obvious.
+  const handleBaseBranchMrSelect = useCallback(
+    (nextBaseBranch: string, item: GitLabWorkItem): void => {
+      setBaseBranch(nextBaseBranch)
+      setStartFromResetHint(null)
+      applyLinkedGitLabWorkItem(item)
+      if (item.type === 'mr') {
+        const suggestedNote = `MR !${item.number} — ${item.title}`
+        const currentNote = noteRef.current
+        if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
+          setNote(suggestedNote)
+          lastAutoNoteRef.current = suggestedNote
+        }
+      }
+    },
+    [applyLinkedGitLabWorkItem]
+  )
+
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
       setStartFromResetHint(null)
@@ -1167,6 +1256,38 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         })
     },
     [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo]
+  )
+
+  // Why: GitLab parallel of handleSmartGitHubItemSelect. For a picked
+  // MR, resolves the base branch via worktrees:resolveMrBase (which uses
+  // refs/merge-requests/<iid>/head for fork MRs the same way the gh side
+  // uses refs/pull/<N>/head). Issue selections short-circuit since
+  // there's no branch-resolution step to run.
+  const handleSmartGitLabItemSelect = useCallback(
+    (item: GitLabWorkItem): void => {
+      applyLinkedGitLabWorkItem(item)
+      setStartFromResetHint(null)
+      const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
+      if (item.type !== 'mr' || !repoForItem) {
+        return
+      }
+      void window.api.worktrees
+        .resolveMrBase({
+          repoId: repoForItem.id,
+          mrIid: item.number,
+          ...(item.branchName ? { sourceBranch: item.branchName } : {}),
+          ...(item.isCrossRepository !== undefined
+            ? { isCrossRepository: item.isCrossRepository }
+            : {})
+        })
+        .then((result) => {
+          if ('error' in result) {
+            return
+          }
+          handleBaseBranchMrSelect(result.baseBranch, item)
+        })
+    },
+    [applyLinkedGitLabWorkItem, eligibleRepos, handleBaseBranchMrSelect, selectedRepo]
   )
 
   const handleSmartBranchSelect = useCallback(
@@ -1257,9 +1378,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const applyWorktreeMeta = useCallback(
     async (
       worktreeId: string,
-      meta: {
-        comment?: string
-      }
+      meta: Partial<WorktreeMeta>
     ): Promise<void> => {
       if (Object.keys(meta).length === 0) {
         return
@@ -1325,7 +1444,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const worktree = result.worktree
 
       const trimmedNote = note.trim()
-      await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
+      await applyWorktreeMeta(worktree.id, {
+        ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
+        ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
+        ...(linkedGitLabIssue !== null ? { linkedGitLabIssue } : {}),
+        ...(linkedGitLabMR !== null ? { linkedGitLabMR } : {}),
+        ...(trimmedNote ? { comment: trimmedNote } : {})
+      })
 
       const issueCommand =
         shouldRunIssueAutomation && issueCommandTrustDecision === 'run'
@@ -1397,6 +1522,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     applyWorktreeMeta,
     issueCommandTemplate,
     effectiveLinkedPR,
+    linkedGitLabIssue,
+    linkedGitLabMR,
     linkedWorkItem?.title,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
@@ -1643,6 +1770,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     name,
     onNameValueChange: handleNameValueChange,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
+    onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
     onSmartBranchSelect: handleSmartBranchSelect,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
     smartNameSelection,
@@ -1680,6 +1808,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     baseBranch,
     onBaseBranchChange: handleBaseBranchChange,
     onBaseBranchPrSelect: handleBaseBranchPrSelect,
+    onBaseBranchMrSelect: handleBaseBranchMrSelect,
     baseBranchLinkedPrNumber:
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
     selectedRepoPath: selectedRepo?.path ?? null,

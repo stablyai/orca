@@ -38,7 +38,10 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
     : 'linux'
 
 export type LinkedWorkItemSummary = {
-  type: 'issue' | 'pr'
+  /** 'mr' is the GitLab analogue of 'pr'. The shape is otherwise
+   *  identical so the linked-work-item badge in the composer renders
+   *  uniformly across providers. */
+  type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
   url: string

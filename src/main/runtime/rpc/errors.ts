@@ -43,6 +43,9 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_gone',
   'no_active_terminal',
   'repo_not_found',
+  'note_not_found',
+  'note_ambiguous',
+  'revision_conflict',
   'timeout',
   'invalid_limit'
 ])

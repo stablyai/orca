@@ -108,6 +108,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "shadcn": "^4.7.0",
+    "sherpa-onnx": "1.12.37",
     "simple-git": "^3.36.0",
     "sonner": "^2.0.7",
     "ssh2": "^1.17.0",
@@ -148,6 +149,13 @@
     "vite": "^7.3.2",
     "vitest": "^4.1.5"
   },
+  "optionalDependencies": {
+    "sherpa-onnx-darwin-arm64": "1.12.37",
+    "sherpa-onnx-darwin-x64": "1.12.37",
+    "sherpa-onnx-linux-arm64": "1.12.37",
+    "sherpa-onnx-linux-x64": "1.12.37",
+    "sherpa-onnx-win-x64": "1.12.37"
+  },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mts,cts}": [
       "oxlint",
@@ -162,13 +170,27 @@
   },
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
+    "supportedArchitectures": {
+      "os": [
+        "current",
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ]
+    },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
       "better-sqlite3",
       "cpu-features",
       "electron",
       "esbuild",
-      "node-pty"
+      "node-pty",
+      "sherpa-onnx"
     ],
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",

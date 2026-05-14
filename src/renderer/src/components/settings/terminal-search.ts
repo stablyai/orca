@@ -95,6 +95,14 @@ export const TERMINAL_FLOATING_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Quick Commands',
+    description: 'Saved terminal command snippets available from the terminal right-click menu.',
+    keywords: ['terminal', 'command', 'snippet', 'quick command', 'send', 'context menu']
+  }
+]
+
 export const TERMINAL_PANE_STYLE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Inactive Pane Opacity',
@@ -293,6 +301,7 @@ export function getTerminalPaneSearchEntries(platform: {
   return [
     ...TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
     ...TERMINAL_FLOATING_SEARCH_ENTRIES,
+    ...TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES,
     ...TERMINAL_RENDERING_SEARCH_ENTRIES,
     ...TERMINAL_CURSOR_SEARCH_ENTRIES,
     ...TERMINAL_PANE_STYLE_SEARCH_ENTRIES,

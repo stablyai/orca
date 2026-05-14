@@ -67,7 +67,14 @@ export function resolveWindowsShellLaunchArgs(
     if (wslInfo) {
       const escapedLinuxCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
       return {
-        shellArgs: ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`],
+        shellArgs: [
+          '-d',
+          wslInfo.distro,
+          '--',
+          'bash',
+          '-c',
+          `cd '${escapedLinuxCwd}' && exec bash -l`
+        ],
         effectiveCwd: defaultCwd,
         validationCwd: cwd
       }

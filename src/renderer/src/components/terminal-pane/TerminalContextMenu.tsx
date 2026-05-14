@@ -7,6 +7,7 @@ import {
   PanelBottomClose,
   PanelRightClose,
   Pencil,
+  SquareTerminal,
   X
 } from 'lucide-react'
 import {
@@ -15,9 +16,13 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
+import type { TerminalQuickCommand } from '../../../../shared/types'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -33,6 +38,8 @@ type TerminalContextMenuProps = {
   onSplitDown: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  quickCommands: TerminalQuickCommand[]
+  onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
 }
@@ -51,6 +58,8 @@ export default function TerminalContextMenu({
   onSplitDown,
   onClosePane,
   onClearScreen,
+  quickCommands,
+  onQuickCommand,
   onToggleExpand,
   onSetTitle
 }: TerminalContextMenuProps): React.JSX.Element {
@@ -112,6 +121,24 @@ export default function TerminalContextMenu({
           Paste
           <DropdownMenuShortcut>{mod}V</DropdownMenuShortcut>
         </DropdownMenuItem>
+        {quickCommands.length > 0 ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <SquareTerminal />
+              Quick Commands
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-60">
+              {quickCommands.map((command) => (
+                <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+                  <span className="truncate">{command.label}</span>
+                  {!command.appendEnter ? (
+                    <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+                  ) : null}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />

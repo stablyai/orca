@@ -1132,6 +1132,10 @@ export default function TerminalPane({
         onSplitDown={contextMenu.onSplitDown}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        quickCommands={(settings?.terminalQuickCommands ?? []).filter(
+          (command) => command.label.trim() && command.command.trimEnd()
+        )}
+        onQuickCommand={contextMenu.onQuickCommand}
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
       />

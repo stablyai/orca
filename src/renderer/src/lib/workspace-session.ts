@@ -10,6 +10,23 @@ import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-sessio
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
 
+/** Why (issue #1158): the debounced + shutdown session writers share this
+ *  gate so a hydration failure cannot overwrite orca-data.json with the
+ *  empty in-memory state the error path leaves behind.
+ *
+ *  - workspaceSessionReady gates the UI mount; it flips true even in the
+ *    error path so users aren't locked out of a crashed session.
+ *  - hydrationSucceeded only flips true after a clean load; it stays false
+ *    forever if hydration ever threw, which is what keeps the writer a
+ *    no-op for the rest of that process lifetime.
+ *
+ *  Both must be true to persist. */
+export function shouldPersistWorkspaceSession(
+  state: Pick<AppState, 'workspaceSessionReady' | 'hydrationSucceeded'>
+): boolean {
+  return state.workspaceSessionReady && state.hydrationSucceeded
+}
+
 export type WorkspaceSessionSnapshot = Pick<
   AppState,
   | 'activeRepoId'

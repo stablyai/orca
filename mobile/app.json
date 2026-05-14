@@ -19,6 +19,7 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your local network.",
+        "NSMicrophoneUsageDescription": "Allow Orca to record voice dictation and transcribe it on your paired desktop.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
@@ -51,6 +52,7 @@
       },
       "usesCleartextTraffic": true,
       "allowBackup": false,
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
       "package": "com.stably.orca.mobile",
       "versionCode": 1
     },

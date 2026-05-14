@@ -9,6 +9,8 @@ import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
 import { registerGitHubHandlers } from './github'
+import { registerGitLabHandlers } from './gitlab'
+import { registerHostedReviewHandlers } from './hosted-review'
 import { registerLinearHandlers } from './linear'
 import { registerFeedbackHandlers } from './feedback'
 import { registerExportHandlers } from './export'
@@ -16,6 +18,7 @@ import { registerStatsHandlers } from './stats'
 import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
+import { registerNotesHandlers } from './notes'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -31,6 +34,7 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerUIHandlers } from './ui'
+import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
@@ -83,6 +87,8 @@ export function registerCoreHandlers(
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
+  registerGitLabHandlers(store)
+  registerHostedReviewHandlers(store, stats)
   registerLinearHandlers()
   registerFeedbackHandlers()
   registerExportHandlers()
@@ -112,7 +118,9 @@ export function registerCoreHandlers(
   registerFilesystemHandlers(store)
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
+  registerNotesHandlers(runtime)
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
+  registerSpeechHandlers(store)
   warmSystemFontFamilies()
 }

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: the worktree card centralizes sidebar card state (selection, drag, agent status, git info, context menu) in one cohesive component so sidebar rendering doesn't fan out across files. */
-import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
@@ -29,7 +29,8 @@ import {
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
-import type { Worktree, Repo, PRInfo, IssueInfo } from '../../../../shared/types'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { Worktree, Repo, IssueInfo } from '../../../../shared/types'
 import {
   branchDisplayName,
   checksLabel,
@@ -38,8 +39,7 @@ import {
   EMPTY_BROWSER_TABS,
   FilledBellIcon
 } from './WorktreeCardHelpers'
-import { IssueSection, PrSection, CommentSection } from './WorktreeCardMeta'
-import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { IssueSection, ReviewSection, CommentSection } from './WorktreeCardMeta'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
@@ -73,7 +73,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
+  const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const handleEditIssue = useCallback(
@@ -153,6 +153,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
+  const hasNotesSurface = useAppStore((s) =>
+    (s.unifiedTabsByWorktree[worktree.id] ?? []).some((tab) => tab.contentType === 'notes')
+  )
   // Why: keep these as separate shallow selectors. Combining them into one
   // returned object nests freshly-created maps under fresh keys, so Zustand's
   // shallow memoization sees every unrelated store write as a change and
@@ -172,14 +175,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
-  const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
+  const hostedReviewCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const issueCacheKey = repo && worktree.linkedIssue ? `${repo.path}::${worktree.linkedIssue}` : ''
 
-  // Subscribe to ONLY the specific cache entry, not entire prCache/issueCache
-  const prEntry = useAppStore((s) => (prCacheKey ? s.prCache[prCacheKey] : undefined))
+  // Subscribe to ONLY the specific cache entry, not entire review/issue caches.
+  const hostedReviewEntry = useAppStore((s) =>
+    hostedReviewCacheKey ? s.hostedReviewCache[hostedReviewCacheKey] : undefined
+  )
   const issueEntry = useAppStore((s) => (issueCacheKey ? s.issueCache[issueCacheKey] : undefined))
 
-  const pr: PRInfo | null | undefined = prEntry !== undefined ? prEntry.data : undefined
+  const hostedReview: HostedReviewInfo | null | undefined =
+    hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
       ? issueEntry.data
@@ -196,8 +202,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
           title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
         }
       : null)
-  const prDisplay = getWorktreeCardPrDisplay(pr, worktree.linkedPR)
-
   const isDeleting = deleteState?.isDeleting ?? false
 
   // Why: the sidebar dot overlays the *stable* hook-reported states (blocked,
@@ -287,6 +291,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         browserTabs,
         ptyIdsByTabId: ptyIdsForWorktree,
         runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
+        hasNotesSurface,
         hasPermission,
         hasLiveDone,
         hasRetainedDone
@@ -296,6 +301,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       browserTabs,
       ptyIdsForWorktree,
       runtimePaneTitlesForWorktree,
+      hasNotesSurface,
       hasPermission,
       hasLiveDone,
       hasRetainedDone
@@ -305,36 +311,36 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
-  const previousPrLookupRef = useRef<{ cacheKey: string; linkedPRNumber: number | null } | null>(
-    null
-  )
 
-  // Skip GitHub fetches when the corresponding card sections are hidden.
+  // Skip hosted-review fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
-    if (repo && !isFolder && !worktree.isBare && prCacheKey && (showPR || showCI)) {
-      const linkedPRNumber = worktree.linkedPR ?? null
-      const previousLookup = previousPrLookupRef.current
-      const linkedPRChanged =
-        previousLookup !== null &&
-        previousLookup.cacheKey === prCacheKey &&
-        previousLookup.linkedPRNumber !== linkedPRNumber
-      previousPrLookupRef.current = { cacheKey: prCacheKey, linkedPRNumber }
+    if (
+      repo &&
+      !repo.connectionId &&
+      !isFolder &&
+      !worktree.isBare &&
+      hostedReviewCacheKey &&
+      (showPR || showCI)
+    ) {
       // Why: pass linkedPR so worktrees created from a PR (whose new local
-      // branch differs from the PR's head ref) still resolve their PR via
-      // a number-based fallback in the main process. Force when that fallback
-      // changes so the branch cache stops showing stale linked-PR data.
-      fetchPRForBranch(repo.path, branch, { linkedPRNumber, force: linkedPRChanged })
+      // branch differs from the remote head ref) still resolve their PR/MR via
+      // a number-based fallback in the main process.
+      fetchHostedReviewForBranch(repo.path, branch, {
+        linkedGitHubPR: worktree.linkedPR ?? null,
+        linkedGitLabMR: worktree.linkedGitLabMR ?? null
+      })
     }
   }, [
     repo,
     isFolder,
     worktree.isBare,
     worktree.linkedPR,
-    fetchPRForBranch,
+    worktree.linkedGitLabMR,
+    fetchHostedReviewForBranch,
     branch,
-    prCacheKey,
+    hostedReviewCacheKey,
     showPR,
     showCI
   ])
@@ -577,24 +583,24 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
 
           {/* CI Checks & PR state on the right */}
-          {cardProps.includes('ci') && pr && pr.checksStatus !== 'neutral' && (
+          {cardProps.includes('ci') && hostedReview && hostedReview.status !== 'neutral' && (
             <div className="flex items-center gap-2 shrink-0">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
-                    {pr.checksStatus === 'success' && (
+                    {hostedReview.status === 'success' && (
                       <CircleCheck className="size-3.5 text-emerald-500" />
                     )}
-                    {pr.checksStatus === 'failure' && (
+                    {hostedReview.status === 'failure' && (
                       <CircleX className="size-3.5 text-rose-500" />
                     )}
-                    {pr.checksStatus === 'pending' && (
+                    {hostedReview.status === 'pending' && (
                       <LoaderCircle className="size-3.5 text-amber-500 animate-spin" />
                     )}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  <span>CI checks {checksLabel(pr.checksStatus).toLowerCase()}</span>
+                  <span>CI checks {checksLabel(hostedReview.status).toLowerCase()}</span>
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -642,20 +648,19 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <CacheTimer worktreeId={worktree.id} />
         </div>
 
-        {/* Meta section: Issue / PR Links / Comment
+        {/* Meta section: Issue / hosted review / Comment
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
         {((cardProps.includes('issue') && issueDisplay) ||
-          (cardProps.includes('pr') && prDisplay) ||
+          (cardProps.includes('pr') && hostedReview) ||
           (cardProps.includes('comment') && worktree.comment)) && (
           <div className="flex flex-col gap-[3px] mt-0.5">
             {cardProps.includes('issue') && issueDisplay && (
               <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
             )}
-            {cardProps.includes('pr') && prDisplay && (
-              <PrSection
-                pr={prDisplay}
-                onClick={handleEditIssue}
+            {cardProps.includes('pr') && hostedReview && (
+              <ReviewSection
+                review={hostedReview}
                 onEdit={handleEditPr}
                 onRemove={handleRemovePr}
               />

@@ -93,9 +93,9 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
-  GitUpstreamStatus,
-  PRInfo
+  GitUpstreamStatus
 } from '../../../../shared/types'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 
 type SourceControlScope = 'all' | 'uncommitted'
@@ -176,6 +176,30 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   both_deleted: 'Both deleted'
 }
 
+function hostedReviewStateClass(review: HostedReviewInfo): string {
+  if (review.state === 'merged') {
+    return 'text-purple-500/80'
+  }
+  if (review.state === 'open') {
+    return 'text-emerald-500/80'
+  }
+  if (review.state === 'closed') {
+    return 'text-muted-foreground/60'
+  }
+  return 'text-muted-foreground/50'
+}
+
+function HostedReviewIcon({
+  review,
+  className
+}: {
+  review: HostedReviewInfo
+  className?: string
+}): React.JSX.Element {
+  const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  return <Icon className={cn(className, hostedReviewStateClass(review))} />
+}
+
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement>(null)
   // Why: React setState is async, so a rapid double-click on the Commit
@@ -198,8 +222,8 @@ function SourceControlInner(): React.JSX.Element {
   const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
-  const prCache = useAppStore((s) => s.prCache)
-  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
+  const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
+  const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
@@ -363,22 +387,36 @@ function SourceControlInner(): React.JSX.Element {
   const hasUncommittedEntries = entries.length > 0
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
-  const prCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
-  const prInfo: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
+  const hostedReviewCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
+  const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
+    ? (hostedReviewCache[hostedReviewCacheKey]?.data ?? null)
+    : null
 
-  const linkedPR = activeWorktree?.linkedPR ?? null
+  const linkedGitHubPR = activeWorktree?.linkedPR ?? null
+  const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
     }
+    if (activeRepo.connectionId) {
+      return
+    }
 
-    // Why: the Source Control panel renders the branch's PR badge directly.
+    // Why: the Source Control panel renders branch review status directly.
     // When a terminal checkout moves this worktree onto a new branch, we need
-    // to fetch that branch's PR immediately instead of waiting for the user to
-    // reselect the worktree or open the separate Checks panel. Pass linkedPR
-    // so create-from-PR worktrees resolve via the number-based fallback.
-    void fetchPRForBranch(activeRepo.path, branchName, { linkedPRNumber: linkedPR })
-  }, [activeRepo, branchName, fetchPRForBranch, isBranchVisible, isFolder, linkedPR])
+    // to fetch that branch's PR/MR immediately instead of waiting for the user
+    // to reselect the worktree. The linked ids handle create-from-review
+    // worktrees whose local branch differs from the remote head branch.
+    void fetchHostedReviewForBranch(activeRepo.path, branchName, { linkedGitHubPR, linkedGitLabMR })
+  }, [
+    activeRepo,
+    branchName,
+    fetchHostedReviewForBranch,
+    isBranchVisible,
+    isFolder,
+    linkedGitHubPR,
+    linkedGitLabMR
+  ])
 
   const grouped = useMemo(() => {
     const groups = {
@@ -1346,25 +1384,17 @@ function SourceControlInner(): React.JSX.Element {
               {value === 'all' ? 'All' : 'Uncommitted'}
             </button>
           ))}
-          {prInfo && (
+          {hostedReview && (
             <div className="ml-auto mb-1.5 flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
-              <PullRequestIcon
-                className={cn(
-                  'size-3 shrink-0',
-                  prInfo.state === 'merged' && 'text-purple-500/80',
-                  prInfo.state === 'open' && 'text-emerald-500/80',
-                  prInfo.state === 'closed' && 'text-muted-foreground/60',
-                  prInfo.state === 'draft' && 'text-muted-foreground/50'
-                )}
-              />
+              <HostedReviewIcon review={hostedReview} className="size-3 shrink-0" />
               <a
-                href={prInfo.url}
+                href={hostedReview.url}
                 target="_blank"
                 rel="noreferrer"
                 className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
-                PR #{prInfo.number}
+                {hostedReview.provider === 'gitlab' ? 'MR' : 'PR'} #{hostedReview.number}
               </a>
             </div>
           )}

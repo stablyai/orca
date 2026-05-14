@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree } from '@/store/selectors'
-import { dirname } from '@/lib/path'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { basename, dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
+import { FileExplorerToolbar } from './FileExplorerToolbar'
+import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import { splitPathSegments } from './path-tree'
 import { buildFolderStatusMap, buildStatusMap } from './status-display'
@@ -20,12 +21,14 @@ import { useFileExplorerKeys } from './useFileExplorerKeys'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerImport } from './useFileExplorerImport'
+import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const toggleDir = useAppStore((s) => s.toggleDir)
@@ -39,6 +42,7 @@ function FileExplorerInner(): React.JSX.Element {
   const closeFile = useAppStore((s) => s.closeFile)
 
   const worktreePath = activeWorktree?.path ?? null
+  const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
 
   const expanded = useMemo(
     () =>
@@ -58,6 +62,7 @@ function FileExplorerInner(): React.JSX.Element {
     refreshDir,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
+  const manualRefresh = useFileExplorerManualRefresh(refreshTree)
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
@@ -290,9 +295,10 @@ function FileExplorerInner(): React.JSX.Element {
   return (
     <>
       <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
+        <FileExplorerToolbar repoName={repoName} refresh={manualRefresh} />
         <ScrollArea
           className={cn(
-            'h-full min-h-0',
+            'min-h-0 flex-1',
             isRootDragOver &&
               !(dragSourcePath && dirname(dragSourcePath) === worktreePath) &&
               'bg-border',
@@ -332,20 +338,12 @@ function FileExplorerInner(): React.JSX.Element {
             startNew('file', worktreePath, 0)
           }}
         >
-          {isLoading && (
-            <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-            </div>
-          )}
-          {hasError && (
-            <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-              Could not load files for this worktree: {rootError}
-            </div>
-          )}
-          {isEmpty && (
-            <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-              No files in this worktree
-            </div>
+          {!showTree && (
+            <FileExplorerTreeStatus
+              isLoading={isLoading}
+              error={hasError ? rootError : null}
+              isEmpty={isEmpty}
+            />
           )}
           {showTree && (
             <FileExplorerVirtualRows

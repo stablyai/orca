@@ -46,7 +46,8 @@ vi.mock('../../../resources/icon-dev.png?asset', () => ({
 
 vi.mock('../browser/browser-manager', () => ({
   browserManager: {
-    attachGuestPolicies: attachGuestPoliciesMock
+    attachGuestPolicies: attachGuestPoliciesMock,
+    setDictationShortcutForwardingPredicate: vi.fn()
   }
 }))
 
@@ -316,6 +317,98 @@ describe('createMainWindow', () => {
       expect(preventDefault).not.toHaveBeenCalled()
     }
 
+    expect(webContents.send).not.toHaveBeenCalled()
+  })
+
+  it('only intercepts the dictation chord when enabled toggle mode can handle it', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    const voice: { enabled: boolean; sttModel: string; dictationMode: 'toggle' | 'hold' } = {
+      enabled: false,
+      sttModel: '',
+      dictationMode: 'toggle'
+    }
+    createMainWindow({
+      getUI: () => ({}) as never,
+      getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
+      updateUI: vi.fn()
+    } as never)
+
+    const isDarwin = process.platform === 'darwin'
+    const dictationInput = {
+      type: 'keyDown',
+      code: 'KeyE',
+      key: 'e',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: false
+    }
+
+    const disabledPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: disabledPreventDefault } as never,
+      dictationInput as never
+    )
+    expect(disabledPreventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    voice.enabled = true
+    voice.sttModel = 'test-model'
+    voice.dictationMode = 'hold'
+    const holdPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: holdPreventDefault } as never,
+      dictationInput as never
+    )
+    expect(holdPreventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    voice.dictationMode = 'toggle'
+    const togglePreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: togglePreventDefault } as never,
+      dictationInput as never
+    )
+    expect(togglePreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    webContents.send.mockClear()
+    const repeatPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: repeatPreventDefault } as never,
+      { ...dictationInput, isAutoRepeat: true } as never
+    )
+    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).not.toHaveBeenCalled()
   })
 

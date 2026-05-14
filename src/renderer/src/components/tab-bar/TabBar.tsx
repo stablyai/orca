@@ -5,7 +5,7 @@
  * more clarity than the ~5 lines of bloat is worth. */
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
-import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
+import { FilePlus, Globe, Plus, TerminalSquare, FileText } from 'lucide-react'
 import type {
   BrowserTab as BrowserTabState,
   TerminalTab,
@@ -17,6 +17,7 @@ import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
 import BrowserTab, { getBrowserTabLabel } from './BrowserTab'
+import { ProjectNotesTab, type ProjectNotesTabState } from './ProjectNotesTab'
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
@@ -32,8 +33,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import type { NoteSummary } from '../../../../shared/notes-types'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = navigator.userAgent.includes('Windows')
@@ -58,6 +63,8 @@ type TabBarProps = {
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
+  onNewNotesTab?: (noteId?: string) => void
+  notesWorktreeId?: string | null
   /** Whether WSL is installed on this Windows machine. When true, the "+"
    *  dropdown shows a WSL option under the terminal submenu. */
   wslAvailable?: boolean
@@ -66,13 +73,17 @@ type TabBarProps = {
   onTogglePaneExpand: (tabId: string) => void
   editorFiles?: (OpenFile & { tabId?: string })[]
   browserTabs?: (BrowserTabState & { tabId?: string })[]
+  notesTabs?: ProjectNotesTabState[]
   activeFileId?: string | null
   activeBrowserTabId?: string | null
+  activeNotesTabId?: string | null
   activeTabType?: WorkspaceVisibleTabType
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onActivateBrowserTab?: (tabId: string) => void
   onCloseBrowserTab?: (tabId: string) => void
+  onActivateNotesTab?: (tabId: string) => void
+  onCloseNotesTab?: (tabId: string) => void
   onDuplicateBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
   onPinFile?: (fileId: string, tabId?: string) => void
@@ -98,6 +109,7 @@ type TabItem =
       unifiedTabId: string
       data: BrowserTabState & { tabId?: string }
     }
+  | { type: 'notes'; id: string; unifiedTabId: string; data: ProjectNotesTabState }
 
 function getTabDragLabel(item: TabItem): string {
   if (item.type === 'terminal') {
@@ -105,6 +117,9 @@ function getTabDragLabel(item: TabItem): string {
   }
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
+  }
+  if (item.type === 'notes') {
+    return item.data.label
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -125,18 +140,24 @@ function TabBarInner({
   terminalOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
+  onNewNotesTab,
+  notesWorktreeId,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
   editorFiles,
   browserTabs,
+  notesTabs,
   activeFileId,
   activeBrowserTabId,
+  activeNotesTabId,
   activeTabType,
   onActivateFile,
   onCloseFile,
   onActivateBrowserTab,
   onCloseBrowserTab,
+  onActivateNotesTab,
+  onCloseNotesTab,
   onDuplicateBrowserTab,
   onCloseAllFiles,
   onPinFile,
@@ -153,6 +174,10 @@ function TabBarInner({
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
   const [pwshAvailable, setPwshAvailable] = useState(false)
+  const [projectNotes, setProjectNotes] = useState<NoteSummary[]>([])
+  const [projectNotesLoading, setProjectNotesLoading] = useState(false)
+  const [projectNotesError, setProjectNotesError] = useState<string | null>(null)
+  const [projectNotesMenuOpen, setProjectNotesMenuOpen] = useState(false)
   useEffect(() => {
     if (!isWindows) {
       setPwshAvailable(false)
@@ -162,6 +187,8 @@ function TabBarInner({
     void window.api.pwsh.isAvailable().then(setPwshAvailable)
   }, [])
   const resolvedGroupId = groupId ?? worktreeId
+  const targetNotesWorktreeId = notesWorktreeId ?? worktreeId
+
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
     [worktreeId, gitStatusByWorktree]
@@ -182,6 +209,49 @@ function TabBarInner({
     return () => window.removeEventListener('blur', dismiss)
   }, [newTabMenuOpen])
 
+  useEffect(() => {
+    if (!newTabMenuOpen) {
+      setProjectNotesMenuOpen(false)
+      return
+    }
+    const refreshProjectNotes = async (): Promise<void> => {
+      if (!onNewNotesTab) {
+        return
+      }
+      let context: { projectId: string; worktreeId: string } | null = null
+      if (targetNotesWorktreeId) {
+        const state = useAppStore.getState()
+        const worktree = Object.values(state.worktreesByRepo)
+          .flat()
+          .find((candidate) => candidate.id === targetNotesWorktreeId)
+        if (worktree) {
+          const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
+          context = { projectId: repo?.id ?? worktree.repoId, worktreeId: targetNotesWorktreeId }
+        }
+      }
+      if (!context) {
+        setProjectNotes([])
+        setProjectNotesError(null)
+        return
+      }
+      setProjectNotesLoading(true)
+      setProjectNotesError(null)
+      try {
+        const result = await window.api.notes.list({
+          projectId: context.projectId,
+          worktreeId: context.worktreeId,
+          limit: 100
+        })
+        setProjectNotes(result.notes)
+      } catch (err) {
+        setProjectNotesError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setProjectNotesLoading(false)
+      }
+    }
+    void refreshProjectNotes()
+  }, [newTabMenuOpen, onNewNotesTab, targetNotesWorktreeId])
+
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(
     () => new Map((editorFiles ?? []).map((f) => [f.tabId ?? f.id, f])),
@@ -191,14 +261,22 @@ function TabBarInner({
     () => new Map((browserTabs ?? []).map((t) => [t.id, t])),
     [browserTabs]
   )
+  const notesMap = useMemo(() => new Map((notesTabs ?? []).map((t) => [t.id, t])), [notesTabs])
 
   const terminalIds = useMemo(() => tabs.map((t) => t.id), [tabs])
   const editorFileIds = useMemo(() => editorFiles?.map((f) => f.tabId ?? f.id) ?? [], [editorFiles])
   const browserTabIds = useMemo(() => browserTabs?.map((tab) => tab.id) ?? [], [browserTabs])
+  const notesTabIds = useMemo(() => notesTabs?.map((tab) => tab.id) ?? [], [notesTabs])
 
   // Build the unified ordered list, reconciling stored order with current items
   const orderedItems = useMemo(() => {
-    const ids = reconcileTabOrder(tabBarOrder, terminalIds, editorFileIds, browserTabIds)
+    const ids = reconcileTabOrder(
+      tabBarOrder,
+      terminalIds,
+      editorFileIds,
+      browserTabIds,
+      notesTabIds
+    )
     const items: TabItem[] = []
     for (const id of ids) {
       const terminal = terminalMap.get(id)
@@ -224,10 +302,25 @@ function TabBarInner({
           unifiedTabId: browserTab.tabId ?? browserTab.id,
           data: browserTab
         })
+        continue
+      }
+      const notesTab = notesMap.get(id)
+      if (notesTab) {
+        items.push({ type: 'notes', id, unifiedTabId: notesTab.id, data: notesTab })
       }
     }
     return items
-  }, [tabBarOrder, terminalIds, editorFileIds, browserTabIds, terminalMap, editorMap, browserMap])
+  }, [
+    tabBarOrder,
+    terminalIds,
+    editorFileIds,
+    browserTabIds,
+    notesTabIds,
+    terminalMap,
+    editorMap,
+    browserMap,
+    notesMap
+  ])
 
   const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
 
@@ -426,6 +519,24 @@ function TabBarInner({
                 />
               )
             }
+            if (item.type === 'notes') {
+              return (
+                <ProjectNotesTab
+                  key={item.id}
+                  tab={item.data}
+                  isActive={activeTabType === 'notes' && activeNotesTabId === item.id}
+                  hasTabsToRight={index < orderedItems.length - 1}
+                  onActivate={() => onActivateNotesTab?.(item.id)}
+                  onClose={() => onCloseNotesTab?.(item.id)}
+                  onCloseToRight={() => onCloseToRight(item.id)}
+                  onSplitGroup={(direction, sourceVisibleTabId) =>
+                    onCreateSplitGroup?.(direction, sourceVisibleTabId)
+                  }
+                  dragData={dragData}
+                  dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                />
+              )
+            }
             return (
               <EditorFileTab
                 key={item.id}
@@ -563,6 +674,77 @@ function TabBarInner({
               New Markdown
               <DropdownMenuShortcut>{NEW_FILE_SHORTCUT}</DropdownMenuShortcut>
             </DropdownMenuItem>
+          )}
+          {onNewNotesTab && (
+            <DropdownMenuSub open={projectNotesMenuOpen} onOpenChange={setProjectNotesMenuOpen}>
+              <DropdownMenuSubTrigger
+                className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+                onPointerEnter={() => setProjectNotesMenuOpen(true)}
+                onFocus={() => setProjectNotesMenuOpen(true)}
+                onClick={() => {
+                  // Why: this row looks like the other creation commands in
+                  // the + menu. Keep hover-to-pick-saved-note, but make a
+                  // direct click create a fresh note instead of only opening
+                  // the submenu.
+                  onNewNotesTab()
+                  setProjectNotesMenuOpen(false)
+                  setNewTabMenuOpen(false)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') {
+                    return
+                  }
+                  event.preventDefault()
+                  onNewNotesTab()
+                  setProjectNotesMenuOpen(false)
+                  setNewTabMenuOpen(false)
+                }}
+              >
+                <FileText className="size-4 text-muted-foreground" />
+                Project Notes
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-64">
+                <DropdownMenuItem
+                  onSelect={() => onNewNotesTab()}
+                  className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+                >
+                  <FileText className="size-3.5 text-muted-foreground" />
+                  New Project Note
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {projectNotesLoading ? (
+                  <DropdownMenuItem disabled className="text-muted-foreground">
+                    Loading notes...
+                  </DropdownMenuItem>
+                ) : projectNotesError ? (
+                  <DropdownMenuItem disabled className="text-destructive">
+                    Failed to load notes
+                  </DropdownMenuItem>
+                ) : projectNotes.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-muted-foreground">
+                    No saved notes
+                  </DropdownMenuItem>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto pr-0.5">
+                    {projectNotes.map((note) => (
+                      <DropdownMenuItem
+                        key={note.id}
+                        onSelect={() => onNewNotesTab(note.id)}
+                        className="items-start gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5"
+                      >
+                        <FileText className="mt-0.5 size-3.5 text-muted-foreground" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{note.title}</span>
+                          <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                            {note.preview || note.relativePath}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           )}
           {showAgentLaunchItems ? (
             <>
