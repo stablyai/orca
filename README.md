@@ -102,7 +102,7 @@ yay -S stably-orca-git
 Control your agents from your phone.
 
 <p align="center">
-  <picture><source srcset="docs/assets/feature-wall/mobile-companion-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-showcase.jpg" alt="Orca desktop with the mobile companion app" width="720" /></picture>
+  <picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="720" /></picture>
 </p>
 
 - **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)

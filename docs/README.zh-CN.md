@@ -102,7 +102,7 @@ yay -S stably-orca-git
 用手机控制你的智能体。
 
 <p align="center">
-  <picture><source srcset="assets/feature-wall/mobile-companion-showcase.gif" type="image/gif"><img src="assets/feature-wall/mobile-companion-showcase.jpg" alt="Orca 桌面端与移动 companion 应用" width="720" /></picture>
+  <picture><source srcset="assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca 桌面端与移动 companion 应用" width="720" /></picture>
 </p>
 
 - **iOS:** [从 App Store 下载](https://apps.apple.com/us/app/orca-ide/id6766130217)
