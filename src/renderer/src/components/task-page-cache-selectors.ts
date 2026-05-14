@@ -32,13 +32,13 @@ export function selectTaskPageWorkItemsCacheEntries(
   repos: readonly TaskPageRepoCacheInput[],
   limit: number,
   query: string
-): Array<CacheEntry<GitHubWorkItem[]> | undefined> {
+): (CacheEntry<GitHubWorkItem[]> | undefined)[] {
   return repos.map((repo) => workItemsCache[workItemsCacheKey(repo.path, limit, query)])
 }
 
 export function buildTaskPageRepoSourceState(
   repos: readonly TaskPageRepoCacheInput[],
-  entries: ReadonlyArray<CacheEntry<GitHubWorkItem[]> | undefined>
+  entries: readonly (CacheEntry<GitHubWorkItem[]> | undefined)[]
 ): TaskPageRepoSourceState[] {
   return repos.map((repo, index) => {
     const entry = entries[index]
