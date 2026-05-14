@@ -223,8 +223,8 @@ test.describe('Onboarding flow', () => {
 
     await orcaPage.getByRole('button', { name: 'Set up' }).click()
     await expectSkillSetupTerminalReady(orcaPage)
-    await expect(orcaPage.getByRole('button', { name: 'Continue to project setup' })).toBeVisible()
-    await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
+    await expect(orcaPage.getByRole('button', { name: 'Continue', exact: true })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Continue' })).toHaveCount(0)
@@ -339,7 +339,7 @@ test.describe('Onboarding flow', () => {
     await installSafeOnboardingFeatureSetupDeps(orcaPage)
     await orcaPage.getByRole('button', { name: 'Set up' }).click()
     await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
-    await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
+    await orcaPage.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
       .poll(
@@ -417,7 +417,7 @@ test.describe('Onboarding flow', () => {
 
     await orcaPage.getByRole('button', { name: 'Set up' }).click()
     await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
-    await orcaPage.getByRole('button', { name: 'Continue to project setup' }).click()
+    await orcaPage.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {

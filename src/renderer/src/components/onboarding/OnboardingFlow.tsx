@@ -47,13 +47,11 @@ export default function OnboardingFlow({
   const flow = useOnboardingFlow(onboarding, onOnboardingChange)
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
-  const primaryActionLabel =
-    busyLabel ??
-    (currentStep.id === 'notifications' && flow.featureSetupTerminalCommand
-      ? 'Continue to project setup'
-      : currentStep.id === 'notifications' && flow.hasSelectedFeatureSetup
-        ? 'Set up'
-        : 'Continue')
+  const shouldShowSetupAction =
+    currentStep.id === 'notifications' &&
+    flow.hasSelectedFeatureSetup &&
+    !flow.featureSetupTerminalCommand
+  const primaryActionLabel = busyLabel ?? (shouldShowSetupAction ? 'Set up' : 'Continue')
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).
   const { next: flowNext, openFolder: flowOpenFolder } = flow
