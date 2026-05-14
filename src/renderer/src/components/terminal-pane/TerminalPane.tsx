@@ -33,6 +33,7 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
+import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
   getFitOverrideForPty,
   getPaneIdsForPty,
@@ -905,7 +906,7 @@ export default function TerminalPane({
   // Register a capture callback for shutdown. The beforeunload handler in
   // App.tsx calls all registered callbacks to serialize terminal buffers.
   useEffect(() => {
-    const captureBuffers = (): void => {
+    const captureBuffers = (options?: { includeLocalBuffers?: boolean }): void => {
       const manager = managerRef.current
       const container = containerRef.current
       if (!manager || !container) {
@@ -921,14 +922,22 @@ export default function TerminalPane({
       // bytes. Without preservation, that empty pass would wipe a known-good
       // buffer. Merge prior state in for leaves whose live capture came back
       // empty. Same shape as persistLayoutSnapshot.
-      const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      const state = useAppStore.getState()
+      const existing = state.terminalLayoutsByTabId[tabId]
+      const includeLocalBuffers = options?.includeLocalBuffers ?? true
+      const shouldCaptureScrollbackBuffers = includeLocalBuffers
+        ? true
+        : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
       const layout = captureTerminalShutdownLayout({
         manager,
         container,
         expandedPaneId: expandedPaneIdRef.current,
         paneTransports: paneTransportsRef.current,
         paneTitlesByPaneId: paneTitlesRef.current,
-        existingLayout: existing
+        existingLayout: existing,
+        // Why: beforeunload skips local/floating bytes because session payloads
+        // immediately prune them; worktree sleep keeps them as defense-in-depth.
+        captureBuffers: shouldCaptureScrollbackBuffers
       })
       setTabLayout(tabId, layout)
     }
@@ -940,7 +949,7 @@ export default function TerminalPane({
         shutdownBufferCaptures.delete(tabId)
       }
     }
-  }, [tabId, setTabLayout])
+  }, [tabId, worktreeId, setTabLayout])
 
   const handleStartRename = useCallback((paneId: number) => {
     setRenameValue(paneTitlesRef.current[paneId] ?? '')

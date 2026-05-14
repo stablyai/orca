@@ -560,7 +560,7 @@ function App(): React.JSX.Element {
       }
       for (const capture of shutdownBufferCaptures.values()) {
         try {
-          capture()
+          capture({ includeLocalBuffers: false })
         } catch {
           // Don't let one pane's failure block the rest.
         }

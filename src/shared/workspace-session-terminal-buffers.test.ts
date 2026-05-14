@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import type { WorkspaceSessionState } from './types'
-import { pruneLocalTerminalScrollbackBuffers } from './workspace-session-terminal-buffers'
+import {
+  pruneLocalTerminalScrollbackBuffers,
+  shouldPreserveTerminalScrollbackBuffers
+} from './workspace-session-terminal-buffers'
 
 function makeSession(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceSessionState {
   return {
@@ -55,6 +58,26 @@ function makeSession(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceS
 }
 
 describe('pruneLocalTerminalScrollbackBuffers', () => {
+  it('classifies which worktrees need renderer-captured scrollback', () => {
+    const repos = [
+      { id: 'local-repo', connectionId: null },
+      { id: 'remote-repo', connectionId: 'ssh-target-1' }
+    ]
+
+    expect(shouldPreserveTerminalScrollbackBuffers('local-repo::/local/worktree', repos)).toBe(
+      false
+    )
+    expect(shouldPreserveTerminalScrollbackBuffers('remote-repo::/remote/worktree', repos)).toBe(
+      true
+    )
+    expect(shouldPreserveTerminalScrollbackBuffers(FLOATING_TERMINAL_WORKTREE_ID, repos)).toBe(
+      false
+    )
+    expect(
+      shouldPreserveTerminalScrollbackBuffers('unknown-repo::/maybe-remote/worktree', repos)
+    ).toBe(true)
+  })
+
   it('drops local buffers while preserving SSH buffers and PTY bindings', () => {
     const result = pruneLocalTerminalScrollbackBuffers(makeSession(), [
       { id: 'local-repo', connectionId: null },

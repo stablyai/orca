@@ -21,6 +21,7 @@ type CaptureTerminalShutdownLayoutArgs = {
   paneTransports: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>>
   paneTitlesByPaneId: Record<number, string>
   existingLayout: TerminalLayoutSnapshot | undefined
+  captureBuffers?: boolean
 }
 
 export function captureTerminalShutdownLayout({
@@ -29,41 +30,44 @@ export function captureTerminalShutdownLayout({
   expandedPaneId,
   paneTransports,
   paneTitlesByPaneId,
-  existingLayout
+  existingLayout,
+  captureBuffers = true
 }: CaptureTerminalShutdownLayoutArgs): TerminalLayoutSnapshot {
   const panes = manager.getPanes()
   const buffers: Record<string, string> = {}
 
-  for (const pane of panes) {
-    try {
-      // Why: non-focused panes may have renderer-throttled PTY bytes queued;
-      // push them into xterm before taking the shutdown scrollback snapshot.
-      flushTerminalOutput(pane.terminal)
-      const leafId = paneLeafId(pane.id)
-      let scrollback = pane.terminal.options.scrollback ?? 10_000
-      let serialized = pane.serializeAddon.serialize({ scrollback })
-      // Cap at 512KB — binary search for largest scrollback that fits.
-      if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
-        let lo = 1
-        let hi = scrollback
-        let best = ''
-        while (lo <= hi) {
-          const mid = Math.floor((lo + hi) / 2)
-          const attempt = pane.serializeAddon.serialize({ scrollback: mid })
-          if (attempt.length <= MAX_BUFFER_BYTES) {
-            best = attempt
-            lo = mid + 1
-          } else {
-            hi = mid - 1
+  if (captureBuffers) {
+    for (const pane of panes) {
+      try {
+        // Why: non-focused panes may have renderer-throttled PTY bytes queued;
+        // push them into xterm before taking the shutdown scrollback snapshot.
+        flushTerminalOutput(pane.terminal)
+        const leafId = paneLeafId(pane.id)
+        let scrollback = pane.terminal.options.scrollback ?? 10_000
+        let serialized = pane.serializeAddon.serialize({ scrollback })
+        // Cap at 512KB — binary search for largest scrollback that fits.
+        if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
+          let lo = 1
+          let hi = scrollback
+          let best = ''
+          while (lo <= hi) {
+            const mid = Math.floor((lo + hi) / 2)
+            const attempt = pane.serializeAddon.serialize({ scrollback: mid })
+            if (attempt.length <= MAX_BUFFER_BYTES) {
+              best = attempt
+              lo = mid + 1
+            } else {
+              hi = mid - 1
+            }
           }
+          serialized = best
         }
-        serialized = best
+        if (serialized.length > 0) {
+          buffers[leafId] = serialized
+        }
+      } catch {
+        // Serialization failure for one pane should not block others.
       }
-      if (serialized.length > 0) {
-        buffers[leafId] = serialized
-      }
-    } catch {
-      // Serialization failure for one pane should not block others.
     }
   }
 
@@ -74,11 +78,13 @@ export function captureTerminalShutdownLayout({
     .map((pane) => [paneLeafId(pane.id), paneTransports.get(pane.id)?.getPtyId() ?? null] as const)
     .filter((entry): entry is readonly [string, string] => entry[1] !== null)
 
-  const mergedBuffers = mergeCapturedLeafState({
-    prior: existingLayout?.buffersByLeafId,
-    fresh: buffers,
-    currentLeafIds
-  })
+  const mergedBuffers = captureBuffers
+    ? mergeCapturedLeafState({
+        prior: existingLayout?.buffersByLeafId,
+        fresh: buffers,
+        currentLeafIds
+      })
+    : {}
   const mergedPtyIds = mergeCapturedLeafState({
     prior: existingLayout?.ptyIdsByLeafId,
     fresh: Object.fromEntries(ptyEntries),

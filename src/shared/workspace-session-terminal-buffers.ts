@@ -4,6 +4,36 @@ import { getRepoIdFromWorktreeId } from './worktree-id'
 
 export type RepoConnection = Pick<Repo, 'id' | 'connectionId'>
 
+function shouldPreserveTerminalScrollbackBuffersForRepoMap(
+  worktreeId: string | undefined,
+  connectionIdByRepoId: ReadonlyMap<string, string | null | undefined>
+): boolean {
+  if (worktreeId === undefined || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return false
+  }
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const connectionId = connectionIdByRepoId.get(repoId)
+  if (connectionId) {
+    return true
+  }
+  if (!connectionIdByRepoId.has(repoId)) {
+    // Why: when the repo catalog is not hydrated, treating the worktree as SSH
+    // avoids losing the only scrollback source a relay-backed terminal may have.
+    return true
+  }
+  return false
+}
+
+export function shouldPreserveTerminalScrollbackBuffers(
+  worktreeId: string | undefined,
+  repos: readonly RepoConnection[]
+): boolean {
+  return shouldPreserveTerminalScrollbackBuffersForRepoMap(
+    worktreeId,
+    new Map(repos.map((repo) => [repo.id, repo.connectionId] as const))
+  )
+}
+
 export function pruneLocalTerminalScrollbackBuffers(
   session: WorkspaceSessionState,
   repos: readonly RepoConnection[]
@@ -22,29 +52,8 @@ export function pruneLocalTerminalScrollbackBuffers(
       continue
     }
     const worktreeId = worktreeIdByTabId.get(tabId)
-    if (worktreeId !== undefined) {
-      if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-        terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
-        const layoutWithoutBuffers = { ...layout }
-        delete layoutWithoutBuffers.buffersByLeafId
-        terminalLayoutsByTabId[tabId] = layoutWithoutBuffers
-        continue
-      }
-      const repoId = getRepoIdFromWorktreeId(worktreeId)
-      const connectionId = connectionIdByRepoId.get(repoId)
-      if (connectionId) {
-        continue
-      }
-      if (!connectionIdByRepoId.has(repoId)) {
-        // Why: when the repo catalog does not know this repoId — either because
-        // it is not yet hydrated, or because the repo has been removed — we
-        // cannot classify the worktree as local vs SSH. Preserve the buffer
-        // until a later call with a hydrated catalog can decide. SSH buffers
-        // are the only authoritative scrollback source, so the cost of a wrong
-        // prune (lost remote scrollback) is higher than the cost of a wrong
-        // preserve (extra bytes persisted).
-        continue
-      }
+    if (shouldPreserveTerminalScrollbackBuffersForRepoMap(worktreeId, connectionIdByRepoId)) {
+      continue
     }
 
     terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
