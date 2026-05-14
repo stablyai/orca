@@ -6,6 +6,7 @@ import type {
   WorkspaceVisibleTabType
 } from '../../../shared/types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
+import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
 
@@ -264,7 +265,10 @@ export function buildWorkspaceSessionPayload(
       snapshot.browserPagesByWorkspace,
       snapshot.activeBrowserTabIdByWorktree
     ),
-    browserUrlHistory: snapshot.browserUrlHistory,
+    // Why: browser history is user-lifetime state. Enforce the storage cap at
+    // the payload boundary so stale renderer state cannot make every session
+    // write stringify an oversized legacy history array.
+    browserUrlHistory: normalizeBrowserHistoryEntries(snapshot.browserUrlHistory),
     unifiedTabs: unifiedTabsByWorktree,
     tabGroups: groupsByWorktree,
     tabGroupLayouts: layoutByWorktree,

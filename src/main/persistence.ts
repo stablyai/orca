@@ -44,6 +44,7 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 
 function encrypt(plaintext: string): string {
@@ -464,7 +465,9 @@ export class Store {
 
     result = {
       ...result,
-      workspaceSession: pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+      workspaceSession: pruneWorkspaceSessionBrowserHistory(
+        pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+      )
     }
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
@@ -1100,7 +1103,9 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
-    session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    session = pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    )
 
     // Why: closes the second half of the SIGKILL race (Issue #217). The
     // renderer's debounced session writer captures its state BEFORE pty:spawn

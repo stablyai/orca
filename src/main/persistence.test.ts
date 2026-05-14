@@ -6,6 +6,7 @@ import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Repo, TerminalTab, WorkspaceSessionState } from '../shared/types'
+import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -110,6 +111,23 @@ function makeSessionWithTerminalBuffers(): WorkspaceSessionState {
         ptyIdsByLeafId: { 'leaf-remote': 'remote-pty' }
       }
     }
+  }
+}
+
+function makeSessionWithBrowserHistory(count: number): WorkspaceSessionState {
+  return {
+    activeRepoId: null,
+    activeWorktreeId: null,
+    activeTabId: null,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    browserUrlHistory: Array.from({ length: count }, (_, index) => ({
+      url: `https://example.com/${index}`,
+      normalizedUrl: `https://example.com/${index}`,
+      title: `Example ${index} ${'x'.repeat(200)}`,
+      lastVisitedAt: 1_700_000_000_000 - index,
+      visitCount: 1
+    }))
   }
 }
 
@@ -1037,6 +1055,20 @@ describe('Store', () => {
     })
   })
 
+  it('caps oversized browser history when setting workspace session', async () => {
+    const store = await createStore()
+    const oversizedSession = makeSessionWithBrowserHistory(500)
+    const oversizedBytes = Buffer.byteLength(JSON.stringify(oversizedSession))
+
+    store.setWorkspaceSession(oversizedSession)
+
+    const session = store.getWorkspaceSession()
+    const prunedBytes = Buffer.byteLength(JSON.stringify(session))
+    expect(session.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+    expect(session.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
+    expect(prunedBytes).toBeLessThan(oversizedBytes / 2)
+  })
+
   it('keeps terminal scrollback buffers when the repo catalog is not hydrated yet', async () => {
     const store = await createStore()
 
@@ -1090,6 +1122,23 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
       'leaf-remote': 'remote-scrollback'
     })
+  })
+
+  it('caps oversized legacy browser history when loading workspace session', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: makeSessionWithBrowserHistory(500)
+    })
+
+    const store = await createStore()
+    const session = store.getWorkspaceSession()
+    expect(session.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+    expect(session.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
   })
 
   it('does not restore cleared SSH bindings after a lease expired', async () => {
