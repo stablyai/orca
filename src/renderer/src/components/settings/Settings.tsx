@@ -124,14 +124,25 @@ function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }):
 const SECTION_FLASH_CLASS = 'settings-section-flash'
 const SECTION_FLASH_DURATION_MS = 900
 
-function scrollSectionIntoView(sectionId: string): void {
+function scrollSectionIntoView(sectionId: string, container?: HTMLElement | null): void {
   const target = document.getElementById(sectionId)
   if (!target) {
     return
   }
-  // Why: the scroll spy samples from the upper part of the viewport. Top-align
-  // sidebar jumps so it does not immediately reselect the previous section.
-  target.scrollIntoView({ block: 'start' })
+  if (!container) {
+    target.scrollIntoView({ block: 'start' })
+    return
+  }
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const targetTop = targetRect.top - containerRect.top + container.scrollTop
+
+  // Why: the scroll spy samples 40% down the viewport. Put sidebar jump
+  // targets just above that probe so short sections like Voice do not
+  // immediately hand active selection to the next section.
+  const desiredTop = targetTop - container.clientHeight * 0.3
+  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+  container.scrollTo({ top: Math.min(Math.max(0, desiredTop), maxScrollTop) })
 }
 
 function flashSectionHighlight(sectionId: string): void {
@@ -460,6 +471,14 @@ function Settings(): React.JSX.Element {
         searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
         badge: 'Beta'
       },
+      {
+        id: 'voice',
+        title: 'Voice',
+        description: 'Local speech-to-text dictation with on-device models.',
+        icon: Mic,
+        searchEntries: VOICE_PANE_SEARCH_ENTRIES,
+        badge: 'Beta'
+      },
       ...(isMac
         ? [
             {
@@ -477,13 +496,6 @@ function Settings(): React.JSX.Element {
         description: 'Anonymous usage data and telemetry controls.',
         icon: Lock,
         searchEntries: PRIVACY_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'voice',
-        title: 'Voice',
-        description: 'Local speech-to-text dictation with on-device models.',
-        icon: Mic,
-        searchEntries: VOICE_PANE_SEARCH_ENTRIES
       },
       {
         id: 'shortcuts',
@@ -545,7 +557,7 @@ function Settings(): React.JSX.Element {
     const visibleIds = new Set(visibleNavSections.map((section) => section.id))
 
     if (scrollTargetId && pendingNavSectionId && visibleIds.has(pendingNavSectionId)) {
-      scrollSectionIntoView(scrollTargetId)
+      scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
       flashSectionHighlight(scrollTargetId)
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null
@@ -592,24 +604,20 @@ function Settings(): React.JSX.Element {
       const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 2
 
       let candidate: HTMLElement | undefined
-      if (atBottom) {
-        candidate = sections.at(-1)
-      } else {
-        for (const section of sections) {
-          const rect = section.getBoundingClientRect()
-          if (rect.top <= probeY && rect.bottom > probeY) {
-            candidate = section
-            break
-          }
-          if (rect.top <= probeY) {
-            // Last section whose heading is above the probe line — used
-            // when no section straddles the probe (e.g. between sections,
-            // or when the probe sits in the gutter above the first one).
-            candidate = section
-          }
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect()
+        if (rect.top <= probeY && rect.bottom > probeY) {
+          candidate = section
+          break
         }
-        candidate ??= sections.at(0)
+        if (rect.top <= probeY) {
+          // Last section whose heading is above the probe line — used
+          // when no section straddles the probe (e.g. between sections,
+          // or when the probe sits in the gutter above the first one).
+          candidate = section
+        }
       }
+      candidate ??= atBottom ? sections.at(-1) : sections.at(0)
       if (!candidate) {
         return
       }
@@ -650,7 +658,7 @@ function Settings(): React.JSX.Element {
       if (sectionId === 'experimental' && modifiers?.shiftKey) {
         setHiddenExperimentalUnlocked((previous) => !previous)
       }
-      scrollSectionIntoView(sectionId)
+      scrollSectionIntoView(sectionId, contentScrollRef.current)
       flashSectionHighlight(sectionId)
       setActiveSectionId(sectionId)
     },
@@ -861,6 +869,16 @@ function Settings(): React.JSX.Element {
                   <ComputerUsePane />
                 </SettingsSection>
 
+                <SettingsSection
+                  id="voice"
+                  title="Voice"
+                  badge="Beta"
+                  description="Local speech-to-text dictation with on-device models."
+                  searchEntries={VOICE_PANE_SEARCH_ENTRIES}
+                >
+                  <VoicePane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
                 {isMac ? (
                   <SettingsSection
                     id="developer-permissions"
@@ -879,15 +897,6 @@ function Settings(): React.JSX.Element {
                   searchEntries={PRIVACY_PANE_SEARCH_ENTRIES}
                 >
                   <PrivacyPane settings={settings} />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="voice"
-                  title="Voice"
-                  description="Local speech-to-text dictation with on-device models."
-                  searchEntries={VOICE_PANE_SEARCH_ENTRIES}
-                >
-                  <VoicePane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection

@@ -24,13 +24,11 @@ import {
   Folder,
   File,
   FileText,
-  LoaderCircle,
   Mic,
   Monitor,
   Plus,
   RefreshCw,
-  Smartphone,
-  Square
+  Smartphone
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
@@ -2150,6 +2148,10 @@ export default function SessionScreen() {
     // raised input dock. Short shell output near the top should stay put.
     return Math.min(keyboardLift, Math.max(0, cursorBottom + margin - dockTop))
   })()
+  const toastAnimatedStyle = {
+    opacity: toastOpacityRef.current,
+    transform: [{ translateY: -keyboardLift }]
+  }
 
   return (
     <View style={styles.container}>
@@ -2288,10 +2290,7 @@ export default function SessionScreen() {
               onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
             />
             {toastMessage && (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.toast, { opacity: toastOpacityRef.current }]}
-              >
+              <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                 <Text style={styles.toastText}>{toastMessage}</Text>
               </Animated.View>
             )}
@@ -2303,10 +2302,7 @@ export default function SessionScreen() {
               title={activeFileTab.title || 'File'}
             />
             {toastMessage && (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.toast, { opacity: toastOpacityRef.current }]}
-              >
+              <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                 <Text style={styles.toastText}>{toastMessage}</Text>
               </Animated.View>
             )}
@@ -2342,10 +2338,7 @@ export default function SessionScreen() {
               />
             ))}
             {toastMessage && (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.toast, { opacity: toastOpacityRef.current }]}
-              >
+              <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                 <Text style={styles.toastText}>{toastMessage}</Text>
               </Animated.View>
             )}
@@ -2496,12 +2489,16 @@ export default function SessionScreen() {
               <Pressable
                 style={[
                   styles.dictationButton,
-                  dictation.isRecording && styles.dictationButtonActive,
-                  (!canSend || dictation.isProcessing) && styles.sendButtonDisabled
+                  (dictation.isStarting || dictation.isRecording) && styles.dictationButtonActive,
+                  !canSend && styles.sendButtonDisabled
                 ]}
-                disabled={!canSend || dictation.isProcessing}
+                disabled={!canSend}
                 onPress={() => {
-                  if (dictation.isRecording) {
+                  if (dictation.isProcessing) {
+                    void dictation.cancel()
+                  } else if (dictation.isStarting) {
+                    return
+                  } else if (dictation.isRecording) {
                     void dictation.stop()
                   } else {
                     void dictation.start().catch((err) => {
@@ -2519,14 +2516,16 @@ export default function SessionScreen() {
                   dictation.isRecording
                     ? 'Stop voice dictation'
                     : dictation.isProcessing
-                      ? 'Processing voice dictation'
-                      : 'Start voice dictation'
+                      ? 'Cancel voice dictation'
+                      : dictation.isStarting
+                        ? 'Starting voice dictation'
+                        : 'Start voice dictation'
                 }
               >
                 {dictation.isProcessing ? (
-                  <LoaderCircle size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                ) : dictation.isRecording ? (
-                  <Square size={15} color={colors.textPrimary} strokeWidth={2.4} />
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : dictation.isStarting || dictation.isRecording ? (
+                  <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
                 ) : (
                   <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
                 )}
@@ -3115,12 +3114,15 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
   },
   dictationButtonActive: {
-    backgroundColor: colors.accentBlue
+    backgroundColor: colors.bgPanel,
+    borderColor: colors.textSecondary
   },
   sendButtonDisabled: {
     opacity: 0.35

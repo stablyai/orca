@@ -4,6 +4,8 @@ import { app } from 'electron'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
 
+const STOP_DICTATION_TIMEOUT_MS = 60_000
+
 export type SttEvent =
   | { type: 'ready' }
   | { type: 'partial'; text?: string }
@@ -227,7 +229,7 @@ export class SttService {
       const timeout = setTimeout(() => {
         worker.terminate()
         resolve()
-      }, 3000)
+      }, STOP_DICTATION_TIMEOUT_MS)
 
       const onStopped = (msg: { type: string; text?: string; error?: string }) => {
         if (msg.type === 'stopped') {

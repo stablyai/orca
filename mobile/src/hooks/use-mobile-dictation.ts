@@ -9,7 +9,7 @@ import {
 } from '@orca/expo-two-way-audio'
 import type { RpcClient } from '../transport/rpc-client'
 
-type DictationStatus = 'idle' | 'recording' | 'processing' | 'error'
+type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
 
 type UseMobileDictationOptions = {
   client: RpcClient | null
@@ -20,6 +20,7 @@ type UseMobileDictationOptions = {
 
 export type UseMobileDictationResult = {
   status: DictationStatus
+  isStarting: boolean
   isRecording: boolean
   isProcessing: boolean
   error: string | null
@@ -29,6 +30,7 @@ export type UseMobileDictationResult = {
 }
 
 const MOBILE_PCM_SAMPLE_RATE = 16000
+const DICTATION_FINISH_TIMEOUT_MS = 75_000
 
 function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64')
@@ -111,7 +113,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       pendingChunksRef.current.add(sendChunk)
     })
     return () => sub.remove()
-  }, [failActiveDictation])
+  }, [failActiveDictation, reportError])
 
   const start = useCallback(async () => {
     const client = clientRef.current
@@ -122,20 +124,29 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     const generation = generationRef.current + 1
     generationRef.current = generation
     setError(null)
+    setStatus('starting')
     const permission = await requestMicrophonePermissionsAsync()
     if (generationRef.current !== generation || !enabledRef.current) {
+      if (generationRef.current === generation) {
+        setStatus('idle')
+      }
       return
     }
     if (!permission.granted) {
+      setStatus('idle')
       throw new Error('Microphone permission denied')
     }
 
     const initialized = await initialize()
     if (generationRef.current !== generation || !enabledRef.current) {
       void tearDown()
+      if (generationRef.current === generation) {
+        setStatus('idle')
+      }
       return
     }
     if (!initialized) {
+      setStatus('idle')
       throw new Error('Failed to initialize microphone')
     }
 
@@ -151,6 +162,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         activeIdRef.current = null
       }
       await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+      setStatus('idle')
       throw err
     }
     if (
@@ -162,6 +174,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       if (activeIdRef.current === dictationId) {
         activeIdRef.current = null
       }
+      setStatus('idle')
       return
     }
 
@@ -194,7 +207,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       ) {
         return
       }
-      const response = await client.sendRequest('speech.dictation.finish', { dictationId })
+      const response = await client.sendRequest(
+        'speech.dictation.finish',
+        { dictationId },
+        { timeoutMs: DICTATION_FINISH_TIMEOUT_MS }
+      )
       if (!response.ok) {
         throw new Error(response.error.message)
       }
@@ -214,6 +231,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       setStatus('idle')
       if (text) {
         onTranscriptRef.current(text)
+      } else {
+        reportError(new Error('No speech detected.'))
       }
     } catch (err) {
       failActiveDictation(dictationId, err)
@@ -275,6 +294,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
   return {
     status,
+    isStarting: status === 'starting',
     isRecording: status === 'recording',
     isProcessing: status === 'processing',
     error,

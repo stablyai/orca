@@ -1,14 +1,17 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { MockWorker, getCreatedWorkerCount } = vi.hoisted(() => {
+const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.hoisted(() => {
   class HoistedMockWorker extends EventTarget {
     static created = 0
+    static instances: HoistedMockWorker[] = []
     terminated = false
+    emitStoppedOnStop = true
     private listeners = new Map<string, Set<(...args: unknown[]) => void>>()
 
     constructor(_path: string, _options: unknown) {
       super()
       HoistedMockWorker.created += 1
+      HoistedMockWorker.instances.push(this)
     }
 
     on(eventName: string, listener: (...args: unknown[]) => void): this {
@@ -38,7 +41,7 @@ const { MockWorker, getCreatedWorkerCount } = vi.hoisted(() => {
       if (message.type === 'init') {
         queueMicrotask(() => this.emit('message', { type: 'ready' }))
       }
-      if (message.type === 'stop') {
+      if (message.type === 'stop' && this.emitStoppedOnStop) {
         queueMicrotask(() => this.emit('message', { type: 'stopped' }))
       }
       if (message.type === 'teardown') {
@@ -55,7 +58,12 @@ const { MockWorker, getCreatedWorkerCount } = vi.hoisted(() => {
 
   return {
     MockWorker: HoistedMockWorker,
-    getCreatedWorkerCount: () => HoistedMockWorker.created
+    getCreatedWorkerCount: () => HoistedMockWorker.created,
+    getLastWorker: () => HoistedMockWorker.instances.at(-1),
+    resetWorkers: () => {
+      HoistedMockWorker.created = 0
+      HoistedMockWorker.instances = []
+    }
   }
 })
 
@@ -84,6 +92,10 @@ vi.mock('./model-catalog', () => ({
 import { SttService } from './stt-service'
 
 describe('SttService', () => {
+  beforeEach(() => {
+    resetWorkers()
+  })
+
   it('reuses an idle warm worker for a second dictation with the same owner', async () => {
     const service = new SttService({
       getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
@@ -95,5 +107,30 @@ describe('SttService', () => {
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
 
     expect(getCreatedWorkerCount()).toBe(1)
+  })
+
+  it('allows slow offline stop decoding before terminating the worker', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new SttService({
+        getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+        getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+      } as never)
+
+      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+      const worker = getLastWorker()
+      expect(worker).toBeDefined()
+      worker!.emitStoppedOnStop = false
+
+      const stopPromise = service.stopDictation('desktop')
+      await vi.advanceTimersByTimeAsync(59_999)
+      expect(worker!.terminated).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await stopPromise
+      expect(worker!.terminated).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
