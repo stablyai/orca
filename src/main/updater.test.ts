@@ -1397,6 +1397,65 @@ describe('updater', () => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
   })
 
+  it('keeps user prerelease fallback available on the short retry cadence', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+    appMock.getVersion.mockReturnValue('1.3.51-rc.5')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      if (callCount === 2) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('update-available', { version: '1.3.51-rc.6' })
+        })
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const setLastUpdateCheckAt = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      setLastUpdateCheckAt
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({
+        state: 'available',
+        version: '1.3.51-rc.6',
+        changelog: null
+      })
+    })
+
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
   it('surfaces the failure when the bounded prerelease fallback also misses its manifest', async () => {
     appMock.getVersion.mockReturnValue('1.3.51-rc.6')
     fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])

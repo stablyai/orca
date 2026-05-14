@@ -164,9 +164,16 @@ export function registerAutoUpdaterHandlers({
       // timestamp persisted for a check that never showed a result.
       setAvailableVersion(info.version)
       setAvailableReleaseUrl(null)
-      recordCompletedUpdateCheck()
-      if (!wasUserInitiated) {
-        scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+      if (missingManifestFallback) {
+        // Why: offering the previous good release is only a temporary fallback;
+        // keep probing soon so users can move to the newest tag once its
+        // platform manifest finishes publishing.
+        scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+      } else {
+        recordCompletedUpdateCheck()
+        if (!wasUserInitiated) {
+          scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+        }
       }
 
       sendStatus({ state: 'available', version: info.version, changelog })
