@@ -38,6 +38,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
@@ -4174,7 +4175,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             return
           }
           const absolutePath = joinPath(worktreePath, entry.path)
-          e.dataTransfer.setData('text/x-orca-file-path', absolutePath)
+          e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={(e) => {
@@ -4336,7 +4337,7 @@ function BranchEntryRow({
         draggable
         onDragStart={(e) => {
           const absolutePath = joinPath(worktreePath, entry.path)
-          e.dataTransfer.setData('text/x-orca-file-path', absolutePath)
+          e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={onOpen}

@@ -1,10 +1,12 @@
 /* eslint-disable max-lines */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import {
   ArrowLeft,
   ArrowRight,
@@ -2674,6 +2676,48 @@ function BrowserPagePane({
     webview.style.display = showFailureOverlay ? 'none' : 'flex'
   }, [showFailureOverlay])
 
+  const handleInternalFileDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const handleInternalFileDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      const filePath = event.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
+      if (!filePath) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+
+      const target = getWorkspaceFileBrowserOpenTarget({ filePath, worktreeId })
+      if (target.status === 'unsupported') {
+        setResourceNotice(target.message)
+        return
+      }
+
+      const webview = webviewRef.current
+      const rect = webview?.getBoundingClientRect()
+      if (!webview || !rect) {
+        setResourceNotice('Browser page is not ready for file drops.')
+        return
+      }
+      const pageX = event.clientX - rect.left
+      const pageY = event.clientY - rect.top
+      if (pageX < 0 || pageY < 0 || pageX > rect.width || pageY > rect.height) {
+        setResourceNotice('Drop files over the browser page, not the toolbar.')
+        return
+      }
+
+      navigateToUrl(target.url)
+    },
+    [navigateToUrl, worktreeId]
+  )
+
   return (
     <div
       className={cn(
@@ -3076,6 +3120,8 @@ function BrowserPagePane({
       <div
         ref={containerRef}
         className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
+        onDragOver={handleInternalFileDragOver}
+        onDrop={handleInternalFileDrop}
       >
         <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
         {showFailureOverlay ? (

@@ -50,6 +50,7 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
 
 // Why: registry lives in a leaf module so the store slice can import it
@@ -1187,13 +1188,13 @@ export default function TerminalPane({
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('text/x-orca-file-path')) {
+          if (e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
             e.preventDefault()
             e.dataTransfer.dropEffect = 'copy'
           }
         }}
         onDrop={(e) => {
-          const filePath = e.dataTransfer.getData('text/x-orca-file-path')
+          const filePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
           if (!filePath) {
             return
           }
