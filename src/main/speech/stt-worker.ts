@@ -28,7 +28,38 @@ let stream: any = null
 let isStreaming = false
 let offlineBuffer: Float32Array[] = []
 let offlineSampleRate = 16000
-let captureSampleRate = 16000
+
+export function resampleToRate(
+  samples: Float32Array,
+  inputSampleRate: number,
+  outputSampleRate: number
+): Float32Array {
+  if (
+    samples.length === 0 ||
+    !Number.isFinite(inputSampleRate) ||
+    !Number.isFinite(outputSampleRate) ||
+    inputSampleRate <= 0 ||
+    outputSampleRate <= 0 ||
+    inputSampleRate === outputSampleRate
+  ) {
+    return samples
+  }
+
+  const outputLength = Math.max(
+    1,
+    Math.round((samples.length * outputSampleRate) / inputSampleRate)
+  )
+  const output = new Float32Array(outputLength)
+  const ratio = inputSampleRate / outputSampleRate
+  for (let i = 0; i < outputLength; i += 1) {
+    const sourceIndex = i * ratio
+    const left = Math.floor(sourceIndex)
+    const right = Math.min(left + 1, samples.length - 1)
+    const weight = sourceIndex - left
+    output[i] = samples[left] * (1 - weight) + samples[right] * weight
+  }
+  return output
+}
 
 function loadSherpa(): any {
   const modulePath = workerData?.sherpaModulePath
@@ -210,8 +241,12 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
 
   try {
     const inputRate = msg.sampleRate || offlineSampleRate
+    // Why: sherpa's native stream aborts the process if one recognizer sees
+    // different input rates across chunks. Normalize before crossing the
+    // native boundary so device/context changes become recoverable JS state.
+    const samples = resampleToRate(msg.samples, inputRate, offlineSampleRate)
     if (isStreaming) {
-      sherpa.acceptWaveformOnline(stream, { sampleRate: inputRate, samples: msg.samples })
+      sherpa.acceptWaveformOnline(stream, { sampleRate: offlineSampleRate, samples })
 
       while (sherpa.isOnlineStreamReady(recognizer, stream)) {
         sherpa.decodeOnlineStream(recognizer, stream)
@@ -234,8 +269,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
     } else {
       // Why: offline recognizers cannot decode incrementally — they need all
       // audio buffered first, then decoded in one shot when dictation stops.
-      captureSampleRate = inputRate
-      offlineBuffer.push(new Float32Array(msg.samples))
+      offlineBuffer.push(new Float32Array(samples))
     }
   } catch (err) {
     parentPort?.postMessage({ type: 'error', error: String(err) })
@@ -271,9 +305,7 @@ function handleStop(): void {
           combined.set(chunk, offset)
           offset += chunk.length
         }
-        // Why: pass the actual capture sample rate (e.g. 48kHz from browser
-        // AudioContext) so sherpa-onnx resamples to the model's expected 16kHz.
-        sherpa.acceptWaveformOffline(stream, { sampleRate: captureSampleRate, samples: combined })
+        sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples: combined })
         sherpa.decodeOfflineStream(recognizer, stream)
         const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
         const result = JSON.parse(resultJson)
