@@ -1,4 +1,5 @@
-import React, { lazy } from 'react'
+import React, { lazy, useEffect, useRef } from 'react'
+import * as monaco from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult, GitStatusEntry } from '../../../../shared/types'
 import { ConflictBanner } from './ConflictComponents'
@@ -42,6 +43,40 @@ export function ChangesModeView({
   onContentChange: (content: string) => void
   onSave: (content: string) => Promise<void>
 }): React.JSX.Element {
+  // Why: after a terminal commit/pull/rebase, Changes mode refreshes the
+  // HEAD-side blob in React state, but Monaco can keep painting the previous
+  // diff if we reuse the same kept model identities. Rotate only the
+  // original-side model identity so Monaco rebuilds the stale HEAD snapshot
+  // without throwing away the modified-side undo history. The URI is null
+  // until the text-side branch below; the rotation effect handles that.
+  const headContentSignature =
+    dc && dc.kind === 'text' ? getContentSignature(dc.originalContent) : null
+  const originalModelKey =
+    headContentSignature !== null ? `${diffViewStateKey}:original:${headContentSignature}` : null
+  const originalModelUri = originalModelKey !== null ? `diff:original:${originalModelKey}` : null
+  // Why: `keepCurrentOriginalModel` tells @monaco-editor/react not to dispose
+  // the original-side model on unmount or path change, so the rotated-out
+  // models from prior HEAD signatures linger in `monaco.editor.getModels()`
+  // forever. Snapshot the previous URI and dispose it explicitly when the
+  // hash flips. Without this, a long session of commits/pulls/rebases would
+  // grow the model registry unboundedly.
+  const previousOriginalModelUriRef = useRef<string | null>(null)
+  useEffect(() => {
+    const previous = previousOriginalModelUriRef.current
+    if (originalModelUri === null) {
+      // Why: dc flipped from text to binary/undefined while the tab stays open;
+      // dispose the retained original so it doesn't linger until tab close.
+      if (previous) {
+        monaco.editor.getModel(monaco.Uri.parse(previous))?.dispose()
+        previousOriginalModelUriRef.current = null
+      }
+      return
+    }
+    if (previous && previous !== originalModelUri) {
+      monaco.editor.getModel(monaco.Uri.parse(previous))?.dispose()
+    }
+    previousOriginalModelUriRef.current = originalModelUri
+  }, [originalModelUri])
   if (!dc) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -65,13 +100,6 @@ export function ChangesModeView({
   // a broken view. Surface an inline banner so the user knows Changes mode is
   // active but there is simply nothing to diff right now.
   const isIdentical = dc.originalContent === modifiedContent
-  // Why: after a terminal commit/pull/rebase, Changes mode refreshes the
-  // HEAD-side blob in React state, but Monaco can keep painting the previous
-  // diff if we reuse the same kept model identities. Rotate only the
-  // original-side model identity so Monaco rebuilds the stale HEAD snapshot
-  // without throwing away the modified-side undo history.
-  const headContentSignature = getContentSignature(dc.originalContent)
-  const originalModelKey = `${diffViewStateKey}:original:${headContentSignature}`
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {activeFile.conflict && <ConflictBanner file={activeFile} entry={activeConflictEntry} />}
@@ -84,7 +112,7 @@ export function ChangesModeView({
         <DiffViewer
           key={viewStateScopeId}
           modelKey={diffViewStateKey}
-          originalModelKey={originalModelKey}
+          originalModelKey={originalModelKey ?? undefined}
           originalContent={dc.originalContent}
           modifiedContent={modifiedContent}
           language={resolvedLanguage}

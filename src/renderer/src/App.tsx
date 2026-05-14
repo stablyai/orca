@@ -55,6 +55,7 @@ import {
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { DictationController } from './components/dictation/DictationController'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
+import { useEditorTabCloseCleanup } from './components/editor/use-editor-tab-close-cleanup'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
@@ -317,6 +318,10 @@ function App(): React.JSX.Element {
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
   // until some unrelated view remount happens to refresh them.
   useGitStatusPolling()
+  // Why: tab-close cleanup (Monaco model disposal, scroll/cursor cache eviction)
+  // must run from an always-mounted hook. EditorPanel unmounts when its active
+  // tab closes — see use-editor-tab-close-cleanup.ts for details.
+  useEditorTabCloseCleanup()
   // Why: the editor must hear external filesystem changes regardless of
   // which right-sidebar panel is visible (Explorer unmounts when the user
   // switches to Source Control or Checks). Wiring this at App level mirrors

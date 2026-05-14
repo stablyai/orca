@@ -4,7 +4,6 @@ keeping that UI state together is easier to reason about than scattering it
 across multiple components. Autosave now lives in a smaller headless controller
 so hidden editor UI no longer participates in shutdown. */
 import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react'
-import * as monaco from 'monaco-editor'
 import { Columns2, Copy, Eye, ExternalLink, FileText, MoreHorizontal, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -28,7 +27,6 @@ import EditorViewToggle, {
   NOTEBOOK_VIEW_MODE_METADATA
 } from './EditorViewToggle'
 import { EditorContent } from './EditorContent'
-import { scrollTopCache, cursorPositionCache, diffViewStateCache } from '@/lib/scroll-cache'
 import type { GitDiffResult } from '../../../../shared/types'
 import {
   getOpenFilesForExternalFileChange,
@@ -222,14 +220,6 @@ function EditorPanelInner({
   const panelRef = useRef<HTMLDivElement>(null)
   const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
 
-  const deleteCacheEntriesByPrefix = useCallback(<T,>(cache: Map<string, T>, prefix: string) => {
-    for (const key of cache.keys()) {
-      if (key.startsWith(prefix)) {
-        cache.delete(key)
-      }
-    }
-  }, [])
-
   // Why: When the user changes their global diff-view preference in Settings,
   // sync the local toggle to match during render (avoids flash of stale diff mode).
   if (settings?.diffDefaultView !== prevDiffView) {
@@ -267,70 +257,10 @@ function EditorPanelInner({
   // churn as long as at least one panel is still mounted.
   useEffect(() => acquireExportPdfListener(), [])
 
-  // Why: keepCurrentModel / keepCurrent*Model retain Monaco models after unmount
-  // so undo history survives tab switches. When a tab is *closed*, the user has
-  // signalled they're done with the file — dispose the models to reclaim memory
-  // and delete cache entries so a reopened file starts fresh.
-  const prevOpenFilesRef = useRef<Map<string, OpenFile>>(new Map())
-
-  useEffect(() => {
-    const currentFilesById = new Map(openFiles.map((f) => [f.id, f]))
-    for (const [prevId, prevFile] of prevOpenFilesRef.current) {
-      if (!currentFilesById.has(prevId)) {
-        // Dispose only the kept-alive Monaco state that this tab mode owns.
-        // Why: edit and diff tabs use different retained-model keys, while the
-        // conflict-review surface does not create kept Monaco models today. An
-        // explicit switch makes that ownership boundary visible so future mode
-        // additions do not silently fall through without considering cleanup.
-        switch (prevFile.mode) {
-          case 'edit':
-            // Why: the edit model URI is constructed via monaco.Uri.parse(filePath)
-            // to match what @monaco-editor/react creates internally when the `path`
-            // prop is provided. This convention is version-dependent.
-            monaco.editor.getModel(monaco.Uri.parse(prevFile.filePath))?.dispose()
-            scrollTopCache.delete(prevFile.filePath)
-            deleteCacheEntriesByPrefix(scrollTopCache, `${prevFile.filePath}::`)
-            // Why: markdown edit tabs keep separate source/rich scroll caches,
-            // and older sessions may still have the legacy in-place preview key.
-            // Clear all of them so reopened files never inherit stale viewport
-            // state from a prior tab incarnation.
-            scrollTopCache.delete(`${prevFile.filePath}:rich`)
-            scrollTopCache.delete(`${prevFile.filePath}:preview`)
-            // Why: mermaid files use a mode-scoped cache key just like markdown.
-            // Without this, a reopened .mmd file would restore a stale scroll
-            // position from the previous session even if the content changed.
-            scrollTopCache.delete(`${prevFile.filePath}:mermaid-diagram`)
-            cursorPositionCache.delete(prevFile.filePath)
-            deleteCacheEntriesByPrefix(cursorPositionCache, `${prevFile.filePath}::`)
-            break
-          case 'markdown-preview':
-            // Why: preview tabs have no retained Monaco models, but they do
-            // own pane-scoped preview scroll cache entries that should be
-            // dropped on close so reopening the preview starts fresh.
-            scrollTopCache.delete(`${prevFile.id}:preview`)
-            deleteCacheEntriesByPrefix(scrollTopCache, `${prevFile.id}::`)
-            break
-          case 'diff':
-            // Why: kept diff models are keyed by tab id, not file path, because the
-            // same file can appear in multiple diff tabs with different contents.
-            monaco.editor.getModel(monaco.Uri.parse(`diff:original:${prevId}`))?.dispose()
-            monaco.editor.getModel(monaco.Uri.parse(`diff:modified:${prevId}`))?.dispose()
-            diffViewStateCache.delete(prevId)
-            deleteCacheEntriesByPrefix(diffViewStateCache, `${prevId}::`)
-            // Why: single-file markdown diffs now have a rendered preview mode
-            // whose scroll position is keyed off the diff tab identity rather
-            // than a Monaco view-state cache entry. Clear those mode-scoped
-            // keys alongside the diff models so reopened diff tabs start fresh.
-            scrollTopCache.delete(`${prevId}:preview`)
-            deleteCacheEntriesByPrefix(scrollTopCache, `${prevId}::`)
-            break
-          case 'conflict-review':
-            break
-        }
-      }
-    }
-    prevOpenFilesRef.current = currentFilesById
-  }, [deleteCacheEntriesByPrefix, openFiles])
+  // Why: tab-close cleanup (Monaco model disposal, scroll/cursor cache eviction)
+  // lives in `useEditorTabCloseCleanup` mounted at the App level. EditorPanel
+  // unmounts whenever its active tab closes, so an effect inside this component
+  // cannot reliably observe the close event for the active tab.
 
   // Load file content when active file changes
   useEffect(() => {
@@ -459,11 +389,12 @@ function EditorPanelInner({
           : null
       const connectionId = getConnectionId(file.worktreeId) ?? undefined
       // Why: Changes view mode runs on top of an edit-mode tab and asks git
-      // for an unstaged diff against HEAD for that file. Use the 'unstaged'
-      // diff-source key so multiple Changes tabs across split panes share one
-      // IPC round-trip with any open unstaged diff-tab for the same path.
-      // Compute this once and reuse it for both the dedup key and the IPC
-      // branch selection so the two can never drift apart.
+      // for an unstaged diff against HEAD. Two split-pane Changes panels for
+      // the same file share a single IPC round-trip; cross-mode sharing with
+      // a separate unstaged diff-tab is intentionally not done because the
+      // 'head' vs 'default' compare-against-head segment of the key differs.
+      // Compute the source/compare values once and reuse them for both the
+      // dedup key and the IPC branch selection so the two can never drift apart.
       const effectiveDiffSource: typeof file.diffSource =
         file.mode === 'edit' ? 'unstaged' : file.diffSource
       const compareAgainstHead = file.mode === 'edit'

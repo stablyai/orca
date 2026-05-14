@@ -800,11 +800,10 @@ function SourceControlInner(): React.JSX.Element {
       const filePath = joinPath(worktreePath, entry.path)
       // Why: unstaged markdown diffs open as a normal edit tab in Changes
       // view mode rather than a dedicated diff tab. This unifies sidebar
-      // clicks with the header's Edit|Changes toggle: there is exactly one
-      // tab per markdown file, and the sidebar click flips that tab's view
-      // mode. Staged diffs still open as a separate diff tab because the
-      // staged content is not what the editor would be editing. Non-markdown
-      // files keep the existing diff-tab flow until the diff-tab type is
+      // clicks with the header's Edit|Changes toggle: one edit tab per
+      // markdown filePath; staged diffs are still separate tabs, and the
+      // sidebar click flips the edit tab's view mode. Non-markdown files
+      // keep the existing diff-tab flow until the diff-tab type is
       // eventually collapsed (see reviews/changes-view-mode-plan.md §"Follow-up").
       if (language === 'markdown' && entry.area === 'unstaged') {
         openFile({
