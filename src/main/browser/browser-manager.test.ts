@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   shellOpenExternalMock,
@@ -58,6 +58,10 @@ describe('browserManager', () => {
     guestOpenDevToolsMock.mockReset()
     webContentsFromIdMock.mockReset()
     browserManager.unregisterAll()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('validates popup URLs before opening externally', () => {
@@ -1142,6 +1146,54 @@ describe('browserManager', () => {
     expect(
       guestOffMock.mock.calls.filter(([eventName]) => eventName === 'before-input-event')
     ).toHaveLength(2)
+  })
+
+  it('cancels pending anti-detection reattach timers when unregistering a guest', () => {
+    vi.useFakeTimers()
+
+    const debuggerHandlers = new Map<string, () => void>()
+    const debuggerAttachMock = vi.fn()
+    const guest = {
+      id: 809,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com/'),
+      debugger: {
+        isAttached: vi.fn(() => false),
+        attach: debuggerAttachMock,
+        sendCommand: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn((eventName: string, handler: () => void) => {
+          debuggerHandlers.set(eventName, handler)
+        }),
+        off: vi.fn((eventName: string, handler: () => void) => {
+          if (debuggerHandlers.get(eventName) === handler) {
+            debuggerHandlers.delete(eventName)
+          }
+        })
+      }
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-reattach',
+      webContentsId: 809,
+      rendererWebContentsId
+    })
+
+    debuggerHandlers.get('detach')?.()
+    expect(vi.getTimerCount()).toBe(1)
+
+    browserManager.unregisterGuest('browser-reattach')
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(500)
+    expect(debuggerAttachMock).toHaveBeenCalledTimes(1)
   })
 
   describe('setViewportOverride', () => {
