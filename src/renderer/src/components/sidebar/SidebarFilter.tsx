@@ -81,6 +81,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
   }, [repos, setFilterRepoIds])
 
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
+  const closeFilters = useCallback(() => handleOpenChange(false), [handleOpenChange])
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -115,18 +116,37 @@ const SidebarFilter = React.memo(function SidebarFilter() {
         </TooltipContent>
       </Tooltip>
       <PopoverContent align="end" className="w-72 p-0">
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
           <span className="text-xs font-medium text-foreground">Filters</span>
-          {hasAnyFilter ? (
-            <button
-              type="button"
-              onClick={clearAll}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3" />
-              Clear all
-            </button>
-          ) : null}
+          <div className="flex items-center gap-1">
+            {hasAnyFilter ? (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3" />
+                Clear all
+              </button>
+            ) : null}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Close filters"
+                  className="text-muted-foreground"
+                  onClick={closeFilters}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Close filters
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         <div className="border-t border-border/60">
