@@ -57,14 +57,6 @@ async function installSafeOnboardingFeatureSetupDeps(page: Page): Promise<void> 
       installCli: async () => {
         throw new Error('CLI registration should not run in this onboarding E2E')
       },
-      installSkills: async (skillIds) => ({
-        results: skillIds.map((skillId) => ({
-          skillId,
-          command: `npx --yes skills add https://github.com/stablyai/orca --skill ${skillId}`,
-          ok: true,
-          detail: null
-        }))
-      }),
       writeClipboardText: async (text) => {
         localStorage.setItem('orca.e2e.onboardingFeatureSetupClipboard', text)
       },
@@ -371,14 +363,6 @@ test.describe('Onboarding flow', () => {
         installCli: async () => {
           throw new Error('CLI registration should not run in this onboarding E2E')
         },
-        installSkills: async (skillIds) => ({
-          results: skillIds.map((skillId) => ({
-            skillId,
-            command: `npx --yes skills add https://github.com/stablyai/orca --skill ${skillId}`,
-            ok: true,
-            detail: null
-          }))
-        }),
         writeClipboardText: async () => undefined,
         getComputerUsePermissionStatus: async () => {
           throw new Error('Computer Use permissions should stay untouched')

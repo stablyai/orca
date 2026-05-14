@@ -8,14 +8,10 @@ import {
   COMPUTER_USE_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_INSTALL_COMMAND
 } from '@/lib/agent-feature-install-commands'
-import {
-  BROWSER_USE_ENABLED_STORAGE_KEY,
-  BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY
-} from '@/lib/browser-use-setup-state'
+import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
-  ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY
 } from '@/lib/orchestration-setup-state'
 import {
@@ -69,14 +65,6 @@ function createDeps(
     clipboardWrites,
     getCliStatus: vi.fn(async () => INSTALLED_CLI_STATUS),
     installCli: vi.fn(async () => INSTALLED_CLI_STATUS),
-    installSkills: vi.fn(async (skillIds) => ({
-      results: skillIds.map((skillId) => ({
-        skillId,
-        command: `npx --yes skills add https://github.com/stablyai/orca --skill ${skillId}`,
-        ok: true,
-        detail: null
-      }))
-    })),
     writeClipboardText: vi.fn(async (text: string) => {
       clipboardWrites.push(text)
     }),
@@ -135,23 +123,25 @@ describe('onboarding feature setup runner', () => {
     expect(result).toEqual({
       selectedIds: ['browserUse', 'computerUse', 'orchestration'],
       cliTouched: false,
-      skillsInstalled: true,
-      skillCommandsCopied: false,
+      skillCommandsCopied: true,
       computerUsePermissionsOpened: true,
       warnings: []
     })
     expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
     expect(deps.installCli).not.toHaveBeenCalled()
-    expect(deps.installSkills).toHaveBeenCalledWith(['orca-cli', 'computer-use', 'orchestration'])
     expect(deps.getComputerUsePermissionStatus).toHaveBeenCalledTimes(1)
     expect(deps.openComputerUsePermissionSetup).toHaveBeenCalledTimes(1)
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('1')
-    expect(deps.storage.get(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY)).toBe('1')
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
-    expect(deps.storage.get(ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY)).toBe('1')
     expect(deps.removeStorageItem).toHaveBeenCalledWith(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
     expect(deps.notifyOrchestrationStateChanged).toHaveBeenCalledTimes(1)
-    expect(deps.clipboardWrites).toHaveLength(0)
+    expect(deps.clipboardWrites).toEqual([
+      [
+        `# Agent Browser Use\n${ORCA_CLI_SKILL_INSTALL_COMMAND}`,
+        `# Computer Use\n${COMPUTER_USE_SKILL_INSTALL_COMMAND}`,
+        `# Agent Orchestration\n${ORCHESTRATION_SKILL_INSTALL_COMMAND}`
+      ].join('\n\n')
+    ])
   })
 
   it('keeps invasive Browser Use and Computer Use setup untouched when only Orchestration is selected', async () => {
@@ -165,31 +155,24 @@ describe('onboarding feature setup runner', () => {
     const result = await runOnboardingFeatureSetup(selection, deps)
 
     expect(result.selectedIds).toEqual(['orchestration'])
-    expect(result.skillsInstalled).toBe(true)
-    expect(result.skillCommandsCopied).toBe(false)
+    expect(result.skillCommandsCopied).toBe(true)
     expect(result.computerUsePermissionsOpened).toBe(false)
     expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
     expect(deps.installCli).not.toHaveBeenCalled()
-    expect(deps.installSkills).toHaveBeenCalledWith(['orchestration'])
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
     expect(deps.openComputerUsePermissionSetup).not.toHaveBeenCalled()
     expect(deps.storage.has(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe(false)
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
-    expect(deps.clipboardWrites).toEqual([])
+    expect(deps.clipboardWrites).toEqual([
+      `# Agent Orchestration\n${ORCHESTRATION_SKILL_INSTALL_COMMAND}`
+    ])
   })
 
-  it('copies selected skill commands as a fallback when skill installation fails', async () => {
+  it('warns when selected skill commands cannot be copied', async () => {
     const deps = createDeps({
-      installSkills: vi.fn(async () => ({
-        results: [
-          {
-            skillId: 'orchestration' as const,
-            command: ORCHESTRATION_SKILL_INSTALL_COMMAND,
-            ok: false,
-            detail: 'Skill install failed. Run the command manually from Settings.'
-          }
-        ]
-      }))
+      writeClipboardText: vi.fn(async () => {
+        throw new Error('Clipboard unavailable')
+      })
     })
 
     const result = await runOnboardingFeatureSetup(
@@ -197,16 +180,13 @@ describe('onboarding feature setup runner', () => {
       deps
     )
 
-    expect(result.skillsInstalled).toBe(false)
-    expect(result.skillCommandsCopied).toBe(true)
+    expect(result.skillCommandsCopied).toBe(false)
     expect(result.warnings).toEqual([
       {
-        featureId: 'orchestration',
-        message: 'Skill install failed. Run the command manually from Settings.'
+        featureId: 'skills',
+        message: 'Clipboard unavailable'
       }
     ])
-    expect(deps.clipboardWrites).toEqual([
-      `# Agent Orchestration\n${ORCHESTRATION_SKILL_INSTALL_COMMAND}`
-    ])
+    expect(deps.clipboardWrites).toEqual([])
   })
 })

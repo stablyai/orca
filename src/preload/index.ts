@@ -5,10 +5,6 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type {
-  AgentFeatureSkillId,
-  AgentFeatureSkillInstallSummary
-} from '../shared/agent-feature-install-commands'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
@@ -987,13 +983,6 @@ const api = {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
     remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove')
-  },
-
-  agentFeatureSkills: {
-    install: (args: {
-      skillIds: AgentFeatureSkillId[]
-    }): Promise<AgentFeatureSkillInstallSummary> =>
-      ipcRenderer.invoke('agentFeatureSkills:install', args)
   },
 
   agentHooks: {

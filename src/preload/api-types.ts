@@ -122,10 +122,6 @@ import type {
 } from '../shared/browser-guest-events'
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type {
-  AgentFeatureSkillId,
-  AgentFeatureSkillInstallSummary
-} from '../shared/agent-feature-install-commands'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
@@ -799,9 +795,6 @@ export type PreloadApi = {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>
     remove: () => Promise<CliInstallStatus>
-  }
-  agentFeatureSkills: {
-    install: (args: { skillIds: AgentFeatureSkillId[] }) => Promise<AgentFeatureSkillInstallSummary>
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
