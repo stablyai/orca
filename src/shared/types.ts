@@ -1754,11 +1754,14 @@ export type GitStatusResult = {
   conflictOperation: GitConflictOperation
   head?: string
   branch?: string
+  // Why: porcelain v2 status already includes upstream/ahead/behind metadata.
+  // Folding it in lets refresh polling avoid a second pair of git subprocesses.
+  upstreamStatus?: GitUpstreamStatus
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a
 // "sync" signal — callers must check hasUpstream before treating 0/0 as in-sync.
-// Kept separate from GitStatusResult because upstream lookup can fail for
+// Kept as a named type because explicit upstream refreshes can still fail for
 // reasons unrelated to working-tree status (e.g., no upstream is expected).
 export type GitUpstreamStatus = {
   hasUpstream: boolean

@@ -74,11 +74,19 @@ export function parseStatusOutput(stdout: string): {
   unmergedLines: string[]
   head?: string
   branch?: string
+  upstreamStatus: {
+    hasUpstream: boolean
+    upstreamName?: string
+    ahead: number
+    behind: number
+  }
 } {
   const entries: Record<string, unknown>[] = []
   const unmergedLines: string[] = []
   let head: string | undefined
   let branch: string | undefined
+  let upstreamName: string | undefined
+  let upstreamAheadBehind: { ahead: number; behind: number } | null = null
 
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
@@ -93,6 +101,16 @@ export function parseStatusOutput(stdout: string): {
     if (line.startsWith('# branch.head ')) {
       const branchHead = line.slice('# branch.head '.length).trim()
       branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
+      continue
+    }
+
+    if (line.startsWith('# branch.upstream ')) {
+      upstreamName = line.slice('# branch.upstream '.length).trim() || undefined
+      continue
+    }
+
+    if (line.startsWith('# branch.ab ')) {
+      upstreamAheadBehind = parseBranchAheadBehind(line)
       continue
     }
 
@@ -145,7 +163,31 @@ export function parseStatusOutput(stdout: string): {
     }
   }
 
-  return { entries, unmergedLines, head, branch }
+  return {
+    entries,
+    unmergedLines,
+    head,
+    branch,
+    upstreamStatus: upstreamName
+      ? {
+          hasUpstream: true,
+          upstreamName,
+          ahead: upstreamAheadBehind?.ahead ?? 0,
+          behind: upstreamAheadBehind?.behind ?? 0
+        }
+      : { hasUpstream: false, ahead: 0, behind: 0 }
+  }
+}
+
+function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {
+  const match = line.match(/^# branch\.ab \+(\d+) -(\d+)$/)
+  if (!match) {
+    return null
+  }
+  return {
+    ahead: Number.parseInt(match[1], 10),
+    behind: Number.parseInt(match[2], 10)
+  }
 }
 
 /**
