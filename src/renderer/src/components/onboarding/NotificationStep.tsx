@@ -32,7 +32,7 @@ export function NotificationStep({
     {
       key: 'terminalBell',
       title: 'Terminal bell',
-      description: 'Play a sound when a terminal rings — usually a question waiting on you.'
+      description: 'Play a sound when a terminal rings, usually a question waiting on you.'
     },
     {
       key: 'notifyWhenFocused',
@@ -77,7 +77,7 @@ export function NotificationStep({
         ))}
       </div>
       <p className="mt-3 text-[13px] text-muted-foreground">
-        Configure other agent status personalization — like custom sounds — under{' '}
+        Configure other agent status personalization, like custom sounds, under{' '}
         <span className="font-medium text-foreground">Settings → Notifications</span>.
       </p>
       <FeatureSetupChecklist value={featureSetup} onChange={onFeatureSetupChange} />

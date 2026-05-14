@@ -34,7 +34,7 @@ export function RepoStep({
         <div className="min-w-0 flex-1">
           <div className="text-base font-semibold text-foreground">Open a folder</div>
           <div className="mt-0.5 text-[13px] text-muted-foreground">
-            Choose any local directory — git repo or not.
+            Choose any local directory, git repo or not.
           </div>
         </div>
         <span className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition group-hover:border-foreground/40">

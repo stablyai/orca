@@ -18,7 +18,7 @@ const stepCopy = {
   agent: {
     title: 'Pick your default agent',
     subtitle:
-      "Orca works with every CLI agent. Choose the one you'll reach for most — switch any time."
+      "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
   },
   theme: {
     title: 'Make it feel like home',

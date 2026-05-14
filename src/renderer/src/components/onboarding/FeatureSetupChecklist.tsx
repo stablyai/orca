@@ -24,7 +24,7 @@ const FEATURE_SETUP_ROWS: readonly FeatureSetupRow[] = [
     id: 'browserUse',
     title: 'Agent Browser Use',
     description: 'Agents can navigate sites, inspect pages, and work through browser tasks.',
-    setupSummary: 'Registers `orca` and installs the browser skill.',
+    setupSummary: 'Registers `orca` and installs the orca-cli skill.',
     icon: <Globe2 className="size-4" />
   },
   {
