@@ -5,13 +5,19 @@ import type {
 } from '../../../../shared/computer-use-permissions-types'
 import {
   COMPUTER_USE_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_INSTALL_COMMAND
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  type AgentFeatureSkillId,
+  type AgentFeatureSkillInstallSummary
 } from '@/lib/agent-feature-install-commands'
-import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
+import {
+  BROWSER_USE_ENABLED_STORAGE_KEY,
+  BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY
+} from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
+  ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
@@ -48,6 +54,12 @@ const FEATURE_SKILL_COMMANDS: Record<OnboardingFeatureSetupId, { label: string; 
     }
   }
 
+const FEATURE_SKILL_IDS: Record<OnboardingFeatureSetupId, AgentFeatureSkillId> = {
+  browserUse: 'orca-cli',
+  computerUse: 'computer-use',
+  orchestration: 'orchestration'
+}
+
 export type OnboardingFeatureSetupWarning = {
   featureId: OnboardingFeatureSetupId | 'cli' | 'skills'
   message: string
@@ -56,6 +68,7 @@ export type OnboardingFeatureSetupWarning = {
 export type OnboardingFeatureSetupResult = {
   selectedIds: OnboardingFeatureSetupId[]
   cliTouched: boolean
+  skillsInstalled: boolean
   skillCommandsCopied: boolean
   computerUsePermissionsOpened: boolean
   warnings: OnboardingFeatureSetupWarning[]
@@ -64,6 +77,7 @@ export type OnboardingFeatureSetupResult = {
 export type OnboardingFeatureSetupDeps = {
   getCliStatus: () => Promise<CliInstallStatus>
   installCli: () => Promise<CliInstallStatus>
+  installSkills: (skillIds: AgentFeatureSkillId[]) => Promise<AgentFeatureSkillInstallSummary>
   writeClipboardText: (text: string) => Promise<void>
   getComputerUsePermissionStatus: () => Promise<ComputerUsePermissionStatusResult>
   openComputerUsePermissionSetup: () => Promise<ComputerUsePermissionSetupResult>
@@ -105,6 +119,7 @@ export function createOnboardingFeatureSetupDeps(): OnboardingFeatureSetupDeps {
   return {
     getCliStatus: () => window.api.cli.getInstallStatus(),
     installCli: () => window.api.cli.install(),
+    installSkills: (skillIds) => window.api.agentFeatureSkills.install({ skillIds }),
     writeClipboardText: (text) => window.api.ui.writeClipboardText(text),
     getComputerUsePermissionStatus: () => window.api.computerUsePermissions.getStatus(),
     openComputerUsePermissionSetup: () => window.api.computerUsePermissions.openSetup(),
@@ -131,11 +146,19 @@ export async function runOnboardingFeatureSetup(
   const selectedIds = selectedOnboardingFeatureSetupIds(selection)
   const warnings: OnboardingFeatureSetupWarning[] = []
   let cliTouched = false
+  let skillsInstalled = false
   let skillCommandsCopied = false
   let computerUsePermissionsOpened = false
 
   if (selectedIds.length === 0) {
-    return { selectedIds, cliTouched, skillCommandsCopied, computerUsePermissionsOpened, warnings }
+    return {
+      selectedIds,
+      cliTouched,
+      skillsInstalled,
+      skillCommandsCopied,
+      computerUsePermissionsOpened,
+      warnings
+    }
   }
 
   try {
@@ -191,21 +214,84 @@ export async function runOnboardingFeatureSetup(
     deps.notifyOrchestrationStateChanged()
   }
 
-  const clipboardText = buildOnboardingFeatureSetupClipboardText(selection)
-  if (clipboardText) {
-    try {
-      // Why: skills are installed per agent project, and onboarding runs before
-      // the user has picked a repo, so we stage the exact commands for paste.
-      await deps.writeClipboardText(clipboardText)
-      skillCommandsCopied = true
-    } catch (error) {
-      warnings.push({ featureId: 'skills', message: formatFeatureSetupError(error) })
+  try {
+    const skillIds = selectedIds.map((id) => FEATURE_SKILL_IDS[id])
+    const skillResult = await deps.installSkills(skillIds)
+    const failedSkillResults = skillResult.results.filter((result) => !result.ok)
+    markInstalledSkills(skillResult, deps)
+    skillsInstalled = skillResult.results.length > 0 && failedSkillResults.length === 0
+    for (const result of failedSkillResults) {
+      warnings.push({
+        featureId: featureIdForSkillId(result.skillId),
+        message: result.detail ?? 'Skill install failed.'
+      })
     }
+    if (failedSkillResults.length > 0) {
+      skillCommandsCopied = await copySkillCommandsFallback(selection, deps, warnings)
+    }
+  } catch (error) {
+    warnings.push({ featureId: 'skills', message: formatFeatureSetupError(error) })
+    skillCommandsCopied = await copySkillCommandsFallback(selection, deps, warnings)
   }
 
-  return { selectedIds, cliTouched, skillCommandsCopied, computerUsePermissionsOpened, warnings }
+  return {
+    selectedIds,
+    cliTouched,
+    skillsInstalled,
+    skillCommandsCopied,
+    computerUsePermissionsOpened,
+    warnings
+  }
 }
 
 function formatFeatureSetupError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function markInstalledSkills(
+  summary: AgentFeatureSkillInstallSummary,
+  deps: OnboardingFeatureSetupDeps
+): void {
+  for (const result of summary.results) {
+    if (!result.ok) {
+      continue
+    }
+    if (result.skillId === 'orca-cli') {
+      deps.setStorageItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY, '1')
+    }
+    if (result.skillId === 'orchestration') {
+      deps.setStorageItem(ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY, '1')
+    }
+  }
+}
+
+function featureIdForSkillId(
+  skillId: AgentFeatureSkillId
+): OnboardingFeatureSetupWarning['featureId'] {
+  switch (skillId) {
+    case 'orca-cli':
+      return 'browserUse'
+    case 'computer-use':
+      return 'computerUse'
+    case 'orchestration':
+      return 'orchestration'
+  }
+}
+
+async function copySkillCommandsFallback(
+  selection: OnboardingFeatureSetupSelection,
+  deps: OnboardingFeatureSetupDeps,
+  warnings: OnboardingFeatureSetupWarning[]
+): Promise<boolean> {
+  const clipboardText = buildOnboardingFeatureSetupClipboardText(selection)
+  if (!clipboardText) {
+    return false
+  }
+  try {
+    await deps.writeClipboardText(clipboardText)
+    return true
+  } catch (error) {
+    warnings.push({ featureId: 'skills', message: formatFeatureSetupError(error) })
+    return false
+  }
 }

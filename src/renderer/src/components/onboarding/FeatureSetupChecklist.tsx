@@ -24,21 +24,21 @@ const FEATURE_SETUP_ROWS: readonly FeatureSetupRow[] = [
     id: 'browserUse',
     title: 'Agent Browser Use',
     description: 'Agents can navigate sites, inspect pages, and work through browser tasks.',
-    setupSummary: 'Registers `orca` and copies the browser skill command.',
+    setupSummary: 'Registers `orca` and installs the browser skill.',
     icon: <Globe2 className="size-4" />
   },
   {
     id: 'computerUse',
     title: 'Computer Use',
     description: 'Agents can inspect app windows and operate local apps when you ask.',
-    setupSummary: 'Registers `orca`, opens permissions, and copies the skill command.',
+    setupSummary: 'Registers `orca`, installs the skill, and opens permissions.',
     icon: <MonitorCog className="size-4" />
   },
   {
     id: 'orchestration',
     title: 'Agent Orchestration',
     description: 'Agents can message each other, take tasks, and coordinate handoffs.',
-    setupSummary: 'Registers `orca`, enables orchestration, and copies the skill command.',
+    setupSummary: 'Registers `orca`, enables orchestration, and installs the skill.',
     icon: <Workflow className="size-4" />
   }
 ]
@@ -53,7 +53,7 @@ export function FeatureSetupChecklist({
         <h2 className="text-sm font-semibold text-foreground">Set up agent features</h2>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           Pick the capabilities you want ready after onboarding. Selected features run setup on the
-          next click and copy the per-project skill commands for your first repo.
+          next click, including installing the selected agent skills.
         </p>
       </div>
 

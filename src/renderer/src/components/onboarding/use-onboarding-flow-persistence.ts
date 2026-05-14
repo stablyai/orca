@@ -189,7 +189,11 @@ export function usePersistCurrentStep({
             })
           } else if (setupResult.skillCommandsCopied) {
             toast.success('Feature setup ready', {
-              description: 'Skill commands copied for your first project terminal.'
+              description: 'Skill install commands copied as a fallback.'
+            })
+          } else if (setupResult.skillsInstalled) {
+            toast.success('Feature setup complete', {
+              description: 'Selected agent skills were installed.'
             })
           }
           if (setupResult.computerUsePermissionsOpened) {

@@ -33,6 +33,7 @@ import { registerPetHandlers } from './pet'
 import { registerUIHandlers } from './ui'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
+import { registerAgentFeatureSkillHandlers } from './agent-feature-skills'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
@@ -79,6 +80,7 @@ export function registerCoreHandlers(
   registerCodexUsageHandlers(codexUsage)
   registerCodexAccountHandlers(codexAccounts)
   registerAgentHookHandlers()
+  registerAgentFeatureSkillHandlers()
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)

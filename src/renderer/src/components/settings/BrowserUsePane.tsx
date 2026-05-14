@@ -120,7 +120,7 @@ export function BrowserUseSetup({
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(ORCA_CLI_SKILL_INSTALL_COMMAND)
-      toast.success('Copied install command. Run it in your agent project.')
+      toast.success('Copied install command. Run it on this computer.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to copy command.')
     }
