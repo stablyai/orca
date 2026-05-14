@@ -58,8 +58,17 @@ async function githubFetch(url, token, accept = 'application/vnd.github+json') {
 }
 
 async function fetchRelease(repo, tag, token) {
-  const res = await githubFetch(`https://api.github.com/repos/${repo}/releases/tags/${tag}`, token)
-  return res.json()
+  // The publish gate runs while the release is still draft.
+  const res = await githubFetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, token)
+  const releases = await res.json()
+  if (!Array.isArray(releases)) {
+    throw new Error(`GitHub releases response for ${repo} was not an array`)
+  }
+  const release = releases.find((candidate) => candidate.tag_name === tag)
+  if (!release) {
+    throw new Error(`Release ${repo}@${tag} was not found in the draft-aware releases list`)
+  }
+  return release
 }
 
 async function fetchAssetText(repo, asset, token) {

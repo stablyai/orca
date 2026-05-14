@@ -22,6 +22,10 @@ import {
 import { fetchNewerReleaseTags, getReleaseDownloadUrl } from './updater-prerelease-feed'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
 
+type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
+type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
+type PrimaryEventSuppression = { failureKey: string; error: unknown }
+
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
@@ -58,8 +62,16 @@ let lastNudgeCheckAt = 0
 let pendingPrereleaseFallback: {
   primaryTag: string
   fallbackTag: string
-  suppressedPromiseFailureKey: string | null
-  used: boolean
+  // Why: the primary promise cleanup can run after fallback starts; fallback
+  // events need the attempt-scoped initiation state, not the mutable global.
+  userInitiated: boolean
+  suppressedPrimaryPromiseFailureKey: string | null
+  suppressedPrimaryEventFailure: PrimaryEventSuppression | null
+  suppressedFallbackPromiseFailureKey: string | null
+  suppressedFallbackEventFailureKey: string | null
+  fallbackResultHandled: boolean
+  fallbackCheckingForUpdateSeen: boolean
+  retryLaunched: boolean
 } | null = null
 
 let _getPendingUpdateNudgeId: (() => string | null) | null = null
@@ -179,6 +191,22 @@ function getPendingInstallVersion(): string {
   return ''
 }
 
+function getCheckFailureKey(message: string, userInitiated?: boolean): string {
+  return `${userInitiated ? 'user' : 'auto'}:${message}`
+}
+
+function clearPrereleaseFallbackContextIfSettled(): void {
+  if (
+    pendingPrereleaseFallback?.fallbackResultHandled &&
+    !pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey &&
+    !pendingPrereleaseFallback.suppressedPrimaryEventFailure &&
+    !pendingPrereleaseFallback.suppressedFallbackPromiseFailureKey &&
+    !pendingPrereleaseFallback.suppressedFallbackEventFailureKey
+  ) {
+    clearPrereleaseFallbackContext()
+  }
+}
+
 function performQuitAndInstall(): void {
   if (pendingQuitAndInstallTimer) {
     clearTimeout(pendingQuitAndInstallTimer)
@@ -208,25 +236,44 @@ function performQuitAndInstall(): void {
 async function sendCheckFailureStatus(
   message: string,
   userInitiated?: boolean,
-  source: 'event' | 'promise' = 'promise'
+  source: CheckFailureSource = 'promise',
+  sourceError?: unknown
 ): Promise<void> {
-  const failureKey = `${userInitiated ? 'user' : 'auto'}:${message}`
+  const failureKey = getCheckFailureKey(message, userInitiated)
   if (
     source === 'promise' &&
-    pendingPrereleaseFallback?.suppressedPromiseFailureKey === failureKey
+    pendingPrereleaseFallback?.suppressedPrimaryPromiseFailureKey === failureKey
   ) {
-    pendingPrereleaseFallback.suppressedPromiseFailureKey = null
+    pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey = null
+    clearPrereleaseFallbackContextIfSettled()
     return
   }
+  if (
+    source === 'fallback-promise' &&
+    pendingPrereleaseFallback?.suppressedFallbackPromiseFailureKey === failureKey
+  ) {
+    pendingPrereleaseFallback.suppressedFallbackPromiseFailureKey = null
+    clearPrereleaseFallbackContextIfSettled()
+    return
+  }
+
+  if (
+    retryPrereleaseFallbackAfterMissingManifest(
+      message,
+      userInitiated,
+      source,
+      failureKey,
+      sourceError
+    )
+  ) {
+    return
+  }
+
   if (pendingCheckFailureKey === failureKey && pendingCheckFailurePromise) {
     return pendingCheckFailurePromise
   }
 
   const handleFailure = async (): Promise<void> => {
-    if (retryPrereleaseFallbackAfterMissingManifest(message, userInitiated, source, failureKey)) {
-      return
-    }
-
     if (isBenignCheckFailure(message)) {
       // Why: release transition failures (missing latest.yml while a new
       // release is being published) and network blips are transient. Schedule
@@ -289,6 +336,92 @@ function recordCompletedUpdateCheck(): void {
   persistLastUpdateCheckAt?.(Date.now())
 }
 
+function getMissingManifestPrereleaseFallbackUserInitiated(): boolean | null {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return null
+  }
+  return pendingPrereleaseFallback.userInitiated
+}
+
+function markMissingManifestPrereleaseFallbackChecking(): void {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return
+  }
+  pendingPrereleaseFallback.fallbackCheckingForUpdateSeen = true
+}
+
+function consumeMissingManifestPrereleaseFallbackResult(): MissingManifestPrereleaseFallbackResult | null {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return null
+  }
+  const result = { userInitiated: pendingPrereleaseFallback.userInitiated }
+  pendingPrereleaseFallback.fallbackResultHandled = true
+  clearPrereleaseFallbackContextIfSettled()
+  return result
+}
+
+function suppressMissingManifestPrereleaseFallbackPromiseFailure(message: string): void {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return
+  }
+  pendingPrereleaseFallback.suppressedFallbackPromiseFailureKey = getCheckFailureKey(
+    message,
+    pendingPrereleaseFallback.userInitiated
+  )
+}
+
+function shouldSuppressMissingManifestPrereleaseFallbackEvent(
+  message: string,
+  error: unknown
+): boolean {
+  if (!pendingPrereleaseFallback?.retryLaunched) {
+    return false
+  }
+  const failureKey = getCheckFailureKey(message, pendingPrereleaseFallback.userInitiated)
+  const primaryEventSuppression = pendingPrereleaseFallback.suppressedPrimaryEventFailure
+  if (primaryEventSuppression?.failureKey === failureKey) {
+    const isPrimaryPromisePair = primaryEventSuppression.error === error
+    // Why: after fallback checking starts, same-message errors may belong to
+    // the fallback attempt, so message matching alone is not safe.
+    if (isPrimaryPromisePair || !pendingPrereleaseFallback.fallbackCheckingForUpdateSeen) {
+      pendingPrereleaseFallback.suppressedPrimaryEventFailure = null
+      clearPrereleaseFallbackContextIfSettled()
+      return true
+    }
+  }
+  if (pendingPrereleaseFallback.suppressedFallbackEventFailureKey === failureKey) {
+    pendingPrereleaseFallback.suppressedFallbackEventFailureKey = null
+    clearPrereleaseFallbackContextIfSettled()
+    return true
+  }
+  return false
+}
+
+function markMissingManifestPrereleaseFallbackPromiseHandled(message: string): void {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return
+  }
+  pendingPrereleaseFallback.suppressedFallbackEventFailureKey = getCheckFailureKey(
+    message,
+    pendingPrereleaseFallback.userInitiated
+  )
+}
+
 function shouldResolvePrereleaseFeed(): boolean {
   // Why: if the user Shift-clicked the menu to opt into RC this process, we've
   // already switched to the native github provider — leave that alone. The
@@ -316,7 +449,18 @@ async function pinPrereleaseFeed(): Promise<void> {
   const fallbackTag = releaseTags[1] ?? null
   pendingPrereleaseFallback =
     newerTag && fallbackTag
-      ? { primaryTag: newerTag, fallbackTag, suppressedPromiseFailureKey: null, used: false }
+      ? {
+          primaryTag: newerTag,
+          fallbackTag,
+          userInitiated: false,
+          suppressedPrimaryPromiseFailureKey: null,
+          suppressedPrimaryEventFailure: null,
+          suppressedFallbackPromiseFailureKey: null,
+          suppressedFallbackEventFailureKey: null,
+          fallbackResultHandled: false,
+          fallbackCheckingForUpdateSeen: false,
+          retryLaunched: false
+        }
       : null
   // Why: console.info goes to stdout and is captured by Console.app on macOS
   // and by --enable-logging elsewhere. This is the only window we have into
@@ -337,12 +481,13 @@ async function pinPrereleaseFeed(): Promise<void> {
 function retryPrereleaseFallbackAfterMissingManifest(
   message: string,
   userInitiated: boolean | undefined,
-  source: 'event' | 'promise',
-  failureKey: string
+  source: CheckFailureSource,
+  failureKey: string,
+  sourceError?: unknown
 ): boolean {
   if (
     !pendingPrereleaseFallback ||
-    pendingPrereleaseFallback.used ||
+    pendingPrereleaseFallback.retryLaunched ||
     !isMissingUpdateManifestFailure(message)
   ) {
     return false
@@ -351,8 +496,13 @@ function retryPrereleaseFallbackAfterMissingManifest(
   // Why: a published tag can briefly point at a missing platform manifest
   // during GitHub release transitions. Walk back once to the previous feed
   // entry so users on the last good build see a normal not-available result.
-  pendingPrereleaseFallback.used = true
-  pendingPrereleaseFallback.suppressedPromiseFailureKey = source === 'event' ? failureKey : null
+  pendingPrereleaseFallback.retryLaunched = true
+  pendingPrereleaseFallback.userInitiated = Boolean(userInitiated)
+  pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey =
+    source === 'event' ? failureKey : null
+  pendingPrereleaseFallback.suppressedPrimaryEventFailure =
+    source === 'promise' ? { failureKey, error: sourceError } : null
+  pendingPrereleaseFallback.fallbackCheckingForUpdateSeen = false
   const { primaryTag, fallbackTag } = pendingPrereleaseFallback
   const url = getReleaseDownloadUrl(fallbackTag)
   console.info(
@@ -362,7 +512,15 @@ function retryPrereleaseFallbackAfterMissingManifest(
   userInitiatedCheck = Boolean(userInitiated)
   backgroundCheckLaunchPending = !userInitiated
   void autoUpdater.checkForUpdates().catch((err) => {
-    void sendCheckFailureStatus(String(err?.message ?? err), userInitiated, 'promise')
+    const message = String(err?.message ?? err)
+    if (userInitiated) {
+      userInitiatedCheck = false
+    } else {
+      backgroundCheckLaunchPending = false
+    }
+    markMissingManifestPrereleaseFallbackPromiseHandled(message)
+    consumeMissingManifestPrereleaseFallbackResult()
+    void sendCheckFailureStatus(message, userInitiated, 'fallback-promise', err)
   })
   return true
 }
@@ -401,7 +559,7 @@ function runBackgroundUpdateCheck(
     : launchWithoutPrereleaseFallback(launch)
   void Promise.resolve(run).catch((err) => {
     backgroundCheckLaunchPending = false
-    void sendCheckFailureStatus(String(err?.message ?? err), undefined, 'promise')
+    void sendCheckFailureStatus(String(err?.message ?? err), undefined, 'promise', err)
   })
 }
 
@@ -454,7 +612,7 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
     : launchWithoutPrereleaseFallback(launch)
   void Promise.resolve(run).catch((err) => {
     userInitiatedCheck = false
-    void sendCheckFailureStatus(String(err?.message ?? err), true, 'promise')
+    void sendCheckFailureStatus(String(err?.message ?? err), true, 'promise', err)
   })
 }
 
@@ -643,6 +801,8 @@ export function setupAutoUpdater(
 
   registerAutoUpdaterHandlers({
     clearAvailableUpdateContext,
+    consumeMissingManifestPrereleaseFallbackResult,
+    getMissingManifestPrereleaseFallbackUserInitiated,
     getCurrentStatus: () => currentStatus,
     getKnownReleaseUrl,
     getPendingInstallVersion,
@@ -651,6 +811,9 @@ export function setupAutoUpdater(
     performQuitAndInstall,
     sendCheckFailureStatus,
     sendErrorStatus,
+    markMissingManifestPrereleaseFallbackChecking,
+    shouldSuppressMissingManifestPrereleaseFallbackEvent,
+    suppressMissingManifestPrereleaseFallbackPromiseFailure,
     recordCompletedUpdateCheck,
     sendStatus,
     scheduleAutomaticUpdateCheck,

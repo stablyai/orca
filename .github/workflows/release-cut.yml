@@ -439,8 +439,16 @@ jobs:
             timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
             release_json=""
             release_error_body=""
-            if ! release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>"$release_error")"; then
-              release_json=""
+            if releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" 2>"$release_error")"; then
+              # Why: releases-by-tag cannot inspect the draft we are monitoring.
+              if ! release_json="$(jq -e -c --arg tag "$TAG" '
+                map(select(.tag_name == $tag))
+                | if length == 1 then .[0] else empty end
+              ' <<<"$releases_json")"; then
+                release_json=""
+                release_error_body="Release $TAG was not found in the draft-aware releases list."
+              fi
+            else
               release_error_body="$(cat "$release_error")"
             fi
 
@@ -719,7 +727,15 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
           set -euo pipefail
-          draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.draft')"
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: release upload must validate the draft before it is publicly visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
           if [[ "$draft" != "true" ]]; then
             echo "::error::Release $TAG was published during the ${{ matrix.platform }} artifact upload."
             exit 1
@@ -765,7 +781,15 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
           set -euo pipefail
-          draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.draft')"
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: publish-release verifies the draft before making it visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
           if [[ "$draft" != "true" ]]; then
             echo "::error::Release $TAG was published before publish-release; refusing to continue."
             exit 1
