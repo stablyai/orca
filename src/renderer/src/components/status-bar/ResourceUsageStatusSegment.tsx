@@ -40,6 +40,10 @@ import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions
 import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import {
+  WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS,
+  WORKSPACE_CLEANUP_IDLE_MS
+} from '../../../../shared/workspace-cleanup'
+import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
   type DaemonSession,
@@ -657,6 +661,7 @@ export function ResourceUsageStatusSegment({
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
 
   const [open, setOpen] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -825,6 +830,26 @@ export function ResourceUsageStatusSegment({
       memBadgeLabel: snapshot ? formatMemory(memory) : '—'
     }
   }, [snapshot])
+
+  const oldWorkspaceCount = useMemo(() => {
+    const now = Date.now()
+    let count = 0
+    for (const worktrees of Object.values(worktreesByRepo)) {
+      for (const worktree of worktrees) {
+        if (worktree.isMainWorktree) {
+          continue
+        }
+        const ageMs = now - worktree.lastActivityAt
+        if (
+          (worktree.isArchived && ageMs >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS) ||
+          ageMs >= WORKSPACE_CLEANUP_IDLE_MS
+        ) {
+          count += 1
+        }
+      }
+    }
+    return count
+  }, [worktreesByRepo])
 
   // Why: memorySnapshotError is null both for "last fetch succeeded" and
   // "never fetched". When the segment is mounted but the popover hasn't
@@ -1283,7 +1308,7 @@ export function ResourceUsageStatusSegment({
             className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
           >
             <ArchiveX className="size-3.5" />
-            Clean up old workspaces
+            Clean up old workspaces ({oldWorkspaceCount})
           </button>
           {orphanCount > 0 ? (
             <button
