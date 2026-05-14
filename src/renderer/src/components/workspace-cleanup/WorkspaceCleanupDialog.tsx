@@ -22,7 +22,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -37,9 +36,9 @@ import {
 } from '../../../../shared/workspace-cleanup'
 
 const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
-  ready: 'Ready to remove',
-  review: 'Needs review',
-  protected: 'Protected'
+  ready: 'Old workspaces Orca can remove',
+  review: 'Other old workspaces',
+  protected: 'Workspaces Orca will not remove'
 }
 
 const REASON_LABELS: Record<WorkspaceCleanupReason, string> = {
@@ -102,6 +101,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const open = activeModal === 'workspace-cleanup'
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [showKept, setShowKept] = useState(false)
+  const [showReview, setShowReview] = useState(false)
   const [showProtected, setShowProtected] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [removing, setRemoving] = useState(false)
@@ -110,6 +110,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   useEffect(() => {
     if (open) {
       setRowFailures({})
+      setShowReview(false)
+      setShowProtected(false)
       void scanWorkspaceCleanup().catch((err: unknown) => {
         toast.error('Workspace cleanup scan failed', {
           description: err instanceof Error ? err.message : String(err)
@@ -185,9 +187,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
 
   const selectReady = useCallback(() => {
     setSelectedIds(
-      new Set(candidates.filter((row) => row.tier === 'ready').map((row) => row.worktreeId))
+      new Set(
+        visibleCandidates
+          .filter((row) => row.tier === 'ready' && canSelectWorkspaceCleanupCandidate(row))
+          .map((row) => row.worktreeId)
+      )
     )
-  }, [candidates])
+  }, [visibleCandidates])
 
   const keepSelected = useCallback(() => {
     if (selectedCandidates.length === 0) {
@@ -252,7 +258,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[min(820px,90vh)] w-[min(1280px,calc(100vw-3rem))] max-w-none flex-col overflow-hidden p-0"
+        className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[1280px] xl:max-w-[1280px]"
       >
         {!confirming ? (
           <>
@@ -289,14 +295,25 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 Scanning workspaces
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
-                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline">{readyCount} ready</Badge>
-                  <Badge variant="outline">{groups.review.length} review</Badge>
-                  <Badge variant="outline">{groups.protected.length} protected</Badge>
-                  {hiddenByKeepCount > 0 && !showKept ? (
-                    <span>{hiddenByKeepCount} kept hidden</span>
-                  ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-3">
+                <div className="min-w-0 text-xs leading-5 text-muted-foreground">
+                  {selectedCount > 0 ? (
+                    <>
+                      <span className="font-medium text-foreground">
+                        {selectedCount} old workspace{selectedCount === 1 ? '' : 's'}
+                      </span>{' '}
+                      selected for removal.
+                    </>
+                  ) : readyCount > 0 ? (
+                    <>
+                      <span className="font-medium text-foreground">
+                        {readyCount} old workspace{readyCount === 1 ? '' : 's'}
+                      </span>{' '}
+                      can be removed.
+                    </>
+                  ) : (
+                    'No old workspaces are selected for removal.'
+                  )}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   {hiddenByKeepCount > 0 ? (
@@ -308,21 +325,18 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       {showKept ? 'Hide kept' : 'Show kept'}
                     </Button>
                   ) : null}
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={selectReady}
-                    disabled={readyCount === 0}
-                  >
-                    Select ready
-                  </Button>
+                  {readyCount > 0 && selectedCount < readyCount ? (
+                    <Button variant="ghost" size="xs" onClick={selectReady}>
+                      Select all removable
+                    </Button>
+                  ) : null}
                   <Button
                     variant="outline"
                     size="xs"
                     onClick={keepSelected}
                     disabled={selectedCount === 0}
                   >
-                    Keep selected
+                    Keep for now
                   </Button>
                   <Button
                     variant="destructive"
@@ -331,7 +345,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     disabled={selectedCount === 0}
                   >
                     <Trash2 className="size-3.5" />
-                    Remove {selectedCount}
+                    Remove selected
                   </Button>
                 </div>
               </div>
@@ -340,12 +354,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             {error ? (
               <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-xs text-destructive">
                 {error}
-              </div>
-            ) : null}
-
-            {scan?.errors.length ? (
-              <div className="border-b border-border bg-muted/20 px-5 py-2 text-xs text-muted-foreground">
-                {scan.errors.map((scanError) => scanError.message).join('  ')}
               </div>
             ) : null}
 
@@ -378,27 +386,42 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     setConfirming(true)
                   }}
                 />
-                <CandidateGroup
-                  tier="review"
-                  rows={groups.review}
-                  selectedIds={selectedIds}
-                  rowFailures={rowFailures}
-                  onToggleSelected={(id) =>
-                    setSelectedIds((current) => toggleSetMember(current, id))
-                  }
-                  onView={closeAndView}
-                  onKeep={(candidate) => void dismissCandidates([candidate])}
-                  onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
-                  onRemove={(candidate) => {
-                    setSelectedIds(new Set([candidate.worktreeId]))
-                    setConfirming(true)
-                  }}
-                />
+                {/* Why: this opens from a compact status popover, so the first screen
+                    stays focused on removable workspaces instead of safety categories. */}
+                {groups.review.length > 0 ? (
+                  groups.ready.length === 0 || showReview ? (
+                    <CandidateGroup
+                      tier="review"
+                      rows={groups.review}
+                      selectedIds={selectedIds}
+                      rowFailures={rowFailures}
+                      onToggleSelected={(id) =>
+                        setSelectedIds((current) => toggleSetMember(current, id))
+                      }
+                      onView={closeAndView}
+                      onKeep={(candidate) => void dismissCandidates([candidate])}
+                      onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
+                      onRemove={(candidate) => {
+                        setSelectedIds(new Set([candidate.worktreeId]))
+                        setConfirming(true)
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowReview(true)}
+                    >
+                      <ChevronRight className="size-3" />
+                      Show workspaces that need a closer look
+                    </button>
+                  )
+                ) : null}
                 {groups.protected.length > 0 ? (
                   <div>
                     <button
                       type="button"
-                      className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                      className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
                       onClick={() => setShowProtected((value) => !value)}
                     >
                       {showProtected ? (
@@ -406,7 +429,9 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       ) : (
                         <ChevronRight className="size-3" />
                       )}
-                      Protected ({groups.protected.length})
+                      {showProtected
+                        ? 'Hide workspaces Orca will not remove'
+                        : 'Show workspaces Orca will not remove'}
                     </button>
                     {showProtected ? (
                       <CandidateGroup
@@ -490,7 +515,7 @@ function CandidateGroup({
     <section className="space-y-2">
       {tier !== 'protected' ? (
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          {TIER_LABELS[tier]} ({rows.length})
+          {TIER_LABELS[tier]}
         </div>
       ) : null}
       <div className="space-y-2">
@@ -534,57 +559,49 @@ function CandidateRow({
   const selectable = canSelectWorkspaceCleanupCandidate(candidate)
   const hasLiveSurfaces =
     candidate.localContext.terminalTabCount > 0 || candidate.localContext.browserTabCount > 0
-  const primaryReason = candidate.reasons[0]
-    ? REASON_LABELS[candidate.reasons[0]]
-    : 'No ready signal'
+  const primaryReason = candidate.reasons[0] ? REASON_LABELS[candidate.reasons[0]] : 'Old workspace'
   const blockers = candidate.blockers.map((blocker) => BLOCKER_LABELS[blocker])
-  const contextSummary = formatContextSummary(candidate)
+  const contextDetails = formatContextDetails(candidate)
+  const shouldShowSleep = candidate.tier !== 'ready' && hasLiveSurfaces
 
   return (
     <div className="rounded-md border border-border bg-card px-3 py-2.5 text-card-foreground">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 xl:grid-cols-[auto_minmax(0,1.35fr)_minmax(15rem,0.65fr)_auto] xl:items-center">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
         <button
           type="button"
           role="checkbox"
           aria-checked={selected}
+          aria-label={`Select ${candidate.displayName}`}
           disabled={!selectable}
           onClick={() => onToggleSelected(candidate.worktreeId)}
           className={cn(
-            'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary',
+            'mt-1 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary',
             selectable && 'hover:bg-accent',
             !selectable && 'opacity-40'
           )}
         >
           {selected ? <Check className="size-3" strokeWidth={3} /> : null}
         </button>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-sm font-semibold">{candidate.displayName}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">·</span>
-            <span className="max-w-36 shrink-0 truncate text-xs text-muted-foreground">
-              {candidate.repoName}
-            </span>
-          </div>
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span className="font-medium">{primaryReason}</span>
+        <div className="min-w-0">
+          <div className="min-w-0 truncate text-sm font-semibold">{candidate.displayName}</div>
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{primaryReason}</span>
+            <span>Last active {formatRelativeTime(candidate.lastActivityAt)}</span>
             {blockers.length > 0 ? (
-              <span className="min-w-0 truncate text-muted-foreground">
-                {blockers.slice(0, 2).join(', ')}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Clean</span>
-            )}
+              <span className="min-w-0 truncate">{blockers.slice(0, 2).join(', ')}</span>
+            ) : null}
           </div>
-          <details className="mt-1 text-xs text-muted-foreground">
+          <details className="mt-1.5 text-xs text-muted-foreground">
             <summary className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-foreground">
               Details
             </summary>
             <div className="mt-2 grid gap-1 sm:grid-cols-2">
-              <span className="min-w-0 truncate font-mono">{candidate.branch}</span>
-              <span className="min-w-0 truncate font-mono">{candidate.path}</span>
+              <span className="min-w-0 truncate">Repo {candidate.repoName}</span>
+              <span className="min-w-0 truncate font-mono">Branch {candidate.branch}</span>
+              <span className="min-w-0 truncate font-mono sm:col-span-2">{candidate.path}</span>
               <span>
                 {candidate.git.clean === true
-                  ? 'Clean'
+                  ? 'Clean git'
                   : candidate.git.clean === false
                     ? 'Dirty'
                     : 'Git unknown'}
@@ -604,10 +621,7 @@ function CandidateRow({
                   ? `PR #${candidate.linkedPR.number} ${candidate.linkedPR.state}`
                   : 'No cached PR'}
               </span>
-              <span>{candidate.localContext.terminalTabCount} terminal tabs</span>
-              <span>{candidate.localContext.cleanEditorTabCount} clean editor tabs</span>
-              <span>{candidate.localContext.browserTabCount} browser tabs</span>
-              <span>{candidate.localContext.diffCommentCount} diff notes</span>
+              {contextDetails ? <span className="sm:col-span-2">{contextDetails}</span> : null}
               <span>Last activity {formatRelativeTime(candidate.lastActivityAt)}</span>
               {candidate.git.checkedAt ? (
                 <span>Git checked {formatRelativeTime(candidate.git.checkedAt)}</span>
@@ -621,15 +635,12 @@ function CandidateRow({
             </div>
           ) : null}
         </div>
-        <div className="col-start-2 min-w-0 text-xs text-muted-foreground xl:col-start-auto">
-          {contextSummary}
-        </div>
-        <div className="col-start-2 flex flex-wrap items-center gap-1.5 xl:col-start-auto xl:justify-end">
+        <div className="col-start-2 flex flex-wrap items-center gap-1.5 lg:col-start-auto lg:justify-end">
           <Button variant="ghost" size="xs" onClick={() => onView(candidate.worktreeId)}>
             <Search className="size-3.5" />
             View
           </Button>
-          {hasLiveSurfaces ? (
+          {shouldShowSleep ? (
             <Button variant="ghost" size="xs" onClick={() => onSleep(candidate)}>
               <Moon className="size-3.5" />
               Sleep
@@ -653,17 +664,44 @@ function CandidateRow({
   )
 }
 
-function formatContextSummary(candidate: WorkspaceCleanupCandidate): string {
-  const parts = [`Last active ${formatRelativeTime(candidate.lastActivityAt)}`]
-  const contextCount =
-    candidate.localContext.terminalTabCount +
-    candidate.localContext.cleanEditorTabCount +
-    candidate.localContext.browserTabCount +
-    candidate.localContext.diffCommentCount
-  if (contextCount > 0) {
-    parts.push(`${contextCount} saved item${contextCount === 1 ? '' : 's'}`)
+function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | null {
+  const parts: string[] = []
+  if (candidate.localContext.terminalTabCount > 0) {
+    parts.push(
+      `${candidate.localContext.terminalTabCount} terminal tab${
+        candidate.localContext.terminalTabCount === 1 ? '' : 's'
+      }`
+    )
   }
-  return parts.join(' · ')
+  if (candidate.localContext.cleanEditorTabCount > 0) {
+    parts.push(
+      `${candidate.localContext.cleanEditorTabCount} editor tab${
+        candidate.localContext.cleanEditorTabCount === 1 ? '' : 's'
+      }`
+    )
+  }
+  if (candidate.localContext.browserTabCount > 0) {
+    parts.push(
+      `${candidate.localContext.browserTabCount} browser tab${
+        candidate.localContext.browserTabCount === 1 ? '' : 's'
+      }`
+    )
+  }
+  if (candidate.localContext.diffCommentCount > 0) {
+    parts.push(
+      `${candidate.localContext.diffCommentCount} diff note${
+        candidate.localContext.diffCommentCount === 1 ? '' : 's'
+      }`
+    )
+  }
+  if (candidate.localContext.retainedDoneAgentCount > 0) {
+    parts.push(
+      `${candidate.localContext.retainedDoneAgentCount} completed agent${
+        candidate.localContext.retainedDoneAgentCount === 1 ? '' : 's'
+      }`
+    )
+  }
+  return parts.length > 0 ? parts.join(', ') : null
 }
 
 function ConfirmRemove({
