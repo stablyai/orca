@@ -7,6 +7,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  ArchiveX,
   ChevronDown,
   ChevronRight,
   LoaderCircle,
@@ -654,6 +655,7 @@ export function ResourceUsageStatusSegment({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
+  const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
 
   const [open, setOpen] = useState(false)
@@ -906,6 +908,11 @@ export function ResourceUsageStatusSegment({
   const handleSleep = useCallback((id: string): void => {
     void runSleepWorktree(id)
   }, [])
+
+  const handleOpenWorkspaceCleanup = useCallback((): void => {
+    setOpen(false)
+    queueMicrotask(() => openModal('workspace-cleanup'))
+  }, [openModal])
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
@@ -1269,17 +1276,25 @@ export function ResourceUsageStatusSegment({
           </div>
         </div>
 
-        {orphanCount > 0 && (
-          <div className="border-t border-border/50 px-3 py-2 shrink-0">
+        <div className="border-t border-border/50 px-3 py-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleOpenWorkspaceCleanup}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+          >
+            <ArchiveX className="size-3.5" />
+            Review workspace cleanup
+          </button>
+          {orphanCount > 0 ? (
             <button
               type="button"
               onClick={() => void handleKillOrphans()}
-              className="inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
             >
               Kill {orphanCount} orphan terminal{orphanCount === 1 ? '' : 's'}
             </button>
-          </div>
-        )}
+          ) : null}
+        </div>
       </PopoverContent>
       {/* Why: Radix Dialog must not be a descendant of PopoverContent — when
           the popover unmounts (e.g. clicking outside, focus moving to the

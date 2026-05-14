@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArchiveX, Plus, SlidersHorizontal } from 'lucide-react'
+import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -10,7 +10,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuCheckboxItem,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuRadioGroup,
@@ -159,12 +158,6 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 {opt.label}
               </DropdownMenuCheckboxItem>
             ))}
-
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => openModal('workspace-cleanup')}>
-              <ArchiveX className="mr-2 size-3.5" />
-              Review workspace cleanup
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 

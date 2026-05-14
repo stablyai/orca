@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { ArchiveX, Globe, Plus, Server, ServerOff } from 'lucide-react'
+import { Globe, Plus, Server, ServerOff } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
 import {
@@ -54,11 +54,6 @@ type BrowserPaletteItem = {
   result: BrowserPaletteSearchResult
 }
 
-type CleanupActionItem = {
-  id: string
-  type: 'cleanup-action'
-}
-
 type SectionHeader = {
   id: string
   type: 'section-header'
@@ -71,7 +66,7 @@ type HintRow = {
   label: string
 }
 
-type PaletteItem = WorktreePaletteItem | BrowserPaletteItem | CleanupActionItem
+type PaletteItem = WorktreePaletteItem | BrowserPaletteItem
 
 type PaletteListEntry = PaletteItem | SectionHeader | HintRow
 
@@ -368,18 +363,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserMatches]
   )
 
-  const cleanupActionItem = useMemo<CleanupActionItem | null>(() => {
-    const terms = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    if (terms.length === 0) {
-      return null
-    }
-    const searchable = 'review workspace cleanup clean old stale remove delete worktrees branches'
-    if (!terms.every((term) => searchable.includes(term))) {
-      return null
-    }
-    return { id: '__workspace_cleanup__', type: 'cleanup-action' }
-  }, [deferredQuery])
-
   // Why: on empty query we cap the worktree section (not browser tabs) so the
   // BROWSER TABS header + ≥1 page row stays visible above the fold — users
   // with 30+ worktrees would otherwise never see browser pages. The cap is
@@ -393,15 +376,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
-
-    if (cleanupActionItem) {
-      entries.push({
-        id: '__header_actions__',
-        type: 'section-header',
-        label: 'Actions'
-      })
-      entries.push(cleanupActionItem)
-    }
 
     // Why: the worktree cap only earns its keep when there are browser tabs
     // to protect above-the-fold. With zero browser pages, capping would force
@@ -456,7 +430,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       entries.push(...visibleBrowserItems)
     }
     return entries
-  }, [worktreeItems, browserItems, hasQuery, cleanupActionItem])
+  }, [worktreeItems, browserItems, hasQuery])
 
   const selectableItems = useMemo<PaletteItem[]>(
     () =>
@@ -646,15 +620,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     (item: PaletteItem) => {
       if (item.type === 'worktree') {
         handleSelectWorktree(item.worktree.id)
-      } else if (item.type === 'cleanup-action') {
-        skipRestoreFocusRef.current = true
-        closeModal()
-        queueMicrotask(() => openModal('workspace-cleanup'))
       } else {
         handleSelectBrowserPage(item.result)
       }
     },
-    [closeModal, handleSelectBrowserPage, handleSelectWorktree, openModal]
+    [handleSelectBrowserPage, handleSelectWorktree]
   )
 
   const handleCreateWorktree = useCallback(() => {
@@ -1015,32 +985,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </span>
                           )}
                         </div>
-                      </div>
-                    </div>
-                  </CommandItem>
-                )
-              }
-
-              if (entry.type === 'cleanup-action') {
-                return (
-                  <CommandItem
-                    key={entry.id}
-                    value={entry.id}
-                    onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
-                  >
-                    <div className="flex w-4 shrink-0 items-center justify-center text-muted-foreground/85">
-                      <ArchiveX className="size-3.5" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                        Review workspace cleanup
-                      </div>
-                      <div className="mt-1 text-[12px] leading-5 text-muted-foreground/88">
-                        Scan stale workspaces and remove selected safe candidates.
                       </div>
                     </div>
                   </CommandItem>
