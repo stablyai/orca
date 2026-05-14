@@ -223,15 +223,22 @@ export function useTerminalPaneGlobalEffects({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible])
 
-  // Why: only the active tab's terminal should process file drops. Registering
-  // a listener per mounted tab causes a MaxListenersExceededWarning when 11+
-  // tabs are open. Gating on isActive ensures at most one listener exists.
+  // Why: visible but unfocused split-group terminals can still receive native
+  // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy
+  // payloads without a tab id keep the old active-terminal-only behavior.
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive && !isVisible) {
       return
     }
     return window.api.ui.onFileDrop((data) => {
       if (data.target !== 'terminal') {
+        return
+      }
+      if (data.tabId) {
+        if (data.tabId !== tabId) {
+          return
+        }
+      } else if (!isActive) {
         return
       }
       const manager = managerRef.current
@@ -250,5 +257,5 @@ export function useTerminalPaneGlobalEffects({
         data
       })
     })
-  }, [isActive, managerRef, paneTransportsRef])
+  }, [isActive, isVisible, managerRef, paneTransportsRef, tabId])
 }
