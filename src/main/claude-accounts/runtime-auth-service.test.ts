@@ -1157,6 +1157,72 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account2Credentials)
   })
 
+  it('materializes only the selected managed account into shared Claude runtime files', async () => {
+    setPlatform('linux')
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const account1Credentials = createClaudeCredentialsJson('one@example.com', 'one-token')
+    const account2Credentials = createClaudeCredentialsJson('two@example.com', 'two-token')
+    const account1Oauth = '{"accountUuid":"account-1","emailAddress":"one@example.com"}\n'
+    const account2Oauth = '{"accountUuid":"account-2","emailAddress":"two@example.com"}\n'
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      account1Credentials,
+      account1Oauth
+    )
+    const managedAuthPath2 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-2',
+      account2Credentials,
+      account2Oauth
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' }),
+        createClaudeAccount('account-2', managedAuthPath2, { email: 'two@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+
+    await service.syncForCurrentSelection()
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account1Credentials)
+    expect(readRuntimeOauthAccountForTest()).toEqual({
+      accountUuid: 'account-1',
+      emailAddress: 'one@example.com'
+    })
+
+    settings.activeClaudeManagedAccountId = 'account-2'
+    await service.syncForCurrentSelection()
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account2Credentials)
+    expect(readRuntimeOauthAccountForTest()).toEqual({
+      accountUuid: 'account-2',
+      emailAddress: 'two@example.com'
+    })
+
+    settings.activeClaudeManagedAccountId = 'account-1'
+    await service.syncForCurrentSelection()
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account1Credentials)
+    expect(readRuntimeOauthAccountForTest()).toEqual({
+      accountUuid: 'account-1',
+      emailAddress: 'one@example.com'
+    })
+
+    // Why: switching rewrites only the shared Claude runtime surface; the
+    // managed account files remain per-account sources of truth.
+    expect(readFileSync(join(managedAuthPath1, '.credentials.json'), 'utf-8')).toBe(
+      account1Credentials
+    )
+    expect(readFileSync(join(managedAuthPath2, '.credentials.json'), 'utf-8')).toBe(
+      account2Credentials
+    )
+    expect(readFileSync(join(managedAuthPath1, 'oauth-account.json'), 'utf-8')).toBe(account1Oauth)
+    expect(readFileSync(join(managedAuthPath2, 'oauth-account.json'), 'utf-8')).toBe(account2Oauth)
+  })
+
   it('does not carry the reauth read-back skip across Claude account switches', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const account1Credentials = createClaudeCredentialsJson('one@example.com', 'one')
