@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import type { ChildProcessWithoutNullStreams } from 'child_process'
 import { dirname } from 'path'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
@@ -14,6 +15,12 @@ export type NotebookRunResult = {
 const PYTHON_RUN_TIMEOUT_MS = 60_000
 const MAX_CAPTURE_BYTES = 2 * 1024 * 1024
 
+type BoundedCapture = {
+  text: string
+  bytes: number
+  truncated: boolean
+}
+
 function pythonCandidates(): { command: string; argsPrefix: string[] }[] {
   const configured = process.env.ORCA_NOTEBOOK_PYTHON?.trim()
   const candidates: { command: string; argsPrefix: string[] }[] = []
@@ -27,15 +34,64 @@ function pythonCandidates(): { command: string; argsPrefix: string[] }[] {
   return candidates
 }
 
-function appendBounded(current: string, chunk: Buffer): string {
-  if (Buffer.byteLength(current) >= MAX_CAPTURE_BYTES) {
-    return current
+function appendBounded(capture: BoundedCapture, chunk: Buffer): void {
+  if (capture.truncated) {
+    return
   }
-  const next = current + chunk.toString('utf8')
-  if (Buffer.byteLength(next) <= MAX_CAPTURE_BYTES) {
-    return next
+  const remainingBytes = MAX_CAPTURE_BYTES - capture.bytes
+  if (remainingBytes <= 0) {
+    capture.truncated = true
+    return
   }
-  return `${next.slice(0, MAX_CAPTURE_BYTES)}\n[output truncated]\n`
+  if (chunk.byteLength <= remainingBytes) {
+    capture.text += chunk.toString('utf8')
+    capture.bytes += chunk.byteLength
+    return
+  }
+  capture.text += `${chunk.subarray(0, remainingBytes).toString('utf8')}\n[output truncated]\n`
+  capture.bytes = MAX_CAPTURE_BYTES
+  capture.truncated = true
+}
+
+function terminateNotebookProcessTree(
+  child: ChildProcessWithoutNullStreams
+): ReturnType<typeof setTimeout> | null {
+  if (!child.pid) {
+    child.kill()
+    return null
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      // Why: a timed-out cell can spawn descendants. taskkill /T is the
+      // Windows equivalent of terminating the whole process group.
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      killer.on('error', () => child.kill())
+      killer.unref()
+    } catch {
+      child.kill()
+    }
+    return null
+  }
+
+  try {
+    process.kill(-child.pid, 'SIGTERM')
+  } catch {
+    child.kill()
+  }
+
+  const forceKillTimer = setTimeout(() => {
+    try {
+      process.kill(-child.pid!, 'SIGKILL')
+    } catch {
+      /* process group already exited */
+    }
+  }, 2000)
+  forceKillTimer.unref?.()
+  return forceKillTimer
 }
 
 function buildPythonExecutionCode(code: string, preamble: string): string {
@@ -61,14 +117,16 @@ async function runPythonCandidate(
   cwd: string
 ): Promise<NotebookRunResult> {
   return new Promise((resolve) => {
-    let stdout = ''
-    let stderr = ''
+    const stdout: BoundedCapture = { text: '', bytes: 0, truncated: false }
+    const stderr: BoundedCapture = { text: '', bytes: 0, truncated: false }
     let settled = false
+    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
     const child = spawn(
       candidate.command,
       [...candidate.argsPrefix, '-c', buildPythonExecutionCode(code, preamble)],
       {
         cwd,
+        detached: process.platform !== 'win32',
         windowsHide: true,
         env: process.env
       }
@@ -78,15 +136,20 @@ async function runPythonCandidate(
         return
       }
       settled = true
-      child.kill()
-      resolve({ stdout, stderr, exitCode: null, error: 'Python cell timed out.' })
+      forceKillTimer = terminateNotebookProcessTree(child)
+      resolve({
+        stdout: stdout.text,
+        stderr: stderr.text,
+        exitCode: null,
+        error: 'Python cell timed out.'
+      })
     }, PYTHON_RUN_TIMEOUT_MS)
 
     child.stdout.on('data', (chunk: Buffer) => {
-      stdout = appendBounded(stdout, chunk)
+      appendBounded(stdout, chunk)
     })
     child.stderr.on('data', (chunk: Buffer) => {
-      stderr = appendBounded(stderr, chunk)
+      appendBounded(stderr, chunk)
     })
     child.on('error', (error) => {
       if (settled) {
@@ -94,15 +157,21 @@ async function runPythonCandidate(
       }
       settled = true
       clearTimeout(timeout)
-      resolve({ stdout, stderr, exitCode: null, error: error.message })
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+      }
+      resolve({ stdout: stdout.text, stderr: stderr.text, exitCode: null, error: error.message })
     })
     child.on('close', (exitCode) => {
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+      }
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timeout)
-      resolve({ stdout, stderr, exitCode })
+      resolve({ stdout: stdout.text, stderr: stderr.text, exitCode })
     })
   })
 }

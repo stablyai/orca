@@ -370,9 +370,13 @@ function OutputItem({ item }: { item: IpynbOutputItem }): React.JSX.Element | nu
       USE_PROFILES: { html: true, svg: true, svgFilters: true }
     })
     return (
-      <div
-        className="markdown-preview-body max-w-full overflow-auto px-3 py-2 text-sm"
-        dangerouslySetInnerHTML={{ __html: html }}
+      <iframe
+        title="Notebook HTML output"
+        sandbox=""
+        referrerPolicy="no-referrer"
+        loading="lazy"
+        className="block h-80 w-full border-0 bg-background"
+        srcDoc={html}
       />
     )
   }

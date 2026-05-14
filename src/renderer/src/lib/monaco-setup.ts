@@ -2,10 +2,6 @@ import { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { typescript as monacoTS } from 'monaco-editor'
 import 'monaco-editor/min/vs/editor/editor.main.css'
-import {
-  conf as pythonLanguageConfiguration,
-  language as pythonTokens
-} from 'monaco-editor/esm/vs/basic-languages/python/python.js'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
@@ -75,19 +71,6 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
-// Why: the notebook renderer colorizes Python cells outside a mounted Monaco
-// editor. Register the tokenizer on our Monaco instance directly so excerpts
-// do not fall back to default-token `mtk1` spans while language contributions
-// are still lazy-loading.
-if (!monaco.languages.getLanguages().some((language) => language.id === 'python')) {
-  monaco.languages.register({
-    id: 'python',
-    extensions: ['.py', '.pyw'],
-    aliases: ['Python', 'py']
-  })
-}
-monaco.languages.setLanguageConfiguration('python', pythonLanguageConfiguration)
-monaco.languages.setMonarchTokensProvider('python', pythonTokens)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
