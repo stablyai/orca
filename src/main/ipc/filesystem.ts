@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
-import { extname } from 'path'
+import { extname, join } from 'path'
 import type { ChildProcess } from 'child_process'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
@@ -11,6 +11,7 @@ import type {
   GitBranchCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitPushTarget,
   GitUpstreamStatus,
   GitStatusResult,
   MarkdownDocument,
@@ -40,6 +41,8 @@ import {
 } from '../git/status'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
+import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
+import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
@@ -104,6 +107,27 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
   }
 }
 
+async function isDirectoryEntry(
+  dirPath: string,
+  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
+  resolveEntryPath: (entryPath: string) => Promise<string>
+): Promise<boolean> {
+  if (entry.isDirectory()) {
+    return true
+  }
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  try {
+    // Why: directory symlinks inside a workspace should navigate like folders
+    // without bypassing the local authorized-path boundary.
+    const entryPath = await resolveEntryPath(join(dirPath, entry.name))
+    return (await stat(entryPath)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 export function registerFilesystemHandlers(store: Store): void {
   const activeTextSearches = new Map<string, ChildProcess>()
 
@@ -120,18 +144,21 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const dirPath = await resolveAuthorizedPath(args.dirPath, store)
       const entries = await readdir(dirPath, { withFileTypes: true })
-      return entries
-        .map((entry) => ({
+      const mapped = await Promise.all(
+        entries.map(async (entry) => ({
           name: entry.name,
-          isDirectory: entry.isDirectory(),
+          isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
+            resolveAuthorizedPath(entryPath, store)
+          ),
           isSymlink: entry.isSymbolicLink()
         }))
-        .sort((a, b) => {
-          if (a.isDirectory !== b.isDirectory) {
-            return a.isDirectory ? -1 : 1
-          }
-          return a.name.localeCompare(b.name)
-        })
+      )
+      return mapped.sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) {
+          return a.isDirectory ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      })
     }
   )
 
@@ -584,21 +611,32 @@ export function registerFilesystemHandlers(store: Store): void {
     'git:push',
     async (
       _event,
-      args: { worktreePath: string; publish?: boolean; connectionId?: string }
+      args: {
+        worktreePath: string
+        publish?: boolean
+        connectionId?: string
+        pushTarget?: GitPushTarget
+      }
     ): Promise<void> => {
       // Why: coerce to strict boolean at the IPC boundary so a malformed
       // renderer payload (e.g. string 'false') can't silently enable
       // --set-upstream mode. Mirrors the relay handler in src/relay/git-handler.ts.
       const publish = args.publish === true
       if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.pushBranch(args.worktreePath, publish)
+        return provider.pushBranch(args.worktreePath, publish, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await gitPush(worktreePath, publish)
+      if (args.pushTarget) {
+        await validateGitPushTarget(worktreePath, args.pushTarget)
+      }
+      await gitPush(worktreePath, publish, args.pushTarget)
     }
   )
 

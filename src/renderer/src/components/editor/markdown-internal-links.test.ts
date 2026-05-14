@@ -72,7 +72,31 @@ describe('resolveMarkdownLinkTarget', () => {
 
   it('classifies non-markdown local file as file', () => {
     const r = resolveMarkdownLinkTarget('./image.png', SOURCE, ROOT)
-    expect(r?.kind).toBe('file')
+    expect(r).toMatchObject({
+      kind: 'file',
+      absolutePath: '/repo/docs/image.png',
+      relativePath: 'docs/image.png'
+    })
+  })
+
+  it('classifies explicit file URLs inside the worktree with a relative path', () => {
+    const r = resolveMarkdownLinkTarget('file:///repo/docs/image.png', SOURCE, ROOT)
+    expect(r).toMatchObject({
+      kind: 'file',
+      uri: 'file:///repo/docs/image.png',
+      absolutePath: '/repo/docs/image.png',
+      relativePath: 'docs/image.png'
+    })
+  })
+
+  it('classifies explicit file URLs outside the worktree without a relative path', () => {
+    const r = resolveMarkdownLinkTarget('file:///tmp/image.png', SOURCE, ROOT)
+    expect(r).toMatchObject({
+      kind: 'file',
+      uri: 'file:///tmp/image.png',
+      absolutePath: '/tmp/image.png',
+      relativePath: undefined
+    })
   })
 
   it('never returns markdown when worktreeRoot is null', () => {

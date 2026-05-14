@@ -1,5 +1,12 @@
 import React, { useState } from 'react'
-import { ExternalLink, FolderPlus, Github, MessageSquareText, Settings } from 'lucide-react'
+import {
+  ExternalLink,
+  FolderPlus,
+  Github,
+  MessageSquareText,
+  Settings,
+  Smartphone
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -233,7 +240,13 @@ function FeedbackDialog({
 const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+
+  const openMobileSettings = (): void => {
+    openSettingsTarget({ pane: 'mobile', repoId: null })
+    openSettingsPage()
+  }
 
   return (
     <div className="mt-auto shrink-0">
@@ -255,6 +268,22 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={openMobileSettings}
+                aria-label="Open Orca Mobile settings"
+                className="text-muted-foreground"
+              >
+                <Smartphone className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              Orca Mobile
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

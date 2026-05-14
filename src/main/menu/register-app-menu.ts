@@ -2,7 +2,7 @@ import { BrowserWindow, Menu, app } from 'electron'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
-  showTitlebarAgentActivity: boolean
+  showTitlebarAppName: boolean
   statusBarVisible: boolean
 }
 
@@ -181,10 +181,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         click: () => onToggleAppearance('showTasksButton')
       },
       {
-        label: 'Show Titlebar Agent Activity',
+        label: 'Show Titlebar App Name',
         type: 'checkbox',
-        checked: appearance.showTitlebarAgentActivity,
-        click: () => onToggleAppearance('showTitlebarAgentActivity')
+        checked: appearance.showTitlebarAppName,
+        click: () => onToggleAppearance('showTitlebarAppName')
       }
     ]
   }

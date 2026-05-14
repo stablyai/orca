@@ -5,6 +5,13 @@ type DataCallback = (payload: { id: string; data: string }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
 type ExitCallback = (payload: { id: string; code: number }) => void
 
+export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+
+export function isSshPtyNotFoundError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /PTY ".+" not found/i.test(message)
+}
+
 /**
  * Remote PTY provider that proxies all operations through the relay
  * via the JSON-RPC multiplexer. Implements the same IPtyProvider interface
@@ -87,13 +94,15 @@ export class SshPtyProvider implements IPtyProvider {
           ...(attachResult.replay ? { replay: attachResult.replay } : {})
         }
       } catch (err) {
-        // Why: pty.attach fails when the relay grace window has elapsed. Fall
-        // through to pty.spawn so the user gets a fresh shell; sessionExpired
-        // lets the renderer show a brief "Session expired" message.
-        console.warn(
-          `[ssh-pty] pty.attach FAILED for ${opts.sessionId}, falling back to fresh spawn:`,
-          err
-        )
+        // Why: pty.attach fails when the relay grace window has elapsed.
+        // Do not silently replace the saved tab with a fresh shell; the
+        // renderer should show an expired-session state so users know the
+        // original remote process is gone.
+        console.warn(`[ssh-pty] pty.attach FAILED for ${opts.sessionId}:`, err)
+        if (isSshPtyNotFoundError(err)) {
+          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${opts.sessionId}`)
+        }
+        throw err
       }
     }
 

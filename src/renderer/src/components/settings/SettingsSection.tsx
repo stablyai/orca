@@ -10,6 +10,7 @@ type SettingsSectionProps = {
   children: React.ReactNode
   className?: string
   badge?: string
+  badgeAccessory?: React.ReactNode
   /** Rendered in the section header's upper-right corner — intended for
    *  section-scoped actions (e.g. "Import from Ghostty") that would otherwise
    *  crowd the settings list as their own row. */
@@ -24,6 +25,7 @@ export function SettingsSection({
   children,
   className,
   badge,
+  badgeAccessory,
   headerAction
 }: SettingsSectionProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
@@ -52,6 +54,7 @@ export function SettingsSection({
                 {badge}
               </span>
             ) : null}
+            {badgeAccessory}
           </h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>

@@ -15,6 +15,7 @@ import { homedir } from 'os'
 import { resolve, join } from 'path'
 import { unlinkSync, existsSync } from 'fs'
 import { RELAY_SENTINEL } from './protocol'
+import { readLaunchVersion, runConnectHandshake, setupDaemonHandshake } from './relay-handshake'
 import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { PtyHandler } from './pty-handler'
@@ -22,6 +23,12 @@ import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
+import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
+import {
+  AGENT_HOOK_INSTALL_PLUGINS_METHOD,
+  AGENT_HOOK_NOTIFICATION_METHOD,
+  AGENT_HOOK_REQUEST_REPLAY_METHOD
+} from '../shared/agent-hook-relay'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
@@ -68,6 +75,7 @@ function parseArgs(argv: string[]): {
 // that owns the PTY sessions.
 
 function runConnectMode(sockPath: string): void {
+  const myVersion = readLaunchVersion()
   const sock = createConnection({ path: sockPath })
 
   const connectTimeout = setTimeout(() => {
@@ -78,13 +86,27 @@ function runConnectMode(sockPath: string): void {
 
   sock.on('connect', () => {
     clearTimeout(connectTimeout)
-    // Why: the client-side waitForSentinel expects this exact string
-    // before it starts sending framed data.  Emitting it here lets the
-    // deploy code use the same sentinel-detection path for both fresh
-    // launches and reconnects.
-    process.stdout.write(RELAY_SENTINEL)
-    process.stdin.pipe(sock)
-    sock.pipe(process.stdout)
+    runConnectHandshake(sock, myVersion, {
+      onAccepted: (leftover: Buffer) => {
+        // Why: RELAY_SENTINEL must be written AFTER the handshake passes; if it
+        // were written earlier, waitForSentinel on the client would resolve
+        // and start sending JSON-RPC over a socket the daemon was about to
+        // close on mismatch — surfacing as a generic channel drop and
+        // re-entering the backoff loop. Sequencing it post-handshake makes
+        // mismatch a clean exit-42 path with no false-positive sentinel.
+        process.stdout.write(RELAY_SENTINEL)
+        // Why: bytes that arrived in the same TCP send as the handshake-ok
+        // frame were buffered inside the handshake's FrameDecoder. Forward
+        // them to stdout BEFORE attaching sock.pipe(process.stdout), so the
+        // multiplexer downstream sees them in order and no daemon frames
+        // are silently dropped at the transition.
+        if (leftover.length > 0) {
+          process.stdout.write(leftover)
+        }
+        process.stdin.pipe(sock)
+        sock.pipe(process.stdout)
+      }
+    })
   })
 
   // Why: when the SSH channel closes, stdout becomes a broken pipe.
@@ -112,7 +134,7 @@ function runConnectMode(sockPath: string): void {
 
 // ── Normal mode ──────────────────────────────────────────────────────
 
-function main(): void {
+async function main(): Promise<void> {
   const { graceTimeMs, connectMode, detached, sockPath } = parseArgs(process.argv)
 
   if (connectMode) {
@@ -152,6 +174,13 @@ function main(): void {
 
   const context = new RelayContext()
 
+  // Why: session.registerRoot is now a protocol-level no-op (the relay no
+  // longer enforces a workspace allowlist; see docs/relay-fs-allowlist-removal.md).
+  // Both notification and request handlers are retained so a new main
+  // connecting to a new relay during the upgrade window — and an old main
+  // connecting to a new relay — both keep working without "Method not found"
+  // errors. Tracked for removal once the relay-version floor moves past the
+  // cutover.
   dispatcher.onNotification('session.registerRoot', (params) => {
     const rootPath = params.rootPath as string
     if (rootPath) {
@@ -159,12 +188,6 @@ function main(): void {
     }
   })
 
-  // Why: worktree creation needs to await root registration before sending
-  // addWorktree, which validates the target directory. While FIFO frame
-  // processing means a notification won't be reordered in steady state,
-  // the request variant makes the ordering guarantee explicit and closes
-  // failure windows during relay reconnect or fresh-host scenarios where
-  // roots may not yet be registered at all. See issue #911.
   dispatcher.onRequest('session.registerRoot', async (params) => {
     const rootPath = params.rootPath as string
     if (rootPath) {
@@ -201,6 +224,70 @@ function main(): void {
   const _portScanHandler = new PortScanHandler(dispatcher)
   void _portScanHandler
 
+  // ── Agent-hook server ─────────────────────────────────────────────
+  // Why: hosts a loopback HTTP receiver inside the relay process so agent
+  // CLIs running in remote PTYs can post hook events without leaving the
+  // host. Each parsed payload is forwarded to Orca via an `agent.hook`
+  // JSON-RPC notification on the existing SSH channel — see
+  // docs/design/agent-status-over-ssh.md §2-§5.
+  const hookServer = new RelayAgentHookServer({
+    // Why: a remote account can host multiple target-specific relay daemons.
+    // Scope endpoint.env/cmd by the daemon socket path so their hook tokens
+    // cannot overwrite each other.
+    endpointDir: endpointDirForRelaySocket(sockPath),
+    forward: (envelope) => {
+      // Why: dispatcher.notify is fire-and-forget — when the SSH channel is
+      // mid-reconnect the write callback no-ops and the notification is
+      // silently dropped. The per-paneKey cache inside `hookServer` lets us
+      // replay the last status for each live pane after Orca re-wires its
+      // handler post-`--connect`.
+      dispatcher.notify(
+        AGENT_HOOK_NOTIFICATION_METHOD,
+        envelope as unknown as Record<string, unknown>
+      )
+    }
+  })
+  // Why: wait for hook-server startup before the readiness sentinel. A PTY
+  // spawned before the augmenter exists can never receive ORCA_AGENT_HOOK_*
+  // later, so success registers the augmenter first; failure is the deliberate
+  // fail-open path where agent status is disabled for this relay process.
+  try {
+    await hookServer.start()
+    ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
+  } catch (err) {
+    process.stderr.write(
+      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
+    )
+  }
+
+  // Why: evict the per-pane last-status cache when the backing PTY exits so
+  // a terminated pane's last working/done payload cannot resurface as a
+  // ghost event after a later reconnect — see §5 Path 3.
+  ptyHandler.setExitListener(({ paneKey }) => {
+    if (paneKey) {
+      hookServer.clearPaneState(paneKey)
+    }
+  })
+
+  // Why: request-driven replay. Orca issues this *after* it re-wires the
+  // `agent.hook` filter on the new mux post-`--connect`. We forward each
+  // cached entry as a fresh notification BEFORE returning so the response
+  // strictly trails all replays on the dispatcher's single write callback —
+  // closing the race the push-on-`setWrite` shape would have lost. See
+  // docs/design/agent-status-over-ssh.md §5 Path 3.
+  dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
+    const replayed = hookServer.replayCachedPayloadsForPanes()
+    return { replayed }
+  })
+
+  // Why: stub for the plugin-source sync handler used by OpenCode/Pi. The
+  // real implementation is wired in commit #7 (deferred to keep this commit
+  // tight). Stubbed out here as a method-found handler so a probing client
+  // can detect support without -32601 noise on first connect.
+  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => {
+    return { installed: false }
+  })
+
   // ── Socket server for reconnection ──────────────────────────────────
   // Why: the relay's original stdin/stdout is tied to the SSH exec channel.
   // When the app restarts that channel is gone.  A Unix domain socket lets
@@ -209,76 +296,80 @@ function main(): void {
 
   let activeSocket: Socket | null = null
   let socketServer: Server | null = null
+  const launchVersion = readLaunchVersion()
+
+  function attachAcceptedSocket(sock: Socket, leftover: Buffer): void {
+    // Why: only one client at a time. If a second reconnect arrives (e.g.
+    // user restarts again quickly), close the stale bridge so the new one
+    // takes over cleanly. We null activeSocket BEFORE destroying so the old
+    // socket's close handler sees it's been replaced and skips starting the
+    // grace timer.
+    if (activeSocket) {
+      process.stderr.write('[relay] Replacing existing socket client with new connection\n')
+      const replaced = activeSocket
+      activeSocket = null
+      replaced.destroy()
+    }
+    activeSocket = sock
+
+    // Why: stdin's data listener is still registered from the initial
+    // connection. If the old SSH channel hasn't fully closed yet (TCP FIN
+    // delayed), buffered stdin data would interleave with the new socket
+    // client's frames, corrupting the frame decoder.
+    process.stdin.pause()
+    process.stdin.removeAllListeners('data')
+
+    ptyHandler.cancelGraceTimer()
+
+    dispatcher.setWrite((data) => {
+      if (!sock.destroyed) {
+        sock.write(data)
+      }
+    })
+
+    // Why: bytes that arrived in the same TCP send as the handshake frame
+    // were buffered inside the handshake's FrameDecoder. Feed them into the
+    // dispatcher BEFORE wiring sock.on('data'), so frame ordering is
+    // preserved and no client data is silently dropped at the transition.
+    if (leftover.length > 0) {
+      dispatcher.feed(leftover)
+    }
+
+    sock.on('data', (chunk: Buffer) => {
+      if (activeSocket !== sock) {
+        return
+      }
+      ptyHandler.cancelGraceTimer()
+      dispatcher.feed(chunk)
+    })
+  }
 
   function startSocketServer(): Server {
     cleanupSocket(sockPath)
     const server = createServer((sock) => {
-      // Why: only one client at a time.  If a second reconnect arrives
-      // (e.g. user restarts again quickly), close the stale bridge so the
-      // new one takes over cleanly.  We null activeSocket BEFORE destroying
-      // so the old socket's close handler sees it's been replaced and
-      // skips starting the grace timer.
-      if (activeSocket) {
-        process.stderr.write('[relay] Replacing existing socket client with new connection\n')
-        const replaced = activeSocket
-        activeSocket = null
-        replaced.destroy()
-      }
-      activeSocket = sock
+      // Why: pre-dispatcher version handshake — see relay-handshake.ts.
+      setupDaemonHandshake(sock, { launchVersion, onAccepted: attachAcceptedSocket })
 
-      // Why: stdin's data listener is still registered from the initial
-      // connection. If the old SSH channel hasn't fully closed yet (TCP
-      // FIN delayed), buffered stdin data would interleave with the new
-      // socket client's frames, corrupting the frame decoder.
-      process.stdin.pause()
-      process.stdin.removeAllListeners('data')
-
-      ptyHandler.cancelGraceTimer()
-
-      dispatcher.setWrite((data) => {
-        if (!sock.destroyed) {
-          sock.write(data)
-        }
-      })
-
-      sock.on('data', (chunk: Buffer) => {
-        if (activeSocket !== sock) {
-          return
-        }
-        ptyHandler.cancelGraceTimer()
-        dispatcher.feed(chunk)
-      })
-
-      // Why: when the --connect bridge's SSH channel dies, stdin.pipe(sock)
-      // calls sock.end(), sending FIN to the relay. Without this handler
-      // the relay-side socket stays half-open — the relay keeps writing
-      // pty.data frames that the bridge can no longer forward, silently
-      // dropping output until the next --connect replaces the socket.
-      // Destroying on 'end' ensures the 'close' handler fires promptly.
+      // Why: when --connect's SSH channel dies, stdin.pipe(sock) calls
+      // sock.end(), sending FIN to the relay. Destroying on 'end' ensures
+      // the 'close' handler fires promptly so the daemon can enter grace.
       sock.on('end', () => {
         if (!sock.destroyed) {
           sock.destroy()
         }
       })
 
+      sock.on('error', () => {
+        // Why: Node emits 'error' then 'close'. The close handler owns
+        // activeSocket cleanup and grace startup.
+      })
+
       sock.on('close', () => {
-        // Why: only start the grace timer if THIS socket is still the
-        // active one.  If it was replaced by a newer connection (see
-        // above), activeSocket was already nulled and reassigned — starting
-        // the grace timer here would incorrectly begin shutdown while a
-        // live client is connected.
         if (activeSocket === sock) {
           activeSocket = null
           dispatcher.invalidateClient()
           startGrace()
         }
-      })
-
-      sock.on('error', () => {
-        // Why: Node emits 'error' then 'close'. The close handler owns
-        // activeSocket cleanup and grace startup; clearing activeSocket here
-        // would make close skip the grace timer and leave the relay alive
-        // indefinitely with no client.
       })
     })
 
@@ -357,6 +448,7 @@ function main(): void {
     dispatcher.dispose()
     ptyHandler.dispose()
     fsHandler.dispose()
+    hookServer.stop()
     if (socketServer) {
       socketServer.close()
     }
@@ -394,4 +486,9 @@ function cleanupSocket(sockPath: string): void {
   }
 }
 
-main()
+void main().catch((err) => {
+  process.stderr.write(
+    `[relay] Fatal startup error: ${err instanceof Error ? err.message : String(err)}\n`
+  )
+  process.exit(1)
+})

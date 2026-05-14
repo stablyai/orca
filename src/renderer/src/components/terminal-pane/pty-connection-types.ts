@@ -16,7 +16,6 @@ export type PtyConnectionDeps = {
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
-  pendingWritesRef: React.RefObject<Map<number, string>>
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>

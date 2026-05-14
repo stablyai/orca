@@ -7,12 +7,16 @@ import {
   FlaskConical,
   GitBranch,
   Globe,
+  Info,
   Keyboard,
   Lock,
+  MousePointerClick,
+  Network,
   ShieldCheck,
   Palette,
   Server,
   SlidersHorizontal,
+  Smartphone,
   Blocks,
   SquareTerminal,
   UserCog
@@ -32,6 +36,7 @@ import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { useGhosttyImport } from './useGhosttyImport'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
 import { getTerminalPaneSearchEntries } from './terminal-search'
@@ -40,6 +45,8 @@ import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './Notifica
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import { OrchestrationPane } from './OrchestrationPane'
+import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
 import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
@@ -47,6 +54,8 @@ import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
 } from './DeveloperPermissionsPane'
+import { ComputerUsePane, COMPUTER_USE_PANE_SEARCH_ENTRIES } from './ComputerUsePane'
+import { MobileSettingsPane, MOBILE_SETTINGS_PANE_SEARCH_ENTRIES } from './MobileSettingsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
@@ -62,6 +71,7 @@ type SettingsNavTarget =
   | 'appearance'
   | 'terminal'
   | 'notifications'
+  | 'computer-use'
   | 'developer-permissions'
   | 'privacy'
   | 'shortcuts'
@@ -69,6 +79,7 @@ type SettingsNavTarget =
   | 'ssh'
   | 'experimental'
   | 'agents'
+  | 'orchestration'
   | 'mobile'
   | 'repo'
 
@@ -92,6 +103,16 @@ function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavS
   return sections.at(0)
 }
 
+function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }): string {
+  if (args.isWindows) {
+    return 'Windows'
+  }
+  if (!args.isMac) {
+    return 'Linux'
+  }
+  return 'This platform'
+}
+
 // Why: after a sidebar jump the target section is now in the viewport center
 // rather than the top, which can make it less obvious which section just
 // scrolled into view. Pulsing the border for a moment reassures the user that
@@ -99,18 +120,14 @@ function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavS
 const SECTION_FLASH_CLASS = 'settings-section-flash'
 const SECTION_FLASH_DURATION_MS = 900
 
-function scrollSectionIntoView(sectionId: string, container: HTMLElement | null): void {
+function scrollSectionIntoView(sectionId: string): void {
   const target = document.getElementById(sectionId)
   if (!target) {
     return
   }
-  // Why: centering a tall section pushes its heading above the viewport,
-  // which defeats the purpose of jumping to it. Only center when the whole
-  // section fits; otherwise align to the top so the title is always visible.
-  const fitsInViewport = container
-    ? target.getBoundingClientRect().height <= container.clientHeight
-    : true
-  target.scrollIntoView({ block: fitsInViewport ? 'center' : 'start' })
+  // Why: the scroll spy samples from the upper part of the viewport. Top-align
+  // sidebar jumps so it does not immediately reselect the previous section.
+  target.scrollIntoView({ block: 'start' })
 }
 
 function flashSectionHighlight(sectionId: string): void {
@@ -157,6 +174,8 @@ function Settings(): React.JSX.Element {
   const systemPrefersDark = useSystemPrefersDark()
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
+  const showComputerUsePreviewTooltip = !isMac
+  const computerUsePlatform = computerUsePlatformLabel({ isWindows, isMac })
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
   // reveals controls that the renderer will intentionally hide.
@@ -255,7 +274,7 @@ function Settings(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!settingsNavigationTarget) {
+    if (!settings || !settingsNavigationTarget) {
       return
     }
 
@@ -266,7 +285,7 @@ function Settings(): React.JSX.Element {
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     clearSettingsTarget()
-  }, [clearSettingsTarget, settingsNavigationTarget])
+  }, [clearSettingsTarget, settings, settingsNavigationTarget])
 
   useEffect(() => {
     if (terminalFontsLoadedRef.current) {
@@ -414,6 +433,29 @@ function Settings(): React.JSX.Element {
         icon: Bell,
         searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
       },
+      {
+        id: 'orchestration',
+        title: 'Orchestration',
+        description: 'Coordinate multiple coding agents through Orca.',
+        icon: Network,
+        searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'mobile',
+        title: 'Mobile',
+        description: 'Control terminals and agents from your phone.',
+        icon: Smartphone,
+        searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
+        badge: 'Beta'
+      },
+      {
+        id: 'computer-use',
+        title: 'Computer Use',
+        description: 'Enable agents to control any app on your computer.',
+        icon: MousePointerClick,
+        searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+        badge: 'Beta'
+      },
       ...(isMac
         ? [
             {
@@ -492,7 +534,7 @@ function Settings(): React.JSX.Element {
     const visibleIds = new Set(visibleNavSections.map((section) => section.id))
 
     if (scrollTargetId && pendingNavSectionId && visibleIds.has(pendingNavSectionId)) {
-      scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
+      scrollSectionIntoView(scrollTargetId)
       flashSectionHighlight(scrollTargetId)
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null
@@ -597,7 +639,7 @@ function Settings(): React.JSX.Element {
       if (sectionId === 'experimental' && modifiers?.shiftKey) {
         setHiddenExperimentalUnlocked((previous) => !previous)
       }
-      scrollSectionIntoView(sectionId, contentScrollRef.current)
+      scrollSectionIntoView(sectionId)
       flashSectionHighlight(sectionId)
       setActiveSectionId(sectionId)
     },
@@ -754,6 +796,58 @@ function Settings(): React.JSX.Element {
                   searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
                 >
                   <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="orchestration"
+                  title="Orchestration"
+                  description="Coordinate multiple coding agents through Orca."
+                  searchEntries={ORCHESTRATION_PANE_SEARCH_ENTRIES}
+                >
+                  <OrchestrationPane />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="mobile"
+                  title="Mobile"
+                  badge="Beta"
+                  description="Control terminals and agents from your phone."
+                  searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
+                >
+                  <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="computer-use"
+                  title="Computer Use"
+                  badge="Beta"
+                  badgeAccessory={
+                    showComputerUsePreviewTooltip ? (
+                      <TooltipProvider delayDuration={250}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="text-muted-foreground transition-colors hover:text-foreground"
+                              aria-label={`${computerUsePlatform} Computer Use preview details`}
+                            >
+                              <Info className="size-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                            <span>
+                              {computerUsePlatform} Computer Use is an early preview. Some apps and
+                              desktop environments may behave inconsistently.
+                            </span>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : null
+                  }
+                  description="Enable agents to control any app on your computer."
+                  searchEntries={COMPUTER_USE_PANE_SEARCH_ENTRIES}
+                >
+                  <ComputerUsePane />
                 </SettingsSection>
 
                 {isMac ? (

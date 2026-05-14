@@ -264,10 +264,9 @@ export function restoreScrollbackBuffers(
       }
       if (buf.length > 0) {
         // Why replayIntoTerminal: the serialized buffer can contain query
-        // sequences that leaked in via the pendingWritesRef flush before
-        // serialization (see TerminalPane capture hook). Writing those
-        // through xterm would trigger auto-replies that land in the new
-        // shell's stdin. See replay-guard.ts.
+        // sequences from the prior session (DA1, DECRQM, OSC 10/11, focus,
+        // CPR). Writing those through xterm.write would trigger auto-replies
+        // that land in the new shell's stdin. See replay-guard.ts.
         replayIntoTerminal(pane, replayingPanesRef, buf)
         // Ensure cursor is on a new line so the new shell prompt
         // doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.

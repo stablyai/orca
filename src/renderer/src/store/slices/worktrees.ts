@@ -9,6 +9,7 @@ import {
   type WorktreeSlice
 } from './worktree-helpers'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
@@ -46,6 +47,11 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt &&
+      worktree.createdWithAgent === candidate.createdWithAgent &&
+      worktree.baseRef === candidate.baseRef &&
+      worktree.pushTarget?.remoteName === candidate.pushTarget?.remoteName &&
+      worktree.pushTarget?.branchName === candidate.pushTarget?.branchName &&
+      worktree.pushTarget?.remoteUrl === candidate.pushTarget?.remoteUrl &&
       worktree.sparseBaseRef === candidate.sparseBaseRef &&
       arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories)
     )
@@ -60,6 +66,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   worktreesByRepo: {},
   activeWorktreeId: null,
   deleteStateByWorktreeId: {},
+  baseStatusByWorktreeId: {},
+  remoteBranchConflictByWorktreeId: {},
   sortEpoch: 0,
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
@@ -195,13 +203,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
+  updateWorktreeBaseStatus: (event) => {
+    set((s) => ({
+      baseStatusByWorktreeId: {
+        ...s.baseStatusByWorktreeId,
+        [event.worktreeId]: event
+      }
+    }))
+  },
+
+  updateWorktreeRemoteBranchConflict: (event) => {
+    set((s) => ({
+      remoteBranchConflictByWorktreeId: {
+        ...s.remoteBranchConflictByWorktreeId,
+        [event.worktreeId]: event
+      }
+    }))
+  },
+
   createWorktree: async (
     repoId,
     name,
     baseBranch,
     setupDecision = 'inherit',
     sparseCheckout,
-    telemetrySource
+    telemetrySource,
+    displayName,
+    linkedIssue,
+    linkedPR,
+    pushTarget,
+    createdWithAgent
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -221,7 +252,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             baseBranch,
             setupDecision,
             sparseCheckout,
-            ...(telemetrySource ? { telemetrySource } : {})
+            ...(displayName ? { displayName } : {}),
+            ...(telemetrySource ? { telemetrySource } : {}),
+            ...(linkedIssue !== undefined ? { linkedIssue } : {}),
+            ...(linkedPR !== undefined ? { linkedPR } : {}),
+            ...(pushTarget ? { pushTarget } : {}),
+            ...(createdWithAgent ? { createdWithAgent } : {})
           })
           // Why: a file watcher (worktrees.onChanged) can fire between the
           // backend creating the worktree and this callback running, causing
@@ -236,6 +272,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 ...s.worktreesByRepo,
                 [repoId]: alreadyPresent ? current : [...current, result.worktree]
               },
+              ...(result.initialBaseStatus
+                ? {
+                    baseStatusByWorktreeId: {
+                      ...s.baseStatusByWorktreeId,
+                      [result.worktree.id]:
+                        s.baseStatusByWorktreeId[result.worktree.id] ?? result.initialBaseStatus
+                    }
+                  }
+                : {}),
               sortEpoch: s.sortEpoch + 1
             }
           })
@@ -410,6 +455,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
+          baseStatusByWorktreeId: (() => {
+            const nextStatus = { ...s.baseStatusByWorktreeId }
+            delete nextStatus[worktreeId]
+            return nextStatus
+          })(),
+          remoteBranchConflictByWorktreeId: (() => {
+            const nextConflict = { ...s.remoteBranchConflictByWorktreeId }
+            delete nextConflict[worktreeId]
+            return nextConflict
+          })(),
           fileSearchStateByWorktree: (() => {
             const nextSearch = { ...s.fileSearchStateByWorktree }
             // Why: file search UI state is worktree-scoped. Removing the worktree
@@ -833,10 +888,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // live to allDead even though the next updateTabPtyId is a reattach.
       // Tracking first-activation per worktree is the reliable signal.
       //
-      // Generation is still only bumped when tabs are allDead — a live tab
-      // remount would kill the user's running shell.
+      // Generation is still only bumped when tabs have no live PTY — a live
+      // tab remount would kill the user's running shell.
       const tabs = s.tabsByWorktree[worktreeId ?? ''] ?? []
-      const allDead = worktreeId && tabs.length > 0 && tabs.every((tab) => !tab.ptyId)
+      const allDead =
+        worktreeId != null &&
+        tabs.length > 0 &&
+        tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
       const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
       const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
       const nextEverActivated = isFirstActivation
@@ -985,6 +1043,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
         // Delete state
         deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
+        baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
+        remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
         // File search
         fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
         // Browser state

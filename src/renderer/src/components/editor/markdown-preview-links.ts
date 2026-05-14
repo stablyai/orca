@@ -74,6 +74,37 @@ export function getMarkdownPreviewImageSrc(
   return rawSrc
 }
 
+export function getMarkdownPreviewImageOpenTarget(
+  rawSrc: string | undefined,
+  filePath: string
+): URL | null {
+  if (!rawSrc) {
+    return null
+  }
+
+  const resolved = resolveMarkdownPreviewHref(rawSrc, filePath)
+  if (!resolved) {
+    return null
+  }
+
+  if (
+    resolved.protocol === 'http:' ||
+    resolved.protocol === 'https:' ||
+    resolved.protocol === 'file:'
+  ) {
+    return resolved
+  }
+
+  return null
+}
+
+export function isMarkdownPreviewOpenModifier(
+  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'>,
+  isMac: boolean
+): boolean {
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
 /**
  * Resolves a relative image src against the markdown file path to produce an
  * absolute filesystem path. Returns null for external URLs (http, https, data,

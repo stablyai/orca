@@ -128,8 +128,12 @@ export async function diagnoseGhAuth(): Promise<GhAuthDiagnostic> {
     ? REQUIRED_SCOPES.filter((s) => !active.scopes.includes(s))
     : [...REQUIRED_SCOPES]
   // Is there a non-env (keyring) account we could fall back to by unsetting
-  // the env var? Only meaningful if the active account is env-shadowed.
-  const keyringFallback = accounts.find((a) => a.source === 'keyring') ?? null
+  // the env var? Only meaningful if the active account is env-shadowed, and
+  // only if the keyring login is on the SAME host — otherwise unsetting the
+  // env var leaves the user with no credential for the host that was active.
+  const keyringFallback = active
+    ? (accounts.find((a) => a.source === 'keyring' && a.host === active.host) ?? null)
+    : null
   return {
     ghAvailable,
     activeAccount: active,

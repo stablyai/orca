@@ -5,11 +5,14 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@xterm/addon-ligatures@0.11.0-beta.198':
+  '@xterm/addon-ligatures@0.11.0-beta.216':
     hash: df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634
-    path: config/patches/@xterm__addon-ligatures@0.11.0-beta.198.patch
+    path: config/patches/@xterm__addon-ligatures@0.11.0-beta.216.patch
+  '@xterm/addon-webgl@0.20.0-beta.215':
+    hash: 4923357da531172cda1fd570a33fd852349d9eb6317f4befa8b3af18c221039d
+    path: config/patches/@xterm__addon-webgl@0.20.0-beta.215.patch
   node-pty@1.1.0:
-    hash: d39825bae630ddf0fc73e83e6001057c70957161772ba078988767d8569cee63
+    hash: 93c259888173175ad66ab303977deb17f2aee9e276cb35522dc61815c65358d4
     path: config/patches/node-pty@1.1.0.patch
 
 importers:
@@ -86,32 +89,32 @@ importers:
         specifier: ^3.22.5
         version: 3.22.5
       '@xterm/addon-fit':
-        specifier: 0.12.0-beta.198
-        version: 0.12.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.12.0-beta.216
+        version: 0.12.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-ligatures':
-        specifier: 0.11.0-beta.198
-        version: 0.11.0-beta.198(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.11.0-beta.216
+        version: 0.11.0-beta.216(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-search':
-        specifier: 0.17.0-beta.198
-        version: 0.17.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.17.0-beta.216
+        version: 0.17.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-serialize':
-        specifier: 0.15.0-beta.198
-        version: 0.15.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.15.0-beta.216
+        version: 0.15.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-unicode11':
-        specifier: 0.10.0-beta.198
-        version: 0.10.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.10.0-beta.216
+        version: 0.10.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-web-links':
-        specifier: 0.13.0-beta.198
-        version: 0.13.0-beta.198(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.13.0-beta.216
+        version: 0.13.0-beta.216(@xterm/xterm@6.1.0-beta.216)
       '@xterm/addon-webgl':
-        specifier: 0.20.0-beta.197
-        version: 0.20.0-beta.197(@xterm/xterm@6.1.0-beta.198)
+        specifier: 0.20.0-beta.215
+        version: 0.20.0-beta.215(patch_hash=4923357da531172cda1fd570a33fd852349d9eb6317f4befa8b3af18c221039d)(@xterm/xterm@6.1.0-beta.216)
       '@xterm/headless':
-        specifier: 6.1.0-beta.198
-        version: 6.1.0-beta.198
+        specifier: 6.1.0-beta.216
+        version: 6.1.0-beta.216
       '@xterm/xterm':
-        specifier: 6.1.0-beta.198
-        version: 6.1.0-beta.198
+        specifier: 6.1.0-beta.216
+        version: 6.1.0-beta.216
       agent-browser:
         specifier: ~0.24.1
         version: 0.24.1
@@ -152,14 +155,14 @@ importers:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.5)
       mermaid:
-        specifier: ^11.14.0
-        version: 11.14.0
+        specifier: ^11.15.0
+        version: 11.15.0
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=d39825bae630ddf0fc73e83e6001057c70957161772ba078988767d8569cee63)
+        version: 1.1.0(patch_hash=93c259888173175ad66ab303977deb17f2aee9e276cb35522dc61815c65358d4)
       pdfjs-dist:
         specifier: ^5.7.284
         version: 5.7.284
@@ -227,8 +230,8 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
       zod:
-        specifier: ~4.3.6
-        version: 4.3.6
+        specifier: ~4.4.3
+        version: 4.4.3
       zustand:
         specifier: ^5.0.13
         version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
@@ -244,7 +247,7 @@ importers:
         version: 1.59.1
       '@stablyai/playwright-test':
         specifier: ^2.1.14
-        version: 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
+        version: 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
       '@tailwindcss/vite':
         specifier: ^4.2.4
         version: 4.2.4(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
@@ -481,20 +484,8 @@ packages:
   '@braintree/sanitize-url@7.1.2':
     resolution: {integrity: sha512-jigsZK+sMF/cuiB7sERuo9V7N9jx+dhmHHnQyDSVdpZwVutaBu7WvNYqMDLSgFgfB30n452TP3vjDAvFC973mA==}
 
-  '@chevrotain/cst-dts-gen@12.0.0':
-    resolution: {integrity: sha512-fSL4KXjTl7cDgf0B5Rip9Q05BOrYvkJV/RrBTE/bKDN096E4hN/ySpcBK5B24T76dlQ2i32Zc3PAE27jFnFrKg==}
-
-  '@chevrotain/gast@12.0.0':
-    resolution: {integrity: sha512-1ne/m3XsIT8aEdrvT33so0GUC+wkctpUPK6zU9IlOyJLUbR0rg4G7ZiApiJbggpgPir9ERy3FRjT6T7lpgetnQ==}
-
-  '@chevrotain/regexp-to-ast@12.0.0':
-    resolution: {integrity: sha512-p+EW9MaJwgaHguhoqwOtx/FwuGr+DnNn857sXWOi/mClXIkPGl3rn7hGNWvo31HA3vyeQxjqe+H36yZJwYU8cA==}
-
-  '@chevrotain/types@12.0.0':
-    resolution: {integrity: sha512-S+04vjFQKeuYw0/eW3U52LkAHQsB1ASxsPGsLPUyQgrZ2iNNibQrsidruDzjEX2JYfespXMG0eZmXlhA6z7nWA==}
-
-  '@chevrotain/utils@12.0.0':
-    resolution: {integrity: sha512-lB59uJoaGIfOOL9knQqQRfhl9g7x8/wqFkp13zTdkRu1huG9kg6IJs1O8hqj9rs6h7orGxHJUKb+mX3rPbWGhA==}
+  '@chevrotain/types@11.1.2':
+    resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
 
   '@develar/schema-utils@2.6.5':
     resolution: {integrity: sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig==}
@@ -1004,8 +995,8 @@ packages:
     resolution: {integrity: sha512-9QOtNffcOF/c1seMCDnjckb3R9WHcG34tky+FHpNKKCW0wc/scYLwMtO+ptyGUfMW0/b/n4qRiALlaFHc9Oj7Q==}
     engines: {node: '>= 10.0.0'}
 
-  '@mermaid-js/parser@1.1.0':
-    resolution: {integrity: sha512-gxK9ZX2+Fex5zu8LhRQoMeMPEHbc73UKZ0FQ54YrQtUxE1VVhMwzeNtKRPAu5aXks4FasbMe4xB4bWrmq6Jlxw==}
+  '@mermaid-js/parser@1.1.1':
+    resolution: {integrity: sha512-VuHdsYMK1bT6X2JbcAaWAhugTRvRBRyuZgd+c22swUeI9g/ntaxF7CY7dYarhZovofCbUNO0G7JesfmNtjYOCw==}
 
   '@modelcontextprotocol/sdk@1.29.0':
     resolution: {integrity: sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==}
@@ -2997,47 +2988,47 @@ packages:
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
 
-  '@xterm/addon-fit@0.12.0-beta.198':
-    resolution: {integrity: sha512-1EZFzOaUjRnlo5p2diIV9+HHVtHqr0O7TEFCstSuFqV/5QaKkRiWiKaMfsPEg2pF5P7yBOASk73yUPII7oquaA==}
+  '@xterm/addon-fit@0.12.0-beta.216':
+    resolution: {integrity: sha512-IgKE3ngNodSnmj1O+EEYpKQZkSbAUbghPlCWd8G32RL0piIMqb3FX3BuYLnWZeLNoD9iMtublLMG1T9XjGeVvA==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-ligatures@0.11.0-beta.198':
-    resolution: {integrity: sha512-LpF9KYiixxybSdyWpBtaPg5S1NNosQU0vcYg9P71xZFVRPT5vjaFvxYd80hV0oeKdnT25EMgNxwxbqHasmHQvg==}
+  '@xterm/addon-ligatures@0.11.0-beta.216':
+    resolution: {integrity: sha512-NJrK8MRi64Kb1Kxz5Jmrnd7H2gTlBqM3wHfObneD7T4xGFoPZkeX2/Kit4IcHt2Y5CTAQFAc92DilsncVm1HnQ==}
     engines: {node: '>8.0.0'}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-search@0.17.0-beta.198':
-    resolution: {integrity: sha512-loNSX0cB4P+9Sg13sgB/cQPPBgdOi1hxRyZ75Jj90+4iKe227mRmgzdqU3wxr10nyFWJWCpysCjVT+47tdC8mQ==}
+  '@xterm/addon-search@0.17.0-beta.216':
+    resolution: {integrity: sha512-p//4yv5aB2eyQcCFmPQ/s7tTFSTwKbtxs89xP1gvMbT9QuZgjW9FNqaQKb1GLDWtMpSfZdy7RrUp4GiCg3PVJQ==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-serialize@0.15.0-beta.198':
-    resolution: {integrity: sha512-0yf13cLPaKX8nkgUqclcdbU5FexacA/xnvWzHzGFYTku0WH+SqygbQcDOcg4bTUGgCcvfZqntEb1NQpr+69KgQ==}
+  '@xterm/addon-serialize@0.15.0-beta.216':
+    resolution: {integrity: sha512-scj/83XfYHg5LiDscYDP9dnadUMZt8To1tbdncQP/dZq2pD4TsTMokW1pciVYYazLBxCeKZybbVLEuOo7IPCqQ==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-unicode11@0.10.0-beta.198':
-    resolution: {integrity: sha512-3itjZ5lTQ5tnDcpUAplX88BsTJTZOvEzX9wNTNMO2aPuctLavMNg2+pXU8KTkeRhUZnDyhx9Lsv81dDs94vWDQ==}
+  '@xterm/addon-unicode11@0.10.0-beta.216':
+    resolution: {integrity: sha512-i7TrEHOTzUEOClH1+6IHoHy7bR/XHVRBjHc5e0u6A1HucFkAlCU+bqUY8EfwNOh1/iUjuB06EtNh6BM1o/ZAlA==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-web-links@0.13.0-beta.198':
-    resolution: {integrity: sha512-qA/B1tuNLpqlzscrAVFjLKjuH0CmKKyfbTn78Y3RLKs6H7xxdYSE6/DjJ1zg9C6aDtLwF9lsaOFpPSPf2AfpYQ==}
+  '@xterm/addon-web-links@0.13.0-beta.216':
+    resolution: {integrity: sha512-ZP3BDy1na/37TZHO8FB+XHJFoO8muyPoOzkaL2X28n5A9ZFQPbf834EMRsvDczKnfQvtZcve+ZCmMJj1ZHGjow==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/addon-webgl@0.20.0-beta.197':
-    resolution: {integrity: sha512-0o30FvLzfd9ODuB1gbpwYMGQHYiz0FebmVaMP0Idesw1sLIG3qc7aIIBQEUnWiBDsKbDHhaysW8WTxacg2AhaQ==}
+  '@xterm/addon-webgl@0.20.0-beta.215':
+    resolution: {integrity: sha512-oCbH3YxiGOzRcKxwTfSRCA1TqpoT/AitO2X5MuqD14DVnb4Z3rTKQYfHBA7R6HA7U4K9OzmtIsi5+VyEIEaWsg==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.198
+      '@xterm/xterm': ^6.1.0-beta.216
 
-  '@xterm/headless@6.1.0-beta.198':
-    resolution: {integrity: sha512-pDS/I5HLGwwJf8sWZFaT+qbHxgFu0qdVQv5/XDzhNyKXMXQJ7cL3ZsJsIox5JxLo2ZuYLVVY8/lirHronhOSfA==}
+  '@xterm/headless@6.1.0-beta.216':
+    resolution: {integrity: sha512-HCut3ABwBv5zVUAB+5KVTW4svr/fCeVMW9xtaJIhmXZsNHOrhVFOGX7E2CYzRa8xdX/aI2JdTIhgLl8xjcHEoA==}
 
-  '@xterm/xterm@6.1.0-beta.198':
-    resolution: {integrity: sha512-udjhNFi4YfypbVBJV7gFNwQV3KziZFJdq+fg87WefGF5JkGbC+4LvIhEsHXR0Kb5Ez8ESxeqM7Yjvj+kw8zDAg==}
+  '@xterm/xterm@6.1.0-beta.216':
+    resolution: {integrity: sha512-87rfymzVje5eYUlGG94hz1WkOYvFRcFDGdiOAbg4d8xt8OGSGR2nMNU4I1n5MDE1RBPBqRd+WVJ5w7q3pwMoZA==}
 
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
@@ -3297,15 +3288,6 @@ packages:
 
   character-reference-invalid@2.0.1:
     resolution: {integrity: sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw==}
-
-  chevrotain-allstar@0.4.3:
-    resolution: {integrity: sha512-2X4mkroolSMKqW+H22pyPMUVDqYZzPhephTmg/NODKb1IGYPHfxfhcW0EjS7wcPJNbze2i4vBWT7zT5FKF2lrQ==}
-    peerDependencies:
-      chevrotain: ^12.0.0
-
-  chevrotain@12.0.0:
-    resolution: {integrity: sha512-csJvb+6kEiQaqo1woTdSAuOWdN0WTLIydkKrBnS+V5gZz0oqBrp4kQ35519QgK6TpBThiG3V1vNSHlIkv4AglQ==}
-    engines: {node: '>=22.0.0'}
 
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
@@ -3887,6 +3869,9 @@ packages:
   es-set-tostringtag@2.1.0:
     resolution: {integrity: sha512-j6vWzfrGVfyXxge+O0x5sh6cvxAog0a/4Rdd2K36zCMV5eJ+/+tOAngRO8cODMNWbVRdVlmGZQL2YS3yR8bIUA==}
     engines: {node: '>= 0.4'}
+
+  es-toolkit@1.46.1:
+    resolution: {integrity: sha512-5eNtXOs3tbfxXOj04tjjseeWkRWaoCjdEI+96DgwzZoe6c9juL49pXlzAFTI72aWC9Y8p7168g6XIKjh7k6pyQ==}
 
   es6-error@4.1.1:
     resolution: {integrity: sha512-Um/+FxMr9CISWh0bi5Zv0iOD+4cFh5qLeks1qhAopKVAJw3drgKbKySikp7wGhDL0HPeaja0P5ULZrxLkniUVg==}
@@ -4565,10 +4550,6 @@ packages:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
     engines: {node: '>=6'}
 
-  langium@4.2.3:
-    resolution: {integrity: sha512-sOPIi4hISFnY7twwV97ca1TsxpBtXq0URu/LL1AvxwccPG/RIBBlKS7a/f/EL6w8lTNaS0EFs/F+IdSOaqYpng==}
-    engines: {node: '>=20.10.0', npm: '>=10.2.3'}
-
   layout-base@1.0.2:
     resolution: {integrity: sha512-8h2oVEZNktL4BH2JCOI90iD1yXwL6iNW7KcCKT2QZgQJR2vbqDsldCTPRU9NifTCqHZci57XvQQ15YTu+sTYPg==}
 
@@ -4820,8 +4801,8 @@ packages:
     resolution: {integrity: sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg==}
     engines: {node: '>= 8'}
 
-  mermaid@11.14.0:
-    resolution: {integrity: sha512-GSGloRsBs+JINmmhl0JDwjpuezCsHB4WGI4NASHxL3fHo3o/BRXTxhDLKnln8/Q0lRFRyDdEjmk1/d5Sn1Xz8g==}
+  mermaid@11.15.0:
+    resolution: {integrity: sha512-pTMbcf3rWdtLiYGpmoTjHEpeY8seiy6sR+9nD7LOs8KfUbHE4lOUAprTRqRAcWSQ6MQpdX+YEsxShtGsINtPtw==}
 
   micromark-core-commonmark@2.0.3:
     resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
@@ -6222,26 +6203,6 @@ packages:
       jsdom:
         optional: true
 
-  vscode-jsonrpc@8.2.0:
-    resolution: {integrity: sha512-C+r0eKJUIfiDIfwJhria30+TYWPtuHJXHtI7J0YlOmKAo7ogxP20T0zxB7HZQIFhIyvoBPwWskjxrvAtfjyZfA==}
-    engines: {node: '>=14.0.0'}
-
-  vscode-languageserver-protocol@3.17.5:
-    resolution: {integrity: sha512-mb1bvRJN8SVznADSGWM9u/b07H7Ecg0I3OgXDuLdn307rl/J3A9YD6/eYOssqhecL27hK1IPZAsaqh00i/Jljg==}
-
-  vscode-languageserver-textdocument@1.0.12:
-    resolution: {integrity: sha512-cxWNPesCnQCcMPeenjKKsOCKQZ/L6Tv19DTRIGuLWe32lyzWhihGVJ/rcckZXJxfdKCFvRLS3fpBIsV/ZGX4zA==}
-
-  vscode-languageserver-types@3.17.5:
-    resolution: {integrity: sha512-Ld1VelNuX9pdF39h2Hgaeb5hEZM2Z3jUrrMgWQAu82jMtZp7p3vJT3BzToKtZI7NgQssZje5o0zryOrhQvzQAg==}
-
-  vscode-languageserver@9.0.1:
-    resolution: {integrity: sha512-woByF3PDpkHFUreUa7Hos7+pUWdeWMXRd26+ZX2A8cFx6v/JPTtd4/uN0/jB6XQHYaOlHbio03NTHCqrgG5n7g==}
-    hasBin: true
-
-  vscode-uri@3.1.0:
-    resolution: {integrity: sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==}
-
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
 
@@ -6376,8 +6337,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
   zustand@5.0.13:
     resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
@@ -6619,20 +6580,7 @@ snapshots:
 
   '@braintree/sanitize-url@7.1.2': {}
 
-  '@chevrotain/cst-dts-gen@12.0.0':
-    dependencies:
-      '@chevrotain/gast': 12.0.0
-      '@chevrotain/types': 12.0.0
-
-  '@chevrotain/gast@12.0.0':
-    dependencies:
-      '@chevrotain/types': 12.0.0
-
-  '@chevrotain/regexp-to-ast@12.0.0': {}
-
-  '@chevrotain/types@12.0.0': {}
-
-  '@chevrotain/utils@12.0.0': {}
+  '@chevrotain/types@11.1.2': {}
 
   '@develar/schema-utils@2.6.5':
     dependencies:
@@ -7052,9 +7000,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mermaid-js/parser@1.1.0':
+  '@mermaid-js/parser@1.1.1':
     dependencies:
-      langium: 4.2.3
+      '@chevrotain/types': 11.1.2
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
@@ -8224,27 +8172,27 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
-  '@stablyai/playwright-base@2.1.14(@playwright/test@1.59.1)(zod@4.3.6)':
+  '@stablyai/playwright-base@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
     dependencies:
       '@playwright/test': 1.59.1
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
-      zod: 4.3.6
+      zod: 4.4.3
 
-  '@stablyai/playwright-test@2.1.14(@playwright/test@1.59.1)(zod@4.3.6)':
+  '@stablyai/playwright-test@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright': 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
-      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
+      '@stablyai/playwright': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
-  '@stablyai/playwright@2.1.14(@playwright/test@1.59.1)(zod@4.3.6)':
+  '@stablyai/playwright@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.3.6)
+      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
@@ -8910,39 +8858,39 @@ snapshots:
   '@xmldom/xmldom@0.9.10':
     optional: true
 
-  '@xterm/addon-fit@0.12.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-fit@0.12.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-ligatures@0.11.0-beta.198(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-ligatures@0.11.0-beta.216(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
       lru-cache: 6.0.0
       opentype.js: 0.8.0
 
-  '@xterm/addon-search@0.17.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-search@0.17.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-serialize@0.15.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-serialize@0.15.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-unicode11@0.10.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-unicode11@0.10.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-web-links@0.13.0-beta.198(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-web-links@0.13.0-beta.216(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/addon-webgl@0.20.0-beta.197(@xterm/xterm@6.1.0-beta.198)':
+  '@xterm/addon-webgl@0.20.0-beta.215(patch_hash=4923357da531172cda1fd570a33fd852349d9eb6317f4befa8b3af18c221039d)(@xterm/xterm@6.1.0-beta.216)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.198
+      '@xterm/xterm': 6.1.0-beta.216
 
-  '@xterm/headless@6.1.0-beta.198': {}
+  '@xterm/headless@6.1.0-beta.216': {}
 
-  '@xterm/xterm@6.1.0-beta.198': {}
+  '@xterm/xterm@6.1.0-beta.216': {}
 
   abbrev@4.0.0: {}
 
@@ -9237,19 +9185,6 @@ snapshots:
   character-entities@2.0.2: {}
 
   character-reference-invalid@2.0.1: {}
-
-  chevrotain-allstar@0.4.3(chevrotain@12.0.0):
-    dependencies:
-      chevrotain: 12.0.0
-      lodash-es: 4.18.1
-
-  chevrotain@12.0.0:
-    dependencies:
-      '@chevrotain/cst-dts-gen': 12.0.0
-      '@chevrotain/gast': 12.0.0
-      '@chevrotain/regexp-to-ast': 12.0.0
-      '@chevrotain/types': 12.0.0
-      '@chevrotain/utils': 12.0.0
 
   chownr@1.1.4: {}
 
@@ -9863,6 +9798,8 @@ snapshots:
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
       hasown: 2.0.3
+
+  es-toolkit@1.46.1: {}
 
   es6-error@4.1.1:
     optional: true
@@ -10643,15 +10580,6 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  langium@4.2.3:
-    dependencies:
-      '@chevrotain/regexp-to-ast': 12.0.0
-      chevrotain: 12.0.0
-      chevrotain-allstar: 0.4.3(chevrotain@12.0.0)
-      vscode-languageserver: 9.0.1
-      vscode-languageserver-textdocument: 1.0.12
-      vscode-uri: 3.1.0
-
   layout-base@1.0.2: {}
 
   layout-base@2.0.1: {}
@@ -10991,11 +10919,11 @@ snapshots:
 
   merge2@1.4.1: {}
 
-  mermaid@11.14.0:
+  mermaid@11.15.0:
     dependencies:
       '@braintree/sanitize-url': 7.1.2
       '@iconify/utils': 3.1.1
-      '@mermaid-js/parser': 1.1.0
+      '@mermaid-js/parser': 1.1.1
       '@types/d3': 7.4.3
       '@upsetjs/venn.js': 2.0.0
       cytoscape: 3.33.3
@@ -11006,9 +10934,9 @@ snapshots:
       dagre-d3-es: 7.0.14
       dayjs: 1.11.20
       dompurify: 3.4.2
+      es-toolkit: 1.46.1
       katex: 0.16.45
       khroma: 2.1.0
-      lodash-es: 4.18.1
       marked: 16.4.2
       roughjs: 4.6.6
       stylis: 4.4.0
@@ -11368,7 +11296,7 @@ snapshots:
       undici: 6.25.0
       which: 6.0.1
 
-  node-pty@1.1.0(patch_hash=d39825bae630ddf0fc73e83e6001057c70957161772ba078988767d8569cee63):
+  node-pty@1.1.0(patch_hash=93c259888173175ad66ab303977deb17f2aee9e276cb35522dc61815c65358d4):
     dependencies:
       node-addon-api: 7.1.1
 
@@ -12745,23 +12673,6 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vscode-jsonrpc@8.2.0: {}
-
-  vscode-languageserver-protocol@3.17.5:
-    dependencies:
-      vscode-jsonrpc: 8.2.0
-      vscode-languageserver-types: 3.17.5
-
-  vscode-languageserver-textdocument@1.0.12: {}
-
-  vscode-languageserver-types@3.17.5: {}
-
-  vscode-languageserver@9.0.1:
-    dependencies:
-      vscode-languageserver-protocol: 3.17.5
-
-  vscode-uri@3.1.0: {}
-
   w3c-keyname@2.2.8: {}
 
   web-namespaces@2.0.1: {}
@@ -12882,7 +12793,7 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.3.6: {}
+  zod@4.4.3: {}
 
   zustand@5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5)):
     optionalDependencies:

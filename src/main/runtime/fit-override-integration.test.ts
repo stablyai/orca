@@ -239,8 +239,17 @@ describe('fit override integration', () => {
     expect(resizes).toEqual(['pty-1:42x18', 'pty-1:120x35'])
   })
 
-  it('disconnect auto-restore also resizes PTY', async () => {
-    const runtime = new OrcaRuntimeService(store)
+  it('disconnect auto-restore also resizes PTY (when auto-restore is configured)', async () => {
+    // Why: indefinite hold (mobileAutoRestoreFitMs=null) is the default and
+    // intentionally suppresses disconnect-driven auto-restore so the desktop
+    // banner stays mounted after the phone leaves. This test verifies the
+    // legacy auto-restore path still works when the user opts into a finite
+    // window. See docs/mobile-fit-hold.md.
+    const finiteRestoreStore = {
+      ...store,
+      getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs: 5_000 })
+    }
+    const runtime = new OrcaRuntimeService(finiteRestoreStore)
     let ptySize = { cols: 100, rows: 30 }
 
     runtime.setPtyController({
@@ -276,5 +285,45 @@ describe('fit override integration', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(ptySize).toEqual({ cols: 100, rows: 30 })
     expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
+  })
+
+  it('disconnect with indefinite hold (default) keeps PTY at phone dims', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let ptySize = { cols: 100, rows: 30 }
+
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      resize: (_ptyId, cols, rows) => {
+        ptySize = { cols, rows }
+        return true
+      },
+      getSize: () => ({ ...ptySize })
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    // Default mobileAutoRestoreFitMs is null (indefinite hold).
+    await runtime.resizeForClient('pty-1', 'mobile-fit', 'phone-disconnect', 45, 20)
+    expect(ptySize).toEqual({ cols: 45, rows: 20 })
+
+    runtime.onClientDisconnected('phone-disconnect')
+    await new Promise((r) => setTimeout(r, 0))
+
+    // PTY stays at phone dims and override persists — desktop banner remains.
+    expect(ptySize).toEqual({ cols: 45, rows: 20 })
+    expect(runtime.getTerminalFitOverride('pty-1')).not.toBeNull()
   })
 })

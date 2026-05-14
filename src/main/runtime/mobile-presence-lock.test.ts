@@ -59,7 +59,12 @@ const store = {
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
-    branchPrefixCustom: ''
+    branchPrefixCustom: '',
+    // Why: legacy mobile tests pre-date the fit-hold preference. Default
+    // to MIN (the new clamp floor) so the auto-restore behavior they assert
+    // continues to fire after a finite delay. Real getDefaultSettings()
+    // is null/indefinite. See docs/mobile-fit-hold.md.
+    mobileAutoRestoreFitMs: 5_000
   })
 }
 
@@ -344,7 +349,7 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     // NOT B's (which captured 45x20 when it joined a phone-fitted PTY).
     runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
     runtime.handleMobileUnsubscribe('pty-1', 'phone-B')
-    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(5_000)
 
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })

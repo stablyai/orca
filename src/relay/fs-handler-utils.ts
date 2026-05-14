@@ -22,8 +22,10 @@ import type { SearchResult as SharedSearchResult } from '../shared/types'
 // the old 5MB search cap would block common JSON/log files before Monaco's
 // large-file optimizations can handle them.
 export const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
-// 10MB for relayed binaries (base64 → ~13.3MB frame payload at 16MB relay cap)
-export const MAX_PREVIEWABLE_BINARY_SIZE = 10 * 1024 * 1024
+// Why: matches the local cap (src/main/ipc/filesystem.ts MAX_PREVIEWABLE_BINARY_SIZE).
+// Reads above the legacy 16MB single-frame budget go through fs.readFileStream,
+// which chunks at STREAM_CHUNK_SIZE; see docs/relay-file-stream-design.md.
+export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
 export const BINARY_PROBE_BYTES = 8192
 export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000

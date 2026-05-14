@@ -1,10 +1,19 @@
 /* eslint-disable max-lines -- Why: the worktree card centralizes sidebar card state (selection, drag, agent status, git info, context menu) in one cohesive component so sidebar rendering doesn't fan out across files. */
-import React, { useEffect, useMemo, useCallback, useState } from 'react'
+import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Server, ServerOff } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  GitMerge,
+  LoaderCircle,
+  CircleCheck,
+  CircleX,
+  Server,
+  ServerOff
+} from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
@@ -13,8 +22,8 @@ import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
-  getWorktreeStatus,
   getWorktreeStatusLabel,
+  resolveWorktreeStatus,
   type WorktreeStatus
 } from '@/lib/worktree-status'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
@@ -30,12 +39,21 @@ import {
   FilledBellIcon
 } from './WorktreeCardHelpers'
 import { IssueSection, PrSection, CommentSection } from './WorktreeCardMeta'
+import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
+import {
+  selectLivePtyIdsForWorktree,
+  selectRuntimePaneTitlesForWorktree
+} from './worktree-card-status-inputs'
 
 type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
+  isMultiSelected?: boolean
+  selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  onSelectionGesture?: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
+  onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
 }
 
 function formatSparseDirectoryPreview(directories: string[]): string {
@@ -47,6 +65,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
+  isMultiSelected = false,
+  selectedWorktrees,
+  onSelectionGesture,
+  onContextMenuSelect,
   hideRepoBadge
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
@@ -54,9 +76,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
-  const dashboardExperimentEnabled = useAppStore(
-    (s) => s.settings?.experimentalAgentDashboard === true
-  )
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -64,6 +83,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         worktreeId: worktree.id,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
+        currentPR: worktree.linkedPR,
         currentComment: worktree.comment,
         focus: 'issue'
       })
@@ -78,6 +98,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         worktreeId: worktree.id,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
+        currentPR: worktree.linkedPR,
         currentComment: worktree.comment,
         focus: 'comment'
       })
@@ -85,8 +106,24 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [worktree, openModal]
   )
 
+  const handleEditPr = useCallback(() => {
+    openModal('edit-meta', {
+      worktreeId: worktree.id,
+      currentDisplayName: worktree.displayName,
+      currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
+      currentComment: worktree.comment,
+      focus: 'pr'
+    })
+  }, [worktree, openModal])
+
+  const handleRemovePr = useCallback(() => {
+    updateWorktreeMeta(worktree.id, { linkedPR: null })
+  }, [worktree.id, updateWorktreeMeta])
+
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
+  const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
 
   // SSH disconnected state
   const sshStatus = useAppStore((s) => {
@@ -116,23 +153,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
-  // Why: split-pane tabs expose per-pane titles that the aggregate
-  // `tab.title` does not preserve (onActivePaneChange overwrites it with the
-  // focused pane's title). getWorktreeStatus needs those pane titles to keep
-  // the sidebar spinner reflecting *any* working pane, not just the focused
-  // one. Narrow the subscription to this worktree's tabs via useShallow so
-  // unrelated pane-title updates do not re-render every sidebar card.
+  // Why: keep these as separate shallow selectors. Combining them into one
+  // returned object nests freshly-created maps under fresh keys, so Zustand's
+  // shallow memoization sees every unrelated store write as a change and
+  // re-renders every mounted card.
+  // tab.ptyId is the wake-hint sessionId preserved across sleep, not a
+  // liveness signal; sleep-then-card-render would lie the dot green if we
+  // read tab.ptyId; ptyIdsByTabId is the source of truth.
+  // tab.title is the focused-pane title (onActivePaneChange overwrites it),
+  // so the per-pane title map is needed to keep the sidebar spinner
+  // reflecting *any* working pane, not just the focused one.
   const runtimePaneTitlesForWorktree = useAppStore(
-    useShallow((s) => {
-      const out: Record<string, Record<number, string>> = {}
-      for (const tab of s.tabsByWorktree[worktree.id] ?? []) {
-        const paneTitles = s.runtimePaneTitlesByTabId[tab.id]
-        if (paneTitles) {
-          out[tab.id] = paneTitles
-        }
-      }
-      return out
-    })
+    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktree.id))
+  )
+  const ptyIdsForWorktree = useAppStore(
+    useShallow((s) => selectLivePtyIdsForWorktree(s, worktree.id))
   )
 
   const branch = branchDisplayName(worktree.branch)
@@ -150,6 +185,18 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ? issueEntry.data
       : undefined
     : null
+  const issueDisplay =
+    issue ??
+    (worktree.linkedIssue
+      ? {
+          number: worktree.linkedIssue,
+          // Why: linked metadata is persisted immediately, but GitHub details
+          // arrive asynchronously. Show the durable link number instead of
+          // making the worktree look unlinked while the cache warms.
+          title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
+        }
+      : null)
+  const prDisplay = getWorktreeCardPrDisplay(pr, worktree.linkedPR)
 
   const isDeleting = deleteState?.isDeleting ?? false
 
@@ -227,35 +274,58 @@ const WorktreeCard = React.memo(function WorktreeCard({
     })
   )
 
-  const status: WorktreeStatus = useMemo(() => {
-    if (hasPermission) {
-      return 'permission'
-    }
-    // Compute the heuristic once so we can let 'working' beat done without
-    // letting quieter heuristic states ('active'/'inactive') erase a done.
-    const heuristic = getWorktreeStatus(tabs, browserTabs, runtimePaneTitlesForWorktree)
-    if (heuristic === 'working') {
-      return 'working'
-    }
-    if (hasLiveDone || hasRetainedDone) {
-      return 'done'
-    }
-    return heuristic
-  }, [tabs, browserTabs, runtimePaneTitlesForWorktree, hasPermission, hasLiveDone, hasRetainedDone])
+  // Why: resolveWorktreeStatus enforces the runtime-liveness precondition —
+  // when no tab in this worktree has a live PTY (and no browser tab exists)
+  // it short-circuits to 'inactive' before consulting hook-reported state or
+  // retained-done snapshots. That keeps the dot honest across sleep, crash,
+  // and slept-with-retained-done while preserving the row data used by the
+  // inline agents list (retained 'done' rows still render inside the card).
+  const status: WorktreeStatus = useMemo(
+    () =>
+      resolveWorktreeStatus({
+        tabs,
+        browserTabs,
+        ptyIdsByTabId: ptyIdsForWorktree,
+        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
+        hasPermission,
+        hasLiveDone,
+        hasRetainedDone
+      }),
+    [
+      tabs,
+      browserTabs,
+      ptyIdsForWorktree,
+      runtimePaneTitlesForWorktree,
+      hasPermission,
+      hasLiveDone,
+      hasRetainedDone
+    ]
+  )
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
+  const previousPrLookupRef = useRef<{ cacheKey: string; linkedPRNumber: number | null } | null>(
+    null
+  )
 
   // Skip GitHub fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
     if (repo && !isFolder && !worktree.isBare && prCacheKey && (showPR || showCI)) {
+      const linkedPRNumber = worktree.linkedPR ?? null
+      const previousLookup = previousPrLookupRef.current
+      const linkedPRChanged =
+        previousLookup !== null &&
+        previousLookup.cacheKey === prCacheKey &&
+        previousLookup.linkedPRNumber !== linkedPRNumber
+      previousPrLookupRef.current = { cacheKey: prCacheKey, linkedPRNumber }
       // Why: pass linkedPR so worktrees created from a PR (whose new local
       // branch differs from the PR's head ref) still resolve their PR via
-      // a number-based fallback in the main process.
-      fetchPRForBranch(repo.path, branch, { linkedPRNumber: worktree.linkedPR ?? null })
+      // a number-based fallback in the main process. Force when that fallback
+      // changes so the branch cache stops showing stale linked-PR data.
+      fetchPRForBranch(repo.path, branch, { linkedPRNumber, force: linkedPRChanged })
     }
   }, [
     repo,
@@ -307,6 +377,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
           return
         }
       }
+      const selectionOnly = onSelectionGesture?.(event, worktree.id) ?? false
+      if (selectionOnly) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
       // Why: route sidebar clicks through the shared activation path so the
       // back/forward stack stays complete for the primary worktree navigation
       // surface instead of only recording palette-driven switches.
@@ -315,7 +391,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         setShowDisconnectedDialog(true)
       }
     },
-    [worktree.id, isSshDisconnected]
+    [worktree.id, isSshDisconnected, onSelectionGesture]
   )
 
   const handleDoubleClick = useCallback(() => {
@@ -323,9 +399,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
       worktreeId: worktree.id,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
       currentComment: worktree.comment
     })
-  }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+  }, [
+    worktree.id,
+    worktree.displayName,
+    worktree.linkedIssue,
+    worktree.linkedPR,
+    worktree.comment,
+    openModal
+  ])
 
   const handleToggleUnreadQuick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -346,10 +430,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cardBody = (
     <div
       className={cn(
-        'group relative flex items-start gap-1.5 px-2 py-2 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none ml-1',
+        'group relative flex items-start gap-1.5 px-2 py-2 cursor-pointer transition-all duration-200 outline-none select-none ml-1',
+        isMultiSelected ? 'rounded-sm' : 'rounded-lg',
         isActive
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-          : 'border border-transparent hover:bg-accent/40',
+          : isMultiSelected
+            ? 'border border-sidebar-ring/35 bg-sidebar-accent/70 ring-1 ring-sidebar-ring/30'
+            : 'border border-transparent hover:bg-sidebar-accent/40',
+        isActive && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
       )}
@@ -557,36 +645,55 @@ const WorktreeCard = React.memo(function WorktreeCard({
         {/* Meta section: Issue / PR Links / Comment
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
-        {((cardProps.includes('issue') && issue) ||
-          (cardProps.includes('pr') && pr) ||
+        {((cardProps.includes('issue') && issueDisplay) ||
+          (cardProps.includes('pr') && prDisplay) ||
           (cardProps.includes('comment') && worktree.comment)) && (
           <div className="flex flex-col gap-[3px] mt-0.5">
-            {cardProps.includes('issue') && issue && (
-              <IssueSection issue={issue} onClick={handleEditIssue} />
+            {cardProps.includes('issue') && issueDisplay && (
+              <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
             )}
-            {cardProps.includes('pr') && pr && <PrSection pr={pr} onClick={handleEditIssue} />}
+            {cardProps.includes('pr') && prDisplay && (
+              <PrSection
+                pr={prDisplay}
+                onClick={handleEditIssue}
+                onEdit={handleEditPr}
+                onRemove={handleRemovePr}
+              />
+            )}
             {cardProps.includes('comment') && worktree.comment && (
               <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />
             )}
           </div>
         )}
 
-        {/* Why: inline agent list. Gated on the experimental setting so
-             managed hook data is only surfaced where the cockpit is enabled,
-             and on the 'inline-agents' card property so users can hide it.
-             Layout coupling: this block grows the card height dynamically —
-             WorktreeList uses measureElement on each row, so the virtualizer
-             re-measures naturally when agents appear/disappear. */}
-        {dashboardExperimentEnabled && cardProps.includes('inline-agents') && (
-          <WorktreeCardAgents worktreeId={worktree.id} />
+        {remoteBranchConflict && (
+          <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="mt-[1px] size-3 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {remoteBranchConflict.remote}/{remoteBranchConflict.branchName} already exists.
+            </span>
+          </div>
         )}
+
+        {/* Why: inline agent list. Gated on the 'inline-agents' card
+             property so users can hide it. Layout coupling: this block
+             grows the card height dynamically — WorktreeList uses
+             measureElement on each row, so the virtualizer re-measures
+             naturally when agents appear/disappear. */}
+        {cardProps.includes('inline-agents') && <WorktreeCardAgents worktreeId={worktree.id} />}
       </div>
     </div>
   )
 
   return (
     <>
-      <WorktreeContextMenu worktree={worktree}>{cardBody}</WorktreeContextMenu>
+      <WorktreeContextMenu
+        worktree={worktree}
+        selectedWorktrees={selectedWorktrees}
+        onContextMenuSelect={onContextMenuSelect}
+      >
+        {cardBody}
+      </WorktreeContextMenu>
 
       {repo?.connectionId && (
         <SshDisconnectedDialog

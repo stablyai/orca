@@ -15,6 +15,11 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Skip Delete Worktree Confirmation',
     description: 'Delete worktrees from the context menu without a confirmation dialog.',
     keywords: ['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']
+  },
+  {
+    title: 'Skip Delete Automation Confirmation',
+    description: 'Delete automations without a confirmation dialog.',
+    keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
   }
 ]
 

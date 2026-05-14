@@ -1,7 +1,10 @@
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
+import { join } from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
+// Why: RelayContext is accepted in the constructor for protocol back-compat
+// (see docs/relay-fs-allowlist-removal.md), but no longer consulted on FS ops.
 import { expandTilde } from './context'
 import {
   DEFAULT_MAX_RESULTS,
@@ -13,7 +16,8 @@ import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
-import { readRelayFileContent } from './fs-handler-file-read'
+import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
+import { RelayStreamRegistry } from './fs-stream-registry'
 
 type WatchState = {
   rootPath: string
@@ -22,20 +26,39 @@ type WatchState = {
   isStale: () => boolean
 }
 
+async function isDirectoryEntry(
+  dirPath: string,
+  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }
+): Promise<boolean> {
+  if (entry.isDirectory()) {
+    return true
+  }
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  try {
+    // Why: the file explorer needs target type for symlinked directories so a
+    // workspace link to an external folder expands instead of opening as a file.
+    return (await stat(join(dirPath, entry.name))).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 export class FsHandler {
   private dispatcher: RelayDispatcher
-  private context: RelayContext
   private watches = new Map<string, WatchState>()
+  private streamRegistry = new RelayStreamRegistry()
 
-  constructor(dispatcher: RelayDispatcher, context: RelayContext) {
+  constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
     this.dispatcher = dispatcher
-    this.context = context
     this.registerHandlers()
   }
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('fs.readDir', (p) => this.readDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
+    this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
     this.dispatcher.onRequest('fs.writeFile', (p) => this.writeFile(p))
     this.dispatcher.onRequest('fs.stat', (p) => this.stat(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
@@ -48,35 +71,50 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
     this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p) => this.unwatch(p))
+    this.dispatcher.onNotification('fs.cancelStream', (p) => this.cancelStream(p))
   }
 
   private async readDir(params: Record<string, unknown>) {
     const dirPath = expandTilde(params.dirPath as string)
-    await this.context.validatePathResolved(dirPath)
     const entries = await readdir(dirPath, { withFileTypes: true })
-    return entries
-      .map((entry) => ({
+    const mapped = await Promise.all(
+      entries.map(async (entry) => ({
         name: entry.name,
-        isDirectory: entry.isDirectory(),
+        isDirectory: await isDirectoryEntry(dirPath, entry),
         isSymlink: entry.isSymbolicLink()
       }))
-      .sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1
-        }
-        return a.name.localeCompare(b.name)
-      })
+    )
+    return mapped.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1
+      }
+      return a.name.localeCompare(b.name)
+    })
   }
 
   private async readFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    await this.context.validatePathResolved(filePath)
     return readRelayFileContent(filePath)
+  }
+
+  private async readFileStream(
+    params: Record<string, unknown>,
+    context?: { isStale: () => boolean }
+  ) {
+    const filePath = expandTilde(params.filePath as string)
+    const ctx = context ?? { isStale: () => false }
+    return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx)
+  }
+
+  private cancelStream(params: Record<string, unknown>): void {
+    const streamId = params.streamId as number | undefined
+    if (typeof streamId === 'number') {
+      this.streamRegistry.abort(streamId)
+    }
   }
 
   private async writeFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    await this.context.validatePathResolved(filePath)
     const content = params.content as string
     try {
       const fileStats = await lstat(filePath)
@@ -93,23 +131,30 @@ export class FsHandler {
 
   private async stat(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    await this.context.validatePathResolved(filePath)
-    // Why: lstat is used instead of stat so that symlinks are reported as
-    // symlinks rather than being silently followed. stat() follows symlinks,
-    // meaning isSymbolicLink() would always return false.
     const stats = await lstat(filePath)
+    if (stats.isSymbolicLink()) {
+      try {
+        // Why: callers use stat to decide whether to read a path or enumerate
+        // it; symlink-to-directory must behave like its target for that choice.
+        const targetStats = await stat(filePath)
+        return {
+          size: targetStats.size,
+          type: targetStats.isDirectory() ? 'directory' : 'file',
+          mtime: targetStats.mtimeMs
+        }
+      } catch {
+        return { size: stats.size, type: 'symlink', mtime: stats.mtimeMs }
+      }
+    }
     let type: 'file' | 'directory' | 'symlink' = 'file'
     if (stats.isDirectory()) {
       type = 'directory'
-    } else if (stats.isSymbolicLink()) {
-      type = 'symlink'
     }
     return { size: stats.size, type, mtime: stats.mtimeMs }
   }
 
   private async deletePath(params: Record<string, unknown>) {
     const targetPath = expandTilde(params.targetPath as string)
-    await this.context.validatePathResolved(targetPath)
     const recursive = params.recursive as boolean | undefined
     const stats = await stat(targetPath)
     if (stats.isDirectory() && !recursive) {
@@ -120,9 +165,6 @@ export class FsHandler {
 
   private async createFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    // Why: symlinks in parent directories can redirect creation outside the
-    // workspace. validatePathResolved follows symlinks before checking roots.
-    await this.context.validatePathResolved(filePath)
     const { dirname } = await import('path')
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
@@ -130,45 +172,29 @@ export class FsHandler {
 
   private async createDir(params: Record<string, unknown>) {
     const dirPath = expandTilde(params.dirPath as string)
-    await this.context.validatePathResolved(dirPath)
     await mkdir(dirPath, { recursive: true })
   }
 
   private async rename(params: Record<string, unknown>) {
     const oldPath = expandTilde(params.oldPath as string)
     const newPath = expandTilde(params.newPath as string)
-    await this.context.validatePathResolved(oldPath)
-    await this.context.validatePathResolved(newPath)
     await rename(oldPath, newPath)
   }
 
   private async copy(params: Record<string, unknown>) {
     const source = expandTilde(params.source as string)
     const destination = expandTilde(params.destination as string)
-    // Why: cp follows symlinks — a symlink inside the workspace pointing to
-    // /etc would copy sensitive files into the workspace where readFile can
-    // exfiltrate them.
-    await this.context.validatePathResolved(source)
-    await this.context.validatePathResolved(destination)
     await cp(source, destination, { recursive: true })
   }
 
   private async realpath(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    this.context.validatePath(filePath)
-    const resolved = await realpath(filePath)
-    // Why: a symlink inside the workspace may resolve to a path outside it.
-    // Returning the resolved path without validation leaks the external target.
-    this.context.validatePath(resolved)
-    return resolved
+    return await realpath(filePath)
   }
 
   private async search(params: Record<string, unknown>) {
     const query = params.query as string
     const rootPath = expandTilde(params.rootPath as string)
-    // Why: a symlink inside the workspace pointing to a directory outside it
-    // would let rg search (and return content from) files beyond the workspace.
-    await this.context.validatePathResolved(rootPath)
     const caseSensitive = params.caseSensitive as boolean | undefined
     const wholeWord = params.wholeWord as boolean | undefined
     const useRegex = params.useRegex as boolean | undefined
@@ -203,7 +229,6 @@ export class FsHandler {
 
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
     const rootPath = expandTilde(params.rootPath as string)
-    await this.context.validatePathResolved(rootPath)
     // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
     // don't get double-scanned. The shared helper validates the shape and
     // normalizes into root-relative prefixes; malformed input yields [] so
@@ -240,7 +265,6 @@ export class FsHandler {
 
   private async watch(params: Record<string, unknown>, context?: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
-    this.context.validatePath(rootPath)
 
     if (this.watches.size >= 20) {
       throw new Error('Maximum number of file watchers reached')
@@ -322,5 +346,6 @@ export class FsHandler {
       state.unwatchFn?.()
     }
     this.watches.clear()
+    void this.streamRegistry.disposeAll()
   }
 }

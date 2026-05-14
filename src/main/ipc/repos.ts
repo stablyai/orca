@@ -30,6 +30,7 @@ import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
+import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
@@ -46,7 +47,11 @@ function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean): void {
   if (alreadyExisted) {
     return
   }
-  track('repo_added', { method })
+  // Why: cohort must read AFTER `store.addRepo()` lands so the just-added
+  // repo is counted — every call site below already emits post-addRepo, so
+  // `getCohortAtEmit()` here returns the user's Nth `repo_added` as `N`.
+  // See docs/onboarding-funnel-cohort-addendum.md §Read-vs-write ordering.
+  track('repo_added', { method, ...getCohortAtEmit() })
 }
 
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
@@ -61,6 +66,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:remove')
+  ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
@@ -391,6 +397,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         // other invocation is using it. Leaking a freshly-made empty folder on
         // a rare race is strictly safer than deleting a directory the winning
         // call (and the user) now owns.
+        emitRepoAdded('folder_picker', true)
         return { repo: raceWinner }
       }
 
@@ -408,6 +415,22 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', false)
       return { repo }
+    }
+  )
+
+  ipcMain.handle(
+    'repos:reorder',
+    (_event, args: { orderedIds: string[] }): { status: 'applied' | 'rejected' } => {
+      // Why: validate at the IPC boundary — IPC input is untrusted and a
+      // permutation mismatch means the renderer's drag was stale relative to
+      // a concurrent add/remove. Reject so the renderer can resync.
+      const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
+      const applied = store.reorderRepos(ids)
+      if (applied) {
+        notifyReposChanged(mainWindow)
+        return { status: 'applied' }
+      }
+      return { status: 'rejected' }
     }
   )
 
@@ -573,6 +596,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!repoName) {
         throw new Error('Could not determine repository name from URL')
       }
+      // Why: gitSpawn uses args.destination as cwd, so it must exist before
+      // spawn — fresh installs may have a defaulted parent dir that does not
+      // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
+      await mkdir(args.destination, { recursive: true })
       const clonePath = join(args.destination, repoName)
 
       // Why: use spawn instead of execFile so there is no maxBuffer limit.

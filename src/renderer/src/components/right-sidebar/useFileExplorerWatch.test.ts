@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getExternalFileChangeRelativePath } from './useFileExplorerWatch'
+import type { FsChangedPayload } from '../../../../shared/types'
+import {
+  getExternalFileChangeRelativePath,
+  payloadRequiresDeferredTreeRefresh
+} from './useFileExplorerWatch'
 
 describe('getExternalFileChangeRelativePath', () => {
   it('returns a worktree-relative file path for external file updates', () => {
@@ -55,5 +59,38 @@ describe('getExternalFileChangeRelativePath', () => {
     expect(getExternalFileChangeRelativePath('/repo', '/repo/a/b/c/deep.ts', false)).toBe(
       'a/b/c/deep.ts'
     )
+  })
+})
+
+describe('payloadRequiresDeferredTreeRefresh', () => {
+  function payload(events: FsChangedPayload['events'], worktreePath = '/repo'): FsChangedPayload {
+    return { worktreePath, events }
+  }
+
+  it('does not require a full tree refresh for replayable deferred changes', () => {
+    const changes = payload([
+      { kind: 'create', absolutePath: '/repo/src/new.ts', isDirectory: false },
+      { kind: 'update', absolutePath: '/repo/src', isDirectory: true },
+      { kind: 'delete', absolutePath: '/repo/src/old.ts' }
+    ])
+
+    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
+  })
+
+  it('requires a full tree refresh for unreplayable rename payloads in the current worktree', () => {
+    const changes = payload([
+      { kind: 'rename', absolutePath: '/repo/src/old.ts', isDirectory: false }
+    ])
+
+    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(true)
+  })
+
+  it('ignores stale deferred rename payloads from a previous worktree', () => {
+    const changes = payload(
+      [{ kind: 'rename', absolutePath: '/other/src/old.ts', isDirectory: false }],
+      '/other'
+    )
+
+    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
   })
 })

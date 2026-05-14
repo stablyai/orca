@@ -332,6 +332,15 @@ export function resolveTerminalFileLink(
   }
 }
 
+export function resolveTerminalFileLinkText(
+  linkText: string,
+  cwd: string
+): ResolvedTerminalFileLink | null {
+  const links = extractTerminalFileLinks(linkText)
+  const exactLink = links.find((link) => link.startIndex === 0 && link.endIndex === linkText.length)
+  return exactLink ? resolveTerminalFileLink(exactLink, cwd) : null
+}
+
 export function isPathInsideWorktree(filePath: string, worktreePath: string): boolean {
   const normalizedFile = normalizeAbsolutePath(filePath)
   const normalizedWorktree = normalizeAbsolutePath(worktreePath)

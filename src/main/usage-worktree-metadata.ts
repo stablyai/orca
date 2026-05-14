@@ -1,5 +1,6 @@
 import { basename } from 'path'
 import type { Repo } from '../shared/types'
+import { splitWorktreeId } from '../shared/worktree-id'
 import type { Store } from './persistence'
 
 export type UsageWorktreeRef = {
@@ -10,17 +11,6 @@ export type UsageWorktreeRef = {
 
 function getDefaultUsageWorktreeLabel(pathValue: string): string {
   return basename(pathValue)
-}
-
-function parseKnownWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } | null {
-  const sepIdx = worktreeId.indexOf('::')
-  if (sepIdx === -1) {
-    return null
-  }
-  return {
-    repoId: worktreeId.slice(0, sepIdx),
-    worktreePath: worktreeId.slice(sepIdx + 2)
-  }
 }
 
 export function loadKnownUsageWorktreesByRepo(
@@ -46,7 +36,7 @@ export function loadKnownUsageWorktreesByRepo(
   // Why: usage scans are background/opt-in analytics. Do not spawn
   // `git worktree list` here; it can re-touch macOS protected folders.
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
-    const parsed = parseKnownWorktreeId(worktreeId)
+    const parsed = splitWorktreeId(worktreeId)
     if (!parsed || !repoIds.has(parsed.repoId)) {
       continue
     }

@@ -65,7 +65,15 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.adapterFor(id).shutdown(id, opts)
-    this.sessionAdapters.delete(id)
+    // Why: sleep passes keepHistory=true and re-spawns against the same
+    // sessionId on wake. If we delete the routing entry here, adapterFor()
+    // falls back to `this.current` on wake — for a session that originally
+    // lived on a legacy adapter (different protocolVersion), the wake-side
+    // createOrAttach lands on the wrong adapter and creates a fresh session,
+    // losing the cold-restore from the legacy adapter's history dir.
+    if (!opts.keepHistory) {
+      this.sessionAdapters.delete(id)
+    }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {

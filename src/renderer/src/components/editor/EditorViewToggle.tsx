@@ -4,6 +4,7 @@ import {
   Eye,
   FileText,
   GitCompareArrows,
+  NotebookText,
   Pencil,
   Table as TableIcon,
   type LucideIcon
@@ -57,6 +58,13 @@ export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMe
   rich: {
     label: 'Table',
     icon: TableIcon
+  }
+}
+
+export const NOTEBOOK_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
+  rich: {
+    label: 'Notebook',
+    icon: NotebookText
   }
 }
 

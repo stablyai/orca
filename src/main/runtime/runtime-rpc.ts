@@ -250,8 +250,14 @@ export class OrcaRuntimeRpcServer {
                 ws.close(code, reason)
               }
             })
-            channel.onMessage((plaintext, encryptedReply) => {
-              void this.handleWebSocketMessage(plaintext, encryptedReply, wsTransport, ws)
+            channel.onMessage((plaintext, encryptedReply, encryptedBinaryReply) => {
+              void this.handleWebSocketMessage(
+                plaintext,
+                encryptedReply,
+                encryptedBinaryReply,
+                wsTransport,
+                ws
+              )
             })
             this.e2eeChannels.set(ws, channel)
           }
@@ -411,6 +417,7 @@ export class OrcaRuntimeRpcServer {
   private async handleWebSocketMessage(
     rawMessage: string,
     reply: (response: string) => void,
+    sendBinary: (response: Uint8Array<ArrayBufferLike>) => void,
     wsTransport?: WebSocketTransport,
     ws?: WebSocket
   ): Promise<void> {
@@ -451,7 +458,7 @@ export class OrcaRuntimeRpcServer {
     }
 
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
-    await this.dispatcher.dispatchStreaming(request, reply, { connectionId })
+    await this.dispatcher.dispatchStreaming(request, reply, { connectionId, sendBinary })
   }
 
   private buildError(id: string, code: string, message: string): RpcResponse {

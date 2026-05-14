@@ -19,5 +19,5 @@
 // "kill switch": desktop can refuse old mobile builds without needing
 // a desktop release of mobile.
 
-export const DESKTOP_PROTOCOL_VERSION = 1
-export const MIN_COMPATIBLE_MOBILE_VERSION = 0
+export const DESKTOP_PROTOCOL_VERSION = 2
+export const MIN_COMPATIBLE_MOBILE_VERSION = 2

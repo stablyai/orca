@@ -23,6 +23,10 @@ const GEMINI_PERMISSION = '\u270B' // ✋
 // explicit launch/session facts Orca owns, not this inference path.
 export const AGENT_NAMES = ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode', 'aider']
 
+// Why: `android` contains `droid`; unlike the legacy agent names above, Droid
+// must be token-matched so Android terminal titles do not become agent status.
+const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
+
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
 // `as const` so consumers receive literal-union types.
@@ -149,7 +153,7 @@ function containsBrailleSpinner(title: string): boolean {
 
 function containsAgentName(title: string): boolean {
   const lower = title.toLowerCase()
-  return AGENT_NAMES.some((name) => lower.includes(name))
+  return AGENT_NAMES.some((name) => lower.includes(name)) || DROID_AGENT_NAME_RE.test(title)
 }
 
 function containsAny(title: string, words: readonly string[]): boolean {
@@ -351,6 +355,11 @@ export function getAgentLabel(title: string): string | null {
   // otherwise claim every "⠋ Cursor Agent" frame as Claude.
   if (lower.includes('cursor')) {
     return 'Cursor'
+  }
+  // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.
+  // Token matching avoids labeling ordinary Android terminal titles as Droid.
+  if (DROID_AGENT_NAME_RE.test(title)) {
+    return 'Droid'
   }
   if (isClaudeAgent(title)) {
     return 'Claude Code'

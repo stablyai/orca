@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: root and generated command help text live together so CLI discovery stays greppable. */
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 
@@ -32,7 +33,7 @@ Terminals:
   terminal send             Send input to a live terminal
   terminal wait             Wait for a terminal condition (exit, tui-idle)
   terminal stop             Stop terminals for a worktree
-  terminal create           Create a new terminal tab in a worktree
+  terminal create           Create a terminal session in a worktree
   terminal rename           Set or clear the title of a terminal tab
   terminal split            Split an existing terminal pane
   terminal switch           Bring a terminal tab to the foreground
@@ -55,6 +56,21 @@ Orchestration:
   orchestration gate-resolve Resolve a pending decision gate
   orchestration gate-list   List decision gates
   orchestration reset       Reset orchestration state
+
+Computer Use:
+  computer permissions      Open the macOS permission setup for computer-use
+  computer list-apps        List running apps available to computer-use
+  computer list-windows     List visible windows for a target app
+  computer get-app-state    Capture a compact accessibility snapshot of an app
+  computer click            Click an app element or window coordinate
+  computer perform-secondary-action Run an advertised accessibility action
+  computer scroll           Scroll an app element
+  computer drag             Drag between app elements or window coordinates
+  computer type-text        Type literal text at the current app focus
+  computer press-key        Press a key using xdotool-style syntax
+  computer hotkey           Press a shortcut combination such as CmdOrCtrl+A
+  computer paste-text       Paste text through the native clipboard path
+  computer set-value        Set the value of a settable app element
 
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
@@ -124,7 +140,7 @@ Common Commands:
   orca open [--json]
   orca status [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--json]
+  orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--json]
@@ -136,7 +152,7 @@ Common Commands:
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
-  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--json]
+  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--json]
@@ -290,27 +306,50 @@ export function formatFlagHelp(flag: string): string {
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
     cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
-    direction: '--direction <dir>      Direction: horizontal|vertical (split) or up|down (scroll)',
+    action: '--action <name>       Secondary accessibility action name',
+    activate: '--activate             Reveal the new worktree in the Orca app',
+    app: '--app <app>            App name, bundle ID, or pid:N',
+    direction:
+      '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
     'display-name': '--display-name <name>  Override the Orca display name',
+    'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
+    focus: '--focus                Reveal the created terminal session in Orca',
     for: '--for exit|tui-idle    Wait condition to satisfy',
+    'from-element-index': '--from-element-index <n> Source element index from get-app-state',
+    'from-x': '--from-x <x>           Source window-local x coordinate',
+    'from-y': '--from-y <y>           Source window-local y coordinate',
     help: '--help                 Show this help message',
     interrupt: '--interrupt            Send as an interrupt-style input when supported',
     issue: '--issue <number|null>  Linked GitHub issue number',
     json: '--json                 Emit machine-readable JSON',
+    key: '--key <key>            Key or combo to press, e.g. Escape or CmdOrCtrl+L',
     limit: '--limit <n>            Maximum number of rows to return',
+    'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
     name: '--name <name>          Name for the new worktree',
+    'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
+    pages: '--pages <n>           Number of scroll pages',
     path: '--path <path>          Filesystem path to the repo',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
     repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
+    'restore-window':
+      '--restore-window     Bring the target app/window forward before the operation',
+    session: '--session <id>        Snapshot namespace for a related computer-use workflow',
     terminal: '--terminal <handle>  Runtime-issued terminal handle',
-    text: '--text <text>          Text to send to the terminal',
+    text: '--text <text>          Text payload to send or type',
+    'text-stdin': '--text-stdin          Read text payload from stdin',
     'timeout-ms': '--timeout-ms <ms>     Maximum wait time before timing out',
+    'to-element-index': '--to-element-index <n> Destination element index from get-app-state',
+    'to-x': '--to-x <x>             Destination window-local x coordinate',
+    'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
       '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+    'value-stdin': '--value-stdin         Read set-value payload from stdin',
+    'window-id': '--window-id <id>      Target a window id from list-windows',
+    'window-index': '--window-index <n>   Target a window index from list-windows',
     // Browser automation flags
     element: '--element <ref>        Element ref from snapshot (e.g. e3)',
     url: '--url <url>            URL to navigate to',

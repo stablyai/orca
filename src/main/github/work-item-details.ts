@@ -32,6 +32,135 @@ const WORK_ITEM_PARTICIPANTS_QUERY = `query($owner: String!, $repo: String!, $nu
   }
 }`
 
+// Why: a single GraphQL round-trip replaces three serial gh subprocesses on
+// the issue path (REST issue + REST comments + GraphQL participants). The
+// previous fan-out could spawn ~3 `gh` processes per drawer-open; this drops
+// it to one. We still fall back to the legacy REST+GraphQL path if the
+// collapsed query throws or returns missing data — see the strict-fallback
+// branch in getWorkItemDetails.
+const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      body
+      assignees(first: 50) { nodes { login } }
+      participants(first: 100) {
+        nodes { login avatarUrl(size: 48) ... on User { name } }
+      }
+      comments(first: 100) {
+        nodes {
+          databaseId
+          body
+          createdAt
+          url
+          author {
+            login
+            avatarUrl(size: 48)
+            ... on Bot { __typename }
+          }
+        }
+      }
+    }
+  }
+}`
+
+type GraphQLIssueDetailsResponse = {
+  data?: {
+    repository?: {
+      issue?: {
+        body?: string | null
+        assignees?: { nodes?: { login?: string }[] }
+        participants?: { nodes?: GitHubAssignableUser[] }
+        comments?: {
+          nodes?: {
+            databaseId?: number | null
+            body?: string | null
+            createdAt?: string | null
+            url?: string | null
+            author?: {
+              login?: string | null
+              avatarUrl?: string | null
+              __typename?: string
+            } | null
+          }[]
+        }
+      } | null
+    } | null
+  }
+  errors?: { message?: string }[]
+}
+
+async function getIssueDetailsViaGraphQL(
+  repoPath: string,
+  issueNumber: number
+): Promise<{
+  body: string
+  comments: PRComment[]
+  assignees: string[]
+  participants: GitHubAssignableUser[]
+} | null> {
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return null
+  }
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${ISSUE_DETAILS_QUERY}`,
+        '-f',
+        `owner=${ownerRepo.owner}`,
+        '-f',
+        `repo=${ownerRepo.repo}`,
+        '-F',
+        `number=${issueNumber}`
+      ],
+      { cwd: repoPath }
+    )
+    const parsed = JSON.parse(stdout) as GraphQLIssueDetailsResponse
+    if (parsed.errors && parsed.errors.length > 0) {
+      // Why: any partial GraphQL error (permissions, unknown field on a fork)
+      // forces the strict REST fallback so the drawer never paints a half-built
+      // shell. The fallback path's behavior is the historical contract.
+      return null
+    }
+    const issue = parsed.data?.repository?.issue
+    if (!issue) {
+      return null
+    }
+    const comments: PRComment[] = (issue.comments?.nodes ?? [])
+      .filter((c) => typeof c.databaseId === 'number')
+      .map((c) => ({
+        id: c.databaseId as number,
+        author: c.author?.login ?? 'ghost',
+        authorAvatarUrl: c.author?.avatarUrl ?? '',
+        body: c.body ?? '',
+        createdAt: c.createdAt ?? '',
+        url: c.url ?? '',
+        isBot: c.author?.__typename === 'Bot'
+      }))
+    const assignees = (issue.assignees?.nodes ?? [])
+      .map((a) => a.login)
+      .filter((login): login is string => Boolean(login))
+    const participants: GitHubAssignableUser[] = (issue.participants?.nodes ?? [])
+      .filter((u) => Boolean(u.login))
+      .map((u) => ({
+        login: u.login,
+        name: u.name ?? null,
+        avatarUrl: u.avatarUrl ?? ''
+      }))
+    return {
+      body: issue.body ?? '',
+      comments,
+      assignees,
+      participants
+    }
+  } catch {
+    return null
+  }
+}
+
 function mergeGitHubUsers(users: GitHubAssignableUser[]): GitHubAssignableUser[] {
   const byLogin = new Map<string, GitHubAssignableUser>()
   for (const user of users) {
@@ -404,8 +533,25 @@ export async function getWorkItemDetails(
   await acquire()
   try {
     if (item.type === 'issue') {
-      // Why: fetch body/comments and GraphQL participants in parallel; the
-      // mention-participant merge is a cheap local operation afterward.
+      // Why: try the collapsed single-GraphQL path first — body, assignees,
+      // participants, and comments all return in one round-trip. On any
+      // failure (permissions, partial errors, non-GitHub remote), strictly
+      // fall back to the legacy REST+GraphQL fan-out so historical behavior
+      // is preserved. The GraphQL `participants` connection includes every
+      // commenter, so we skip the extra `getMentionParticipants` aliased
+      // user-hydration trip when the collapsed path succeeds.
+      const collapsed = await getIssueDetailsViaGraphQL(repoPath, item.number)
+      if (collapsed) {
+        return {
+          item,
+          body: collapsed.body,
+          comments: collapsed.comments,
+          assignees: collapsed.assignees,
+          participants: collapsed.participants
+        }
+      }
+      // Why: fall back to body/comments and GraphQL participants in parallel;
+      // the mention-participant merge is a cheap local operation afterward.
       const [{ body, comments, assignees }, participants] = await Promise.all([
         getIssueBodyAndComments(repoPath, item.number),
         getWorkItemParticipants(repoPath, item)

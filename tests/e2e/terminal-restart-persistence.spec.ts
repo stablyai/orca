@@ -7,11 +7,10 @@
  *   wouldn't lose in-session output. With many panes of accumulated output,
  *   each tick blocked the renderer main thread for seconds, causing visible
  *   input lag across the whole app. The periodic save was removed in favor
- *   of the out-of-process terminal daemon (PR #729). For users who don't
- *   opt into the daemon, the `beforeunload` save in App.tsx is now the
- *   *only* thing that preserves scrollback across a restart — this suite
- *   locks that behavior down so a future regression can't silently return
- *   us to "quit → empty terminal on relaunch."
+ *   of the out-of-process terminal daemon (PR #729), and local renderer
+ *   scrollback buffers are pruned from persisted workspace sessions. This
+ *   suite locks down daemon-backed clean quit → relaunch so we don't silently
+ *   return to "quit → empty terminal on relaunch."
  *
  * What it covers:
  *   - Scrollback survives clean quit → relaunch (primary regression test).
@@ -22,9 +21,7 @@
  *
  * What it does NOT try to cover:
  *   - Main-thread input-lag improvement — machine-dependent and flaky.
- *   - Crash/SIGKILL recovery — non-daemon users now intentionally lose
- *     in-session scrollback on unclean exit; that's the tradeoff the
- *     removed periodic save represented.
+ *   - Crash/SIGKILL recovery — that is covered by daemon history checkpoints.
  */
 
 import { readFileSync, existsSync } from 'fs'
@@ -47,6 +44,7 @@ import {
   ensureTerminalVisible
 } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
 // Why: each test in this file does a full quit→relaunch cycle, which spawns
 // two Electron instances back-to-back. Running in serial keeps the isolated
@@ -121,6 +119,10 @@ test.describe('Terminal restart persistence', () => {
       const firstLaunch = await session.launch()
       firstApp = firstLaunch.app
       const { worktreeId, ptyId } = await bootstrapFirstLaunch(firstLaunch.page, repoPath)
+      // Why: this spec validates the daemon-backed persistence path. If the
+      // daemon falls back to LocalPtyProvider, local buffers are intentionally
+      // pruned and the scrollback assertion would fail with the wrong signal.
+      expect(ptyId).toContain(PTY_SESSION_ID_SEPARATOR)
 
       // Why: the marker must be distinctive enough that it can't appear in the
       // restored prompt banner or a stray OSC sequence. The timestamp suffix
@@ -130,9 +132,8 @@ test.describe('Terminal restart persistence', () => {
       await execInTerminal(firstLaunch.page, ptyId, `echo ${marker}`)
       await waitForTerminalOutput(firstLaunch.page, marker)
 
-      // Why: closing the app triggers beforeunload → session.setSync, which is
-      // the one remaining codepath that flushes serialized scrollback to disk
-      // for non-daemon users. This is the behavior the suite is guarding.
+      // Why: closing the app triggers the session save plus daemon disconnect.
+      // The session keeps the PTY binding while the daemon keeps the scrollback.
       await session.close(firstApp)
       firstApp = null
 
@@ -141,10 +142,9 @@ test.describe('Terminal restart persistence', () => {
       secondApp = secondLaunch.app
       await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
 
-      // Why: buffer restore replays the serialized output through xterm.write
-      // during pane mount. Poll the live terminal content rather than hitting
-      // the store because the store only sees the raw saved buffer, whereas
-      // restoreScrollbackBuffers can strip alt-screen sequences before write.
+      // Why: daemon reattach replays its snapshot through xterm.write during
+      // pane mount. Poll the live terminal content, not the store, because the
+      // store intentionally no longer carries local scrollback buffers.
       await expect
         .poll(async () => (await getTerminalContent(secondLaunch.page)).includes(marker), {
           timeout: 15_000,
@@ -158,7 +158,7 @@ test.describe('Terminal restart persistence', () => {
       if (firstApp) {
         await session.close(firstApp)
       }
-      session.dispose()
+      await session.dispose()
     }
   })
 
@@ -223,7 +223,7 @@ test.describe('Terminal restart persistence', () => {
       if (firstApp) {
         await session.close(firstApp)
       }
-      session.dispose()
+      await session.dispose()
     }
   })
 
@@ -271,7 +271,7 @@ test.describe('Terminal restart persistence', () => {
       if (app) {
         await session.close(app)
       }
-      session.dispose()
+      await session.dispose()
     }
   })
 })

@@ -5,6 +5,12 @@ import type {
   LinearLabel,
   LinearMember
 } from '../../../shared/types'
+import {
+  clearMetadataRequestStore,
+  createMetadataRequestStore,
+  getFreshMetadata,
+  loadMetadata
+} from './metadata-request-cache'
 
 type MetadataState<T> = {
   data: T
@@ -12,19 +18,10 @@ type MetadataState<T> = {
   error: string | null
 }
 
-const METADATA_TTL = 300_000 // 5 min
-
-type CachedMetadata<T> = { data: T; fetchedAt: number }
-
-function isCacheFresh<T>(cache: Map<string, CachedMetadata<T>>, key: string): boolean {
-  const entry = cache.get(key)
-  return !!entry && Date.now() - entry.fetchedAt < METADATA_TTL
-}
-
 // ─── GitHub ────────────────────────────────────────────────
 
-const ghLabelCache = new Map<string, CachedMetadata<string[]>>()
-const ghAssigneeCache = new Map<string, CachedMetadata<GitHubAssignableUser[]>>()
+const ghLabelStore = createMetadataRequestStore<string[]>()
+const ghAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
 export function useRepoLabels(repoPath: string | null): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
@@ -39,8 +36,8 @@ export function useRepoLabels(repoPath: string | null): MetadataState<string[]> 
       return
     }
 
-    const cached = ghLabelCache.get(repoPath)
-    if (cached && isCacheFresh(ghLabelCache, repoPath)) {
+    const cached = getFreshMetadata(ghLabelStore, repoPath)
+    if (cached) {
       if (activeKeyRef.current !== repoPath) {
         setState({ data: cached.data, loading: false, error: null })
         activeKeyRef.current = repoPath
@@ -56,14 +53,13 @@ export function useRepoLabels(repoPath: string | null): MetadataState<string[]> 
       loading: true,
       error: null
     }))
-    window.api.gh
-      .listLabels({ repoPath })
-      .then((labels) => {
+    loadMetadata(ghLabelStore, repoPath, () =>
+      window.api.gh.listLabels({ repoPath }).then((labels) => labels as string[])
+    )
+      .then((data) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        const data = labels as string[]
-        ghLabelCache.set(repoPath, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })
       .catch((err) => {
@@ -95,8 +91,8 @@ export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubA
       return
     }
 
-    const cached = ghAssigneeCache.get(repoPath)
-    if (cached && isCacheFresh(ghAssigneeCache, repoPath)) {
+    const cached = getFreshMetadata(ghAssigneeStore, repoPath)
+    if (cached) {
       if (activeKeyRef.current !== repoPath) {
         setState({ data: cached.data, loading: false, error: null })
         activeKeyRef.current = repoPath
@@ -112,14 +108,15 @@ export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubA
       loading: true,
       error: null
     }))
-    window.api.gh
-      .listAssignableUsers({ repoPath })
-      .then((users) => {
+    loadMetadata(ghAssigneeStore, repoPath, () =>
+      window.api.gh
+        .listAssignableUsers({ repoPath })
+        .then((users) => users as GitHubAssignableUser[])
+    )
+      .then((data) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        const data = users as GitHubAssignableUser[]
-        ghAssigneeCache.set(repoPath, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })
       .catch((err) => {
@@ -140,19 +137,19 @@ export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubA
 
 // ─── Linear ────────────────────────────────────────────────
 
-const linearStateCache = new Map<string, CachedMetadata<LinearWorkflowState[]>>()
-const linearLabelCache = new Map<string, CachedMetadata<LinearLabel[]>>()
-const linearMemberCache = new Map<string, CachedMetadata<LinearMember[]>>()
+const linearStateStore = createMetadataRequestStore<LinearWorkflowState[]>()
+const linearLabelStore = createMetadataRequestStore<LinearLabel[]>()
+const linearMemberStore = createMetadataRequestStore<LinearMember[]>()
 
 export function clearLinearMetadataCache(): void {
-  linearStateCache.clear()
-  linearLabelCache.clear()
-  linearMemberCache.clear()
+  clearMetadataRequestStore(linearStateStore)
+  clearMetadataRequestStore(linearLabelStore)
+  clearMetadataRequestStore(linearMemberStore)
 }
 
 export function clearGitHubMetadataCache(): void {
-  ghLabelCache.clear()
-  ghAssigneeCache.clear()
+  clearMetadataRequestStore(ghLabelStore)
+  clearMetadataRequestStore(ghAssigneeStore)
 }
 
 export function useTeamStates(teamId: string | null): MetadataState<LinearWorkflowState[]> {
@@ -168,8 +165,8 @@ export function useTeamStates(teamId: string | null): MetadataState<LinearWorkfl
       return
     }
 
-    const cached = linearStateCache.get(teamId)
-    if (cached && isCacheFresh(linearStateCache, teamId)) {
+    const cached = getFreshMetadata(linearStateStore, teamId)
+    if (cached) {
       if (activeKeyRef.current !== teamId) {
         setState({ data: cached.data, loading: false, error: null })
         activeKeyRef.current = teamId
@@ -185,14 +182,13 @@ export function useTeamStates(teamId: string | null): MetadataState<LinearWorkfl
       loading: true,
       error: null
     }))
-    window.api.linear
-      .teamStates({ teamId })
-      .then((states) => {
+    loadMetadata(linearStateStore, teamId, () =>
+      window.api.linear.teamStates({ teamId }).then((states) => states as LinearWorkflowState[])
+    )
+      .then((data) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        const data = states as LinearWorkflowState[]
-        linearStateCache.set(teamId, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })
       .catch((err) => {
@@ -224,8 +220,8 @@ export function useTeamLabels(teamId: string | null): MetadataState<LinearLabel[
       return
     }
 
-    const cached = linearLabelCache.get(teamId)
-    if (cached && isCacheFresh(linearLabelCache, teamId)) {
+    const cached = getFreshMetadata(linearLabelStore, teamId)
+    if (cached) {
       if (activeKeyRef.current !== teamId) {
         setState({ data: cached.data, loading: false, error: null })
         activeKeyRef.current = teamId
@@ -241,14 +237,13 @@ export function useTeamLabels(teamId: string | null): MetadataState<LinearLabel[
       loading: true,
       error: null
     }))
-    window.api.linear
-      .teamLabels({ teamId })
-      .then((labels) => {
+    loadMetadata(linearLabelStore, teamId, () =>
+      window.api.linear.teamLabels({ teamId }).then((labels) => labels as LinearLabel[])
+    )
+      .then((data) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        const data = labels as LinearLabel[]
-        linearLabelCache.set(teamId, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })
       .catch((err) => {
@@ -280,8 +275,8 @@ export function useTeamMembers(teamId: string | null): MetadataState<LinearMembe
       return
     }
 
-    const cached = linearMemberCache.get(teamId)
-    if (cached && isCacheFresh(linearMemberCache, teamId)) {
+    const cached = getFreshMetadata(linearMemberStore, teamId)
+    if (cached) {
       if (activeKeyRef.current !== teamId) {
         setState({ data: cached.data, loading: false, error: null })
         activeKeyRef.current = teamId
@@ -297,14 +292,13 @@ export function useTeamMembers(teamId: string | null): MetadataState<LinearMembe
       loading: true,
       error: null
     }))
-    window.api.linear
-      .teamMembers({ teamId })
-      .then((members) => {
+    loadMetadata(linearMemberStore, teamId, () =>
+      window.api.linear.teamMembers({ teamId }).then((members) => members as LinearMember[])
+    )
+      .then((data) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        const data = members as LinearMember[]
-        linearMemberCache.set(teamId, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })
       .catch((err) => {

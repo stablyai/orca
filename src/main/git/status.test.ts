@@ -324,6 +324,38 @@ describe('getStatus', () => {
       branch: 'refs/heads/feature/prompts'
     })
   })
+
+  it('folds upstream ahead/behind from porcelain v2 into the status result', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/feature/prompts\n# branch.ab +2 -3\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(result.upstreamStatus).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/feature/prompts',
+      ahead: 2,
+      behind: 3
+    })
+  })
+
+  it('reports no upstream from porcelain v2 status without an extra git call', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
+  })
 })
 
 describe('detectConflictOperation', () => {

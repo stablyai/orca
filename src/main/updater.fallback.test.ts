@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { compareVersions, isPrereleaseVersion } from './updater-fallback'
+import {
+  compareVersions,
+  isMissingUpdateManifestFailure,
+  isPrereleaseVersion
+} from './updater-fallback'
 
 describe('compareVersions', () => {
   it('compares prerelease and build semver strings correctly', () => {
@@ -23,5 +27,17 @@ describe('isPrereleaseVersion', () => {
     expect(isPrereleaseVersion('v1.3.17')).toBe(false)
     expect(isPrereleaseVersion('1.3.17+build.5')).toBe(false)
     expect(isPrereleaseVersion('not-a-version')).toBe(false)
+  })
+})
+
+describe('isMissingUpdateManifestFailure', () => {
+  it('matches platform manifest 404s but not generic network failures', () => {
+    expect(
+      isMissingUpdateManifestFailure(
+        'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+      )
+    ).toBe(true)
+    expect(isMissingUpdateManifestFailure('net::ERR_FAILED')).toBe(false)
+    expect(isMissingUpdateManifestFailure('Unable to find latest version on GitHub')).toBe(false)
   })
 })

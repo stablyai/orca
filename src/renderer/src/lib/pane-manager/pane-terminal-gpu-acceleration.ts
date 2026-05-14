@@ -1,5 +1,5 @@
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
-import { attachWebgl, disposeWebgl, resetTerminalWebglSuggestion } from './pane-lifecycle'
+import { attachWebgl, disposeWebgl, resetTerminalWebglSuggestion } from './pane-webgl-renderer'
 import { safeFit } from './pane-tree-ops'
 
 export function applyTerminalGpuAcceleration(
@@ -15,7 +15,7 @@ export function applyTerminalGpuAcceleration(
   }
   for (const pane of panes) {
     pane.terminalGpuAcceleration = nextMode
-    if (nextMode === 'off') {
+    if (nextMode === 'off' || (nextMode === 'auto' && pane.hasComplexScriptOutput)) {
       disposeWebgl(pane, { refreshDimensions: true })
       continue
     }
@@ -23,7 +23,8 @@ export function applyTerminalGpuAcceleration(
       pane.gpuRenderingEnabled &&
       !pane.webglAddon &&
       !pane.webglAttachmentDeferred &&
-      !pane.webglDisabledAfterContextLoss
+      !pane.webglDisabledAfterContextLoss &&
+      (nextMode === 'on' || !pane.hasComplexScriptOutput)
     ) {
       attachWebgl(pane)
       safeFit(pane)

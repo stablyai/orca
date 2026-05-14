@@ -5,7 +5,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import type { Repo } from '../shared/types'
+import type { Repo, TerminalTab, WorkspaceSessionState } from '../shared/types'
+import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -61,6 +62,75 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   ...overrides
 })
 
+const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({
+  id: 'tab1',
+  ptyId: 'pty1',
+  worktreeId: 'repo1::/worktree',
+  title: 'Terminal',
+  customTitle: null,
+  color: null,
+  sortOrder: 0,
+  createdAt: 1,
+  ...overrides
+})
+
+function makeSessionWithTerminalBuffers(): WorkspaceSessionState {
+  return {
+    activeRepoId: 'local-repo',
+    activeWorktreeId: 'local-repo::/local',
+    activeTabId: 'local-tab',
+    tabsByWorktree: {
+      'local-repo::/local': [
+        makeTerminalTab({
+          id: 'local-tab',
+          ptyId: 'local-pty',
+          worktreeId: 'local-repo::/local'
+        })
+      ],
+      'remote-repo::/remote': [
+        makeTerminalTab({
+          id: 'remote-tab',
+          ptyId: 'remote-pty',
+          worktreeId: 'remote-repo::/remote'
+        })
+      ]
+    },
+    terminalLayoutsByTabId: {
+      'local-tab': {
+        root: { type: 'leaf', leafId: 'leaf-local' },
+        activeLeafId: 'leaf-local',
+        expandedLeafId: null,
+        buffersByLeafId: { 'leaf-local': 'local-scrollback' },
+        ptyIdsByLeafId: { 'leaf-local': 'local-pty' }
+      },
+      'remote-tab': {
+        root: { type: 'leaf', leafId: 'leaf-remote' },
+        activeLeafId: 'leaf-remote',
+        expandedLeafId: null,
+        buffersByLeafId: { 'leaf-remote': 'remote-scrollback' },
+        ptyIdsByLeafId: { 'leaf-remote': 'remote-pty' }
+      }
+    }
+  }
+}
+
+function makeSessionWithBrowserHistory(count: number): WorkspaceSessionState {
+  return {
+    activeRepoId: null,
+    activeWorktreeId: null,
+    activeTabId: null,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    browserUrlHistory: Array.from({ length: count }, (_, index) => ({
+      url: `https://example.com/${index}`,
+      normalizedUrl: `https://example.com/${index}`,
+      title: `Example ${index} ${'x'.repeat(200)}`,
+      lastVisitedAt: 1_700_000_000_000 - index,
+      visitCount: 1
+    }))
+  }
+}
+
 describe('Store', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -90,6 +160,9 @@ describe('Store', () => {
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
+    expect(settings.experimentalActivity).toBe(true)
+    expect(settings.floatingTerminalEnabled).toBe(true)
+    expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
   })
 
@@ -122,6 +195,57 @@ describe('Store', () => {
     expect(repos).toHaveLength(1)
     expect(repos[0].id).toBe('r1')
     expect(repos[0].gitUsername).toBe('testuser')
+  })
+
+  it('can clear an automation back to the project default branch', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ worktreeBaseRef: 'origin/main' }))
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      baseBranch: 'origin/release',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const updated = store.updateAutomation(automation.id, { baseBranch: null })
+
+    expect(updated.baseBranch).toBeNull()
+    store.flush()
+    const persisted = readDataFile() as { automations: { baseBranch: string | null }[] }
+    expect(persisted.automations[0].baseBranch).toBeNull()
+  })
+
+  it('numbers automation run titles per automation', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const first = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const duplicate = store.createAutomationRun(
+      automation,
+      new Date('2026-05-13T09:00:00Z').getTime()
+    )
+    const second = store.createAutomationRun(automation, new Date('2026-05-14T09:00:00Z').getTime())
+
+    expect(first.title).toBe('Nightly run 1')
+    expect(duplicate.id).toBe(first.id)
+    expect(duplicate.title).toBe('Nightly run 1')
+    expect(second.title).toBe('Nightly run 2')
   })
 
   // ── 3. Corrupt JSON → falls back to defaults ────────────────────────
@@ -159,9 +283,45 @@ describe('Store', () => {
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
+    expect(store.getSettings().experimentalActivity).toBe(true)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
+  })
+
+  it('migrates the legacy floating terminal disabled default to enabled', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { floatingTerminalEnabled: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().floatingTerminalEnabled).toBe(true)
+    expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
+  })
+
+  it('preserves a post-migration floating terminal opt-out', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalEnabled: false,
+        floatingTerminalDefaultedForAllUsers: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().floatingTerminalEnabled).toBe(false)
+    expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
   })
 
   it('preserves custom notification sound paths from persisted settings', async () => {
@@ -650,22 +810,54 @@ describe('Store', () => {
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
   })
 
-  // ── inline-agents card-property migration ──────────────────────────
-  //
-  // Why: 'inline-agents' was added to DEFAULT_WORKTREE_CARD_PROPERTIES after
-  // the experimentalAgentDashboard toggle. Users who had the toggle on in a
-  // prior rc already had worktreeCardProperties persisted without the new
-  // entry, so the defaults-merge in load() wouldn't reach them and the
-  // inline agent list stayed hidden after upgrade. The migration appends
-  // 'inline-agents' once and sets a flag so a later deliberate uncheck
-  // from the Workspaces view options menu sticks across restarts.
-
-  it('adds inline-agents to persisted cardProps when experimental toggle is on', async () => {
+  it('migrates the legacy experimentalSidekick setting to experimentalPet', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
+      settings: { experimentalSidekick: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalPet).toBe(true)
+  })
+
+  it('promotes legacy experimentalActivity profiles to default-on', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalActivity: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalActivity).toBe(true)
+  })
+
+  // ── inline-agents card-property migration ──────────────────────────
+  //
+  // Why: 'inline-agents' was added to DEFAULT_WORKTREE_CARD_PROPERTIES after
+  // the inline agents feature shipped default-on. Existing users had
+  // worktreeCardProperties persisted without the new entry, so the
+  // defaults-merge in load() wouldn't reach them and the inline agent list
+  // stayed hidden after upgrade. The migration appends 'inline-agents' once
+  // for every user and sets a flag so a later deliberate uncheck from the
+  // Workspaces view options menu sticks across restarts.
+
+  it('adds inline-agents to persisted cardProps on first load after upgrade', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
       ui: {
         worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment']
       },
@@ -675,28 +867,34 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
     expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('does not add inline-agents when experimental toggle is off', async () => {
-    // Why: the experimental toggle gates whether inline agents render at all,
-    // so there's no value in checking the view-mode option for opted-out users.
+  it('adds inline-agents for users who launched a prior RC with the experiment off', async () => {
+    // Why: the legacy flag _inlineAgentsDefaultedForExperiment was stamped
+    // unconditionally on every prior load, so opt-out RC users already have
+    // it set to true on disk. The default-on migration must NOT be gated on
+    // that legacy flag — it must use the new _inlineAgentsDefaultedForAllUsers
+    // flag instead. Without this test, the regression would re-appear if
+    // anyone tried to "consolidate" the two flags.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: false },
+      settings: {},
       ui: {
-        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment']
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
-    expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('respects a deliberate uncheck after migration flag is set', async () => {
+  it('respects a deliberate post-migration uncheck', async () => {
     // Why: once migrated, an empty-of-inline-agents array is treated as a
     // user choice — not a legacy pre-migration state — so we must not
     // re-add it on every subsequent launch.
@@ -704,10 +902,10 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
+      settings: {},
       ui: {
         worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForExperiment: true
+        _inlineAgentsDefaultedForAllUsers: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -721,7 +919,7 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
+      settings: {},
       ui: {
         worktreeCardProperties: [
           'status',
@@ -739,7 +937,78 @@ describe('Store', () => {
     const store = await createStore()
     const props = store.getUI().worktreeCardProperties
     expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
-    expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {
+    // Why: a user who turned the experiment on and then deliberately
+    // unchecked 'inline-agents' from the sidebar options menu has the same
+    // on-disk shape as a never-touched user (legacy flag true, no
+    // 'inline-agents' in worktreeCardProperties). The migration discriminates
+    // them via the deprecated experimentalAgentDashboard value still riding
+    // on disk. Without this discriminator, the deliberate uncheck would be
+    // silently overridden on first load after upgrade.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('Case B preservation is durable across restarts', async () => {
+    // Why: once the new flag is stamped, the discriminator is no longer
+    // consulted. Subsequent loads must leave the deliberate uncheck intact
+    // even if a future settings-write code path were to strip the deprecated
+    // experimentalAgentDashboard key from disk.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true,
+        _inlineAgentsDefaultedForAllUsers: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it('lapsed Case B (experiment off at upgrade time) re-adds inline-agents', async () => {
+    // Why: documented limitation. A user who turned experiment on, unchecked,
+    // then turned the experiment off again before upgrading has
+    // experimentalAgentDashboard: false on disk. The discriminator only sees
+    // the most recent value, so they fall into the Case C path. They re-uncheck
+    // once and it sticks (new flag stamps). This test locks the limitation in
+    // so a future "fix" doesn't accidentally regress something else.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalAgentDashboard: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForExperiment: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
   // ── GitHub Cache ───────────────────────────────────────────────────
@@ -767,6 +1036,835 @@ describe('Store', () => {
     }
     store.setWorkspaceSession(session)
     expect(store.getWorkspaceSession()).toEqual(session)
+  })
+
+  it('strips local terminal scrollback buffers when setting workspace session', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
+    store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
+
+    store.setWorkspaceSession(makeSessionWithTerminalBuffers())
+
+    const session = store.getWorkspaceSession()
+    expect(session.terminalLayoutsByTabId['local-tab'].buffersByLeafId).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId).toEqual({
+      'leaf-local': 'local-pty'
+    })
+    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
+      'leaf-remote': 'remote-scrollback'
+    })
+  })
+
+  it('caps oversized browser history when setting workspace session', async () => {
+    const store = await createStore()
+    const oversizedSession = makeSessionWithBrowserHistory(500)
+    const oversizedBytes = Buffer.byteLength(JSON.stringify(oversizedSession))
+
+    store.setWorkspaceSession(oversizedSession)
+
+    const session = store.getWorkspaceSession()
+    const prunedBytes = Buffer.byteLength(JSON.stringify(session))
+    expect(session.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+    expect(session.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
+    expect(prunedBytes).toBeLessThan(oversizedBytes / 2)
+  })
+
+  it('keeps terminal scrollback buffers when the repo catalog is not hydrated yet', async () => {
+    const store = await createStore()
+
+    store.setWorkspaceSession({
+      activeRepoId: 'remote-repo',
+      activeWorktreeId: 'remote-repo::/remote',
+      activeTabId: 'remote-tab',
+      tabsByWorktree: {
+        'remote-repo::/remote': [
+          makeTerminalTab({
+            id: 'remote-tab',
+            ptyId: 'remote-pty',
+            worktreeId: 'remote-repo::/remote'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'remote-tab': {
+          root: { type: 'leaf', leafId: 'leaf-remote' },
+          activeLeafId: 'leaf-remote',
+          expandedLeafId: null,
+          buffersByLeafId: { 'leaf-remote': 'maybe-remote-scrollback' }
+        }
+      }
+    })
+
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].buffersByLeafId
+    ).toEqual({
+      'leaf-remote': 'maybe-remote-scrollback'
+    })
+  })
+
+  it('strips legacy local terminal scrollback buffers when loading workspace session', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({ id: 'local-repo', connectionId: null }),
+        makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: makeSessionWithTerminalBuffers()
+    })
+
+    const store = await createStore()
+    const session = store.getWorkspaceSession()
+    expect(session.terminalLayoutsByTabId['local-tab'].buffersByLeafId).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
+      'leaf-remote': 'remote-scrollback'
+    })
+  })
+
+  it('caps oversized legacy browser history when loading workspace session', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: makeSessionWithBrowserHistory(500)
+    })
+
+    const store = await createStore()
+    const session = store.getWorkspaceSession()
+    expect(session.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+    expect(session.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
+  })
+
+  it('does not restore cleared SSH bindings after a lease expired', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: 'leaf1',
+      state: 'expired'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
+  })
+
+  it('does not let an expired lease for another tab suppress a matching pty id', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab-expired',
+      leafId: 'leaf-expired',
+      state: 'expired'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab-live',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-live',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: { type: 'leaf', leafId: 'leaf-live' },
+          activeLeafId: 'leaf-live',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-live': 'remote-pty' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab-live',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-live',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: { type: 'leaf', leafId: 'leaf-live' },
+          activeLeafId: 'leaf-live',
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
+    expect(session.terminalLayoutsByTabId['tab-live'].ptyIdsByLeafId).toEqual({
+      'leaf-live': 'remote-pty'
+    })
+  })
+
+  it('does not let an expired lease for another SSH target suppress the same tab binding', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'repo-live', connectionId: 'ssh-live' }))
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-expired',
+      ptyId: 'remote-pty',
+      worktreeId: 'repo-live::/wt',
+      tabId: 'tab-live',
+      leafId: 'leaf-live',
+      state: 'expired'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-live',
+      ptyId: 'remote-pty',
+      worktreeId: 'repo-live::/wt',
+      tabId: 'tab-live',
+      leafId: 'leaf-live',
+      state: 'detached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'repo-live',
+      activeWorktreeId: 'repo-live::/wt',
+      activeTabId: 'tab-live',
+      tabsByWorktree: {
+        'repo-live::/wt': [
+          {
+            id: 'tab-live',
+            worktreeId: 'repo-live::/wt',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: { type: 'leaf', leafId: 'leaf-live' },
+          activeLeafId: 'leaf-live',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-live': 'remote-pty' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'repo-live',
+      activeWorktreeId: 'repo-live::/wt',
+      activeTabId: 'tab-live',
+      tabsByWorktree: {
+        'repo-live::/wt': [
+          {
+            id: 'tab-live',
+            worktreeId: 'repo-live::/wt',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: { type: 'leaf', leafId: 'leaf-live' },
+          activeLeafId: 'leaf-live',
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree['repo-live::/wt'][0].ptyId).toBe('remote-pty')
+    expect(session.terminalLayoutsByTabId['tab-live'].ptyIdsByLeafId).toEqual({
+      'leaf-live': 'remote-pty'
+    })
+  })
+
+  it('does not treat contextless expired leases as wildcards for contextual bindings', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      state: 'expired'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({ leaf1: 'remote-pty' })
+  })
+
+  it('does not treat layout-level leases missing worktree context as contextual matches', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      tabId: 'tab1',
+      leafId: 'leaf1',
+      state: 'expired'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      leaf1: 'remote-pty'
+    })
+  })
+
+  it('merges missing prior layout bindings into partial renderer snapshots', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-1',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: 'leaf1',
+      state: 'detached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-2',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: 'leaf2',
+      state: 'detached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty-1'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf1' },
+            second: { type: 'leaf', leafId: 'leaf2' },
+            ratio: 0.5
+          },
+          activeLeafId: 'leaf2',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty-1', leaf2: 'remote-pty-2' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty-1'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf1' },
+            second: { type: 'leaf', leafId: 'leaf2' },
+            ratio: 0.5
+          },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty-1' }
+        }
+      }
+    })
+
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      leaf1: 'remote-pty-1',
+      leaf2: 'remote-pty-2'
+    })
+  })
+
+  it('does not restore layout bindings for leaves removed from the incoming layout', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-1',
+      tabId: 'tab1',
+      leafId: 'leaf1',
+      state: 'detached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-2',
+      tabId: 'tab1',
+      leafId: 'leaf2',
+      state: 'detached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty-1'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf1' },
+            second: { type: 'leaf', leafId: 'leaf2' },
+            ratio: 0.5
+          },
+          activeLeafId: 'leaf2',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty-1', leaf2: 'remote-pty-2' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty-1'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty-1' }
+        }
+      }
+    })
+
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      leaf1: 'remote-pty-1'
+    })
+  })
+
+  it('does not restore missing layout bindings without a live SSH lease', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'local-pty-1'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf1' },
+            second: { type: 'leaf', leafId: 'leaf2' },
+            ratio: 0.5
+          },
+          activeLeafId: 'leaf2',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'local-pty-1', leaf2: 'local-pty-2' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'local-pty-1'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf1' },
+            second: { type: 'leaf', leafId: 'leaf2' },
+            ratio: 0.5
+          },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'local-pty-1' }
+        }
+      }
+    })
+
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      leaf1: 'local-pty-1'
+    })
+  })
+
+  it('clears workspace bindings before removing SSH remote PTY leases for a target', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: 'leaf1',
+      state: 'detached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+        }
+      }
+    })
+
+    store.removeSshRemotePtyLeases('ssh-1')
+
+    const session = store.getWorkspaceSession()
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
+  })
+
+  it('clears workspace bindings before removing contextless SSH remote PTY leases', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      state: 'detached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf1' },
+          activeLeafId: 'leaf1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+        }
+      }
+    })
+
+    store.removeSshRemotePtyLeases('ssh-1')
+
+    const session = store.getWorkspaceSession()
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
+  })
+
+  it('does not revive expired leases when marking a target detached', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'live-pty',
+      state: 'attached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'expired-pty',
+      state: 'expired'
+    })
+
+    store.markSshRemotePtyLeases('ssh-1', 'detached')
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ptyId: 'live-pty', state: 'detached' }),
+        expect.objectContaining({ ptyId: 'expired-pty', state: 'expired' })
+      ])
+    )
   })
 
   // ── getAllWorktreeMeta ─────────────────────────────────────────────

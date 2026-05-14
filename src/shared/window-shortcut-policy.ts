@@ -10,6 +10,7 @@ export type WindowShortcutInput = {
 export type WindowShortcutAction =
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
   | { type: 'toggleWorktreePalette' }
+  | { type: 'toggleFloatingTerminal' }
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
@@ -68,6 +69,16 @@ function isHistoryNavigateChord(input: WindowShortcutInput, platform: NodeJS.Pla
   )
 }
 
+function isFloatingTerminalChord(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
+  return (
+    platformPrimaryModifier(input, platform) &&
+    !platformOppositeModifier(input, platform) &&
+    Boolean(input.alt) &&
+    !input.shift &&
+    matchesLetterShortcut(input, 't', 'KeyT')
+  )
+}
+
 function isZoomInShortcut(input: WindowShortcutInput): boolean {
   return input.key === '=' || input.key === '+' || input.code === 'NumpadAdd'
 }
@@ -122,6 +133,10 @@ export function resolveWindowShortcutAction(
       type: 'worktreeHistoryNavigate',
       direction: input.code === 'ArrowLeft' ? 'back' : 'forward'
     }
+  }
+
+  if (isFloatingTerminalChord(input, platform)) {
+    return { type: 'toggleFloatingTerminal' }
   }
 
   if (!isWindowShortcutModifierChord(input, platform)) {

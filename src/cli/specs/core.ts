@@ -72,11 +72,22 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'name', 'base-branch', 'issue', 'comment', 'run-hooks'],
+      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--activate] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'repo',
+      'name',
+      'base-branch',
+      'issue',
+      'comment',
+      'run-hooks',
+      'activate'
+    ],
     notes: [
-      'By default this matches the Orca UI flow and activates the new worktree in the app.',
-      'Repo-defined orca.yaml hooks are skipped unless --run-hooks is passed.'
+      'By default this creates the worktree and its first terminal without switching the active Orca workspace.',
+      'Repo-defined setup hooks follow the repository setup policy; pass --run-hooks to force them.',
+      'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
+      'Passing --run-hooks reveals the worktree so the setup hook can run in its first terminal.'
     ]
   },
   {
@@ -148,13 +159,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'create'],
-    summary: 'Create a new terminal tab in the current worktree',
+    summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
+    notes: [
+      'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.'
+    ],
     examples: [
       'orca terminal create --json',
-      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"'
+      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
+      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
     ]
   },
   {

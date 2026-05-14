@@ -1,26 +1,70 @@
 import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
+import type { GitPushTarget } from '../../shared/types'
+import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
 
-export async function gitPush(worktreePath: string, _publish = false): Promise<void> {
+async function getConfiguredPushTarget(
+  worktreePath: string
+): Promise<{ remote: string; refspec: string } | null> {
   try {
-    // Why: always pass --set-upstream so that worktrees Orca creates with
-    // `git worktree add --track -b <name> <dir> <baseRef>` (which initially
-    // track the BASE — e.g. origin/main) get their upstream repointed to
-    // origin/<branch> on first push. Without this the local branch keeps
-    // tracking origin/main forever, so ahead/behind reads via @{u} measure
-    // "ahead of base" rather than "ahead of remote branch", and the primary
-    // button never rotates from "Push" to "Commit" after a successful push.
+    const { stdout: branchStdout } = await gitExecFileAsync(
+      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+      { cwd: worktreePath }
+    )
+    const branch = branchStdout.trim()
+    if (!branch) {
+      return null
+    }
+
+    const [{ stdout: remoteStdout }, { stdout: mergeStdout }] = await Promise.all([
+      gitExecFileAsync(['config', '--get', `branch.${branch}.remote`], { cwd: worktreePath }),
+      gitExecFileAsync(['config', '--get', `branch.${branch}.merge`], { cwd: worktreePath })
+    ])
+    const remote = remoteStdout.trim()
+    const mergeRef = mergeStdout.trim()
+    const branchRef = mergeRef.replace(/^refs\/heads\//, '')
+    if (!remote || !branchRef || remote === '.' || branchRef === mergeRef) {
+      return null
+    }
+    if (remote === 'origin' && branchRef !== branch) {
+      return null
+    }
+    return { remote, refspec: `HEAD:${branchRef}` }
+  } catch {
+    return null
+  }
+}
+
+function explicitPushTarget(target: GitPushTarget): { remote: string; refspec: string } {
+  return { remote: target.remoteName, refspec: `HEAD:${target.branchName}` }
+}
+
+export async function gitPush(
+  worktreePath: string,
+  _publish = false,
+  pushTarget?: GitPushTarget
+): Promise<void> {
+  try {
+    if (pushTarget) {
+      await validateGitPushTarget(worktreePath, pushTarget)
+    }
+    // Why: push to the branch's configured upstream when one exists. PR-created
+    // worktrees can track a contributor fork remote; hardcoding origin here
+    // would send review commits to the upstream repository instead.
     //
-    // The `publish` flag becomes redundant under this strategy — every push
-    // sets upstream, including the first. We keep the parameter in the
-    // signature so callers don't need to change, but it's no longer
-    // load-bearing. On an already-published branch --set-upstream is a
-    // no-op for the tracking config and a regular push otherwise.
+    // When no upstream exists, keep the existing first-publish behavior:
+    // create/update origin/<current branch> and set it as upstream.
     //
     // Branch-vs-base reporting (the "Committed on Branch" section) is
     // unaffected because it uses branchCompare against an explicit baseRef
     // from worktree config, not the upstream relationship.
-    await gitExecFileAsync(['push', '--set-upstream', 'origin', 'HEAD'], { cwd: worktreePath })
+    const target = pushTarget
+      ? explicitPushTarget(pushTarget)
+      : await getConfiguredPushTarget(worktreePath)
+    const args = target
+      ? ['push', '--set-upstream', target.remote, target.refspec]
+      : ['push', '--set-upstream', 'origin', 'HEAD']
+    await gitExecFileAsync(args, { cwd: worktreePath })
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'push'))
   }

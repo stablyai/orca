@@ -266,6 +266,40 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             </button>
           </SearchableSetting>
         </div>
+
+        <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
+          <SearchableSetting
+            title="Skip Delete Automation Confirmation"
+            description="Delete automations without a confirmation dialog."
+            keywords={['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']}
+            className="flex items-center justify-between gap-4 px-1 py-2"
+          >
+            <div className="space-y-0.5">
+              <Label>Skip Delete Automation Confirmation</Label>
+              <p className="text-xs text-muted-foreground">
+                Delete automations and their run history without a confirmation dialog.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={settings.skipDeleteAutomationConfirm}
+              onClick={() =>
+                updateSettings({
+                  skipDeleteAutomationConfirm: !settings.skipDeleteAutomationConfirm
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.skipDeleteAutomationConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                  settings.skipDeleteAutomationConfirm ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </SearchableSetting>
+        </div>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (

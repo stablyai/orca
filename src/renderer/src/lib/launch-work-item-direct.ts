@@ -219,13 +219,40 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       baseBranch,
       finalSetupDecision,
       undefined,
-      telemetrySource
+      telemetrySource,
+      item.title,
+      item.type === 'issue' && item.number ? item.number : undefined,
+      item.type === 'pr' && item.number ? item.number : undefined
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
+    const meta: {
+      linkedLinearIssue?: string
+    } = {}
+    if (item.linearIdentifier) {
+      meta.linkedLinearIssue = item.linearIdentifier
+    }
+    if (Object.keys(meta).length > 0) {
+      // Why: Project direct-launch activates the new workspace immediately.
+      // GitHub issue/PR links are persisted during create; Linear metadata
+      // still uses a best-effort follow-up because create args do not carry it.
+      // Best-effort: the worktree is already created on disk, so a meta
+      // write failure must not abort activation and orphan it.
+      void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
+        // Non-critical: continue into activation without the link metadata.
+      })
+    }
 
     const detectedIds = new Set(await detectedAgentsPromise)
     effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    if (effectiveAgent) {
+      // Why: direct task launch creates and starts the workspace in separate
+      // steps so agent detection can overlap git worktree creation. Persist
+      // the chosen agent once known so empty-worktree reopen can recreate it.
+      void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
+        // Non-critical: activation still has the explicit startup below.
+      })
+    }
     const draftContent = item.pasteContent ?? item.url
 
     // Why: agents that gate first-launch behind a "Do you trust this folder?"
@@ -299,25 +326,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const message = error instanceof Error ? error.message : 'Failed to create workspace.'
     toast.error(message)
     return
-  }
-
-  const meta: {
-    linkedIssue?: number
-    linkedPR?: number
-    linkedLinearIssue?: string
-  } = {}
-  if (item.type === 'issue' && item.number) {
-    meta.linkedIssue = item.number
-  } else if (item.type === 'pr' && item.number) {
-    meta.linkedPR = item.number
-  }
-  if (item.linearIdentifier) {
-    meta.linkedLinearIssue = item.linearIdentifier
-  }
-  if (Object.keys(meta).length > 0) {
-    void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
-      // Meta update is non-critical for the draft flow — continue.
-    })
   }
 
   store.setSidebarOpen(true)

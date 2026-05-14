@@ -132,10 +132,7 @@ describe('orca cli browser page targeting', () => {
     queueFixtures(callMock, okFixture('req_switch', { switched: 1, browserPageId: 'page-1' }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(
-      ['tab', 'switch', '--page', 'page-1', '--focus', '--json'],
-      '/tmp/repo/feature/src'
-    )
+    await main(['tab', 'switch', '--page', 'page-1', '--focus', '--json'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('browser.tabSwitch', {

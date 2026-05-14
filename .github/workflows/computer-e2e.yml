@@ -1,0 +1,104 @@
+name: Computer-use e2e
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/computer-e2e.yml'
+      - 'config/electron-builder.config.cjs'
+      - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/verify-computer-native.mjs'
+      - 'native/computer-use-macos/**'
+      - 'native/computer-use-linux/**'
+      - 'native/computer-use-windows/**'
+      - 'src/cli/**'
+      - 'src/main/computer/**'
+      - 'src/main/runtime/rpc/methods/computer.ts'
+      - 'src/shared/runtime-types.ts'
+      - 'tests/e2e/computer-linux.e2e.ts'
+      - 'tests/e2e/computer-mac.e2e.ts'
+      - 'tests/e2e/computer-windows.e2e.ts'
+      - 'tests/e2e/helpers/computer-driver.ts'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  native-smoke:
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify:computer-native
+      - run: pnpm build:cli
+
+  mac:
+    # macOS Accessibility and Screen Recording require user-granted TCC entries.
+    # Keep this on manual/scheduled permission-bearing runners instead of PR CI.
+    if: github.event_name != 'pull_request'
+    runs-on: macos-14
+    env:
+      ORCA_COMPUTER_E2E: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:computer-macos
+      - run: pnpm verify:computer-native
+      - run: pnpm build:cli
+      - run: pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-mac.e2e.ts
+
+  linux:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    env:
+      ORCA_COMPUTER_E2E: '1'
+      ACCESSIBILITY_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - run: sudo apt-get update && sudo apt-get install -y build-essential python3 python3-gi gir1.2-atspi-2.0 gedit at-spi2-core xvfb xclip xdotool
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify:computer-native
+      - run: pnpm build:cli
+      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-linux.e2e.ts
+
+  windows:
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    env:
+      ORCA_COMPUTER_E2E: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify:computer-native
+      - run: pnpm build:cli
+      - run: pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-windows.e2e.ts

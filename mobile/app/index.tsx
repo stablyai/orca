@@ -88,6 +88,21 @@ function formatDuration(ms: number): string {
   return `${totalMinutes}m`
 }
 
+// Why: derive a stable per-instance identity for RpcClient so the wireUp
+// effect's dep key changes when forceReconnect swaps the underlying client
+// for a host (without this, listeners stay attached to the closed client
+// and notifications/accounts subs never re-attach).
+const clientIdentities = new WeakMap<RpcClient, number>()
+let nextClientIdentity = 1
+function clientKey(client: RpcClient): number {
+  let id = clientIdentities.get(client)
+  if (id == null) {
+    id = nextClientIdentity++
+    clientIdentities.set(client, id)
+  }
+  return id
+}
+
 function fetchStats(
   client: RpcClient,
   setStats: (s: StatsSummary) => void,
@@ -423,14 +438,16 @@ export default function HomeScreen() {
     return () => {
       for (const c of cleanups) c()
     }
-    // Why: depend on the host-id set, not the whole allClients array, so
+    // Why: depend on the host-id set AND each entry's client identity, so
     // resubscriptions don't fire on every render that produces a new
-    // array reference. Client identity is stable per hostId for the
-    // lifetime of the underlying transport.
+    // array reference, but DO fire when forceReconnect swaps the
+    // underlying client for a host (otherwise wireUp would keep firing
+    // on a closed client and never re-attach to the fresh one, leaving
+    // notifications/accounts subs broken until the user navigates).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allClients
-      .map((e) => e.hostId)
+      .map((e) => `${e.hostId}:${clientKey(e.client)}`)
       .sort()
       .join(',')
   ])

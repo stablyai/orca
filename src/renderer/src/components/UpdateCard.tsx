@@ -324,12 +324,20 @@ export function UpdateCard() {
             : 'Could not check for updates.',
           message: status.message,
           releaseUrl: releaseUrlForVersion(cachedVersion),
+          // Why: check-time failures are often transient (offline, GitHub
+          // hiccup), so offer a Re-check next to "Download Manually" instead
+          // of forcing the user into the manual fallback.
           primaryAction: cachedVersion
             ? {
                 label: 'Retry Download',
                 onClick: handleUpdate
               }
-            : undefined
+            : {
+                label: 'Re-check',
+                onClick: () => {
+                  void window.api.updater.check({ includePrerelease: false })
+                }
+              }
         }
       : installError
         ? {

@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: SSH IPC session lifecycle tests share a
+single mocked Electron/connection harness; splitting them would obscure active
+session state that the terminate/disconnect assertions depend on. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const {
@@ -38,7 +41,9 @@ const {
   mockPtyProvider: {
     onData: vi.fn(),
     onExit: vi.fn(),
-    onReplay: vi.fn()
+    onReplay: vi.fn(),
+    attach: vi.fn(),
+    shutdown: vi.fn()
   },
   mockFsProvider: {},
   mockGitProvider: {},
@@ -90,6 +95,8 @@ vi.mock('../ssh/ssh-channel-multiplexer', () => ({
 }))
 
 vi.mock('../providers/ssh-pty-provider', () => ({
+  isSshPtyNotFoundError: (err: unknown) =>
+    (err instanceof Error ? err.message : String(err)).includes('not found'),
   SshPtyProvider: class MockSshPtyProvider {
     constructor() {
       return mockPtyProvider
@@ -111,6 +118,7 @@ vi.mock('./pty', () => ({
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
+  setPtyOwnership: vi.fn(),
   getSshPtyProvider: vi.fn(),
   getPtyIdsForConnection: vi.fn().mockReturnValue([])
 }))
@@ -144,10 +152,17 @@ vi.mock('../ssh/ssh-port-forward', () => ({
 
 import { registerSshHandlers } from './ssh'
 import type { SshTarget } from '../../shared/ssh-types'
+import { getSshPtyProvider, getPtyIdsForConnection } from './pty'
 
 describe('SSH IPC handlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
-  const mockStore = { getRepos: () => [] } as never
+  const mockStore = {
+    getRepos: () => [],
+    getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    markSshRemotePtyLease: vi.fn(),
+    markSshRemotePtyLeases: vi.fn(),
+    removeSshRemotePtyLeases: vi.fn()
+  }
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
@@ -166,6 +181,10 @@ describe('SSH IPC handlers', () => {
     mockSshStore.updateTarget.mockReset()
     mockSshStore.removeTarget.mockReset()
     mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
+    mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
+    mockStore.markSshRemotePtyLease.mockReset()
+    mockStore.markSshRemotePtyLeases.mockReset()
+    mockStore.removeSshRemotePtyLeases.mockReset()
 
     mockConnectionManager.connect.mockReset()
     mockConnectionManager.disconnect.mockReset()
@@ -183,8 +202,11 @@ describe('SSH IPC handlers', () => {
     mockPtyProvider.onData.mockReset()
     mockPtyProvider.onExit.mockReset()
     mockPtyProvider.onReplay.mockReset()
+    mockPtyProvider.shutdown.mockReset()
+    vi.mocked(getSshPtyProvider).mockReset()
+    vi.mocked(getPtyIdsForConnection).mockReset().mockReturnValue([])
 
-    registerSshHandlers(mockStore, () => mockWindow as never)
+    registerSshHandlers(mockStore as never, () => mockWindow as never)
   })
 
   it('registers all expected IPC channels', () => {
@@ -196,6 +218,7 @@ describe('SSH IPC handlers', () => {
     expect(channels).toContain('ssh:importConfig')
     expect(channels).toContain('ssh:connect')
     expect(channels).toContain('ssh:disconnect')
+    expect(channels).toContain('ssh:terminateSessions')
     expect(channels).toContain('ssh:getState')
     expect(channels).toContain('ssh:testConnection')
   })
@@ -227,6 +250,36 @@ describe('SSH IPC handlers', () => {
 
   it('ssh:removeTarget calls store.removeTarget', async () => {
     await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
+    expect(mockSshStore.removeTarget).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('ssh:removeTarget tears down an active relay before deleting the target', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    mockPortForwardManager.removeAllForwards.mockClear()
+    mockConnectionManager.disconnect.mockClear().mockResolvedValue(undefined)
+
+    await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
+
+    expect(mockPortForwardManager.removeAllForwards).toHaveBeenCalledWith('ssh-1')
+    expect(mockMux.dispose).toHaveBeenCalledWith('shutdown')
+    expect(mockStore.markSshRemotePtyLeases).toHaveBeenCalledWith('ssh-1', 'terminated')
+    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+    expect(mockStore.removeSshRemotePtyLeases).toHaveBeenCalledWith('ssh-1')
     expect(mockSshStore.removeTarget).toHaveBeenCalledWith('ssh-1')
   })
 
@@ -275,7 +328,7 @@ describe('SSH IPC handlers', () => {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn()
     }
-    registerSshHandlers(mockStore, () => mockWindow as never, runtime as never)
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -312,6 +365,53 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
 
+    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('ssh:terminateSessions preserves tracking when relay shutdown fails', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' }
+    ])
+    vi.mocked(getSshPtyProvider).mockReturnValue(mockPtyProvider as never)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+    mockPtyProvider.shutdown.mockRejectedValue(new Error('mux down'))
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    await expect(
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    ).rejects.toThrow('Failed to terminate remote SSH sessions')
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', 'pty-1', 'terminated')
+    expect(mockConnectionManager.disconnect).not.toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('ssh:terminateSessions ignores expired leases when disconnected', async () => {
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-expired', state: 'expired' }
+    ])
+    vi.mocked(getSshPtyProvider).mockReturnValue(undefined)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+
+    await expect(
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    ).resolves.toBeUndefined()
+
+    expect(mockPtyProvider.shutdown).not.toHaveBeenCalled()
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 

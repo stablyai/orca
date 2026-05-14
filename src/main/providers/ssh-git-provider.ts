@@ -6,6 +6,7 @@ import type {
   GitDiffResult,
   GitBranchCompareResult,
   GitConflictOperation,
+  GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo
 } from '../../shared/types'
@@ -90,8 +91,12 @@ export class SshGitProvider implements IGitProvider {
     })) as GitUpstreamStatus
   }
 
-  async pushBranch(worktreePath: string, publish = false): Promise<void> {
-    await this.mux.request('git.push', { worktreePath, publish })
+  async pushBranch(
+    worktreePath: string,
+    publish = false,
+    pushTarget?: GitPushTarget
+  ): Promise<void> {
+    await this.mux.request('git.push', { worktreePath, publish, pushTarget })
   }
 
   async pullBranch(worktreePath: string): Promise<void> {
@@ -124,7 +129,7 @@ export class SshGitProvider implements IGitProvider {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; track?: boolean }
+    options?: { base?: string }
   ): Promise<void> {
     await this.mux.request('git.addWorktree', {
       repoPath,

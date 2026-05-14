@@ -52,6 +52,10 @@ export type RpcContext = {
   // server reap all subscriptions for a closing socket, even when other
   // sockets for the same deviceToken stay alive (multi-screen mobile).
   connectionId?: string
+  // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
+  // responses after the binary terminal cutover. Undefined on Unix/socket
+  // transports and non-E2EE WebSocket paths.
+  sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
 }
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown

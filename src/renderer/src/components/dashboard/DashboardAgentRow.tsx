@@ -203,7 +203,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     <div
       onClick={handleActivate}
       className={cn(
-        'group relative flex flex-col pl-1 pr-1.5 py-0.5',
+        'group relative flex flex-col pr-1.5 py-0.5',
         // Why: hover tints have to go in opposite directions per theme —
         // dark mode adds light on dark (bg-accent/30), light mode needs to
         // add *dark* on white. Alpha-on-accent in light mode collapses to

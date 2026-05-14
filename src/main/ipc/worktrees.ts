@@ -8,6 +8,7 @@ import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
+  GitPushTarget,
   GitWorktreeInfo,
   Repo,
   WorktreeMeta
@@ -15,7 +16,7 @@ import type {
 import { removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
-import { getWorkItem } from '../github/client'
+import { getPullRequestPushTarget, getWorkItem } from '../github/client'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
@@ -45,7 +46,9 @@ import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { getLocalPtyProvider } from './pty'
 import { removeWorktreeSymlinks } from './worktree-symlinks'
 import { track } from '../telemetry/client'
+import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
+import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 
 // Why: worktrees discovered on disk (not created via Orca's UI) have no
 // persisted WorktreeMeta, so mergeWorktree falls back to `lastActivityAt: 0`.
@@ -152,7 +155,13 @@ export function registerWorktreeHandlers(
             `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
             err
           )
-          rememberLocalWorktreeRoots(store, repo, [])
+          // Why: do NOT seed an empty success here. registerWorktreeRootsForRepo
+          // would mark this repo as registered and flip
+          // registeredWorktreeRootsDirty to false, which causes
+          // resolveRegisteredWorktreePath to permanently deny access to
+          // legitimate linked worktrees of this repo until something invalidates
+          // the cache. Leaving it unregistered keeps the cache dirty so the
+          // next access path can rebuild.
           return []
         }
       })
@@ -206,7 +215,8 @@ export function registerWorktreeHandlers(
         `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
         err
       )
-      rememberLocalWorktreeRoots(store, repo, [])
+      // Why: see worktrees:listAll catch — seeding an empty-success result
+      // would poison the auth cache and block linked worktrees.
       return []
     }
   })
@@ -222,10 +232,27 @@ export function registerWorktreeHandlers(
         throw new Error('Folder mode does not support creating worktrees.')
       }
 
-      // Remote repos route all git operations through the relay
-      const result = repo.connectionId
-        ? await createRemoteWorktree(args, repo, store, mainWindow)
-        : await createLocalWorktree(args, repo, store, mainWindow, runtime)
+      const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
+      const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
+
+      let result: CreateWorktreeResult
+      try {
+        // Why: only wrap the helpers themselves. The pre-validation throws
+        // above (`Repo not found`, `Folder mode does not support creating
+        // worktrees`) signal IPC-shape bugs, not the user-visible
+        // git/filesystem failures the funnel cares about — bucketing them
+        // into `unknown` would pollute the failure taxonomy.
+        result = repo.connectionId
+          ? await createRemoteWorktree(args, repo, store, mainWindow)
+          : await createLocalWorktree(args, repo, store, mainWindow, runtime)
+      } catch (error) {
+        track('workspace_create_failed', {
+          source,
+          error_class: classifyWorkspaceCreateError(error),
+          ...getCohortAtEmit()
+        })
+        throw error
+      }
 
       // Why: emit `workspace_created` only after the underlying create has
       // resolved (the helpers throw on failure, so reaching this line means
@@ -235,11 +262,10 @@ export function registerWorktreeHandlers(
       // baseBranch; an unspecified baseBranch means "branch from default
       // HEAD", which is the not-from-existing-branch case. We never send
       // the branch name itself.
-      const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
-      const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
       track('workspace_created', {
         source,
-        from_existing_branch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0
+        from_existing_branch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
+        ...getCohortAtEmit()
       })
 
       return result
@@ -256,7 +282,7 @@ export function registerWorktreeHandlers(
         headRefName?: string
         isCrossRepository?: boolean
       }
-    ): Promise<{ baseBranch: string } | { error: string }> => {
+    ): Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }> => {
       const repo = store.getRepo(args.repoId)
       if (!repo) {
         return { error: 'Repo not found' }
@@ -272,6 +298,7 @@ export function registerWorktreeHandlers(
 
       let headRefName = args.headRefName?.trim() ?? ''
       let isCrossRepository = args.isCrossRepository === true
+      let pushTarget: CreateWorktreeArgs['pushTarget'] | undefined
 
       // Skip the gh lookup when both hints are present (picker already has them).
       if (!headRefName) {
@@ -288,6 +315,21 @@ export function registerWorktreeHandlers(
         }
         if (item.isCrossRepository === true) {
           isCrossRepository = true
+        }
+      }
+      if (isCrossRepository) {
+        try {
+          pushTarget = (await getPullRequestPushTarget(repo.path, args.prNumber)) ?? undefined
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error
+                ? error.message
+                : `Could not resolve PR #${args.prNumber} head push target.`
+          }
+        }
+        if (!pushTarget) {
+          return { error: `Could not resolve PR #${args.prNumber} head push target.` }
         }
       }
 
@@ -327,11 +369,14 @@ export function registerWorktreeHandlers(
         if (!sha) {
           return { error: `Empty SHA resolving fork PR #${args.prNumber} head.` }
         }
-        return { baseBranch: sha }
+        return { baseBranch: sha, ...(pushTarget ? { pushTarget } : {}) }
       }
 
       try {
-        await gitExecFileAsync(['fetch', remote, headRefName], { cwd: repo.path })
+        await gitExecFileAsync(
+          ['fetch', remote, `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`],
+          { cwd: repo.path }
+        )
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return {
@@ -346,7 +391,10 @@ export function registerWorktreeHandlers(
         return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
       }
 
-      return { baseBranch: remoteRef }
+      if (!pushTarget) {
+        pushTarget = { remoteName: remote, branchName: headRefName }
+      }
+      return { baseBranch: remoteRef, pushTarget }
     }
   )
 
@@ -393,6 +441,7 @@ export function registerWorktreeHandlers(
           throw new Error(`No git provider for connection "${repo.connectionId}"`)
         }
         await provider.removeWorktree(worktreePath, args.force)
+        runtime.clearOptimisticReconcileToken(args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
         deleteWorktreeHistoryDir(args.worktreeId)
         notifyWorktreesChanged(mainWindow, repoId)
@@ -429,6 +478,7 @@ export function registerWorktreeHandlers(
           // list` continues to show the stale entry and the branch it had checked out
           // remains locked — other worktrees cannot check it out.
           await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
+          runtime.clearOptimisticReconcileToken(args.worktreeId)
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
           invalidateAuthorizedRootsCache()
@@ -437,6 +487,7 @@ export function registerWorktreeHandlers(
         }
         throw new Error(formatWorktreeRemovalError(error, worktreePath, args.force ?? false))
       }
+      runtime.clearOptimisticReconcileToken(args.worktreeId)
       store.removeWorktreeMeta(args.worktreeId)
       deleteWorktreeHistoryDir(args.worktreeId)
       invalidateAuthorizedRootsCache()

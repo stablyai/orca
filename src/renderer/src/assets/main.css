@@ -240,6 +240,9 @@
 
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
+  /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
+  padding-right: 9px;
+  scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
 
@@ -402,6 +405,98 @@
   flex-shrink: 0;
 }
 
+/* Why: small identity anchor on Windows where the native window chrome is
+   hidden. Sized to sit comfortably in the 36px titlebar with a little
+   horizontal breathing room. The SVG fill is white; light mode inverts it to
+   black so it reads on the light titlebar background. */
+.titlebar-logo {
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0 4px 0 10px;
+  opacity: 0.75;
+}
+
+/* Why: .dark is toggled on <html> (the :root), so :not(.dark) on a descendant
+   always matches. Scope to :root:not(.dark) to correctly target light mode only. */
+:root:not(.dark) .titlebar-logo {
+  filter: invert(1);
+}
+
+/* Why: Windows-only custom title bar buttons that replace the native OS chrome
+   removed by titleBarStyle:'hidden'.  Anchored to the top-right corner of the
+   viewport so they overlay any layout mode (full titlebar, workspace split, etc.)
+   and stay accessible at all times. */
+.window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: row;
+  height: 36px;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background 100ms,
+    color 100ms;
+}
+
+.window-controls-btn:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.window-controls-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+/* Why: flex spacer that reserves the width occupied by the three window-control
+   buttons (3 × 46px) so that the preceding titlebar content is not obscured by
+   the fixed-position overlay on Windows. */
+.window-controls-titlebar-spacer {
+  flex-shrink: 0;
+  width: var(--window-controls-width, 0px);
+}
+
+/* Why: the right sidebar header extends to the window's right edge. On Windows
+   the fixed-position window-controls overlay sits on top of that edge, so we
+   add matching padding-right so the header's close button (pr-1) isn't hidden
+   behind the overlay. --window-controls-width is 0px on non-Windows. */
+.right-sidebar-header-inset {
+  padding-right: var(--window-controls-width, 0px);
+}
+
+/* Why: in side-bar activity-bar mode the icon strip sits flush against the
+   right window edge. The fixed-position window-controls overlay (height 36px,
+   width 138px) covers the top-right corner, so the topmost sidebar icons are
+   unreachable without this offset. --window-controls-height is 0px on
+   non-Windows so this rule is a no-op there. */
+.side-activity-bar-windows-inset {
+  padding-top: var(--window-controls-height, 0px);
+}
+
+/* Why: in side activity-bar mode the panel header does NOT extend to the window
+   edge — the 40px icon strip sits to its right. But the window-controls overlay
+   is 138px wide, so it still overlaps the panel by (138 - 40) = 98px. Apply
+   exactly that remainder as padding-right so the close button clears the
+   minimize button. max(0px, ...) keeps this a no-op on non-Windows where the
+   var is 0px and the subtraction would otherwise go negative. */
+.right-sidebar-header-side-inset {
+  padding-right: max(0px, calc(var(--window-controls-width, 0px) - 40px));
+}
+
 .sidebar-toggle {
   -webkit-app-region: no-drag;
   background: none;
@@ -443,190 +538,21 @@
   color: var(--muted-foreground);
 }
 
-.titlebar-agent-badge {
+.titlebar-app-name {
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-left: 4px;
-  margin-right: 8px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  background: color-mix(in srgb, var(--accent) 80%, transparent);
-  color: var(--foreground);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-/* Why: the titlebar is a drag region, and descendant elements inherit that
-   region unless they opt out. Without this, hovering the dot/count spans
-   inside the badge showed the default cursor instead of pointer because the
-   drag region overrode the button's cursor. pointer-events: none forwards
-   hover/click hit-testing to the button, which already has no-drag set. */
-.titlebar-agent-badge > * {
-  pointer-events: none;
-}
-
-.titlebar-agent-badge:hover {
-  background: var(--accent);
-  border-color: var(--border);
-}
-
-.titlebar-agent-badge-idle {
-  opacity: 0.55;
-}
-
-.titlebar-agent-badge-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: #16a34a;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #16a34a 18%, transparent);
-}
-
-.titlebar-agent-badge-dot-idle {
-  background: var(--muted-foreground);
-  box-shadow: none;
-}
-
-.titlebar-agent-badge-count {
-  min-width: 1ch;
-}
-
-.titlebar-agent-badge-label {
+  height: 24px;
+  margin-left: 2px;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
   color: var(--muted-foreground);
-  font-weight: 500;
-}
-
-/* ─── Agent hover card (titlebar badge popover) ───────────────────── */
-
-.titlebar-agent-hovercard {
-  width: auto;
-  min-width: 180px;
-  max-width: 280px;
-  padding: 8px 0 0;
-}
-
-.titlebar-agent-hovercard-header {
-  padding: 0 12px 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-
-.titlebar-agent-hovercard-header-with-list {
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-}
-
-.titlebar-agent-hovercard-hide {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 5px 12px 8px;
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-  background: none;
-  border-left: none;
-  border-right: none;
-  border-bottom: none;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  cursor: pointer;
-  border-radius: 0;
-}
-
-.titlebar-agent-hovercard-hide:hover {
-  color: var(--foreground);
-  background: var(--accent);
-}
-
-.titlebar-agent-hovercard-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.titlebar-agent-hovercard-worktree {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  background: none;
-  border: none;
-  color: var(--foreground);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 0;
-  width: 100%;
-}
-
-.titlebar-agent-hovercard-worktree:hover {
-  background: var(--accent);
-}
-
-.titlebar-agent-hovercard-agent {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 12px 3px 24px;
   font-size: 12px;
-  color: var(--muted-foreground);
-  background: none;
-  border: none;
-  text-align: left;
-  width: 100%;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
   cursor: pointer;
-}
-
-.titlebar-agent-hovercard-agent:hover {
-  background: var(--accent);
-  color: var(--foreground);
-}
-
-.titlebar-agent-hovercard-agent-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.titlebar-agent-hovercard-agent-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: #16a34a;
-}
-
-.titlebar-agent-hovercard-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.titlebar-agent-hovercard-count {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-.titlebar-agent-hovercard-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #16a34a;
 }
 
 .titlebar-icon-button {
@@ -1096,6 +1022,12 @@
    percentages would not give equal contrast. Override lives in `.dark`. */
 .orca-diff-comment-card {
   position: relative;
+  /* Why: Monaco's view-lines overlay (data-mprt=8) is positioned absolutely on
+     top of view-zone DOM. Without an explicit z-index here, clicks on
+     interior controls (Cancel/Save in edit mode, the textarea, etc.) hit the
+     overlay first and never reach our buttons. Lifting the whole card creates
+     a stacking context that keeps every nested control clickable. */
+  z-index: 1;
   border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
   border-left: 3px solid color-mix(in srgb, var(--foreground) 55%, transparent);
   border-radius: 6px;
@@ -1123,6 +1055,36 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+/* Why: keep edit + delete close together but visually distinct from the meta
+   label. Both share the same subtle button styling; only delete recolours on
+   hover (destructive intent). */
+.orca-diff-comment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.orca-diff-comment-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.orca-diff-comment-edit:hover {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 /* Why: the trash button is always visible (not hover-only) because the saved
@@ -1236,6 +1198,7 @@
 
 .orca-diff-comment-popover-footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 6px;
 }

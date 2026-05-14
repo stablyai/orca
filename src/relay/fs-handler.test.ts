@@ -76,7 +76,6 @@ describe('FsHandler', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-fs-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    ctx.registerRoot(tmpDir)
     handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx)
   })
 
@@ -118,6 +117,25 @@ describe('FsHandler', () => {
     expect(result[0].isDirectory).toBe(true)
     expect(result.find((e) => e.name === 'file.txt')).toBeDefined()
     expect(result.find((e) => e.name === 'aaa.txt')).toBeDefined()
+  })
+
+  it('readDir reports symlinked directories as directories', async () => {
+    const targetDir = path.join(tmpDir, 'external-models')
+    const linkPath = path.join(tmpDir, 'Model')
+    mkdirSync(targetDir)
+    symlinkSync(targetDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = (await dispatcher.callRequest('fs.readDir', { dirPath: tmpDir })) as {
+      name: string
+      isDirectory: boolean
+      isSymlink: boolean
+    }[]
+
+    expect(result.find((e) => e.name === 'Model')).toEqual({
+      name: 'Model',
+      isDirectory: true,
+      isSymlink: true
+    })
   })
 
   it('readFile returns text content for text files', async () => {
@@ -210,6 +228,19 @@ describe('FsHandler', () => {
     const result = (await dispatcher.callRequest('fs.stat', { filePath: tmpDir })) as {
       type: string
     }
+    expect(result.type).toBe('directory')
+  })
+
+  it('stat returns directory type for symlinked directories', async () => {
+    const targetDir = path.join(tmpDir, 'external-models')
+    const linkPath = path.join(tmpDir, 'Model')
+    mkdirSync(targetDir)
+    symlinkSync(targetDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = (await dispatcher.callRequest('fs.stat', { filePath: linkPath })) as {
+      type: string
+    }
+
     expect(result.type).toBe('directory')
   })
 

@@ -1,4 +1,5 @@
 import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { branchName } from '@/lib/git-utils'
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
 import {
@@ -45,6 +46,24 @@ export type SmartSortOverride = {
   worktree: Worktree
   tabs: TerminalTab[]
   hasRecentPRSignal: boolean
+}
+
+function terminalTabIsLive(
+  tab: TerminalTab,
+  ptyIdsByTabId?: Record<string, string[]> | null
+): boolean {
+  // Why: slept terminals retain tab.ptyId as a wake hint, so the live PTY map is
+  // the source of truth once callers can provide it.
+  return ptyIdsByTabId ? tabHasLivePty(ptyIdsByTabId, tab.id) : Boolean(tab.ptyId)
+}
+
+export function hasAnyLivePty(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  ptyIdsByTabId?: Record<string, string[]> | null
+): boolean {
+  return Object.values(tabsByWorktree)
+    .flat()
+    .some((tab) => terminalTabIsLive(tab, ptyIdsByTabId))
 }
 
 // Why: building this index once at the sort call site reduces the smart-
@@ -105,9 +124,10 @@ function computeSmartScoreFromSignals(
   hasRecentPR: boolean,
   now: number,
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>,
-  explicitByTabId?: Map<string, AgentStatusEntry[]>
+  explicitByTabId?: Map<string, AgentStatusEntry[]>,
+  ptyIdsByTabId?: Record<string, string[]> | null
 ): number {
-  const liveTabs = tabs.filter((t) => t.ptyId)
+  const liveTabs = tabs.filter((tab) => terminalTabIsLive(tab, ptyIdsByTabId))
 
   let score = 0
 
@@ -239,7 +259,8 @@ export function buildWorktreeComparator(
   smartSortOverrides: Record<string, SmartSortOverride> | null = null,
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>,
   precomputedScores?: Map<string, number>,
-  explicitByTabId?: Map<string, AgentStatusEntry[]>
+  explicitByTabId?: Map<string, AgentStatusEntry[]>,
+  ptyIdsByTabId?: Record<string, string[]> | null
 ): (a: Worktree, b: Worktree) => number {
   // Why: when the caller does not pre-build the tabId index but does provide
   // the source map, build it ONCE here and close over it. Array.sort invokes
@@ -293,7 +314,8 @@ export function buildWorktreeComparator(
                 smartA.hasRecentPRSignal,
                 now,
                 agentStatusByPaneKey,
-                resolvedExplicitByTabId
+                resolvedExplicitByTabId,
+                ptyIdsByTabId
               )
         const scoreB =
           precomputedScores && !smartSortOverrides?.[b.id]
@@ -304,7 +326,8 @@ export function buildWorktreeComparator(
                 smartB.hasRecentPRSignal,
                 now,
                 agentStatusByPaneKey,
-                resolvedExplicitByTabId
+                resolvedExplicitByTabId,
+                ptyIdsByTabId
               )
         return (
           scoreB - scoreA ||
@@ -357,13 +380,10 @@ export function sortWorktreesSmart(
   tabsByWorktree: Record<string, TerminalTab[]>,
   repoMap: Map<string, Repo>,
   prCache: Record<string, PRCacheEntry> | null,
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey?: Record<string, AgentStatusEntry>,
+  ptyIdsByTabId?: Record<string, string[]> | null
 ): Worktree[] {
-  const hasAnyLivePty = Object.values(tabsByWorktree)
-    .flat()
-    .some((t) => t.ptyId)
-
-  if (!hasAnyLivePty) {
+  if (!hasAnyLivePty(tabsByWorktree, ptyIdsByTabId)) {
     // Cold start: use persisted sortOrder snapshot
     return [...worktrees].sort(
       (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
@@ -395,7 +415,8 @@ export function sortWorktreesSmart(
         prCache,
         now,
         agentStatusByPaneKey,
-        explicitByTabId
+        explicitByTabId,
+        ptyIdsByTabId
       )
     ])
   )
@@ -414,7 +435,8 @@ export function sortWorktreesSmart(
       null,
       agentStatusByPaneKey,
       precomputedScores,
-      explicitByTabId
+      explicitByTabId,
+      ptyIdsByTabId
     )
   )
 }
@@ -439,7 +461,8 @@ export function computeSmartScore(
   prCache: Record<string, PRCacheEntry> | null,
   now: number = Date.now(),
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>,
-  explicitByTabId?: Map<string, AgentStatusEntry[]>
+  explicitByTabId?: Map<string, AgentStatusEntry[]>,
+  ptyIdsByTabId?: Record<string, string[]> | null
 ): number {
   return computeSmartScoreFromSignals(
     worktree,
@@ -451,6 +474,7 @@ export function computeSmartScore(
     repoMap ? hasRecentPRSignal(worktree, repoMap, prCache) : worktree.linkedPR !== null,
     now,
     agentStatusByPaneKey,
-    explicitByTabId
+    explicitByTabId,
+    ptyIdsByTabId
   )
 }

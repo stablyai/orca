@@ -5,6 +5,7 @@ import type {
   GitDiffResult,
   GitBranchCompareResult,
   GitConflictOperation,
+  GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
   SearchOptions,
@@ -148,7 +149,7 @@ export type IGitProvider = {
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
   getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus>
-  pushBranch(worktreePath: string, publish?: boolean): Promise<void>
+  pushBranch(worktreePath: string, publish?: boolean, pushTarget?: GitPushTarget): Promise<void>
   pullBranch(worktreePath: string): Promise<void>
   fetchRemote(worktreePath: string): Promise<void>
   getBranchDiff(
@@ -161,7 +162,7 @@ export type IGitProvider = {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; track?: boolean }
+    options?: { base?: string }
   ): Promise<void>
   removeWorktree(worktreePath: string, force?: boolean): Promise<void>
   isGitRepo(path: string): boolean

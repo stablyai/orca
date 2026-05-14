@@ -2,6 +2,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { getConnectionId } from '@/lib/connection-context'
+import { detectLanguage } from '@/lib/language-detect'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import {
   ArrowLeft,
   ArrowRight,
@@ -52,6 +55,7 @@ import {
   getHiddenContainer,
   MAX_PARKED_WEBVIEWS,
   parkedAtByTabId,
+  registerPersistentWebview,
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
@@ -129,6 +133,29 @@ function getBrowserDisplayTitle(title: string | null | undefined, url: string): 
 
 function isChromiumErrorPage(url: string): boolean {
   return url.startsWith('chrome-error://')
+}
+
+function fileUrlToAbsolutePath(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'file:') {
+      return null
+    }
+    const hostPrefix =
+      parsed.hostname && parsed.hostname !== 'localhost' ? `//${parsed.hostname}` : ''
+    let absolutePath = `${hostPrefix}${decodeURIComponent(parsed.pathname)}`
+    if (/^\/[A-Za-z]:\//.test(absolutePath)) {
+      absolutePath = absolutePath.slice(1)
+    }
+    return absolutePath
+  } catch {
+    return null
+  }
+}
+
+function getNotebookPathFromBrowserUrl(url: string): string | null {
+  const filePath = fileUrlToAbsolutePath(url)
+  return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
 }
 
 function getLoadErrorMetadata(loadError: BrowserLoadError | null): {
@@ -939,7 +966,7 @@ function BrowserPagePane({
       // browsers paint the viewport white by default; sites that specify their
       // own background (including dark ones) still override this.
       webview.style.background = '#ffffff'
-      webviewRegistry.set(browserTab.id, webview)
+      registerPersistentWebview(browserTab.id, webview)
       container.appendChild(webview)
       needsInitialNavigation = true
     }
@@ -1501,29 +1528,77 @@ function BrowserPagePane({
 
   const navigateToUrl = useCallback(
     (url: string): void => {
-      const browserModelUrl = redactKagiSessionToken(url)
-      setAddressBarValue(toDisplayUrl(browserModelUrl))
-      onSetUrlRef.current(browserTab.id, browserModelUrl)
-      onUpdatePageStateRef.current(browserTab.id, {
-        loading: true,
-        loadError: null,
-        title: getBrowserDisplayTitle(browserModelUrl, browserModelUrl)
-      })
-      setResourceNotice(null)
+      const navigateBrowserUrl = (targetUrl: string): void => {
+        const browserModelUrl = redactKagiSessionToken(targetUrl)
+        setAddressBarValue(toDisplayUrl(browserModelUrl))
+        onSetUrlRef.current(browserTab.id, browserModelUrl)
+        onUpdatePageStateRef.current(browserTab.id, {
+          loading: true,
+          loadError: null,
+          title: getBrowserDisplayTitle(browserModelUrl, browserModelUrl)
+        })
+        setResourceNotice(null)
 
-      const webview = webviewRef.current
-      if (!webview) {
+        const webview = webviewRef.current
+        if (!webview) {
+          return
+        }
+        trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
+        lastKnownWebviewUrlRef.current =
+          normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+        webview.src = targetUrl
+        if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
+          focusWebviewNow()
+        }
+      }
+
+      const notebookPath = getNotebookPathFromBrowserUrl(url)
+      if (notebookPath) {
+        void (async () => {
+          const store = useAppStore.getState()
+          const connectionId = getConnectionId(worktreeId)
+          if (connectionId !== null) {
+            navigateBrowserUrl(url)
+            return
+          }
+
+          try {
+            await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
+            const stat = await window.api.fs.stat({ filePath: notebookPath })
+            if (stat.isDirectory) {
+              navigateBrowserUrl(url)
+              return
+            }
+
+            const activeWorktree = store.allWorktrees().find((w) => w.id === worktreeId)
+            let relativePath = notebookPath
+            if (activeWorktree?.path && isPathInsideWorktree(notebookPath, activeWorktree.path)) {
+              relativePath =
+                toWorktreeRelativePath(notebookPath, activeWorktree.path) ?? notebookPath
+            }
+
+            // Why: file:// notebooks in the browser are otherwise rendered as raw JSON by Chromium.
+            store.setActiveTabType('editor')
+            store.openFile(
+              {
+                filePath: notebookPath,
+                relativePath,
+                worktreeId,
+                language: detectLanguage(notebookPath),
+                mode: 'edit'
+              },
+              { preview: false, targetGroupId: store.ensureWorktreeRootGroup(worktreeId) }
+            )
+          } catch {
+            navigateBrowserUrl(url)
+          }
+        })()
         return
       }
-      trackNextLoadingEventRef.current = url !== ORCA_BROWSER_BLANK_URL
-      lastKnownWebviewUrlRef.current =
-        normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
-      webview.src = url
-      if (url !== ORCA_BROWSER_BLANK_URL) {
-        focusWebviewNow()
-      }
+
+      navigateBrowserUrl(url)
     },
-    [browserTab.id, focusWebviewNow]
+    [browserTab.id, focusWebviewNow, worktreeId]
   )
 
   const submitAddressBar = (): void => {

@@ -45,6 +45,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
         : 'setup'
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
+  const previouslyApproved = modalData.previouslyApproved === true
   const onResolve =
     typeof modalData.onResolve === 'function'
       ? (modalData.onResolve as (decision: 'run' | 'skip') => void)
@@ -94,19 +95,29 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
       <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            Run {SCRIPT_KIND_LABEL[scriptKind]} from {repoName}?
+            {previouslyApproved
+              ? `${repoName}'s ${SCRIPT_KIND_LABEL[scriptKind]} changed — run the new version?`
+              : `Run ${SCRIPT_KIND_LABEL[scriptKind]} from ${repoName}?`}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            This repository&apos;s <code>orca.yaml</code> defines a {SCRIPT_KIND_LABEL[scriptKind]}{' '}
-            that will execute on your machine {SCRIPT_KIND_TRIGGER[scriptKind]}. Only run it if you
-            trust the contents of this repository.
+            {previouslyApproved ? (
+              <>
+                <code>orca.yaml</code> changed since you last approved. Re-review before it runs{' '}
+                {SCRIPT_KIND_TRIGGER[scriptKind]}.
+              </>
+            ) : (
+              <>
+                This repository&apos;s <code>orca.yaml</code> runs on your machine{' '}
+                {SCRIPT_KIND_TRIGGER[scriptKind]}. Only run if you trust {repoName}.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         {scriptContent && (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2">
             <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {scriptKind} script
+              {previouslyApproved ? `New ${scriptKind} script` : `${scriptKind} script`}
             </div>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground">
               {scriptContent}
@@ -114,15 +125,21 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
-        <label className="flex items-start gap-2 text-xs text-foreground">
+        <label
+          className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
+            alwaysTrust
+              ? 'border-primary/60 bg-primary/5'
+              : 'border-border/70 bg-muted/25 hover:border-border hover:bg-muted/40'
+          }`}
+        >
           <input
             type="checkbox"
-            className="mt-0.5 h-3.5 w-3.5"
+            className="h-4 w-4 accent-primary"
             checked={alwaysTrust}
             onChange={(event) => setAlwaysTrust(event.target.checked)}
           />
-          <span>
-            Always trust this repository&apos;s <code>orca.yaml</code> hooks.
+          <span className="text-xs font-medium text-foreground">
+            Always trust <code>orca.yaml</code> in {repoName}
           </span>
         </label>
 

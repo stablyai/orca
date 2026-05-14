@@ -132,6 +132,7 @@ export class BrowserManager {
   // further re-attach attempts.
   private injectAntiDetection(guest: Electron.WebContents): () => void {
     let disposed = false
+    let reattachTimer: ReturnType<typeof setTimeout> | null = null
 
     const attach = (): void => {
       if (disposed || guest.isDestroyed()) {
@@ -160,8 +161,11 @@ export class BrowserManager {
     // sessions end. The 500ms delay avoids racing with the proxy/bridge if
     // it is mid-restart (detach → re-attach).
     const onDetach = (): void => {
-      if (!disposed && !guest.isDestroyed()) {
-        setTimeout(attach, 500)
+      if (!disposed && !guest.isDestroyed() && reattachTimer === null) {
+        reattachTimer = setTimeout(() => {
+          reattachTimer = null
+          attach()
+        }, 500)
       }
     }
 
@@ -174,6 +178,10 @@ export class BrowserManager {
 
     return () => {
       disposed = true
+      if (reattachTimer !== null) {
+        clearTimeout(reattachTimer)
+        reattachTimer = null
+      }
       try {
         guest.debugger.off('detach', onDetach)
       } catch {

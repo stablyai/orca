@@ -744,6 +744,57 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
+  it('bumps activation generation for slept wake-hint tabs with no live PTY', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({
+            id: 'tab-1',
+            worktreeId,
+            ptyId: 'wake-hint-session',
+            generation: 2
+          })
+        ]
+      },
+      ptyIdsByTabId: { 'tab-1': [] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId,
+            contentType: 'terminal',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [worktreeId]: [{ id: 'group-1', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
+      },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
+    })
+
+    store.getState().setActiveWorktree(worktreeId)
+
+    const tab = store.getState().tabsByWorktree[worktreeId][0]
+    expect(tab.generation).toBe(3)
+    expect(tab.pendingActivationSpawn).toBe(true)
+  })
+
   // Why: the FIRST activation of a worktree tags every tab — even if tab.ptyId
   // already looks live, because reconnectPersistedTerminals can re-populate
   // tab.ptyId with a restored daemon session ID before the pane mounts, making
@@ -1312,6 +1363,48 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[1].isPreview).toBe(true)
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
+  })
+
+  it('re-detects restored file languages instead of trusting stale session data', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath: '/path/wt1/notebooks/example.ipynb',
+            relativePath: 'notebooks/example.ipynb',
+            worktreeId: wt,
+            language: 'json'
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [wt]: '/path/wt1/notebooks/example.ipynb' },
+      activeTabTypeByWorktree: { [wt]: 'editor' }
+    })
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        filePath: '/path/wt1/notebooks/example.ipynb',
+        language: 'notebook'
+      })
+    )
   })
 
   it('does nothing when no editor files are persisted', () => {

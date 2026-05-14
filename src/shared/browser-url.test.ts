@@ -35,6 +35,15 @@ describe('browser-url helpers', () => {
     )
   })
 
+  it('normalizes pasted absolute local paths to file URLs', () => {
+    expect(normalizeBrowserNavigationUrl('/Users/me/Downloads/Example.ipynb')).toBe(
+      'file:///Users/me/Downloads/Example.ipynb'
+    )
+    expect(normalizeBrowserNavigationUrl('C:\\Users\\me\\Downloads\\Example.ipynb')).toBe(
+      'file:///C:/Users/me/Downloads/Example.ipynb'
+    )
+  })
+
   // Why: in-app preview is fine (sandboxed webview), but handing file:// to
   // shell.openExternal would let a remote page drive Finder/Explorer to
   // arbitrary paths. External-open paths must still refuse file://.

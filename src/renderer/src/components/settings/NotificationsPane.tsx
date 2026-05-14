@@ -31,8 +31,9 @@ export const NOTIFICATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Custom Sound',
-    description: 'Choose one local audio file for all delivered desktop notifications.',
-    keywords: ['notifications', 'sound', 'audio', 'ogg', 'mp3', 'wav']
+    description:
+      'Choose one local audio file (MP3, WAV, OGG, M4A, AAC, or FLAC) for all delivered desktop notifications.',
+    keywords: ['notifications', 'sound', 'audio', 'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac']
   },
   {
     title: 'Send Test Notification',
@@ -140,6 +141,9 @@ export function NotificationsPane({
           </div>
           <p className="text-xs text-muted-foreground">
             One local audio file for all delivered desktop notifications.
+          </p>
+          <p className="text-[11px] text-muted-foreground/80">
+            Supported formats: MP3, WAV, OGG, M4A, AAC, FLAC.
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
