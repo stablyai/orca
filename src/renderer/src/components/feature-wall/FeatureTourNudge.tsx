@@ -58,7 +58,7 @@ export function FeatureTourNudge(): JSX.Element | null {
   }
 
   const handleOpenTour = (): void => {
-    openModal('feature-wall')
+    openModal('feature-wall', { source: 'popup' })
   }
 
   return (

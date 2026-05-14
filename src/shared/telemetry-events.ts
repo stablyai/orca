@@ -156,6 +156,9 @@ export const featureWallTileIdSchema = z.enum([
 ])
 export type FeatureWallTileIdTelemetry = z.infer<typeof featureWallTileIdSchema>
 
+export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'unknown'])
+export type FeatureWallOpenSourceTelemetry = z.infer<typeof featureWallOpenSourceSchema>
+
 // `env_var` is deliberately absent — env-var and CI paths override consent at
 // runtime only (see consent.ts); they never mutate `optedIn` and therefore
 // never fire a `telemetry_opted_in/out` event. If a future path explicitly
@@ -258,13 +261,22 @@ const settingsChangedSchema = z
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 
-const featureWallOpenedSchema = z.object({}).strict()
+const featureWallOpenedSchema = z
+  .object({
+    source: featureWallOpenSourceSchema
+  })
+  .strict()
 const featureWallClosedSchema = z
   .object({
     dwell_ms: z.number().int().min(0).max(FEATURE_WALL_MAX_DWELL_MS)
   })
   .strict()
 const featureWallTileFocusedSchema = z
+  .object({
+    tile_id: featureWallTileIdSchema
+  })
+  .strict()
+const featureWallTileClickedSchema = z
   .object({
     tile_id: featureWallTileIdSchema
   })
@@ -581,6 +593,7 @@ export const eventSchemas = {
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
   feature_wall_tile_focused: featureWallTileFocusedSchema,
+  feature_wall_tile_clicked: featureWallTileClickedSchema,
 
   onboarding_started: onboardingStartedSchema,
   onboarding_step_viewed: onboardingStepViewedSchema,

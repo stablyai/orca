@@ -5,6 +5,7 @@ import {
   isFeatureWallMediaTile,
   type FeatureWallTileId
 } from '../../../../shared/feature-wall-tiles'
+import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import { FEATURE_WALL_MAX_DWELL_MS } from '../../../../shared/feature-wall-telemetry'
 import {
   Dialog,
@@ -33,6 +34,13 @@ const NAVIGATION_KEYS = new Set<string>([
   'Home',
   'End'
 ])
+
+function getFeatureWallOpenSource(
+  modalData: Record<string, unknown>
+): FeatureWallOpenSourceTelemetry {
+  const source = modalData.source
+  return source === 'help_menu' || source === 'popup' ? source : 'unknown'
+}
 
 function usePrefersReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
@@ -88,6 +96,7 @@ function useGridColumnCount(gridRef: RefObject<HTMLDivElement | null>, open: boo
 
 export default function FeatureWallModal(): JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
+  const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const isOpen = activeModal === 'feature-wall'
   const assetBaseUrl = useFeatureWallAssetBaseUrl(isOpen)
@@ -149,13 +158,15 @@ export default function FeatureWallModal(): JSX.Element | null {
         open: true,
         openedAtMs: performance.now()
       }
-      track('feature_wall_opened', {})
+      track('feature_wall_opened', {
+        source: getFeatureWallOpenSource(modalData)
+      })
       return
     }
     if (!isOpen) {
       emitCloseTelemetry()
     }
-  }, [emitCloseTelemetry, isOpen])
+  }, [emitCloseTelemetry, isOpen, modalData])
 
   useEffect(() => {
     return () => emitCloseTelemetry()
@@ -274,7 +285,12 @@ export default function FeatureWallModal(): JSX.Element | null {
                 }}
                 onBlur={() => setFocusedTileId((current) => (current === tile.id ? null : current))}
                 onKeyDown={(event) => handleTileKeyDown(event, index)}
-                onOpenDocs={() => void window.api.shell.openUrl(tile.docsUrl)}
+                onOpenDocs={() => {
+                  track('feature_wall_tile_clicked', {
+                    tile_id: tile.id
+                  })
+                  void window.api.shell.openUrl(tile.docsUrl)
+                }}
               />
             )
           })}
