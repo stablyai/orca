@@ -1,5 +1,4 @@
 import os from 'os'
-import path from 'path'
 
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -204,27 +203,6 @@ test.describe('Localhost SSH', () => {
     await execInTerminal(orcaPage, ptyId, emitMarkerCommand(terminalMarker))
     await waitForTerminalOutput(orcaPage, terminalMarker, 20_000)
 
-    // Why: managed hook scripts intentionally ignore Electron userData so
-    // dev/prod Orca instances converge on the same installed command.
-    const codexHookPath = path.join(os.homedir(), '.orca', 'agent-hooks', 'codex-hook.sh')
-    const quotedCodexHookPath = shellQuote(codexHookPath)
-    const codexHookStatus = await orcaPage.evaluate(() => window.api.agentHooks.codexStatus())
-    expect(codexHookStatus.state).toBe('installed')
-    const installMarker = marker('CODEX_HOOK_INSTALLED')
-    const installFailedMarker = marker('CODEX_HOOK_INSTALL_FAILED')
-    await execInTerminal(
-      orcaPage,
-      ptyId,
-      [
-        `if [ -x ${quotedCodexHookPath} ] && grep -F ${quotedCodexHookPath} "$HOME/.codex/hooks.json" >/dev/null 2>&1; then`,
-        `  ${emitMarkerCommand(installMarker)}`,
-        'else',
-        `  ${emitMarkerCommand(installFailedMarker)}`,
-        'fi'
-      ].join('\n')
-    )
-    await waitForTerminalOutput(orcaPage, installMarker, 20_000)
-
     const envMarker = marker('AGENT_HOOK_ENV_OK')
     const envFailedMarker = marker('AGENT_HOOK_ENV_BAD')
     await execInTerminal(
@@ -241,25 +219,44 @@ test.describe('Localhost SSH', () => {
     )
     await waitForTerminalOutput(orcaPage, envMarker, 20_000)
 
-    const prompt = `orca ssh e2e prompt ${Date.now()}`
-    const hookPostedMarker = marker('AGENT_HOOK_POSTED')
-    const hookPayloadFile = `/tmp/orca-e2e-hook-payload-${Date.now()}.json`
+    const pluginOverlayMarker = marker('AGENT_PLUGIN_OVERLAYS_OK')
+    const pluginOverlayFailedMarker = marker('AGENT_PLUGIN_OVERLAYS_BAD')
     await execInTerminal(
       orcaPage,
       ptyId,
       [
-        `if [ ! -x ${quotedCodexHookPath} ]; then`,
-        '  echo __ORCA_CODEX_HOOK_SCRIPT_MISSING__',
-        'elif [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+        'opencode_status_file="$OPENCODE_CONFIG_DIR/plugins/orca-opencode-status.js"',
+        'pi_status_file="$PI_CODING_AGENT_DIR/extensions/orca-agent-status.ts"',
+        'if [ -n "$OPENCODE_CONFIG_DIR" ] && [ -f "$opencode_status_file" ] && [ -n "$PI_CODING_AGENT_DIR" ] && [ -f "$pi_status_file" ]; then',
+        `  ${emitMarkerCommand(pluginOverlayMarker)}`,
+        'else',
+        `  printf '%s opencode=%s opencode_file=%s pi=%s pi_file=%s\\n' ${shellQuote(pluginOverlayFailedMarker)} "$OPENCODE_CONFIG_DIR" "$opencode_status_file" "$PI_CODING_AGENT_DIR" "$pi_status_file"`,
+        'fi'
+      ].join('\n')
+    )
+    await waitForTerminalOutput(orcaPage, pluginOverlayMarker, 20_000)
+
+    const prompt = `orca ssh e2e prompt ${Date.now()}`
+    const hookPostedMarker = marker('AGENT_HOOK_POSTED')
+    await execInTerminal(
+      orcaPage,
+      ptyId,
+      [
+        'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
         '  echo __ORCA_AGENT_HOOK_ENV_MISSING__',
         'else',
-        `  printf '%s' ${shellQuote(
-          JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt })
-        )} > ${shellQuote(hookPayloadFile)}`,
-        `  /bin/sh ${quotedCodexHookPath} < ${shellQuote(hookPayloadFile)}`,
-        '  hook_status=$?',
-        `  rm -f ${shellQuote(hookPayloadFile)}`,
-        `  if [ "$hook_status" -eq 0 ]; then ${emitMarkerCommand(hookPostedMarker)}; fi`,
+        `  hook_payload=${shellQuote(JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt }))}`,
+        '  if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+        '    -H "Content-Type: application/x-www-form-urlencoded" \\',
+        '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
+        '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
+        '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+        '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
+        '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
+        '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+        '    --data-urlencode "payload=${hook_payload}" >/dev/null; then',
+        `    ${emitMarkerCommand(hookPostedMarker)}`,
+        '  fi',
         'fi'
       ].join('\n')
     )

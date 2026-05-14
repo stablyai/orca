@@ -34,13 +34,17 @@ describe('readShellStartupEnvVar', () => {
   })
 
   function mockStartupFiles(files: Record<string, string>) {
+    const hasAbsoluteKeys = Object.keys(files).some((path) => path.startsWith('/'))
     existsSyncMock.mockImplementation((p: string) => {
       const file = p.split('/').pop() ?? ''
-      return file in files
+      return p in files || (!hasAbsoluteKeys && file in files)
     })
     readFileSyncMock.mockImplementation((p: string) => {
       const file = p.split('/').pop() ?? ''
-      if (file in files) {
+      if (p in files) {
+        return files[p]
+      }
+      if (!hasAbsoluteKeys && file in files) {
         return files[file]
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -94,6 +98,17 @@ describe('readShellStartupEnvVar', () => {
       '.zlogin': 'export OPENCODE_CONFIG_DIR="/newest/zlogin"\n'
     })
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBe('/newest/zlogin')
+  })
+
+  it('uses ZDOTDIR exported from .zshenv for later zsh startup files', () => {
+    mockStartupFiles({
+      '/home/alice/.zshenv': 'export ZDOTDIR="$HOME/.config/zsh"\n',
+      '/home/alice/.config/zsh/.zshrc': 'export OPENCODE_CONFIG_DIR="$HOME/company/opencode"\n'
+    })
+
+    expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice', '/bin/zsh')).toBe(
+      '/home/alice/company/opencode'
+    )
   })
 
   it('handles double-quoted values', () => {

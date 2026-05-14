@@ -80,8 +80,8 @@ function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
@@ -391,7 +391,9 @@ export class CodexHookService {
       config.hooks = nextHooks
       // Why: script/settings first, trust TOML last. A partial trust write
       // leaves Codex asking for approval rather than executing a missing script.
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript())
+      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
+      // running on Windows; never derive remote script syntax from local OS.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, config)
       try {
         const existingToml = (await readTextFileRemote(sftp, remoteTomlPath)) ?? ''

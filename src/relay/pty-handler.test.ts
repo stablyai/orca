@@ -1,5 +1,8 @@
 /* oxlint-disable max-lines */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -435,6 +438,113 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
   })
 
+  it('passes the PTY id and renderer paneKey to env augmenters', async () => {
+    const seenContexts: { id: string; paneKey?: string; env: Record<string, string> }[] = []
+    handler.addEnvAugmenter((ctx) => {
+      seenContexts.push(ctx)
+      return {
+        OVERLAY_ID: ctx.paneKey ?? ctx.id
+      }
+    })
+
+    await dispatcher.callRequest('pty.spawn', {
+      env: { ORCA_PANE_KEY: 'tab-context:0' }
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    const firstEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    const secondEnv = mockPtySpawn.mock.calls[1][2] as { env: Record<string, string> }
+    expect(seenContexts[0]).toMatchObject({
+      id: 'pty-1',
+      paneKey: 'tab-context:0',
+      env: { ORCA_PANE_KEY: 'tab-context:0' }
+    })
+    expect(seenContexts[1]).toMatchObject({ id: 'pty-2', paneKey: undefined })
+    expect(firstEnv.env.OVERLAY_ID).toBe('tab-context:0')
+    expect(secondEnv.env.OVERLAY_ID).toBe('pty-2')
+  })
+
+  it('passes process and renderer env to env augmenters before augmenter overrides are applied', async () => {
+    const oldProcessValue = process.env.OPENCODE_CONFIG_DIR
+    process.env.OPENCODE_CONFIG_DIR = '/remote/default-opencode'
+    try {
+      handler.addEnvAugmenter((ctx) => ({
+        SEEN_OPENCODE_CONFIG_DIR: ctx.env.OPENCODE_CONFIG_DIR,
+        SEEN_PI_CODING_AGENT_DIR: ctx.env.PI_CODING_AGENT_DIR
+      }))
+
+      await dispatcher.callRequest('pty.spawn', {
+        env: {
+          OPENCODE_CONFIG_DIR: '/remote/renderer-opencode',
+          PI_CODING_AGENT_DIR: '/remote/pi'
+        }
+      })
+    } finally {
+      if (oldProcessValue === undefined) {
+        delete process.env.OPENCODE_CONFIG_DIR
+      } else {
+        process.env.OPENCODE_CONFIG_DIR = oldProcessValue
+      }
+    }
+
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnEnv.env.SEEN_OPENCODE_CONFIG_DIR).toBe('/remote/renderer-opencode')
+    expect(spawnEnv.env.SEEN_PI_CODING_AGENT_DIR).toBe('/remote/pi')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'wraps bash spawns to restore overlay env after remote startup files',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-pty-shell-launch-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        if (!existsSync('/bin/bash')) {
+          return
+        }
+
+        handler.addEnvAugmenter(() => ({
+          OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
+          ORCA_OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
+          PI_CODING_AGENT_DIR: '/remote/overlay/pi',
+          ORCA_PI_CODING_AGENT_DIR: '/remote/overlay/pi'
+        }))
+
+        await dispatcher.callRequest('pty.spawn', { env: { HOME: homeDir } })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+      }
+
+      const shellArgs = mockPtySpawn.mock.calls[0][1]
+      const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+      const rcfile = join(homeDir, '.orca-relay', 'shell-ready', 'bash', 'rcfile')
+
+      expect(shellArgs).toEqual(['--rcfile', rcfile])
+      expect(spawnOptions.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/remote/overlay/opencode')
+      expect(spawnOptions.env.ORCA_PI_CODING_AGENT_DIR).toBe('/remote/overlay/pi')
+      expect(readFileSync(rcfile, 'utf8')).toContain(
+        'export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+      )
+      expect(readFileSync(rcfile, 'utf8')).toContain(
+        'export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
+      )
+
+      rmSync(homeDir, { recursive: true, force: true })
+    }
+  )
+
   it('revive restores pane identity env alongside hook-server coordinates', async () => {
     await dispatcher.callRequest('pty.spawn', {
       cols: 90,
@@ -494,7 +604,32 @@ describe('PtyHandler', () => {
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-2:1' }])
   })
 
-  it('dispose kills all PTYs with SIGKILL', async () => {
+  it('immediate shutdown invokes the exit listener once even if onExit arrives later', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
+
+    await dispatcher.callRequest('pty.spawn', {
+      env: { ORCA_PANE_KEY: 'tab-shutdown:0' }
+    })
+    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    onExitCb!({ exitCode: 0 })
+
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-shutdown:0' }])
+    expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('dispose kills all PTYs with SIGKILL and invokes exit listeners', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -502,9 +637,11 @@ describe('PtyHandler', () => {
       onData: vi.fn(),
       onExit: vi.fn()
     })
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
 
-    await dispatcher.callRequest('pty.spawn', {})
-    await dispatcher.callRequest('pty.spawn', {})
+    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dispose:0' } })
+    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dispose:1' } })
     expect(handler.activePtyCount).toBe(2)
 
     handler.dispose()
@@ -513,6 +650,10 @@ describe('PtyHandler', () => {
     // wedged process, uninterruptible sleep) would survive SIGTERM + immediate
     // destroy() as an orphan on the remote host. SIGKILL is not ignorable.
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(exits).toEqual([
+      { id: 'pty-1', paneKey: 'tab-dispose:0' },
+      { id: 'pty-2', paneKey: 'tab-dispose:1' }
+    ])
     expect(handler.activePtyCount).toBe(0)
   })
 })

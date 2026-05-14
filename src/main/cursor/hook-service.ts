@@ -61,8 +61,8 @@ function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
@@ -285,7 +285,9 @@ export class CursorHookService {
       // Why: script-then-config order so a partial-failure mid-install at
       // worst leaves a working script no settings.json points at — see
       // ClaudeHookService.installRemote.
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript())
+      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
+      // running on Windows; never derive remote script syntax from local OS.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {

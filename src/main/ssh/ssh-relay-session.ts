@@ -17,11 +17,6 @@ import { SshPtyProvider, isSshPtyNotFoundError } from '../providers/ssh-pty-prov
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
-import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
-import { cursorHookService } from '../cursor/hook-service'
-import { geminiHookService } from '../gemini/hook-service'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -165,7 +160,13 @@ export class SshRelaySession {
       // here fails fast so doConnect() can report the real error.
       await mux.request('session.resolveHome', { path: '~' })
 
-      await this.registerProviders(conn, mux)
+      const registered = await this.registerProviders(mux, ownsAttempt)
+      if (!registered) {
+        if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        throw new Error('Session disposed during establish')
+      }
 
       // Why: the mux's transport can close during registerProviders (e.g.
       // the --connect bridge exits). registerRelayRoots swallows mux errors
@@ -282,7 +283,7 @@ export class SshRelaySession {
         return
       }
 
-      const registered = await this.registerProviders(conn, mux, ownsAttempt)
+      const registered = await this.registerProviders(mux, ownsAttempt)
       if (!registered) {
         if (!mux.isDisposed()) {
           mux.dispose()
@@ -410,7 +411,6 @@ export class SshRelaySession {
   // Why: shared by establish() and reconnect() — the exact same provider
   // registration sequence, eliminating the duplication that caused bugs.
   private async registerProviders(
-    conn: SshConnection,
     mux: SshChannelMultiplexer,
     shouldContinue?: () => boolean
   ): Promise<boolean> {
@@ -420,7 +420,6 @@ export class SshRelaySession {
     }
 
     await this.installPluginsOnRelay(mux)
-    await this.installRemoteManagedHooks(conn, mux)
     if (shouldContinue && !shouldContinue()) {
       return false
     }
@@ -448,8 +447,8 @@ export class SshRelaySession {
   //
   // Best-effort: a -32601 from an older relay (no handler installed) is
   // swallowed; the user just doesn't get OpenCode/Pi status reporting until
-  // they upgrade. Hook-script-based agents use the separate remote installer
-  // flow below.
+  // they upgrade. Hook-script-based agents use a separate explicit remote
+  // installer flow because that mutates user-owned agent config files.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled()) {
       return
@@ -474,65 +473,6 @@ export class SshRelaySession {
       }
       console.warn(
         `[ssh-relay-session] agent_hook.installPlugins failed for ${this.targetId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      )
-    }
-  }
-
-  // Why: local managed hooks are auto-installed at app startup. For SSH panes,
-  // the equivalent install has to happen on the remote before the PTY provider
-  // is registered; otherwise the first spawned remote agent pane can start
-  // before its config points at the relay-local hook script.
-  private async installRemoteManagedHooks(
-    conn: SshConnection,
-    mux: SshChannelMultiplexer
-  ): Promise<void> {
-    if (!isRemoteAgentHooksEnabled()) {
-      return
-    }
-
-    try {
-      const homeResult = (await mux.request('session.resolveHome', { path: '~' })) as {
-        resolvedPath?: unknown
-      }
-      const remoteHome = typeof homeResult.resolvedPath === 'string' ? homeResult.resolvedPath : ''
-      if (!remoteHome || !remoteHome.startsWith('/') || /[\u0000\r\n]/.test(remoteHome)) {
-        console.warn(
-          `[ssh-relay-session] Skipping remote Claude hook install for ${this.targetId}: invalid remote home`
-        )
-        return
-      }
-
-      const sftp = await conn.sftp()
-      try {
-        const statuses: AgentHookInstallStatus[] = []
-        statuses.push(await claudeHookService.installRemote(sftp, remoteHome))
-        statuses.push(await codexHookService.installRemote(sftp, remoteHome))
-        statuses.push(await geminiHookService.installRemote(sftp, remoteHome))
-        statuses.push(await cursorHookService.installRemote(sftp, remoteHome))
-        for (const status of statuses) {
-          if (status.state === 'error') {
-            console.warn(
-              `[ssh-relay-session] Remote ${status.agent} hook install failed for ${
-                this.targetId
-              }: ${status.detail ?? 'unknown error'}`
-            )
-          }
-        }
-      } finally {
-        sftp.end()
-      }
-    } catch (err) {
-      const code = (err as { code?: unknown })?.code
-      if (code === 'CONNECTION_LOST' || code === 'DISPOSED') {
-        return
-      }
-      if (mux.isDisposed()) {
-        return
-      }
-      console.warn(
-        `[ssh-relay-session] Remote agent hook install failed for ${this.targetId}: ${
           err instanceof Error ? err.message : String(err)
         }`
       )

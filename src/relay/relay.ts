@@ -35,6 +35,8 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
+import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
+import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
@@ -291,15 +293,25 @@ async function main(): Promise<void> {
     // PTYs that don't go through the renderer).
     const overlayId = ctx.paneKey ?? ctx.id
     if (pluginOverlay.hasOpenCodeSource()) {
-      const dir = pluginOverlay.materializeOpenCode(overlayId)
+      const sourceDir = resolveOpenCodeSourceConfigDir(ctx.env, ctx.shell)
+      const dir = pluginOverlay.materializeOpenCode(overlayId, sourceDir)
       if (dir) {
         env.OPENCODE_CONFIG_DIR = dir
+        env.ORCA_OPENCODE_CONFIG_DIR = dir
+        if (sourceDir) {
+          env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
+        }
       }
     }
     if (pluginOverlay.hasPiSource()) {
-      const dir = pluginOverlay.materializePi(overlayId)
+      const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell)
+      const dir = pluginOverlay.materializePi(overlayId, sourceDir)
       if (dir) {
         env.PI_CODING_AGENT_DIR = dir
+        env.ORCA_PI_CODING_AGENT_DIR = dir
+        if (sourceDir) {
+          env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+        }
       }
     }
     return env
@@ -337,16 +349,11 @@ async function main(): Promise<void> {
   // relay by pushing a giant string. The HTTP path has HOOK_REQUEST_MAX_BYTES
   // = 1 MB; the JSON-RPC path needs an equivalent ceiling. Real plugin sources
   // are <50 KB today; 256 KB leaves generous headroom.
-  const PLUGIN_SOURCE_MAX_BYTES = 256 * 1024
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
-    if (typeof opencode === 'string' && opencode.length > PLUGIN_SOURCE_MAX_BYTES) {
-      throw new Error(`opencodePluginSource exceeds ${PLUGIN_SOURCE_MAX_BYTES} byte cap`)
-    }
-    if (typeof pi === 'string' && pi.length > PLUGIN_SOURCE_MAX_BYTES) {
-      throw new Error(`piExtensionSource exceeds ${PLUGIN_SOURCE_MAX_BYTES} byte cap`)
-    }
+    assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
+    assertPluginSourceUnderByteCap('piExtensionSource', pi)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined

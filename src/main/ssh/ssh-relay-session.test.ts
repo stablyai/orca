@@ -8,19 +8,9 @@ import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
 
-const {
-  muxRequestMock,
-  claudeInstallRemoteMock,
-  codexInstallRemoteMock,
-  geminiInstallRemoteMock,
-  cursorInstallRemoteMock
-} = vi.hoisted(() => ({
-    muxRequestMock: vi.fn(),
-    claudeInstallRemoteMock: vi.fn(),
-    codexInstallRemoteMock: vi.fn(),
-    geminiInstallRemoteMock: vi.fn(),
-    cursorInstallRemoteMock: vi.fn()
-  }))
+const { muxRequestMock } = vi.hoisted(() => ({
+  muxRequestMock: vi.fn()
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -86,30 +76,6 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   unregisterSshGitProvider: vi.fn()
 }))
 
-vi.mock('../claude/hook-service', () => ({
-  claudeHookService: {
-    installRemote: claudeInstallRemoteMock
-  }
-}))
-
-vi.mock('../codex/hook-service', () => ({
-  codexHookService: {
-    installRemote: codexInstallRemoteMock
-  }
-}))
-
-vi.mock('../gemini/hook-service', () => ({
-  geminiHookService: {
-    installRemote: geminiInstallRemoteMock
-  }
-}))
-
-vi.mock('../cursor/hook-service', () => ({
-  cursorHookService: {
-    installRemote: cursorInstallRemoteMock
-  }
-}))
-
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
 const {
   registerSshPtyProvider,
@@ -161,38 +127,6 @@ describe('SshRelaySession', () => {
     delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
-    claudeInstallRemoteMock.mockReset()
-    claudeInstallRemoteMock.mockResolvedValue({
-      agent: 'claude',
-      state: 'installed',
-      configPath: '/home/dev/.claude/settings.json',
-      managedHooksPresent: true,
-      detail: null
-    })
-    codexInstallRemoteMock.mockReset()
-    codexInstallRemoteMock.mockResolvedValue({
-      agent: 'codex',
-      state: 'installed',
-      configPath: '/home/dev/.codex/hooks.json',
-      managedHooksPresent: true,
-      detail: null
-    })
-    geminiInstallRemoteMock.mockReset()
-    geminiInstallRemoteMock.mockResolvedValue({
-      agent: 'gemini',
-      state: 'installed',
-      configPath: '/home/dev/.gemini/settings.json',
-      managedHooksPresent: true,
-      detail: null
-    })
-    cursorInstallRemoteMock.mockReset()
-    cursorInstallRemoteMock.mockResolvedValue({
-      agent: 'cursor',
-      state: 'installed',
-      configPath: '/home/dev/.cursor/hooks.json',
-      managedHooksPresent: true,
-      detail: null
-    })
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
   })
@@ -217,14 +151,9 @@ describe('SshRelaySession', () => {
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
-  it('installs remote hook assets before registering the SSH PTY provider', async () => {
+  it('syncs relay-owned plugin assets before registering the SSH PTY provider', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
-    muxRequestMock.mockImplementation(async (method: string) => {
-      if (method === 'session.resolveHome') {
-        return { resolvedPath: '/home/dev' }
-      }
-      return { ok: true }
-    })
+    muxRequestMock.mockResolvedValue({ ok: true })
     const sftp = { end: vi.fn() }
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {
@@ -241,23 +170,42 @@ describe('SshRelaySession', () => {
     expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
       vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
     )
-    expect(claudeInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
-    expect(codexInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
-    expect(geminiInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
-    expect(cursorInstallRemoteMock).toHaveBeenCalledWith(sftp, '/home/dev')
-    expect(claudeInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
+    // Why: connecting to SSH may upload relay-owned plugin source, but must
+    // not mutate user-owned agent config files. Remote managed-hook install
+    // belongs behind an explicit per-host user action.
+    expect(mockConn.sftp).not.toHaveBeenCalled()
+    expect(sftp.end).not.toHaveBeenCalled()
+  })
+
+  it('does not register providers if dispose wins during initial plugin sync', async () => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    let resolvePluginInstall!: () => void
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === AGENT_HOOK_INSTALL_PLUGINS_METHOD) {
+        return new Promise((resolve) => {
+          resolvePluginInstall = () => resolve({ ok: true })
+        })
+      }
+      return { ok: true }
+    })
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = {} as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    const establish = session.establish(mockConn)
+    await vi.waitFor(() =>
+      expect(muxRequestMock).toHaveBeenCalledWith(
+        AGENT_HOOK_INSTALL_PLUGINS_METHOD,
+        expect.anything()
+      )
     )
-    expect(codexInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
-    )
-    expect(geminiInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
-    )
-    expect(cursorInstallRemoteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
-    )
-    expect(sftp.end).toHaveBeenCalled()
+    session.dispose()
+    resolvePluginInstall()
+
+    await expect(establish).rejects.toThrow('Session disposed during establish')
+    expect(registerSshPtyProvider).not.toHaveBeenCalled()
+    expect(registerSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(registerSshGitProvider).not.toHaveBeenCalled()
   })
 
   it('rejects establish when not idle', async () => {

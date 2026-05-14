@@ -16,6 +16,8 @@ import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 
 import { isPlainObject, type HooksConfig } from './installer-utils'
 
+const DEFAULT_REMOTE_CONFIG_MODE = 0o600
+
 /** Read+JSON-parse a remote file. Returns `null` on parse failure (caller
  *  surfaces "could not parse" status to the UI), `{}` on missing file
  *  (matches local behavior — first-install case). Rethrows on other I/O
@@ -70,7 +72,9 @@ export async function writeHooksJsonRemote(
   // truncated settings.json that the agent CLI would refuse to load.
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
   try {
-    await writeFile(sftp, tmp, serialized)
+    const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
+    await writeFile(sftp, tmp, serialized, mode)
+    await chmod(sftp, tmp, mode)
     await rename(sftp, tmp, remotePath)
   } finally {
     // Best-effort cleanup if rename failed.
@@ -90,9 +94,33 @@ export async function writeManagedScriptRemote(
   remotePath: string,
   content: string
 ): Promise<void> {
-  await mkdirpRemote(sftp, dirnamePosix(remotePath))
-  await writeFile(sftp, remotePath, content)
-  await chmod(sftp, remotePath, 0o755)
+  const dir = dirnamePosix(remotePath)
+  await mkdirpRemote(sftp, dir)
+  try {
+    const existing = await readFile(sftp, remotePath)
+    if (existing === content) {
+      await chmod(sftp, remotePath, 0o755)
+      return
+    }
+  } catch {
+    // ENOENT or read error — fall through to the atomic write below.
+  }
+
+  // Why: existing configs may already invoke this script. Write/chmod a temp
+  // file first, then rename it into place so interrupted reinstalls do not
+  // leave the configured hook path truncated or non-executable.
+  const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
+  try {
+    await writeFile(sftp, tmp, content, 0o755)
+    await chmod(sftp, tmp, 0o755)
+    await rename(sftp, tmp, remotePath)
+  } finally {
+    try {
+      await unlink(sftp, tmp)
+    } catch {
+      // already gone or never created
+    }
+  }
 }
 
 export async function readTextFileRemote(
@@ -127,7 +155,9 @@ export async function writeTextFileRemoteAtomic(
 
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
   try {
-    await writeFile(sftp, tmp, content)
+    const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
+    await writeFile(sftp, tmp, content, mode)
+    await chmod(sftp, tmp, mode)
     await rename(sftp, tmp, remotePath)
   } finally {
     try {
@@ -152,9 +182,16 @@ async function readFile(sftp: SFTPWrapper, remotePath: string): Promise<string> 
   })
 }
 
-async function writeFile(sftp: SFTPWrapper, remotePath: string, content: string): Promise<void> {
+async function writeFile(
+  sftp: SFTPWrapper,
+  remotePath: string,
+  content: string,
+  mode?: number
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    sftp.writeFile(remotePath, content, 'utf8', (err) => {
+    const options =
+      mode === undefined ? { encoding: 'utf8' as const } : { encoding: 'utf8' as const, mode }
+    sftp.writeFile(remotePath, content, options, (err) => {
       if (err) {
         reject(err)
         return
@@ -164,9 +201,67 @@ async function writeFile(sftp: SFTPWrapper, remotePath: string, content: string)
   })
 }
 
+async function statMode(sftp: SFTPWrapper, remotePath: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    sftp.stat(remotePath, (err, stats) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      resolve(stats.mode & 0o7777)
+    })
+  })
+}
+
+async function getRemoteFileModeOrDefault(
+  sftp: SFTPWrapper,
+  remotePath: string,
+  defaultMode: number
+): Promise<number> {
+  try {
+    return await statMode(sftp, remotePath)
+  } catch (err) {
+    if (isNoEntryError(err)) {
+      return defaultMode
+    }
+    throw err
+  }
+}
+
 async function rename(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
+  if (typeof sftp.ext_openssh_rename === 'function') {
+    try {
+      await renameOpenSsh(sftp, src, dst)
+      return
+    } catch (err) {
+      if (!isUnsupportedExtensionError(err)) {
+        throw err
+      }
+    }
+  }
+
+  // Why: servers without OpenSSH overwrite-rename cannot safely replace an
+  // existing live config path. Renaming dst aside would leave settings.json
+  // missing if the SFTP channel dies before src is moved into place, so fail
+  // closed and keep the existing file intact.
+  await renamePlain(sftp, src, dst)
+}
+
+async function renamePlain(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
   return new Promise((resolve, reject) => {
     sftp.rename(src, dst, (err) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      resolve()
+    })
+  })
+}
+
+async function renameOpenSsh(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    sftp.ext_openssh_rename(src, dst, (err) => {
       if (err) {
         reject(err)
         return
@@ -278,4 +373,13 @@ function isAlreadyExistsError(err: unknown): boolean {
   // mkdir failures; we accept the ambiguity and let the next readdir prove
   // success.
   return (err as { code?: unknown }).code === 4
+}
+
+function isUnsupportedExtensionError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') {
+    return false
+  }
+  const code = (err as { code?: unknown }).code
+  const message = (err as { message?: unknown }).message
+  return code === 8 || (typeof message === 'string' && /unsupported/i.test(message))
 }

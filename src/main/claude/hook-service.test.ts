@@ -30,6 +30,7 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
     code: 2,
     message: `ENOENT ${path}`
   })
+  const fakeStats = (mode: number): { mode: number } => ({ mode })
   const sftp = {
     readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
       const v = fs.files.get(path)
@@ -39,8 +40,16 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
       }
       cb(null, v)
     },
-    writeFile: (path: string, content: string, _enc: string, cb: (err: unknown) => void): void => {
+    writeFile: (
+      path: string,
+      content: string,
+      options: string | { mode?: number },
+      cb: (err: unknown) => void
+    ): void => {
       fs.files.set(path, content)
+      if (typeof options !== 'string' && options.mode !== undefined) {
+        fs.modes.set(path, options.mode)
+      }
       cb(null)
     },
     rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
@@ -51,15 +60,28 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
       }
       fs.files.set(dst, v)
       fs.files.delete(src)
+      const mode = fs.modes.get(src)
+      if (mode !== undefined) {
+        fs.modes.set(dst, mode)
+        fs.modes.delete(src)
+      }
       cb(null)
     },
     unlink: (path: string, cb: (err: unknown) => void): void => {
       fs.files.delete(path)
+      fs.modes.delete(path)
       cb(null)
     },
     chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
       fs.modes.set(path, mode)
       cb(null)
+    },
+    stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
+      if (!fs.files.has(path)) {
+        cb(noEntryError(path))
+        return
+      }
+      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
       if (fs.dirs.has(path)) {
