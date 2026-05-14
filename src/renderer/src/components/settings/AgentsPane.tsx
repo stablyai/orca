@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
@@ -26,6 +26,69 @@ type AgentRowProps = {
   onSaveOverride: (value: string) => void
 }
 
+type AgentCommandOverrideInputProps = {
+  defaultCmd: string
+  cmdOverride: string | undefined
+  onSaveOverride: (value: string) => void
+}
+
+function AgentCommandOverrideInput({
+  defaultCmd,
+  cmdOverride,
+  onSaveOverride
+}: AgentCommandOverrideInputProps): React.JSX.Element {
+  const draftSeed = cmdOverride ?? defaultCmd
+  const [cmdDraft, setCmdDraft] = useState(draftSeed)
+
+  const commitCmd = (): void => {
+    const trimmed = cmdDraft.trim()
+    if (!trimmed || trimmed === defaultCmd) {
+      onSaveOverride('')
+      setCmdDraft(defaultCmd)
+    } else {
+      onSaveOverride(trimmed)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-xs text-muted-foreground">Command</span>
+      <Input
+        value={cmdDraft}
+        onChange={(e) => setCmdDraft(e.target.value)}
+        onBlur={commitCmd}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commitCmd()
+            e.currentTarget.blur()
+          }
+          if (e.key === 'Escape') {
+            setCmdDraft(draftSeed)
+            e.currentTarget.blur()
+          }
+        }}
+        placeholder={defaultCmd}
+        spellCheck={false}
+        className="h-7 flex-1 font-mono text-xs"
+      />
+      {cmdOverride && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={() => {
+            onSaveOverride('')
+            setCmdDraft(defaultCmd)
+          }}
+          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Reset
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function AgentRow({
   agentId,
   label,
@@ -38,21 +101,6 @@ function AgentRow({
   onSaveOverride
 }: AgentRowProps): React.JSX.Element {
   const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
-  const [cmdDraft, setCmdDraft] = useState(cmdOverride ?? defaultCmd)
-
-  useEffect(() => {
-    setCmdDraft(cmdOverride ?? defaultCmd)
-  }, [cmdOverride, defaultCmd])
-
-  const commitCmd = (): void => {
-    const trimmed = cmdDraft.trim()
-    if (!trimmed || trimmed === defaultCmd) {
-      onSaveOverride('')
-      setCmdDraft(defaultCmd)
-    } else {
-      onSaveOverride(trimmed)
-    }
-  }
 
   return (
     <div
@@ -160,41 +208,13 @@ function AgentRow({
       {/* Command override row */}
       {isDetected && cmdOpen && (
         <div className="border-t border-border/40 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 text-xs text-muted-foreground">Command</span>
-            <Input
-              value={cmdDraft}
-              onChange={(e) => setCmdDraft(e.target.value)}
-              onBlur={commitCmd}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  commitCmd()
-                  e.currentTarget.blur()
-                }
-                if (e.key === 'Escape') {
-                  setCmdDraft(cmdOverride ?? defaultCmd)
-                  e.currentTarget.blur()
-                }
-              }}
-              placeholder={defaultCmd}
-              spellCheck={false}
-              className="h-7 flex-1 font-mono text-xs"
-            />
-            {cmdOverride && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => {
-                  onSaveOverride('')
-                  setCmdDraft(defaultCmd)
-                }}
-                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Reset
-              </Button>
-            )}
-          </div>
+          {/* Why: key by the persisted seed so settings changes reset the draft during reconciliation, not in a follow-up effect commit. */}
+          <AgentCommandOverrideInput
+            key={cmdOverride ?? defaultCmd}
+            defaultCmd={defaultCmd}
+            cmdOverride={cmdOverride}
+            onSaveOverride={onSaveOverride}
+          />
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             Override the binary path or name used to launch this agent.
           </p>
