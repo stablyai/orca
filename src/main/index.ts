@@ -34,6 +34,7 @@ import {
   installUncaughtPipeErrorGuard,
   patchPackagedProcessPath
 } from './startup/configure-process'
+import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
@@ -611,32 +612,29 @@ app.whenReady().then(async () => {
   })
   registerMobileHandlers(runtimeRpc)
 
-  // Why: the persistent-terminal daemon is always started. If it fails, the
-  // LocalPtyProvider (initialized at module load in ipc/pty.ts) remains as the
-  // implicit fallback — terminals work, just without cross-restart persistence.
-  try {
-    await initDaemonPtyProvider()
-  } catch (error) {
-    console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
-  }
-  // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
-  // so the hook server must start before the window opens — otherwise
-  // restored terminals race ahead without the env on first launch.
-  try {
-    await agentHookServer.start({
-      env: app.isPackaged ? 'production' : 'development',
-      // Why: passing the userData path lets the server write its endpoint
-      // file (PORT/TOKEN/ENV/VERSION) to a stable location. Hook scripts
-      // source that file at invocation time so they reach the current Orca
-      // even when the PTY's env was frozen under a prior instance.
-      userDataPath: app.getPath('userData')
-    })
-  } catch (error) {
-    // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
-    // enrichment only. Orca must still boot even if the local loopback
-    // receiver cannot bind on this launch.
-    console.error('[agent-hooks] Failed to start local hook server:', error)
-  }
+  await startFirstWindowStartupServices({
+    // Why: the persistent-terminal daemon is always started. If it fails, the
+    // LocalPtyProvider remains as the implicit fallback — terminals work, just
+    // without cross-restart persistence.
+    startDaemonPtyProvider: () => initDaemonPtyProvider(),
+    // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
+    // so the hook server must start before restored terminals can mount.
+    startAgentHookServer: () =>
+      agentHookServer.start({
+        env: app.isPackaged ? 'production' : 'development',
+        // Why: hooks source this endpoint file at invocation time, so old PTY
+        // env still reaches the current Orca process after an app restart.
+        userDataPath: app.getPath('userData')
+      }),
+    onDaemonError: (error) => {
+      console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
+    },
+    onAgentHookServerError: (error) => {
+      // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
+      // enrichment only. Orca must still boot if the loopback receiver fails.
+      console.error('[agent-hooks] Failed to start local hook server:', error)
+    }
+  })
 
   // Why: once the hook server is ready (or has already failed open), window
   // creation and runtime RPC startup are independent.
