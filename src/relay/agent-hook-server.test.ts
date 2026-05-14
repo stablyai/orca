@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { RelayAgentHookServer } from './agent-hook-server'
+import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 
 describe('RelayAgentHookServer', () => {
@@ -12,6 +12,15 @@ describe('RelayAgentHookServer', () => {
   })
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('scopes endpoint files by relay socket path', () => {
+    const first = endpointDirForRelaySocket(join(dir, 'relay-a.sock'))
+    const second = endpointDirForRelaySocket(join(dir, 'relay-b.sock'))
+
+    expect(first).toBe(join(dir, 'agent-hooks', 'relay-a.sock'))
+    expect(second).toBe(join(dir, 'agent-hooks', 'relay-b.sock'))
+    expect(first).not.toBe(second)
   })
 
   it('forwards a parsed Claude UserPromptSubmit POST as a normalized envelope', async () => {

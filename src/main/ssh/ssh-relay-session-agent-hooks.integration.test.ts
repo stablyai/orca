@@ -114,7 +114,10 @@ function createFakeRelay(): FakeRelay {
 
 function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
   const store = {
-    getRepos: vi.fn().mockReturnValue([])
+    getRepos: vi.fn().mockReturnValue([]),
+    getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    markSshRemotePtyLease: vi.fn(),
+    markSshRemotePtyLeases: vi.fn()
   } as unknown as Store
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)

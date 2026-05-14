@@ -10,7 +10,7 @@
 // request-driven replay) for the rationale.
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { randomUUID } from 'crypto'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { homedir } from 'os'
 
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
@@ -50,6 +50,10 @@ const MAX_HOOK_META_LEN = 64
 
 function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
+}
+
+export function endpointDirForRelaySocket(sockPath: string): string {
+  return join(dirname(sockPath), RELAY_HOOKS_SUBDIR, basename(sockPath))
 }
 
 export type RelayHookServerOptions = {

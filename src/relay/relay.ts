@@ -23,7 +23,7 @@ import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
-import { RelayAgentHookServer } from './agent-hook-server'
+import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -231,6 +231,10 @@ async function main(): Promise<void> {
   // JSON-RPC notification on the existing SSH channel — see
   // docs/design/agent-status-over-ssh.md §2-§5.
   const hookServer = new RelayAgentHookServer({
+    // Why: a remote account can host multiple target-specific relay daemons.
+    // Scope endpoint.env/cmd by the daemon socket path so their hook tokens
+    // cannot overwrite each other.
+    endpointDir: endpointDirForRelaySocket(sockPath),
     forward: (envelope) => {
       // Why: dispatcher.notify is fire-and-forget — when the SSH channel is
       // mid-reconnect the write callback no-ops and the notification is
