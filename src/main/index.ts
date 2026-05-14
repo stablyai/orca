@@ -54,6 +54,7 @@ import { getPtyIdForPaneKey, registerPaneKeyTeardownListener, getLocalPtyProvide
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
+import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -72,6 +73,7 @@ let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let starNag: StarNagService | null = null
+let disposeFeatureWallFirstAgentTour: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 
@@ -310,6 +312,12 @@ function openMainWindow(): BrowserWindow {
   return window
 }
 
+function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
+  const webContents =
+    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
+  webContents?.send('ui:openFeatureTour')
+}
+
 function shutdownWatchersOnce(): Promise<void> {
   if (watcherShutdownDone) {
     return Promise.resolve()
@@ -512,6 +520,10 @@ app.whenReady().then(async () => {
     getLocalProvider: () => getLocalPtyProvider()
   })
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  disposeFeatureWallFirstAgentTour = registerFeatureWallFirstAgentTour({
+    stats,
+    getWindow: () => mainWindow
+  })
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
@@ -540,11 +552,7 @@ app.whenReady().then(async () => {
       // first so hidden/headless E2E windows and future multi-window flows route
       // the tour to the correct renderer instead of relying on global focus.
       const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
-      const webContents =
-        targetBrowserWindow && !targetBrowserWindow.isDestroyed()
-          ? targetBrowserWindow.webContents
-          : mainWindow?.webContents
-      webContents?.send('ui:openFeatureTour')
+      sendOpenFeatureTour(targetBrowserWindow)
     },
     onZoomIn: () => {
       mainWindow?.webContents.send('terminal:zoom', 'in')
@@ -676,6 +684,8 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  disposeFeatureWallFirstAgentTour?.()
+  disposeFeatureWallFirstAgentTour = null
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to
   // capture terminal scrollback buffers before PTY exit events race in and
   // unmount TerminalPane components (removing their capture callbacks).
