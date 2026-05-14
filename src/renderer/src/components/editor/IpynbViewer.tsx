@@ -30,6 +30,14 @@ import { useAppStore } from '@/store'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { registerPendingEditorFlush } from './editor-pending-flush'
@@ -463,6 +471,8 @@ export default function IpynbViewer({
   const [runningCellIndex, setRunningCellIndex] = useState<number | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
+  const [executionTrustedForFile, setExecutionTrustedForFile] = useState(false)
+  const [pendingRunCellIndex, setPendingRunCellIndex] = useState<number | null>(null)
   const [sourceDrafts, setSourceDrafts] = useState<Record<string, string>>({})
   const sourceDraftsRef = useRef(sourceDrafts)
   const contentRef = useRef(content)
@@ -526,6 +536,11 @@ export default function IpynbViewer({
   useEffect(() => {
     return registerPendingEditorFlush(fileId, flushSourceDrafts)
   }, [fileId, flushSourceDrafts])
+
+  useEffect(() => {
+    setExecutionTrustedForFile(false)
+    setPendingRunCellIndex(null)
+  }, [filePath])
 
   useEffect(() => {
     return () => {
@@ -681,11 +696,18 @@ export default function IpynbViewer({
   const deleteCell = (index: number): void => {
     applyStructuralContentChange((latestContent) => deleteIpynbCell(latestContent, index))
   }
-  const runCell = async (index: number): Promise<void> => {
+  const runCell = async (
+    index: number,
+    options: { skipTrustPrompt?: boolean } = {}
+  ): Promise<void> => {
     const latestContent = flushSourceDrafts()
     const latestNotebook = parseIpynb(latestContent)
     const cell = latestNotebook.cells[index]
     if (!cell || cell.kind !== 'code' || runningCellIndex !== null) {
+      return
+    }
+    if (!executionTrustedForFile && !options.skipTrustPrompt) {
+      setPendingRunCellIndex(index)
       return
     }
     setRunError(null)
@@ -707,6 +729,15 @@ export default function IpynbViewer({
       setRunError(error instanceof Error ? error.message : String(error))
     } finally {
       setRunningCellIndex(null)
+    }
+  }
+  const cancelPendingRun = (): void => setPendingRunCellIndex(null)
+  const confirmPendingRun = (): void => {
+    const index = pendingRunCellIndex
+    setPendingRunCellIndex(null)
+    setExecutionTrustedForFile(true)
+    if (index !== null) {
+      void runCell(index, { skipTrustPrompt: true })
     }
   }
 
@@ -802,6 +833,32 @@ export default function IpynbViewer({
           })
         )}
       </div>
+      <Dialog
+        open={pendingRunCellIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            cancelPendingRun()
+          }
+        }}
+      >
+        <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-sm">Run Notebook Code?</DialogTitle>
+            <DialogDescription className="text-xs">
+              Notebook cells execute local Python on this machine from the notebook folder. Only run
+              cells from files you trust.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={cancelPendingRun}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" autoFocus onClick={confirmPendingRun}>
+              Run cell
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
