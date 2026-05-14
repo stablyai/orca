@@ -41,7 +41,7 @@ export class SttService {
       }
       return
     }
-    if (this.worker && this.activeOwner !== owner) {
+    if (this.worker && this.activeOwner && this.activeOwner !== owner) {
       throw new Error('dictation_already_active')
     }
     this.starting = true
