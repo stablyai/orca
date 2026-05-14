@@ -88,6 +88,16 @@ function formatRelativeTime(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
+function formatScanErrorMessage(errors: { repoId: string; message: string }[]): string | null {
+  if (errors.length === 0) {
+    return null
+  }
+  if (errors.length === 1) {
+    return errors[0].message
+  }
+  return `${errors.length} repositories could not be scanned. ${errors[0].message}`
+}
+
 export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -168,6 +178,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const hiddenByKeepCount = candidates.filter((candidate) =>
     candidate.blockers.includes('dismissed')
   ).length
+  const scanErrorMessage = useMemo(() => formatScanErrorMessage(scan?.errors ?? []), [scan?.errors])
   const readyCount = groups.ready.length
   const initialLoading = loading && !scan
 
@@ -366,17 +377,20 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               </div>
             )}
 
-            {error ? (
+            {error || scanErrorMessage ? (
               <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-xs text-destructive">
-                {error}
+                {error ?? scanErrorMessage}
               </div>
             ) : null}
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-4 p-5">
                 {initialLoading ? <SkeletonRows /> : null}
-                {!loading && scan && candidates.length === 0 ? (
+                {!loading && scan && candidates.length === 0 && !scanErrorMessage ? (
                   <EmptyState title="No old workspaces to clean up." />
+                ) : null}
+                {!loading && scan && candidates.length === 0 && scanErrorMessage ? (
+                  <EmptyState title="Workspace cleanup scan could not complete." />
                 ) : null}
                 {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
                   <EmptyState

@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { create } from 'zustand'
+import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup'
+import type {
+  WorkspaceCleanupCandidate,
+  WorkspaceCleanupScanResult
+} from '../../../../shared/workspace-cleanup'
+import { createWorkspaceCleanupSlice, enrichWorkspaceCleanupCandidates } from './workspace-cleanup'
 
 const WORKTREE_ID = 'repo1::/tmp/old-workspace'
 const NOW = 1_700_000_000_000
@@ -62,6 +66,26 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
   } as AppState
 }
 
+function createCleanupTestStore(removeWorktree = vi.fn()) {
+  return create<AppState>()(
+    (...a) =>
+      ({
+        tabsByWorktree: {},
+        ptyIdsByTabId: {},
+        openFiles: [],
+        editorDrafts: {},
+        browserTabsByWorktree: {},
+        retainedAgentsByPaneKey: {},
+        activeWorktreeId: null,
+        agentStatusByPaneKey: {},
+        runtimePaneTitlesByTabId: {},
+        lastVisitedAtByWorktreeId: {},
+        removeWorktree,
+        ...createWorkspaceCleanupSlice(...a)
+      }) as unknown as AppState
+  )
+}
+
 describe('workspace cleanup viewed rows', () => {
   it('demotes an active suggested workspace when it was not viewed from cleanup', async () => {
     const [candidate] = await enrichWorkspaceCleanupCandidates(
@@ -74,7 +98,7 @@ describe('workspace cleanup viewed rows', () => {
     expect(candidate.blockers).toContain('active-workspace')
   })
 
-  it('keeps a viewed suggested workspace in cleanup even when it is now active', async () => {
+  it('keeps a viewed active workspace visible but not removable', async () => {
     const [candidate] = await enrichWorkspaceCleanupCandidates(
       [makeCandidate()],
       makeState({
@@ -90,9 +114,9 @@ describe('workspace cleanup viewed rows', () => {
       { applyDismissals: false }
     )
 
-    expect(candidate.tier).toBe('ready')
-    expect(candidate.selectedByDefault).toBe(true)
-    expect(candidate.blockers).not.toContain('active-workspace')
+    expect(candidate.tier).toBe('protected')
+    expect(candidate.selectedByDefault).toBe(false)
+    expect(candidate.blockers).toContain('active-workspace')
   })
 
   it('does not preserve the cleanup view exception after the row changes', async () => {
@@ -113,5 +137,42 @@ describe('workspace cleanup viewed rows', () => {
 
     expect(candidate.tier).toBe('protected')
     expect(candidate.blockers).toContain('active-workspace')
+  })
+
+  it('uses current renderer state after async delete preflight scan resolves', async () => {
+    let resolveScan: (value: WorkspaceCleanupScanResult) => void
+    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+    const store = createCleanupTestStore(removeWorktree)
+
+    ;(globalThis as { window: unknown }).window = {
+      api: {
+        workspaceCleanup: {
+          scan: vi.fn(
+            (): Promise<WorkspaceCleanupScanResult> =>
+              new Promise<WorkspaceCleanupScanResult>((resolve) => {
+                resolveScan = resolve
+              })
+          ),
+          dismiss: vi.fn().mockResolvedValue(undefined),
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
+        }
+      }
+    }
+
+    const removal = store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
+    store.setState({ activeWorktreeId: WORKTREE_ID })
+    resolveScan!({ scannedAt: NOW, candidates: [makeCandidate()], errors: [] })
+
+    await expect(removal).resolves.toEqual({
+      removedIds: [],
+      failures: [
+        {
+          worktreeId: WORKTREE_ID,
+          displayName: 'old-workspace',
+          message: 'active-workspace'
+        }
+      ]
+    })
+    expect(removeWorktree).not.toHaveBeenCalled()
   })
 })

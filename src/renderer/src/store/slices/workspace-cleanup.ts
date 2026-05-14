@@ -179,7 +179,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     const failures: WorkspaceCleanupFailure[] = []
 
     for (const worktreeId of worktreeIds) {
-      const preflight = await preflightWorkspaceCleanupCandidate(worktreeId, get())
+      const preflight = await preflightWorkspaceCleanupCandidate(worktreeId, get)
       if (!preflight.ok) {
         failures.push(preflight.failure)
         continue
@@ -244,7 +244,7 @@ async function enrichWorkspaceCleanupCandidate(
   const blockers = candidate.blockers.filter((blocker) => blocker !== 'dismissed')
   const preserveCleanupInspection = shouldPreserveCleanupInspection(candidate, state)
 
-  if (state.activeWorktreeId === candidate.worktreeId && !preserveCleanupInspection) {
+  if (state.activeWorktreeId === candidate.worktreeId) {
     blockers.push('active-workspace')
   }
   if (dirtyEditorBuffers.length > 0) {
@@ -322,13 +322,13 @@ function applyDismissal(
 
 async function preflightWorkspaceCleanupCandidate(
   worktreeId: string,
-  state: AppState
+  getState: () => AppState
 ): Promise<
   | { ok: true; candidate: WorkspaceCleanupCandidate }
   | { ok: false; failure: WorkspaceCleanupFailure }
 > {
   const scan = await window.api.workspaceCleanup.scan({ worktreeId })
-  const [candidate] = await enrichWorkspaceCleanupCandidates(scan.candidates, state, {
+  const [candidate] = await enrichWorkspaceCleanupCandidates(scan.candidates, getState(), {
     applyDismissals: false
   })
   if (!candidate) {

@@ -27,11 +27,13 @@ import {
 
 const GIT_READ_TIMEOUT_MS = 8_000
 const WORKTREE_SCAN_CONCURRENCY = 3
+const GITHUB_PR_CACHE_TTL_MS = 5 * 60_000
 
 type PrCacheHit = {
   pr: PRInfo | null
   fetchedAt: number
   trustedForReady: boolean
+  stale: boolean
 }
 
 type GitEvidence = {
@@ -139,7 +141,8 @@ async function scanRepoWorkspaces(args: {
       )
     }
   } catch (error) {
-    errors.push({ repoId: repo.id, message: toErrorMessage(error) })
+    console.error('Workspace cleanup repo scan failed', error)
+    errors.push({ repoId: repo.id, message: toSafeWorkspaceCleanupError(error) })
     return { scannedAt, candidates: [], errors }
   }
 
@@ -160,7 +163,8 @@ async function scanRepoWorkspaces(args: {
       provider,
       prCacheAmbiguous: Boolean(repo.connectionId) || duplicateRepoPaths.has(repo.path)
     }).catch((error) => {
-      errors.push({ repoId: repo.id, message: toErrorMessage(error) })
+      console.error('Workspace cleanup candidate scan failed', error)
+      errors.push({ repoId: repo.id, message: toSafeWorkspaceCleanupError(error) })
       return buildCandidateFromError(repo, worktree, scannedAt, toErrorMessage(error))
     })
   )
@@ -191,9 +195,18 @@ async function buildCandidate(args: {
     blockers.push('pinned')
   }
 
-  const rawPrHit = findCachedPR(store, repo, shortBranchName(worktree.branch), worktree.linkedPR)
+  const rawPrHit = findCachedPR(
+    store,
+    repo,
+    shortBranchName(worktree.branch),
+    worktree.linkedPR,
+    scannedAt
+  )
   const prHit = rawPrHit
-    ? { ...rawPrHit, trustedForReady: rawPrHit.trustedForReady && !prCacheAmbiguous }
+    ? {
+        ...rawPrHit,
+        trustedForReady: rawPrHit.trustedForReady && !rawPrHit.stale && !prCacheAmbiguous
+      }
     : null
   const linkedPR = prHit?.pr
     ? { number: prHit.pr.number, state: prHit.pr.state }
@@ -211,6 +224,7 @@ async function buildCandidate(args: {
       : await readGitEvidence(worktree, repo, provider)
   blockers.push(...gitEvidence.blockers)
 
+  const localContext = buildLocalContext(worktree)
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
     worktreeId: worktree.id,
     repoId: repo.id,
@@ -226,7 +240,7 @@ async function buildCandidate(args: {
     lastActivityAt: worktree.lastActivityAt,
     ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
     ...(linkedPR ? { linkedPR } : {}),
-    localContext: buildLocalContext(worktree),
+    localContext,
     git: {
       clean: gitEvidence.clean,
       upstreamAhead: gitEvidence.upstreamAhead,
@@ -235,7 +249,7 @@ async function buildCandidate(args: {
       checkedAt: gitEvidence.checkedAt
     },
     prStateCheckedAt: prHit?.fetchedAt ?? null,
-    staleEvidence: false,
+    staleEvidence: rawPrHit?.stale ?? false,
     fingerprint: ''
   }
 
@@ -255,12 +269,25 @@ async function buildCandidate(args: {
   ) {
     reasons.push('archived')
   }
+  const hasIdleOnlyLocalContext =
+    localContext.diffCommentCount > 0 &&
+    !(
+      prHit?.trustedForReady &&
+      (prHit.pr?.state === 'merged' ||
+        (prHit.pr?.state === 'closed' && gitEvidence.branchCompareChangedFiles === 0))
+    ) &&
+    gitEvidence.branchCompareChangedFiles !== 0
+  const linkedPrStateCanMakeIdleReady =
+    worktree.linkedPR === null || prHit?.trustedForReady === true
+
   if (
     scannedAt - worktree.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS &&
     !worktree.linkedIssue &&
     prHit?.pr?.state !== 'open' &&
     prHit?.pr?.state !== 'draft' &&
     linkedPR?.state !== 'unknown' &&
+    linkedPrStateCanMakeIdleReady &&
+    !hasIdleOnlyLocalContext &&
     hasWorkspaceCleanupDivergenceProof(candidateWithoutFingerprint)
   ) {
     reasons.push('idle-clean')
@@ -462,12 +489,18 @@ function findCachedPR(
   store: Store,
   repo: Repo,
   branch: string,
-  linkedPR: number | null
+  linkedPR: number | null,
+  now: number
 ): PrCacheHit | null {
   const cache = store.getGitHubCache().pr
   const exact = cache[`${repo.path}::${branch}`]
   if (exact) {
-    return { pr: exact.data, fetchedAt: exact.fetchedAt, trustedForReady: true }
+    return {
+      pr: exact.data,
+      fetchedAt: exact.fetchedAt,
+      trustedForReady: true,
+      stale: isPrCacheStale(exact.fetchedAt, now)
+    }
   }
 
   if (!linkedPR) {
@@ -477,11 +510,20 @@ function findCachedPR(
   const repoPrefix = `${repo.path}::`
   for (const [key, value] of Object.entries(cache)) {
     if (key.startsWith(repoPrefix) && value.data?.number === linkedPR) {
-      return { pr: value.data, fetchedAt: value.fetchedAt, trustedForReady: true }
+      return {
+        pr: value.data,
+        fetchedAt: value.fetchedAt,
+        trustedForReady: true,
+        stale: isPrCacheStale(value.fetchedAt, now)
+      }
     }
   }
 
   return null
+}
+
+function isPrCacheStale(fetchedAt: number, now: number): boolean {
+  return now - fetchedAt >= GITHUB_PR_CACHE_TTL_MS
 }
 
 function buildLocalContext(worktree: Worktree): WorkspaceCleanupCandidate['localContext'] {
@@ -569,4 +611,12 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function toSafeWorkspaceCleanupError(error: unknown): string {
+  const message = toErrorMessage(error)
+  if (message.startsWith('Timed out ')) {
+    return message
+  }
+  return 'Could not scan workspace cleanup for this repository.'
 }

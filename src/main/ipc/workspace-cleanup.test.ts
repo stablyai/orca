@@ -1,0 +1,204 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Store } from '../persistence'
+import type {
+  DiffComment,
+  GitBranchCompareResult,
+  GitStatusResult,
+  PRInfo,
+  Repo
+} from '../../shared/types'
+
+const { listRepoWorktreesMock, getStatusMock, getBranchCompareMock } = vi.hoisted(() => ({
+  listRepoWorktreesMock: vi.fn(),
+  getStatusMock: vi.fn(),
+  getBranchCompareMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: vi.fn(),
+    removeHandler: vi.fn()
+  }
+}))
+
+vi.mock('../repo-worktrees', () => ({
+  listRepoWorktrees: listRepoWorktreesMock,
+  createFolderWorktree: vi.fn()
+}))
+
+vi.mock('../git/status', () => ({
+  getStatus: getStatusMock,
+  getBranchCompare: getBranchCompareMock
+}))
+
+vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProvider: vi.fn()
+}))
+
+import { scanWorkspaceCleanup } from './workspace-cleanup'
+
+const NOW = 1_700_000_000_000
+const REPO: Repo = {
+  id: 'repo-1',
+  path: '/repo',
+  displayName: 'Repo',
+  badgeColor: '#000',
+  addedAt: NOW
+}
+
+function makeStore(
+  prFetchedAt: number | null,
+  options: {
+    baseRef?: string
+    diffComments?: DiffComment[]
+    linkedPR?: number | null
+    repos?: Repo[]
+  } = {}
+): Store {
+  const linkedPR = options.linkedPR === undefined ? 123 : options.linkedPR
+  const baseRef = Object.hasOwn(options, 'baseRef') ? options.baseRef : 'origin/main'
+  const pr =
+    prFetchedAt === null
+      ? {}
+      : {
+          '/repo::feature': {
+            fetchedAt: prFetchedAt,
+            data: {
+              number: 123,
+              title: 'Feature',
+              state: 'merged',
+              url: 'https://github.example/pull/123',
+              checksStatus: 'success',
+              updatedAt: '2026-05-14T00:00:00Z',
+              mergeable: 'MERGEABLE'
+            } satisfies PRInfo
+          }
+        }
+  return {
+    getRepos: () => options.repos ?? [REPO],
+    getWorktreeMeta: () => ({
+      linkedPR,
+      lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
+      baseRef,
+      diffComments: options.diffComments
+    }),
+    getAllWorktreeMeta: () => ({}),
+    getGitHubCache: () => ({
+      pr,
+      issue: {}
+    })
+  } as unknown as Store
+}
+
+describe('workspace cleanup scan', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    listRepoWorktreesMock.mockReset()
+    getStatusMock.mockReset()
+    getBranchCompareMock.mockReset()
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: '/repo-feature',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    getStatusMock.mockResolvedValue({
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+    } satisfies GitStatusResult)
+    getBranchCompareMock.mockResolvedValue({
+      summary: {
+        baseRef: 'origin/main',
+        baseOid: 'base',
+        compareRef: 'feature',
+        headOid: 'abc123',
+        mergeBase: 'base',
+        changedFiles: 0,
+        status: 'ready'
+      },
+      entries: []
+    } satisfies GitBranchCompareResult)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not default-select from stale cached PR evidence', async () => {
+    const staleFetchedAt = NOW - 5 * 60_000
+
+    const result = await scanWorkspaceCleanup(makeStore(staleFetchedAt))
+
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'review',
+      selectedByDefault: false,
+      staleEvidence: true,
+      prStateCheckedAt: staleFetchedAt
+    })
+    expect(result.candidates[0].reasons).not.toContain('pr-merged')
+  })
+
+  it('keeps raw scan errors out of renderer-facing results', async () => {
+    listRepoWorktreesMock.mockRejectedValue(new Error('fatal: path /Users/alice/private failed'))
+
+    const result = await scanWorkspaceCleanup(makeStore(NOW))
+
+    expect(result.errors).toEqual([
+      {
+        repoId: 'repo-1',
+        message: 'Could not scan workspace cleanup for this repository.'
+      }
+    ])
+  })
+
+  it('does not default-select idle-only workspaces with local diff comments', async () => {
+    const result = await scanWorkspaceCleanup(
+      makeStore(null, {
+        baseRef: undefined,
+        linkedPR: null,
+        diffComments: [
+          {
+            id: 'comment-1',
+            worktreeId: 'repo-1::/repo-feature',
+            filePath: 'src/file.ts',
+            lineNumber: 12,
+            body: 'Follow up before deleting',
+            createdAt: NOW - 1_000,
+            side: 'modified'
+          }
+        ]
+      })
+    )
+
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'review',
+      selectedByDefault: false,
+      localContext: {
+        diffCommentCount: 1,
+        newestDiffCommentAt: NOW - 1_000
+      }
+    })
+    expect(result.candidates[0].reasons).not.toContain('idle-clean')
+  })
+
+  it('does not use ambiguous PR cache state to make linked PR workspaces idle-ready', async () => {
+    const result = await scanWorkspaceCleanup(
+      makeStore(NOW, {
+        repos: [REPO, { ...REPO, id: 'repo-2' }]
+      })
+    )
+
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'review',
+      selectedByDefault: false,
+      linkedPR: { number: 123, state: 'merged' }
+    })
+    expect(result.candidates[0].reasons).not.toContain('pr-merged')
+    expect(result.candidates[0].reasons).not.toContain('idle-clean')
+  })
+})
