@@ -3,7 +3,7 @@
  * based on current view, tab type, and focused element.
  */
 export function resolveZoomTarget(args: {
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
   activeTabType: 'terminal' | 'editor' | 'browser'
   activeElement: unknown
 }): 'terminal' | 'editor' | 'ui' {

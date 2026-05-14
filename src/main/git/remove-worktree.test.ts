@@ -362,6 +362,25 @@ describe('listWorktrees', () => {
     warnSpy.mockRestore()
   })
 
+  it('returns no worktrees when the path exists but is not a git repo', async () => {
+    const warnSpy = vi.spyOn(console, 'warn')
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('Command failed: git worktree list --porcelain'), {
+        code: 128,
+        stdout: '',
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+
+    await expect(listWorktrees('/private/tmp/orca-issue-1582-test/my-repo')).resolves.toEqual([])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain'], {
+      cwd: '/private/tmp/orca-issue-1582-test/my-repo'
+    })
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
   it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.join(' ') === 'worktree list --porcelain') {

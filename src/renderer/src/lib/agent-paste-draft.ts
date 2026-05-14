@@ -61,10 +61,11 @@ export async function pasteDraftWhenAgentReady(args: {
   tabId: string
   content: string
   agent?: TuiAgent
+  submit?: boolean
   timeoutMs?: number
   onTimeout?: () => void
 }): Promise<boolean> {
-  const { tabId, content, agent, timeoutMs, onTimeout } = args
+  const { tabId, content, agent, submit, timeoutMs, onTimeout } = args
 
   // Why: agents with a documented prefill flag (currently Claude — see
   // TUI_AGENT_CONFIG.claude.draftPromptFlag) launch with the URL already
@@ -88,7 +89,10 @@ export async function pasteDraftWhenAgentReady(args: {
     return false
   }
 
-  window.api.pty.write(ptyId, `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`)
+  window.api.pty.write(
+    ptyId,
+    `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}${submit ? '\r' : ''}`
+  )
   return true
 }
 

@@ -28,7 +28,7 @@ import { join } from 'path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
-import type { AgentHookSource } from './agent-hook-relay'
+import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -83,6 +83,41 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastStatusByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
+}
+
+/** Emit warn-once diagnostics for cross-build (`version`) and dev-vs-prod
+ *  (`env`) mismatches. Shared between the local HTTP path
+ *  (`normalizeHookPayload`) and the relay-forwarded path
+ *  (`AgentHookServer.ingestRemote`) so a remote-sourced event triggers the
+ *  same diagnostic noise as a local one. The relay's "remote" marker is a
+ *  location tag, not a build env, so it must not look like stale local hooks. */
+export function warnOnHookEnvOrVersionMismatch(
+  state: HookListenerState,
+  fields: { version?: string; env?: string; expectedEnv: string }
+): void {
+  const { version, env, expectedEnv } = fields
+  if (
+    version &&
+    version !== ORCA_HOOK_PROTOCOL_VERSION &&
+    !state.warnedVersions.has(version) &&
+    state.warnedVersions.size < MAX_WARNED_KEYS
+  ) {
+    state.warnedVersions.add(version)
+    console.warn(
+      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
+        'Reinstall agent hooks from Settings to upgrade the managed script.'
+    )
+  }
+  if (env && env !== REMOTE_AGENT_HOOK_ENV && env !== expectedEnv) {
+    const key = `${env}->${expectedEnv}`
+    if (!state.warnedEnvs.has(key) && state.warnedEnvs.size < MAX_WARNED_KEYS) {
+      state.warnedEnvs.add(key)
+      console.warn(
+        `[agent-hooks] received ${env} hook on ${expectedEnv} server. ` +
+          'Likely a stale terminal from another Orca install.'
+      )
+    }
+  }
 }
 
 export type AgentHookEventPayload = {
@@ -1144,31 +1179,11 @@ export function normalizeHookPayload(
     return null
   }
 
-  const version = readStringField(record, 'version')
-  if (
-    version &&
-    version !== ORCA_HOOK_PROTOCOL_VERSION &&
-    !state.warnedVersions.has(version) &&
-    state.warnedVersions.size < MAX_WARNED_KEYS
-  ) {
-    state.warnedVersions.add(version)
-    console.warn(
-      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
-        'Reinstall agent hooks from Settings to upgrade the managed script.'
-    )
-  }
-
-  const clientEnv = readStringField(record, 'env')
-  if (clientEnv && clientEnv !== expectedEnv) {
-    const key = `${clientEnv}->${expectedEnv}`
-    if (!state.warnedEnvs.has(key) && state.warnedEnvs.size < MAX_WARNED_KEYS) {
-      state.warnedEnvs.add(key)
-      console.warn(
-        `[agent-hooks] received ${clientEnv} hook on ${expectedEnv} server. ` +
-          'Likely a stale terminal from another Orca install.'
-      )
-    }
-  }
+  warnOnHookEnvOrVersionMismatch(state, {
+    version: readStringField(record, 'version'),
+    env: readStringField(record, 'env'),
+    expectedEnv
+  })
 
   const tabId = readStringField(record, 'tabId')
   const worktreeId = readStringField(record, 'worktreeId')

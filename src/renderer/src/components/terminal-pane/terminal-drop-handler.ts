@@ -11,7 +11,7 @@ type Args = {
   paneTransports: Map<number, PtyTransport>
   worktreeId: string
   cwd: string | undefined
-  data: { paths: string[]; target: string }
+  data: { paths: string[]; target: string; tabId?: string }
 }
 
 /**

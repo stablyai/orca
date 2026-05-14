@@ -224,6 +224,8 @@ describe('updater', () => {
   })
 
   it('opts into the RC channel when checkForUpdatesFromMenu is called with includePrerelease', async () => {
+    appMock.getVersion.mockReturnValue('1.3.17')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18-rc.1'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const mainWindow = { webContents: { send: vi.fn() } }
 
@@ -238,13 +240,17 @@ describe('updater', () => {
 
     checkForUpdatesFromMenu({ includePrerelease: true })
 
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 2, {
+        includePrerelease: true
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
+      })
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     expect(autoUpdaterMock.allowPrerelease).toBe(true)
-    const newCalls = autoUpdaterMock.setFeedURL.mock.calls.slice(setupFeedUrlCalls)
-    expect(newCalls).toEqual([[{ provider: 'github', owner: 'stablyai', repo: 'orca' }]])
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-
-    // Second RC-mode invocation should not re-set the feed URL.
-    checkForUpdatesFromMenu({ includePrerelease: true })
     expect(autoUpdaterMock.setFeedURL.mock.calls.length).toBe(setupFeedUrlCalls + 1)
   })
 
@@ -1536,11 +1542,12 @@ describe('updater', () => {
     })
   })
 
-  // Why: once the user Shift-clicks to opt into RC channel, we switch to the
-  // native github provider. The atom-feed resolver must NOT run after that,
-  // or it would clobber the provider switch with a generic feed URL.
-  it('does not run the atom resolver after a Shift-click RC opt-in', async () => {
+  // Why: Shift-click opts into RC updates, but the native GitHub provider can
+  // still select cancelled prerelease tags with missing manifests. Keep the
+  // manifest-probed generic feed path so those tags are skipped.
+  it('uses the manifest-probed generic feed after a Shift-click RC opt-in', async () => {
     appMock.getVersion.mockReturnValue('1.3.17')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18-rc.1'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -1551,14 +1558,15 @@ describe('updater', () => {
     checkForUpdatesFromMenu({ includePrerelease: true })
 
     await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 2, {
+        includePrerelease: true
+      })
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
-    expect(fetchNewerReleaseTagsMock).not.toHaveBeenCalled()
     expect(autoUpdaterMock.allowPrerelease).toBe(true)
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
-      provider: 'github',
-      owner: 'stablyai',
-      repo: 'orca'
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
     })
   })
 })

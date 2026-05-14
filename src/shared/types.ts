@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
+import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
 
@@ -1236,6 +1237,10 @@ export type GlobalSettings = {
    *  again" checkbox inside it or from the General settings pane. We keep this
    *  defaulted to false so first-time behavior stays safe. */
   skipDeleteWorktreeConfirm: boolean
+  /** Why: deleting an automation also deletes its run history. Keep this
+   *  separate from worktree deletion so skipping one destructive confirmation
+   *  does not silently skip the other. */
+  skipDeleteAutomationConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
@@ -1665,6 +1670,8 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  automations: Automation[]
+  automationRuns: AutomationRun[]
   onboarding: OnboardingState
 }
 

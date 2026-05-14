@@ -170,6 +170,14 @@ import type {
 } from '../shared/codex-usage-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationDispatchRequest,
+  AutomationDispatchResult,
+  AutomationRun,
+  AutomationUpdateInput
+} from '../shared/automations-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -1169,7 +1177,7 @@ export type PreloadApi = {
       callback: (
         data:
           | { paths: string[]; target: 'editor' }
-          | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'terminal'; tabId?: string }
           | { paths: string[]; target: 'composer' }
           | { paths: string[]; target: 'file-explorer'; destinationDir: string }
       ) => void
@@ -1279,6 +1287,17 @@ export type PreloadApi = {
     ) => () => void
     onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
+  }
+  automations: {
+    list: () => Promise<Automation[]>
+    listRuns: (args?: { automationId?: string }) => Promise<AutomationRun[]>
+    create: (input: AutomationCreateInput) => Promise<Automation>
+    update: (args: { id: string; updates: AutomationUpdateInput }) => Promise<Automation>
+    delete: (args: { id: string }) => Promise<void>
+    runNow: (args: { id: string }) => Promise<AutomationRun>
+    markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
+    rendererReady: () => Promise<void>
+    onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   }
   wsl: {
     isAvailable: () => Promise<boolean>

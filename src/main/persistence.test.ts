@@ -179,6 +179,57 @@ describe('Store', () => {
     expect(repos[0].gitUsername).toBe('testuser')
   })
 
+  it('can clear an automation back to the project default branch', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ worktreeBaseRef: 'origin/main' }))
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      baseBranch: 'origin/release',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const updated = store.updateAutomation(automation.id, { baseBranch: null })
+
+    expect(updated.baseBranch).toBeNull()
+    store.flush()
+    const persisted = readDataFile() as { automations: { baseBranch: string | null }[] }
+    expect(persisted.automations[0].baseBranch).toBeNull()
+  })
+
+  it('numbers automation run titles per automation', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const first = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const duplicate = store.createAutomationRun(
+      automation,
+      new Date('2026-05-13T09:00:00Z').getTime()
+    )
+    const second = store.createAutomationRun(automation, new Date('2026-05-14T09:00:00Z').getTime())
+
+    expect(first.title).toBe('Nightly run 1')
+    expect(duplicate.id).toBe(first.id)
+    expect(duplicate.title).toBe('Nightly run 1')
+    expect(second.title).toBe('Nightly run 2')
+  })
+
   // ── 3. Corrupt JSON → falls back to defaults ────────────────────────
 
   it('falls back to defaults when data file contains invalid JSON', async () => {

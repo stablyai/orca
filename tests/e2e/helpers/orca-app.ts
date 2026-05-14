@@ -212,10 +212,16 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // Why: ORCA_E2E_HEADLESS suppresses mainWindow.show() for CI/headless
       // runs. ORCA_E2E_HEADFUL overrides this for tests that need a visible
       // window (e.g. pointer-capture drag tests).
+      // Why: local SSH E2E deploys the relay from the dev build output. The
+      // Electron app's getAppPath() points at the compiled main bundle in E2E,
+      // so pass the repo-root relay path explicitly for this opt-in suite.
       env: {
         ...cleanEnv,
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
+        ...(process.env.ORCA_E2E_SSH_LOCALHOST === '1' && !cleanEnv.ORCA_RELAY_PATH
+          ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
+          : {}),
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })

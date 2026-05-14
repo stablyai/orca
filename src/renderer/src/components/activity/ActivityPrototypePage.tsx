@@ -65,6 +65,7 @@ type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
 type ActivityEventState = Extract<AgentStatusState, 'done' | 'blocked' | 'waiting'>
 type ActivityLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
+type ActivityStatusGroupId = 'working' | 'blocked' | 'waiting' | 'done' | 'interrupted'
 
 type ActivityEvent = {
   id: string
@@ -108,6 +109,14 @@ type AgentPaneThread = {
   unread: boolean
 }
 
+type ActivityThreadGroup = {
+  key: string
+  id?: ActivityStatusGroupId
+  label: string
+  state?: AgentStatusState
+  threads: AgentPaneThread[]
+}
+
 type ActivityTerminalPortalReadiness = {
   target: HTMLElement | null
   tabId: string | null
@@ -120,10 +129,16 @@ type ActivityTerminalPortalDomStatus = {
 }
 
 type ActivityTerminalPortalSlotId = 'primary' | 'secondary'
-type ActivityThreadGroup = { key: string; label: string; threads: AgentPaneThread[] }
 
 const ACTIVITY_TERMINAL_LOADING_LABEL_DELAY_MS = 180
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
+const ACTIVITY_STATUS_GROUP_ORDER: ActivityStatusGroupId[] = [
+  'working',
+  'blocked',
+  'waiting',
+  'done',
+  'interrupted'
+]
 
 const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
@@ -749,6 +764,48 @@ export function buildActivityThreadGroups(
   return groups
 }
 
+function threadStatusGroupId(thread: AgentPaneThread): ActivityStatusGroupId {
+  const state = threadAgentState(thread)
+  if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
+    return 'interrupted'
+  }
+  return state === 'working' || state === 'blocked' || state === 'waiting' ? state : 'done'
+}
+
+function threadStatusGroupState(id: ActivityStatusGroupId): AgentStatusState {
+  return id === 'interrupted' ? 'done' : id
+}
+
+function threadStatusGroupLabel(id: ActivityStatusGroupId): string {
+  if (id === 'interrupted') {
+    return 'Interrupted'
+  }
+  return agentStateLabel(threadStatusGroupState(id))
+}
+
+export function groupActivityThreadsByStatus(threads: AgentPaneThread[]): ActivityThreadGroup[] {
+  const groups = new Map<ActivityStatusGroupId, AgentPaneThread[]>()
+  for (const thread of threads) {
+    const groupId = threadStatusGroupId(thread)
+    groups.set(groupId, [...(groups.get(groupId) ?? []), thread])
+  }
+  return ACTIVITY_STATUS_GROUP_ORDER.flatMap((id) => {
+    const groupThreads = groups.get(id) ?? []
+    if (groupThreads.length === 0) {
+      return []
+    }
+    return [
+      {
+        key: id,
+        id,
+        label: threadStatusGroupLabel(id),
+        state: threadStatusGroupState(id),
+        threads: groupThreads
+      }
+    ]
+  })
+}
+
 function threadSearchText(thread: AgentPaneThread): string {
   const latest = thread.latestEvent
   const stateLabel = threadAgentStateLabel(thread)
@@ -785,6 +842,24 @@ function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): Rea
         {label}
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+function ActivityStatusGroupHeader({ group }: { group: ActivityThreadGroup }): React.JSX.Element {
+  return (
+    <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      {group.state ? (
+        <span className="inline-flex size-4 shrink-0 items-center justify-center">
+          <AgentStateDot state={group.state} size="sm" />
+        </span>
+      ) : null}
+      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        {group.label}
+      </span>
+      <span className="rounded-full border border-border bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
+        {group.threads.length}
+      </span>
+    </div>
   )
 }
 
@@ -940,7 +1015,7 @@ function ThreadRow({
           <EventTime timestamp={thread.latestTimestamp} />
         </span>
       </div>
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5 pl-[42px]">
         <EventRepoBadge repo={thread.repo} />
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
           {thread.worktree.displayName}
@@ -1065,7 +1140,6 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
     })
   }, [allThreads, readFilter, query, selectedPaneKey])
-
   const visibleThreadGroups = useMemo(
     () => buildActivityThreadGroups(visibleThreads, groupBy),
     [visibleThreads, groupBy]
@@ -1380,10 +1454,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           </div>
           <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
             {visibleThreadGroups.map((group) => (
-              <div key={group.key}>
-                <div className="sticky top-0 z-10 border-y border-border bg-background/95 px-3 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase backdrop-blur-sm">
-                  {group.label}
-                </div>
+              <section key={group.key} aria-label={`${group.label} activity`}>
+                <ActivityStatusGroupHeader group={group} />
                 {group.threads.map((thread) => (
                   <ThreadRow
                     key={thread.paneKey}
@@ -1395,7 +1467,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     compactMode={compactMode}
                   />
                 ))}
-              </div>
+              </section>
             ))}
             {visibleThreads.length === 0 ? (
               <div className="px-3 py-8 text-sm text-muted-foreground">
@@ -1444,7 +1516,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                       {selectedThread.paneTitle}
                     </h2>
                   </div>
-                  <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 pl-11">
                     <EventRepoBadge repo={selectedThread.repo} />
                     <span className="truncate text-xs text-muted-foreground">
                       {selectedThread.worktree.displayName}

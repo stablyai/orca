@@ -54,6 +54,7 @@ import { getPtyIdForPaneKey, registerPaneKeyTeardownListener, getLocalPtyProvide
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
+import { AutomationService } from './automations/service'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -74,6 +75,7 @@ let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let starNag: StarNagService | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
+let automations: AutomationService | null = null
 
 installUncaughtPipeErrorGuard()
 // Why: propagate the Orca app version into `process.env` so PTY-env
@@ -188,6 +190,9 @@ function openMainWindow(): BrowserWindow {
   if (!rateLimits) {
     throw new Error('Rate limit service must be initialized before opening the main window')
   }
+  if (!automations) {
+    throw new Error('Automation service must be initialized before opening the main window')
+  }
   if (!codexAccounts) {
     throw new Error('Codex account service must be initialized before opening the main window')
   }
@@ -248,8 +253,11 @@ function openMainWindow(): BrowserWindow {
     codexAccounts,
     claudeAccounts,
     rateLimits,
-    window.webContents.id
+    window.webContents.id,
+    automations
   )
+  automations.setWebContents(window.webContents)
+  automations.start()
   attachMainWindowServices(
     window,
     store,
@@ -263,6 +271,7 @@ function openMainWindow(): BrowserWindow {
     if (mainWindow === window) {
       mainWindow = null
     }
+    automations?.setWebContents(null)
     // Why: detach the agent hook listener on window close so the server
     // never fires into a destroyed webContents during the gap before
     // reopen (e.g. macOS dock re-activation). This also ensures the
@@ -511,6 +520,7 @@ app.whenReady().then(async () => {
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider()
   })
+  automations = new AutomationService(store)
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   starNag = new StarNagService(store, stats)
   starNag.start()
@@ -685,6 +695,7 @@ app.on('will-quit', (e) => {
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
   starNag?.stop()
+  automations?.stop()
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   stats?.flush()

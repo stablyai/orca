@@ -10,16 +10,17 @@
 //
 // Per the design doc:
 // - The relay normalizes; Orca routes. The envelope's `payload` field has
-//   already been through `normalizeHookPayload` on the relay side; Orca's
-//   ingestRemote re-runs the canonical normalizer at the trust boundary
-//   (defense-in-depth) before feeding the event into the same `onAgentStatus`
-//   fanout the local HTTP path uses.
+//   already been through `normalizeHookPayload` (which calls
+//   `parseAgentStatusPayload` → `normalizeAgentStatusObject`) on the relay
+//   side. Orca's `ingestRemote` re-runs the canonical payload normalizer at
+//   the SSH trust boundary before caching or persisting, so relay skew or a
+//   buggy remote process cannot poison main-process state.
 // - The wire `connectionId` is **always `null`**: a `connectionId` is Orca's
 //   local handle on an `ssh2` connection, not a wire identity. Orca stamps the
 //   real value on receive from `mux` identity inside `ingestRemote`.
-// - The wire `version` and `env` fields are forwarded verbatim from the agent
-//   CLI's POST body so Orca's existing warn-once cross-build / dev-vs-prod
-//   diagnostics still fire on remote-sourced events.
+// - The wire `version` and `env` fields are forwarded from the agent CLI's
+//   POST body so Orca's warn-once protocol diagnostics still fire. The relay
+//   default env is `remote`, a location marker ignored by dev-vs-prod checks.
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 
@@ -31,6 +32,10 @@ import type { ParsedAgentStatusPayload } from './agent-status-types'
 // that consumes it from the relay side).
 export type AgentHookSource = 'claude' | 'codex' | 'gemini' | 'opencode' | 'cursor' | 'pi' | 'droid'
 
+/** Env marker used by the remote relay. It is a transport/location marker, not
+ *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
+export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
+
 /** Wire envelope for a single hook event flowing relay → Orca. */
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
@@ -39,16 +44,14 @@ export type AgentHookRelayEnvelope = {
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */
   connectionId: null
-  /** Forwarded verbatim from the agent CLI POST body (e.g. 'production',
-   *  'development'). Lets Orca's warn-once env-mismatch diagnostic fire on
-   *  remote events the same as on local. */
+  /** Forwarded from the agent CLI POST body. The relay default is `remote`,
+   *  which marks transport location rather than dev/prod build env. */
   env?: string
   /** Forwarded verbatim from the agent CLI POST body. Lets Orca's warn-once
    *  protocol-version diagnostic fire on remote events the same as on local. */
   version?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
-   *  Orca's `ingestRemote` re-validates via `normalizeAgentStatusPayload` at
-   *  the trust boundary as defense-in-depth. */
+   *  Orca's `ingestRemote` validates it again at the SSH trust boundary. */
   payload: ParsedAgentStatusPayload
 }
 

@@ -1035,11 +1035,20 @@ function SourceControlInner(): React.JSX.Element {
     }
 
     void refreshBranchCompareRef.current()
-    const intervalId = window.setInterval(
-      () => void refreshBranchCompareRef.current(),
-      BRANCH_REFRESH_INTERVAL_MS
-    )
-    return () => window.clearInterval(intervalId)
+    const refreshIfFocused = (): void => {
+      if (document.hasFocus()) {
+        void refreshBranchCompareRef.current()
+      }
+    }
+    // Why: branch compare shells out to git every tick. The panel only needs
+    // background freshness while Orca is focused; on focus we refresh
+    // immediately so hidden-window time does not burn subprocess work.
+    const intervalId = window.setInterval(refreshIfFocused, BRANCH_REFRESH_INTERVAL_MS)
+    window.addEventListener('focus', refreshIfFocused)
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refreshIfFocused)
+    }
   }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
 
   useEffect(() => {

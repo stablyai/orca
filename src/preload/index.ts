@@ -79,6 +79,14 @@ import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationDispatchRequest,
+  AutomationDispatchResult,
+  AutomationRun,
+  AutomationUpdateInput
+} from '../shared/automations-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -90,13 +98,50 @@ import {
 
 type NativeDropResolution =
   | { target: 'editor' }
-  | { target: 'terminal' }
+  | { target: 'terminal'; tabId?: string }
   | { target: 'composer' }
   | { target: 'file-explorer'; destinationDir: string }
   // Why: returned when the explorer marker was found but no destinationDir
   // could be resolved. The caller must suppress the drop entirely instead of
   // falling back to 'editor' — fail-closed behavior per design §7.1.
   | { target: 'rejected' }
+
+type NativeFileDropPayload =
+  | { paths: string[]; target: 'editor' }
+  | { paths: string[]; target: 'terminal'; tabId?: string }
+  | { paths: string[]; target: 'composer' }
+  | { paths: string[]; target: 'file-explorer'; destinationDir: string }
+
+type NativeFileDropCallback = (data: NativeFileDropPayload) => void
+
+const nativeFileDropCallbacks: NativeFileDropCallback[] = []
+let nativeFileDropListenerRegistered = false
+
+const onNativeFileDrop = (_event: Electron.IpcRendererEvent, data: NativeFileDropPayload): void => {
+  for (const callback of Array.from(nativeFileDropCallbacks)) {
+    callback(data)
+  }
+}
+
+function subscribeNativeFileDrop(callback: NativeFileDropCallback): () => void {
+  nativeFileDropCallbacks.push(callback)
+  if (!nativeFileDropListenerRegistered) {
+    // Why: terminal panes subscribe per visible split group, so the IPC layer
+    // must keep one real listener and fan out locally to avoid listener warnings.
+    ipcRenderer.on('terminal:file-drop', onNativeFileDrop)
+    nativeFileDropListenerRegistered = true
+  }
+  return () => {
+    const callbackIndex = nativeFileDropCallbacks.indexOf(callback)
+    if (callbackIndex !== -1) {
+      nativeFileDropCallbacks.splice(callbackIndex, 1)
+    }
+    if (nativeFileDropCallbacks.length === 0 && nativeFileDropListenerRegistered) {
+      ipcRenderer.removeListener('terminal:file-drop', onNativeFileDrop)
+      nativeFileDropListenerRegistered = false
+    }
+  }
+}
 
 // Why: one shared HTMLAudioElement per sound file, restarted from t=0 on each
 // play, with an in-flight guard that drops new plays while the sound is still
@@ -142,7 +187,10 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
     }
 
     const target = entry.dataset.nativeFileDropTarget
-    if (target === 'editor' || target === 'terminal' || target === 'composer') {
+    if (target === 'terminal') {
+      return { target, tabId: entry.dataset.terminalTabId }
+    }
+    if (target === 'editor' || target === 'composer') {
       return { target }
     }
     if (target === 'file-explorer') {
@@ -241,7 +289,10 @@ document.addEventListener(
       // behavior instead of being silently discarded.
       ipcRenderer.send('terminal:file-dropped-from-preload', {
         paths,
-        target: resolution?.target ?? 'editor'
+        target: resolution?.target ?? 'editor',
+        ...(resolution?.target === 'terminal' && resolution.tabId
+          ? { tabId: resolution.tabId }
+          : {})
       })
     }
   },
@@ -2035,26 +2086,8 @@ const api = {
       ipcRenderer.invoke('clipboard:writeText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeImage', dataUrl),
-    onFileDrop: (
-      callback: (
-        data:
-          | { paths: string[]; target: 'editor' }
-          | { paths: string[]; target: 'terminal' }
-          | { paths: string[]; target: 'composer' }
-          | { paths: string[]; target: 'file-explorer'; destinationDir: string }
-      ) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data:
-          | { paths: string[]; target: 'editor' }
-          | { paths: string[]; target: 'terminal' }
-          | { paths: string[]; target: 'composer' }
-          | { paths: string[]; target: 'file-explorer'; destinationDir: string }
-      ) => callback(data)
-      ipcRenderer.on('terminal:file-drop', listener)
-      return () => ipcRenderer.removeListener('terminal:file-drop', listener)
-    },
+    onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>
+      subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),
     setZoomLevel: (level: number): void => webFrame.setZoomLevel(level),
     syncTrafficLights: (zoomFactor: number): void =>
@@ -2369,6 +2402,29 @@ const api = {
     submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
       ipcRenderer.invoke('ssh:submitCredential', args)
   },
+
+  automations: {
+    list: (): Promise<Automation[]> => ipcRenderer.invoke('automations:list'),
+    listRuns: (args?: { automationId?: string }): Promise<AutomationRun[]> =>
+      ipcRenderer.invoke('automations:listRuns', args),
+    create: (input: AutomationCreateInput): Promise<Automation> =>
+      ipcRenderer.invoke('automations:create', input),
+    update: (args: { id: string; updates: AutomationUpdateInput }): Promise<Automation> =>
+      ipcRenderer.invoke('automations:update', args),
+    delete: (args: { id: string }): Promise<void> => ipcRenderer.invoke('automations:delete', args),
+    runNow: (args: { id: string }): Promise<AutomationRun> =>
+      ipcRenderer.invoke('automations:runNow', args),
+    markDispatchResult: (result: AutomationDispatchResult): Promise<AutomationRun> =>
+      ipcRenderer.invoke('automations:markDispatchResult', result),
+    rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
+    onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>
+        callback(request)
+      ipcRenderer.on('automations:dispatchRequested', listener)
+      return () => ipcRenderer.removeListener('automations:dispatchRequested', listener)
+    }
+  },
+
   e2e: {
     getConfig: () => preloadE2EConfig
   },

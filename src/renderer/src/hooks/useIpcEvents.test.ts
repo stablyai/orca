@@ -1610,6 +1610,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolInput?: string
     lastAssistantMessage?: string
     interrupted?: boolean
+    connectionId?: string | null
     receivedAt: number
     stateStartedAt: number
   }
@@ -1650,6 +1651,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       removeSshCredentialRequest: vi.fn(),
       clearTabPtyId: vi.fn(),
       runtimePaneTitlesByTabId: {},
+      repos: [],
+      worktreesByRepo: {},
       tabsByWorktree: {},
       workspaceSessionReady: false,
       settings: { terminalFontSize: 13 },
@@ -2024,5 +2027,195 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('forwards events whose connectionId matches the live repo connection', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: 'tab-1:0',
+      connectionId: 'conn-1',
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      'tab-1:0',
+      expect.objectContaining({ state: 'working' }),
+      'Terminal 1',
+      { updatedAt: 1_700_000_000_100, stateStartedAt: 1_699_999_999_100 }
+    )
+  })
+
+  it('drops events whose connectionId no longer matches the live local repo', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: 'tab-1:0',
+      connectionId: 'conn-stale',
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('drops remote-stamped events when the owning worktree is no longer in worktreesByRepo', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: { 'repo-1': [] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: 'tab-1:0',
+      connectionId: 'conn-other',
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('accepts events without a stamped connectionId for preload compatibility', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: 'tab-1:0',
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
   })
 })

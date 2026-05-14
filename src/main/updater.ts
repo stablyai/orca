@@ -38,12 +38,8 @@ let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void) | null = null
 let autoUpdaterInitialized = false
 // Why: Shift-clicking "Check for Updates" opts the user into the RC release
-// channel for the rest of this process. We switch to the GitHub provider
-// with allowPrerelease=true so both the check AND any follow-up download
-// resolve against the same (possibly prerelease) release manifest.
-// Resetting only after the check would leave a downloaded RC pointing at a
-// feed URL that no longer advertises it. See design comment in
-// enableIncludePrerelease.
+// channel for the rest of this process. The generic feed still gets pinned to
+// a concrete tag on every check so cancelled RCs without manifests are skipped.
 let includePrereleaseActive = false
 let availableVersion: string | null = null
 let availableReleaseUrl: string | null = null
@@ -422,12 +418,6 @@ function markMissingManifestPrereleaseFallbackPromiseHandled(message: string): v
   )
 }
 
-function shouldPinDefaultReleaseFeed(): boolean {
-  // Why: if the user Shift-clicked the menu to opt into RC this process, we've
-  // already switched to the native github provider — leave that alone.
-  return !includePrereleaseActive
-}
-
 async function pinDefaultReleaseFeed(): Promise<void> {
   // Why: the /releases/latest/download/ redirect can move between the update
   // check and the later manual download click. Pinning to the concrete tag
@@ -436,7 +426,7 @@ async function pinDefaultReleaseFeed(): Promise<void> {
   // Prerelease users still need any-channel resolution so they can move to a
   // newer RC or the next stable. Stable users should only resolve stable tags.
   const currentVersion = app.getVersion()
-  const includePrerelease = isPrereleaseVersion(currentVersion)
+  const includePrerelease = includePrereleaseActive || isPrereleaseVersion(currentVersion)
   const releaseTags = await fetchNewerReleaseTags(currentVersion, includePrerelease ? 2 : 1, {
     includePrerelease
   })
@@ -524,11 +514,6 @@ function retryPrereleaseFallbackAfterMissingManifest(
   return true
 }
 
-function launchWithoutPrereleaseFallback(launch: () => Promise<unknown>): Promise<unknown> {
-  clearPrereleaseFallbackContext()
-  return launch()
-}
-
 function runBackgroundUpdateCheck(
   nudgeId: string | null = getPersistedPendingUpdateNudgeId()
 ): void {
@@ -553,9 +538,7 @@ function runBackgroundUpdateCheck(
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldPinDefaultReleaseFeed()
-    ? pinDefaultReleaseFeed().then(launch)
-    : launchWithoutPrereleaseFallback(launch)
+  const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
     backgroundCheckLaunchPending = false
     void sendCheckFailureStatus(String(err?.message ?? err), undefined, 'promise', err)
@@ -570,18 +553,11 @@ function enableIncludePrerelease(): void {
   if (includePrereleaseActive) {
     return
   }
-  // Why: the default feed points at GitHub's /releases/latest/download/
-  // manifest, which is scoped to the most recent non-prerelease release.
-  // Switch to the native github provider with allowPrerelease so latest.yml
-  // is sourced from the newest release on the repo regardless of the
-  // prerelease flag. Staying on this feed for the rest of the process
-  // keeps the download manifest consistent with the check result.
+  // Why: generic-provider checks still need this flag so electron-updater will
+  // accept a prerelease manifest for users who intentionally Shift-clicked.
+  // We keep using the manifest-probed generic feed instead of the native
+  // GitHub provider because cancelled RC releases can appear without assets.
   autoUpdater.allowPrerelease = true
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'stablyai',
-    repo: 'orca'
-  })
   includePrereleaseActive = true
 }
 
@@ -606,9 +582,7 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   // and sending it from both places causes duplicate notifications (issue #35).
 
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldPinDefaultReleaseFeed()
-    ? pinDefaultReleaseFeed().then(launch)
-    : launchWithoutPrereleaseFallback(launch)
+  const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
     userInitiatedCheck = false
     void sendCheckFailureStatus(String(err?.message ?? err), true, 'promise', err)

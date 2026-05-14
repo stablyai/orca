@@ -10,8 +10,8 @@
  * bucket drops to <25% remaining (warn) or <10% (crit). At healthy levels
  * the budget is not actionable information and surfacing it just trains
  * users to ignore the pill (or worry needlessly about ambiguous numbers
- * like "30/30"). The probe still runs in the background so we can show
- * the pill the moment something becomes actionable.
+ * like "30/30"). The probe still refreshes while the page is active so we
+ * can show the pill the moment something becomes actionable.
  *
  * This is an indicator, not a throttle — we deliberately don't block the
  * user from making requests when counts are low. Blocking would hurt the
@@ -130,11 +130,23 @@ export default function GitHubRateLimitPill(): React.JSX.Element | null {
   }, [])
 
   useEffect(() => {
+    const fetchIfVisible = (): void => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        void fetchSnapshot(false)
+      }
+    }
     void fetchSnapshot(false)
-    const handle = window.setInterval(() => {
-      void fetchSnapshot(false)
-    }, REFRESH_INTERVAL_MS)
-    return () => window.clearInterval(handle)
+    // Why: rate-limit probes are only useful while the TaskPage is visible.
+    // Skipping hidden-window ticks avoids spending gh/API work just to keep an
+    // invisible pill current; focus refreshes restore freshness before use.
+    const handle = window.setInterval(fetchIfVisible, REFRESH_INTERVAL_MS)
+    window.addEventListener('focus', fetchIfVisible)
+    document.addEventListener('visibilitychange', fetchIfVisible)
+    return () => {
+      window.clearInterval(handle)
+      window.removeEventListener('focus', fetchIfVisible)
+      document.removeEventListener('visibilitychange', fetchIfVisible)
+    }
   }, [fetchSnapshot])
 
   // Why: silently render nothing on error or before first load. The pill is

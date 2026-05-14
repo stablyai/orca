@@ -945,6 +945,7 @@ describe('registerPtyHandlers', () => {
         // shipping any of them to a remote shell is at best useless and at
         // worst a credential leak.
         expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+        expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
@@ -1226,6 +1227,122 @@ describe('registerPtyHandlers', () => {
           'terminated'
         )
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
+      it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when feature flag is off', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        try {
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: 'tab-1:0',
+              ORCA_TAB_ID: 'tab-1',
+              ORCA_WORKTREE_ID: 'wt-1'
+            },
+            connectionId: 'ssh-1'
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.FOO).toBe('bar')
+          expect(env.ORCA_PANE_KEY).toBeUndefined()
+          expect(env.ORCA_TAB_ID).toBeUndefined()
+          expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
+      })
+
+      it('forwards ORCA_PANE_KEY/TAB_ID/WORKTREE_ID over SSH when feature flag is on', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+        try {
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: 'tab-2:0',
+              ORCA_TAB_ID: 'tab-2',
+              ORCA_WORKTREE_ID: 'wt-2'
+            },
+            connectionId: 'ssh-1'
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.ORCA_PANE_KEY).toBe('tab-2:0')
+          expect(env.ORCA_TAB_ID).toBe('tab-2')
+          expect(env.ORCA_WORKTREE_ID).toBe('wt-2')
+          // Local hook server coords still must NOT cross the wire — the
+          // relay is the source of truth for those.
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
       })
     })
   })

@@ -221,6 +221,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
+    skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
@@ -283,6 +284,8 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     workspaceSession: getDefaultWorkspaceSession(),
     sshTargets: [],
     sshRemotePtyLeases: [],
+    automations: [],
+    automationRuns: [],
     onboarding: getDefaultOnboardingState()
   }
 }

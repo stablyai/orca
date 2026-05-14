@@ -8,6 +8,18 @@ import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'node:crypto'
 import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationDispatchResult,
+  AutomationRun,
+  AutomationRunTrigger,
+  AutomationUpdateInput
+} from '../shared/automations-types'
+import {
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from '../shared/automation-schedules'
+import type {
   PersistedState,
   Repo,
   SparsePreset,
@@ -403,6 +415,8 @@ export class Store {
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          automations: Array.isArray(parsed.automations) ? parsed.automations : [],
+          automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
           onboarding: (() => {
             // Why: if we successfully parsed an existing orca-data.json that
             // lacks an onboarding block, this is an upgrade-cohort user —
@@ -780,6 +794,186 @@ export class Store {
     const existing = this.state.sparsePresetsByRepo[repoId] ?? []
     this.state.sparsePresetsByRepo[repoId] = existing.filter((entry) => entry.id !== presetId)
     this.scheduleSave()
+  }
+
+  // ── Automations ───────────────────────────────────────────────────
+
+  listAutomations(): Automation[] {
+    return [...(this.state.automations ?? [])].sort((left, right) =>
+      left.name.localeCompare(right.name)
+    )
+  }
+
+  listAutomationRuns(automationId?: string): AutomationRun[] {
+    const runs = this.state.automationRuns ?? []
+    return [
+      ...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)
+    ].sort((left, right) => right.createdAt - left.createdAt)
+  }
+
+  createAutomation(input: AutomationCreateInput): Automation {
+    const repo = this.state.repos.find((entry) => entry.id === input.projectId)
+    const now = Date.now()
+    const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const automation: Automation = {
+      id: randomUUID(),
+      name: input.name.trim() || 'Untitled automation',
+      prompt: input.prompt,
+      agentId: input.agentId,
+      projectId: input.projectId,
+      executionTargetType,
+      executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
+      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      workspaceMode: input.workspaceMode,
+      workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
+      baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      timezone: input.timezone,
+      rrule: input.rrule,
+      dtstart: input.dtstart,
+      enabled: input.enabled ?? true,
+      nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
+      missedRunPolicy: 'run_once_within_grace',
+      missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.automations = [...(this.state.automations ?? []), automation]
+    this.flush()
+    return automation
+  }
+
+  updateAutomation(id: string, updates: AutomationUpdateInput): Automation {
+    const index = (this.state.automations ?? []).findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation not found.')
+    }
+    const current = this.state.automations[index]
+    const repoId = updates.projectId ?? current.projectId
+    const repo = this.state.repos.find((entry) => entry.id === repoId)
+    const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const rrule = updates.rrule ?? current.rrule
+    const dtstart = updates.dtstart ?? current.dtstart
+    const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
+    const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+    const updated: Automation = {
+      ...current,
+      ...updates,
+      name:
+        updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
+      projectId: repoId,
+      executionTargetType,
+      executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
+      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      workspaceMode,
+      workspaceId:
+        workspaceMode === 'existing'
+          ? Object.hasOwn(updates, 'workspaceId')
+            ? (updates.workspaceId ?? null)
+            : current.workspaceId
+          : null,
+      baseBranch:
+        workspaceMode === 'new_per_run'
+          ? Object.hasOwn(updates, 'baseBranch')
+            ? (updates.baseBranch ?? null)
+            : (current.baseBranch ?? null)
+          : null,
+      rrule,
+      dtstart,
+      nextRunAt: scheduleChanged
+        ? nextAutomationOccurrenceAfter(rrule, dtstart, Date.now())
+        : current.nextRunAt,
+      updatedAt: Date.now()
+    }
+    this.state.automations[index] = updated
+    this.flush()
+    return updated
+  }
+
+  deleteAutomation(id: string): void {
+    this.state.automations = (this.state.automations ?? []).filter((entry) => entry.id !== id)
+    this.state.automationRuns = (this.state.automationRuns ?? []).filter(
+      (entry) => entry.automationId !== id
+    )
+    this.flush()
+  }
+
+  createAutomationRun(
+    automation: Automation,
+    scheduledFor: number,
+    trigger: AutomationRunTrigger = 'scheduled'
+  ): AutomationRun {
+    const existing = (this.state.automationRuns ?? []).find(
+      (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
+    )
+    if (existing) {
+      return existing
+    }
+    const now = Date.now()
+    const runNumber =
+      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id).length +
+      1
+    const run: AutomationRun = {
+      id: randomUUID(),
+      automationId: automation.id,
+      title: `${automation.name} run ${runNumber}`,
+      scheduledFor,
+      status: 'pending',
+      trigger,
+      workspaceId: automation.workspaceId,
+      sessionKind: 'terminal',
+      chatSessionId: null,
+      terminalSessionId: null,
+      error: null,
+      startedAt: null,
+      dispatchedAt: null,
+      createdAt: now
+    }
+    this.state.automationRuns = [...(this.state.automationRuns ?? []), run]
+    this.flush()
+    return run
+  }
+
+  updateAutomationRun(result: AutomationDispatchResult): AutomationRun {
+    const index = (this.state.automationRuns ?? []).findIndex((entry) => entry.id === result.runId)
+    if (index === -1) {
+      throw new Error('Automation run not found.')
+    }
+    const now = Date.now()
+    const current = this.state.automationRuns[index]
+    const updated: AutomationRun = {
+      ...current,
+      status: result.status,
+      workspaceId: result.workspaceId ?? current.workspaceId,
+      terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      error: result.error ?? null,
+      startedAt: current.startedAt ?? now,
+      dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
+    }
+    this.state.automationRuns[index] = updated
+    const automation = this.state.automations.find((entry) => entry.id === updated.automationId)
+    if (automation) {
+      automation.lastRunAt = now
+      automation.updatedAt = now
+    }
+    this.flush()
+    return updated
+  }
+
+  advanceAutomationNextRun(id: string, now = Date.now()): Automation {
+    const index = (this.state.automations ?? []).findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation not found.')
+    }
+    const current = this.state.automations[index]
+    const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
+    const updated = { ...current, nextRunAt, updatedAt: Date.now() }
+    this.state.automations[index] = updated
+    this.flush()
+    return updated
+  }
+
+  getLatestAutomationOccurrence(automation: Automation, now = Date.now()): number | null {
+    return latestAutomationOccurrenceAtOrBefore(automation.rrule, automation.dtstart, now)
   }
 
   // ── Worktree Meta ──────────────────────────────────────────────────

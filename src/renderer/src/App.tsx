@@ -34,6 +34,7 @@ import {
 import { useAppStore } from './store'
 import { useShallow } from 'zustand/react/shallow'
 import { useIpcEvents } from './hooks/useIpcEvents'
+import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
@@ -146,6 +147,7 @@ function WindowControls(): React.JSX.Element {
 
 const Landing = lazy(() => import('./components/Landing'))
 const TaskPage = lazy(() => import('./components/TaskPage'))
+const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
@@ -292,6 +294,7 @@ function App(): React.JSX.Element {
 
   // Subscribe to IPC push events
   useIpcEvents()
+  useAutomationDispatchEvents()
   // Why: retention must run at App level so the inline per-card agents list
   // always sees retained entries. If retention ran inside the sidebar-card
   // subtree, "done" agents would vanish any time the user collapsed a card's
@@ -490,7 +493,7 @@ function App(): React.JSX.Element {
     return useAppStore.subscribe((state, previousState) => {
       // Why: skip the key build entirely when no input field has changed by
       // reference. Mirrors every field used by getRuntimeMobileSessionSyncKey
-      // so this gate stays a strict superset of "could the key have changed?"
+      // so this gate covers every "could the key have changed?" case.
       // — if any field's reference is unchanged, neither the projection
       // serialized from it nor the reference-compared map can have changed.
       if (
@@ -683,7 +686,10 @@ function App(): React.JSX.Element {
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
   const showRightSidebarControls =
-    activeView !== 'settings' && activeView !== 'tasks' && activeView !== 'activity'
+    activeView !== 'settings' &&
+    activeView !== 'tasks' &&
+    activeView !== 'activity' &&
+    activeView !== 'automations'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -738,7 +744,7 @@ function App(): React.JSX.Element {
         // Why: Back/Forward traverse mixed worktree + Tasks visits, so the
         // shortcut is active wherever the titlebar button cluster is (terminal
         // or tasks). Still suppressed in Settings to keep that view modal-ish.
-        if (activeView !== 'terminal' && activeView !== 'tasks') {
+        if (activeView !== 'terminal' && activeView !== 'tasks' && activeView !== 'automations') {
           return
         }
         e.preventDefault()
@@ -770,7 +776,7 @@ function App(): React.JSX.Element {
 
       // Why: full-page navigation surfaces should not reveal the right sidebar;
       // they are designed as distraction-free content areas.
-      if (activeView === 'tasks' || activeView === 'activity') {
+      if (activeView === 'tasks' || activeView === 'activity' || activeView === 'automations') {
         return
       }
 
@@ -1002,7 +1008,10 @@ function App(): React.JSX.Element {
   ) : null
 
   useEffect(() => {
-    if ((activeView === 'tasks' || activeView === 'activity') && rightSidebarOpen) {
+    if (
+      (activeView === 'tasks' || activeView === 'activity' || activeView === 'automations') &&
+      rightSidebarOpen
+    ) {
       // Why: hide the right sidebar immediately when entering full-page
       // navigation views so previous side-panel state cannot occlude them.
       actions.setRightSidebarOpen(false)
@@ -1168,6 +1177,7 @@ function App(): React.JSX.Element {
                   <Suspense fallback={null}>
                     {activeView === 'settings' ? <Settings /> : null}
                     {activeView === 'tasks' ? <TaskPage /> : null}
+                    {activeView === 'automations' ? <AutomationsPage /> : null}
                     {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                     {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
                   </Suspense>
