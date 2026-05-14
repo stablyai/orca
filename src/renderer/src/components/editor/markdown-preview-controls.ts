@@ -27,6 +27,11 @@ export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly Ed
   if (target.mode !== 'edit') {
     return getMarkdownViewModes(target)
   }
+  if (target.language === 'notebook') {
+    // Why: notebook source mode is raw JSON and Changes would diff that JSON,
+    // which is noisy and currently invalid for restored external notebooks.
+    return NOTEBOOK_VIEW_MODES
+  }
   const languageModes = getMarkdownViewModes(target)
   if (languageModes.length > 0) {
     return [...languageModes, 'changes']

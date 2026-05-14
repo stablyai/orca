@@ -84,6 +84,19 @@ function shouldRetryFileLoadError(message: string): boolean {
   )
 }
 
+function isAbsolutePathLike(value: string): boolean {
+  return value.startsWith('/') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value)
+}
+
+function canUseChangesModeForFile(file: OpenFile): boolean {
+  return (
+    file.mode === 'edit' &&
+    !file.isUntitled &&
+    file.relativePath !== file.filePath &&
+    !isAbsolutePathLike(file.relativePath)
+  )
+}
+
 // Why: split-pane layouts mount one EditorPanel per pane, and each panel
 // attaches its own listener to `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT`.
 // Without coordination, a single external write fans out into N concurrent
@@ -191,6 +204,7 @@ function EditorPanelInner({
   const isChangesMode =
     !!activeFile &&
     activeFile.mode === 'edit' &&
+    canUseChangesModeForFile(activeFile) &&
     editorViewMode[activeFile.id] === 'changes' &&
     !fileContents[activeFile.id]?.isBinary &&
     !fileContents[activeFile.id]?.loadError
@@ -431,6 +445,9 @@ function EditorPanelInner({
       return
     }
     try {
+      if (file.mode === 'edit' && !canUseChangesModeForFile(file)) {
+        return
+      }
       // Extract worktree path from absolute file path and relative path
       const worktreePath = file.filePath.slice(
         0,
@@ -1094,12 +1111,14 @@ function EditorPanelInner({
   })
   const isBinaryEditSurface =
     activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
+  const canUseChangesMode = canUseChangesModeForFile(activeFile)
   // Why: edit-mode binary/image tabs already have their own dedicated renderers
-  // and cannot enter the Changes diff surface. Hide that segment rather than
-  // offering a toggle state the renderer will immediately ignore.
-  const availableEditorToggleModes = isBinaryEditSurface
-    ? editorToggleModes.filter((mode) => mode !== 'changes')
-    : editorToggleModes
+  // and external files have no repo-relative path for git diff. Hide Changes
+  // rather than offering a segment the renderer will immediately ignore.
+  const availableEditorToggleModes =
+    isBinaryEditSurface || !canUseChangesMode
+      ? editorToggleModes.filter((mode) => mode !== 'changes')
+      : editorToggleModes
   // Why: a toggle with a single option is just a decorative pill with nothing
   // to switch to. Binary plain-code tabs end up here after 'changes' is
   // stripped — on main they had no header toggle at all, so requiring >1 mode
