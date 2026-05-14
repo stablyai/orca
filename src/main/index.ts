@@ -535,8 +535,16 @@ app.whenReady().then(async () => {
     onOpenSettings: () => {
       mainWindow?.webContents.send('ui:openSettings')
     },
-    onOpenFeatureTour: () => {
-      mainWindow?.webContents.send('ui:openFeatureTour')
+    onOpenFeatureTour: (targetWindow) => {
+      // Why: menu clicks provide the BrowserWindow that invoked the item. Use it
+      // first so hidden/headless E2E windows and future multi-window flows route
+      // the tour to the correct renderer instead of relying on global focus.
+      const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
+      const webContents =
+        targetBrowserWindow && !targetBrowserWindow.isDestroyed()
+          ? targetBrowserWindow.webContents
+          : mainWindow?.webContents
+      webContents?.send('ui:openFeatureTour')
     },
     onZoomIn: () => {
       mainWindow?.webContents.send('terminal:zoom', 'in')

@@ -10,7 +10,7 @@ export type AppearanceMenuKey = keyof AppearanceMenuState
 
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
-  onOpenFeatureTour: () => void
+  onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: { includePrerelease: boolean }) => void
   onZoomIn: () => void
   onZoomOut: () => void
@@ -77,7 +77,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const featureTourItem: Electron.MenuItemConstructorOptions = {
     label: 'Feature tour',
-    click: () => onOpenFeatureTour()
+    click: (_menuItem, window) => onOpenFeatureTour(window)
   }
 
   const exportPdfItem: Electron.MenuItemConstructorOptions = {

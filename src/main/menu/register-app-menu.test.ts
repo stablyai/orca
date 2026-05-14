@@ -200,9 +200,11 @@ describe('registerAppMenu', () => {
     )
     expect(featureTourItem?.accelerator).toBeUndefined()
 
-    featureTourItem?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
+    const targetWindow = {} as Electron.BaseWindow
+    featureTourItem?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
 
     expect(options.onOpenFeatureTour).toHaveBeenCalledTimes(1)
+    expect(options.onOpenFeatureTour).toHaveBeenCalledWith(targetWindow)
   })
 
   it('exposes an Appearance submenu under View with checkbox items reflecting state', () => {
