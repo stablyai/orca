@@ -857,7 +857,7 @@ export function ResourceUsageStatusSegment({
     [repos, worktreesByRepo]
   )
   const oldWorkspaceCountLabel = hasUnloadedRemoteWorktrees
-    ? `${oldWorkspaceCount} known`
+    ? `${oldWorkspaceCount}+`
     : String(oldWorkspaceCount)
 
   // Why: memorySnapshotError is null both for "last fetch succeeded" and

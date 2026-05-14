@@ -338,16 +338,14 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   {selectedCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">
-                        {selectedCount} {scanNoticeMessage ? 'known ' : ''}old workspace
-                        {selectedCount === 1 ? '' : 's'}
+                        {selectedCount} workspace{selectedCount === 1 ? '' : 's'}
                       </span>{' '}
-                      selected.
+                      selected for removal.
                     </>
                   ) : readyCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">
-                        {readyCount} {scanNoticeMessage ? 'known ' : ''}old workspace
-                        {readyCount === 1 ? '' : 's'}
+                        {readyCount} workspace{readyCount === 1 ? '' : 's'}
                       </span>{' '}
                       suggested for cleanup.
                     </>
