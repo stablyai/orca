@@ -90,7 +90,7 @@
     "katex": "^0.16.45",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
-    "mermaid": "^11.14.0",
+    "mermaid": "^11.15.0",
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "^5.7.284",
