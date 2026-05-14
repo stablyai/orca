@@ -6,13 +6,10 @@ import {
   type FeatureWallTileId
 } from '../../../../shared/feature-wall-tiles'
 import { FEATURE_WALL_MAX_DWELL_MS } from '../../../../shared/feature-wall-telemetry'
-import { Button } from '@/components/ui/button'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
@@ -232,7 +229,6 @@ export default function FeatureWallModal(): JSX.Element | null {
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
         className="scrollbar-sleek max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] gap-4 overflow-y-auto p-5 sm:max-w-[1040px]"
-        showCloseButton={false}
         tabIndex={-1}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
@@ -283,12 +279,6 @@ export default function FeatureWallModal(): JSX.Element | null {
             )
           })}
         </div>
-
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="ghost">Close</Button>
-          </DialogClose>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
