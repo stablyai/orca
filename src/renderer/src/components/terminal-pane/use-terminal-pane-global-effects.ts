@@ -227,6 +227,9 @@ export function useTerminalPaneGlobalEffects({
   // the foreground terminal pane consumes the inserted text — otherwise text
   // would be duplicated across all mounted but inactive tabs.
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
     const onDictationInsert = (event: Event): void => {
       if (!isActiveRef.current) {
         return
