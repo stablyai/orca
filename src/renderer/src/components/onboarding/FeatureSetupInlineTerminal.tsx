@@ -117,7 +117,7 @@ export function FeatureSetupInlineTerminal({
           Settings.
         </p>
       </div>
-      <div className="relative h-[240px] min-h-0 bg-background">
+      <div className="relative h-[280px] min-h-0 bg-background">
         {cwd && tabId ? (
           <TerminalPane
             tabId={tabId}
