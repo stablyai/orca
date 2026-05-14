@@ -1,5 +1,4 @@
 import type { StoreApi } from 'zustand'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
@@ -20,49 +19,16 @@ import {
 import { flushPendingEditorChange } from './editor-pending-flush'
 import { clearSelfWrite, recordSelfWrite } from './editor-self-write-registry'
 import {
+  autosaveSubscriberInputsEqual,
+  getAutosaveSubscriberInputs,
+  getDuplicateDirtySavePaths
+} from './editor-autosave-state-projections'
+import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
 } from '../../../../shared/editor-save-events'
 
 type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
-
-type AutosaveSubscriberInputs = {
-  openFiles: AppState['openFiles']
-  editorDrafts: AppState['editorDrafts']
-  editorAutoSave: boolean | undefined
-  editorAutoSaveDelayMs: number | undefined
-}
-
-function getAutosaveSubscriberInputs(state: AppState): AutosaveSubscriberInputs {
-  return {
-    openFiles: state.openFiles,
-    editorDrafts: state.editorDrafts,
-    editorAutoSave: state.settings?.editorAutoSave,
-    editorAutoSaveDelayMs: state.settings?.editorAutoSaveDelayMs
-  }
-}
-
-function autosaveSubscriberInputsEqual(
-  a: AutosaveSubscriberInputs,
-  b: AutosaveSubscriberInputs
-): boolean {
-  return (
-    a.openFiles === b.openFiles &&
-    a.editorDrafts === b.editorDrafts &&
-    a.editorAutoSave === b.editorAutoSave &&
-    a.editorAutoSaveDelayMs === b.editorAutoSaveDelayMs
-  )
-}
-
-function getDuplicateDirtySavePaths(files: OpenFile[]): string[] {
-  const counts = new Map<string, number>()
-  for (const file of files) {
-    counts.set(file.filePath, (counts.get(file.filePath) ?? 0) + 1)
-  }
-  return Array.from(counts.entries())
-    .filter(([, count]) => count > 1)
-    .map(([filePath]) => filePath)
-}
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const autoSaveTimers = new Map<string, number>()
@@ -394,8 +360,4 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     saveQueue.clear()
     saveGeneration.clear()
   }
-}
-
-export function attachAppEditorAutosaveController(): () => void {
-  return attachEditorAutosaveController(useAppStore)
 }
