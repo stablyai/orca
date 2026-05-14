@@ -5,12 +5,7 @@ import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
-import type {
-  BrowserTab as BrowserTabState,
-  Tab,
-  TabGroup,
-  TerminalTab
-} from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { useAllWorktrees } from '../../store/selectors'
 import { createUntitledMarkdownFile } from '../../lib/create-untitled-markdown'
@@ -19,14 +14,16 @@ import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
+import { getProjectNotesEntityId } from '../../lib/open-project-notes-tab'
+import { requestProjectNotesTabClose } from '../../lib/project-notes-close-request'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
+export type GroupNotesItem = { id: string; label: string; entityId: string; isDirty: boolean }
 
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
-const EMPTY_RUNTIME_TERMINAL_TABS: readonly TerminalTab[] = []
 
 type TerminalTabItem = {
   id: string
@@ -59,7 +56,6 @@ export function useTabGroupWorkspaceModel({
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
-      runtimeTerminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_RUNTIME_TERMINAL_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId
     }))
   )
@@ -83,7 +79,6 @@ export function useTabGroupWorkspaceModel({
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
-  const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
   const openFile = useAppStore((state) => state.openFile)
 
   const group = useMemo(
@@ -148,9 +143,17 @@ export function useTabGroupWorkspaceModel({
     [groupTabs, worktreeState.browserTabs]
   )
 
-  const runtimeTerminalTabById = useMemo(
-    () => new Map(worktreeState.runtimeTerminalTabs.map((tab) => [tab.id, tab])),
-    [worktreeState.runtimeTerminalTabs]
+  const notesItems = useMemo<GroupNotesItem[]>(
+    () =>
+      groupTabs
+        .filter((item) => item.contentType === 'notes')
+        .map((item) => ({
+          id: item.id,
+          label: item.label,
+          entityId: item.entityId,
+          isDirty: item.isDirty === true
+        })),
+    [groupTabs]
   )
 
   const closeEditorIfUnreferenced = useCallback(
@@ -206,6 +209,14 @@ export function useTabGroupWorkspaceModel({
       } else if (item.contentType === 'browser') {
         destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
         closeBrowserTab(item.entityId)
+      } else if (item.contentType === 'notes') {
+        requestProjectNotesTabClose(item.id, () => {
+          closeUnifiedTab(item.id)
+          if (!opts?.skipEmptyCheck) {
+            leaveWorktreeIfEmpty()
+          }
+        })
+        return
       } else {
         const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
         if (!canCloseTab) {
@@ -239,6 +250,10 @@ export function useTabGroupWorkspaceModel({
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
+        } else if (item.contentType === 'notes') {
+          requestProjectNotesTabClose(item.id, () => {
+            closeUnifiedTab(item.id)
+          })
         } else {
           const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
           if (canCloseTab) {
@@ -294,6 +309,21 @@ export function useTabGroupWorkspaceModel({
       setActiveTabType('browser')
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
+  )
+
+  const activateNotes = useCallback(
+    (tabId: string) => {
+      const item = groupTabs.find(
+        (candidate) => candidate.id === tabId && candidate.contentType === 'notes'
+      )
+      if (!item) {
+        return
+      }
+      focusGroup(worktreeId, groupId)
+      activateTab(item.id)
+      setActiveTabType('notes')
+    },
+    [activateTab, focusGroup, groupId, groupTabs, setActiveTabType, worktreeId]
   )
 
   const createSplitGroup = useCallback(
@@ -434,11 +464,10 @@ export function useTabGroupWorkspaceModel({
     activeTab,
     browserItems,
     editorItems,
+    notesItems,
     terminalTabs,
     tabBarOrder,
     groupTabs,
-    worktreePath: worktree?.path,
-    runtimeTerminalTabById,
     expandedPaneByTabId: worktreeState.expandedPaneByTabId,
     commands: {
       focusGroup: () => {
@@ -446,13 +475,13 @@ export function useTabGroupWorkspaceModel({
       },
       activateBrowser,
       activateEditor,
+      activateNotes,
       activateTerminal,
       closeAllEditorTabsInGroup,
       closeGroup,
       closeItem,
       closeOthers,
       closeToRight,
-      consumeSuppressedPtyExit,
       createSplitGroup,
       newBrowserTab: () => {
         const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
@@ -489,6 +518,30 @@ export function useTabGroupWorkspaceModel({
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
         }
+      },
+      newNotesTab: async (noteId?: string) => {
+        const projectId = worktree?.repoId ?? worktreeId
+        let label = 'Project Notes'
+        if (noteId) {
+          try {
+            const result = await window.api.notes.show({ projectId, worktreeId, note: noteId })
+            label = result.note.title
+            await window.api.notes.link({ projectId, worktreeId, note: noteId, kind: 'active' })
+          } catch {
+            label = 'Project Notes'
+          }
+        }
+        const tab = useAppStore.getState().createUnifiedTab(worktreeId, 'notes', {
+          targetGroupId: groupId,
+          label,
+          // Why: each Project Notes tab is an editor surface, not the note
+          // identity itself. Give it a unique entity id so users can keep
+          // more than one notes tab open in the same pane.
+          entityId: getProjectNotesEntityId(projectId, noteId)
+        })
+        focusGroup(worktreeId, groupId)
+        activateTab(tab.id)
+        setActiveTabType('notes')
       },
       newTerminalTab: () => {
         const terminal = createTab(worktreeId, groupId)

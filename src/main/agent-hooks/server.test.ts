@@ -14,7 +14,10 @@ import {
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
-import { parseAgentStatusPayload } from '../../shared/agent-status-types'
+import {
+  AGENT_STATUS_MAX_FIELD_LENGTH,
+  parseAgentStatusPayload
+} from '../../shared/agent-status-types'
 
 const { trackMock } = vi.hoisted(() => ({
   trackMock: vi.fn()
@@ -161,6 +164,119 @@ describe('AgentHookServer listener replay', () => {
       expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
         reason: 'empty_pane_key'
       })
+    } finally {
+      server.stop()
+    }
+  })
+
+  // Why: agent-status-over-SSH §3 — ingestRemote must run the same warn-once
+  // cross-build diagnostics the local HTTP path runs, so a remote source of
+  // genuinely stale hooks emits the same signal locally.
+  it('runs warn-once env/version diagnostics on relay-forwarded events', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: PANE,
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'conn-1',
+          payload: expect.objectContaining({ state: 'working', agentType: 'claude' })
+        })
+      )
+
+      const warnCalls = warn.mock.calls.map((c) => String(c[0]))
+      expect(warnCalls.some((m) => m.includes('v999'))).toBe(true)
+      expect(warnCalls.some((m) => m.includes('development') && m.includes('production'))).toBe(
+        true
+      )
+
+      const warnsAfterFirst = warn.mock.calls.length
+      server.ingestRemote(
+        {
+          paneKey: 'tab-2:0',
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: 'tab-2:0',
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+      expect(warn.mock.calls.length).toBe(warnsAfterFirst)
+      // Why: pin both invariants — warn-once dedupe AND fanout still fires for
+      // the second event. Without the second assertion, a future refactor that
+      // drops the second event silently would still leave warn-count unchanged.
+      expect(listener).toHaveBeenCalledTimes(2)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('treats remote env as normal relay traffic and normalizes payload at the trust boundary', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      const oversizedPrompt = 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH + 50)
+      server.ingestRemote(
+        {
+          paneKey: ' tab-3:0 ',
+          tabId: ' tab-3 ',
+          worktreeId: ' wt-3 ',
+          env: 'remote',
+          version: '1',
+          payload: {
+            state: 'done',
+            prompt: oversizedPrompt,
+            agentType: 'codex'
+          }
+        },
+        ' conn-9 '
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: 'tab-3:0',
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          connectionId: 'conn-9',
+          payload: expect.objectContaining({
+            state: 'done',
+            agentType: 'codex',
+            prompt: 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH)
+          })
+        })
+      )
+      expect(warn).not.toHaveBeenCalled()
     } finally {
       server.stop()
     }
@@ -1487,6 +1603,67 @@ describe('Endpoint file lifecycle', () => {
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
     } finally {
       server.stop()
+    }
+  })
+
+  it('ingestRemote stamps connectionId and feeds the listener bypassing HTTP', () => {
+    const server = new AgentHookServer()
+    const events: { paneKey: string; connectionId: string | null; payload: unknown }[] = []
+    server.setListener((evt) => {
+      events.push({
+        paneKey: evt.paneKey,
+        connectionId: evt.connectionId,
+        payload: evt.payload
+      })
+    })
+    try {
+      server.ingestRemote(
+        {
+          paneKey: 'tab-3:0',
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          payload: {
+            state: 'working',
+            prompt: 'remote prompt',
+            agentType: 'claude'
+          }
+        },
+        'conn-42'
+      )
+      expect(events).toHaveLength(1)
+      expect(events[0].paneKey).toBe('tab-3:0')
+      expect(events[0].connectionId).toBe('conn-42')
+      expect(events[0].payload).toMatchObject({
+        state: 'working',
+        prompt: 'remote prompt',
+        agentType: 'claude'
+      })
+    } finally {
+      server.setListener(null)
+    }
+  })
+
+  it('ingestRemote ignores malformed envelopes (fail-open)', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    try {
+      // Missing paneKey
+      server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
+      // Missing payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { foo: 'bar' } }, 'conn-x')
+      // Invalid payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'nonsense' } }, 'conn-x')
+      // Empty connection id
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'working' } }, '  ')
+      // Wrong types
+      server.ingestRemote(
+        { paneKey: 'tab-1:0', payload: 'not-an-object' as unknown } as never,
+        'conn-x'
+      )
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.setListener(null)
     }
   })
 

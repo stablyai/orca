@@ -39,6 +39,9 @@ module.exports = {
   // integration — dependencies inside the asar archive are invisible to
   // require(). Unpack CLI runtime deps so they resolve from
   // app.asar.unpacked/node_modules/.
+  // Why: sherpa-onnx native bindings (platform-specific subpackages) must be
+  // unpacked because they ship .node addons + .dylib/.so files that cannot be
+  // dlopen()'d from inside the asar archive.
   asarUnpack: [
     'out/cli/**',
     'out/shared/**',
@@ -46,7 +49,8 @@ module.exports = {
     'out/main/computer-sidecar.js',
     'out/main/chunks/**',
     'resources/**',
-    'node_modules/zod/**'
+    'node_modules/zod/**',
+    'node_modules/sherpa-onnx*/**'
   ],
   afterPack: async (context) => {
     const resourcesDir =
@@ -161,10 +165,10 @@ module.exports = {
   dmg: {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
-  deb: {
-    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip']
-  },
   linux: {
+    // Why: Ubuntu 26 ships GNOME Orca as the `orca` package and /usr/bin/orca.
+    // The Linux installer should not claim those system package/file names.
+    executableName: 'orca-ide',
     extraResources: [
       {
         from: 'resources/linux/bin/orca',
@@ -186,6 +190,11 @@ module.exports = {
   },
   appImage: {
     artifactName: 'orca-linux.${ext}'
+  },
+  deb: {
+    packageName: 'orca-ide',
+    artifactName: 'orca-ide_${version}_${arch}.${ext}',
+    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip']
   },
   // Why: must be true so that electron-builder rebuilds native modules
   // (node-pty) for each target architecture when producing dual-arch macOS

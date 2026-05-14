@@ -73,6 +73,7 @@ export class RateLimitService {
   private inactiveClaudeFetching = new Set<string>()
   private inactiveCodexFetching = new Set<string>()
   private lastInactiveClaudeFetchAt = 0
+  private inactiveClaudeAccountsGeneration = 0
   private lastInactiveCodexFetchAt = 0
   private stateListeners = new Set<(state: RateLimitState) => void>()
 
@@ -105,6 +106,7 @@ export class RateLimitService {
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
     this.inactiveClaudeAccountsResolver = resolver
+    this.inactiveClaudeAccountsGeneration += 1
   }
 
   setInactiveCodexAccountsResolver(resolver: () => InactiveCodexAccountInfo[]): void {
@@ -193,6 +195,8 @@ export class RateLimitService {
     if (outgoingAccountId && this.state.claude?.session) {
       this.inactiveClaudeCache.set(outgoingAccountId, this.state.claude)
     }
+    this.inactiveClaudeAccountsGeneration += 1
+    this.pruneInactiveClaudeState()
     this.claudeFetchGeneration += 1
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
@@ -207,10 +211,12 @@ export class RateLimitService {
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
+    this.pruneInactiveClaudeState()
     const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
     if (accounts.length === 0) {
       return
     }
+    const fetchGeneration = this.inactiveClaudeAccountsGeneration
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -218,19 +224,49 @@ export class RateLimitService {
     this.pushToRenderer()
 
     for (const account of accounts) {
+      if (
+        fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
+        !this.isCurrentInactiveClaudeAccount(account.id)
+      ) {
+        this.inactiveClaudeFetching.delete(account.id)
+        if (!this.isCurrentInactiveClaudeAccount(account.id)) {
+          this.inactiveClaudeCache.delete(account.id)
+        }
+        this.pushToRenderer()
+        continue
+      }
       try {
         const fresh = await fetchManagedAccountUsage(account)
+        if (
+          fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
+          !this.isCurrentInactiveClaudeAccount(account.id)
+        ) {
+          this.inactiveClaudeFetching.delete(account.id)
+          if (!this.isCurrentInactiveClaudeAccount(account.id)) {
+            this.inactiveClaudeCache.delete(account.id)
+          }
+          this.pushToRenderer()
+          continue
+        }
         const cached = this.inactiveClaudeCache.get(account.id) ?? null
         this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
       } catch {
         // Why: per-account try/catch prevents one Keychain rejection or
         // network error from aborting the remaining accounts in the batch.
+        if (
+          fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
+          !this.isCurrentInactiveClaudeAccount(account.id)
+        ) {
+          this.inactiveClaudeCache.delete(account.id)
+        }
       }
       this.inactiveClaudeFetching.delete(account.id)
       this.pushToRenderer()
     }
 
-    this.lastInactiveClaudeFetchAt = Date.now()
+    if (fetchGeneration === this.inactiveClaudeAccountsGeneration) {
+      this.lastInactiveClaudeFetchAt = Date.now()
+    }
   }
 
   async fetchInactiveCodexAccountsOnOpen(): Promise<void> {
@@ -266,9 +302,32 @@ export class RateLimitService {
   }
 
   evictInactiveClaudeCache(accountId: string): void {
+    this.inactiveClaudeAccountsGeneration += 1
     this.inactiveClaudeCache.delete(accountId)
     this.inactiveClaudeFetching.delete(accountId)
     this.pushToRenderer()
+  }
+
+  private isCurrentInactiveClaudeAccount(accountId: string): boolean {
+    return (this.inactiveClaudeAccountsResolver?.() ?? []).some(
+      (account) => account.id === accountId
+    )
+  }
+
+  private pruneInactiveClaudeState(): void {
+    const currentIds = new Set(
+      (this.inactiveClaudeAccountsResolver?.() ?? []).map((account) => account.id)
+    )
+    for (const accountId of this.inactiveClaudeCache.keys()) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveClaudeCache.delete(accountId)
+      }
+    }
+    for (const accountId of this.inactiveClaudeFetching) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveClaudeFetching.delete(accountId)
+      }
+    }
   }
 
   evictInactiveCodexCache(accountId: string): void {
@@ -735,6 +794,7 @@ export class RateLimitService {
     cache: Map<string, ProviderRateLimits>,
     fetching: Set<string>
   ): InactiveAccountUsage[] {
+    this.pruneInactiveClaudeState()
     const result: InactiveAccountUsage[] = []
     for (const [accountId, limits] of cache) {
       result.push({

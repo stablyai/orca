@@ -10,7 +10,7 @@
 // request-driven replay) for the rationale.
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { randomUUID } from 'crypto'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { homedir } from 'os'
 
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
@@ -27,7 +27,11 @@ import {
   type AgentHookEventPayload,
   type HookListenerState
 } from '../shared/agent-hook-listener'
-import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
+import {
+  REMOTE_AGENT_HOOK_ENV,
+  type AgentHookRelayEnvelope,
+  type AgentHookSource
+} from '../shared/agent-hook-relay'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -38,15 +42,25 @@ export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
 
+// Why: cap env/version metadata at 64 chars so a misbehaving agent CLI
+// cannot grow lastEnvelopeMetaByPaneKey unboundedly per pane via the cache
+// + replay path. Canonical values are short ('production'/'development',
+// '1'/'999'); anything longer is treated as absent.
+const MAX_HOOK_META_LEN = 64
+
 function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
+}
+
+export function endpointDirForRelaySocket(sockPath: string): string {
+  return join(dirname(sockPath), RELAY_HOOKS_SUBDIR, basename(sockPath))
 }
 
 export type RelayHookServerOptions = {
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
   endpointDir?: string
-  /** Env tag forwarded into hook payloads (warn-once cross-build diagnostic).
-   *  Defaults to "remote" — distinct from Orca's local 'production'/'development'. */
+  /** Env tag forwarded into hook payloads. Defaults to "remote", a relay
+   *  location marker that main excludes from dev-vs-prod mismatch warnings. */
   env?: string
   /** Called once per parsed payload. The relay wires this to
    *  `dispatcher.notify('agent.hook', envelope)`. */
@@ -76,7 +90,7 @@ export class RelayAgentHookServer {
   private forward: RelayHookForward
 
   constructor(options: RelayHookServerOptions) {
-    this.env = options.env ?? 'remote'
+    this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
     this.forward = options.forward
@@ -252,7 +266,10 @@ export class RelayAgentHookServer {
       return undefined
     }
     const v = (body as Record<string, unknown>).env
-    return typeof v === 'string' && v.length > 0 ? v : undefined
+    if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
+      return undefined
+    }
+    return v
   }
 
   private bodyVersion(body: unknown): string | undefined {
@@ -260,6 +277,9 @@ export class RelayAgentHookServer {
       return undefined
     }
     const v = (body as Record<string, unknown>).version
-    return typeof v === 'string' && v.length > 0 ? v : undefined
+    if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
+      return undefined
+    }
+    return v
   }
 }

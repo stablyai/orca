@@ -194,15 +194,16 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity'
-  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity'
-  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity'
-  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
+  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations'
+  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations'
+  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
     prefilledName?: string
-    taskSource?: 'github' | 'linear'
+    taskSource?: 'github' | 'linear' | 'gitlab'
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
@@ -213,7 +214,7 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      type: 'issue' | 'pr'
+      type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
       url: string
@@ -221,6 +222,10 @@ export type UISlice = {
     agent: TuiAgent
     linkedIssue: string
     linkedPR: number | null
+    /** GitLab parallels — number for an issue, iid for an MR. Optional so
+     *  drafts saved before GitLab support keep loading without migration. */
+    linkedGitLabIssue?: number | null
+    linkedGitLabMR?: number | null
     // Why: repo-scoped start ref selected via the "Start from" picker.
     // Absent means "use the repo's effective base ref".
     baseBranch?: string
@@ -229,6 +234,10 @@ export type UISlice = {
   closeTaskPage: () => void
   openActivityPage: () => void
   closeActivityPage: () => void
+  selectedAutomationId: string | null
+  setSelectedAutomationId: (id: string | null) => void
+  openAutomationsPage: () => void
+  closeAutomationsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -245,6 +254,7 @@ export type UISlice = {
       | 'repo'
       | 'agents'
       | 'accounts'
+      | 'voice'
       | 'experimental'
       | 'mobile'
       | 'ssh'
@@ -412,6 +422,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeTasks: 'terminal',
   previousViewBeforeSettings: 'terminal',
   previousViewBeforeActivity: 'terminal',
+  previousViewBeforeAutomations: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -512,6 +523,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeActivityPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeActivity
+    })),
+  selectedAutomationId: null,
+  setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
+  openAutomationsPage: () =>
+    set((state) => ({
+      activeView: 'automations',
+      previousViewBeforeAutomations:
+        state.activeView === 'automations' ? state.previousViewBeforeAutomations : state.activeView
+    })),
+  closeAutomationsPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeAutomations
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),

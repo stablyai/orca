@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
@@ -34,6 +34,10 @@ class MockHTMLElement {
 
 beforeAll(() => {
   ;(globalThis as unknown as Record<string, unknown>).HTMLElement = MockHTMLElement
+})
+
+beforeEach(() => {
+  mocks.flushTerminalOutput.mockReset()
 })
 
 function mockRootForPane(paneId: number): HTMLDivElement {
@@ -87,5 +91,41 @@ describe('captureTerminalShutdownLayout', () => {
       ptyIdsByLeafId: { 'pane:1': 'pty-1' },
       titlesByLeafId: { 'pane:1': 'build logs' }
     })
+  })
+
+  it('skips local shutdown scrollback serialization while preserving layout metadata', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const pane = {
+      id: 1,
+      terminal: { options: { scrollback: 50_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => 'x'.repeat(512 * 1024))
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: { 1: 'local shell' },
+      existingLayout: {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        buffersByLeafId: { 'pane:1': 'previous-local-scrollback' }
+      },
+      captureBuffers: false
+    })
+
+    expect(mocks.flushTerminalOutput).not.toHaveBeenCalled()
+    expect(pane.serializeAddon.serialize).not.toHaveBeenCalled()
+    expect(layout.buffersByLeafId).toBeUndefined()
+    expect(layout.ptyIdsByLeafId).toEqual({ 'pane:1': 'pty-1' })
+    expect(layout.titlesByLeafId).toEqual({ 'pane:1': 'local shell' })
   })
 })

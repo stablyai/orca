@@ -34,6 +34,7 @@ import {
   installUncaughtPipeErrorGuard,
   patchPackagedProcessPath
 } from './startup/configure-process'
+import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
@@ -55,6 +56,7 @@ import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
+import { AutomationService } from './automations/service'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -76,6 +78,7 @@ let starNag: StarNagService | null = null
 let disposeFeatureWallFirstAgentTour: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
+let automations: AutomationService | null = null
 
 installUncaughtPipeErrorGuard()
 // Why: propagate the Orca app version into `process.env` so PTY-env
@@ -190,6 +193,9 @@ function openMainWindow(): BrowserWindow {
   if (!rateLimits) {
     throw new Error('Rate limit service must be initialized before opening the main window')
   }
+  if (!automations) {
+    throw new Error('Automation service must be initialized before opening the main window')
+  }
   if (!codexAccounts) {
     throw new Error('Codex account service must be initialized before opening the main window')
   }
@@ -250,8 +256,11 @@ function openMainWindow(): BrowserWindow {
     codexAccounts,
     claudeAccounts,
     rateLimits,
-    window.webContents.id
+    window.webContents.id,
+    automations
   )
+  automations.setWebContents(window.webContents)
+  automations.start()
   attachMainWindowServices(
     window,
     store,
@@ -265,6 +274,7 @@ function openMainWindow(): BrowserWindow {
     if (mainWindow === window) {
       mainWindow = null
     }
+    automations?.setWebContents(null)
     // Why: detach the agent hook listener on window close so the server
     // never fires into a destroyed webContents during the gap before
     // reopen (e.g. macOS dock re-activation). This also ensures the
@@ -519,6 +529,7 @@ app.whenReady().then(async () => {
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider()
   })
+  automations = new AutomationService(store)
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   disposeFeatureWallFirstAgentTour = registerFeatureWallFirstAgentTour({
     stats,
@@ -620,32 +631,29 @@ app.whenReady().then(async () => {
   })
   registerMobileHandlers(runtimeRpc)
 
-  // Why: the persistent-terminal daemon is always started. If it fails, the
-  // LocalPtyProvider (initialized at module load in ipc/pty.ts) remains as the
-  // implicit fallback — terminals work, just without cross-restart persistence.
-  try {
-    await initDaemonPtyProvider()
-  } catch (error) {
-    console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
-  }
-  // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
-  // so the hook server must start before the window opens — otherwise
-  // restored terminals race ahead without the env on first launch.
-  try {
-    await agentHookServer.start({
-      env: app.isPackaged ? 'production' : 'development',
-      // Why: passing the userData path lets the server write its endpoint
-      // file (PORT/TOKEN/ENV/VERSION) to a stable location. Hook scripts
-      // source that file at invocation time so they reach the current Orca
-      // even when the PTY's env was frozen under a prior instance.
-      userDataPath: app.getPath('userData')
-    })
-  } catch (error) {
-    // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
-    // enrichment only. Orca must still boot even if the local loopback
-    // receiver cannot bind on this launch.
-    console.error('[agent-hooks] Failed to start local hook server:', error)
-  }
+  await startFirstWindowStartupServices({
+    // Why: the persistent-terminal daemon is always started. If it fails, the
+    // LocalPtyProvider remains as the implicit fallback — terminals work, just
+    // without cross-restart persistence.
+    startDaemonPtyProvider: () => initDaemonPtyProvider(),
+    // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
+    // so the hook server must start before restored terminals can mount.
+    startAgentHookServer: () =>
+      agentHookServer.start({
+        env: app.isPackaged ? 'production' : 'development',
+        // Why: hooks source this endpoint file at invocation time, so old PTY
+        // env still reaches the current Orca process after an app restart.
+        userDataPath: app.getPath('userData')
+      }),
+    onDaemonError: (error) => {
+      console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
+    },
+    onAgentHookServerError: (error) => {
+      // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
+      // enrichment only. Orca must still boot if the loopback receiver fails.
+      console.error('[agent-hooks] Failed to start local hook server:', error)
+    }
+  })
 
   // Why: once the hook server is ready (or has already failed open), window
   // creation and runtime RPC startup are independent.
@@ -706,6 +714,7 @@ app.on('will-quit', (e) => {
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
   starNag?.stop()
+  automations?.stop()
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   stats?.flush()

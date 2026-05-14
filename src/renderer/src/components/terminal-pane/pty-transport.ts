@@ -19,14 +19,14 @@ import {
 } from './pty-dispatcher'
 import type { PtyTransport, IpcPtyTransportOptions, PtyConnectResult } from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { parseAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { createAgentStatusOscProcessor } from './agent-status-osc'
 
 // Re-export public API so existing consumers keep working.
 export {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
   registerEagerPtyBuffer,
+  subscribeToPtyExit,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
 export type {
@@ -37,108 +37,7 @@ export type {
 } from './pty-dispatcher'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
-// ─── OSC 9999: agent status reporting ──────────────────────────────────────
-// Why OSC 9999: avoids known-used codes (7=cwd, 133=VS Code, 777=Superset,
-// 1337=iTerm2, 9001=Warp). Agents report structured status by printing
-// printf '\x1b]9999;{"state":"working","prompt":"..."}\x07'
-const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
-
-export type ProcessedAgentStatusChunk = {
-  cleanData: string
-  payloads: ParsedAgentStatusPayload[]
-}
-
-function findAgentStatusTerminator(
-  data: string,
-  searchFrom: number
-): { index: number; length: 1 | 2 } | null {
-  const belIndex = data.indexOf('\x07', searchFrom)
-  const stIndex = data.indexOf('\x1b\\', searchFrom)
-  if (belIndex === -1 && stIndex === -1) {
-    return null
-  }
-  if (belIndex === -1) {
-    return { index: stIndex, length: 2 }
-  }
-  if (stIndex === -1 || belIndex < stIndex) {
-    return { index: belIndex, length: 1 }
-  }
-  return { index: stIndex, length: 2 }
-}
-
-/**
- * Stateful OSC 9999 parser for PTY streams.
- * Why: the design doc explicitly calls out partial reads across chunks. Regexing
- * each chunk independently drops valid status updates when the PTY splits the
- * escape sequence mid-payload and can leak raw control bytes into xterm.
- */
-export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgentStatusChunk {
-  // Why: cap the pending buffer so a malformed or binary stream containing our
-  // OSC 9999 prefix without a valid terminator cannot grow memory unbounded.
-  const MAX_PENDING = 64 * 1024
-  let pending = ''
-
-  return (data: string): ProcessedAgentStatusChunk => {
-    const combined = pending + data
-    pending = ''
-
-    const payloads: ParsedAgentStatusPayload[] = []
-    let cleanData = ''
-    let cursor = 0
-
-    while (cursor < combined.length) {
-      const start = combined.indexOf(OSC_AGENT_STATUS_PREFIX, cursor)
-      if (start === -1) {
-        // Why: if the stream ends on a partial copy of the prefix (e.g. "\x1b]9999"
-        // without the trailing ";"), carrying that tail into `pending` lets the
-        // next chunk complete the prefix. Without this, the tail would be
-        // emitted as plain output and the next chunk's valid status update
-        // would be dropped because its prefix is incomplete on its own.
-        const tail = combined.slice(cursor)
-        const prefixLen = OSC_AGENT_STATUS_PREFIX.length
-        let partialPrefixLen = 0
-        for (let k = Math.min(prefixLen - 1, tail.length); k > 0; k--) {
-          if (tail.endsWith(OSC_AGENT_STATUS_PREFIX.slice(0, k))) {
-            partialPrefixLen = k
-            break
-          }
-        }
-        if (partialPrefixLen > 0) {
-          cleanData += tail.slice(0, tail.length - partialPrefixLen)
-          pending = tail.slice(tail.length - partialPrefixLen)
-        } else {
-          cleanData += tail
-        }
-        break
-      }
-
-      cleanData += combined.slice(cursor, start)
-      const payloadStart = start + OSC_AGENT_STATUS_PREFIX.length
-      const terminator = findAgentStatusTerminator(combined, payloadStart)
-
-      if (terminator === null) {
-        const candidate = combined.slice(start)
-        // Why: drop the unterminated OSC entirely when it overflows MAX_PENDING,
-        // instead of flushing it to xterm. xterm.js would treat a lone
-        // "\x1b]9999;..." as an open string state and could swallow later
-        // output until it sees a BEL/ST terminator. Bounding the buffer is the
-        // goal; leaking corrupt escape sequences would be worse than the
-        // dropped payload.
-        pending = candidate.length > MAX_PENDING ? '' : candidate
-        break
-      }
-
-      const parsed = parseAgentStatusPayload(combined.slice(payloadStart, terminator.index))
-      if (parsed) {
-        payloads.push(parsed)
-      }
-      cursor = terminator.index + terminator.length
-    }
-
-    return { cleanData, payloads }
-  }
-}
 
 // Why: onAgentStatus callback added to IpcPtyTransportOptions in pty-dispatcher
 // so the OSC 9999 status payloads can be forwarded to the store.

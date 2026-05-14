@@ -28,6 +28,7 @@ import {
   parseFormEncodedBody,
   readRequestBody,
   resolveHookSource,
+  warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
   type HookListenerState
@@ -269,19 +270,17 @@ export class AgentHookServer {
   /** Ingest a payload that arrived over the relay JSON-RPC channel rather
    *  than the local HTTP server. `connectionId` is the SshChannelMultiplexer
    *  identity Orca holds (the wire envelope carries connectionId: null and
-   *  Orca stamps the real value here). The relay pre-normalizes the inner
-   *  payload via the shared listener module; we re-run the canonical
-   *  normalizer here as a defense-in-depth check at the trust boundary
-   *  before feeding the event into the same `onAgentStatus` fanout the HTTP
-   *  path uses. See docs/design/agent-status-over-ssh.md §5. */
+   *  Orca stamps the real value here). The relay has already normalized the
+   *  payload via the shared listener module, but main is still the SSH trust
+   *  boundary: re-run the canonical status normalizer before caching or
+   *  persisting anything. The `env`/`version` fields are forwarded verbatim
+   *  from the agent CLI's POST body on the remote and validated here so the
+   *  warn-once diagnostics fire for real cross-build mismatches. */
   ingestRemote(
     envelope: {
       paneKey: string
       tabId?: string
       worktreeId?: string
-      // Why: forwarded verbatim from the agent CLI POST body on the remote so
-      // the warn-once cross-build / dev-vs-prod diagnostics fire identically
-      // to the local HTTP path. Declared on the type now; consumed in PR2.
       env?: string
       version?: string
       payload: unknown
@@ -339,6 +338,14 @@ export class AgentHookServer {
     if (!normalizedPayload) {
       return
     }
+    // Why: run the same warn-once diagnostics the HTTP path runs (cross-build
+    // version mismatch, dev-vs-prod env mismatch). Use `this.env` as the
+    // expected env so the messages match what the local server produces.
+    warnOnHookEnvOrVersionMismatch(this.state, {
+      version: envelope.version,
+      env: envelope.env,
+      expectedEnv: this.env
+    })
     const event: AgentHookEventPayload = {
       paneKey,
       tabId,

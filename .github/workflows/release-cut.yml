@@ -412,6 +412,112 @@ jobs:
             --generate-notes \
             --prerelease="$is_rc"
 
+  # Why: the rc.7 incident did not match the original publisher hypothesis.
+  # Poll both authenticated release state and anonymous atom visibility during
+  # real cuts so the next diagnosis has proof instead of timing guesses.
+  monitor-release:
+    needs:
+      - cut
+      - create-release
+    if: needs.cut.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Poll release visibility during cut
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          log_path="$RUNNER_TEMP/release-cut-instrumentation-${TAG}.jsonl"
+          release_error="$RUNNER_TEMP/release-api-error.txt"
+          : >"$log_path"
+
+          for attempt in $(seq 1 60); do
+            timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            release_json=""
+            release_error_body=""
+            if releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" 2>"$release_error")"; then
+              # Why: releases-by-tag cannot inspect the draft we are monitoring.
+              if ! release_json="$(jq -e -c --arg tag "$TAG" '
+                map(select(.tag_name == $tag))
+                | if length == 1 then .[0] else empty end
+              ' <<<"$releases_json")"; then
+                release_json=""
+                release_error_body="Release $TAG was not found in the draft-aware releases list."
+              fi
+            else
+              release_error_body="$(cat "$release_error")"
+            fi
+
+            atom_body="$(curl -fsSL --retry 2 --max-time 10 "https://github.com/$GITHUB_REPOSITORY/releases.atom" 2>/dev/null || true)"
+            tag_in_anon_atom=false
+            if printf '%s' "$atom_body" | grep -Fq "/releases/tag/$TAG"; then
+              tag_in_anon_atom=true
+            fi
+
+            if [[ -n "$release_json" ]]; then
+              jq -c \
+                --arg timestamp "$timestamp" \
+                --argjson tag_in_anon_atom "$tag_in_anon_atom" \
+                --arg run_id "$GITHUB_RUN_ID" \
+                --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+                '{
+                  timestamp: $timestamp,
+                  tag: .tag_name,
+                  draft: .draft,
+                  prerelease: .prerelease,
+                  published_at: .published_at,
+                  author: .author.login,
+                  asset_count: (.assets | length),
+                  assets: (.assets | map({
+                    name,
+                    state,
+                    size,
+                    created_at,
+                    updated_at,
+                    uploader: .uploader.login
+                  })),
+                  tag_in_anon_atom: $tag_in_anon_atom,
+                  workflow_run: {
+                    id: $run_id,
+                    attempt: $run_attempt
+                  }
+                }' <<<"$release_json" >>"$log_path"
+
+              draft="$(jq -r '.draft' <<<"$release_json")"
+              if [[ "$draft" == "false" && "$tag_in_anon_atom" == "true" ]]; then
+                break
+              fi
+            else
+              jq -nc \
+                --arg timestamp "$timestamp" \
+                --arg tag "$TAG" \
+                --arg error "$release_error_body" \
+                --argjson tag_in_anon_atom "$tag_in_anon_atom" \
+                '{
+                  timestamp: $timestamp,
+                  tag: $tag,
+                  release_api_error: $error,
+                  tag_in_anon_atom: $tag_in_anon_atom
+                }' >>"$log_path"
+            fi
+
+            sleep 30
+          done
+
+          echo "Wrote $log_path"
+
+      - name: Upload release visibility log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-cut-instrumentation-${{ needs.cut.outputs.tag }}
+          path: ${{ runner.temp }}/release-cut-instrumentation-*.jsonl
+          if-no-files-found: warn
+
   # Why: E2E runs alongside the release for visibility (failures surface as a
   # red check on the tag), but is NOT in `publish-release`'s needs list.
   # Releases already take a while and the suite is already a required check
@@ -611,6 +717,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify release remains draft after artifact upload
+        # Why: the build matrix must never be the actor that exposes a partial
+        # release. If an uploader or GitHub transition flips draft early, fail
+        # this platform leg and leave the diagnostic monitor artifact behind.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: release upload must validate the draft before it is publicly visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
+          if [[ "$draft" != "true" ]]; then
+            echo "::error::Release $TAG was published during the ${{ matrix.platform }} artifact upload."
+            exit 1
+          fi
+
       # Why post-publish (not pre-publish): electron-builder packs and
       # uploads in a single `--publish always` invocation, so there is no
       # cheap insertion point between pack and upload without splitting
@@ -637,6 +767,43 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+
+      - name: Verify release is still draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: publish-release verifies the draft before making it visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
+          if [[ "$draft" != "true" ]]; then
+            echo "::error::Release $TAG was published before publish-release; refusing to continue."
+            exit 1
+          fi
+
+      - name: Verify release assets complete
+        # Why: publish-release is the only intended draft -> published
+        # transition. Refuse to un-draft until every updater manifest and
+        # referenced installer asset is present on GitHub.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: node config/scripts/verify-release-required-assets.mjs "$TAG"
+
       - name: Publish release
         # Why: derive `--prerelease` from the tag shape (not from whatever
         # electron-builder left the release flagged as). On 2026-04-27,

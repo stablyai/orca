@@ -278,6 +278,7 @@ export class OrcaRuntimeRpcServer {
           const connectionId = this.wsConnectionIds.get(ws)
           if (connectionId) {
             this.runtime.cleanupSubscriptionsForConnection(connectionId)
+            this.runtime.cancelMobileDictationForConnection(connectionId)
             this.wsConnectionIds.delete(ws)
           }
           const channel = this.e2eeChannels.get(ws)
@@ -458,7 +459,11 @@ export class OrcaRuntimeRpcServer {
     }
 
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
-    await this.dispatcher.dispatchStreaming(request, reply, { connectionId, sendBinary })
+    await this.dispatcher.dispatchStreaming(request, reply, {
+      connectionId,
+      clientId: token,
+      sendBinary
+    })
   }
 
   private buildError(id: string, code: string, message: string): RpcResponse {

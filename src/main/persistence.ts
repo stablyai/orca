@@ -2,11 +2,32 @@
 load/save, and flush logic in one file so the full storage contract is reviewable
 as a unit instead of being scattered across modules. */
 import { app, safeStorage } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, unlinkSync } from 'fs'
-import { writeFile, rename, mkdir, rm } from 'fs/promises'
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  renameSync,
+  unlinkSync,
+  copyFileSync,
+  statSync
+} from 'fs'
+import { writeFile, rename, mkdir, rm, copyFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'node:crypto'
+import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationDispatchResult,
+  AutomationRun,
+  AutomationRunTrigger,
+  AutomationUpdateInput
+} from '../shared/automations-types'
+import {
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from '../shared/automation-schedules'
 import type {
   PersistedState,
   Repo,
@@ -25,6 +46,7 @@ import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
   getDefaultOnboardingState,
+  getDefaultVoiceSettings,
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
@@ -32,7 +54,9 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -96,6 +120,16 @@ function getDataFile(): string {
     _dataFile = join(app.getPath('userData'), 'orca-data.json')
   }
   return _dataFile
+}
+
+// Why (issue #1158): keep 5 rolling backups of orca-data.json so a corrupt or
+// empty write leaves at least one earlier copy recoverable. Five snapshots at
+// >=1-hour spacing cover recent work without churning disk on every debounce.
+const BACKUP_COUNT = 5
+const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+
+function backupPath(dataFile: string, index: number): string {
+  return `${dataFile}.bak.${index}`
 }
 
 function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' {
@@ -231,7 +265,94 @@ export class Store {
     this.state = this.load()
   }
 
-  private load(): PersistedState {
+  // Why (issue #1158): debounced writes fire as often as every 300ms during
+  // active use. The backup ring should capture meaningfully different moments,
+  // not five near-identical snapshots from one burst of store updates.
+  private shouldRotateBackups(now: number, dataFile: string): boolean {
+    try {
+      const mtime = statSync(backupPath(dataFile, 0)).mtimeMs
+      return now - mtime >= BACKUP_MIN_INTERVAL_MS
+    } catch {
+      return true
+    }
+  }
+
+  // Why: rotate oldest to discarded and shift .bak.i to .bak.i+1 by rename;
+  // then copy the current data file to .bak.0 so load() has a JSON recovery
+  // source even if a later primary write is truncated or corrupted.
+  private async rotateBackupsAsync(dataFile: string): Promise<void> {
+    if (!existsSync(dataFile)) {
+      return
+    }
+    await rm(backupPath(dataFile, BACKUP_COUNT - 1)).catch((err: unknown) => {
+      if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('[persistence] Failed to remove oldest backup:', err)
+      }
+    })
+    for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
+      const src = backupPath(dataFile, i)
+      const dst = backupPath(dataFile, i + 1)
+      if (existsSync(src)) {
+        await rename(src, dst).catch((err) => {
+          console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
+        })
+      }
+    }
+    await copyFile(dataFile, backupPath(dataFile, 0)).catch((err) => {
+      console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+    })
+  }
+
+  private rotateBackupsSync(dataFile: string): void {
+    if (!existsSync(dataFile)) {
+      return
+    }
+    try {
+      unlinkSync(backupPath(dataFile, BACKUP_COUNT - 1))
+    } catch (err) {
+      if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('[persistence] Failed to remove oldest backup:', err)
+      }
+    }
+    for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
+      const src = backupPath(dataFile, i)
+      const dst = backupPath(dataFile, i + 1)
+      if (existsSync(src)) {
+        try {
+          renameSync(src, dst)
+        } catch (err) {
+          console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
+        }
+      }
+    }
+    try {
+      copyFileSync(dataFile, backupPath(dataFile, 0))
+    } catch (err) {
+      console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+    }
+  }
+
+  private restoreFromBackup(dataFile: string): boolean {
+    for (let i = 0; i < BACKUP_COUNT; i++) {
+      const path = backupPath(dataFile, i)
+      if (!existsSync(path)) {
+        continue
+      }
+      try {
+        const raw = readFileSync(path, 'utf-8')
+        JSON.parse(raw)
+        mkdirSync(dirname(dataFile), { recursive: true })
+        writeFileSync(dataFile, raw, 'utf-8')
+        console.warn(`[persistence] Recovered state from backup slot ${i}: ${path}`)
+        return true
+      } catch (err) {
+        console.error(`[persistence] Backup slot ${i} unusable, trying next:`, err)
+      }
+    }
+    return false
+  }
+
+  private load(allowBackupRecovery = true): PersistedState {
     // Capture once, at the top: this is the unambiguous "has the user run
     // Orca before?" signal used by the telemetry cohort migration below.
     // Field-based inference (e.g., `settings.telemetry` presence) does not
@@ -305,9 +426,16 @@ export class Store {
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
+            terminalQuickCommands: normalizeTerminalQuickCommands(
+              parsed.settings?.terminalQuickCommands
+            ),
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications
+            },
+            voice: {
+              ...getDefaultVoiceSettings(),
+              ...parsed.settings?.voice
             }
           },
           // Why: 'recent' used to mean the weighted smart sort. One-shot
@@ -403,6 +531,8 @@ export class Store {
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          automations: Array.isArray(parsed.automations) ? parsed.automations : [],
+          automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
           onboarding: (() => {
             // Why: if we successfully parsed an existing orca-data.json that
             // lacks an onboarding block, this is an upgrade-cohort user —
@@ -436,7 +566,7 @@ export class Store {
         }
       }
     } catch (err) {
-      console.error('[persistence] Failed to load state, using defaults:', err)
+      console.error('[persistence] Failed to load primary state, trying backups:', err)
     }
 
     // Corrupt-file catch path and "no file on disk" path converge here. The
@@ -444,13 +574,31 @@ export class Store {
     // because a user whose `orca-data.json` got corrupted is not a fresh
     // install of the telemetry release — they still count as existing and
     // must see the opt-in banner, not the default-on toast.
+    if (result === null && allowBackupRecovery) {
+      let hasBackup = false
+      for (let i = 0; i < BACKUP_COUNT; i++) {
+        if (existsSync(backupPath(dataFile, i))) {
+          hasBackup = true
+          break
+        }
+      }
+      if (fileExistedOnLoad || hasBackup) {
+        if (this.restoreFromBackup(dataFile)) {
+          return this.load(false)
+        }
+        console.error('[persistence] No usable state file or backup found, using defaults')
+      }
+    }
+
     if (result === null) {
       result = getDefaultPersistedState(homedir())
     }
 
     result = {
       ...result,
-      workspaceSession: pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+      workspaceSession: pruneWorkspaceSessionBrowserHistory(
+        pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+      )
     }
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
@@ -521,13 +669,20 @@ export class Store {
     }
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
-      this.pendingWrite = this.writeToDiskAsync()
+      // Why (issue #1158): serialize async writes so backup rotation never has
+      // two callers racing over the same dataFile/tmp/.bak paths.
+      const prev = this.pendingWrite ?? Promise.resolve()
+      const next = prev
+        .then(() => this.writeToDiskAsync())
         .catch((err) => {
           console.error('[persistence] Failed to write state:', err)
         })
         .finally(() => {
-          this.pendingWrite = null
+          if (this.pendingWrite === next) {
+            this.pendingWrite = null
+          }
         })
+      this.pendingWrite = next
     }, 300)
   }
 
@@ -580,6 +735,15 @@ export class Store {
         await rm(tmpFile).catch(() => {})
       }
     }
+    // Why (issue #1158): rotate only after the atomic rename succeeded; then
+    // re-check the generation so a concurrent flush owns any backup rotation.
+    if (this.writeGeneration !== gen) {
+      return
+    }
+    const now = Date.now()
+    if (this.shouldRotateBackups(now, dataFile)) {
+      await this.rotateBackupsAsync(dataFile)
+    }
   }
 
   // Why: synchronous variant kept only for flush() at shutdown, where the
@@ -622,6 +786,10 @@ export class Store {
           // Best-effort cleanup; the write already failed, swallow secondary error.
         }
       }
+    }
+    const now = Date.now()
+    if (this.shouldRotateBackups(now, dataFile)) {
+      this.rotateBackupsSync(dataFile)
     }
   }
 
@@ -782,6 +950,186 @@ export class Store {
     this.scheduleSave()
   }
 
+  // ── Automations ───────────────────────────────────────────────────
+
+  listAutomations(): Automation[] {
+    return [...(this.state.automations ?? [])].sort((left, right) =>
+      left.name.localeCompare(right.name)
+    )
+  }
+
+  listAutomationRuns(automationId?: string): AutomationRun[] {
+    const runs = this.state.automationRuns ?? []
+    return [
+      ...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)
+    ].sort((left, right) => right.createdAt - left.createdAt)
+  }
+
+  createAutomation(input: AutomationCreateInput): Automation {
+    const repo = this.state.repos.find((entry) => entry.id === input.projectId)
+    const now = Date.now()
+    const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const automation: Automation = {
+      id: randomUUID(),
+      name: input.name.trim() || 'Untitled automation',
+      prompt: input.prompt,
+      agentId: input.agentId,
+      projectId: input.projectId,
+      executionTargetType,
+      executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
+      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      workspaceMode: input.workspaceMode,
+      workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
+      baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      timezone: input.timezone,
+      rrule: input.rrule,
+      dtstart: input.dtstart,
+      enabled: input.enabled ?? true,
+      nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
+      missedRunPolicy: 'run_once_within_grace',
+      missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.automations = [...(this.state.automations ?? []), automation]
+    this.flush()
+    return automation
+  }
+
+  updateAutomation(id: string, updates: AutomationUpdateInput): Automation {
+    const index = (this.state.automations ?? []).findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation not found.')
+    }
+    const current = this.state.automations[index]
+    const repoId = updates.projectId ?? current.projectId
+    const repo = this.state.repos.find((entry) => entry.id === repoId)
+    const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const rrule = updates.rrule ?? current.rrule
+    const dtstart = updates.dtstart ?? current.dtstart
+    const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
+    const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+    const updated: Automation = {
+      ...current,
+      ...updates,
+      name:
+        updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
+      projectId: repoId,
+      executionTargetType,
+      executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
+      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      workspaceMode,
+      workspaceId:
+        workspaceMode === 'existing'
+          ? Object.hasOwn(updates, 'workspaceId')
+            ? (updates.workspaceId ?? null)
+            : current.workspaceId
+          : null,
+      baseBranch:
+        workspaceMode === 'new_per_run'
+          ? Object.hasOwn(updates, 'baseBranch')
+            ? (updates.baseBranch ?? null)
+            : (current.baseBranch ?? null)
+          : null,
+      rrule,
+      dtstart,
+      nextRunAt: scheduleChanged
+        ? nextAutomationOccurrenceAfter(rrule, dtstart, Date.now())
+        : current.nextRunAt,
+      updatedAt: Date.now()
+    }
+    this.state.automations[index] = updated
+    this.flush()
+    return updated
+  }
+
+  deleteAutomation(id: string): void {
+    this.state.automations = (this.state.automations ?? []).filter((entry) => entry.id !== id)
+    this.state.automationRuns = (this.state.automationRuns ?? []).filter(
+      (entry) => entry.automationId !== id
+    )
+    this.flush()
+  }
+
+  createAutomationRun(
+    automation: Automation,
+    scheduledFor: number,
+    trigger: AutomationRunTrigger = 'scheduled'
+  ): AutomationRun {
+    const existing = (this.state.automationRuns ?? []).find(
+      (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
+    )
+    if (existing) {
+      return existing
+    }
+    const now = Date.now()
+    const runNumber =
+      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id).length +
+      1
+    const run: AutomationRun = {
+      id: randomUUID(),
+      automationId: automation.id,
+      title: `${automation.name} run ${runNumber}`,
+      scheduledFor,
+      status: 'pending',
+      trigger,
+      workspaceId: automation.workspaceId,
+      sessionKind: 'terminal',
+      chatSessionId: null,
+      terminalSessionId: null,
+      error: null,
+      startedAt: null,
+      dispatchedAt: null,
+      createdAt: now
+    }
+    this.state.automationRuns = [...(this.state.automationRuns ?? []), run]
+    this.flush()
+    return run
+  }
+
+  updateAutomationRun(result: AutomationDispatchResult): AutomationRun {
+    const index = (this.state.automationRuns ?? []).findIndex((entry) => entry.id === result.runId)
+    if (index === -1) {
+      throw new Error('Automation run not found.')
+    }
+    const now = Date.now()
+    const current = this.state.automationRuns[index]
+    const updated: AutomationRun = {
+      ...current,
+      status: result.status,
+      workspaceId: result.workspaceId ?? current.workspaceId,
+      terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      error: result.error ?? null,
+      startedAt: current.startedAt ?? now,
+      dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
+    }
+    this.state.automationRuns[index] = updated
+    const automation = this.state.automations.find((entry) => entry.id === updated.automationId)
+    if (automation) {
+      automation.lastRunAt = now
+      automation.updatedAt = now
+    }
+    this.flush()
+    return updated
+  }
+
+  advanceAutomationNextRun(id: string, now = Date.now()): Automation {
+    const index = (this.state.automations ?? []).findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation not found.')
+    }
+    const current = this.state.automations[index]
+    const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
+    const updated = { ...current, nextRunAt, updatedAt: Date.now() }
+    this.state.automations[index] = updated
+    this.flush()
+    return updated
+  }
+
+  getLatestAutomationOccurrence(automation: Automation, now = Date.now()): number | null {
+    return latestAutomationOccurrenceAtOrBefore(automation.rrule, automation.dtstart, now)
+  }
+
   // ── Worktree Meta ──────────────────────────────────────────────────
 
   getWorktreeMeta(worktreeId: string): WorktreeMeta | undefined {
@@ -812,6 +1160,12 @@ export class Store {
   }
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
+    const sanitizedUpdates = { ...updates }
+    if ('terminalQuickCommands' in updates) {
+      sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
+        updates.terminalQuickCommands
+      )
+    }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping
     // only `optedIn`) must not clobber sibling fields like `installId` or
@@ -819,15 +1173,15 @@ export class Store {
     // synthesize a `telemetry` key on the result when at least one side has
     // one.
     const mergedTelemetry =
-      updates.telemetry !== undefined
-        ? { ...this.state.settings.telemetry, ...updates.telemetry }
+      sanitizedUpdates.telemetry !== undefined
+        ? { ...this.state.settings.telemetry, ...sanitizedUpdates.telemetry }
         : this.state.settings.telemetry
     this.state.settings = {
       ...this.state.settings,
-      ...updates,
+      ...sanitizedUpdates,
       notifications: {
         ...this.state.settings.notifications,
-        ...updates.notifications
+        ...sanitizedUpdates.notifications
       },
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
@@ -906,7 +1260,9 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
-    session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    session = pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    )
 
     // Why: closes the second half of the SIGKILL race (Issue #217). The
     // renderer's debounced session writer captures its state BEFORE pty:spawn
@@ -1344,6 +1700,8 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

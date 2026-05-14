@@ -2,10 +2,11 @@
 migration, mutation, and flush behavior in one file so schema changes are
 reviewed against the full storage contract instead of being scattered. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'fs'
+import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Repo, TerminalTab, WorkspaceSessionState } from '../shared/types'
+import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -113,6 +114,23 @@ function makeSessionWithTerminalBuffers(): WorkspaceSessionState {
   }
 }
 
+function makeSessionWithBrowserHistory(count: number): WorkspaceSessionState {
+  return {
+    activeRepoId: null,
+    activeWorktreeId: null,
+    activeTabId: null,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    browserUrlHistory: Array.from({ length: count }, (_, index) => ({
+      url: `https://example.com/${index}`,
+      normalizedUrl: `https://example.com/${index}`,
+      title: `Example ${index} ${'x'.repeat(200)}`,
+      lastVisitedAt: 1_700_000_000_000 - index,
+      visitCount: 1
+    }))
+  }
+}
+
 describe('Store', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -177,6 +195,57 @@ describe('Store', () => {
     expect(repos).toHaveLength(1)
     expect(repos[0].id).toBe('r1')
     expect(repos[0].gitUsername).toBe('testuser')
+  })
+
+  it('can clear an automation back to the project default branch', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ worktreeBaseRef: 'origin/main' }))
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      baseBranch: 'origin/release',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const updated = store.updateAutomation(automation.id, { baseBranch: null })
+
+    expect(updated.baseBranch).toBeNull()
+    store.flush()
+    const persisted = readDataFile() as { automations: { baseBranch: string | null }[] }
+    expect(persisted.automations[0].baseBranch).toBeNull()
+  })
+
+  it('numbers automation run titles per automation', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const first = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const duplicate = store.createAutomationRun(
+      automation,
+      new Date('2026-05-13T09:00:00Z').getTime()
+    )
+    const second = store.createAutomationRun(automation, new Date('2026-05-14T09:00:00Z').getTime())
+
+    expect(first.title).toBe('Nightly run 1')
+    expect(duplicate.id).toBe(first.id)
+    expect(duplicate.title).toBe('Nightly run 1')
+    expect(second.title).toBe('Nightly run 2')
   })
 
   // ── 3. Corrupt JSON → falls back to defaults ────────────────────────
@@ -986,6 +1055,20 @@ describe('Store', () => {
     })
   })
 
+  it('caps oversized browser history when setting workspace session', async () => {
+    const store = await createStore()
+    const oversizedSession = makeSessionWithBrowserHistory(500)
+    const oversizedBytes = Buffer.byteLength(JSON.stringify(oversizedSession))
+
+    store.setWorkspaceSession(oversizedSession)
+
+    const session = store.getWorkspaceSession()
+    const prunedBytes = Buffer.byteLength(JSON.stringify(session))
+    expect(session.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+    expect(session.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
+    expect(prunedBytes).toBeLessThan(oversizedBytes / 2)
+  })
+
   it('keeps terminal scrollback buffers when the repo catalog is not hydrated yet', async () => {
     const store = await createStore()
 
@@ -1039,6 +1122,23 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
       'leaf-remote': 'remote-scrollback'
     })
+  })
+
+  it('caps oversized legacy browser history when loading workspace session', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: makeSessionWithBrowserHistory(500)
+    })
+
+    const store = await createStore()
+    const session = store.getWorkspaceSession()
+    expect(session.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+    expect(session.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
   })
 
   it('does not restore cleared SSH bindings after a lease expired', async () => {
@@ -1788,6 +1888,308 @@ describe('Store', () => {
     store.removeWorktreeMeta('a')
     expect(store.getWorktreeMeta('a')).toBeUndefined()
     expect(store.getWorktreeMeta('b')).toBeDefined()
+  })
+
+  // ── Rolling backups (issue #1158) ──────────────────────────────────
+
+  describe('rolling backups', () => {
+    function backupFile(index: number): string {
+      return `${dataFile()}.bak.${index}`
+    }
+
+    function readBackup(index: number): { repos: Repo[] } {
+      return JSON.parse(readFileSync(backupFile(index), 'utf-8'))
+    }
+
+    function advanceMockedTime(advanceFn: () => void, ms: number): void {
+      vi.setSystemTime(new Date(Date.now() + ms))
+      advanceFn()
+    }
+
+    it('snapshots the just-written file to .bak.0 on the very first write', async () => {
+      const s = await createStore()
+      s.addRepo(makeRepo())
+      s.flush()
+      expect(existsSync(dataFile())).toBe(true)
+      expect(existsSync(backupFile(0))).toBe(true)
+      expect(readBackup(0).repos.map((r) => r.id)).toEqual(['r1'])
+    })
+
+    it('rotates older .bak.0 to .bak.1 when the interval elapses', async () => {
+      vi.useFakeTimers()
+      try {
+        const first = await createStore()
+        first.addRepo(makeRepo({ id: 'r1' }))
+        first.flush()
+        expect((readDataFile() as { repos: Repo[] }).repos[0].id).toBe('r1')
+        expect(readBackup(0).repos.map((r) => r.id)).toEqual(['r1'])
+
+        vi.setSystemTime(new Date(Date.now() + 61 * 60 * 1000))
+
+        const second = await createStore()
+        second.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
+        second.flush()
+
+        const current = readDataFile() as { repos: Repo[] }
+        expect(current.repos.map((r) => r.id).sort()).toEqual(['r1', 'r2'])
+        expect(
+          readBackup(0)
+            .repos.map((r) => r.id)
+            .sort()
+        ).toEqual(['r1', 'r2'])
+        expect(readBackup(1).repos.map((r) => r.id)).toEqual(['r1'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps at most 5 rotating backups', async () => {
+      vi.useFakeTimers()
+      try {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [makeRepo({ id: 'seed' })],
+          worktreeMeta: {},
+          settings: {},
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+
+        for (let i = 0; i < 6; i++) {
+          vi.setSystemTime(new Date(Date.now() + 61 * 60 * 1000))
+          const s = await createStore()
+          s.addRepo(makeRepo({ id: `gen-${i}`, path: `/gen-${i}` }))
+          s.flush()
+        }
+
+        for (let i = 0; i < 5; i++) {
+          expect(existsSync(backupFile(i))).toBe(true)
+        }
+        expect(existsSync(backupFile(5))).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not rotate more than once per hour', async () => {
+      vi.useFakeTimers()
+      try {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [makeRepo({ id: 'seed' })],
+          worktreeMeta: {},
+          settings: {},
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+
+        const store = await createStore()
+        store.addRepo(makeRepo({ id: 'after-seed' }))
+        store.flush()
+
+        const bak0After1 = readBackup(0)
+        expect(bak0After1.repos.map((r) => r.id).sort()).toEqual(['after-seed', 'seed'])
+
+        advanceMockedTime(
+          () => {
+            store.addRepo(makeRepo({ id: 'within-hour', path: '/within' }))
+            store.flush()
+          },
+          5 * 60 * 1000
+        )
+
+        const bak0After2 = readBackup(0)
+        expect(bak0After2.repos.map((r) => r.id).sort()).toEqual(['after-seed', 'seed'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not rotate on the async write path within the 1-hour window', async () => {
+      vi.useFakeTimers()
+      try {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [makeRepo({ id: 'seed' })],
+          worktreeMeta: {},
+          settings: {},
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+
+        const store = await createStore()
+        store.addRepo(makeRepo({ id: 'first-async' }))
+        vi.advanceTimersByTime(300)
+        await store.waitForPendingWrite()
+
+        const bak0AfterFirst = readBackup(0)
+        expect(bak0AfterFirst.repos.map((r) => r.id).sort()).toEqual(['first-async', 'seed'])
+
+        vi.setSystemTime(new Date(Date.now() + 5 * 60 * 1000))
+        store.addRepo(makeRepo({ id: 'within-hour-async', path: '/within-async' }))
+        vi.advanceTimersByTime(300)
+        await store.waitForPendingWrite()
+
+        const bak0AfterSecond = readBackup(0)
+        expect(bak0AfterSecond.repos.map((r) => r.id).sort()).toEqual(['first-async', 'seed'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('rotates on the async write path after the 1-hour window elapses', async () => {
+      vi.useFakeTimers()
+      try {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [makeRepo({ id: 'seed' })],
+          worktreeMeta: {},
+          settings: {},
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+
+        const store = await createStore()
+        store.addRepo(makeRepo({ id: 'first-async' }))
+        vi.advanceTimersByTime(300)
+        await store.waitForPendingWrite()
+
+        expect(
+          readBackup(0)
+            .repos.map((r) => r.id)
+            .sort()
+        ).toEqual(['first-async', 'seed'])
+
+        vi.setSystemTime(new Date(Date.now() + 61 * 60 * 1000))
+        store.addRepo(makeRepo({ id: 'after-hour-async', path: '/after-async' }))
+        vi.advanceTimersByTime(300)
+        await store.waitForPendingWrite()
+
+        expect(
+          readBackup(0)
+            .repos.map((r) => r.id)
+            .sort()
+        ).toEqual(['after-hour-async', 'first-async', 'seed'])
+        expect(existsSync(backupFile(1))).toBe(true)
+        expect(
+          readBackup(1)
+            .repos.map((r) => r.id)
+            .sort()
+        ).toEqual(['first-async', 'seed'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    function writeBackup(index: number, data: unknown): void {
+      mkdirSync(testState.dir, { recursive: true })
+      writeFileSync(backupFile(index), JSON.stringify(data, null, 2), 'utf-8')
+    }
+
+    it('recovers from .bak.0 when the primary file is corrupt', async () => {
+      mkdirSync(testState.dir, { recursive: true })
+      writeFileSync(dataFile(), '{{{corrupt-json', 'utf-8')
+      writeBackup(0, {
+        schemaVersion: 1,
+        repos: [makeRepo({ id: 'recovered' })],
+        worktreeMeta: {},
+        settings: {},
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getRepos().map((r) => r.id)).toEqual(['recovered'])
+    })
+
+    it('falls through to .bak.1 when both primary and .bak.0 are corrupt', async () => {
+      mkdirSync(testState.dir, { recursive: true })
+      writeFileSync(dataFile(), '{{{corrupt-json', 'utf-8')
+      writeFileSync(backupFile(0), '{{also-corrupt', 'utf-8')
+      writeBackup(1, {
+        schemaVersion: 1,
+        repos: [makeRepo({ id: 'from-bak1' })],
+        worktreeMeta: {},
+        settings: {},
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getRepos().map((r) => r.id)).toEqual(['from-bak1'])
+    })
+
+    it('falls back to defaults only when every backup is also unusable', async () => {
+      mkdirSync(testState.dir, { recursive: true })
+      writeFileSync(dataFile(), '{{{corrupt', 'utf-8')
+      for (let i = 0; i < 5; i++) {
+        writeFileSync(backupFile(i), `{{slot-${i}-corrupt`, 'utf-8')
+      }
+
+      const store = await createStore()
+      expect(store.getRepos()).toEqual([])
+    })
+
+    it('uses .bak.0 even when primary file is missing entirely', async () => {
+      mkdirSync(testState.dir, { recursive: true })
+      writeBackup(0, {
+        schemaVersion: 1,
+        repos: [makeRepo({ id: 'rescued' })],
+        worktreeMeta: {},
+        settings: {},
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getRepos().map((r) => r.id)).toEqual(['rescued'])
+    })
+
+    it('still recovers repos/worktrees from a backup with corrupt workspaceSession', async () => {
+      mkdirSync(testState.dir, { recursive: true })
+      writeFileSync(dataFile(), '{{{corrupt', 'utf-8')
+      writeBackup(0, {
+        schemaVersion: 1,
+        repos: [makeRepo({ id: 'survives' })],
+        worktreeMeta: {},
+        settings: { theme: 'dark' },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: { activeRepoId: 12345 }
+      })
+
+      const store = await createStore()
+      expect(store.getRepos().map((r) => r.id)).toEqual(['survives'])
+      expect(store.getSettings().theme).toBe('dark')
+    })
+  })
+
+  // ── Concurrent write serialization (issue #1158) ───────────────────
+
+  describe('concurrent write serialization', () => {
+    it('chains debounced writes via pendingWrite so they run sequentially', async () => {
+      vi.useFakeTimers()
+      try {
+        const store = await createStore()
+        store.addRepo(makeRepo({ id: 'first' }))
+        vi.advanceTimersByTime(300)
+        store.addRepo(makeRepo({ id: 'second', path: '/second' }))
+        vi.advanceTimersByTime(300)
+        await store.waitForPendingWrite()
+
+        const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as { repos: Repo[] }
+        expect(persisted.repos.map((r) => r.id).sort()).toEqual(['first', 'second'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   // ── Telemetry cohort migration ─────────────────────────────────────

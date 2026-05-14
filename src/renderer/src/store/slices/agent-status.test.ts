@@ -191,6 +191,40 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
+
+  it('bumps global epochs when a stale same-state entry refreshes', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'stale ping', agentType: 'claude' },
+        'claude',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstEpoch = store.getState().agentStatusEpoch
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'fresh again', agentType: 'claude' },
+        'claude',
+        {
+          updatedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1,
+          stateStartedAt: 1_000
+        }
+      )
+
+    const refreshedEntry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(refreshedEntry.prompt).toBe('fresh again')
+    // Why: a stale same-state refresh can promote the worktree back into a
+    // smart-sort attention class, so both freshness and sort epochs must tick.
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
 })
 
 describe('agent status stateStartedAt', () => {

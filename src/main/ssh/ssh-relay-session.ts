@@ -16,6 +16,12 @@ import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
+import { agentHookServer } from '../agent-hooks/server'
+import {
+  AGENT_HOOK_NOTIFICATION_METHOD,
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  isRemoteAgentHooksEnabled
+} from '../../shared/agent-hook-relay'
 import {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
@@ -409,7 +415,79 @@ export class SshRelaySession {
     registerSshGitProvider(this.targetId, gitProvider)
 
     this.wireUpPtyEvents(ptyProvider)
+    this.wireUpAgentHookEvents(mux)
     return true
+  }
+
+  // Why: route the relay's `agent.hook` JSON-RPC notification into Orca's
+  // shared `agentHookServer` via `ingestRemote`. The wire envelope carries
+  // `connectionId: null` (the relay does not know Orca's local handle); we
+  // stamp the real value here from `this.targetId` so the renderer can drop
+  // in-flight events for connections that have torn down. After wiring is
+  // in place we kick off a request-driven replay so any cached payload from
+  // before the channel was up survives the reconnect — see §5 Path 3.
+  //
+  // The Orca-side mux's `notificationHandlers` is a flat array — each
+  // handler must filter by method name itself.
+  private wireUpAgentHookEvents(mux: SshChannelMultiplexer): void {
+    if (!isRemoteAgentHooksEnabled()) {
+      return
+    }
+    mux.onNotification((method, params) => {
+      if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
+        return
+      }
+      const envelope = params as {
+        paneKey?: unknown
+        tabId?: unknown
+        worktreeId?: unknown
+        env?: unknown
+        version?: unknown
+        payload?: unknown
+      }
+      if (typeof envelope.paneKey !== 'string') {
+        return
+      }
+      // Why: forward env/version verbatim so Orca's warn-once cross-build /
+      // dev-vs-prod diagnostics fire on remote events the same as on local
+      // ones — see docs/design/agent-status-over-ssh.md §3 ("Replay /
+      // version mismatch") and the relay's wire envelope at
+      // src/shared/agent-hook-relay.ts.
+      agentHookServer.ingestRemote(
+        {
+          paneKey: envelope.paneKey,
+          tabId: typeof envelope.tabId === 'string' ? envelope.tabId : undefined,
+          worktreeId: typeof envelope.worktreeId === 'string' ? envelope.worktreeId : undefined,
+          env: typeof envelope.env === 'string' ? envelope.env : undefined,
+          version: typeof envelope.version === 'string' ? envelope.version : undefined,
+          payload: envelope.payload
+        },
+        this.targetId
+      )
+    })
+
+    // Why: ask the relay to replay every cached paneKey it remembers. Issued
+    // *after* the handler is wired so the request-driven replay shape
+    // strictly trails our subscription on the dispatcher's single write
+    // callback. Best-effort: a relay that does not know the method
+    // (e.g. older relay binary) returns -32601, which we swallow.
+    void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch((err) => {
+      const code = (err as { code?: unknown })?.code
+      if (code === -32601) {
+        return
+      }
+      // Why: a normal disconnect/teardown rejects the in-flight request with
+      // "Multiplexer disposed"; suppress the warn for that path so reconnect
+      // cycles aren't noisy.
+      if (mux.isDisposed()) {
+        return
+      }
+      console.warn(
+        `[ssh-relay-session] agent_hook.requestReplay failed for ${this.targetId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      )
+    })
   }
 
   private teardownProviders(reason: 'shutdown' | 'connection_lost'): void {

@@ -6,6 +6,7 @@ import type { TabsSlice } from './slices/tabs'
 import type { UISlice } from './slices/ui'
 import type { SettingsSlice } from './slices/settings'
 import type { GitHubSlice } from './slices/github'
+import type { HostedReviewSlice } from './slices/hosted-review'
 import type { LinearSlice } from './slices/linear'
 import type { EditorSlice } from './slices/editor'
 import type { StatsSlice } from './slices/stats'
@@ -19,6 +20,7 @@ import type { AgentStatusSlice } from './slices/agent-status'
 import type { DiffCommentsSlice } from './slices/diffComments'
 import type { DetectedAgentsSlice } from './slices/detected-agents'
 import type { WorktreeNavHistorySlice } from './slices/worktree-nav-history'
+import type { DictationSlice } from './slices/dictation'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -28,6 +30,7 @@ export type AppState = RepoSlice &
   UISlice &
   SettingsSlice &
   GitHubSlice &
+  HostedReviewSlice &
   LinearSlice &
   EditorSlice &
   StatsSlice &
@@ -40,4 +43,5 @@ export type AppState = RepoSlice &
   AgentStatusSlice &
   DiffCommentsSlice &
   DetectedAgentsSlice &
-  WorktreeNavHistorySlice
+  WorktreeNavHistorySlice &
+  DictationSlice

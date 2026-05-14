@@ -14,6 +14,11 @@ import type {
 } from '../../../../shared/types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import {
+  MAX_BROWSER_HISTORY_ENTRIES,
+  normalizeBrowserHistoryEntries,
+  normalizeBrowserHistoryUrl
+} from '../../../../shared/workspace-session-browser-history'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
 
@@ -136,38 +141,6 @@ export type BrowserSlice = {
   clearBrowserHistory: () => void
   defaultBrowserSessionProfileId: string | null
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void
-}
-
-const MAX_BROWSER_HISTORY_ENTRIES = 200
-
-function normalizeHistoryUrl(url: string): string {
-  try {
-    const parsed = new URL(redactKagiSessionToken(url))
-    parsed.hostname = parsed.hostname.toLowerCase()
-    parsed.protocol = parsed.protocol.toLowerCase()
-    let normalized = parsed.toString()
-    if (normalized.endsWith('/')) {
-      normalized = normalized.slice(0, -1)
-    }
-    return normalized
-  } catch {
-    return redactKagiSessionToken(url).toLowerCase()
-  }
-}
-
-function deduplicateHistory(entries: BrowserHistoryEntry[]): BrowserHistoryEntry[] {
-  const seen = new Set<string>()
-  const deduped: BrowserHistoryEntry[] = []
-  for (const entry of entries) {
-    const safeUrl = redactKagiSessionToken(entry.url)
-    const key = normalizeHistoryUrl(safeUrl)
-    if (seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    deduped.push({ ...entry, url: safeUrl, normalizedUrl: key })
-  }
-  return deduped.slice(0, MAX_BROWSER_HISTORY_ENTRIES)
 }
 
 function normalizeUrl(url: string): string {
@@ -1268,7 +1241,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activeBrowserTabId,
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         activeTabType,
-        browserUrlHistory: deduplicateHistory(session.browserUrlHistory ?? [])
+        browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? [])
       }
     })
 
@@ -1494,7 +1467,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
       return
     }
-    const normalized = normalizeHistoryUrl(safeUrl)
+    const normalized = normalizeBrowserHistoryUrl(safeUrl)
     set((s) => {
       const existing = s.browserUrlHistory.find((entry) => entry.normalizedUrl === normalized)
       let next: BrowserHistoryEntry[] = existing

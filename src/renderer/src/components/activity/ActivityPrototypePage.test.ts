@@ -1,15 +1,21 @@
+/* eslint-disable max-lines -- Activity feed builders share realistic fixture
+coverage in one file so status grouping stays tied to the event/thread adapter. */
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
+  buildActivityThreadGroups,
   buildActivityEvents,
-  buildAgentPaneThreads
+  buildAgentPaneThreads,
+  getActivityThreadGroup,
+  groupActivityThreadsByStatus
 } from './ActivityPrototypePage'
 
 function makeRepo(): Repo {
@@ -54,6 +60,26 @@ function makeTab(): TerminalTab {
     color: null,
     sortOrder: 0,
     createdAt: 1
+  }
+}
+
+function makeWorktreeWithId(id: string, repoId = 'repo-1', displayName = id): Worktree {
+  return {
+    ...makeWorktree(),
+    id,
+    repoId,
+    path: `/repo/${id}`,
+    displayName
+  }
+}
+
+function makeTabWithIds(id: string, worktreeId: string, title = id): TerminalTab {
+  return {
+    ...makeTab(),
+    id,
+    ptyId: `pty-${id}`,
+    worktreeId,
+    title
   }
 }
 
@@ -327,5 +353,216 @@ describe('buildActivityEvents', () => {
     expect(threads[0].responsePreview).toBe('')
     expect(threads[0].latestTimestamp).toBe(3_000)
     expect(threads[0].events[0].entry.prompt).toBe('Retained prior run')
+  })
+
+  it('groups visible threads by current status order', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const workingTab = makeTab()
+    const blockedTab = { ...makeTab(), id: 'tab-2', ptyId: 'pty-2' }
+    const doneTab = { ...makeTab(), id: 'tab-3', ptyId: 'pty-3' }
+    const result = buildActivityEvents({
+      agentStatusByPaneKey: {
+        'tab-1:1': makeWorkingEntryWithoutHistory(),
+        'tab-2:1': {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'blocked',
+          prompt: 'Needs approval',
+          updatedAt: 4_000,
+          stateStartedAt: 4_000,
+          paneKey: 'tab-2:1'
+        },
+        'tab-3:1': {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'done',
+          prompt: 'Finished work',
+          updatedAt: 5_000,
+          stateStartedAt: 5_000,
+          paneKey: 'tab-3:1'
+        }
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: {
+        [worktree.id]: [workingTab, blockedTab, doneTab]
+      },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 5_000
+    })
+
+    const groups = groupActivityThreadsByStatus(
+      buildAgentPaneThreads({
+        events: result.events,
+        liveAgentByPaneKey: result.liveAgentByPaneKey
+      })
+    )
+
+    expect(groups.map((group) => group.id)).toEqual(['working', 'blocked', 'done'])
+    expect(groups.map((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
+      ['tab-1:1'],
+      ['tab-2:1'],
+      ['tab-3:1']
+    ])
+  })
+})
+
+describe('activity thread grouping', () => {
+  it('status grouping separates interrupted done from normal done and keeps Interrupted label', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab1 = makeTabWithIds('tab-1', worktree.id)
+    const tab2 = makeTabWithIds('tab-2', worktree.id)
+    const sharedDone: Omit<
+      AgentStatusEntry,
+      'paneKey' | 'interrupted' | 'updatedAt' | 'stateStartedAt'
+    > = {
+      state: 'done',
+      prompt: 'Prompt',
+      terminalTitle: 'Claude',
+      stateHistory: [],
+      agentType: 'claude'
+    }
+    const { events, liveAgentByPaneKey } = buildActivityEvents({
+      agentStatusByPaneKey: {
+        'tab-1:1': {
+          ...sharedDone,
+          paneKey: 'tab-1:1',
+          interrupted: true,
+          updatedAt: 3_000,
+          stateStartedAt: 3_000
+        },
+        'tab-2:1': {
+          ...sharedDone,
+          paneKey: 'tab-2:1',
+          interrupted: false,
+          updatedAt: 2_000,
+          stateStartedAt: 2_000
+        }
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: { [worktree.id]: [tab1, tab2] },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 3_000
+    })
+    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
+    const groups = buildActivityThreadGroups(threads, 'status')
+
+    expect(groups).toHaveLength(2)
+    expect(groups[0].key).toBe('done:interrupted')
+    expect(groups[0].label).toBe('Interrupted')
+    expect(groups[1].key).toBe('done')
+    expect(groups[1].label).toBe('Done')
+  })
+
+  it('project grouping falls back to unknown project when repo is missing', () => {
+    const worktree = makeWorktreeWithId('wt-unknown', 'missing-repo', 'unknown-wt')
+    const tab = makeTabWithIds('tab-unknown', worktree.id)
+    const { events, liveAgentByPaneKey } = buildActivityEvents({
+      agentStatusByPaneKey: {
+        'tab-unknown:1': {
+          state: 'done',
+          prompt: 'Prompt',
+          updatedAt: 1_000,
+          stateStartedAt: 1_000,
+          paneKey: 'tab-unknown:1',
+          terminalTitle: 'Claude',
+          stateHistory: [],
+          agentType: 'claude'
+        }
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: { [worktree.id]: [tab] },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map(),
+      acknowledgedAgentsByPaneKey: {},
+      now: 1_000
+    })
+    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
+    const group = getActivityThreadGroup(threads[0], 'project')
+
+    expect(group).toEqual({ key: 'project:unknown', label: 'Unknown project' })
+  })
+
+  it('worktree and agent grouping use expected keys and labels', () => {
+    const result = makeActivityResult({
+      entries: {
+        'tab-1:1': makeWorkingEntryWithoutHistory()
+      }
+    })
+    const threads = makeThreads(result)
+
+    expect(getActivityThreadGroup(threads[0], 'worktree')).toEqual({
+      key: 'worktree:wt-1',
+      label: 'feature'
+    })
+    expect(getActivityThreadGroup(threads[0], 'agent')).toEqual({
+      key: 'agent:claude',
+      label: formatAgentTypeLabel('claude')
+    })
+  })
+
+  it('keeps first-appearance group order and preserves intra-group thread order', () => {
+    const repo = makeRepo()
+    const wtA = makeWorktreeWithId('wt-a', repo.id, 'alpha')
+    const wtB = makeWorktreeWithId('wt-b', repo.id, 'beta')
+    const tabA1 = makeTabWithIds('tab-a1', wtA.id)
+    const tabB1 = makeTabWithIds('tab-b1', wtB.id)
+    const tabA2 = makeTabWithIds('tab-a2', wtA.id)
+    const { events, liveAgentByPaneKey } = buildActivityEvents({
+      agentStatusByPaneKey: {
+        'tab-a1:1': {
+          state: 'done',
+          prompt: 'A1',
+          updatedAt: 3_000,
+          stateStartedAt: 3_000,
+          paneKey: 'tab-a1:1',
+          terminalTitle: 'Claude',
+          stateHistory: [],
+          agentType: 'claude'
+        },
+        'tab-b1:1': {
+          state: 'done',
+          prompt: 'B1',
+          updatedAt: 2_000,
+          stateStartedAt: 2_000,
+          paneKey: 'tab-b1:1',
+          terminalTitle: 'Claude',
+          stateHistory: [],
+          agentType: 'claude'
+        },
+        'tab-a2:1': {
+          state: 'done',
+          prompt: 'A2',
+          updatedAt: 1_000,
+          stateStartedAt: 1_000,
+          paneKey: 'tab-a2:1',
+          terminalTitle: 'Claude',
+          stateHistory: [],
+          agentType: 'claude'
+        }
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: { [wtA.id]: [tabA1, tabA2], [wtB.id]: [tabB1] },
+      worktreeMap: new Map([
+        [wtA.id, wtA],
+        [wtB.id, wtB]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 3_000
+    })
+    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
+    const groups = buildActivityThreadGroups(threads, 'worktree')
+
+    expect(groups.map((group) => group.key)).toEqual(['worktree:wt-a', 'worktree:wt-b'])
+    expect(groups[0].threads.map((thread) => thread.paneKey)).toEqual(['tab-a1:1', 'tab-a2:1'])
+    expect(groups[1].threads.map((thread) => thread.paneKey)).toEqual(['tab-b1:1'])
+  })
+
+  it('returns no groups for empty thread input', () => {
+    expect(buildActivityThreadGroups([], 'status')).toEqual([])
   })
 })

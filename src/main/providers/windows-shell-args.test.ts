@@ -73,6 +73,37 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.shellArgs[3]).toBe("cd '/mnt/c' && exec bash -l")
   })
 
+  it('keeps WSL UNC worktree cwd inside the matching distro', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const result = resolveWindowsShellLaunchArgs(
+        'wsl.exe',
+        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
+        'C:\\Users\\alice'
+      )
+      expect(result.shellArgs).toEqual([
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-c',
+        "cd '/home/alice/repo' && exec bash -l"
+      ])
+      expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+      expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('falls back to empty args + same cwd for unknown shells', () => {
     const result = resolveWindowsShellLaunchArgs(
       'C:\\tools\\fish.exe',

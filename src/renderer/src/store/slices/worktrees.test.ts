@@ -84,6 +84,8 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -228,14 +230,15 @@ describe('createWorktree base status merge', () => {
     vi.clearAllMocks()
   })
 
-  it('passes linked issue and PR metadata through the create IPC payload', async () => {
+  it('passes linked work item and creation agent metadata through the create IPC payload', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       linkedIssue: 123,
-      linkedPR: 456
+      linkedPR: 456,
+      createdWithAgent: 'codex'
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
@@ -250,7 +253,9 @@ describe('createWorktree base status merge', () => {
         'sidebar',
         'Feature Title',
         123,
-        456
+        456,
+        undefined,
+        'codex'
       )
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
@@ -258,12 +263,14 @@ describe('createWorktree base status merge', () => {
         repoId: 'repo1',
         name: 'feature',
         linkedIssue: 123,
-        linkedPR: 456
+        linkedPR: 456,
+        createdWithAgent: 'codex'
       })
     )
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       linkedIssue: 123,
-      linkedPR: 456
+      linkedPR: 456,
+      createdWithAgent: 'codex'
     })
   })
 

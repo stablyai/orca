@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: command routing, WSL translation, and
+git/gh/glab wrappers must stay co-located so platform behavior remains
+consistent across every repo-scoped subprocess call. */
 /**
  * Centralized git/gh/command runner with transparent WSL support.
  *
@@ -464,6 +467,58 @@ export async function ghExecFileAsync(
     }
   }
   // Unreachable: the loop either returns or throws. Here for TS exhaustiveness.
+  throw lastError
+}
+
+// ─── glab CLI runner ────────────────────────────────────────────────
+// Why: parallel to gh CLI runner above. GitLab support is added by
+// cloning gh's surface rather than abstracting both behind a generic
+// runner — keeping them as parallel implementations matches the
+// project's clone-and-adapt approach for new providers and avoids
+// touching the working gh path. Reuses the shared retry/transient
+// helpers since HTTP-status- and TCP-error-based classification is
+// provider-agnostic.
+
+type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & { cwd?: string; wslDistro?: string }
+
+/**
+ * Async glab CLI execution. Drop-in replacement for
+ * `execFileAsync('glab', args, { cwd, encoding, ... })`.
+ *
+ * Retry policy mirrors ghExecFileAsync.
+ */
+export async function glabExecFileAsync(
+  args: string[],
+  options: GlabExecOptions = {}
+): Promise<{ stdout: string; stderr: string }> {
+  const resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
+  let lastError: unknown
+  for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const { stdout, stderr } = await execFileAsync(resolved.binary, resolved.args, {
+        cwd: resolved.cwd,
+        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+        maxBuffer: options.maxBuffer,
+        timeout: options.timeout,
+        env: options.env
+      })
+      return { stdout: stdout as string, stderr: stderr as string }
+    } catch (err) {
+      lastError = err
+      const { stderr } = extractExecError(err)
+      const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
+      if (!isLastAttempt && isTransientGhError(stderr)) {
+        const retryAfterMs = parseRetryAfterMs(stderr)
+        const delayMs =
+          retryAfterMs !== null
+            ? Math.min(retryAfterMs, GH_RETRY_AFTER_MAX_MS)
+            : GH_RETRY_DELAYS_MS[attempt]
+        await sleep(delayMs)
+        continue
+      }
+      throw err
+    }
+  }
   throw lastError
 }
 

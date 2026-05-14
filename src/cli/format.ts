@@ -33,6 +33,7 @@ import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
+import type { NoteListResult, NoteMutationResult, NoteShowResult } from '../shared/notes-types'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 
@@ -177,6 +178,39 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
     `status: ${result.wait.status}`,
     `exitCode: ${result.wait.exitCode ?? 'null'}`
   ].join('\n')
+}
+
+export function formatNoteList(result: NoteListResult): string {
+  if (result.notes.length === 0) {
+    return 'No notes.'
+  }
+  const body = result.notes
+    .map((note) => {
+      const link = note.linkKind ? `  ${note.linkKind}` : ''
+      const preview = note.preview ? `\n${note.preview}` : ''
+      return `${note.id}  ${note.title}${link}\npath: ${note.relativePath}\nupdated: ${note.updatedAt}${preview}`
+    })
+    .join('\n\n')
+  return result.truncated
+    ? `${body}\n\ntruncated: showing ${result.notes.length} of ${result.totalCount}`
+    : body
+}
+
+export function formatNoteShow(result: NoteShowResult): string {
+  const link = result.linkKind ? `link: ${result.linkKind}` : 'link: none'
+  return [
+    `id: ${result.note.id}`,
+    `path: ${result.note.relativePath}`,
+    `title: ${result.note.title}`,
+    `revision: ${result.note.revision}`,
+    link,
+    '',
+    result.note.bodyMarkdown
+  ].join('\n')
+}
+
+export function formatNoteMutation(result: NoteMutationResult): string {
+  return `Saved note ${result.note.id} (${result.note.title}) revision ${result.note.revision}.`
 }
 
 export function formatWorktreePs(result: RuntimeWorktreePsResult): string {

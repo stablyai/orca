@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the floating surface owns both terminal chrome and local notes tabs until the shared floating shell is extracted. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Maximize2, Minimize2, Minus } from 'lucide-react'
 import TabBar from '@/components/tab-bar/TabBar'
@@ -11,10 +12,13 @@ import {
   isOrchestrationSetupDismissed,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
+import { notifyProjectNotesSelectionChanged } from '@/lib/open-project-notes-tab'
+import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalTab } from '../../../../shared/types'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
+import ProjectNotesTabContent from '@/components/notes/ProjectNotesTabContent'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
@@ -24,6 +28,7 @@ import {
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
+type FloatingNotesTab = { id: string; label: string; noteId: string | null; isDirty: boolean }
 
 type FloatingTerminalPanelProps = {
   open: boolean
@@ -46,6 +51,7 @@ export function FloatingTerminalPanel({
   const setTabPaneExpanded = useAppStore((s) => s.setTabPaneExpanded)
   const tabBarOrder = useAppStore((s) => s.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID])
   const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '~')
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
@@ -54,6 +60,9 @@ export function FloatingTerminalPanel({
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
     () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
   )
+  const [notesTabs, setNotesTabs] = useState<FloatingNotesTab[]>([])
+  const [activeNotesTabId, setActiveNotesTabId] = useState<string | null>(null)
+  const [activeSurface, setActiveSurface] = useState<'terminal' | 'notes'>('terminal')
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -144,6 +153,7 @@ export function FloatingTerminalPanel({
   const createFloatingTab = useCallback(() => {
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
     setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tab.id)
+    setActiveSurface('terminal')
     const state = useAppStore.getState()
     const currentTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     const stored = state.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
@@ -162,6 +172,7 @@ export function FloatingTerminalPanel({
   const closeFloatingTab = useCallback(
     (tabId: string) => {
       closeTab(tabId)
+      setActiveSurface('terminal')
     },
     [closeTab]
   )
@@ -189,6 +200,72 @@ export function FloatingTerminalPanel({
     },
     [closeTab, tabs]
   )
+
+  const openFloatingNotesTab = useCallback(
+    async (noteId?: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const state = useAppStore.getState()
+      const worktree = Object.values(state.worktreesByRepo)
+        .flat()
+        .find((candidate) => candidate.id === activeWorktreeId)
+      const projectId =
+        state.repos.find((candidate) => candidate.id === worktree?.repoId)?.id ?? worktree?.repoId
+      let label = 'Project Notes'
+      if (noteId && projectId) {
+        try {
+          const result = await window.api.notes.show({
+            projectId,
+            worktreeId: activeWorktreeId,
+            note: noteId
+          })
+          label = result.note.title
+        } catch {
+          label = 'Project Notes'
+        }
+        if (projectId) {
+          await window.api.notes.link({
+            projectId,
+            worktreeId: activeWorktreeId,
+            note: noteId,
+            kind: 'active'
+          })
+          notifyProjectNotesSelectionChanged()
+        }
+      }
+      const id = `floating-project-notes:${globalThis.crypto.randomUUID()}`
+      setNotesTabs((current) => [...current, { id, label, noteId: noteId ?? null, isDirty: false }])
+      setActiveNotesTabId(id)
+      setActiveSurface('notes')
+    },
+    [activeWorktreeId]
+  )
+
+  const closeFloatingNotesTab = useCallback((tabId: string) => {
+    requestProjectNotesTabClose(tabId, () => {
+      setNotesTabs((current) => current.filter((tab) => tab.id !== tabId))
+      setActiveNotesTabId((current) => (current === tabId ? null : current))
+      setActiveSurface('terminal')
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!open || activeSurface !== 'notes' || !activeNotesTabId) {
+      return
+    }
+    const isMac = navigator.userAgent.includes('Mac')
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const mod = isMac ? event.metaKey : event.ctrlKey
+      if (!mod || event.shiftKey || event.repeat || event.key.toLowerCase() !== 'w') {
+        return
+      }
+      event.preventDefault()
+      closeFloatingNotesTab(activeNotesTabId)
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [activeNotesTabId, activeSurface, closeFloatingNotesTab, open])
 
   const toggleMaximized = useCallback(() => {
     setMaximized((current) => {
@@ -292,19 +369,31 @@ export function FloatingTerminalPanel({
               activeTabId={activeTab?.id ?? null}
               worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
               expandedPaneByTabId={expandedPaneByTabId}
-              onActivate={(tabId) => setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tabId)}
+              onActivate={(tabId) => {
+                setActiveSurface('terminal')
+                setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tabId)
+              }}
               onClose={closeFloatingTab}
               onCloseOthers={closeOthers}
               onCloseToRight={closeToRight}
               onNewTerminalTab={createFloatingTab}
               onNewBrowserTab={() => {}}
+              onNewNotesTab={activeWorktreeId ? openFloatingNotesTab : undefined}
+              notesWorktreeId={activeWorktreeId}
               terminalOnly
               onSetCustomTitle={setTabCustomTitle}
               onSetTabColor={setTabColor}
               onTogglePaneExpand={(tabId) =>
                 setTabPaneExpanded(tabId, expandedPaneByTabId[tabId] !== true)
               }
-              activeTabType="terminal"
+              notesTabs={activeWorktreeId ? notesTabs : []}
+              activeNotesTabId={activeSurface === 'notes' ? activeNotesTabId : null}
+              onActivateNotesTab={(tabId) => {
+                setActiveNotesTabId(tabId)
+                setActiveSurface('notes')
+              }}
+              onCloseNotesTab={closeFloatingNotesTab}
+              activeTabType={activeSurface}
               tabBarOrder={tabBarOrder}
             />
           </div>
@@ -352,27 +441,42 @@ export function FloatingTerminalPanel({
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
-          {cwd
-            ? tabs.map((tab) => (
-                <div
-                  key={`${tab.id}-${tab.generation ?? 0}`}
-                  className={
-                    tab.id === activeTab?.id ? 'absolute inset-0' : 'absolute inset-0 hidden'
-                  }
-                  aria-hidden={tab.id !== activeTab?.id}
-                >
-                  <TerminalPane
-                    tabId={tab.id}
-                    worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
-                    cwd={cwd}
-                    isActive={tab.id === activeTab?.id}
-                    isVisible={tab.id === activeTab?.id}
-                    onPtyExit={() => closeTab(tab.id)}
-                    onCloseTab={() => closeTab(tab.id)}
-                  />
-                </div>
-              ))
-            : null}
+          {activeSurface === 'notes' && activeWorktreeId && activeNotesTabId ? (
+            <ProjectNotesTabContent
+              key={activeNotesTabId}
+              worktreeId={activeWorktreeId}
+              tabId={activeNotesTabId}
+              noteId={notesTabs.find((tab) => tab.id === activeNotesTabId)?.noteId ?? null}
+              forceNew={notesTabs.find((tab) => tab.id === activeNotesTabId)?.noteId === null}
+              onDirtyChange={(dirty) => {
+                setNotesTabs((current) =>
+                  current.map((tab) =>
+                    tab.id === activeNotesTabId ? { ...tab, isDirty: dirty } : tab
+                  )
+                )
+              }}
+            />
+          ) : cwd ? (
+            tabs.map((tab) => (
+              <div
+                key={`${tab.id}-${tab.generation ?? 0}`}
+                className={
+                  tab.id === activeTab?.id ? 'absolute inset-0' : 'absolute inset-0 hidden'
+                }
+                aria-hidden={tab.id !== activeTab?.id}
+              >
+                <TerminalPane
+                  tabId={tab.id}
+                  worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                  cwd={cwd}
+                  isActive={tab.id === activeTab?.id}
+                  isVisible={tab.id === activeTab?.id}
+                  onPtyExit={() => closeTab(tab.id)}
+                  onCloseTab={() => closeTab(tab.id)}
+                />
+              </div>
+            ))
+          ) : null}
         </div>
       </div>
       {showOrchestrationSetup ? (

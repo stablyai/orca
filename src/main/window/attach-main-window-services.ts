@@ -325,7 +325,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
       _event,
       args:
         | { paths: string[]; target: 'editor' }
-        | { paths: string[]; target: 'terminal' }
+        | { paths: string[]; target: 'terminal'; tabId?: string }
         | { paths: string[]; target: 'composer' }
         | { paths: string[]; target: 'file-explorer'; destinationDir: string }
     ) => {

@@ -12,7 +12,7 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
-import { terminalOutputRequiresDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
+import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
 import {
   paneLeafId,
   POST_REPLAY_MODE_RESET,
@@ -626,7 +626,7 @@ export function connectPanePty(
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
-      if (terminalOutputRequiresDomRenderer(data)) {
+      if (terminalOutputPrefersDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
@@ -641,7 +641,7 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string): void => {
-      if (terminalOutputRequiresDomRenderer(data)) {
+      if (terminalOutputPrefersDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       // Why: visibility is the right gate — split-pane layouts have multiple

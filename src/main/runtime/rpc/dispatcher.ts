@@ -77,7 +77,11 @@ export class RpcDispatcher {
   async dispatchStreaming(
     request: RpcRequest,
     reply: (response: string) => void,
-    options?: { connectionId?: string; sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void }
+    options?: {
+      connectionId?: string
+      clientId?: string
+      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+    }
   ): Promise<void> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
@@ -101,6 +105,7 @@ export class RpcDispatcher {
         const result = await method.handler(parsedParams.value, {
           runtime: this.runtime,
           connectionId: options?.connectionId,
+          clientId: options?.clientId,
           sendBinary: options?.sendBinary
         })
         reply(JSON.stringify(successResponse(request.id, meta, result)))
@@ -122,6 +127,7 @@ export class RpcDispatcher {
         {
           runtime: this.runtime,
           connectionId: options?.connectionId,
+          clientId: options?.clientId,
           sendBinary: options?.sendBinary
         },
         emit

@@ -39,6 +39,12 @@ type ManagedPty = {
    *  entry-point calls into a clean "not found" error instead of a silent no-op
    *  (POSIX proc.kill is neutralized inside disposeManagedPty). */
   disposed?: boolean
+  /** Renderer-supplied paneKey from spawn env (ORCA_PANE_KEY). Captured so
+   *  external observers (the relay-hook-server cache) can evict per-pane
+   *  state when this PTY exits. Symmetric with Orca's local pty.ts. */
+  paneKey?: string
+  tabId?: string
+  worktreeId?: string
 }
 
 function disposeManagedPty(managed: ManagedPty): void {
@@ -84,7 +90,19 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR2'
 ])
 
-type SerializedPtyEntry = { id: string; pid: number; cols: number; rows: number; cwd: string }
+type SerializedPtyEntry = {
+  id: string
+  pid: number
+  cols: number
+  rows: number
+  cwd: string
+  paneKey?: string
+  tabId?: string
+  worktreeId?: string
+}
+
+export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
+export type PtyEnvAugmenter = () => Record<string, string>
 
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
@@ -92,11 +110,64 @@ export class PtyHandler {
   private dispatcher: RelayDispatcher
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: external observers (the relay's hook-server cache) need to drop
+  // per-pane state when a PTY exits. Multiple listeners is unnecessary today
+  // — the hook server is the only consumer — so a single optional callback
+  // keeps the surface tight. A throw inside the listener is swallowed so it
+  // can never block disposeManagedPty / map cleanup.
+  private exitListener: PtyExitListener | null = null
+  // Why: env augmenters injected at relay boot (currently the relay-hook
+  // server's ORCA_AGENT_HOOK_* coords). Run on every spawn so every PTY
+  // sees the live hook coordinates without the dispatcher needing to know
+  // about agent hooks.
+  private envAugmenters: PtyEnvAugmenter[] = []
 
   constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
     this.registerHandlers()
+  }
+
+  /** Subscribe to PTY-exit events. Used by the relay-hook server to evict
+   *  per-paneKey cached payloads when the backing PTY ends. */
+  setExitListener(listener: PtyExitListener | null): void {
+    this.exitListener = listener
+  }
+
+  /** Register an env augmenter whose return value is merged into every spawn
+   *  env *after* `process.env` and the renderer-supplied env. Used by the
+   *  relay-hook server to inject ORCA_AGENT_HOOK_PORT/TOKEN/ENV/VERSION/
+   *  ENDPOINT — values the agent CLI inside the PTY needs to find the local
+   *  hook receiver. See docs/design/agent-status-over-ssh.md §3. */
+  addEnvAugmenter(augmenter: PtyEnvAugmenter): () => void {
+    this.envAugmenters.push(augmenter)
+    return () => {
+      const idx = this.envAugmenters.indexOf(augmenter)
+      if (idx !== -1) {
+        this.envAugmenters.splice(idx, 1)
+      }
+    }
+  }
+
+  /** Build the augmented spawn env. Augmenter values override `process.env`
+   *  and any renderer-supplied env (the augmenter contract — see
+   *  addEnvAugmenter doc-comment). Used by both spawn() and revive() so the
+   *  relationship between process.env, renderer env, and augmenters cannot
+   *  drift between the two paths — revived shells after a relay restart must
+   *  see the fresh ORCA_AGENT_HOOK_* coords just like freshly-spawned ones,
+   *  otherwise agent-status over SSH silently breaks on every revive. */
+  private buildSpawnEnv(rendererEnv?: Record<string, string>): Record<string, string> {
+    const augmented: Record<string, string> = {}
+    for (const augmenter of this.envAugmenters) {
+      try {
+        Object.assign(augmented, augmenter())
+      } catch (err) {
+        process.stderr.write(
+          `[pty-handler] env augmenter threw: ${err instanceof Error ? err.message : String(err)}\n`
+        )
+      }
+    }
+    return { ...process.env, ...rendererEnv, ...augmented } as Record<string, string>
   }
 
   /** Wire onData/onExit listeners for a managed PTY and store it. */
@@ -128,6 +199,19 @@ export class PtyHandler {
         managed.killTimer = undefined
       }
       this.dispatcher.notify('pty.exit', { id: managed.id, code: exitCode })
+      // Why: notify external observers BEFORE deleting the map entry so a
+      // listener that needs to read paneKey from the managed entry still
+      // can. Wrap in try/catch so a throwing listener cannot block fd
+      // release or map cleanup.
+      if (this.exitListener) {
+        try {
+          this.exitListener({ id: managed.id, paneKey: managed.paneKey })
+        } catch (err) {
+          process.stderr.write(
+            `[pty-handler] onExit listener threw: ${err instanceof Error ? err.message : String(err)}\n`
+          )
+        }
+      }
       this.ptys.delete(managed.id)
       // Why: release the ptmx fd on the natural-exit path. Without this the
       // node-pty wrapper's _socket stays alive until GC and the master fd
@@ -178,6 +262,12 @@ export class PtyHandler {
     const shell = resolveDefaultShell()
     const id = `pty-${this.nextId++}`
 
+    // Why: server-side augmenter values (ORCA_AGENT_HOOK_*) override any
+    // renderer-supplied env so the live hook-server coords always reach the
+    // agent CLI — they come from the relay, not the renderer. See
+    // buildSpawnEnv for the precedence contract.
+    const spawnEnv = this.buildSpawnEnv(env)
+
     // Why: SSH exec channels give the relay a minimal environment without
     // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
     // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
@@ -186,10 +276,25 @@ export class PtyHandler {
       cols,
       rows,
       cwd,
-      env: { ...process.env, ...env } as Record<string, string>
+      env: spawnEnv
     })
 
-    const managed: ManagedPty = { id, pty: term, initialCwd: cwd, buffered: '' }
+    // Why: capture the renderer-supplied paneKey on the managed entry so the
+    // exit listener can evict per-pane caches without the relay needing a
+    // separate ptyId→paneKey map. ORCA_PANE_KEY is shaped `${tabId}:${paneId}`
+    // and is bounded by the renderer; the relay treats it as opaque.
+    const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
+    const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
+    const managed: ManagedPty = {
+      id,
+      pty: term,
+      initialCwd: cwd,
+      buffered: '',
+      paneKey,
+      tabId,
+      worktreeId
+    }
     this.wireAndStore(managed)
     if (context?.isStale()) {
       // Why: if the client reconnected while pty.spawn was in flight, the
@@ -394,7 +499,16 @@ export class PtyHandler {
         continue
       }
       const { pid, cols, rows } = managed.pty
-      entries.push({ id, pid, cols, rows, cwd: managed.initialCwd })
+      entries.push({
+        id,
+        pid,
+        cols,
+        rows,
+        cwd: managed.initialCwd,
+        paneKey: managed.paneKey,
+        tabId: managed.tabId,
+        worktreeId: managed.worktreeId
+      })
     }
     return JSON.stringify(entries)
   }
@@ -417,14 +531,36 @@ export class PtyHandler {
       if (!ptyMod) {
         continue
       }
+      // Why: revive must apply the same hook env as spawn(). The hook-server
+      // coords come from augmenters, while pane identity comes from the
+      // serialized PTY entry because managed hook scripts exit without
+      // ORCA_PANE_KEY.
+      const revivedEnv: Record<string, string> = {}
+      if (entry.paneKey) {
+        revivedEnv.ORCA_PANE_KEY = entry.paneKey
+      }
+      if (entry.tabId) {
+        revivedEnv.ORCA_TAB_ID = entry.tabId
+      }
+      if (entry.worktreeId) {
+        revivedEnv.ORCA_WORKTREE_ID = entry.worktreeId
+      }
       const term = ptyMod.spawn(resolveDefaultShell(), ['-l'], {
         name: 'xterm-256color',
         cols: entry.cols,
         rows: entry.rows,
         cwd: entry.cwd,
-        env: process.env as Record<string, string>
+        env: this.buildSpawnEnv(revivedEnv)
       })
-      this.wireAndStore({ id: entry.id, pty: term, initialCwd: entry.cwd, buffered: '' })
+      this.wireAndStore({
+        id: entry.id,
+        pty: term,
+        initialCwd: entry.cwd,
+        buffered: '',
+        paneKey: entry.paneKey,
+        tabId: entry.tabId,
+        worktreeId: entry.worktreeId
+      })
 
       // Why: nextId starts at 1 and is only incremented by spawn(). Revived
       // PTYs carry their original IDs (e.g. "pty-3"), so without this bump the

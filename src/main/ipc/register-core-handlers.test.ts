@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this test mirrors the complete core IPC handler registry so
+   duplicate-registration coverage stays tied to the one production entry point. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -10,6 +12,7 @@ const {
   registerStatsHandlersMock,
   registerMemoryHandlersMock,
   registerNotebookHandlersMock,
+  registerNotesHandlersMock,
   registerNotificationHandlersMock,
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
@@ -34,8 +37,11 @@ const {
   registerFilesystemWatcherHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
+  registerGitLabHandlersMock,
+  registerHostedReviewHandlersMock,
   registerExportHandlersMock,
-  registerOnboardingHandlersMock
+  registerOnboardingHandlersMock,
+  registerSpeechHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -46,6 +52,7 @@ const {
   registerStatsHandlersMock: vi.fn(),
   registerMemoryHandlersMock: vi.fn(),
   registerNotebookHandlersMock: vi.fn(),
+  registerNotesHandlersMock: vi.fn(),
   registerNotificationHandlersMock: vi.fn(),
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
@@ -70,12 +77,19 @@ const {
   registerFilesystemWatcherHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
+  registerGitLabHandlersMock: vi.fn(),
+  registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
-  registerOnboardingHandlersMock: vi.fn()
+  registerOnboardingHandlersMock: vi.fn(),
+  registerSpeechHandlersMock: vi.fn()
 }))
 
 vi.mock('./onboarding', () => ({
   registerOnboardingHandlers: registerOnboardingHandlersMock
+}))
+
+vi.mock('./speech', () => ({
+  registerSpeechHandlers: registerSpeechHandlersMock
 }))
 
 vi.mock('./cli', () => ({
@@ -116,6 +130,10 @@ vi.mock('./memory', () => ({
 
 vi.mock('./notebook', () => ({
   registerNotebookHandlers: registerNotebookHandlersMock
+}))
+
+vi.mock('./notes', () => ({
+  registerNotesHandlers: registerNotesHandlersMock
 }))
 
 vi.mock('./notifications', () => ({
@@ -205,6 +223,14 @@ vi.mock('./linear', () => ({
   registerLinearHandlers: registerLinearHandlersMock
 }))
 
+vi.mock('./gitlab', () => ({
+  registerGitLabHandlers: registerGitLabHandlersMock
+}))
+
+vi.mock('./hosted-review', () => ({
+  registerHostedReviewHandlers: registerHostedReviewHandlersMock
+}))
+
 import { registerCoreHandlers } from './register-core-handlers'
 
 describe('registerCoreHandlers', () => {
@@ -218,6 +244,7 @@ describe('registerCoreHandlers', () => {
     registerStatsHandlersMock.mockReset()
     registerMemoryHandlersMock.mockReset()
     registerNotebookHandlersMock.mockReset()
+    registerNotesHandlersMock.mockReset()
     registerNotificationHandlersMock.mockReset()
     registerDeveloperPermissionHandlersMock.mockReset()
     registerComputerUsePermissionHandlersMock.mockReset()
@@ -242,7 +269,10 @@ describe('registerCoreHandlers', () => {
     registerFilesystemWatcherHandlersMock.mockReset()
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
+    registerGitLabHandlersMock.mockReset()
+    registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
+    registerSpeechHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', () => {
@@ -275,6 +305,8 @@ describe('registerCoreHandlers', () => {
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
+    expect(registerGitLabHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerHostedReviewHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerFeedbackHandlersMock).toHaveBeenCalled()
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
     expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
@@ -296,6 +328,7 @@ describe('registerCoreHandlers', () => {
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
+    expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {

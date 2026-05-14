@@ -25,6 +25,9 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
   const entries: GitStatusEntry[] = []
   let head: string | undefined
   let branch: string | undefined
+  let upstreamName: string | undefined
+  let upstreamAheadBehind: { ahead: number; behind: number } | null = null
+  let statusSucceeded = false
 
   // Why: detectConflictOperation (4 existsSync + readFile) and git status are
   // independent. Running them concurrently saves one round-trip of I/O latency.
@@ -60,6 +63,16 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
         // `identity.branch ?? worktree.branch` preserves the prior branch
         // value when git can't report one, instead of overwriting it with ''.
         branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
+        continue
+      }
+
+      if (line.startsWith('# branch.upstream ')) {
+        upstreamName = line.slice('# branch.upstream '.length).trim() || undefined
+        continue
+      }
+
+      if (line.startsWith('# branch.ab ')) {
+        upstreamAheadBehind = parseBranchAheadBehind(line)
         continue
       }
 
@@ -107,11 +120,40 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
         }
       }
     }
+    statusSucceeded = true
   } catch {
     // Not a git repo or git not available
   }
 
-  return { entries, conflictOperation, head, branch }
+  return {
+    entries,
+    conflictOperation,
+    head,
+    branch,
+    ...(statusSucceeded
+      ? {
+          upstreamStatus: upstreamName
+            ? {
+                hasUpstream: true,
+                upstreamName,
+                ahead: upstreamAheadBehind?.ahead ?? 0,
+                behind: upstreamAheadBehind?.behind ?? 0
+              }
+            : { hasUpstream: false, ahead: 0, behind: 0 }
+        }
+      : {})
+  }
+}
+
+function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {
+  const match = line.match(/^# branch\.ab \+(\d+) -(\d+)$/)
+  if (!match) {
+    return null
+  }
+  return {
+    ahead: Number.parseInt(match[1], 10),
+    behind: Number.parseInt(match[2], 10)
+  }
 }
 
 function parseStatusChar(char: string): GitFileStatus {

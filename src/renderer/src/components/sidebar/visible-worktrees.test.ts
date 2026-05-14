@@ -6,7 +6,7 @@ import {
   isDefaultBranchWorkspace,
   sidebarHasActiveFilters
 } from './visible-worktrees'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo, Tab, TerminalTab, Worktree } from '../../../../shared/types'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
   return {
@@ -15,6 +15,21 @@ function makeTab(id: string, worktreeId: string, ptyId: string | null): Terminal
     worktreeId,
     title: id,
     customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}
+
+function makeNotesTab(id: string, worktreeId: string): Tab {
+  return {
+    id,
+    entityId: `notes:${worktreeId}:${id}`,
+    groupId: 'group-1',
+    worktreeId,
+    contentType: 'notes',
+    label: 'Project Notes',
+    customLabel: null,
     color: null,
     sortOrder: 0,
     createdAt: 0
@@ -93,6 +108,22 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([wt.id])
+  })
+
+  it('treats project-notes tabs as active for the active-only filter', () => {
+    const notesWt = makeWorktree('wt-notes')
+    const unrelatedWt = makeWorktree('wt-unrelated')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [notesWt, unrelatedWt] },
+      [notesWt.id, unrelatedWt.id],
+      visibleOptions({
+        showActiveOnly: true,
+        unifiedTabsByWorktree: { [notesWt.id]: [makeNotesTab('notes-1', notesWt.id)] }
+      })
+    )
+
+    expect(result).toEqual([notesWt.id])
   })
 
   it('keeps the currently active worktree visible even without PTYs', () => {

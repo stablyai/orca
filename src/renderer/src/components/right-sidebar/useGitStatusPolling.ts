@@ -14,6 +14,7 @@ export function useGitStatusPolling(): void {
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const repoMap = useRepoMap()
@@ -63,7 +64,11 @@ export function useGitStatusPolling(): void {
         head: status.head,
         branch: status.branch
       })
-      await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
+      if (status.upstreamStatus) {
+        setUpstreamStatus(activeWorktreeId, status.upstreamStatus)
+      } else {
+        await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
+      }
     } catch {
       // ignore
     }
@@ -73,6 +78,7 @@ export function useGitStatusPolling(): void {
     fetchUpstreamStatus,
     worktreePath,
     setGitStatus,
+    setUpstreamStatus,
     updateWorktreeGitIdentity
   ])
 

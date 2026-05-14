@@ -39,7 +39,7 @@ type ClaudeUsageSourceRecord = {
 }
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
-const YIELD_EVERY_FILES = 10
+const FILE_SCAN_BATCH_SIZE = 4
 
 function getDefaultProjectLabel(cwd: string | null): string {
   if (!cwd) {
@@ -166,6 +166,36 @@ export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsag
   }
 
   return turns
+}
+
+async function readClaudeUsageScanFile(filePath: string): Promise<{
+  processedFile: ClaudeUsageProcessedFile
+  turns: ClaudeUsageParsedTurn[]
+}> {
+  const fileStat = await stat(filePath)
+  let lineCount = 0
+  const turns: ClaudeUsageParsedTurn[] = []
+  const lines = createInterface({
+    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    crlfDelay: Infinity
+  })
+
+  for await (const line of lines) {
+    lineCount++
+    const parsed = parseClaudeUsageRecord(line)
+    if (parsed) {
+      turns.push(parsed)
+    }
+  }
+
+  return {
+    processedFile: {
+      path: filePath,
+      mtimeMs: fileStat.mtimeMs,
+      lineCount
+    },
+    turns
+  }
 }
 
 function localDayFromTimestamp(timestamp: string): string | null {
@@ -361,13 +391,16 @@ export async function scanClaudeUsageFiles(worktrees: ClaudeUsageWorktreeRef[]):
   const allTurns: ClaudeUsageParsedTurn[] = []
   const worktreeLookup = await buildWorktreeLookup(worktrees)
 
-  for (const [index, filePath] of files.entries()) {
-    processedFiles.push(await getProcessedFileInfo(filePath))
-    allTurns.push(...(await parseClaudeUsageFile(filePath)))
-    // Why: transcript scans can touch many files and run on the Electron main
-    // process. Yield between batches so Settings stays responsive while the
-    // analytics refresh is in flight.
-    if ((index + 1) % YIELD_EVERY_FILES === 0) {
+  for (let index = 0; index < files.length; index += FILE_SCAN_BATCH_SIZE) {
+    const batch = files.slice(index, index + FILE_SCAN_BATCH_SIZE)
+    const results = await Promise.all(batch.map((filePath) => readClaudeUsageScanFile(filePath)))
+    for (const result of results) {
+      processedFiles.push(result.processedFile)
+      allTurns.push(...result.turns)
+    }
+    // Why: transcript scans run in Electron's main process. Small parallel
+    // batches cut independent file I/O without letting Settings stay blocked.
+    if (index + batch.length < files.length) {
       await yieldToEventLoop()
     }
   }

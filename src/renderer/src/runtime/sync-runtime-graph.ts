@@ -24,6 +24,8 @@ type RegisteredTerminalTab = {
   getPtyIdForPane: (paneId: number) => string | null
 }
 
+type OpenFileByWorktreeAndId = Map<string, Map<string, AppState['openFiles'][number]>>
+
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // Why: track when each tab was registered so we can suppress the "no live
 // transport" warning during the initial PTY connection window. The warning
@@ -193,6 +195,14 @@ async function syncRuntimeGraph(): Promise<void> {
   // Injecting the getter from App keeps the runtime graph path out of the
   // store construction cycle and avoids test-time partial initialization.
   const state = getStoreState()
+  // Why: sync can run after high-churn terminal/title mutations. Build lookup
+  // maps once per sync instead of flattening every worktree's tabs for each
+  // registered terminal.
+  const terminalTabById = new Map(
+    Object.values(state.tabsByWorktree)
+      .flat()
+      .map((tab) => [tab.id, tab])
+  )
   const graph: RuntimeSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -200,9 +210,7 @@ async function syncRuntimeGraph(): Promise<void> {
   }
 
   for (const [tabId, registeredTab] of registeredTabs) {
-    const tab = Object.values(state.tabsByWorktree)
-      .flat()
-      .find((candidate) => candidate.id === tabId)
+    const tab = terminalTabById.get(tabId)
     if (!tab) {
       continue
     }
@@ -256,7 +264,13 @@ async function syncRuntimeGraph(): Promise<void> {
   }
 }
 
-function buildMobileSessionTabSnapshots(state: AppState): RuntimeMobileSessionTabsSnapshot[] {
+export function buildMobileSessionTabSnapshots(
+  state: AppState
+): RuntimeMobileSessionTabsSnapshot[] {
+  // Why: mobile publication walks the tab order for every worktree. A single
+  // worktree-scoped file map keeps large editor sessions linear without
+  // collapsing SSH worktrees that expose the same absolute remote path.
+  const openFileByWorktreeAndId = indexOpenFilesByWorktreeAndId(state.openFiles)
   const worktreeIds = new Set<string>([
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.groupsByWorktree),
@@ -268,24 +282,28 @@ function buildMobileSessionTabSnapshots(state: AppState): RuntimeMobileSessionTa
   for (const worktreeId of worktreeIds) {
     const activeGroupId = state.activeGroupIdByWorktree[worktreeId] ?? null
     const order = getActiveTabNavOrder(state, worktreeId)
+    const terminalTabByIdForWorktree = new Map(
+      (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
+    )
     const tabs: RuntimeMobileSessionSnapshotTab[] = []
 
     for (const item of order) {
       if (item.type === 'terminal') {
-        const terminal = (state.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === item.id)
+        const terminal = terminalTabByIdForWorktree.get(item.id)
         if (!terminal) {
           continue
         }
-        tabs.push(...buildMobileTerminalSurfaceTabs(state, terminal.id, worktreeId, item.tabId))
+        tabs.push(...buildMobileTerminalSurfaceTabs(state, terminal, worktreeId, item.tabId))
       } else if (item.type === 'editor') {
-        const file = state.openFiles.find(
-          (candidate) => candidate.id === item.id && candidate.worktreeId === worktreeId
-        )
-        const markdown = file ? buildMobileMarkdownTab(state, file.id, item.tabId) : null
+        const file = openFileByWorktreeAndId.get(worktreeId)?.get(item.id)
+        if (!file) {
+          continue
+        }
+        const markdown = buildMobileMarkdownTab(state, openFileByWorktreeAndId, file, item.tabId)
         if (markdown) {
           tabs.push(markdown)
-        } else if (file) {
-          tabs.push(buildMobileFileTab(state, file.id, item.tabId))
+        } else {
+          tabs.push(buildMobileFileTab(state, file, item.tabId))
         }
       }
     }
@@ -303,6 +321,21 @@ function buildMobileSessionTabSnapshots(state: AppState): RuntimeMobileSessionTa
   }
 
   return snapshots
+}
+
+function indexOpenFilesByWorktreeAndId(openFiles: AppState['openFiles']): OpenFileByWorktreeAndId {
+  const byWorktreeAndId: OpenFileByWorktreeAndId = new Map()
+  for (const file of openFiles) {
+    let filesById = byWorktreeAndId.get(file.worktreeId)
+    if (!filesById) {
+      filesById = new Map()
+      byWorktreeAndId.set(file.worktreeId, filesById)
+    }
+    if (!filesById.has(file.id)) {
+      filesById.set(file.id, file)
+    }
+  }
+  return byWorktreeAndId
 }
 
 function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
@@ -331,15 +364,10 @@ function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] 
 
 function buildMobileTerminalSurfaceTabs(
   state: AppState,
-  terminalTabId: string,
+  terminal: NonNullable<AppState['tabsByWorktree'][string]>[number],
   worktreeId: string,
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
-  const terminal = (state.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === terminalTabId)
-  if (!terminal) {
-    return []
-  }
-
   const isDesktopTabActive = unifiedTabId
     ? state.groupsByWorktree[worktreeId]?.some(
         (group) =>
@@ -348,20 +376,20 @@ function buildMobileTerminalSurfaceTabs(
       ) === true
     : state.activeTabId === terminal.id
   const liveActiveLeafId =
-    registeredTabs.get(terminalTabId)?.getManager()?.getActivePane()?.id ?? null
+    registeredTabs.get(terminal.id)?.getManager()?.getActivePane()?.id ?? null
   const activeLeafId =
     liveActiveLeafId !== null
       ? paneLeafId(liveActiveLeafId)
-      : (state.terminalLayoutsByTabId[terminalTabId]?.activeLeafId ?? paneLeafId(1))
-  const paneTitles = state.runtimePaneTitlesByTabId[terminalTabId] ?? {}
-  return getRuntimeLeafIdsForTerminal(terminalTabId, state).map((leafId) => {
+      : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? paneLeafId(1))
+  const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
+  return getRuntimeLeafIdsForTerminal(terminal.id, state).map((leafId) => {
     const paneId = /^pane:(\d+)$/.exec(leafId)?.[1]
     const paneTitle = paneId ? paneTitles[Number(paneId)] : undefined
     return {
       type: 'terminal' as const,
-      id: mobileTerminalSurfaceId(terminalTabId, leafId),
+      id: mobileTerminalSurfaceId(terminal.id, leafId),
       title: paneTitle ?? terminal.customTitle ?? terminal.title ?? 'Terminal',
-      parentTabId: terminalTabId,
+      parentTabId: terminal.id,
       leafId,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }
@@ -370,13 +398,10 @@ function buildMobileTerminalSurfaceTabs(
 
 function buildMobileMarkdownTab(
   state: AppState,
-  fileId: string,
+  openFileByWorktreeAndId: OpenFileByWorktreeAndId,
+  file: AppState['openFiles'][number],
   unifiedTabId?: string
 ): RuntimeMobileSessionMarkdownTab | null {
-  const file = state.openFiles.find((candidate) => candidate.id === fileId)
-  if (!file) {
-    return null
-  }
   if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
     return null
   }
@@ -386,7 +411,7 @@ function buildMobileMarkdownTab(
 
   const sourceFile =
     file.mode === 'markdown-preview' && file.markdownPreviewSourceFileId
-      ? (state.openFiles.find((candidate) => candidate.id === file.markdownPreviewSourceFileId) ??
+      ? (openFileByWorktreeAndId.get(file.worktreeId)?.get(file.markdownPreviewSourceFileId) ??
         file)
       : file
   const draftContent = state.editorDrafts[sourceFile.id]
@@ -416,10 +441,9 @@ function buildMobileMarkdownTab(
 
 function buildMobileFileTab(
   state: AppState,
-  fileId: string,
+  file: AppState['openFiles'][number],
   unifiedTabId?: string
 ): RuntimeMobileSessionFileTab {
-  const file = state.openFiles.find((candidate) => candidate.id === fileId)!
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
 
   return {

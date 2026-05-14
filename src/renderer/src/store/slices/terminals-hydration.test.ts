@@ -300,3 +300,44 @@ describe('hydrateWorkspaceSession', () => {
     expect(canGoBackWorktreeHistory(store.getState())).toBe(true)
   })
 })
+
+describe('hydrationSucceeded flag (issue #1158)', () => {
+  it('defaults to false so the session writer is gated off at startup', () => {
+    // Why: App.tsx only flips hydrationSucceeded=true after a clean load from
+    // orca-data.json. If a startup error prevents that call, the flag stays
+    // false and the debounced writer never fires — protecting the user's good
+    // on-disk state from being overwritten with an empty in-memory snapshot.
+    const store = createTestStore()
+    expect(store.getState().hydrationSucceeded).toBe(false)
+  })
+
+  it('setHydrationSucceeded toggles the flag both ways', () => {
+    const store = createTestStore()
+    store.getState().setHydrationSucceeded(true)
+    expect(store.getState().hydrationSucceeded).toBe(true)
+    store.getState().setHydrationSucceeded(false)
+    expect(store.getState().hydrationSucceeded).toBe(false)
+  })
+
+  it('hydrateWorkspaceSession does not flip hydrationSucceeded on its own', () => {
+    // Why: the hydration call can populate state partially and still throw
+    // downstream (e.g. reconnect fails). Leaving the flip to App.tsx — after
+    // hydrateWorkspaceSession has returned without throwing — keeps the gate
+    // honest in those mid-flight failures.
+    const store = createTestStore()
+    const wt = 'repo1::/wt'
+    seedStore(store, {
+      worktreesByRepo: { repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/wt' })] }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(store.getState().hydrationSucceeded).toBe(false)
+  })
+})

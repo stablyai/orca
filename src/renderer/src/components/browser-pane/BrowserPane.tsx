@@ -55,6 +55,7 @@ import {
   getHiddenContainer,
   MAX_PARKED_WEBVIEWS,
   parkedAtByTabId,
+  registerPersistentWebview,
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
@@ -965,7 +966,7 @@ function BrowserPagePane({
       // browsers paint the viewport white by default; sites that specify their
       // own background (including dark ones) still override this.
       webview.style.background = '#ffffff'
-      webviewRegistry.set(browserTab.id, webview)
+      registerPersistentWebview(browserTab.id, webview)
       container.appendChild(webview)
       needsInitialNavigation = true
     }

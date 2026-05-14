@@ -15,6 +15,7 @@ import type {
   TerminalPaneLayoutNode,
   WorkspaceSessionState
 } from './types'
+import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -64,9 +65,16 @@ const terminalTabSchema = z.object({
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
-const tabContentTypeSchema = z.enum(['terminal', 'editor', 'diff', 'conflict-review', 'browser'])
+const tabContentTypeSchema = z.enum([
+  'terminal',
+  'editor',
+  'diff',
+  'conflict-review',
+  'browser',
+  'notes'
+])
 
-const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser'])
+const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'notes'])
 
 const tabSchema = z.object({
   id: z.string(),
@@ -80,7 +88,8 @@ const tabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   isPreview: z.boolean().optional(),
-  isPinned: z.boolean().optional()
+  isPinned: z.boolean().optional(),
+  isDirty: z.boolean().optional()
 })
 
 const tabGroupSchema = z.object({
@@ -182,6 +191,10 @@ const browserHistoryEntrySchema = z.object({
   visitCount: z.number()
 })
 
+const browserHistoryEntriesSchema = z
+  .array(browserHistoryEntrySchema)
+  .transform((entries) => normalizeBrowserHistoryEntries(entries))
+
 // ─── Workspace session ──────────────────────────────────────────────
 
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
@@ -197,7 +210,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   browserPagesByWorkspace: z.record(z.string(), z.array(browserPageSchema)).optional(),
   activeBrowserTabIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
   activeTabTypeByWorktree: z.record(z.string(), workspaceVisibleTabTypeSchema).optional(),
-  browserUrlHistory: z.array(browserHistoryEntrySchema).optional(),
+  browserUrlHistory: browserHistoryEntriesSchema.optional(),
   activeTabIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
   unifiedTabs: z.record(z.string(), z.array(tabSchema)).optional(),
   tabGroups: z.record(z.string(), z.array(tabGroupSchema)).optional(),

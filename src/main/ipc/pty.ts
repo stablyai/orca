@@ -36,6 +36,7 @@ import {
   launchSourceSchema,
   requestKindSchema
 } from '../../shared/telemetry-events'
+import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 
 // ─── Provider Registry ──────────────────────────────────────────────
@@ -1059,7 +1060,30 @@ export function registerPtyHandlers(
       const isMintedSessionId = args.sessionId === undefined && isDaemonHostSpawn
       const effectiveSessionId =
         args.sessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
-      const baseEnv = claudeAuth ? { ...args.env, ...claudeAuth.envPatch } : args.env
+      // Why: the renderer unconditionally sets ORCA_PANE_KEY/TAB_ID/WORKTREE_ID
+      // on every spawn, including SSH ones (see pty-connection.ts). When the
+      // remote-agent-hook feature is OFF, the relay-side hook server is not
+      // wired up and forwarding these vars across the SSH wire would let a
+      // future relay build start posting hook events Orca cannot route. Strip
+      // them on the SSH path while the flag is off; flag ON keeps them so the
+      // relay's pty-handler sees the paneKey on spawn env. See
+      // docs/design/agent-status-over-ssh.md §8 (commit #6 gate location a).
+      let sshSourceEnv = args.env
+      if (args.connectionId && !isRemoteAgentHooksEnabled()) {
+        if (
+          sshSourceEnv &&
+          ('ORCA_PANE_KEY' in sshSourceEnv ||
+            'ORCA_TAB_ID' in sshSourceEnv ||
+            'ORCA_WORKTREE_ID' in sshSourceEnv)
+        ) {
+          const stripped = { ...sshSourceEnv }
+          delete stripped.ORCA_PANE_KEY
+          delete stripped.ORCA_TAB_ID
+          delete stripped.ORCA_WORKTREE_ID
+          sshSourceEnv = stripped
+        }
+      }
+      const baseEnv = claudeAuth ? { ...sshSourceEnv, ...claudeAuth.envPatch } : sshSourceEnv
       let env: Record<string, string> | undefined = baseEnv
       const preAllocatedHandle =
         runtime && !(provider instanceof LocalPtyProvider)

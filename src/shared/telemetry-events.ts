@@ -549,6 +549,35 @@ const onboardingGhosttyDiscoveredSchema = z
   })
   .strict()
 const onboardingGhosttyImportClickedSchema = z.object({ cohort: cohortSchema }).strict()
+
+// Why: smart-sort telemetry. The class distribution event tells us whether
+// real users have meaningful Class 1/2/3 populations (signal that the
+// redesign is doing work) or whether everyone collapses to Class 4 (signal
+// that hook coverage is too low). The Class 1 promotion event distinguishes
+// hook-driven attention from the title-heuristic fallback so we can tell
+// whether Edge case 9 is carrying weight. The smart→recent switch event is
+// our regression signal: users abandoning Smart for Recent.
+const smartSortClassDistributionSchema = z
+  .object({
+    class_1: z.number().int().nonnegative(),
+    class_2: z.number().int().nonnegative(),
+    class_3: z.number().int().nonnegative(),
+    class_4: z.number().int().nonnegative(),
+    total_worktrees: z.number().int().nonnegative()
+  })
+  .strict()
+const smartSortClass1PromotionSchema = z
+  .object({
+    cause: z.enum(['blocked', 'waiting', 'title-heuristic'])
+  })
+  .strict()
+// Why a placeholder field instead of `z.object({})`: an empty zod object
+// infers as TS `{}` (which in TS means "anything non-null/undefined"). That
+// upsets the `keyof EventMap[N]` probes used by COHORT_EXTENDED_SET and
+// ONBOARDING_COHORT_SET, breaking their compile-time roster sync checks.
+// Carrying a single optional `_v` discriminator dodges the issue and
+// preserves room to add future fields without renaming the event.
+const smartToRecentSwitchSchema = z.object({ _v: z.literal(1).optional() }).strict()
 const onboardingGhosttyImportFailedSchema = z
   .object({
     // `'no_config'` is reserved for a future explicit "preview returned
@@ -607,7 +636,11 @@ export const eventSchemas = {
   onboarding_ghostty_discovered: onboardingGhosttyDiscoveredSchema,
   onboarding_ghostty_import_clicked: onboardingGhosttyImportClickedSchema,
   onboarding_ghostty_import_failed: onboardingGhosttyImportFailedSchema,
-  activation_checklist_item_completed: activationChecklistItemCompletedSchema
+  activation_checklist_item_completed: activationChecklistItemCompletedSchema,
+
+  smart_sort_class_distribution: smartSortClassDistributionSchema,
+  smart_sort_class_1_promotion: smartSortClass1PromotionSchema,
+  smart_to_recent_switch: smartToRecentSwitchSchema
 } as const
 
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }

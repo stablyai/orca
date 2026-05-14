@@ -23,6 +23,12 @@ import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
+import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
+import {
+  AGENT_HOOK_INSTALL_PLUGINS_METHOD,
+  AGENT_HOOK_NOTIFICATION_METHOD,
+  AGENT_HOOK_REQUEST_REPLAY_METHOD
+} from '../shared/agent-hook-relay'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
@@ -128,7 +134,7 @@ function runConnectMode(sockPath: string): void {
 
 // ── Normal mode ──────────────────────────────────────────────────────
 
-function main(): void {
+async function main(): Promise<void> {
   const { graceTimeMs, connectMode, detached, sockPath } = parseArgs(process.argv)
 
   if (connectMode) {
@@ -217,6 +223,70 @@ function main(): void {
 
   const _portScanHandler = new PortScanHandler(dispatcher)
   void _portScanHandler
+
+  // ── Agent-hook server ─────────────────────────────────────────────
+  // Why: hosts a loopback HTTP receiver inside the relay process so agent
+  // CLIs running in remote PTYs can post hook events without leaving the
+  // host. Each parsed payload is forwarded to Orca via an `agent.hook`
+  // JSON-RPC notification on the existing SSH channel — see
+  // docs/design/agent-status-over-ssh.md §2-§5.
+  const hookServer = new RelayAgentHookServer({
+    // Why: a remote account can host multiple target-specific relay daemons.
+    // Scope endpoint.env/cmd by the daemon socket path so their hook tokens
+    // cannot overwrite each other.
+    endpointDir: endpointDirForRelaySocket(sockPath),
+    forward: (envelope) => {
+      // Why: dispatcher.notify is fire-and-forget — when the SSH channel is
+      // mid-reconnect the write callback no-ops and the notification is
+      // silently dropped. The per-paneKey cache inside `hookServer` lets us
+      // replay the last status for each live pane after Orca re-wires its
+      // handler post-`--connect`.
+      dispatcher.notify(
+        AGENT_HOOK_NOTIFICATION_METHOD,
+        envelope as unknown as Record<string, unknown>
+      )
+    }
+  })
+  // Why: wait for hook-server startup before the readiness sentinel. A PTY
+  // spawned before the augmenter exists can never receive ORCA_AGENT_HOOK_*
+  // later, so success registers the augmenter first; failure is the deliberate
+  // fail-open path where agent status is disabled for this relay process.
+  try {
+    await hookServer.start()
+    ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
+  } catch (err) {
+    process.stderr.write(
+      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
+    )
+  }
+
+  // Why: evict the per-pane last-status cache when the backing PTY exits so
+  // a terminated pane's last working/done payload cannot resurface as a
+  // ghost event after a later reconnect — see §5 Path 3.
+  ptyHandler.setExitListener(({ paneKey }) => {
+    if (paneKey) {
+      hookServer.clearPaneState(paneKey)
+    }
+  })
+
+  // Why: request-driven replay. Orca issues this *after* it re-wires the
+  // `agent.hook` filter on the new mux post-`--connect`. We forward each
+  // cached entry as a fresh notification BEFORE returning so the response
+  // strictly trails all replays on the dispatcher's single write callback —
+  // closing the race the push-on-`setWrite` shape would have lost. See
+  // docs/design/agent-status-over-ssh.md §5 Path 3.
+  dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
+    const replayed = hookServer.replayCachedPayloadsForPanes()
+    return { replayed }
+  })
+
+  // Why: stub for the plugin-source sync handler used by OpenCode/Pi. The
+  // real implementation is wired in commit #7 (deferred to keep this commit
+  // tight). Stubbed out here as a method-found handler so a probing client
+  // can detect support without -32601 noise on first connect.
+  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => {
+    return { installed: false }
+  })
 
   // ── Socket server for reconnection ──────────────────────────────────
   // Why: the relay's original stdin/stdout is tied to the SSH exec channel.
@@ -378,6 +448,7 @@ function main(): void {
     dispatcher.dispose()
     ptyHandler.dispose()
     fsHandler.dispose()
+    hookServer.stop()
     if (socketServer) {
       socketServer.close()
     }
@@ -415,4 +486,9 @@ function cleanupSocket(sockPath: string): void {
   }
 }
 
-main()
+void main().catch((err) => {
+  process.stderr.write(
+    `[relay] Fatal startup error: ${err instanceof Error ? err.message : String(err)}\n`
+  )
+  process.exit(1)
+})

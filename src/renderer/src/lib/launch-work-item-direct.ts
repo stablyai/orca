@@ -245,6 +245,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
 
     const detectedIds = new Set(await detectedAgentsPromise)
     effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    if (effectiveAgent) {
+      // Why: direct task launch creates and starts the workspace in separate
+      // steps so agent detection can overlap git worktree creation. Persist
+      // the chosen agent once known so empty-worktree reopen can recreate it.
+      void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
+        // Non-critical: activation still has the explicit startup below.
+      })
+    }
     const draftContent = item.pasteContent ?? item.url
 
     // Why: agents that gate first-launch behind a "Do you trust this folder?"

@@ -1,7 +1,10 @@
 /* eslint-disable max-lines */
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
+import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
+import type { VoiceSettings } from './speech-types'
+import type { GitLabProjectSettings } from './gitlab-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -111,6 +114,16 @@ export type Worktree = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  // Why: parallel slots for GitLab work-item references. Kept as separate
+  // fields (rather than reusing linkedIssue / linkedPR with a provider
+  // discriminator) so the persistence layer is unambiguous when a user
+  // has both a GitHub and a GitLab remote on the same repo, and so the
+  // existing GitHub renderer code keeps reading linkedPR / linkedIssue
+  // unchanged. Optional on the type so existing test fixtures and
+  // persisted older worktrees that never carried these fields continue
+  // to typecheck and load without migration.
+  linkedGitLabMR?: number | null
+  linkedGitLabIssue?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -121,6 +134,10 @@ export type Worktree = {
    *  grant newly-created worktrees a short grace window at the top of Recent,
    *  immune to ambient PTY-bump reordering in other worktrees. */
   createdAt?: number
+  /** Agent selected when Orca originally created the worktree. Used only to
+   *  seed a replacement terminal if the user later reopens the worktree after
+   *  closing every visible surface. */
+  createdWithAgent?: TuiAgent
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -146,6 +163,10 @@ export type WorktreeMeta = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  /** Optional for backward compatibility — see Worktree.linkedGitLabMR. */
+  linkedGitLabMR?: number | null
+  /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */
+  linkedGitLabIssue?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -153,6 +174,8 @@ export type WorktreeMeta = {
   lastActivityAt: number
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
+  /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */
+  createdWithAgent?: TuiAgent
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
@@ -194,9 +217,15 @@ export type TabGroupLayoutNode =
     }
 
 // ─── Unified Tab ────────────────────────────────────────────────────
-export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review' | 'browser'
+export type TabContentType =
+  | 'terminal'
+  | 'editor'
+  | 'diff'
+  | 'conflict-review'
+  | 'browser'
+  | 'notes'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'notes'
 
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
@@ -211,6 +240,7 @@ export type Tab = {
   createdAt: number
   isPreview?: boolean // preview tabs get replaced by next single-click open
   isPinned?: boolean // pinned tabs survive "close others"
+  isDirty?: boolean // unsaved tab-local content, currently used by Project Notes
 }
 
 export type TabGroup = {
@@ -724,6 +754,36 @@ export type ClassifiedError = {
 // can continue using the short local name.
 export type GitHubOwnerRepo = { owner: string; repo: string }
 
+// Why: GitLab-specific types live in `./gitlab-types` so they can grow
+// independently from the central types file (which is touched by every
+// upstream feature). Re-exported here so existing call sites
+// (`from '../shared/types'`) keep working without changes.
+export type {
+  GitLabAssignableUser,
+  GitLabCommentResult,
+  GitLabIssueInfo,
+  GitLabIssueState,
+  GitLabIssueUpdate,
+  GitLabMRFile,
+  GitLabPagedResult,
+  GitLabPipelineJob,
+  GitLabProjectRef,
+  GitLabProjectSettings,
+  GitLabReaction,
+  GitLabTodo,
+  GitLabTodoTargetType,
+  GitLabViewer,
+  GitLabWorkItem,
+  GitLabWorkItemDetails,
+  ListMergeRequestsResult,
+  MRCheckDetail,
+  MRComment,
+  MRInfo,
+  MRListState,
+  MRMergeableState,
+  MRState
+} from './gitlab-types'
+
 /**
  * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
  * see remaining budget before they hit the wall. `core` = REST (5000/hr),
@@ -880,6 +940,8 @@ export type CreateWorktreeArgs = {
   linkedIssue?: number
   linkedPR?: number
   pushTarget?: GitPushTarget
+  /** Agent selected in the create surface. Omitted for blank-shell creates. */
+  createdWithAgent?: TuiAgent
   /** Telemetry-only: which UI surface initiated this create. Threaded from
    *  the renderer entry point so main can emit `workspace_created` with the
    *  correct `source`. `unknown` is a valid wire value — an unrecognized
@@ -1092,6 +1154,13 @@ export type TerminalColorOverrides = {
   bold?: string
 }
 
+export type TerminalQuickCommand = {
+  id: string
+  label: string
+  command: string
+  appendEnter: boolean
+}
+
 export type FloatingTerminalCwdRequest = {
   path?: string
 }
@@ -1144,6 +1213,7 @@ export type GlobalSettings = {
   terminalMouseHideWhileTyping?: boolean
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
+  terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
@@ -1236,11 +1306,15 @@ export type GlobalSettings = {
    *  again" checkbox inside it or from the General settings pane. We keep this
    *  defaulted to false so first-time behavior stays safe. */
   skipDeleteWorktreeConfirm: boolean
+  /** Why: deleting an automation also deletes its run history. Keep this
+   *  separate from worktree deletion so skipping one destructive confirmation
+   *  does not silently skip the other. */
+  skipDeleteAutomationConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
    *  reopens to the same provider instead of always defaulting to GitHub. */
-  defaultTaskSource: 'github' | 'linear'
+  defaultTaskSource: 'github' | 'linear' | 'gitlab'
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays
@@ -1313,6 +1387,10 @@ export type GlobalSettings = {
    *  landed won't have the key; `getDefaultSettings()` hydrates the empty
    *  default via the persistence merge. */
   githubProjects?: GitHubProjectSettings
+  /** GitLab project preferences — pinned + recent project paths.
+   *  Optional for backward compatibility with profiles saved before
+   *  GitLab support; the persistence merge fills the empty default. */
+  gitlabProjects?: GitLabProjectSettings
   /** Anonymous product-telemetry state. Optional because the one-shot
    *  migration in `Store.load()` is what populates it on first boot of the
    *  telemetry release; before migration runs, the field is absent. After
@@ -1339,6 +1417,13 @@ export type GlobalSettings = {
      *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
   }
+  /** Local voice/dictation configuration (Phase 1 voice feature). Optional
+   *  because profiles created before voice landed won't have the key;
+   *  `getDefaultSettings()` hydrates `getDefaultVoiceSettings()` via the
+   *  `{ ...defaults, ...parsed }` merge in persistence.ts. Treat as
+   *  effectively present at runtime — the renderer should still fall back to
+   *  defaults when reading optional sub-fields. */
+  voice?: VoiceSettings
 }
 
 export type GhosttyImportPreview = {
@@ -1665,6 +1750,8 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  automations: Automation[]
+  automationRuns: AutomationRun[]
   onboarding: OnboardingState
 }
 
@@ -1739,11 +1826,14 @@ export type GitStatusResult = {
   conflictOperation: GitConflictOperation
   head?: string
   branch?: string
+  // Why: porcelain v2 status already includes upstream/ahead/behind metadata.
+  // Folding it in lets refresh polling avoid a second pair of git subprocesses.
+  upstreamStatus?: GitUpstreamStatus
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a
 // "sync" signal — callers must check hasUpstream before treating 0/0 as in-sync.
-// Kept separate from GitStatusResult because upstream lookup can fail for
+// Kept as a named type because explicit upstream refreshes can still fail for
 // reasons unrelated to working-tree status (e.g., no upstream is expected).
 export type GitUpstreamStatus = {
   hasUpstream: boolean

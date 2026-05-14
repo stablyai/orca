@@ -24,6 +24,7 @@ import {
   Folder,
   File,
   FileText,
+  Mic,
   Monitor,
   Plus,
   RefreshCw,
@@ -33,6 +34,7 @@ import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
 import { useHostClient } from '../../../../src/transport/client-context'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
+import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
   triggerMediumImpact,
   triggerSelection,
@@ -523,6 +525,24 @@ export default function SessionScreen() {
       }, durationMs)
     })
   }, [])
+
+  const dictation = useMobileDictation({
+    client,
+    enabled: canSend,
+    onTranscript: (text) => {
+      setInput((current) => {
+        if (!current.trim()) {
+          return text
+        }
+        return `${current.trimEnd()} ${text}`
+      })
+      showToast('Dictation inserted')
+    },
+    onError: (err) => {
+      triggerError()
+      showToast(err.message)
+    }
+  })
 
   useEffect(() => {
     activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
@@ -2128,6 +2148,10 @@ export default function SessionScreen() {
     // raised input dock. Short shell output near the top should stay put.
     return Math.min(keyboardLift, Math.max(0, cursorBottom + margin - dockTop))
   })()
+  const toastAnimatedStyle = {
+    opacity: toastOpacityRef.current,
+    transform: [{ translateY: -keyboardLift }]
+  }
 
   return (
     <View style={styles.container}>
@@ -2266,10 +2290,7 @@ export default function SessionScreen() {
               onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
             />
             {toastMessage && (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.toast, { opacity: toastOpacityRef.current }]}
-              >
+              <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                 <Text style={styles.toastText}>{toastMessage}</Text>
               </Animated.View>
             )}
@@ -2281,10 +2302,7 @@ export default function SessionScreen() {
               title={activeFileTab.title || 'File'}
             />
             {toastMessage && (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.toast, { opacity: toastOpacityRef.current }]}
-              >
+              <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                 <Text style={styles.toastText}>{toastMessage}</Text>
               </Animated.View>
             )}
@@ -2320,10 +2338,7 @@ export default function SessionScreen() {
               />
             ))}
             {toastMessage && (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.toast, { opacity: toastOpacityRef.current }]}
-              >
+              <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                 <Text style={styles.toastText}>{toastMessage}</Text>
               </Animated.View>
             )}
@@ -2471,6 +2486,50 @@ export default function SessionScreen() {
                 editable={canSend}
                 onSubmitEditing={() => void handleSend()}
               />
+              <Pressable
+                style={[
+                  styles.dictationButton,
+                  (dictation.isStarting || dictation.isRecording) && styles.dictationButtonActive,
+                  !canSend && styles.sendButtonDisabled
+                ]}
+                disabled={!canSend}
+                onPress={() => {
+                  if (dictation.isProcessing) {
+                    void dictation.cancel()
+                  } else if (dictation.isStarting) {
+                    return
+                  } else if (dictation.isRecording) {
+                    void dictation.stop()
+                  } else {
+                    void dictation.start().catch((err) => {
+                      triggerError()
+                      showToast(err instanceof Error ? err.message : String(err))
+                    })
+                  }
+                }}
+                onLongPress={() => {
+                  if (dictation.isRecording || dictation.isProcessing) {
+                    void dictation.cancel()
+                  }
+                }}
+                accessibilityLabel={
+                  dictation.isRecording
+                    ? 'Stop voice dictation'
+                    : dictation.isProcessing
+                      ? 'Cancel voice dictation'
+                      : dictation.isStarting
+                        ? 'Starting voice dictation'
+                        : 'Start voice dictation'
+                }
+              >
+                {dictation.isProcessing ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : dictation.isStarting || dictation.isRecording ? (
+                  <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
+                ) : (
+                  <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                )}
+              </Pressable>
               <Pressable
                 style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
                 disabled={!canSend}
@@ -3049,6 +3108,21 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  dictationButton: {
+    backgroundColor: colors.bgRaised,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm
+  },
+  dictationButtonActive: {
+    backgroundColor: colors.bgPanel,
+    borderColor: colors.textSecondary
   },
   sendButtonDisabled: {
     opacity: 0.35

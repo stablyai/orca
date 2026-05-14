@@ -13,7 +13,9 @@
     "mock-server": "npx tsx scripts/mock-server.ts"
   },
   "dependencies": {
+    "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "buffer": "^6.0.3",
     "expo": "^55.0.23",
     "expo-build-properties": "^55.0.13",
     "expo-camera": "^55.0.18",
@@ -22,6 +24,7 @@
     "expo-crypto": "^55.0.14",
     "expo-haptics": "^55.0.14",
     "expo-linking": "^55.0.15",
+    "expo-modules-core": "~55.0.25",
     "expo-notifications": "^55.0.22",
     "expo-router": "^55.0.14",
     "expo-secure-store": "^55.0.13",

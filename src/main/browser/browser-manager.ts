@@ -112,10 +112,15 @@ export class BrowserManager {
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
   private readonly policyCleanupByGuestId = new Map<number, () => void>()
+  private shouldForwardDictationShortcut: (() => boolean) | null = null
   private readonly pendingLoadFailuresByGuestId = new Map<
     number,
     { code: number; description: string; validatedUrl: string }
   >()
+
+  setDictationShortcutForwardingPredicate(predicate: (() => boolean) | null): void {
+    this.shouldForwardDictationShortcut = predicate
+  }
   private readonly pendingPermissionEventsByGuestId = new Map<number, PendingPermissionEvent[]>()
   private readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
   private readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
@@ -132,6 +137,7 @@ export class BrowserManager {
   // further re-attach attempts.
   private injectAntiDetection(guest: Electron.WebContents): () => void {
     let disposed = false
+    let reattachTimer: ReturnType<typeof setTimeout> | null = null
 
     const attach = (): void => {
       if (disposed || guest.isDestroyed()) {
@@ -160,8 +166,11 @@ export class BrowserManager {
     // sessions end. The 500ms delay avoids racing with the proxy/bridge if
     // it is mid-restart (detach → re-attach).
     const onDetach = (): void => {
-      if (!disposed && !guest.isDestroyed()) {
-        setTimeout(attach, 500)
+      if (!disposed && !guest.isDestroyed() && reattachTimer === null) {
+        reattachTimer = setTimeout(() => {
+          reattachTimer = null
+          attach()
+        }, 500)
       }
     }
 
@@ -174,6 +183,10 @@ export class BrowserManager {
 
     return () => {
       disposed = true
+      if (reattachTimer !== null) {
+        clearTimeout(reattachTimer)
+        reattachTimer = null
+      }
       try {
         guest.debugger.off('detach', onDetach)
       } catch {
@@ -1213,7 +1226,8 @@ export class BrowserManager {
         browserTabId,
         guest,
         resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false
       })
     )
   }
