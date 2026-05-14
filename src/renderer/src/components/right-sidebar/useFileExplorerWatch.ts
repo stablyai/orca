@@ -57,6 +57,17 @@ export function getExternalFileChangeRelativePath(
   return normalizeRelativePath(normalizedAbsolutePath.slice(worktreePrefix.length))
 }
 
+export function payloadRequiresDeferredTreeRefresh(
+  payload: FsChangedPayload,
+  currentWorktreePath: string
+): boolean {
+  if (normalizeAbsolutePath(payload.worktreePath) !== normalizeAbsolutePath(currentWorktreePath)) {
+    return false
+  }
+
+  return payload.events.some((evt) => evt.kind === 'rename')
+}
+
 /**
  * Reconciles File Explorer state on filesystem events for the active worktree.
  *
@@ -278,6 +289,9 @@ export function useFileExplorerWatch({
       deferredRef.current.length > 0
     ) {
       const deferred = deferredRef.current.splice(0)
+      const requiresFullRefresh = worktreePath
+        ? deferred.some((payload) => payloadRequiresDeferredTreeRefresh(payload, worktreePath))
+        : false
       // Why: replay every deferred payload through `processPayload` so the
       // tree cache reconciles to disk state after inline input or drag ends
       // (design §6.2). Editor-tab reloads are handled independently by
@@ -288,11 +302,10 @@ export function useFileExplorerWatch({
           processPayloadRef.current(payload)
         }
       }
-      // Why: also trigger a tree refresh as a safety net. Deferred events may
-      // have been coalesced by the watcher or become stale during the defer
-      // window, and a full refresh guarantees the explorer state converges on
-      // disk reality even if individual event replay misses a subtree.
-      if (worktreePath) {
+      // Why: create/delete/update payloads replay into targeted refreshDir
+      // calls above. Only event kinds this reconciler cannot apply safely
+      // should pay the full expanded-tree refresh cost after a deferred flush.
+      if (requiresFullRefresh) {
         void refreshTreeRef.current()
       }
     }
