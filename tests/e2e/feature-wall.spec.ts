@@ -139,6 +139,19 @@ test.describe('Feature tour modal', () => {
     })
     await expect(nudge).toBeVisible()
     await expect(nudge.getByText('GitHub & Linear, native')).toBeVisible()
+    await expect(
+      nudge.getByText(
+        'Browse GitHub and Linear tasks in-app. Start worktrees, review PRs, and approve without switching context.'
+      )
+    ).toBeVisible()
+    await expect
+      .poll(
+        () => nudge.locator('p').evaluate((node) => node.scrollHeight <= node.clientHeight + 1),
+        {
+          message: 'feature tour nudge caption should not be clipped'
+        }
+      )
+      .toBe(true)
     await expect(nudge.locator('img')).toHaveAttribute('src', /tile-03/)
 
     await nudge.getByRole('button', { name: /^Open tour$/ }).click()

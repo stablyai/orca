@@ -84,7 +84,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     kind: 'media',
     title: 'GitHub & Linear, native',
     caption:
-      'Browse PRs, issues, and Project boards in-app. Open a worktree from any task, review and approve PRs, and create Linear issues with team selectors.',
+      'Browse GitHub and Linear tasks in-app. Start worktrees, review PRs, and approve without switching context.',
     gifPath: 'tile-03.gif',
     posterPath: 'tile-03.poster.jpg',
     recordedAtPath: 'tile-03.recorded-at.json',
