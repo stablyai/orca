@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { JSX, KeyboardEvent } from 'react'
+import { ExternalLink } from 'lucide-react'
 import type { FeatureWallTile } from '../../../../shared/feature-wall-tiles'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +16,7 @@ export function FeatureWallTileCard(props: {
   onFocus: () => void
   onBlur: () => void
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+  onOpenDocs: () => void
 }): JSX.Element {
   const {
     tile,
@@ -27,7 +29,8 @@ export function FeatureWallTileCard(props: {
     onPointerLeave,
     onFocus,
     onBlur,
-    onKeyDown
+    onKeyDown,
+    onOpenDocs
   } = props
   const [posterFailed, setPosterFailed] = useState(false)
   const [gifFailed, setGifFailed] = useState(false)
@@ -41,22 +44,36 @@ export function FeatureWallTileCard(props: {
     setGifFailed(false)
   }, [gifUrl, posterUrl])
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    onKeyDown(event)
+    if (event.defaultPrevented) {
+      return
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return
+    }
+    event.preventDefault()
+    onOpenDocs()
+  }
+
   return (
     <div
       ref={refCallback}
       role="listitem"
-      aria-label={`${tile.title}. ${tile.caption}`}
+      aria-label={`Open docs for ${tile.title}. ${tile.caption}`}
       tabIndex={tabIndex}
       data-feature-wall-tile-id={tile.id}
       className={cn(
-        'group min-w-0 overflow-hidden rounded-md border border-border/70 bg-card text-left shadow-xs outline-none transition-[border-color,box-shadow,transform]',
+        'group min-w-0 cursor-pointer overflow-hidden rounded-md border border-border/70 bg-card text-left shadow-xs outline-none transition-[border-color,box-shadow,transform]',
+        'hover:border-ring/60',
         'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
       )}
+      onClick={onOpenDocs}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       onFocus={onFocus}
       onBlur={onBlur}
-      onKeyDown={onKeyDown}
+      onKeyDown={handleKeyDown}
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-muted">
         {showMockup ? <AgentStatusMockup /> : null}
@@ -88,7 +105,10 @@ export function FeatureWallTileCard(props: {
         ) : null}
       </div>
       <div className={cn('space-y-1 p-3', textOnly && 'invisible')}>
-        <div className="truncate text-sm font-semibold text-foreground">{tile.title}</div>
+        <div className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
+          <span className="truncate">{tile.title}</span>
+          <ExternalLink className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+        </div>
         <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{tile.caption}</p>
       </div>
     </div>

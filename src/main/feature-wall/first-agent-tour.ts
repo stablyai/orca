@@ -21,15 +21,15 @@ export function registerFeatureWallFirstAgentTour(args: {
 
     didScheduleTour = true
 
-    // Why: let the first agent launch visibly land before the education modal
-    // takes focus; older users skip this because their total is already > 1.
+    // Why: first-agent education should invite without taking focus from the
+    // just-started terminal; older users skip this because their total is > 1.
     pendingTimer = setTimeout(() => {
       pendingTimer = null
       const window = args.getWindow()
       if (!window || window.isDestroyed()) {
         return
       }
-      window.webContents.send('ui:openFeatureTour')
+      window.webContents.send('ui:showFeatureTourNudge')
     }, FEATURE_WALL_FIRST_AGENT_TOUR_DELAY_MS)
   })
 

@@ -419,3 +419,30 @@ describe('createUISlice settings navigation', () => {
     expect(store.getState().activeView).toBe('tasks')
   })
 })
+
+describe('createUISlice feature tour nudge', () => {
+  it('shows and dismisses the feature tour nudge', () => {
+    const store = createUIStore()
+
+    store.getState().showFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(true)
+
+    store.getState().dismissFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(false)
+  })
+
+  it('keeps the nudge hidden while the full feature tour is open', () => {
+    const store = createUIStore()
+
+    store.getState().openModal('feature-wall')
+    store.getState().showFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(false)
+
+    store.getState().closeModal()
+    store.getState().showFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(true)
+
+    store.getState().openModal('feature-wall')
+    expect(store.getState().featureTourNudgeVisible).toBe(false)
+  })
+})

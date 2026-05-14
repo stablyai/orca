@@ -22,6 +22,7 @@ import {
   getFeatureWallGridNavigationTarget,
   type FeatureWallNavigationKey
 } from './feature-wall-grid-navigation'
+import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
 import { FeatureWallTileCard } from './FeatureWallTileCard'
 
 const AUTO_ROTATE_MS = 3_500
@@ -35,17 +36,6 @@ const NAVIGATION_KEYS = new Set<string>([
   'Home',
   'End'
 ])
-
-function toAssetUrl(baseUrl: string | null, assetPath: string): string | null {
-  if (!baseUrl) {
-    return null
-  }
-  try {
-    return new URL(assetPath, baseUrl).toString()
-  } catch {
-    return null
-  }
-}
 
 function usePrefersReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
@@ -66,35 +56,6 @@ function usePrefersReducedMotion(): boolean {
   }, [])
 
   return prefersReducedMotion
-}
-
-function useFeatureWallAssetBaseUrl(open: boolean): string | null {
-  const [assetBaseUrl, setAssetBaseUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!open || assetBaseUrl !== null) {
-      return
-    }
-
-    let cancelled = false
-    void window.api.app
-      .getFeatureWallAssetBaseUrl()
-      .then((url) => {
-        if (!cancelled) {
-          setAssetBaseUrl(url)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAssetBaseUrl('')
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [assetBaseUrl, open])
-
-  return assetBaseUrl
 }
 
 function useGridColumnCount(gridRef: RefObject<HTMLDivElement | null>, open: boolean): number {
@@ -164,8 +125,8 @@ export default function FeatureWallModal(): JSX.Element | null {
       FEATURE_WALL_TILES.filter(isFeatureWallMediaTile).map((tile) => [
         tile.id,
         {
-          gifUrl: toAssetUrl(assetBaseUrl, tile.gifPath),
-          posterUrl: toAssetUrl(assetBaseUrl, tile.posterPath)
+          gifUrl: toFeatureWallAssetUrl(assetBaseUrl, tile.gifPath),
+          posterUrl: toFeatureWallAssetUrl(assetBaseUrl, tile.posterPath)
         }
       ])
     )
@@ -317,6 +278,7 @@ export default function FeatureWallModal(): JSX.Element | null {
                 }}
                 onBlur={() => setFocusedTileId((current) => (current === tile.id ? null : current))}
                 onKeyDown={(event) => handleTileKeyDown(event, index)}
+                onOpenDocs={() => void window.api.shell.openUrl(tile.docsUrl)}
               />
             )
           })}

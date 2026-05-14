@@ -65,6 +65,45 @@ test.describe('Feature tour modal', () => {
     expect(assetSources.length).toBeGreaterThanOrEqual(11)
     expect(assetSources.every((src) => src.includes('/onboarding/feature-wall/'))).toBe(true)
 
+    await electronApp.evaluate(({ shell }) => {
+      const testGlobal = globalThis as typeof globalThis & {
+        __featureWallOpenedDocsUrl: string | null
+        __featureWallOriginalOpenExternal?: typeof shell.openExternal
+      }
+      testGlobal.__featureWallOpenedDocsUrl = null
+      testGlobal.__featureWallOriginalOpenExternal = shell.openExternal
+      shell.openExternal = ((url: string) => {
+        testGlobal.__featureWallOpenedDocsUrl = url
+        return Promise.resolve()
+      }) as typeof shell.openExternal
+    })
+    try {
+      await orcaPage.locator('[data-feature-wall-tile-id="tile-02"]').click()
+      await expect
+        .poll(() =>
+          electronApp.evaluate(
+            () =>
+              (
+                globalThis as typeof globalThis & {
+                  __featureWallOpenedDocsUrl: string | null
+                }
+              ).__featureWallOpenedDocsUrl
+          )
+        )
+        .toBe('https://www.onorca.dev/docs/terminal')
+    } finally {
+      await electronApp.evaluate(({ shell }) => {
+        const originalOpenExternal = (
+          globalThis as typeof globalThis & {
+            __featureWallOriginalOpenExternal?: typeof shell.openExternal
+          }
+        ).__featureWallOriginalOpenExternal
+        if (originalOpenExternal) {
+          shell.openExternal = originalOpenExternal
+        }
+      })
+    }
+
     await orcaPage.locator('[data-feature-wall-tile-id="tile-01"]').focus()
     await orcaPage.keyboard.press('ArrowRight')
     await expect
@@ -78,5 +117,26 @@ test.describe('Feature tour modal', () => {
     await orcaPage.getByRole('button', { name: 'Close' }).click()
     await expect(orcaPage.getByRole('dialog', { name: 'Feature tour' })).toHaveCount(0)
     await expect.poll(async () => getStoreState<string>(orcaPage, 'activeModal')).toBe('none')
+  })
+
+  test('shows the bottom-right nudge and opens the full tour', async ({ orcaPage }) => {
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.getState().showFeatureTourNudge()
+    })
+
+    const nudge = orcaPage.getByRole('complementary', { name: 'Orca feature tour' })
+    await expect(nudge).toBeVisible()
+    await expect(nudge.getByText('Ghostty-class terminal')).toBeVisible()
+    await expect(nudge.locator('img')).toHaveAttribute('src', /tile-02/)
+
+    await nudge.getByRole('button', { name: /^Open tour$/ }).click()
+    await expect(orcaPage.getByRole('dialog', { name: 'Feature tour' })).toBeVisible()
+    await expect
+      .poll(async () => getStoreState<boolean>(orcaPage, 'featureTourNudgeVisible'))
+      .toBe(false)
   })
 })

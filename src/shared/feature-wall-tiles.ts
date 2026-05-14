@@ -17,6 +17,7 @@ type FeatureWallTileBase = {
   title: string
   caption: string
   owner: string
+  docsUrl: string
 }
 
 export type FeatureWallTile =
@@ -62,7 +63,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-01.gif',
     posterPath: 'tile-01.poster.jpg',
     recordedAtPath: 'tile-01.recorded-at.json',
-    owner: 'worktree-orchestration'
+    owner: 'worktree-orchestration',
+    docsUrl: 'https://www.onorca.dev/docs/model/worktrees'
   },
   {
     id: 'tile-02',
@@ -73,7 +75,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-02.gif',
     posterPath: 'tile-02.poster.jpg',
     recordedAtPath: 'tile-02.recorded-at.json',
-    owner: 'terminal'
+    owner: 'terminal',
+    docsUrl: 'https://www.onorca.dev/docs/terminal'
   },
   {
     id: 'tile-03',
@@ -81,7 +84,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Agents that report back',
     caption:
       'Live activity dots, agent-finished notifications, unread markers, free-text checkpoints via the Orca CLI. Stop babysitting terminals.',
-    owner: 'agent-activity'
+    owner: 'agent-activity',
+    docsUrl: 'https://www.onorca.dev/docs/notifications'
   },
   {
     id: 'tile-04',
@@ -92,7 +96,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-04.gif',
     posterPath: 'tile-04.poster.jpg',
     recordedAtPath: 'tile-04.recorded-at.json',
-    owner: 'agent-integrations'
+    owner: 'agent-integrations',
+    docsUrl: 'https://www.onorca.dev/docs/agents/supported'
   },
   {
     id: 'tile-05',
@@ -103,7 +108,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-05.gif',
     posterPath: 'tile-05.poster.jpg',
     recordedAtPath: 'tile-05.recorded-at.json',
-    owner: 'browser-experience'
+    owner: 'browser-experience',
+    docsUrl: 'https://www.onorca.dev/docs/browser/design-mode'
   },
   {
     id: 'tile-06',
@@ -114,7 +120,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-06.gif',
     posterPath: 'tile-06.poster.jpg',
     recordedAtPath: 'tile-06.recorded-at.json',
-    owner: 'ssh-workspaces'
+    owner: 'ssh-workspaces',
+    docsUrl: 'https://www.onorca.dev/docs/ssh'
   },
   {
     id: 'tile-07',
@@ -125,7 +132,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-07.gif',
     posterPath: 'tile-07.poster.jpg',
     recordedAtPath: 'tile-07.recorded-at.json',
-    owner: 'editor'
+    owner: 'editor',
+    docsUrl: 'https://www.onorca.dev/docs/editing/file-explorer'
   },
   {
     id: 'tile-08',
@@ -136,7 +144,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-08.gif',
     posterPath: 'tile-08.poster.jpg',
     recordedAtPath: 'tile-08.recorded-at.json',
-    owner: 'diff-review'
+    owner: 'diff-review',
+    docsUrl: 'https://www.onorca.dev/docs/review/annotate-ai-diff'
   },
   {
     id: 'tile-09',
@@ -146,7 +155,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-09.gif',
     posterPath: 'tile-09.poster.jpg',
     recordedAtPath: 'tile-09.recorded-at.json',
-    owner: 'orca-cli'
+    owner: 'orca-cli',
+    docsUrl: 'https://www.onorca.dev/docs/cli/overview'
   },
   {
     id: 'tile-10',
@@ -157,7 +167,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-10.gif',
     posterPath: 'tile-10.poster.jpg',
     recordedAtPath: 'tile-10.recorded-at.json',
-    owner: 'keyboard-ux'
+    owner: 'keyboard-ux',
+    docsUrl: 'https://www.onorca.dev/docs/model/quick-open'
   },
   {
     id: 'tile-11',
@@ -168,7 +179,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-11.gif',
     posterPath: 'tile-11.poster.jpg',
     recordedAtPath: 'tile-11.recorded-at.json',
-    owner: 'usage-rate-limits'
+    owner: 'usage-rate-limits',
+    docsUrl: 'https://www.onorca.dev/docs/agents/usage-tracking'
   },
   {
     id: 'tile-12',
@@ -179,6 +191,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     gifPath: 'tile-12.gif',
     posterPath: 'tile-12.poster.jpg',
     recordedAtPath: 'tile-12.recorded-at.json',
-    owner: 'file-preview'
+    owner: 'file-preview',
+    docsUrl: 'https://www.onorca.dev/docs/editing/viewers'
   }
 ] as const

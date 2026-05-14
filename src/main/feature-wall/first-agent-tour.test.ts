@@ -38,7 +38,7 @@ describe('registerFeatureWallFirstAgentTour', () => {
     vi.useRealTimers()
   })
 
-  it('opens the feature tour shortly after the first agent starts', () => {
+  it('shows the feature tour nudge shortly after the first agent starts', () => {
     vi.useFakeTimers()
     const source = createStatsSource()
     const window = createWindow()
@@ -54,7 +54,7 @@ describe('registerFeatureWallFirstAgentTour', () => {
     expect(window.webContents.send).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
 
-    expect(window.webContents.send).toHaveBeenCalledWith('ui:openFeatureTour')
+    expect(window.webContents.send).toHaveBeenCalledWith('ui:showFeatureTourNudge')
   })
 
   it('does not open for later agent starts or destroyed windows', () => {
