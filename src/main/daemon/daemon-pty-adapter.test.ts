@@ -475,6 +475,41 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
     })
 
+    it('checkpoints only dirty sessions on the periodic timer', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      adapterClass.CHECKPOINT_INTERVAL_MS = 25
+
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const { id } = await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/home/user',
+          sessionId: 'dirty-checkpoint'
+        })
+        const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+
+        await new Promise((r) => setTimeout(r, 80))
+
+        // Why: idle terminals can be numerous. A periodic pass with no data
+        // must not serialize every live daemon session just because it exists.
+        expect(checkpointSpy).not.toHaveBeenCalled()
+
+        lastSubprocess._simulateData('new output\r\n')
+        await waitFor(() => checkpointSpy.mock.calls.length === 1)
+        expect(checkpointSpy).toHaveBeenCalledWith(
+          id,
+          expect.objectContaining({ snapshotAnsi: expect.stringContaining('new output') })
+        )
+
+        await new Promise((r) => setTimeout(r, 80))
+        expect(checkpointSpy).toHaveBeenCalledTimes(1)
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+      }
+    })
+
     it('writes meta.json with endedAt on exit', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
