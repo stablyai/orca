@@ -11,7 +11,8 @@
  */
 
 import { execSync } from 'child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs'
 import path from 'path'
 import os from 'os'
 
@@ -53,8 +54,7 @@ export default function globalSetup(): void {
   // ── 2. Create a seeded test git repo ───────────────────────────────
   // Why: each test run gets its own git repo so the suite is fully
   // idempotent. No test depends on whatever repos the user has open.
-  const testRepoDir = path.join(os.tmpdir(), `orca-e2e-repo-${Date.now()}`)
-  mkdirSync(testRepoDir, { recursive: true })
+  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -80,7 +80,7 @@ export default function globalSetup(): void {
   // Why: several tests verify worktree-switching behavior (terminal content
   // retention, browser tab retention). They need at least 2 worktrees.
   // Creating one here makes those tests run instead of being skipped.
-  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${Date.now()}`)
+  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
   execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
     cwd: testRepoDir,
     stdio: 'pipe'

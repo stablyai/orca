@@ -6,6 +6,8 @@ import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
+  ORCHESTRATION_ENABLED_STORAGE_KEY,
+  ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
   isOrchestrationSetupEnabled,
   isOrchestrationSkillMarkedInstalled,
@@ -41,13 +43,13 @@ export function OrchestrationPane(): React.JSX.Element {
 
   const toggleOrchestration = (value: boolean): void => {
     setOrchestrationEnabled(value)
-    localStorage.setItem('orca.orchestration.enabled', value ? '1' : '0')
+    localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, value ? '1' : '0')
     notifyOrchestrationSetupStateChanged()
   }
 
   const markOrchestrationSkillInstalled = (value: boolean): void => {
     setOrchestrationSkillInstalled(value)
-    localStorage.setItem('orca.orchestration.skillInstalled', value ? '1' : '0')
+    localStorage.setItem(ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY, value ? '1' : '0')
     notifyOrchestrationSetupStateChanged()
   }
 

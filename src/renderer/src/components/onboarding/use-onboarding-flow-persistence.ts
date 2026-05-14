@@ -1,8 +1,14 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
+import {
+  hasSelectedOnboardingFeatureSetup,
+  runOnboardingFeatureSetup,
+  type OnboardingFeatureSetupSelection
+} from './onboarding-feature-setup'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -109,6 +115,7 @@ type PersistCurrentStepDeps = {
   selectedAgent: TuiAgent | null
   theme: GlobalSettings['theme']
   notifications: NotificationDraft
+  featureSetupSelection: OnboardingFeatureSetupSelection
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
   onboardingChecklist: OnboardingState['checklist']
@@ -121,6 +128,7 @@ export function usePersistCurrentStep({
   selectedAgent,
   theme,
   notifications,
+  featureSetupSelection,
   settings,
   updateSettings,
   onboardingChecklist,
@@ -172,6 +180,22 @@ export function usePersistCurrentStep({
             suppressWhenFocused: !notifications.notifyWhenFocused
           }
         })
+        if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
+          const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
+          const firstWarning = setupResult.warnings[0]
+          if (firstWarning) {
+            toast.warning('Some feature setup needs attention', {
+              description: firstWarning.message
+            })
+          } else if (setupResult.skillCommandsCopied) {
+            toast.success('Feature setup ready', {
+              description: 'Skill commands copied for your first project terminal.'
+            })
+          }
+          if (setupResult.computerUsePermissionsOpened) {
+            toast.message('Opened Computer Use permissions')
+          }
+        }
         onOnboardingChange(await persistStep(3))
         return true
       }
@@ -182,6 +206,7 @@ export function usePersistCurrentStep({
     }
   }, [
     currentStepId,
+    featureSetupSelection,
     notifications,
     onboardingChecklist,
     onOnboardingChange,

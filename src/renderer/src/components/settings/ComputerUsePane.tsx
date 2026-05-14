@@ -6,12 +6,10 @@ import type {
   ComputerUsePermissionState,
   ComputerUsePermissionStatus
 } from '../../../../shared/computer-use-permissions-types'
+import { COMPUTER_USE_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import type { SettingsSearchEntry } from './settings-search'
-
-const COMPUTER_USE_SKILL_INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill computer-use'
 
 export const COMPUTER_USE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {

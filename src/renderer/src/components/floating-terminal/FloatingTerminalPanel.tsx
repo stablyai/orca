@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
+  ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
   hasOrchestrationSetupMarker,
   isOrchestrationSetupDismissed,
@@ -250,7 +251,7 @@ export function FloatingTerminalPanel({
   }
 
   const dismissOrchestrationSetup = useCallback(() => {
-    localStorage.setItem('orca.orchestration.setupDismissed', '1')
+    localStorage.setItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY, '1')
     setShowOrchestrationSetup(false)
     notifyOrchestrationSetupStateChanged()
   }, [])

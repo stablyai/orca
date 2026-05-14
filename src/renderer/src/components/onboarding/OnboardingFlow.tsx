@@ -46,6 +46,11 @@ export default function OnboardingFlow({
   const flow = useOnboardingFlow(onboarding, onOnboardingChange)
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
+  const primaryActionLabel =
+    busyLabel ??
+    (currentStep.id === 'notifications' && flow.hasSelectedFeatureSetup
+      ? 'Set up & continue'
+      : 'Continue')
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).
   const { next: flowNext, openFolder: flowOpenFolder } = flow
@@ -153,7 +158,12 @@ export default function OnboardingFlow({
             />
           )}
           {currentStep.id === 'notifications' && (
-            <NotificationStep value={flow.notifications} onChange={flow.setNotifications} />
+            <NotificationStep
+              value={flow.notifications}
+              onChange={flow.setNotifications}
+              featureSetup={flow.featureSetupSelection}
+              onFeatureSetupChange={flow.setFeatureSetupSelection}
+            />
           )}
           {currentStep.id === 'repo' && (
             <RepoStep
@@ -173,7 +183,13 @@ export default function OnboardingFlow({
             <kbd className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground">
               {enterLabel}
             </kbd>
-            <span>{currentStep.id === 'repo' ? 'open folder' : 'continue'}</span>
+            <span>
+              {currentStep.id === 'repo'
+                ? 'open folder'
+                : currentStep.id === 'notifications' && flow.hasSelectedFeatureSetup
+                  ? 'set up'
+                  : 'continue'}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -202,7 +218,7 @@ export default function OnboardingFlow({
                 disabled={Boolean(busyLabel)}
                 onClick={() => void flow.next()}
               >
-                Continue
+                {primaryActionLabel}
               </button>
             )}
           </div>

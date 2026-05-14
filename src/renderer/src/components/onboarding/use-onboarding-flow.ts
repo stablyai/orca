@@ -10,6 +10,11 @@ import { buildAgentPickedPayload } from './agent-picked-payload'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
+import {
+  DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
+  hasSelectedOnboardingFeatureSetup,
+  type OnboardingFeatureSetupSelection
+} from './onboarding-feature-setup'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 
@@ -52,6 +57,8 @@ export function useOnboardingFlow(
     terminalBell: true,
     notifyWhenFocused: true
   })
+  const [featureSetupSelection, setFeatureSetupSelection] =
+    useState<OnboardingFeatureSetupSelection>(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)
   const [cloneUrl, setCloneUrl] = useState('')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -283,12 +290,14 @@ export function useOnboardingFlow(
     selectedAgent,
     theme,
     notifications,
+    featureSetupSelection,
     settings,
     updateSettings,
     onboardingChecklist: onboarding.checklist,
     onOnboardingChange,
     setError
   })
+  const hasSelectedFeatureSetup = hasSelectedOnboardingFeatureSetup(featureSetupSelection)
 
   // Why: synchronous re-entry latch. `busyLabel` is React state and only
   // commits after the awaited persistCurrentStep round-trip resolves, so a
@@ -302,6 +311,9 @@ export function useOnboardingFlow(
         return
       }
       nextInFlightRef.current = true
+      if (currentStep.id === 'notifications' && hasSelectedFeatureSetup) {
+        setBusyLabel('Setting up features…')
+      }
       try {
         const ok = await persistCurrentStep()
         if (ok) {
@@ -314,6 +326,9 @@ export function useOnboardingFlow(
           setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
         }
       } finally {
+        if (currentStep.id === 'notifications') {
+          setBusyLabel(null)
+        }
         nextInFlightRef.current = false
       }
     },
@@ -323,6 +338,7 @@ export function useOnboardingFlow(
       currentStep.id,
       currentStep.stepNumber,
       currentStep.valueKind,
+      hasSelectedFeatureSetup,
       persistCurrentStep
     ]
   )
@@ -447,6 +463,9 @@ export function useOnboardingFlow(
     setTheme: setThemeInteractive,
     notifications,
     setNotifications,
+    featureSetupSelection,
+    setFeatureSetupSelection,
+    hasSelectedFeatureSetup,
     cloneUrl,
     setCloneUrl,
     busyLabel,
