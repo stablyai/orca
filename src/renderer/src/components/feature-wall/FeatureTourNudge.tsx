@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/card'
 import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
 
 const FEATURE_TOUR_NUDGE_TILE = FEATURE_WALL_TILES.find(
-  (tile): tile is FeatureWallMediaTile => tile.id === 'tile-02' && isFeatureWallMediaTile(tile)
+  (tile): tile is FeatureWallMediaTile => tile.id === 'tile-03' && isFeatureWallMediaTile(tile)
 )
 
 export function FeatureTourNudge(): JSX.Element | null {

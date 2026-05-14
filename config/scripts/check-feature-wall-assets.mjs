@@ -10,6 +10,7 @@ const MAX_BYTES = 11 * 1024 * 1024
 const MEDIA_TILE_IDS = [
   'tile-01',
   'tile-02',
+  'tile-03',
   'tile-04',
   'tile-05',
   'tile-06',

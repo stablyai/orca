@@ -240,7 +240,9 @@ export default function FeatureWallModal(): JSX.Element | null {
       >
         <DialogHeader className="gap-1">
           <DialogTitle>Explore some of Orca&apos;s features</DialogTitle>
-          <DialogDescription>Terminal, agents, browser, SSH, review, and more.</DialogDescription>
+          <DialogDescription>
+            Tasks, terminal, agents, browser, SSH, review, and more.
+          </DialogDescription>
         </DialogHeader>
 
         <div

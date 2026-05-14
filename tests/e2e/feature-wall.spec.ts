@@ -49,7 +49,7 @@ test.describe('Feature tour modal', () => {
       timeout: 10_000
     })
     await expect(
-      orcaPage.getByText('Terminal, agents, browser, SSH, review, and more.')
+      orcaPage.getByText('Tasks, terminal, agents, browser, SSH, review, and more.')
     ).toBeVisible()
     await expect(orcaPage.getByRole('listitem')).toHaveCount(12)
     await expect(
@@ -61,12 +61,12 @@ test.describe('Feature tour modal', () => {
         timeout: 10_000,
         message: 'feature-wall media did not load'
       })
-      .toBeGreaterThanOrEqual(11)
+      .toBeGreaterThanOrEqual(12)
 
     const assetSources = await orcaPage
       .locator('[data-feature-wall-tile-id] img')
       .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).src))
-    expect(assetSources.length).toBeGreaterThanOrEqual(11)
+    expect(assetSources.length).toBeGreaterThanOrEqual(12)
     expect(assetSources.every((src) => src.includes('/onboarding/feature-wall/'))).toBe(true)
 
     await electronApp.evaluate(({ shell }) => {
@@ -138,8 +138,8 @@ test.describe('Feature tour modal', () => {
       name: "Explore some of Orca's features"
     })
     await expect(nudge).toBeVisible()
-    await expect(nudge.getByText('Ghostty-class terminal')).toBeVisible()
-    await expect(nudge.locator('img')).toHaveAttribute('src', /tile-02/)
+    await expect(nudge.getByText('GitHub & Linear, native')).toBeVisible()
+    await expect(nudge.locator('img')).toHaveAttribute('src', /tile-03/)
 
     await nudge.getByRole('button', { name: /^Open tour$/ }).click()
     await expect(

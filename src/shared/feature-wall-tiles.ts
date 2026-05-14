@@ -34,6 +34,7 @@ export type FeatureWallTile =
 export const FEATURE_WALL_MEDIA_TILE_IDS = [
   'tile-01',
   'tile-02',
+  'tile-03',
   'tile-04',
   'tile-05',
   'tile-06',
@@ -80,12 +81,15 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
   },
   {
     id: 'tile-03',
-    kind: 'agent-status-mockup',
-    title: 'Agents that report back',
+    kind: 'media',
+    title: 'GitHub & Linear, native',
     caption:
-      'Live activity dots, agent-finished notifications, unread markers, free-text checkpoints via the Orca CLI. Stop babysitting terminals.',
-    owner: 'agent-activity',
-    docsUrl: 'https://www.onorca.dev/docs/notifications'
+      'Browse PRs, issues, and Project boards in-app. Open a worktree from any task, review and approve PRs, and create Linear issues with team selectors.',
+    gifPath: 'tile-03.gif',
+    posterPath: 'tile-03.poster.jpg',
+    recordedAtPath: 'tile-03.recorded-at.json',
+    owner: 'task-integrations',
+    docsUrl: 'https://www.onorca.dev/docs/review/linear'
   },
   {
     id: 'tile-04',
@@ -150,7 +154,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
   {
     id: 'tile-09',
     kind: 'media',
-    title: 'Scriptable. First-class CLI.',
+    title: 'Orca CLI',
     caption: 'Agents drive Orca too: orca worktree create, snapshot, click, fill.',
     gifPath: 'tile-09.gif',
     posterPath: 'tile-09.poster.jpg',
