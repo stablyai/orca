@@ -19,6 +19,7 @@ import {
   MoveDown,
   MoveUp,
   Play,
+  Save,
   Trash2
 } from 'lucide-react'
 import { monaco } from '@/lib/monaco-setup'
@@ -30,6 +31,7 @@ import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
 import {
@@ -170,11 +172,13 @@ function NotebookCellHeader({
 function NotebookHeaderButton({
   label,
   disabled = false,
+  shortcutKeys,
   onClick,
   children
 }: {
   label: string
   disabled?: boolean
+  shortcutKeys?: string[]
   onClick: () => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -193,7 +197,12 @@ function NotebookHeaderButton({
           {children}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent>
+        <span className="flex items-center gap-2">
+          <span>{label}</span>
+          {shortcutKeys ? <ShortcutKeyCombo keys={shortcutKeys} /> : null}
+        </span>
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -213,16 +222,22 @@ function CodeCell({
   source,
   active,
   onActivate,
-  onChange
+  onDeactivate,
+  onChange,
+  onSaveRequest
 }: {
   cell: IpynbCell
   source: string
   active: boolean
   onActivate: () => void
+  onDeactivate: () => void
   onChange: (source: string) => void
+  onSaveRequest: () => Promise<void>
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const onDeactivateRef = useRef(onDeactivate)
+  const onSaveRequestRef = useRef(onSaveRequest)
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const lineCount = Math.max(3, source.split('\n').length + 1)
   const editorHeight = Math.min(520, Math.max(96, lineCount * (fontSize + 8)))
@@ -231,9 +246,23 @@ function CodeCell({
     () => (source.length > 0 ? source.replace(/\n$/, '').split('\n') : ['']),
     [source]
   )
-  const handleMount: OnMount = useCallback((editorInstance) => {
+  const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
+    editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
+      void onSaveRequestRef.current()
+    })
+    editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
+      onDeactivateRef.current()
+    })
+    editorInstance.onDidBlurEditorWidget(() => {
+      onDeactivateRef.current()
+    })
   }, [])
+
+  useEffect(() => {
+    onDeactivateRef.current = onDeactivate
+    onSaveRequestRef.current = onSaveRequest
+  }, [onDeactivate, onSaveRequest])
 
   useEffect(() => {
     monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
@@ -555,6 +584,39 @@ export default function IpynbViewer({
     container.scrollTop = targetScrollTop
   }, [scrollCacheKey, content])
 
+  const saveNotebook = useCallback(async (): Promise<void> => {
+    const latestContent = flushSourceDrafts()
+    await onSave(latestContent)
+  }, [flushSourceDrafts, onSave])
+
+  const handleNotebookKeyDownCapture = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      const isMac = navigator.userAgent.includes('Mac')
+      const hasSaveModifier = isMac ? event.metaKey : event.ctrlKey
+      if (!hasSaveModifier || event.shiftKey || event.repeat || event.key.toLowerCase() !== 's') {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      void saveNotebook()
+    },
+    [saveNotebook]
+  )
+
+  const handleNotebookPointerDownCapture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => {
+      if (editingCellKey === null) {
+        return
+      }
+      const target = event.target instanceof Element ? event.target : null
+      if (target?.closest('.monaco-editor')) {
+        return
+      }
+      setEditingCellKey(null)
+    },
+    [editingCellKey]
+  )
+
   if (parsed.error || !parsed.notebook) {
     return (
       <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm text-muted-foreground">
@@ -570,6 +632,7 @@ export default function IpynbViewer({
   }
 
   const { notebook } = parsed
+  const shortcutModifier = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
   const applyContent = (nextContent: string): void => {
     contentRef.current = nextContent
     onContentChange(nextContent)
@@ -648,6 +711,8 @@ export default function IpynbViewer({
       ref={rootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize, fontFamily: settings?.terminalFontFamily || undefined }}
+      onKeyDownCapture={handleNotebookKeyDownCapture}
+      onPointerDownCapture={handleNotebookPointerDownCapture}
     >
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
@@ -655,10 +720,19 @@ export default function IpynbViewer({
         <span>{notebook.language}</span>
         {notebook.kernelName ? <span>{notebook.kernelName}</span> : null}
         {runError ? <span className="text-destructive">{runError}</span> : null}
-        <span className="ml-auto rounded-sm border border-border bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-          BETA
-        </span>
-        <span className="font-mono">nbformat {notebook.nbformat}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <NotebookHeaderButton
+            label="Save notebook"
+            shortcutKeys={[shortcutModifier, 'S']}
+            onClick={() => void saveNotebook()}
+          >
+            <Save className="size-3.5" />
+          </NotebookHeaderButton>
+          <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+            BETA
+          </span>
+          <span className="font-mono">nbformat {notebook.nbformat}</span>
+        </div>
       </div>
       <div className="mx-auto flex max-w-[980px] flex-col gap-3 px-5 py-5">
         {notebook.cells.length === 0 ? (
@@ -706,7 +780,11 @@ export default function IpynbViewer({
                     source={source}
                     active={editingCellKey === cellKey}
                     onActivate={() => setEditingCellKey(cellKey)}
+                    onDeactivate={() =>
+                      setEditingCellKey((current) => (current === cellKey ? null : current))
+                    }
                     onChange={(nextSource) => updateCellSource(index, nextSource)}
+                    onSaveRequest={saveNotebook}
                   />
                 ) : (
                   <EditableTextCell
