@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow, systemPreferences, app } from 'electron'
 import { join } from 'path'
 import { writeFile, unlink } from 'fs/promises'
+import { createHash } from 'crypto'
 import { SPEECH_MODEL_CATALOG, getCatalogModel } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import type { Store } from '../persistence'
@@ -40,18 +41,24 @@ export function registerSpeechHandlers(store: Store): void {
     await getSpeechModelManager(store).deleteModel(modelId)
   })
 
-  const hotwordsFilePath = join(app.getPath('userData'), 'speech-hotwords.txt')
+  const getHotwordsFilePath = (content: string): string => {
+    const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
+    return join(app.getPath('userData'), `speech-hotwords-${digest}.txt`)
+  }
 
   ipcMain.handle('speech:startDictation', async (event, modelId: string, hotwords?: string[]) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
       return
     }
+    let resolvedHotwordsPath: string | undefined
     const cleanupOnWindowClosed = (): void => {
       void getSpeechSttService(store)
         .stopDictation('desktop')
         .finally(() => {
-          unlink(hotwordsFilePath).catch(() => {})
+          if (resolvedHotwordsPath) {
+            unlink(resolvedHotwordsPath).catch(() => {})
+          }
         })
     }
     window.once('closed', cleanupOnWindowClosed)
@@ -74,9 +81,9 @@ export function registerSpeechHandlers(store: Store): void {
       }
     }
 
-    let resolvedHotwordsPath: string | undefined
     if (hotwords && hotwords.length > 0) {
       const content = `${hotwords.map((w) => `${w} :2.0`).join('\n')}\n`
+      const hotwordsFilePath = getHotwordsFilePath(content)
       await writeFile(hotwordsFilePath, content, 'utf-8')
       resolvedHotwordsPath = hotwordsFilePath
     }
@@ -109,10 +116,13 @@ export function registerSpeechHandlers(store: Store): void {
         resolvedHotwordsPath,
         'desktop'
       )
+      if (resolvedHotwordsPath) {
+        unlink(resolvedHotwordsPath).catch(() => {})
+      }
     } catch (err) {
       window.off('closed', cleanupOnWindowClosed)
       if (resolvedHotwordsPath) {
-        unlink(hotwordsFilePath).catch(() => {})
+        unlink(resolvedHotwordsPath).catch(() => {})
       }
       throw err
     }
@@ -127,6 +137,5 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:stopDictation', async () => {
     await getSpeechSttService(store).stopDictation('desktop')
-    unlink(hotwordsFilePath).catch(() => {})
   })
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resampleToRate } from './stt-worker'
+import { resampleToRate } from './stt-audio-resample'
 
 describe('resampleToRate', () => {
   it('normalizes changing capture rates before audio enters the native recognizer', () => {

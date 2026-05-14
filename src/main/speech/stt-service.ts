@@ -17,10 +17,13 @@ export class SttService {
   private worker: Worker | null = null
   private modelManager: ModelManager
   private activeModelId: string | null = null
+  private activeHotwordsFilePath: string | undefined
   private activeOwner: string | null = null
   private startingOwner: string | null = null
   private starting = false
   private canceledOwners = new Set<string>()
+  private eventSink: SttEventSink | null = null
+  private idleTeardownTimer: NodeJS.Timeout | null = null
 
   constructor(modelManager: ModelManager) {
     this.modelManager = modelManager
@@ -43,6 +46,7 @@ export class SttService {
     }
     this.starting = true
     this.startingOwner = owner
+    this.clearIdleTeardownTimer()
 
     try {
       await this._startDictation(modelId, sink, hotwordsFilePath, owner)
@@ -64,8 +68,19 @@ export class SttService {
     hotwordsFilePath?: string,
     owner = 'desktop'
   ): Promise<void> {
+    if (
+      this.worker &&
+      this.activeModelId === modelId &&
+      this.activeHotwordsFilePath === hotwordsFilePath
+    ) {
+      this.eventSink = sink
+      sink({ type: 'ready' })
+      return
+    }
+
     if (this.worker) {
       await this.stopDictation(owner)
+      await this.teardownIdleWorker()
     }
 
     const manifest = getCatalogModel(modelId)
@@ -87,6 +102,8 @@ export class SttService {
     const worker = this.worker
 
     this.activeModelId = modelId
+    this.activeHotwordsFilePath = hotwordsFilePath
+    this.eventSink = sink
 
     const readyPromise = new Promise<void>((resolve, reject) => {
       let settled = false
@@ -131,15 +148,17 @@ export class SttService {
     })
 
     worker.on('message', (msg: SttEvent) => {
-      sink(msg)
+      this.eventSink?.(msg)
     })
 
     worker.on('error', (err) => {
-      sink({ type: 'error', error: String(err) })
+      this.eventSink?.({ type: 'error', error: String(err) })
       if (this.worker === worker) {
         this.worker = null
         this.activeModelId = null
+        this.activeHotwordsFilePath = undefined
         this.activeOwner = null
+        this.eventSink = null
       }
     })
 
@@ -147,7 +166,9 @@ export class SttService {
       if (this.worker === worker) {
         this.worker = null
         this.activeModelId = null
+        this.activeHotwordsFilePath = undefined
         this.activeOwner = null
+        this.eventSink = null
       }
     })
 
@@ -171,7 +192,9 @@ export class SttService {
       if (this.worker === worker) {
         this.worker = null
         this.activeModelId = null
+        this.activeHotwordsFilePath = undefined
         this.activeOwner = null
+        this.eventSink = null
       }
       throw error
     }
@@ -210,18 +233,16 @@ export class SttService {
         if (msg.type === 'stopped') {
           clearTimeout(timeout)
           worker.off('message', onStopped)
-          worker.postMessage({ type: 'teardown' })
           resolve()
         }
       }
       worker.on('message', onStopped)
     })
 
-    worker.removeAllListeners()
     if (this.worker === worker) {
-      this.worker = null
-      this.activeModelId = null
       this.activeOwner = null
+      this.eventSink = null
+      this.scheduleIdleTeardown()
     }
   }
 
@@ -238,6 +259,44 @@ export class SttService {
       return join(process.resourcesPath, 'app.asar', 'out', 'main', 'stt-worker.js')
     }
     return join(__dirname, 'stt-worker.js')
+  }
+
+  private clearIdleTeardownTimer(): void {
+    if (this.idleTeardownTimer) {
+      clearTimeout(this.idleTeardownTimer)
+      this.idleTeardownTimer = null
+    }
+  }
+
+  private scheduleIdleTeardown(): void {
+    this.clearIdleTeardownTimer()
+    // Why: keep the native recognizer warm for repeated dictations, but release
+    // the ONNX model after a quiet period so long-running Orca sessions don't
+    // pin speech memory forever.
+    this.idleTeardownTimer = setTimeout(
+      () => {
+        void this.teardownIdleWorker()
+      },
+      5 * 60 * 1000
+    )
+    this.idleTeardownTimer.unref?.()
+  }
+
+  private async teardownIdleWorker(): Promise<void> {
+    this.clearIdleTeardownTimer()
+    if (!this.worker || this.activeOwner || this.startingOwner) {
+      return
+    }
+    const worker = this.worker
+    worker.postMessage({ type: 'teardown' })
+    worker.removeAllListeners()
+    await worker.terminate().catch(() => undefined)
+    if (this.worker === worker) {
+      this.worker = null
+      this.activeModelId = null
+      this.activeHotwordsFilePath = undefined
+      this.eventSink = null
+    }
   }
 
   private getSherpaModulePath(): string {

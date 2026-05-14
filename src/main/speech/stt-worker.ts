@@ -1,6 +1,7 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
 import { parentPort, workerData } from 'worker_threads'
 import { readdirSync } from 'fs'
+import { resampleToRate } from './stt-audio-resample'
 
 type WorkerMessage =
   | {
@@ -28,38 +29,6 @@ let stream: any = null
 let isStreaming = false
 let offlineBuffer: Float32Array[] = []
 let offlineSampleRate = 16000
-
-export function resampleToRate(
-  samples: Float32Array,
-  inputSampleRate: number,
-  outputSampleRate: number
-): Float32Array {
-  if (
-    samples.length === 0 ||
-    !Number.isFinite(inputSampleRate) ||
-    !Number.isFinite(outputSampleRate) ||
-    inputSampleRate <= 0 ||
-    outputSampleRate <= 0 ||
-    inputSampleRate === outputSampleRate
-  ) {
-    return samples
-  }
-
-  const outputLength = Math.max(
-    1,
-    Math.round((samples.length * outputSampleRate) / inputSampleRate)
-  )
-  const output = new Float32Array(outputLength)
-  const ratio = inputSampleRate / outputSampleRate
-  for (let i = 0; i < outputLength; i += 1) {
-    const sourceIndex = i * ratio
-    const left = Math.floor(sourceIndex)
-    const right = Math.min(left + 1, samples.length - 1)
-    const weight = sourceIndex - left
-    output[i] = samples[left] * (1 - weight) + samples[right] * weight
-  }
-  return output
-}
 
 function loadSherpa(): any {
   const modulePath = workerData?.sherpaModulePath
@@ -294,6 +263,7 @@ function handleStop(): void {
       if (text) {
         parentPort?.postMessage({ type: 'final', text })
       }
+      stream = sherpa.createOnlineStream(recognizer)
     } else {
       // Why: offline recognizer decodes all audio at once — concatenate
       // buffered chunks into a single Float32Array and feed it to the stream.
@@ -315,6 +285,7 @@ function handleStop(): void {
         }
       }
       offlineBuffer = []
+      stream = sherpa.createOfflineStream(recognizer)
     }
   } catch (err) {
     parentPort?.postMessage({ type: 'error', error: String(err) })
