@@ -562,6 +562,7 @@ function CandidateRow({
   const primaryReason = candidate.reasons[0] ? REASON_LABELS[candidate.reasons[0]] : 'Old workspace'
   const blockers = candidate.blockers.map((blocker) => BLOCKER_LABELS[blocker])
   const contextDetails = formatContextDetails(candidate)
+  const branchSafetyDetails = formatBranchSafetyDetails(candidate)
   const shouldShowSleep = candidate.tier !== 'ready' && hasLiveSurfaces
 
   return (
@@ -606,16 +607,9 @@ function CandidateRow({
                     ? 'Dirty'
                     : 'Git unknown'}
               </span>
-              <span>
-                {candidate.git.upstreamAhead !== null
-                  ? `Ahead ${candidate.git.upstreamAhead}`
-                  : 'No upstream proof'}
-              </span>
-              <span>
-                {candidate.git.branchCompareChangedFiles !== null
-                  ? `${candidate.git.branchCompareChangedFiles} changed files vs base`
-                  : 'No branch compare proof'}
-              </span>
+              {branchSafetyDetails.map((detail) => (
+                <span key={detail}>{detail}</span>
+              ))}
               <span>
                 {candidate.linkedPR
                   ? `PR #${candidate.linkedPR.number} ${candidate.linkedPR.state}`
@@ -662,6 +656,29 @@ function CandidateRow({
       </div>
     </div>
   )
+}
+
+function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate): string[] {
+  const details: string[] = []
+  if (candidate.git.upstreamAhead !== null) {
+    details.push(
+      candidate.git.upstreamAhead === 0
+        ? 'No unpushed commits'
+        : `${candidate.git.upstreamAhead} unpushed commit${
+            candidate.git.upstreamAhead === 1 ? '' : 's'
+          }`
+    )
+  }
+  if (candidate.git.branchCompareChangedFiles !== null) {
+    details.push(
+      candidate.git.branchCompareChangedFiles === 0
+        ? 'No changes vs base'
+        : `${candidate.git.branchCompareChangedFiles} changed file${
+            candidate.git.branchCompareChangedFiles === 1 ? '' : 's'
+          } vs base`
+    )
+  }
+  return details.length > 0 ? details : ['Branch not verified']
 }
 
 function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | null {
