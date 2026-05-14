@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
-import { registerFeatureWallFirstAgentTour } from './first-agent-tour'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  FEATURE_WALL_FIRST_AGENT_TOUR_DELAY_MS,
+  registerFeatureWallFirstAgentTour
+} from './first-agent-tour'
 import type { StatsCollector } from '../stats/collector'
 
 function createStatsSource() {
@@ -31,7 +34,12 @@ function createWindow() {
 }
 
 describe('registerFeatureWallFirstAgentTour', () => {
-  it('opens the feature tour when the first agent starts', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('opens the feature tour shortly after the first agent starts', () => {
+    vi.useFakeTimers()
     const source = createStatsSource()
     const window = createWindow()
 
@@ -41,10 +49,16 @@ describe('registerFeatureWallFirstAgentTour', () => {
     })
     source.emit(1)
 
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(FEATURE_WALL_FIRST_AGENT_TOUR_DELAY_MS - 1)
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+
     expect(window.webContents.send).toHaveBeenCalledWith('ui:openFeatureTour')
   })
 
   it('does not open for later agent starts or destroyed windows', () => {
+    vi.useFakeTimers()
     const source = createStatsSource()
     const window = createWindow()
     registerFeatureWallFirstAgentTour({
@@ -53,22 +67,29 @@ describe('registerFeatureWallFirstAgentTour', () => {
     })
 
     source.emit(2)
+    vi.advanceTimersByTime(FEATURE_WALL_FIRST_AGENT_TOUR_DELAY_MS)
     window.isDestroyed.mockReturnValue(true)
     source.emit(1)
+    vi.advanceTimersByTime(FEATURE_WALL_FIRST_AGENT_TOUR_DELAY_MS)
 
     expect(window.webContents.send).not.toHaveBeenCalled()
   })
 
-  it('returns the stats listener disposer', () => {
+  it('disposes the stats listener and pending tour timer', () => {
+    vi.useFakeTimers()
     const source = createStatsSource()
+    const window = createWindow()
     const dispose = registerFeatureWallFirstAgentTour({
       stats: source.stats,
-      getWindow: () => createWindow()
+      getWindow: () => window
     })
 
+    source.emit(1)
     dispose()
+    vi.advanceTimersByTime(FEATURE_WALL_FIRST_AGENT_TOUR_DELAY_MS)
     source.emit(1)
 
     expect(source.dispose).toHaveBeenCalledTimes(1)
+    expect(window.webContents.send).not.toHaveBeenCalled()
   })
 })
