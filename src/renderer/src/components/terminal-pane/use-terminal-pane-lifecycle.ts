@@ -48,6 +48,7 @@ import {
   type SplitTerminalPaneDetail,
   type CloseTerminalPaneDetail
 } from '@/constants/terminal'
+import type { EffectiveKeymap } from '../../../../shared/keybindings/keybinding-types'
 
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
@@ -75,6 +76,7 @@ type UseTerminalPaneLifecycleDeps = {
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
+  effectiveKeymap: EffectiveKeymap
   /** Resolved Option-as-Alt value: `'auto'` has already been mapped to
    *  `'true' | 'false'` via the keyboard-layout probe. Passed separately
    *  from `settings` because the probe lives outside the settings store. */
@@ -170,6 +172,7 @@ export function useTerminalPaneLifecycle({
   systemPrefersDark,
   settings,
   settingsRef,
+  effectiveKeymap,
   effectiveMacOptionAsAlt,
   effectiveMacOptionAsAltRef,
   initialLayoutRef,
@@ -212,6 +215,8 @@ export function useTerminalPaneLifecycle({
 }: UseTerminalPaneLifecycleDeps): void {
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
+  const effectiveKeymapRef = useRef(effectiveKeymap)
+  effectiveKeymapRef.current = effectiveKeymap
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
@@ -456,7 +461,8 @@ export function useTerminalPaneLifecycle({
           }
           return !shouldBypassXtermKeydown(e, {
             isMac: navigator.userAgent.includes('Mac'),
-            hasSelection: pane.terminal.hasSelection()
+            hasSelection: pane.terminal.hasSelection(),
+            keymap: effectiveKeymapRef.current
           })
         })
 

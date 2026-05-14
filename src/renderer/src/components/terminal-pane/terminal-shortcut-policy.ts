@@ -1,3 +1,9 @@
+import { resolveKeybindingAction } from '../../../../shared/keybindings/effective-keymap'
+import type {
+  EffectiveKeymap,
+  KeybindingCommand
+} from '../../../../shared/keybindings/keybinding-types'
+
 export type TerminalShortcutEvent = {
   key: string
   code?: string
@@ -36,14 +42,33 @@ export type TerminalShortcutAction =
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'sendInput'; data: string }
 
+export type ResolveTerminalShortcutOptions = {
+  keymap?: EffectiveKeymap
+  macOptionAsAlt?: MacOptionAsAlt
+}
+
 export function resolveTerminalShortcutAction(
   event: TerminalShortcutEvent,
   isMac: boolean,
-  macOptionAsAlt: MacOptionAsAlt = 'false',
+  optionsOrMacOptionAsAlt: ResolveTerminalShortcutOptions | MacOptionAsAlt = 'false',
   optionKeyLocation: number = 0
 ): TerminalShortcutAction | null {
+  const options =
+    typeof optionsOrMacOptionAsAlt === 'string'
+      ? { macOptionAsAlt: optionsOrMacOptionAsAlt }
+      : optionsOrMacOptionAsAlt
+  const macOptionAsAlt = options.macOptionAsAlt ?? 'false'
+
+  if (options.keymap) {
+    const action = resolveKeybindingAction(options.keymap, event, 'terminal')
+    const terminalAction = action ? commandToTerminalShortcutAction(action.command) : null
+    if (terminalAction || action) {
+      return terminalAction
+    }
+  }
+
   const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  if (!event.repeat && mod && !event.altKey) {
+  if (!options.keymap && !event.repeat && mod && !event.altKey) {
     const lowerKey = event.key.toLowerCase()
 
     if (event.shiftKey && lowerKey === 'c') {
@@ -100,6 +125,7 @@ export function resolveTerminalShortcutAction(
   // of Ctrl, following the Windows Terminal convention for split shortcuts
   // and avoiding the Ctrl+D / EOF conflict (see #586).
   if (
+    !options.keymap &&
     !isMac &&
     !event.repeat &&
     !event.metaKey &&
@@ -111,89 +137,91 @@ export function resolveTerminalShortcutAction(
     return { type: 'splitActivePane', direction: 'horizontal' }
   }
 
-  if (
-    !event.metaKey &&
-    !event.ctrlKey &&
-    !event.altKey &&
-    event.shiftKey &&
-    event.key === 'Enter'
-  ) {
-    return { type: 'sendInput', data: '\x1b[13;2u' }
-  }
-
-  if (
-    event.ctrlKey &&
-    !event.metaKey &&
-    !event.altKey &&
-    !event.shiftKey &&
-    event.key === 'Backspace'
-  ) {
-    return { type: 'sendInput', data: '\x17' }
-  }
-
-  if (isMac && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-    if (event.key === 'Backspace') {
-      return { type: 'sendInput', data: '\x15' }
+  if (!options.keymap) {
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      event.shiftKey &&
+      event.key === 'Enter'
+    ) {
+      return { type: 'sendInput', data: '\x1b[13;2u' }
     }
-    if (event.key === 'Delete') {
-      return { type: 'sendInput', data: '\x0b' }
-    }
-    // Why: Cmd+←/→ on macOS conventionally moves to start/end of line in
-    // terminals (iTerm2, Ghostty). xterm.js has no default mapping for
-    // Cmd+Arrow, so we translate to readline's Ctrl+A (\x01) / Ctrl+E (\x05),
-    // which work universally across bash/zsh/fish and most TUI editors.
-    if (event.key === 'ArrowLeft') {
-      return { type: 'sendInput', data: '\x01' }
-    }
-    if (event.key === 'ArrowRight') {
-      return { type: 'sendInput', data: '\x05' }
-    }
-  }
 
-  if (
-    !event.metaKey &&
-    !event.ctrlKey &&
-    event.altKey &&
-    !event.shiftKey &&
-    event.key === 'Backspace'
-  ) {
-    return { type: 'sendInput', data: '\x1b\x7f' }
-  }
+    if (
+      event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.key === 'Backspace'
+    ) {
+      return { type: 'sendInput', data: '\x17' }
+    }
 
-  if (
-    !event.metaKey &&
-    !event.ctrlKey &&
-    event.altKey &&
-    !event.shiftKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-  ) {
-    // Why: xterm.js would otherwise emit \e[1;3D / \e[1;3C for option/alt+arrow,
-    // which default readline (bash, zsh) does not bind to backward-word /
-    // forward-word — so word navigation silently doesn't work without a custom
-    // inputrc. Translate to \eb / \ef (readline's default word-nav bindings) so
-    // option+←/→ on macOS and alt+←/→ on Linux/Windows behave like they do in
-    // iTerm2's "Esc+" option-key mode. Platform-agnostic: both produce altKey.
-    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
-  }
+    if (isMac && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+      if (event.key === 'Backspace') {
+        return { type: 'sendInput', data: '\x15' }
+      }
+      if (event.key === 'Delete') {
+        return { type: 'sendInput', data: '\x0b' }
+      }
+      // Why: Cmd+←/→ on macOS conventionally moves to start/end of line in
+      // terminals (iTerm2, Ghostty). xterm.js has no default mapping for
+      // Cmd+Arrow, so we translate to readline's Ctrl+A (\x01) / Ctrl+E (\x05),
+      // which work universally across bash/zsh/fish and most TUI editors.
+      if (event.key === 'ArrowLeft') {
+        return { type: 'sendInput', data: '\x01' }
+      }
+      if (event.key === 'ArrowRight') {
+        return { type: 'sendInput', data: '\x05' }
+      }
+    }
 
-  if (
-    !isMac &&
-    !event.metaKey &&
-    event.ctrlKey &&
-    !event.altKey &&
-    !event.shiftKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-  ) {
-    // Why: Windows Terminal, GNOME Terminal, and Konsole all bind Ctrl+←/→ for
-    // word navigation on Linux/Windows — but xterm.js emits \e[1;5D / \e[1;5C,
-    // which default readline (bash, zsh) does not bind to backward-word /
-    // forward-word. Translate to \eb / \ef (same bytes as our Alt+Arrow rule)
-    // so Ctrl+←/→ works for word-nav matching user expectations on those
-    // platforms without requiring a custom inputrc.
-    //
-    // Mac-gated: Ctrl+Arrow on macOS is reserved for Mission Control / Spaces
-    // navigation at the OS level and should never reach the app.
-    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      event.altKey &&
+      !event.shiftKey &&
+      event.key === 'Backspace'
+    ) {
+      return { type: 'sendInput', data: '\x1b\x7f' }
+    }
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      event.altKey &&
+      !event.shiftKey &&
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    ) {
+      // Why: xterm.js would otherwise emit \e[1;3D / \e[1;3C for option/alt+arrow,
+      // which default readline (bash, zsh) does not bind to backward-word /
+      // forward-word — so word navigation silently doesn't work without a custom
+      // inputrc. Translate to \eb / \ef (readline's default word-nav bindings) so
+      // option+←/→ on macOS and alt+←/→ on Linux/Windows behave like they do in
+      // iTerm2's "Esc+" option-key mode. Platform-agnostic: both produce altKey.
+      return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+    }
+
+    if (
+      !isMac &&
+      !event.metaKey &&
+      event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    ) {
+      // Why: Windows Terminal, GNOME Terminal, and Konsole all bind Ctrl+←/→ for
+      // word navigation on Linux/Windows — but xterm.js emits \e[1;5D / \e[1;5C,
+      // which default readline (bash, zsh) does not bind to backward-word /
+      // forward-word. Translate to \eb / \ef (same bytes as our Alt+Arrow rule)
+      // so Ctrl+←/→ works for word-nav matching user expectations on those
+      // platforms without requiring a custom inputrc.
+      //
+      // Mac-gated: Ctrl+Arrow on macOS is reserved for Mission Control / Spaces
+      // navigation at the OS level and should never reach the app.
+      return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+    }
   }
 
   // Why: with macOptionIsMeta disabled (to let non-US keyboard layouts compose
@@ -249,4 +277,29 @@ export function resolveTerminalShortcutAction(
   }
 
   return null
+}
+
+function commandToTerminalShortcutAction(
+  command: KeybindingCommand
+): TerminalShortcutAction | null {
+  switch (command.type) {
+    case 'terminalCopySelection':
+      return { type: 'copySelection' }
+    case 'terminalToggleSearch':
+      return { type: 'toggleSearch' }
+    case 'terminalClearActivePane':
+      return { type: 'clearActivePane' }
+    case 'terminalFocusPane':
+      return { type: 'focusPane', direction: command.direction }
+    case 'terminalToggleExpandActivePane':
+      return { type: 'toggleExpandActivePane' }
+    case 'terminalCloseActivePane':
+      return { type: 'closeActivePane' }
+    case 'terminalSplitActivePane':
+      return { type: 'splitActivePane', direction: command.direction }
+    case 'terminalSendInput':
+      return { type: 'sendInput', data: command.data }
+    default:
+      return null
+  }
 }

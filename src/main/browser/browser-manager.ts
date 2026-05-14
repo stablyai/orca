@@ -37,6 +37,7 @@ import {
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import type { BrowserViewportOverride } from '../../shared/types'
+import type { EffectiveKeymap } from '../../shared/keybindings/keybinding-types'
 
 // Why: mobile presets need a touch-capable UA or responsive sites serve the
 // desktop variant based on UA sniffing. This is the Chrome DevTools default
@@ -91,6 +92,12 @@ function safeOrigin(rawUrl: string): string {
 }
 
 export class BrowserManager {
+  private getEffectiveKeymap: (() => EffectiveKeymap) | null = null
+
+  setEffectiveKeymapResolver(resolver: (() => EffectiveKeymap) | null): void {
+    this.getEffectiveKeymap = resolver
+  }
+
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map enables O(1) guest→tab lookups instead of O(N) linear
   // scans on every mouse event, load failure, permission, and popup event.
@@ -1190,7 +1197,8 @@ export class BrowserManager {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId)
+        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId),
+        getEffectiveKeymap: this.getEffectiveKeymap ?? undefined
       })
     )
   }
@@ -1213,7 +1221,8 @@ export class BrowserManager {
         browserTabId,
         guest,
         resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+        getEffectiveKeymap: this.getEffectiveKeymap ?? undefined
       })
     )
   }

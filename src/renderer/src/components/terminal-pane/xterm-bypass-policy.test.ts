@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { keybindingCatalog } from '../../../../shared/keybindings/keybinding-catalog'
+import { buildEffectiveKeymap } from '../../../../shared/keybindings/effective-keymap'
 import { shouldBypassXtermKeydown, type XtermBypassEvent } from './xterm-bypass-policy'
 
 function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
@@ -150,6 +152,27 @@ describe('shouldBypassXtermKeydown — Windows/Linux', () => {
         event({ key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true }),
         noSel
       )
+    ).toBe(true)
+  })
+
+  it('uses configured terminal paste chords instead of hardcoded defaults', () => {
+    const keymap = buildEffectiveKeymap({
+      catalog: keybindingCatalog,
+      platform: 'linux',
+      overrides: { 'terminal.paste': 'ctrl+shift+v' }
+    })
+
+    expect(
+      shouldBypassXtermKeydown(event({ key: 'v', code: 'KeyV', ctrlKey: true }), {
+        ...noSel,
+        keymap
+      })
+    ).toBe(false)
+    expect(
+      shouldBypassXtermKeydown(event({ key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true }), {
+        ...noSel,
+        keymap
+      })
     ).toBe(true)
   })
 

@@ -1,4 +1,8 @@
+/* eslint-disable max-lines -- Why: this file covers every branch of the
+terminal shortcut policy and its platform carve-outs. */
 import { describe, expect, it } from 'vitest'
+import { keybindingCatalog } from '../../../../shared/keybindings/keybinding-catalog'
+import { buildEffectiveKeymap } from '../../../../shared/keybindings/effective-keymap'
 import {
   resolveTerminalShortcutAction,
   type TerminalShortcutEvent
@@ -18,6 +22,50 @@ function event(overrides: Partial<TerminalShortcutEvent>): TerminalShortcutEvent
 }
 
 describe('resolveTerminalShortcutAction', () => {
+  it('uses the Effective Keymap when resolving terminal command overrides', () => {
+    const keymap = buildEffectiveKeymap({
+      catalog: keybindingCatalog,
+      platform: 'linux',
+      overrides: { 'terminal.search.toggle': 'ctrl+shift+f' }
+    })
+
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'f', code: 'KeyF', ctrlKey: true }), false, {
+        keymap
+      })
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'F', code: 'KeyF', ctrlKey: true, shiftKey: true }),
+        false,
+        { keymap }
+      )
+    ).toEqual({ type: 'toggleSearch' })
+  })
+
+  it('uses the Effective Keymap when resolving named terminal input translations', () => {
+    const keymap = buildEffectiveKeymap({
+      catalog: keybindingCatalog,
+      platform: 'linux',
+      overrides: { 'terminal.input.wordLeft': 'ctrl+shift+arrowleft' }
+    })
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true }),
+        false,
+        { keymap }
+      )
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true }),
+        false,
+        { keymap }
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1bb' })
+  })
+
   it('preserves macOS readline ctrl chords for the shell', () => {
     const passthroughCases = [
       event({ key: 'r', code: 'KeyR', ctrlKey: true }),

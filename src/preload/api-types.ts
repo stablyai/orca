@@ -169,6 +169,7 @@ import type {
 } from '../shared/codex-usage-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import type { KeybindingSnapshot } from '../shared/keybindings/keybinding-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -767,6 +768,13 @@ export type PreloadApi = {
      *  menu toggles) so the renderer can stay in sync with main's persisted
      *  state without round-tripping through settings:get. */
     onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
+  }
+  keybindings: {
+    getSnapshot: () => Promise<KeybindingSnapshot>
+    reload: () => Promise<KeybindingSnapshot>
+    openConfig: () => Promise<void>
+    revealConfig: () => Promise<void>
+    onChanged: (callback: (snapshot: KeybindingSnapshot) => void) => () => void
   }
   codexAccounts: {
     list: () => Promise<CodexRateLimitAccountsState>

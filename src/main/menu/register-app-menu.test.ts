@@ -20,6 +20,9 @@ vi.mock('electron', () => ({
 }))
 
 import { registerAppMenu } from './register-app-menu'
+import { keybindingCatalog } from '../../shared/keybindings/keybinding-catalog'
+import { buildEffectiveKeymap } from '../../shared/keybindings/effective-keymap'
+import type { KeybindingPlatform } from '../../shared/keybindings/keybinding-types'
 
 const isMac = process.platform === 'darwin'
 
@@ -39,6 +42,13 @@ function buildMenuOptions() {
       statusBarVisible: true
     }))
   }
+}
+
+function testPlatform(): KeybindingPlatform {
+  if (process.platform === 'darwin') {
+    return 'macos'
+  }
+  return process.platform === 'win32' ? 'windows' : 'linux'
 }
 
 function getTemplate(): Electron.MenuItemConstructorOptions[] {
@@ -244,7 +254,7 @@ describe('registerAppMenu', () => {
       []) as Electron.MenuItemConstructorOptions[]
 
     const leftLabel = `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`
-    const rightLabel = `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`
+    const rightLabel = `Toggle Right Sidebar\t${isMac ? 'Cmd+L' : 'Ctrl+L'}`
 
     appearanceSubmenu
       .find((item) => item.label === leftLabel)
@@ -260,5 +270,27 @@ describe('registerAppMenu', () => {
     // menu accelerator would bypass.
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
+  })
+
+  it('derives zoom menu accelerators from the effective keymap', () => {
+    const options = {
+      ...buildMenuOptions(),
+      getEffectiveKeymap: vi.fn(() =>
+        buildEffectiveKeymap({
+          catalog: keybindingCatalog,
+          platform: testPlatform(),
+          overrides: {
+            'window.zoomIn': 'ctrl+shift+y',
+            'window.zoomOut': 'none'
+          }
+        })
+      )
+    }
+
+    registerAppMenu(options)
+
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    expect(viewSubmenu.find((item) => item.label === 'Zoom In')?.accelerator).toBe('Ctrl+Shift+Y')
+    expect(viewSubmenu.find((item) => item.label === 'Zoom Out')?.accelerator).toBeUndefined()
   })
 })

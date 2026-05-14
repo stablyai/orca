@@ -1,316 +1,222 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
+import { ExternalLink, FolderOpen, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { Button } from '../ui/button'
+import { formatCanonicalChordLabel } from '../../../../shared/keybindings/keybinding-display'
+import { keybindingCatalog } from '../../../../shared/keybindings/keybinding-catalog'
+import type {
+  EffectiveKeybinding,
+  KeybindingActionId
+} from '../../../../shared/keybindings/keybinding-types'
 
-type ShortcutItem = {
-  action: string
-  keys: string[]
-}
-
-type ShortcutGroup = {
+type KeybindingGroupDefinition = {
   title: string
-  items: ShortcutItem[]
+  matches: (id: KeybindingActionId) => boolean
 }
 
-type ShortcutDefinition = {
-  action: string
-  searchKeywords: string[]
-  keys: (labels: { mod: string; shift: string; enter: string }) => string[]
-}
-
-type ShortcutGroupDefinition = {
+type EffectiveBindingView = {
+  id: KeybindingActionId
   title: string
-  items: ShortcutDefinition[]
+  source: EffectiveKeybinding['source']
+  groupTitle: string
+  searchEntry: SettingsSearchEntry
+  chordLabels: string[]
 }
 
-const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
-  {
-    title: 'Global',
-    items: [
-      {
-        action: 'Go to File',
-        searchKeywords: ['shortcut', 'global', 'file'],
-        keys: ({ mod }) => [mod, 'P']
-      },
-      {
-        action: 'Switch worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
-        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'J'] : [mod, shift, 'J'])
-      },
-      {
-        action: 'Create worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree'],
-        keys: ({ mod }) => [mod, 'N']
-      },
-      {
-        action: 'Toggle Sidebar',
-        searchKeywords: ['shortcut', 'sidebar'],
-        keys: ({ mod }) => [mod, 'B']
-      },
-      {
-        action: 'Toggle Right Sidebar',
-        searchKeywords: ['shortcut', 'sidebar', 'right'],
-        keys: ({ mod }) => [mod, 'L']
-      },
-      {
-        action: 'Move up worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree', 'move'],
-        keys: ({ mod, shift }) => [mod, shift, '↑']
-      },
-      {
-        action: 'Move down worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree', 'move'],
-        keys: ({ mod, shift }) => [mod, shift, '↓']
-      },
-      {
-        action: 'Toggle File Explorer',
-        searchKeywords: ['shortcut', 'file explorer'],
-        keys: ({ mod, shift }) => [mod, shift, 'E']
-      },
-      {
-        action: 'Toggle Search',
-        searchKeywords: ['shortcut', 'search'],
-        keys: ({ mod, shift }) => [mod, shift, 'F']
-      },
-      {
-        action: 'Toggle Source Control',
-        searchKeywords: ['shortcut', 'source control'],
-        keys: ({ mod, shift }) => [mod, shift, 'G']
-      },
-      {
-        action: 'Zoom In',
-        searchKeywords: ['shortcut', 'zoom', 'in', 'scale'],
-        keys: ({ mod, shift }) => (mod === 'Ctrl' ? [mod, shift, '+'] : [mod, '+'])
-      },
-      {
-        action: 'Zoom Out',
-        searchKeywords: ['shortcut', 'zoom', 'out', 'scale'],
-        keys: ({ mod, shift }) => (mod === 'Ctrl' ? [mod, shift, '-'] : [mod, '-'])
-      },
-      {
-        action: 'Reset Size',
-        searchKeywords: ['shortcut', 'zoom', 'reset', 'size', 'actual'],
-        keys: ({ mod }) => [mod, '0']
-      },
-      {
-        action: 'Force Reload',
-        searchKeywords: ['shortcut', 'reload', 'refresh', 'force'],
-        keys: ({ mod, shift }) => [mod, shift, 'R']
-      }
-    ]
-  },
-  {
-    title: 'Tabs',
-    items: [
-      {
-        action: 'New terminal tab',
-        searchKeywords: ['shortcut', 'tab', 'terminal', 'new'],
-        keys: ({ mod }) => [mod, 'T']
-      },
-      {
-        action: 'New browser tab',
-        searchKeywords: ['shortcut', 'tab', 'browser', 'new'],
-        keys: ({ mod, shift }) => [mod, shift, 'B']
-      },
-      {
-        action: 'New markdown tab',
-        searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'new'],
-        keys: ({ mod, shift }) => [mod, shift, 'M']
-      },
-      {
-        action: 'Close active tab / pane',
-        searchKeywords: ['shortcut', 'close', 'tab', 'pane'],
-        keys: ({ mod }) => [mod, 'W']
-      },
-      {
-        action: 'Reopen closed tab',
-        searchKeywords: ['shortcut', 'tab', 'reopen', 'restore', 'closed'],
-        keys: ({ mod, shift }) => [mod, shift, 'T']
-      }
-    ]
-  },
-  {
-    title: 'Tab Navigation',
-    items: [
-      {
-        action: 'Next tab (same type)',
-        searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle'],
-        keys: ({ mod, shift }) => [mod, shift, ']']
-      },
-      {
-        action: 'Previous tab (same type)',
-        searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle'],
-        keys: ({ mod, shift }) => [mod, shift, '[']
-      },
-      {
-        action: 'Next tab (all types)',
-        searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle', 'all', 'any'],
-        keys: ({ mod }) => [mod, mod === '⌘' ? '⌥' : 'Alt', ']']
-      },
-      {
-        action: 'Previous tab (all types)',
-        searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle', 'all', 'any'],
-        keys: ({ mod }) => [mod, mod === '⌘' ? '⌥' : 'Alt', '[']
-      },
-      {
-        action: 'Next terminal tab',
-        searchKeywords: ['shortcut', 'tab', 'terminal', 'next', 'switch'],
-        keys: () => ['Ctrl', 'PageDown']
-      },
-      {
-        action: 'Previous terminal tab',
-        searchKeywords: ['shortcut', 'tab', 'terminal', 'previous', 'switch'],
-        keys: () => ['Ctrl', 'PageUp']
-      }
-    ]
-  },
-  {
-    title: 'Terminal Panes',
-    items: [
-      {
-        action: 'Split terminal right',
-        searchKeywords: ['shortcut', 'pane', 'split'],
-        // Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
-        // so split-right requires Shift on non-Mac platforms.
-        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'D'] : [mod, shift, 'D'])
-      },
-      {
-        action: 'Split terminal down',
-        searchKeywords: ['shortcut', 'pane', 'split'],
-        // Why: on Windows/Linux, Ctrl+Shift+D is taken by split-right (#586),
-        // so split-down uses Alt+Shift+D following Windows Terminal convention.
-        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, shift, 'D'] : ['Alt', shift, 'D'])
-      },
-      {
-        action: 'Close pane (EOF)',
-        searchKeywords: ['shortcut', 'pane', 'close', 'eof'],
-        keys: () => ['Ctrl', 'D']
-      },
-      {
-        action: 'Focus next pane',
-        searchKeywords: ['shortcut', 'pane', 'focus', 'next'],
-        keys: ({ mod }) => [mod, ']']
-      },
-      {
-        action: 'Focus previous pane',
-        searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
-        keys: ({ mod }) => [mod, '[']
-      },
-      {
-        action: 'Clear active pane',
-        searchKeywords: ['shortcut', 'pane', 'clear'],
-        keys: ({ mod }) => [mod, 'K']
-      },
-      {
-        action: 'Expand / collapse pane',
-        searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
-        keys: ({ mod, shift, enter }) => [mod, shift, enter]
-      }
-    ]
-  },
-  {
-    title: 'Editors',
-    items: [
-      {
-        action: 'Show Markdown Preview',
-        searchKeywords: ['shortcut', 'editor', 'markdown', 'preview'],
-        keys: ({ mod, shift }) => [mod, shift, 'V']
-      }
-    ]
-  }
+const KEYBINDING_GROUPS: KeybindingGroupDefinition[] = [
+  { title: 'Global', matches: (id) => /^(window|worktree|sidebar|quickOpen|workspace)\./.test(id) },
+  { title: 'Tabs', matches: (id) => id.startsWith('tab.') || id.endsWith('.tab.new') },
+  { title: 'Browser', matches: (id) => id.startsWith('browser.') },
+  { title: 'Terminal', matches: (id) => id.startsWith('terminal.') },
+  { title: 'Editors', matches: (id) => id.startsWith('editor.') }
 ]
 
-// Why: search is supposed to stay in lockstep with the rendered shortcuts. Deriving
-// both from one definition prevents the registry drift regression this branch introduced.
-export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] =
-  SHORTCUT_GROUP_DEFINITIONS.flatMap((group) =>
-    group.items.map((item) => ({
-      title: item.action,
-      description: `${group.title} shortcut`,
-      keywords: item.searchKeywords
-    }))
-  )
+const KEYBINDINGS_TOML_EXAMPLE = `[keybindings.linux]
+"terminal.paste" = ["ctrl+shift+v", "shift+insert"]
+"browser.tab.new" = "ctrl+shift+b"
+
+[keybindings.macos]
+"terminal.paste" = "cmd+v"
+
+[keybindings.windows]
+"terminal.paste" = "ctrl+shift+v"`
+
+function groupTitleForAction(id: KeybindingActionId): string {
+  return KEYBINDING_GROUPS.find((group) => group.matches(id))?.title ?? 'Other'
+}
+
+function searchEntryForBinding(
+  id: KeybindingActionId,
+  title: string,
+  groupTitle: string
+): SettingsSearchEntry {
+  return {
+    title,
+    description: `${groupTitle} keybinding`,
+    keywords: ['shortcut', 'keybinding', id, ...id.split('.')]
+  }
+}
+
+export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = keybindingCatalog.map((entry) =>
+  searchEntryForBinding(entry.id, entry.title, groupTitleForAction(entry.id))
+)
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const isMac = navigator.userAgent.includes('Mac')
-  const mod = isMac ? '⌘' : 'Ctrl'
-  const shift = isMac ? '⇧' : 'Shift'
-  const enter = isMac ? '↵' : 'Enter'
+  const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
+  const fetchKeybindings = useAppStore((state) => state.fetchKeybindings)
+  const reloadKeybindings = useAppStore((state) => state.reloadKeybindings)
 
-  const groups = useMemo<ShortcutGroup[]>(
+  const effectiveBindings = useMemo<EffectiveBindingView[]>(
     () =>
-      SHORTCUT_GROUP_DEFINITIONS.map((group) => ({
-        title: group.title,
-        items: group.items.map((item) => ({
-          action: item.action,
-          keys: item.keys({ mod, shift, enter })
+      keybindingSnapshot?.keymap.bindings.map((binding) => ({
+        id: binding.id,
+        title: binding.title,
+        source: binding.source,
+        groupTitle: groupTitleForAction(binding.id),
+        searchEntry: searchEntryForBinding(
+          binding.id,
+          binding.title,
+          groupTitleForAction(binding.id)
+        ),
+        chordLabels:
+          binding.chords.length === 0
+            ? ['Unbound']
+            : binding.chords.map((chord) =>
+                formatCanonicalChordLabel(chord, keybindingSnapshot.keymap.platform)
+              )
+      })) ?? [],
+    [keybindingSnapshot]
+  )
+
+  const groupedBindings = useMemo(
+    () =>
+      [...KEYBINDING_GROUPS.map((group) => group.title), 'Other']
+        .map((title) => ({
+          title,
+          items: effectiveBindings.filter((binding) => binding.groupTitle === title)
         }))
-      })),
-    [mod, shift, enter]
+        .filter((group) => group.items.length > 0),
+    [effectiveBindings]
   )
 
-  // Why: keywords here must match the ones used by SHORTCUTS_PANE_SEARCH_ENTRIES
-  // (which uses searchKeywords from SHORTCUT_GROUP_DEFINITIONS). Using item.keys
-  // (rendered key labels like ['Cmd', 'P']) would cause a mismatch where sidebar-level
-  // search finds a shortcut but the inner SearchableSetting hides it.
-  const groupEntries = useMemo<Record<string, SettingsSearchEntry[]>>(
-    () =>
-      Object.fromEntries(
-        SHORTCUT_GROUP_DEFINITIONS.map((groupDef) => [
-          groupDef.title,
-          groupDef.items.map((defItem) => ({
-            title: defItem.action,
-            description: `${groupDef.title} shortcut`,
-            keywords: defItem.searchKeywords
-          }))
-        ])
-      ),
-    []
-  )
+  useEffect(() => {
+    if (!keybindingSnapshot) {
+      void fetchKeybindings()
+    }
+  }, [fetchKeybindings, keybindingSnapshot])
 
   return (
     <div className="space-y-8">
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">Keyboard Shortcuts</h2>
-          <p className="text-xs text-muted-foreground">
-            View common hotkeys used across the application. Shortcuts customization is not
-            currently supported.
-          </p>
+        </div>
+
+        <div className="space-y-3 rounded-md border border-border/60 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-muted-foreground">Config file</div>
+              <div className="truncate font-mono text-sm">
+                {keybindingSnapshot?.displayPath ?? '~/.orca/keybindings.toml'}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void window.api.keybindings.openConfig()}
+              >
+                <ExternalLink />
+                Open
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void window.api.keybindings.revealConfig()}
+              >
+                <FolderOpen />
+                Reveal
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void reloadKeybindings()}
+              >
+                <RefreshCw />
+                Reload
+              </Button>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {keybindingSnapshot?.fileState === 'missing'
+              ? 'No keybindings file exists yet. Open will create a starter TOML file.'
+              : `Last loaded ${keybindingSnapshot?.keymap.diagnostics.length ?? 0} diagnostic(s).`}
+          </div>
+          {keybindingSnapshot && keybindingSnapshot.keymap.diagnostics.length > 0 ? (
+            <div className="space-y-1 border-t border-border/50 pt-2">
+              {keybindingSnapshot.keymap.diagnostics.map((diagnostic, index) => (
+                <div key={index} className="text-xs text-destructive">
+                  {diagnostic.message}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div className="border-t border-border/50 pt-2">
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Example</div>
+            <pre className="overflow-x-auto rounded-md bg-muted/50 p-2 font-mono text-xs text-muted-foreground">
+              {KEYBINDINGS_TOML_EXAMPLE}
+            </pre>
+          </div>
         </div>
 
         <div className="grid gap-8">
-          {groups
-            .filter((group) => matchesSettingsSearch(searchQuery, groupEntries[group.title] ?? []))
+          {groupedBindings
+            .filter((group) =>
+              matchesSettingsSearch(
+                searchQuery,
+                group.items.map((binding) => binding.searchEntry)
+              )
+            )
             .map((group) => (
               <div key={group.title} className="space-y-3">
                 <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
                   {group.title}
                 </h3>
                 <div className="grid gap-2">
-                  {group.items.map((item, idx) => {
-                    // Why: look up the definition's searchKeywords so the inner
-                    // SearchableSetting matches the same terms as the sidebar search.
-                    const defGroup = SHORTCUT_GROUP_DEFINITIONS.find((g) => g.title === group.title)
-                    const defItem = defGroup?.items.find((d) => d.action === item.action)
-                    const keywords = defItem?.searchKeywords ?? item.keys
-
-                    return (
-                      <SearchableSetting
-                        key={idx}
-                        title={item.action}
-                        description={`${group.title} shortcut`}
-                        keywords={keywords}
-                        className="flex items-center justify-between py-1"
-                      >
-                        <span className="text-sm text-foreground">{item.action}</span>
-                        <ShortcutKeyCombo keys={item.keys} />
-                      </SearchableSetting>
-                    )
-                  })}
+                  {group.items.map((binding) => (
+                    <SearchableSetting
+                      key={binding.id}
+                      title={binding.title}
+                      description={binding.searchEntry.description}
+                      keywords={binding.searchEntry.keywords}
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-1"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm text-foreground">{binding.title}</div>
+                        <div className="truncate font-mono text-xs text-muted-foreground">
+                          {binding.id} · {binding.source}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {binding.chordLabels.map((label) =>
+                          label === 'Unbound' ? (
+                            <span key={label} className="text-xs text-muted-foreground">
+                              Unbound
+                            </span>
+                          ) : (
+                            <ShortcutKeyCombo key={label} keys={label.split('+')} />
+                          )
+                        )}
+                      </div>
+                    </SearchableSetting>
+                  ))}
                 </div>
               </div>
             ))}

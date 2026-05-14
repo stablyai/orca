@@ -1,3 +1,6 @@
+import { resolveKeybindingAction } from './keybindings/effective-keymap'
+import type { EffectiveKeymap, KeybindingCommand } from './keybindings/keybinding-types'
+
 export type WindowShortcutInput = {
   key?: string
   code?: string
@@ -123,8 +126,25 @@ function matchesLetterShortcut(
 
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  keymap?: EffectiveKeymap
 ): WindowShortcutAction | null {
+  if (keymap) {
+    const action = resolveKeybindingAction(
+      keymap,
+      {
+        key: input.key ?? '',
+        code: input.code,
+        metaKey: Boolean(input.meta),
+        ctrlKey: Boolean(input.control),
+        altKey: Boolean(input.alt),
+        shiftKey: Boolean(input.shift)
+      },
+      'mainWindow'
+    )
+    return action ? commandToWindowShortcutAction(action.command) : null
+  }
+
   // Why: evaluate the history-navigate chord BEFORE the standard modifier-chord
   // gate because that gate rejects Alt. The predicate already narrows to
   // ArrowLeft/ArrowRight so only those two codes reach here.
@@ -199,4 +219,29 @@ export function resolveWindowShortcutAction(
   // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen by a
   // future shortcut addition.
   return null
+}
+
+function commandToWindowShortcutAction(command: KeybindingCommand): WindowShortcutAction | null {
+  switch (command.type) {
+    case 'zoom':
+      return { type: 'zoom', direction: command.direction }
+    case 'toggleWorktreePalette':
+      return { type: 'toggleWorktreePalette' }
+    case 'toggleFloatingTerminal':
+      return { type: 'toggleFloatingTerminal' }
+    case 'toggleLeftSidebar':
+      return { type: 'toggleLeftSidebar' }
+    case 'toggleRightSidebar':
+      return { type: 'toggleRightSidebar' }
+    case 'openQuickOpen':
+      return { type: 'openQuickOpen' }
+    case 'openNewWorkspace':
+      return { type: 'openNewWorkspace' }
+    case 'jumpToWorktreeIndex':
+      return { type: 'jumpToWorktreeIndex', index: command.index }
+    case 'worktreeHistoryNavigate':
+      return { type: 'worktreeHistoryNavigate', direction: command.direction }
+    default:
+      return null
+  }
 }

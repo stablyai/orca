@@ -79,6 +79,7 @@ import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import type { KeybindingSnapshot } from '../shared/keybindings/keybinding-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -903,6 +904,19 @@ const api = {
       ): void => callback(updates)
       ipcRenderer.on('settings:changed', listener)
       return () => ipcRenderer.removeListener('settings:changed', listener)
+    }
+  },
+
+  keybindings: {
+    getSnapshot: (): Promise<KeybindingSnapshot> => ipcRenderer.invoke('keybindings:getSnapshot'),
+    reload: (): Promise<KeybindingSnapshot> => ipcRenderer.invoke('keybindings:reload'),
+    openConfig: (): Promise<void> => ipcRenderer.invoke('keybindings:openConfig'),
+    revealConfig: (): Promise<void> => ipcRenderer.invoke('keybindings:revealConfig'),
+    onChanged: (callback: (snapshot: KeybindingSnapshot) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, snapshot: KeybindingSnapshot): void =>
+        callback(snapshot)
+      ipcRenderer.on('keybindings:changed', listener)
+      return () => ipcRenderer.removeListener('keybindings:changed', listener)
     }
   },
 

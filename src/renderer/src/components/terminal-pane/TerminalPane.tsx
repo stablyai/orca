@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: terminal pane component co-locates title state, layout serialization, and portal rendering to keep pane lifecycle consistent. */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
@@ -33,6 +33,10 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
+import { isTerminalPasteKeybinding } from './terminal-paste-keybinding'
+import { keybindingCatalog } from '../../../../shared/keybindings/keybinding-catalog'
+import { buildEffectiveKeymap } from '../../../../shared/keybindings/effective-keymap'
+import type { KeybindingPlatform } from '../../../../shared/keybindings/keybinding-types'
 import {
   getFitOverrideForPty,
   getPaneIdsForPty,
@@ -253,6 +257,18 @@ export default function TerminalPane({
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const settings = useAppStore((store) => store.settings)
+  const keybindingSnapshot = useAppStore((store) => store.keybindingSnapshot)
+  const fallbackKeybindingPlatform: KeybindingPlatform = navigator.userAgent.includes('Mac')
+    ? 'macos'
+    : navigator.userAgent.includes('Windows')
+      ? 'windows'
+      : 'linux'
+  const defaultEffectiveKeymap = useMemo(
+    () =>
+      buildEffectiveKeymap({ catalog: keybindingCatalog, platform: fallbackKeybindingPlatform }),
+    [fallbackKeybindingPlatform]
+  )
+  const effectiveKeymap = keybindingSnapshot?.keymap ?? defaultEffectiveKeymap
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
   // context menu. The settings default keeps the Windows shortcut feeling native
@@ -488,6 +504,7 @@ export default function TerminalPane({
     systemPrefersDark,
     settings,
     settingsRef,
+    effectiveKeymap,
     effectiveMacOptionAsAlt,
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
@@ -710,7 +727,8 @@ export default function TerminalPane({
     onRequestClosePane: handleRequestClosePane,
     searchOpenRef,
     searchStateRef,
-    macOptionAsAltRef
+    macOptionAsAltRef,
+    effectiveKeymap
   })
 
   useTerminalPaneGlobalEffects({
@@ -778,18 +796,13 @@ export default function TerminalPane({
         })
     }
 
-    // Why: intercept Cmd+V / Ctrl+V at the keydown level so we can check
+    // Why: intercept configured terminal paste chords at the keydown level so we can check
     // for clipboard images via Electron's main-process clipboard API. The
     // browser's paste event is unreliable for image-only clipboards when the
     // target is a <textarea> (xterm.js's hidden input), so this handler
     // ensures image paste works regardless.
-    const isMac = navigator.userAgent.includes('Mac')
     const onKeyPaste = (e: KeyboardEvent): void => {
-      if (e.key.toLowerCase() !== 'v') {
-        return
-      }
-      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
-      if (!mod || e.altKey || e.shiftKey) {
+      if (!isTerminalPasteKeybinding(e, effectiveKeymap)) {
         return
       }
       const target = e.target
@@ -835,7 +848,7 @@ export default function TerminalPane({
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
     }
-  }, [isActive])
+  }, [isActive, effectiveKeymap])
 
   // Why: a click inside the terminal container is a deliberate interaction
   // with the pane — dismiss the bell indicator for this tab and worktree

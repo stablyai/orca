@@ -120,6 +120,14 @@ export function useIpcEvents(): void {
       })
     )
 
+    if (window.api.keybindings) {
+      unsubs.push(
+        window.api.keybindings.onChanged((snapshot) => {
+          useAppStore.getState().setKeybindingSnapshot(snapshot)
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onToggleLeftSidebar(() => {
         useAppStore.getState().toggleSidebar()

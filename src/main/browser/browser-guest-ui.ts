@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: focused guest hooks share teardown and
+shortcut-forwarding invariants that are easier to audit together. */
 import { screen, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
@@ -8,6 +10,8 @@ import {
   isWindowShortcutModifierChord,
   resolveWindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import { resolveKeybindingAction } from '../../shared/keybindings/effective-keymap'
+import type { EffectiveKeymap, KeybindingCommand } from '../../shared/keybindings/keybinding-types'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 
@@ -19,6 +23,193 @@ function isTerminalTabSwitchChord(input: Electron.Input): boolean {
     !input.shift &&
     (input.code === 'PageDown' || input.code === 'PageUp')
   )
+}
+
+type BrowserGuestShortcutForward =
+  | { channel: 'ui:worktreeHistoryNavigate'; args: ['back' | 'forward'] }
+  | { channel: 'ui:toggleFloatingTerminal'; args?: [] }
+  | { channel: 'ui:switchTabAcrossAllTypes'; args: [1 | -1] }
+  | { channel: 'ui:switchTerminalTab'; args: [1 | -1] }
+  | { channel: 'ui:newBrowserTab'; args?: [] }
+  | { channel: 'ui:newTerminalTab'; args?: [] }
+  | { channel: 'ui:focusBrowserAddressBar'; args?: [] }
+  | { channel: 'ui:hardReloadBrowserPage'; args?: [] }
+  | { channel: 'ui:reloadBrowserPage'; args?: [] }
+  | { channel: 'ui:findInBrowserPage'; args?: [] }
+  | { channel: 'ui:closeActiveTab'; args?: [] }
+  | { channel: 'ui:switchTab'; args: [1 | -1] }
+  | { channel: 'ui:toggleWorktreePalette'; args?: [] }
+  | { channel: 'ui:openQuickOpen'; args?: [] }
+  | { channel: 'ui:openNewWorkspace'; args?: [] }
+  | { channel: 'ui:jumpToWorktreeIndex'; args: [number] }
+
+function sendBrowserGuestShortcut(
+  renderer: Electron.WebContents | null,
+  forward: BrowserGuestShortcutForward
+): void {
+  renderer?.send(forward.channel, ...(forward.args ?? []))
+}
+
+function resolveBrowserGuestShortcut(
+  input: Electron.Input,
+  keymap?: EffectiveKeymap
+): BrowserGuestShortcutForward | null {
+  if (keymap) {
+    const action = resolveKeybindingAction(
+      keymap,
+      {
+        key: input.key ?? '',
+        code: input.code,
+        metaKey: Boolean(input.meta),
+        ctrlKey: Boolean(input.control),
+        altKey: Boolean(input.alt),
+        shiftKey: Boolean(input.shift)
+      },
+      'browserGuest'
+    )
+    return action ? browserGuestCommandToForward(action.command) : null
+  }
+
+  return resolveLegacyBrowserGuestShortcut(input)
+}
+
+function resolveLegacyBrowserGuestShortcut(
+  input: Electron.Input
+): BrowserGuestShortcutForward | null {
+  const action = resolveWindowShortcutAction(input, process.platform)
+  if (action?.type === 'worktreeHistoryNavigate') {
+    return { channel: 'ui:worktreeHistoryNavigate', args: [action.direction] }
+  }
+
+  if (action?.type === 'toggleFloatingTerminal') {
+    return { channel: 'ui:toggleFloatingTerminal' }
+  }
+
+  const isPrimaryMod =
+    process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
+  if (
+    isPrimaryMod &&
+    input.alt &&
+    (input.code === 'BracketRight' || input.code === 'BracketLeft')
+  ) {
+    return {
+      channel: 'ui:switchTabAcrossAllTypes',
+      args: [input.code === 'BracketRight' ? 1 : -1]
+    }
+  }
+
+  if (isTerminalTabSwitchChord(input)) {
+    return { channel: 'ui:switchTerminalTab', args: [input.code === 'PageDown' ? 1 : -1] }
+  }
+
+  if (!isWindowShortcutModifierChord(input, process.platform)) {
+    return null
+  }
+
+  if (input.code === 'KeyB' && input.shift) {
+    return { channel: 'ui:newBrowserTab' }
+  }
+  if (input.code === 'KeyT' && !input.shift) {
+    return { channel: 'ui:newTerminalTab' }
+  }
+  if (input.code === 'KeyL' && !input.shift) {
+    return { channel: 'ui:focusBrowserAddressBar' }
+  }
+  if (input.code === 'KeyR' && input.shift) {
+    return { channel: 'ui:hardReloadBrowserPage' }
+  }
+  if (input.code === 'KeyR' && !input.shift) {
+    return { channel: 'ui:reloadBrowserPage' }
+  }
+  if (input.code === 'KeyF' && !input.shift) {
+    return { channel: 'ui:findInBrowserPage' }
+  }
+  if (input.code === 'KeyW' && !input.shift) {
+    return { channel: 'ui:closeActiveTab' }
+  }
+  if (input.shift && (input.code === 'BracketRight' || input.code === 'BracketLeft')) {
+    return { channel: 'ui:switchTab', args: [input.code === 'BracketRight' ? 1 : -1] }
+  }
+  if (action?.type === 'toggleWorktreePalette') {
+    return { channel: 'ui:toggleWorktreePalette' }
+  }
+  if (action?.type === 'openQuickOpen') {
+    return { channel: 'ui:openQuickOpen' }
+  }
+  if (action?.type === 'openNewWorkspace') {
+    return { channel: 'ui:openNewWorkspace' }
+  }
+  if (action?.type === 'jumpToWorktreeIndex') {
+    return { channel: 'ui:jumpToWorktreeIndex', args: [action.index] }
+  }
+
+  return null
+}
+
+function browserGuestCommandToForward(
+  command: KeybindingCommand
+): BrowserGuestShortcutForward | null {
+  switch (command.type) {
+    case 'worktreeHistoryNavigate':
+      return { channel: 'ui:worktreeHistoryNavigate', args: [command.direction] }
+    case 'toggleFloatingTerminal':
+      return { channel: 'ui:toggleFloatingTerminal' }
+    case 'switchTabAcrossAllTypes':
+      return {
+        channel: 'ui:switchTabAcrossAllTypes',
+        args: [command.direction === 'next' ? 1 : -1]
+      }
+    case 'switchTerminalTab':
+      return { channel: 'ui:switchTerminalTab', args: [command.direction === 'next' ? 1 : -1] }
+    case 'openNewBrowserTab':
+      return { channel: 'ui:newBrowserTab' }
+    case 'openNewTerminalTab':
+      return { channel: 'ui:newTerminalTab' }
+    case 'focusBrowserAddressBar':
+      return { channel: 'ui:focusBrowserAddressBar' }
+    case 'hardReloadBrowserPage':
+      return { channel: 'ui:hardReloadBrowserPage' }
+    case 'reloadBrowserPage':
+      return { channel: 'ui:reloadBrowserPage' }
+    case 'findInBrowserPage':
+      return { channel: 'ui:findInBrowserPage' }
+    case 'closeActiveTab':
+      return { channel: 'ui:closeActiveTab' }
+    case 'switchTab':
+      return { channel: 'ui:switchTab', args: [command.direction === 'next' ? 1 : -1] }
+    case 'toggleWorktreePalette':
+      return { channel: 'ui:toggleWorktreePalette' }
+    case 'openQuickOpen':
+      return { channel: 'ui:openQuickOpen' }
+    case 'openNewWorkspace':
+      return { channel: 'ui:openNewWorkspace' }
+    case 'jumpToWorktreeIndex':
+      return { channel: 'ui:jumpToWorktreeIndex', args: [command.index] }
+    default:
+      return null
+  }
+}
+
+function isBrowserGrabModeToggleShortcut(input: Electron.Input, keymap?: EffectiveKeymap): boolean {
+  if (keymap) {
+    const action = resolveKeybindingAction(
+      keymap,
+      {
+        key: input.key ?? '',
+        code: input.code,
+        metaKey: Boolean(input.meta),
+        ctrlKey: Boolean(input.control),
+        altKey: Boolean(input.alt),
+        shiftKey: Boolean(input.shift)
+      },
+      'browserGuest'
+    )
+    return action?.command.type === 'toggleBrowserGrabMode'
+  }
+
+  const isMod = process.platform === 'darwin' ? input.meta : input.control
+  const bareKey = input.key.toLowerCase()
+  return Boolean(isMod) && !input.shift && !input.alt && bareKey === 'c'
 }
 
 export function setupGuestContextMenu(args: {
@@ -130,6 +321,7 @@ export function setupGrabShortcutForwarding(args: {
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   hasActiveGrabOp: (browserTabId: string) => boolean
+  getEffectiveKeymap?: () => EffectiveKeymap
 }): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp } = args
   const handler = (event: Electron.Event, input: Electron.Input): void => {
@@ -157,8 +349,7 @@ export function setupGrabShortcutForwarding(args: {
       return
     }
 
-    const isMod = process.platform === 'darwin' ? input.meta : input.control
-    if (!isMod || input.shift || input.alt || bareKey !== 'c') {
+    if (!isBrowserGrabModeToggleShortcut(input, args.getEffectiveKeymap?.())) {
       return
     }
 
@@ -217,125 +408,21 @@ export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
+  getEffectiveKeymap?: () => EffectiveKeymap
 }): () => void {
-  const { browserTabId, guest, resolveRenderer } = args
+  const { browserTabId, guest, resolveRenderer, getEffectiveKeymap } = args
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     if (input.type !== 'keyDown') {
       return
     }
-    // Why: resolve the policy action once per keystroke. The history-navigate
-    // chord (Cmd/Ctrl+Alt+Arrow) is the only allowlisted chord that carries
-    // Alt and must be handled before the generic modifier-chord gate below,
-    // which rejects Alt. Every other chord handled further down can reuse
-    // the same `action` rather than re-running the full predicate chain.
-    const action = resolveWindowShortcutAction(input, process.platform)
-    if (action?.type === 'worktreeHistoryNavigate') {
-      // Why: preventDefault unconditionally — if we cannot resolve the
-      // renderer (torn-down tab or teardown race), dropping the keystroke
-      // into the guest's webContents would let Chromium / the guest page
-      // handle Cmd+Alt+Arrow as their own chord (e.g. guest-side text
-      // navigation). Consistency with the main-window path is preserved
-      // only by suppressing the event here too.
-      event.preventDefault()
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:worktreeHistoryNavigate', action.direction)
-      return
-    }
-
-    if (action?.type === 'toggleFloatingTerminal') {
-      event.preventDefault()
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:toggleFloatingTerminal')
-      return
-    }
-
-    // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
-    // the generic modifier-chord gate below because that gate rejects Alt.
-    // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.
-    const isPrimaryMod =
-      process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
-    if (
-      isPrimaryMod &&
-      input.alt &&
-      (input.code === 'BracketRight' || input.code === 'BracketLeft')
-    ) {
-      event.preventDefault()
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:switchTabAcrossAllTypes', input.code === 'BracketRight' ? 1 : -1)
-      return
-    }
-
-    // Why: terminal-only tab switching is intentionally Ctrl+PageUp/PageDown on
-    // every platform. Handle it before the primary-modifier gate so macOS Ctrl
-    // (non-primary there) still forwards out of focused browser guests.
-    if (isTerminalTabSwitchChord(input)) {
-      event.preventDefault()
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:switchTerminalTab', input.code === 'PageDown' ? 1 : -1)
-      return
-    }
-
-    // Why: browser guests need a broader modifier-chord gate than the main
-    // window because they also forward guest-specific tab shortcuts
-    // (Cmd/Ctrl+T/W/Shift+B/Shift+[ / ]) in addition to the shared allowlist
-    // handled by resolveWindowShortcutAction().
-    if (!isWindowShortcutModifierChord(input, process.platform)) {
-      return
-    }
-
-    const renderer = resolveRenderer(browserTabId)
-    if (!renderer) {
-      return
-    }
-
-    if (input.code === 'KeyB' && input.shift) {
-      renderer.send('ui:newBrowserTab')
-    } else if (input.code === 'KeyT' && !input.shift) {
-      // Why: Cmd/Ctrl+T always opens a new terminal in the central pane,
-      // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the
-      // dedicated shortcut for new browser tabs.
-      renderer.send('ui:newTerminalTab')
-    } else if (input.code === 'KeyL' && !input.shift) {
-      // Why: the address bar lives in the renderer chrome, not the guest
-      // page. Forward Cmd/Ctrl+L out of the guest so the active BrowserPane
-      // can focus its own input just like a standalone browser would.
-      renderer.send('ui:focusBrowserAddressBar')
-    } else if (input.code === 'KeyR' && input.shift) {
-      // Why: Cmd/Ctrl+Shift+R is the browser convention for hard reload
-      // (bypass cache). The guest would handle it natively, but Orca's webview
-      // reloadIgnoringCache() call must come from the renderer side so it goes
-      // through the same parked-webview ref that owns the guest surface.
-      renderer.send('ui:hardReloadBrowserPage')
-    } else if (input.code === 'KeyR' && !input.shift) {
-      // Why: same as above for soft reload — Cmd/Ctrl+R must be forwarded so
-      // the renderer can call reload() on its own webview ref rather than
-      // relying on the guest's built-in shortcut, which may not reach the
-      // parked-webview eviction logic.
-      renderer.send('ui:reloadBrowserPage')
-    } else if (input.code === 'KeyF' && !input.shift) {
-      // Why: Cmd/Ctrl+F must be forwarded out of the guest so the renderer can
-      // open its own find-in-page bar and call webview.findInPage(). Letting the
-      // guest handle it natively would open Chromium's built-in find UI inside
-      // the guest frame, which is invisible behind Orca's chrome.
-      renderer.send('ui:findInBrowserPage')
-    } else if (input.code === 'KeyW' && !input.shift) {
-      renderer.send('ui:closeActiveTab')
-    } else if (input.shift && (input.code === 'BracketRight' || input.code === 'BracketLeft')) {
-      renderer.send('ui:switchTab', input.code === 'BracketRight' ? 1 : -1)
-    } else if (action?.type === 'toggleWorktreePalette') {
-      renderer.send('ui:toggleWorktreePalette')
-    } else if (action?.type === 'openQuickOpen') {
-      renderer.send('ui:openQuickOpen')
-    } else if (action?.type === 'openNewWorkspace') {
-      renderer.send('ui:openNewWorkspace')
-    } else if (action?.type === 'jumpToWorktreeIndex') {
-      renderer.send('ui:jumpToWorktreeIndex', action.index)
-    } else {
+    const forward = resolveBrowserGuestShortcut(input, getEffectiveKeymap?.())
+    if (!forward) {
       return
     }
     // Why: preventDefault stops the guest page from also processing the chord
     // (e.g. Cmd+T opening a browser-internal new-tab page).
     event.preventDefault()
+    sendBrowserGuestShortcut(resolveRenderer(browserTabId), forward)
   }
 
   guest.on('before-input-event', handler)

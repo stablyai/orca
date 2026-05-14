@@ -12,6 +12,7 @@ import {
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
 import { resolveWindowShortcutAction } from '../../shared/window-shortcut-policy'
+import type { EffectiveKeymap } from '../../shared/keybindings/keybinding-types'
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 
@@ -60,6 +61,7 @@ type CreateMainWindowOptions = {
    *  latch must be cleared or later window closes will be misclassified as
    *  quit attempts. */
   onQuitAborted?: () => void
+  getEffectiveKeymap?: () => EffectiveKeymap
 }
 
 export function createMainWindow(
@@ -498,7 +500,11 @@ export function createMainWindow(
     // Why: keep the main-process interception surface as an explicit allowlist.
     // Anything outside this helper must continue to the renderer/PTTY so
     // readline control chords are not silently stolen above the terminal.
-    const action = resolveWindowShortcutAction(input, process.platform)
+    const action = resolveWindowShortcutAction(
+      input,
+      process.platform,
+      opts?.getEffectiveKeymap?.()
+    )
     if (!action) {
       return
     }

@@ -164,6 +164,7 @@ function App(): React.JSX.Element {
       fetchRepos: s.fetchRepos,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchSettings: s.fetchSettings,
+      fetchKeybindings: s.fetchKeybindings,
       initGitHubCache: s.initGitHubCache,
       refreshAllGitHub: s.refreshAllGitHub,
       hydrateWorkspaceSession: s.hydrateWorkspaceSession,
@@ -292,6 +293,7 @@ function App(): React.JSX.Element {
         // hydration has access to user preferences. Without this, settings
         // would still be null at hydration time.
         await actions.fetchSettings()
+        await actions.fetchKeybindings()
         if (!cancelled) {
           actions.hydratePersistedUI(persistedUI)
           actions.hydrateWorkspaceSession(session)

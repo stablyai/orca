@@ -3,6 +3,8 @@ shortcut policy (letter chords, zoom variants, alt/shift gating, history
 navigation, new-workspace tab routing). Splitting across files would
 fragment the test of a single pure function. */
 import { describe, expect, it } from 'vitest'
+import { keybindingCatalog } from './keybindings/keybinding-catalog'
+import { buildEffectiveKeymap } from './keybindings/effective-keymap'
 import {
   isWindowShortcutModifierChord,
   resolveWindowShortcutAction,
@@ -11,6 +13,29 @@ import {
 } from './window-shortcut-policy'
 
 describe('resolveWindowShortcutAction', () => {
+  it('uses the Effective Keymap when resolving main-window overrides', () => {
+    const keymap = buildEffectiveKeymap({
+      catalog: keybindingCatalog,
+      platform: 'linux',
+      overrides: { 'sidebar.left.toggle': 'ctrl+shift+y' }
+    })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyB', key: 'b', meta: false, control: true, alt: false, shift: false },
+        'linux',
+        keymap
+      )
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyY', key: 'Y', meta: false, control: true, alt: false, shift: true },
+        'linux',
+        keymap
+      )
+    ).toEqual({ type: 'toggleLeftSidebar' })
+  })
+
   it('keeps ctrl/cmd+r and readline control chords out of the main-process allowlist', () => {
     const macCases: WindowShortcutInput[] = [
       { code: 'KeyR', key: 'r', meta: true, control: false, alt: false, shift: false },

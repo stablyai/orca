@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: these tests cover the paired browser guest
+context-menu and shortcut-forwarding hooks that share the same fake guest. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { screenGetCursorScreenPointMock } = vi.hoisted(() => ({
@@ -9,7 +11,14 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-import { setupGuestContextMenu } from './browser-guest-ui'
+import { keybindingCatalog } from '../../shared/keybindings/keybinding-catalog'
+import { buildEffectiveKeymap } from '../../shared/keybindings/effective-keymap'
+import {
+  setupGrabShortcutForwarding,
+  setupGuestContextMenu,
+  setupGuestShortcutForwarding
+} from './browser-guest-ui'
+import type { EffectiveKeymap } from '../../shared/keybindings/keybinding-types'
 
 describe('setupGuestContextMenu', () => {
   const browserTabId = 'tab-1'
@@ -215,5 +224,189 @@ describe('setupGuestContextMenu', () => {
 
       expect(rendererSendMock).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('setupGuestShortcutForwarding', () => {
+  const browserTabId = 'tab-1'
+  let rendererSendMock: ReturnType<typeof vi.fn>
+  let guestOnMock: ReturnType<typeof vi.fn>
+  let guestOffMock: ReturnType<typeof vi.fn>
+
+  function makeGuest() {
+    return {
+      on: guestOnMock,
+      off: guestOffMock
+    } as unknown as Electron.WebContents
+  }
+
+  function makeRenderer() {
+    return { send: rendererSendMock } as unknown as Electron.WebContents
+  }
+
+  function triggerKeydown(input: Partial<Electron.Input>) {
+    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-input-event')?.[1] as
+      | ((event: { preventDefault: () => void }, input: Electron.Input) => void)
+      | undefined
+
+    expect(handler).toBeTypeOf('function')
+    const preventDefault = vi.fn()
+    handler!({ preventDefault }, {
+      type: 'keyDown',
+      key: '',
+      code: '',
+      meta: false,
+      control: false,
+      alt: false,
+      shift: false,
+      ...input
+    } as Electron.Input)
+    return preventDefault
+  }
+
+  function keymap(overrides: Record<string, string | string[] | 'none'>): EffectiveKeymap {
+    return buildEffectiveKeymap({
+      catalog: keybindingCatalog,
+      platform: 'linux',
+      overrides
+    })
+  }
+
+  beforeEach(() => {
+    rendererSendMock = vi.fn()
+    guestOnMock = vi.fn()
+    guestOffMock = vi.fn()
+  })
+
+  it('uses the effective keymap for browser guest reload shortcuts', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getEffectiveKeymap: () => keymap({ 'browser.page.reload': 'ctrl+shift+y' })
+    })
+
+    expect(triggerKeydown({ key: 'r', code: 'KeyR', control: true }).mock.calls.length).toBe(0)
+
+    const preventDefault = triggerKeydown({
+      key: 'Y',
+      code: 'KeyY',
+      control: true,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:reloadBrowserPage')
+  })
+
+  it('honors explicit unbinding for browser guest actions', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getEffectiveKeymap: () => keymap({ 'browser.tab.new': 'none' })
+    })
+
+    const preventDefault = triggerKeydown({
+      key: 'B',
+      code: 'KeyB',
+      control: true,
+      shift: true
+    })
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
+  it('matches shifted bracket shortcuts by physical code when Electron reports a shifted key', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getEffectiveKeymap: () => keymap({})
+    })
+
+    const preventDefault = triggerKeydown({
+      key: '}',
+      code: 'BracketRight',
+      control: true,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:switchTab', 1)
+  })
+})
+
+describe('setupGrabShortcutForwarding', () => {
+  const browserTabId = 'tab-1'
+  let rendererSendMock: ReturnType<typeof vi.fn>
+  let guestOnMock: ReturnType<typeof vi.fn>
+  let guestOffMock: ReturnType<typeof vi.fn>
+  let executeJavaScriptMock: ReturnType<typeof vi.fn>
+
+  function makeGuest() {
+    return {
+      on: guestOnMock,
+      off: guestOffMock,
+      executeJavaScript: executeJavaScriptMock
+    } as unknown as Electron.WebContents
+  }
+
+  function makeRenderer() {
+    return { send: rendererSendMock } as unknown as Electron.WebContents
+  }
+
+  function keymap(overrides: Record<string, string | string[] | 'none'>): EffectiveKeymap {
+    return buildEffectiveKeymap({
+      catalog: keybindingCatalog,
+      platform: 'linux',
+      overrides
+    })
+  }
+
+  function triggerKeydown(input: Partial<Electron.Input>) {
+    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-input-event')?.[1] as
+      | ((event: { preventDefault: () => void }, input: Electron.Input) => void)
+      | undefined
+
+    expect(handler).toBeTypeOf('function')
+    const preventDefault = vi.fn()
+    handler!({ preventDefault }, {
+      type: 'keyDown',
+      key: '',
+      code: '',
+      meta: false,
+      control: false,
+      alt: false,
+      shift: false,
+      ...input
+    } as Electron.Input)
+    return preventDefault
+  }
+
+  beforeEach(() => {
+    rendererSendMock = vi.fn()
+    guestOnMock = vi.fn()
+    guestOffMock = vi.fn()
+    executeJavaScriptMock = vi.fn().mockResolvedValue(true)
+  })
+
+  it('uses the effective keymap for the browser grab-mode toggle', async () => {
+    setupGrabShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      hasActiveGrabOp: () => false,
+      getEffectiveKeymap: () => keymap({ 'browser.grabMode.toggle': 'ctrl+g' })
+    })
+
+    expect(triggerKeydown({ key: 'c', code: 'KeyC', control: true })).not.toHaveBeenCalled()
+
+    const preventDefault = triggerKeydown({ key: 'g', code: 'KeyG', control: true })
+    await Promise.resolve()
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:grabModeToggle', browserTabId)
   })
 })

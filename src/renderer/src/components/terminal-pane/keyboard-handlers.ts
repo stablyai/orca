@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: terminal keyboard handling keeps ordered
+shortcut precedence in one hook so xterm interception remains auditable. */
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
@@ -5,6 +7,7 @@ import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
+import type { EffectiveKeymap } from '../../../../shared/keybindings/keybinding-types'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -83,6 +86,7 @@ type KeyboardHandlersDeps = {
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
+  effectiveKeymap: EffectiveKeymap
 }
 
 export function useTerminalKeyboardShortcuts({
@@ -102,7 +106,8 @@ export function useTerminalKeyboardShortcuts({
   onRequestClosePane,
   searchOpenRef,
   searchStateRef,
-  macOptionAsAltRef
+  macOptionAsAltRef,
+  effectiveKeymap
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -169,7 +174,10 @@ export function useTerminalKeyboardShortcuts({
       const action = resolveTerminalShortcutAction(
         e,
         isMac,
-        macOptionAsAltRef.current,
+        {
+          keymap: effectiveKeymap,
+          macOptionAsAlt: macOptionAsAltRef.current
+        },
         optionKeyLocation
       )
       if (!action) {
@@ -355,6 +363,7 @@ export function useTerminalKeyboardShortcuts({
     onRequestClosePane,
     searchOpenRef,
     searchStateRef,
-    macOptionAsAltRef
+    macOptionAsAltRef,
+    effectiveKeymap
   ])
 }

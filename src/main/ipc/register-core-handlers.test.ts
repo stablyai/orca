@@ -34,7 +34,8 @@ const {
   registerAppHandlersMock,
   registerLinearHandlersMock,
   registerExportHandlersMock,
-  registerOnboardingHandlersMock
+  registerOnboardingHandlersMock,
+  registerKeybindingHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -69,7 +70,8 @@ const {
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
-  registerOnboardingHandlersMock: vi.fn()
+  registerOnboardingHandlersMock: vi.fn(),
+  registerKeybindingHandlersMock: vi.fn()
 }))
 
 vi.mock('./onboarding', () => ({
@@ -126,6 +128,10 @@ vi.mock('./computer-use-permissions', () => ({
 
 vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
+}))
+
+vi.mock('./keybindings', () => ({
+  registerKeybindingHandlers: registerKeybindingHandlersMock
 }))
 
 vi.mock('./telemetry', () => ({
@@ -236,6 +242,7 @@ describe('registerCoreHandlers', () => {
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
+    registerKeybindingHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', () => {
@@ -247,6 +254,7 @@ describe('registerCoreHandlers', () => {
     const codexAccounts = { marker: 'codexAccounts' }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
+    const keybindingService = { marker: 'keybindings' }
 
     registerCoreHandlers(
       store as never,
@@ -256,7 +264,9 @@ describe('registerCoreHandlers', () => {
       codexUsage as never,
       codexAccounts as never,
       claudeAccounts as never,
-      rateLimits as never
+      rateLimits as never,
+      null,
+      keybindingService as never
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
@@ -275,6 +285,7 @@ describe('registerCoreHandlers', () => {
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerKeybindingHandlersMock).toHaveBeenCalledWith(keybindingService)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)

@@ -208,6 +208,9 @@ importers:
       simple-git:
         specifier: ^3.36.0
         version: 3.36.0
+      smol-toml:
+        specifier: 1.6.1
+        version: 1.6.1
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

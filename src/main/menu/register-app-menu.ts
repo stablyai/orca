@@ -1,4 +1,13 @@
 import { BrowserWindow, Menu, app } from 'electron'
+import { keybindingCatalog } from '../../shared/keybindings/keybinding-catalog'
+import { buildEffectiveKeymap } from '../../shared/keybindings/effective-keymap'
+import { getPrimaryChordLabel } from '../../shared/keybindings/keybinding-display'
+import type {
+  CanonicalChord,
+  EffectiveKeymap,
+  KeybindingActionId,
+  KeybindingPlatform
+} from '../../shared/keybindings/keybinding-types'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -18,6 +27,64 @@ type RegisterAppMenuOptions = {
   onToggleRightSidebar: () => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
+  getEffectiveKeymap?: () => EffectiveKeymap
+}
+
+function getElectronAccelerators(keymap: EffectiveKeymap, actionId: KeybindingActionId): string[] {
+  const binding = keymap.bindings.find((candidate) => candidate.id === actionId)
+  return binding?.chords.map(chordToElectronAccelerator).filter((value) => value !== null) ?? []
+}
+
+function chordToElectronAccelerator(chord: CanonicalChord): string | null {
+  const parts: string[] = []
+  if (chord.cmd) {
+    parts.push('Cmd')
+  }
+  if (chord.ctrl) {
+    parts.push('Ctrl')
+  }
+  if (chord.alt) {
+    parts.push('Alt')
+  }
+  if (chord.shift) {
+    parts.push('Shift')
+  }
+
+  const key = chordKeyToElectronAcceleratorKey(chord.key)
+  if (!key) {
+    return null
+  }
+  parts.push(key)
+  return parts.join('+')
+}
+
+function chordKeyToElectronAcceleratorKey(key: string): string | null {
+  switch (key) {
+    case 'arrowleft':
+      return 'Left'
+    case 'arrowright':
+      return 'Right'
+    case 'arrowup':
+      return 'Up'
+    case 'arrowdown':
+      return 'Down'
+    case 'escape':
+      return 'Esc'
+    case 'enter':
+      return 'Enter'
+    case 'backspace':
+      return 'Backspace'
+    case 'delete':
+      return 'Delete'
+    case 'insert':
+      return 'Insert'
+    case 'space':
+      return 'Space'
+    case '+':
+      return 'Plus'
+    default:
+      return key.length === 1 ? key.toUpperCase() : key
+  }
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
@@ -30,11 +97,23 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onToggleLeftSidebar,
     onToggleRightSidebar,
     onToggleAppearance,
-    getAppearanceState
+    getAppearanceState,
+    getEffectiveKeymap
   } = options
 
   const isMac = process.platform === 'darwin'
+  const keybindingPlatform: KeybindingPlatform = isMac
+    ? 'macos'
+    : process.platform === 'win32'
+      ? 'windows'
+      : 'linux'
+  const effectiveKeymap =
+    getEffectiveKeymap?.() ??
+    buildEffectiveKeymap({ catalog: keybindingCatalog, platform: keybindingPlatform })
   const appearance = getAppearanceState()
+  const zoomInAccelerators = getElectronAccelerators(effectiveKeymap, 'window.zoomIn')
+  const zoomOutAccelerators = getElectronAccelerators(effectiveKeymap, 'window.zoomOut')
+  const zoomResetAccelerators = getElectronAccelerators(effectiveKeymap, 'window.zoomReset')
 
   const reloadFocusedWindow = (ignoreCache: boolean): void => {
     const webContents = BrowserWindow.getFocusedWindow()?.webContents
@@ -159,12 +238,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // accelerator here would steal the chord before that carve-out can
         // fire. Sidebar open/closed lives in the renderer store (non-persisted),
         // so we forward a toggle request rather than mirroring state in main.
-        label: `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`,
+        label: `Toggle Left Sidebar\t${getPrimaryChordLabel(effectiveKeymap, 'sidebar.left.toggle')}`,
         click: () => onToggleLeftSidebar()
       },
       {
         // Why: display-only shortcut hint for the same reason as above.
-        label: `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`,
+        label: `Toggle Right Sidebar\t${getPrimaryChordLabel(effectiveKeymap, 'sidebar.right.toggle')}`,
         click: () => onToggleRightSidebar()
       },
       {
@@ -205,7 +284,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       {
         label: 'Reset Size',
-        accelerator: 'CmdOrCtrl+0',
+        accelerator: zoomResetAccelerators[0],
         // Why: Some keyboard layouts/platforms intercept Cmd/Ctrl+zoom chords
         // before before-input-event fires. Binding the menu accelerator gives
         // us a reliable cross-platform fallback path.
@@ -213,12 +292,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       },
       {
         label: 'Zoom In',
-        accelerator: 'CmdOrCtrl+=',
+        accelerator: zoomInAccelerators[0],
         click: () => onZoomIn()
       },
       {
         label: 'Zoom Out',
-        accelerator: 'CmdOrCtrl+-',
+        accelerator: zoomOutAccelerators[0],
         click: () => onZoomOut()
       },
       {
@@ -226,7 +305,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // Why: Some Linux keyboard layouts report the top-row minus chord as
         // an underscore accelerator. Keep this hidden alias so Ctrl+- and
         // Ctrl+_ can both route to terminal zoom out.
-        accelerator: 'CmdOrCtrl+_',
+        accelerator: zoomOutAccelerators[1],
         visible: false,
         click: () => onZoomOut()
       },
@@ -237,7 +316,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // before the renderer's keydown handler fires. The overlay
         // mutual-exclusion logic (which runs in the renderer) would be
         // bypassed if this were a real accelerator binding.
-        label: `Open Worktree Palette\t${isMac ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+        label: `Open Worktree Palette\t${getPrimaryChordLabel(effectiveKeymap, 'worktree.palette.toggle')}`
       },
       { type: 'separator' },
       { role: 'togglefullscreen' },

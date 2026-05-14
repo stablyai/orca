@@ -30,6 +30,7 @@ type OrcaTestFixtures = {
   electronApp: ElectronApplication
   sharedPage: Page
   orcaPage: Page
+  keybindingsToml: string | null
   // Why: every fresh userData dir paints the first-launch onboarding overlay
   // (closedAt=null), which is `fixed inset-0 z-[100]` and intercepts pointer
   // events for every other test. Dismiss it by default; onboarding.spec.ts
@@ -145,9 +146,17 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   ],
 
   // Test-scoped: one Electron app per test
-  electronApp: async ({ dismissOnboarding }, provideFixture, testInfo) => {
+  electronApp: async ({ dismissOnboarding, keybindingsToml }, provideFixture, testInfo) => {
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
+    const homeDir =
+      keybindingsToml === null ? null : mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-home-'))
+
+    if (homeDir !== null) {
+      const configDir = path.join(homeDir, '.orca')
+      mkdirSync(configDir, { recursive: true })
+      writeFileSync(path.join(configDir, 'keybindings.toml'), keybindingsToml)
+    }
 
     if (dismissOnboarding) {
       // Why: onboarding renders a fullscreen `fixed inset-0 z-[100]` overlay
@@ -213,6 +222,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // window (e.g. pointer-capture drag tests).
       env: {
         ...cleanEnv,
+        ...(homeDir === null ? {} : { HOME: homeDir, USERPROFILE: homeDir }),
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
@@ -241,10 +251,14 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       }
     }
     rmSync(userDataDir, { recursive: true, force: true })
+    if (homeDir !== null) {
+      rmSync(homeDir, { recursive: true, force: true })
+    }
   },
 
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.
   dismissOnboarding: [true, { option: true }],
+  keybindingsToml: [null, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.

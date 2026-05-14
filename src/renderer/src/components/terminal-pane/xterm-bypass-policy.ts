@@ -27,12 +27,16 @@ export type XtermBypassEvent = {
   shiftKey: boolean
 }
 
+import { resolveKeybindingAction } from '../../../../shared/keybindings/effective-keymap'
+import type { EffectiveKeymap } from '../../../../shared/keybindings/keybinding-types'
+
 export type XtermBypassOptions = {
   isMac: boolean
   /** True when the terminal has a current text selection — Ctrl+C on
    *  Windows/Linux should only bubble to clipboard when something is selected,
    *  otherwise it must reach the shell as SIGINT. */
   hasSelection: boolean
+  keymap?: EffectiveKeymap
 }
 
 /**
@@ -54,6 +58,19 @@ export function shouldBypassXtermKeydown(
     // not stopped propagation. Match VS Code by preventing xterm's kitty
     // encoder from also sending that app shortcut to the shell.
     return true
+  }
+
+  if (options.keymap) {
+    const action = resolveKeybindingAction(options.keymap, event, 'terminalClipboardBypass')
+    if (!action) {
+      return false
+    }
+    if (action.command.type === 'terminalCopySelectionIfSelected') {
+      return isMac || hasSelection
+    }
+    return (
+      action.command.type === 'terminalCopySelection' || action.command.type === 'terminalPaste'
+    )
   }
 
   if (isMac) {

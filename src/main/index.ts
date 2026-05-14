@@ -3,7 +3,9 @@
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
 import { grantDirAcl } from './win32-utils'
-import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
+import { app, BrowserWindow, nativeImage, nativeTheme, shell } from 'electron'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { homedir } from 'os'
 import { electronApp, is } from '@electron-toolkit/utils'
 import devIcon from '../../resources/icon-dev.png?asset'
 import { Store, initDataPath } from './persistence'
@@ -53,6 +55,10 @@ import { getPtyIdForPaneKey, registerPaneKeyTeardownListener, getLocalPtyProvide
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
+import {
+  createUserKeybindingServiceFromDisk,
+  type UserKeybindingService
+} from './keybindings/keybinding-service'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -71,6 +77,7 @@ let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let starNag: StarNagService | null = null
+let keybindings: UserKeybindingService | null = null
 
 installUncaughtPipeErrorGuard()
 // Why: propagate the Orca app version into `process.env` so PTY-env
@@ -217,7 +224,8 @@ function openMainWindow(): BrowserWindow {
     getIsQuitting: () => isQuitting,
     onQuitAborted: () => {
       isQuitting = false
-    }
+    },
+    getEffectiveKeymap: () => keybindings!.getSnapshot().keymap
   })
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
@@ -245,7 +253,8 @@ function openMainWindow(): BrowserWindow {
     codexAccounts,
     claudeAccounts,
     rateLimits,
-    window.webContents.id
+    window.webContents.id,
+    keybindings ?? undefined
   )
   attachMainWindowServices(
     window,
@@ -458,6 +467,16 @@ app.whenReady().then(async () => {
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
   rateLimits = new RateLimitService()
+  keybindings = createUserKeybindingServiceFromDisk({
+    homeDirectory: homedir(),
+    platform: process.platform,
+    existsSync,
+    mkdirSync,
+    readFileSync,
+    writeFileSync,
+    openPath: (path) => shell.openPath(path),
+    showItemInFolder: (path) => shell.showItemInFolder(path)
+  })
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
@@ -490,6 +509,7 @@ app.whenReady().then(async () => {
   starNag.start()
   starNag.registerIpcHandlers()
   runtime.setAgentBrowserBridge(new AgentBrowserBridge(browserManager))
+  browserManager.setEffectiveKeymapResolver(() => keybindings!.getSnapshot().keymap)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Why: managed hook installation mutates user-global agent config. Each
   // installer runs inside its own try/catch so a malformed local config
@@ -543,6 +563,7 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('settings:changed', { [key]: !current[key] })
       rebuildAppMenu()
     },
+    getEffectiveKeymap: () => keybindings!.getSnapshot().keymap,
     getAppearanceState: () => {
       const settings = store?.getSettings()
       const ui = store?.getUI()
