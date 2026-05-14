@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this pane shell coordinates terminals, editor tabs, browser slots, and notes tabs so split-group routing stays in one place. */
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
@@ -19,8 +20,13 @@ import {
   type TabDropZone
 } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import {
+  getProjectNoteIdFromEntityId,
+  isNewProjectNoteEntityId
+} from '@/lib/open-project-notes-tab'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const ProjectNotesTabContent = lazy(() => import('../notes/ProjectNotesTabContent'))
 
 export default function TabGroupPanel({
   groupId,
@@ -56,7 +62,8 @@ export default function TabGroupPanel({
   }, [])
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
-  const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
+  const { activeTab, browserItems, commands, editorItems, notesItems, tabBarOrder, terminalTabs } =
+    model
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -119,23 +126,30 @@ export default function TabGroupPanel({
       wslAvailable={wslAvailable}
       onNewBrowserTab={commands.newBrowserTab}
       onNewFileTab={commands.newFileTab}
+      onNewNotesTab={commands.newNotesTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
       onTogglePaneExpand={() => {}}
       editorFiles={editorItems}
       browserTabs={browserItems}
+      notesTabs={notesItems}
       activeFileId={
-        activeTab?.contentType === 'terminal' || activeTab?.contentType === 'browser'
+        activeTab?.contentType === 'terminal' ||
+        activeTab?.contentType === 'browser' ||
+        activeTab?.contentType === 'notes'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
+      activeNotesTabId={activeTab?.contentType === 'notes' ? activeTab.id : null}
       activeTabType={
         activeTab?.contentType === 'terminal'
           ? 'terminal'
           : activeTab?.contentType === 'browser'
             ? 'browser'
-            : 'editor'
+            : activeTab?.contentType === 'notes'
+              ? 'notes'
+              : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -143,6 +157,15 @@ export default function TabGroupPanel({
       onCloseBrowserTab={(browserTabId) => {
         const item = model.groupTabs.find(
           (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
+        )
+        if (item) {
+          commands.closeItem(item.id)
+        }
+      }}
+      onActivateNotesTab={commands.activateNotes}
+      onCloseNotesTab={(notesTabId) => {
+        const item = model.groupTabs.find(
+          (candidate) => candidate.id === notesTabId && candidate.contentType === 'notes'
         )
         if (item) {
           commands.closeItem(item.id)
@@ -338,9 +361,36 @@ export default function TabGroupPanel({
         style={bodyAnchorStyle}
       >
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
+        {model.groupTabs
+          .filter((tab) => tab.contentType === 'notes')
+          .map((notesTab) => (
+            <div
+              key={notesTab.id}
+              className={`absolute inset-0 min-h-0 min-w-0 ${
+                activeTab?.id === notesTab.id ? 'flex' : 'hidden'
+              }`}
+            >
+              <Suspense
+                fallback={
+                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                    Loading notes...
+                  </div>
+                }
+              >
+                <ProjectNotesTabContent
+                  worktreeId={worktreeId}
+                  tabId={notesTab.id}
+                  noteId={getProjectNoteIdFromEntityId(notesTab.entityId)}
+                  forceNew={isNewProjectNoteEntityId(notesTab.entityId)}
+                />
+              </Suspense>
+            </div>
+          ))}
+
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'browser' && (
+          activeTab.contentType !== 'browser' &&
+          activeTab.contentType !== 'notes' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor/browser content inside a
                   plain relative pane body instead of the legacy flex column in

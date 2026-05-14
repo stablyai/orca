@@ -1,4 +1,4 @@
-import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
+import type { Worktree, Repo, Tab, TerminalTab } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { useAppStore } from '@/store'
@@ -81,6 +81,7 @@ export function computeVisibleWorktreeIds(
     showActiveOnly: boolean
     tabsByWorktree: Record<string, TerminalTab[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
+    unifiedTabsByWorktree?: Record<string, Tab[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
     activeWorktreeId?: string | null
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
@@ -114,11 +115,15 @@ export function computeVisibleWorktreeIds(
         opts.ptyIdsByTabId ? tabHasLivePty(opts.ptyIdsByTabId, tab.id) : false
       )
       const hasBrowserTabs = (opts.browserTabsByWorktree?.[w.id] ?? []).length > 0
+      const hasNotesTabs = (opts.unifiedTabsByWorktree?.[w.id] ?? []).some(
+        (tab) => tab.contentType === 'notes'
+      )
       // Why: "Active only" should reflect the surfaces Orca can actually
       // restore into, not just PTY-backed terminals. A browser-tab worktree is
-      // still active from the user's point of view even if it has no live PTY,
-      // and the currently selected worktree should never vanish from the list.
-      return hasLiveTerminal || hasBrowserTabs || opts.activeWorktreeId === w.id
+      // still active from the user's point of view even if it has no live PTY.
+      // Project notes follow the same rule because they are workspace tabs
+      // backed by the notes store, not PTY-backed terminal state.
+      return hasLiveTerminal || hasBrowserTabs || hasNotesTabs || opts.activeWorktreeId === w.id
     })
   }
 
@@ -202,6 +207,7 @@ export function getVisibleWorktreeIds(): string[] {
     showActiveOnly: state.showActiveOnly,
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
     browserTabsByWorktree: state.browserTabsByWorktree,
     activeWorktreeId: state.activeWorktreeId,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,

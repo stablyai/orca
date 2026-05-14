@@ -3,7 +3,7 @@ import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
 
 export type VisibleTabRef = {
-  type: 'terminal' | 'editor' | 'browser'
+  type: 'terminal' | 'editor' | 'browser' | 'notes'
   id: string
   tabId?: string
 }
@@ -56,6 +56,7 @@ export function getGroupVisibleTabOrder(
   const seenTerminals = new Set<string>()
   const seenBrowsers = new Set<string>()
   const seenEditors = new Set<string>()
+  const seenNotes = new Set<string>()
   for (const unifiedId of group.tabOrder) {
     const tab = tabsById.get(unifiedId)
     if (!tab) {
@@ -73,6 +74,12 @@ export function getGroupVisibleTabOrder(
       }
       seenBrowsers.add(tab.entityId)
       result.push({ type: 'browser', id: tab.entityId, tabId: tab.id })
+    } else if (tab.contentType === 'notes') {
+      if (seenNotes.has(tab.id)) {
+        continue
+      }
+      seenNotes.add(tab.id)
+      result.push({ type: 'notes', id: tab.id, tabId: tab.id })
     } else {
       if (!editorEntityIds.has(tab.entityId) || seenEditors.has(tab.id)) {
         continue
@@ -114,6 +121,9 @@ export function getActiveTabNavOrder(
   const terminalIds = (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
   const editorIds = state.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
   const browserIds = (state.browserTabsByWorktree[worktreeId] ?? []).map((t) => t.id)
+  const notesIds = (state.unifiedTabsByWorktree[worktreeId] ?? [])
+    .filter((tab) => tab.contentType === 'notes')
+    .map((tab) => tab.id)
 
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
@@ -138,11 +148,13 @@ export function getActiveTabNavOrder(
     state.tabBarOrderByWorktree[worktreeId],
     terminalIds,
     editorIds,
-    browserIds
+    browserIds,
+    notesIds
   )
   const terminalIdSet = new Set(terminalIds)
   const editorIdSet = new Set(editorIds)
   const browserIdSet = new Set(browserIds)
+  const notesIdSet = new Set(notesIds)
   const result: VisibleTabRef[] = []
   for (const id of visibleIds) {
     if (terminalIdSet.has(id)) {
@@ -151,6 +163,8 @@ export function getActiveTabNavOrder(
       result.push({ type: 'editor', id })
     } else if (browserIdSet.has(id)) {
       result.push({ type: 'browser', id })
+    } else if (notesIdSet.has(id)) {
+      result.push({ type: 'notes', id, tabId: id })
     }
   }
   return result

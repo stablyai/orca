@@ -178,6 +178,24 @@ import type {
   AutomationRun,
   AutomationUpdateInput
 } from '../shared/automations-types'
+import type {
+  NoteAppendArgs,
+  NoteCreateArgs,
+  NoteDeleteArgs,
+  NoteDeleteResult,
+  NoteLinkArgs,
+  NoteLink,
+  NoteListArgs,
+  NoteListResult,
+  NoteMutationResult,
+  NoteRenameArgs,
+  NoteSaveArgs,
+  NoteSearchArgs,
+  NoteShowArgs,
+  NoteShowResult,
+  NotesPanelOpenState,
+  NotesPanelStateArgs
+} from '../shared/notes-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -1061,6 +1079,18 @@ export type PreloadApi = {
       line: number
       connectionId?: string
     }) => Promise<string | null>
+  }
+  notes: {
+    list: (args: NoteListArgs) => Promise<NoteListResult>
+    show: (args: NoteShowArgs) => Promise<NoteShowResult>
+    create: (args: NoteCreateArgs) => Promise<NoteMutationResult>
+    save: (args: NoteSaveArgs) => Promise<NoteMutationResult>
+    rename: (args: NoteRenameArgs) => Promise<NoteMutationResult>
+    delete: (args: NoteDeleteArgs) => Promise<NoteDeleteResult>
+    append: (args: NoteAppendArgs) => Promise<NoteMutationResult>
+    search: (args: NoteSearchArgs) => Promise<NoteListResult>
+    link: (args: NoteLinkArgs) => Promise<NoteLink>
+    panelState: (args: NotesPanelStateArgs) => Promise<NotesPanelOpenState>
   }
   ui: {
     get: () => Promise<PersistedUIState>

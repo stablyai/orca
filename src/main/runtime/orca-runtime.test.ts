@@ -11,6 +11,19 @@ import {
 import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeService } from './orca-runtime'
 
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => '/tmp/orca-user-data')
+  },
+  BrowserWindow: {
+    fromId: vi.fn(() => null)
+  },
+  ipcMain: {
+    on: vi.fn(),
+    removeListener: vi.fn()
+  }
+}))
+
 const {
   MOCK_GIT_WORKTREES,
   addWorktreeMock,
@@ -1607,6 +1620,120 @@ describe('OrcaRuntimeService', () => {
     expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), result.setup)
   })
 
+  it('spawns startup and setup in runtime before revealing activated worktrees', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const activateWorktree = vi.fn()
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-visible-worktree' })
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-visible-startup' })
+      .mockResolvedValueOnce({ id: 'pty-visible-setup' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-startup-setup')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-startup-setup')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
+      envVars: {
+        ORCA_ROOT_PATH: '/tmp/repo',
+        ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-startup-setup',
+        head: 'def',
+        branch: 'runtime-startup-setup',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-startup-setup',
+      runHooks: true,
+      startup: {
+        command: 'codex --prompt "setup"',
+        env: {
+          ORCA_STARTUP_SETUP: '1'
+        }
+      }
+    })
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-startup-setup',
+        command: 'codex --prompt "setup"',
+        env: expect.objectContaining({
+          ORCA_STARTUP_SETUP: '1'
+        }),
+        worktreeId: result.worktree.id
+      })
+    )
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-startup-setup',
+        command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+        env: expect.objectContaining({
+          ORCA_ROOT_PATH: '/tmp/repo',
+          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup'
+        }),
+        worktreeId: result.worktree.id
+      })
+    )
+    expect(revealTerminalSession).toHaveBeenNthCalledWith(
+      1,
+      result.worktree.id,
+      expect.objectContaining({
+        ptyId: 'pty-visible-startup',
+        title: null,
+        activate: false
+      })
+    )
+    expect(revealTerminalSession).toHaveBeenNthCalledWith(
+      2,
+      result.worktree.id,
+      expect.objectContaining({
+        ptyId: 'pty-visible-setup',
+        title: 'Setup',
+        activate: false
+      })
+    )
+    expect(activateWorktree).toHaveBeenCalledWith('repo-1', result.worktree.id, undefined)
+    expect(revealTerminalSession.mock.invocationCallOrder[1]).toBeLessThan(
+      activateWorktree.mock.invocationCallOrder[0]
+    )
+  })
+
   it('follows normal setup policy for CLI-created worktrees without activating them', async () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()
@@ -1790,6 +1917,79 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('runs startup commands through background PTYs when worktree activation was not requested', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const activateWorktree = vi.fn()
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-startup-worktree' })
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-startup-worktree' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-startup-terminal')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-startup-terminal')
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-startup-terminal',
+        head: 'def',
+        branch: 'runtime-startup-terminal',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-startup-terminal',
+      startup: {
+        command: 'codex --prompt "summarize"',
+        env: {
+          ORCA_TEST_MODE: '1'
+        }
+      }
+    })
+
+    expect(activateWorktree).not.toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-startup-terminal',
+        command: 'codex --prompt "summarize"',
+        env: expect.objectContaining({
+          ORCA_TEST_MODE: '1'
+        }),
+        worktreeId: result.worktree.id,
+        preAllocatedHandle: expect.stringMatching(/^term_/)
+      })
+    )
+    expect(revealTerminalSession).toHaveBeenCalledWith(
+      result.worktree.id,
+      expect.objectContaining({
+        ptyId: 'pty-startup-worktree',
+        title: null,
+        activate: false
+      })
+    )
+  })
+
   it('keeps CLI-created worktrees successful when initial terminal creation fails', async () => {
     const runtime = new OrcaRuntimeService(store)
     const spawn = vi.fn().mockRejectedValue(new Error('pty unavailable'))
@@ -1888,6 +2088,70 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), undefined)
+  })
+
+  it('spawns startup commands in runtime before revealing explicitly activated worktrees', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const activateWorktree = vi.fn()
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-visible-startup' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-visible-startup')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-visible-startup')
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-visible-startup',
+        head: 'def',
+        branch: 'runtime-visible-startup',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-visible-startup',
+      activate: true,
+      startup: {
+        command: 'claude --dangerously-skip-permissions',
+        env: {
+          ORCA_VISIBLE_STARTUP: '1'
+        }
+      }
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-visible-startup',
+        command: 'claude --dangerously-skip-permissions',
+        env: expect.objectContaining({
+          ORCA_VISIBLE_STARTUP: '1'
+        }),
+        worktreeId: result.worktree.id
+      })
+    )
+    expect(activateWorktree).toHaveBeenCalledWith('repo-1', result.worktree.id, undefined)
   })
 
   it('stamps createdAt alongside lastActivityAt so CLI-created worktrees get the Recent-sort grace window', async () => {

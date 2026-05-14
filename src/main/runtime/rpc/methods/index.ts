@@ -12,6 +12,7 @@ import { ACCOUNT_METHODS } from './accounts'
 import { COMPUTER_METHODS } from './computer'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { FILE_METHODS } from './files'
+import { NOTE_METHODS } from './notes'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -29,5 +30,6 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...ACCOUNT_METHODS,
   ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,
-  ...FILE_METHODS
+  ...FILE_METHODS,
+  ...NOTE_METHODS
 ]

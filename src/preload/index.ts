@@ -324,6 +324,19 @@ const api = {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable')
   },
 
+  notes: {
+    list: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:list', args),
+    show: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:show', args),
+    create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:create', args),
+    save: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:save', args),
+    rename: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:rename', args),
+    delete: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:delete', args),
+    append: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:append', args),
+    search: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:search', args),
+    link: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:link', args),
+    panelState: (args: unknown): Promise<unknown> => ipcRenderer.invoke('notes:panelState', args)
+  },
+
   repos: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
 

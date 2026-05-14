@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Files, Search, GitBranch, ListChecks, Cable, PanelRight } from 'lucide-react'
+import { Files, Search, GitBranch, ListChecks, Cable, PanelRight, FileText } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,7 @@ import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
 import PortsPanel from './PortsPanel'
+import NotesPanel from './NotesPanel'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -86,6 +87,12 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     icon: Search,
     title: 'Search',
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}F`
+  },
+  {
+    id: 'notes',
+    icon: FileText,
+    title: 'Project Notes',
+    shortcut: ''
   },
   {
     id: 'source-control',
@@ -245,6 +252,7 @@ function RightSidebarInner(): React.JSX.Element {
         {effectiveTab === 'source-control' && <SourceControl />}
         {effectiveTab === 'checks' && <ChecksPanel />}
         {effectiveTab === 'ports' && <PortsPanel />}
+        {effectiveTab === 'notes' && <NotesPanel />}
       </div>
     </div>
   )

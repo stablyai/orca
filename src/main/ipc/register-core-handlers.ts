@@ -16,6 +16,7 @@ import { registerStatsHandlers } from './stats'
 import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
+import { registerNotesHandlers } from './notes'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -112,6 +113,7 @@ export function registerCoreHandlers(
   registerFilesystemHandlers(store)
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
+  registerNotesHandlers(runtime)
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
   warmSystemFontFamilies()

@@ -962,6 +962,14 @@ describe('TabsSlice', () => {
       store.getState().setUnifiedTabColor(tab.id, '#ff0000')
       expect(store.getState().unifiedTabsByWorktree[WT][0].color).toBe('#ff0000')
     })
+
+    it('setTabDirty updates dirty state', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'notes')
+      store.getState().setTabDirty(tab.id, true)
+      expect(store.getState().unifiedTabsByWorktree[WT][0].isDirty).toBe(true)
+      store.getState().setTabDirty(tab.id, false)
+      expect(store.getState().unifiedTabsByWorktree[WT][0].isDirty).toBe(false)
+    })
   })
 
   // ─── pinTab / unpinTab ────────────────────────────────────────────
@@ -1490,6 +1498,48 @@ describe('TabsSlice', () => {
         type: 'leaf',
         groupId: restoredGroup?.id
       })
+    })
+
+    it('keeps project notes tabs even though they are not openFiles-backed editors', () => {
+      const groupId = 'g-1'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'notes-tab-1',
+              entityId: 'notes:repo-1:note-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'notes',
+              label: 'Project Notes',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'notes-tab-1',
+              tabOrder: ['notes-tab-1']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        tabsByWorktree: { [WT]: [] },
+        openFiles: []
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe('notes-tab-1')
+      expect(store.getState().unifiedTabsByWorktree[WT]).toHaveLength(1)
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe('notes-tab-1')
     })
   })
 })
