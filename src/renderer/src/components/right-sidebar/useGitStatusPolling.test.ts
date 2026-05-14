@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as React from 'react'
 import type { GitStatusResult } from '../../../../shared/types'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
@@ -14,7 +15,14 @@ type PollState = {
   gitConflictOperationByWorktree: Record<string, unknown>
 }
 
-async function runPollingOnce(status: GitStatusResult): Promise<PollState> {
+type GitStatusPollingHook = () => void
+
+function GitStatusPollingHarness({ runPolling }: { runPolling: GitStatusPollingHook }): null {
+  runPolling()
+  return null
+}
+
+async function usePollingOnce(status: GitStatusResult): Promise<PollState> {
   vi.resetModules()
 
   const state: PollState = {
@@ -28,7 +36,7 @@ async function runPollingOnce(status: GitStatusResult): Promise<PollState> {
   }
 
   vi.doMock('react', async () => {
-    const actual = await vi.importActual<typeof import('react')>('react')
+    const actual = await vi.importActual<typeof React>('react')
     return {
       ...actual,
       useCallback: (callback: unknown) => callback,
@@ -68,8 +76,8 @@ async function runPollingOnce(status: GitStatusResult): Promise<PollState> {
   vi.stubGlobal('setInterval', vi.fn())
   vi.stubGlobal('clearInterval', vi.fn())
 
-  const { useGitStatusPolling } = await import('./useGitStatusPolling')
-  useGitStatusPolling()
+  const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
+  GitStatusPollingHarness({ runPolling })
   await Promise.resolve()
 
   return state
@@ -82,7 +90,7 @@ describe('useGitStatusPolling', () => {
   })
 
   it('uses upstream data from git status instead of spawning a separate upstream refresh', async () => {
-    const state = await runPollingOnce({
+    const state = await usePollingOnce({
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',
@@ -105,7 +113,7 @@ describe('useGitStatusPolling', () => {
   })
 
   it('falls back to the upstream IPC for legacy status payloads', async () => {
-    const state = await runPollingOnce({
+    const state = await usePollingOnce({
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',

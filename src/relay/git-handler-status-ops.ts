@@ -7,7 +7,8 @@
 import * as path from 'path'
 import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
-import { parseStatusOutput, parseUnmergedEntry } from './git-handler-utils'
+import { parseUnmergedEntry } from './git-handler-utils'
+import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {

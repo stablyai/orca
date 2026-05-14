@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseStatusOutput } from './git-handler-utils'
+import { parseStatusOutput } from './git-status-output-parser'
 
 describe('parseStatusOutput', () => {
   it('parses upstream ahead/behind from porcelain v2 branch headers', () => {
