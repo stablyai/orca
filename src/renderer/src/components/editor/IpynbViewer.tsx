@@ -9,10 +9,22 @@ import Markdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
-import { AlertCircle, Braces, FileCode2, Loader2, Play, Plus, Trash2 } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowUpToLine,
+  Braces,
+  FileCode2,
+  Loader2,
+  MoveDown,
+  MoveUp,
+  Play,
+  Trash2
+} from 'lucide-react'
 import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { cn } from '@/lib/utils'
@@ -23,6 +35,7 @@ import MonacoCodeExcerpt from './MonacoCodeExcerpt'
 import {
   deleteIpynbCell,
   insertIpynbCell,
+  moveIpynbCell,
   parseIpynb,
   updateIpynbCellKind,
   updateIpynbCellOutputs,
@@ -73,17 +86,27 @@ function NotebookCellHeader({
   cell,
   index,
   running,
+  canMoveUp,
+  canMoveDown,
   onRun,
   onKindChange,
+  onInsertAbove,
   onInsertBelow,
+  onMoveUp,
+  onMoveDown,
   onDelete
 }: {
   cell: IpynbCell
   index: number
   running: boolean
+  canMoveUp: boolean
+  canMoveDown: boolean
   onRun: () => void
   onKindChange: (kind: IpynbCellKind) => void
+  onInsertAbove: (kind: IpynbCellKind) => void
   onInsertBelow: (kind: IpynbCellKind) => void
+  onMoveUp: () => void
+  onMoveDown: () => void
   onDelete: () => void
 }): React.JSX.Element {
   const Icon = cell.kind === 'code' ? Play : cell.kind === 'markdown' ? FileCode2 : Braces
@@ -102,64 +125,76 @@ function NotebookCellHeader({
         <option value="raw">Raw</option>
       </select>
       {cell.kind === 'code' ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              disabled={running}
-              onClick={onRun}
-            >
-              {running ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Play className="size-3.5" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Run cell</TooltipContent>
-        </Tooltip>
+        <NotebookHeaderButton label="Run cell" disabled={running} onClick={onRun}>
+          {running ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+        </NotebookHeaderButton>
       ) : null}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={() => onInsertBelow('code')}
-          >
-            <Plus className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Add code cell</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={() => onInsertBelow('markdown')}
-          >
-            <FileCode2 className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Add markdown cell</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button type="button" variant="ghost" size="icon" className="size-7" onClick={onDelete}>
-            <Trash2 className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Delete cell</TooltipContent>
-      </Tooltip>
+      <NotebookHeaderButton label="Move cell up" disabled={!canMoveUp} onClick={onMoveUp}>
+        <MoveUp className="size-3.5" />
+      </NotebookHeaderButton>
+      <NotebookHeaderButton label="Move cell down" disabled={!canMoveDown} onClick={onMoveDown}>
+        <MoveDown className="size-3.5" />
+      </NotebookHeaderButton>
+      <NotebookHeaderButton label="Insert code cell above" onClick={() => onInsertAbove('code')}>
+        <ArrowUpToLine className="size-3.5" />
+      </NotebookHeaderButton>
+      <NotebookHeaderButton label="Insert code cell below" onClick={() => onInsertBelow('code')}>
+        <ArrowDownToLine className="size-3.5" />
+      </NotebookHeaderButton>
+      <NotebookHeaderButton
+        label="Insert markdown cell above"
+        onClick={() => onInsertAbove('markdown')}
+      >
+        <span className="relative size-4">
+          <FileCode2 className="absolute left-0.5 top-0.5 size-3" />
+          <MoveUp className="absolute -right-0.5 -top-0.5 size-2.5" />
+        </span>
+      </NotebookHeaderButton>
+      <NotebookHeaderButton
+        label="Insert markdown cell below"
+        onClick={() => onInsertBelow('markdown')}
+      >
+        <span className="relative size-4">
+          <FileCode2 className="absolute left-0.5 top-0.5 size-3" />
+          <MoveDown className="absolute -bottom-0.5 -right-0.5 size-2.5" />
+        </span>
+      </NotebookHeaderButton>
+      <NotebookHeaderButton label="Delete cell" onClick={onDelete}>
+        <Trash2 className="size-3.5" />
+      </NotebookHeaderButton>
       <span className="ml-auto font-mono">#{index + 1}</span>
     </div>
+  )
+}
+
+function NotebookHeaderButton({
+  label,
+  disabled = false,
+  onClick,
+  children
+}: {
+  label: string
+  disabled?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -191,9 +226,7 @@ function CodeCell({
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const lineCount = Math.max(3, source.split('\n').length + 1)
   const editorHeight = Math.min(520, Math.max(96, lineCount * (fontSize + 8)))
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const lines = useMemo(
     () => (source.length > 0 ? source.replace(/\n$/, '').split('\n') : ['']),
     [source]
@@ -236,6 +269,7 @@ function CodeCell({
         height={editorHeight}
         defaultLanguage={cell.language}
         language={cell.language}
+        theme={isDark ? 'vs-dark' : 'vs'}
         value={source}
         onMount={handleMount}
         onChange={(value) => onChange(value ?? '')}
@@ -552,17 +586,33 @@ export default function IpynbViewer({
     onDirtyStateHintRef.current(true)
     queueSourceDraftCommit()
   }
-  const updateCellKind = (index: number, kind: IpynbCellKind): void => {
+  const applyStructuralContentChange = (
+    getNextContent: (latestContent: string) => string
+  ): void => {
     const latestContent = flushSourceDrafts()
-    applyContent(updateIpynbCellKind(latestContent, index, kind, notebook.language))
+    // Why: Monaco can still have a render frame queued for the active cell.
+    // Exit edit mode first, then reorder/replace cells on the next frame so
+    // structural notebook actions do not dispose an editor mid-render.
+    setEditingCellKey(null)
+    requestAnimationFrame(() => {
+      applyContent(getNextContent(latestContent))
+    })
+  }
+  const updateCellKind = (index: number, kind: IpynbCellKind): void => {
+    applyStructuralContentChange((latestContent) =>
+      updateIpynbCellKind(latestContent, index, kind, notebook.language)
+    )
   }
   const insertCell = (index: number, kind: IpynbCellKind): void => {
-    const latestContent = flushSourceDrafts()
-    applyContent(insertIpynbCell(latestContent, index, kind, notebook.language))
+    applyStructuralContentChange((latestContent) =>
+      insertIpynbCell(latestContent, index, kind, notebook.language)
+    )
+  }
+  const moveCell = (index: number, direction: -1 | 1): void => {
+    applyStructuralContentChange((latestContent) => moveIpynbCell(latestContent, index, direction))
   }
   const deleteCell = (index: number): void => {
-    const latestContent = flushSourceDrafts()
-    applyContent(deleteIpynbCell(latestContent, index))
+    applyStructuralContentChange((latestContent) => deleteIpynbCell(latestContent, index))
   }
   const runCell = async (index: number): Promise<void> => {
     const latestContent = flushSourceDrafts()
@@ -630,9 +680,14 @@ export default function IpynbViewer({
                   cell={cell}
                   index={index}
                   running={runningCellIndex === index}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < notebook.cells.length - 1}
                   onRun={() => void runCell(index)}
                   onKindChange={(kind) => updateCellKind(index, kind)}
+                  onInsertAbove={(kind) => insertCell(index, kind)}
                   onInsertBelow={(kind) => insertCell(index + 1, kind)}
+                  onMoveUp={() => moveCell(index, -1)}
+                  onMoveDown={() => moveCell(index, 1)}
                   onDelete={() => deleteCell(index)}
                 />
                 {cell.kind === 'markdown' ? (

@@ -3,6 +3,7 @@ import {
   concatIpynbMultilineString,
   deleteIpynbCell,
   insertIpynbCell,
+  moveIpynbCell,
   parseIpynb,
   translateKernelLanguageToMonaco,
   updateIpynbCellKind,
@@ -141,6 +142,36 @@ describe('ipynb parsing', () => {
 
     const deleted = JSON.parse(deleteIpynbCell(JSON.stringify(changed), 1))
     expect(deleted.cells).toHaveLength(1)
+  })
+
+  it('moves cells up and down while preserving cell data', () => {
+    const content = JSON.stringify({
+      nbformat: 4,
+      nbformat_minor: 5,
+      metadata: {},
+      cells: [
+        {
+          id: 'a',
+          cell_type: 'code',
+          metadata: {},
+          execution_count: 1,
+          outputs: [],
+          source: ['a']
+        },
+        { id: 'b', cell_type: 'markdown', metadata: { keep: true }, source: ['b'] },
+        { id: 'c', cell_type: 'code', metadata: {}, execution_count: 2, outputs: [], source: ['c'] }
+      ]
+    })
+
+    const movedDown = JSON.parse(moveIpynbCell(content, 0, 1))
+    expect(movedDown.cells.map((cell: { id: string }) => cell.id)).toEqual(['b', 'a', 'c'])
+    expect(movedDown.cells[0].metadata).toEqual({ keep: true })
+
+    const movedUp = JSON.parse(moveIpynbCell(JSON.stringify(movedDown), 2, -1))
+    expect(movedUp.cells.map((cell: { id: string }) => cell.id)).toEqual(['b', 'c', 'a'])
+
+    expect(moveIpynbCell(content, 0, -1)).toBe(content)
+    expect(moveIpynbCell(content, 2, 1)).toBe(content)
   })
 
   it('writes Python run results as notebook outputs', () => {

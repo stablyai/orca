@@ -319,6 +319,18 @@ export function deleteIpynbCell(content: string, index: number): string {
   return serializeNotebook(root)
 }
 
+export function moveIpynbCell(content: string, index: number, direction: -1 | 1): string {
+  const root = parseNotebookRoot(content)
+  const cells = root.cells as unknown[]
+  const nextIndex = index + direction
+  if (index < 0 || index >= cells.length || nextIndex < 0 || nextIndex >= cells.length) {
+    return content
+  }
+  const [cell] = cells.splice(index, 1)
+  cells.splice(nextIndex, 0, cell)
+  return serializeNotebook(root)
+}
+
 export function updateIpynbCellOutputs(
   content: string,
   index: number,
