@@ -32,6 +32,7 @@ type TerminalOverlaySlotProps = {
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   closeTab: (tabId: string) => void
+  leaveWorktreeIfEmpty: () => void
 }
 
 const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
@@ -45,7 +46,8 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
-  closeTab
+  closeTab,
+  leaveWorktreeIfEmpty
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const style: React.CSSProperties = useMemo(
@@ -95,8 +97,12 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           return
         }
         closeTab(terminalTabId)
+        leaveWorktreeIfEmpty()
       }}
-      onCloseTab={() => closeTab(terminalTabId)}
+      onCloseTab={() => {
+        closeTab(terminalTabId)
+        leaveWorktreeIfEmpty()
+      }}
     />
   )
 
@@ -142,6 +148,25 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
   const closeTab = useAppStore((state) => state.closeTab)
+  const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
+  const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
+
+  // Why: legacy TabGroupPanel routed terminal closes through
+  // commands.closeItem → leaveWorktreeIfEmpty, which deselected the worktree
+  // when the last renderable tab closed and sent the user back to Landing.
+  // The overlay layer calls store.closeTab directly, so replicate that
+  // post-close check here; otherwise closing the last terminal leaves an
+  // empty TabGroupPanel body selected.
+  const leaveWorktreeIfEmpty = useCallback(() => {
+    const state = useAppStore.getState()
+    if (state.activeWorktreeId !== worktreeId) {
+      return
+    }
+    const { renderableTabCount } = reconcileWorktreeTabModel(worktreeId)
+    if (renderableTabCount === 0) {
+      setActiveWorktree(null)
+    }
+  }, [reconcileWorktreeTabModel, setActiveWorktree, worktreeId])
 
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
@@ -199,6 +224,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}
             closeTab={closeTab}
+            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
           />
         )
       })}
