@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -43,7 +44,7 @@ async function resolveFloatingTerminalCwd(args?: FloatingTerminalCwdRequest): Pr
 function getFeatureWallAssetBaseUrl(): string {
   const assetDir = app.isPackaged
     ? path.join(process.resourcesPath, 'onboarding', 'feature-wall')
-    : path.join(app.getAppPath(), 'resources', 'onboarding', 'feature-wall')
+    : resolveDevFeatureWallAssetDir()
 
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     const vitePath = assetDir.split(path.sep).join('/')
@@ -54,6 +55,19 @@ function getFeatureWallAssetBaseUrl(): string {
   }
 
   return `${pathToFileURL(assetDir).toString()}/`
+}
+
+function resolveDevFeatureWallAssetDir(): string {
+  const relativeDir = path.join('resources', 'onboarding', 'feature-wall')
+  const candidates = [
+    path.join(app.getAppPath(), relativeDir),
+    path.resolve(app.getAppPath(), '..', '..', relativeDir),
+    path.join(process.cwd(), relativeDir)
+  ]
+
+  // Why: E2E launches out/main/index.js, so app.getAppPath() can point at
+  // out/main even though development resources still live at the repo root.
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
 export function registerAppHandlers(): void {
