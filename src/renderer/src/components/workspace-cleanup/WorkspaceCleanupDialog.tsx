@@ -95,6 +95,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const loading = useAppStore((s) => s.workspaceCleanupLoading)
   const error = useAppStore((s) => s.workspaceCleanupError)
   const scanWorkspaceCleanup = useAppStore((s) => s.scanWorkspaceCleanup)
+  const markCandidateViewed = useAppStore((s) => s.markWorkspaceCleanupCandidateViewed)
   const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
   const resetDismissals = useAppStore((s) => s.resetWorkspaceCleanupDismissals)
   const removeCandidates = useAppStore((s) => s.removeWorkspaceCleanupCandidates)
@@ -466,9 +467,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     </Dialog>
   )
 
-  function closeAndView(worktreeId: string): void {
+  function closeAndView(candidate: WorkspaceCleanupCandidate): void {
+    markCandidateViewed(candidate)
     closeModal()
-    activateAndRevealWorktree(worktreeId)
+    activateAndRevealWorktree(candidate.worktreeId)
   }
 }
 
@@ -492,7 +494,7 @@ function CandidateGroup({
   selectedIds: Set<string>
   rowFailures: Record<string, string>
   onToggleSelected: (worktreeId: string) => void
-  onView: (worktreeId: string) => void
+  onView: (candidate: WorkspaceCleanupCandidate) => void
   onKeep: (candidate: WorkspaceCleanupCandidate) => void
   onSleep: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
@@ -549,7 +551,7 @@ function CandidateRow({
   selected: boolean
   failure?: string
   onToggleSelected: (worktreeId: string) => void
-  onView: (worktreeId: string) => void
+  onView: (candidate: WorkspaceCleanupCandidate) => void
   onKeep: (candidate: WorkspaceCleanupCandidate) => void
   onSleep: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
@@ -634,7 +636,7 @@ function CandidateRow({
           ) : null}
         </div>
         <div className="col-start-2 flex flex-wrap items-center gap-1.5 lg:col-start-auto lg:justify-end">
-          <Button variant="ghost" size="xs" onClick={() => onView(candidate.worktreeId)}>
+          <Button variant="ghost" size="xs" onClick={() => onView(candidate)}>
             <Search className="size-3.5" />
             View
           </Button>

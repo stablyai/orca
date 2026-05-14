@@ -29,12 +29,20 @@ export type WorkspaceCleanupRemoveResult = {
   failures: WorkspaceCleanupFailure[]
 }
 
+type WorkspaceCleanupViewedCandidate = {
+  viewedAt: number
+  fingerprint: string
+  wasSuggested: boolean
+}
+
 export type WorkspaceCleanupSlice = {
   workspaceCleanupScan: WorkspaceCleanupScanResult | null
   workspaceCleanupLoading: boolean
   workspaceCleanupError: string | null
   workspaceCleanupDismissals: Record<string, WorkspaceCleanupDismissal>
+  workspaceCleanupViewedCandidates: Record<string, WorkspaceCleanupViewedCandidate>
   scanWorkspaceCleanup: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
+  markWorkspaceCleanupCandidateViewed: (candidate: WorkspaceCleanupCandidate) => void
   dismissWorkspaceCleanupCandidates: (
     candidates: readonly WorkspaceCleanupCandidate[]
   ) => Promise<void>
@@ -49,6 +57,7 @@ type EnrichOptions = {
 }
 
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
+const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
 
 const SHELL_PROCESS_NAMES = new Set([
   'bash',
@@ -86,6 +95,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   workspaceCleanupLoading: false,
   workspaceCleanupError: null,
   workspaceCleanupDismissals: {},
+  workspaceCleanupViewedCandidates: {},
 
   scanWorkspaceCleanup: async (args) => {
     set({ workspaceCleanupLoading: true, workspaceCleanupError: null })
@@ -100,6 +110,19 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       set({ workspaceCleanupError: message, workspaceCleanupLoading: false })
       throw error
     }
+  },
+
+  markWorkspaceCleanupCandidateViewed: (candidate) => {
+    set((state) => ({
+      workspaceCleanupViewedCandidates: {
+        ...state.workspaceCleanupViewedCandidates,
+        [candidate.worktreeId]: {
+          viewedAt: Date.now(),
+          fingerprint: candidate.fingerprint,
+          wasSuggested: candidate.tier === 'ready' && canSelectWorkspaceCleanupCandidate(candidate)
+        }
+      }
+    }))
   },
 
   dismissWorkspaceCleanupCandidates: async (candidates) => {
@@ -219,8 +242,9 @@ async function enrichWorkspaceCleanupCandidate(
     (entry) => entry.worktreeId === candidate.worktreeId && entry.entry.state === 'done'
   ).length
   const blockers = candidate.blockers.filter((blocker) => blocker !== 'dismissed')
+  const preserveCleanupInspection = shouldPreserveCleanupInspection(candidate, state)
 
-  if (state.activeWorktreeId === candidate.worktreeId) {
+  if (state.activeWorktreeId === candidate.worktreeId && !preserveCleanupInspection) {
     blockers.push('active-workspace')
   }
   if (dirtyEditorBuffers.length > 0) {
@@ -246,6 +270,7 @@ async function enrichWorkspaceCleanupCandidate(
   if (
     hasVisibleContext &&
     !hasStrongCompletion &&
+    !preserveCleanupInspection &&
     lastVisitedAt > 0 &&
     Date.now() - lastVisitedAt <= RECENT_VISIBLE_CONTEXT_MS
   ) {
@@ -267,6 +292,19 @@ async function enrichWorkspaceCleanupCandidate(
   return options.applyDismissals === false
     ? enriched
     : applyDismissal(enriched, state.workspaceCleanupDismissals)
+}
+
+function shouldPreserveCleanupInspection(
+  candidate: WorkspaceCleanupCandidate,
+  state: AppState
+): boolean {
+  const viewed = state.workspaceCleanupViewedCandidates[candidate.worktreeId]
+  if (!viewed?.wasSuggested || viewed.fingerprint !== candidate.fingerprint) {
+    return false
+  }
+  // Why: View is part of cleanup review. It should not make the same
+  // suggested row vanish on the next scan, but this exception must expire.
+  return Date.now() - viewed.viewedAt <= VIEWED_FROM_CLEANUP_MS
 }
 
 function applyDismissal(
