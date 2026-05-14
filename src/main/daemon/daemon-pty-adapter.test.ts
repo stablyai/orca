@@ -183,6 +183,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await waitFor(() => dataPayloads.length > 0)
       expect(dataPayloads[0]).toEqual({ id, data: 'hello' })
     })
+
+    it('coalesces burst data events before serializing daemon stream output', async () => {
+      const dataPayloads: { id: string; data: string }[] = []
+      adapter.onData((payload) => dataPayloads.push(payload))
+
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess._simulateData('a')
+      lastSubprocess._simulateData('b')
+      lastSubprocess._simulateData('c')
+
+      await waitFor(() => dataPayloads.length > 0)
+      expect(dataPayloads).toEqual([{ id, data: 'abc' }])
+    })
   })
 
   describe('onExit', () => {
