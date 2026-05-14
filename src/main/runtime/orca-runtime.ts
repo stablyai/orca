@@ -4943,6 +4943,7 @@ export class OrcaRuntimeService {
     baseBranch?: string
     linkedIssue?: number | null
     linkedPR?: number | null
+    linkedLinearIssue?: string
     comment?: string
     displayName?: string
     sparseCheckout?: { directories: string[]; presetId?: string }
@@ -5100,6 +5101,9 @@ export class OrcaRuntimeService {
         : {}),
       ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
       ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+      ...(args.linkedLinearIssue !== undefined
+        ? { linkedLinearIssue: args.linkedLinearIssue }
+        : {}),
       ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {})
     })

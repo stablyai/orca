@@ -271,7 +271,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedIssue,
     linkedPR,
     pushTarget,
-    createdWithAgent
+    createdWithAgent,
+    linkedLinearIssue
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -296,7 +297,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedIssue !== undefined ? { linkedIssue } : {}),
             ...(linkedPR !== undefined ? { linkedPR } : {}),
             ...(pushTarget ? { pushTarget } : {}),
-            ...(createdWithAgent ? { createdWithAgent } : {})
+            ...(createdWithAgent ? { createdWithAgent } : {}),
+            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -315,7 +317,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedIssue !== undefined ? { linkedIssue } : {}),
                     ...(linkedPR !== undefined ? { linkedPR } : {}),
                     ...(pushTarget ? { pushTarget } : {}),
-                    ...(createdWithAgent ? { createdWithAgent } : {})
+                    ...(createdWithAgent ? { createdWithAgent } : {}),
+                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
                   },
                   { timeoutMs: 10 * 60_000 }
                 )

@@ -38,6 +38,7 @@ const WorktreeCreate = z.object({
   baseBranch: OptionalString,
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
+  linkedLinearIssue: z.string().optional(),
   comment: OptionalString,
   displayName: OptionalString,
   sparseCheckout: z
@@ -155,6 +156,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         baseBranch: params.baseBranch,
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
+        linkedLinearIssue: params.linkedLinearIssue,
         comment: params.comment,
         displayName: params.displayName,
         sparseCheckout: params.sparseCheckout,

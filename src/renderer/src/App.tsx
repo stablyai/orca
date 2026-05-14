@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
 import { useShallow } from 'zustand/react/shallow'
-import { useIpcEvents } from './hooks/useIpcEvents'
+import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
@@ -84,6 +84,7 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
+import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -172,6 +173,36 @@ const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
 // past first-launch. The gate `shouldShowOnboarding` lives in its own tiny
 // module so no eager import path pulls OnboardingFlow into the main chunk.
 const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
+
+function applyRemoteWorkspacePatchStatus(
+  targetId: string,
+  result: RemoteWorkspacePatchResult
+): void {
+  const store = useAppStore.getState()
+  if (result.ok) {
+    store.setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'synced',
+      direction: 'push',
+      revision: result.snapshot.revision,
+      updatedAt: result.snapshot.updatedAt,
+      lastSyncedAt: Date.now(),
+      message: 'Workspace uploaded'
+    })
+    return
+  }
+  store.setRemoteWorkspaceSyncStatus(targetId, {
+    phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
+    direction: 'push',
+    revision: result.snapshot?.revision,
+    updatedAt: result.snapshot?.updatedAt,
+    lastSyncedAt: Date.now(),
+    message:
+      result.message ??
+      (result.reason === 'stale-revision'
+        ? 'Workspace changed on another device'
+        : 'Remote workspace sync unavailable')
+  })
+}
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
@@ -661,7 +692,32 @@ function App(): React.JSX.Element {
   useEffect(() => {
     return createSessionWriteSubscriber({
       store: useAppStore,
-      persist: (payload) => void window.api.session.set(payload)
+      shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
+      persist: (payload) => {
+        void window.api.session.set(payload)
+        const state = useAppStore.getState()
+        const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
+          (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
+        )
+        if (hydratedTargetIds.length > 0) {
+          void window.api.remoteWorkspace
+            ?.setForConnectedTargets({ session: payload, hydratedTargetIds })
+            .then((results) => {
+              for (const { targetId, result } of results) {
+                applyRemoteWorkspacePatchStatus(targetId, result)
+              }
+            })
+            .catch((err) => {
+              for (const targetId of hydratedTargetIds) {
+                useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+                  phase: 'error',
+                  direction: 'push',
+                  message: err instanceof Error ? err.message : 'Workspace upload failed'
+                })
+              }
+            })
+        }
+      }
     })
   }, [])
 

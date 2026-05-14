@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: GitHub client fixtures cover local and SSH repo identity paths in one suite so mocked CLI behavior stays consistent. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -6,7 +7,10 @@ const {
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
   getOwnerRepoForRemoteMock,
+  getRemoteUrlForRepoMock,
   gitExecFileAsyncMock,
+  ghRepoExecOptionsMock,
+  githubRepoContextMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
@@ -15,7 +19,15 @@ const {
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
   getOwnerRepoForRemoteMock: vi.fn(),
+  getRemoteUrlForRepoMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  ghRepoExecOptionsMock: vi.fn((context) =>
+    context.connectionId ? {} : { cwd: context.repoPath }
+  ),
+  githubRepoContextMock: vi.fn((repoPath, connectionId) => ({
+    repoPath,
+    connectionId: connectionId ?? null
+  })),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -26,7 +38,10 @@ vi.mock('./gh-utils', () => ({
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
+  getRemoteUrlForRepo: getRemoteUrlForRepoMock,
   gitExecFileAsync: gitExecFileAsyncMock,
+  ghRepoExecOptions: ghRepoExecOptionsMock,
+  githubRepoContext: githubRepoContextMock,
   parseGitHubOwnerRepo: (remoteUrl: string) => {
     const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
     return match ? { owner: match[1], repo: match[2] } : null
@@ -49,7 +64,10 @@ describe('getPRForBranch', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
+    getRemoteUrlForRepoMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    ghRepoExecOptionsMock.mockClear()
+    githubRepoContextMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -79,7 +97,7 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'refs/heads/feature/test')
 
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root')
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', undefined)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'pr',

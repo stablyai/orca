@@ -1696,6 +1696,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     onSet: (cb: (data: AgentStatusSetData) => void) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
+    remoteWorkspace?: Record<string, unknown>
   }): Record<string, unknown> {
     return {
       api: {
@@ -1785,7 +1786,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onSet: args.onSet,
           getSnapshot: args.getSnapshot ?? vi.fn(() => Promise.resolve([])),
           drop: args.drop ?? vi.fn()
-        }
+        },
+        remoteWorkspace: args.remoteWorkspace
       }
     }
   }
@@ -2021,6 +2023,103 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
     expect(getSnapshot).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('waits for the remote workspace client id before dropping self notifications', async () => {
+    const hydrateWorkspaceSession = vi.fn()
+    const hydrateTabsSession = vi.fn()
+    const hydrateEditorSession = vi.fn()
+    const hydrateBrowserSession = vi.fn()
+    let resolveClientId!: (id: string) => void
+    const clientId = new Promise<string>((resolve) => {
+      resolveClientId = resolve
+    })
+    const onChangedListenerRef: {
+      current:
+        | ((event: {
+            targetId: string
+            sourceClientId?: string
+            snapshot: Record<string, unknown>
+          }) => void)
+        | null
+    } = { current: null }
+    const storeState: StoreLike = buildStoreState({
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/repo', repoId: 'repo-1' }] },
+      hydrateWorkspaceSession,
+      hydrateTabsSession,
+      hydrateEditorSession,
+      hydrateBrowserSession,
+      markRemoteWorkspaceHydrated: vi.fn(),
+      setRemoteWorkspaceSyncStatus: vi.fn(),
+      reconnectPersistedTerminals: vi.fn(() => Promise.resolve())
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        remoteWorkspace: {
+          clientId: () => clientId,
+          onChanged: (cb: typeof onChangedListenerRef.current) => {
+            onChangedListenerRef.current = cb
+            return () => {}
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    onChangedListenerRef.current?.({
+      targetId: 'conn-1',
+      sourceClientId: 'client-self',
+      snapshot: {
+        revision: 1,
+        updatedAt: Date.now(),
+        session: {
+          activeWorktreePath: '/repo',
+          activeTabId: 'tab-1',
+          tabsByWorktreePath: {
+            '/repo': [
+              {
+                id: 'tab-1',
+                ptyId: null,
+                worktreePath: '/repo',
+                title: 'Remote',
+                customTitle: null,
+                color: null,
+                sortOrder: 1,
+                createdAt: 1
+              }
+            ]
+          },
+          terminalLayoutsByTabId: {}
+        }
+      }
+    })
+    await Promise.resolve()
+    expect(hydrateWorkspaceSession).not.toHaveBeenCalled()
+
+    resolveClientId('client-self')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(hydrateWorkspaceSession).not.toHaveBeenCalled()
+    expect(hydrateTabsSession).not.toHaveBeenCalled()
+    expect(hydrateEditorSession).not.toHaveBeenCalled()
+    expect(hydrateBrowserSession).not.toHaveBeenCalled()
   })
 
   it('silently discards snapshot entries whose tabs are still unknown', async () => {

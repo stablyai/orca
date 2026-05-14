@@ -9,10 +9,15 @@ import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constant
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
-import type { UpdateStatus } from '../../../shared/types'
+import type { UpdateStatus, WorkspaceSessionState } from '../../../shared/types'
+import type {
+  RemoteWorkspacePatchResult,
+  RemoteWorkspaceSnapshot
+} from '../../../shared/remote-workspace-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type { RuntimeTerminalDriverState } from '../../../shared/runtime-types'
+import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
@@ -38,10 +43,276 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
 const ZOOM_STEP = 0.5
+let remoteWorkspaceSnapshotApplyDepth = 0
+let remoteWorkspaceSnapshotWriteSuppressUntil = 0
+const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
+
+export function isRemoteWorkspaceSnapshotApplyInProgress(): boolean {
+  return (
+    remoteWorkspaceSnapshotApplyDepth > 0 || Date.now() < remoteWorkspaceSnapshotWriteSuppressUntil
+  )
+}
+
+async function waitForWorkspaceSessionReady(): Promise<boolean> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (useAppStore.getState().workspaceSessionReady) {
+      return true
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 100))
+  }
+  return useAppStore.getState().workspaceSessionReady
+}
+
+async function prepareRemoteWorkspaceTarget(targetId: string): Promise<boolean> {
+  if (!(await waitForWorkspaceSessionReady())) {
+    return false
+  }
+  const store = useAppStore.getState()
+  let repos = store.repos.filter((repo) => repo.connectionId === targetId)
+  if (repos.length === 0) {
+    await store.fetchRepos()
+    repos = useAppStore.getState().repos.filter((repo) => repo.connectionId === targetId)
+  }
+  await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+  return true
+}
+
+function targetRepoIds(targetId: string): Set<string> {
+  return new Set(
+    useAppStore
+      .getState()
+      .repos.filter((repo) => repo.connectionId === targetId)
+      .map((repo) => repo.id)
+  )
+}
+
+function targetWorktreeIds(targetId: string): Set<string> {
+  const repoIds = targetRepoIds(targetId)
+  return new Set(
+    Object.values(useAppStore.getState().worktreesByRepo)
+      .flat()
+      .filter((worktree) => repoIds.has(worktree.repoId))
+      .map((worktree) => worktree.id)
+  )
+}
+
+function mergeRemoteWorkspaceSession(
+  current: WorkspaceSessionState,
+  remote: WorkspaceSessionState,
+  targetId: string
+): WorkspaceSessionState {
+  const replaceWorktreeIds = targetWorktreeIds(targetId)
+  const remoteTabIds = new Set(
+    Object.values(remote.tabsByWorktree)
+      .flat()
+      .map((tab) => tab.id)
+  )
+  const replacedTabIds = new Set([
+    ...remoteTabIds,
+    ...Object.entries(current.tabsByWorktree)
+      .filter(([worktreeId]) => replaceWorktreeIds.has(worktreeId))
+      .flatMap(([, tabs]) => tabs.map((tab) => tab.id))
+  ])
+  const omitTargetWorktrees = <T>(record: Record<string, T> | undefined): Record<string, T> =>
+    Object.fromEntries(
+      Object.entries(record ?? {}).filter(([worktreeId]) => !replaceWorktreeIds.has(worktreeId))
+    )
+
+  return {
+    ...current,
+    activeRepoId:
+      remote.activeRepoId ??
+      (current.activeWorktreeId && replaceWorktreeIds.has(current.activeWorktreeId)
+        ? null
+        : current.activeRepoId),
+    activeWorktreeId:
+      remote.activeWorktreeId ??
+      (current.activeWorktreeId && replaceWorktreeIds.has(current.activeWorktreeId)
+        ? null
+        : current.activeWorktreeId),
+    activeTabId:
+      remote.activeTabId ??
+      (current.activeTabId && replacedTabIds.has(current.activeTabId) ? null : current.activeTabId),
+    tabsByWorktree: {
+      ...omitTargetWorktrees(current.tabsByWorktree),
+      ...remote.tabsByWorktree
+    },
+    terminalLayoutsByTabId: {
+      ...Object.fromEntries(
+        Object.entries(current.terminalLayoutsByTabId).filter(
+          ([tabId]) => !replacedTabIds.has(tabId)
+        )
+      ),
+      ...remote.terminalLayoutsByTabId
+    },
+    activeWorktreeIdsOnShutdown: [
+      ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
+      ...(remote.activeWorktreeIdsOnShutdown ?? [])
+    ],
+    activeTabIdByWorktree: {
+      ...omitTargetWorktrees(current.activeTabIdByWorktree),
+      ...remote.activeTabIdByWorktree
+    },
+    remoteSessionIdsByTabId: {
+      ...Object.fromEntries(
+        Object.entries(current.remoteSessionIdsByTabId ?? {}).filter(
+          ([tabId]) => !replacedTabIds.has(tabId)
+        )
+      ),
+      ...remote.remoteSessionIdsByTabId
+    },
+    lastVisitedAtByWorktreeId: {
+      ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
+      ...remote.lastVisitedAtByWorktreeId
+    }
+  }
+}
+
+async function applyRemoteWorkspaceSnapshot(
+  targetId: string,
+  snapshot: RemoteWorkspaceSnapshot
+): Promise<void> {
+  if (!(await prepareRemoteWorkspaceTarget(targetId))) {
+    throw new Error('Workspace sync waited for local session hydration and timed out')
+  }
+  const worktreeIds = targetWorktreeIds(targetId)
+  const localByPath = new Map(
+    Array.from(worktreeIds).map((worktreeId) => {
+      const separator = worktreeId.indexOf('::')
+      return [separator === -1 ? worktreeId : worktreeId.slice(separator + 2), worktreeId] as const
+    })
+  )
+  const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
+    resolveWorktreeId: (worktreePath) => localByPath.get(worktreePath) ?? null
+  })
+  const current = buildWorkspaceSessionPayload(useAppStore.getState())
+  const merged = mergeRemoteWorkspaceSession(current, remoteSession, targetId)
+  const store = useAppStore.getState()
+  remoteWorkspaceSnapshotApplyDepth += 1
+  try {
+    store.hydrateWorkspaceSession(merged)
+    store.hydrateTabsSession(merged)
+    store.hydrateEditorSession(merged)
+    store.hydrateBrowserSession(merged)
+    store.markRemoteWorkspaceHydrated(targetId)
+    store.setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'synced',
+      direction: 'pull',
+      revision: snapshot.revision,
+      updatedAt: snapshot.updatedAt,
+      lastSyncedAt: Date.now(),
+      message: 'Workspace synced'
+    })
+    await useAppStore.getState().reconnectPersistedTerminals()
+  } finally {
+    // Why: remote terminal reattach can update pty ids and titles just after
+    // hydration. Those local side effects came from the remote snapshot and
+    // must not echo back as a fresh workspace revision.
+    remoteWorkspaceSnapshotWriteSuppressUntil =
+      Date.now() + REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS
+    remoteWorkspaceSnapshotApplyDepth -= 1
+  }
+}
+
+async function syncRemoteWorkspaceAfterConnect(targetId: string): Promise<void> {
+  const store = useAppStore.getState()
+  if (store.sshTargetRemoteSyncEnabled.get(targetId) !== true) {
+    return
+  }
+  if (!(await prepareRemoteWorkspaceTarget(targetId))) {
+    store.setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'error',
+      direction: 'pull',
+      message: 'Workspace sync waited for local session hydration and timed out'
+    })
+    return
+  }
+  store.setRemoteWorkspaceSyncStatus(targetId, { phase: 'pulling', direction: 'pull' })
+  const worktreeIds = targetWorktreeIds(targetId)
+  const hasLocalTabs = Array.from(worktreeIds).some(
+    (worktreeId) => (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).length > 0
+  )
+  const snapshot = await window.api.remoteWorkspace.get({ targetId })
+  if (!snapshot) {
+    useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'offline',
+      direction: 'pull',
+      message: 'Remote workspace sync unavailable'
+    })
+    return
+  }
+  if (snapshot.revision > 0) {
+    await applyRemoteWorkspaceSnapshot(targetId, snapshot)
+    return
+  }
+
+  useAppStore.getState().markRemoteWorkspaceHydrated(targetId)
+  if (hasLocalTabs) {
+    // Why: first connect must read the relay before publishing local tabs.
+    // Otherwise a reconnecting device can overwrite a newer cross-device
+    // workspace snapshot with stale local renderer state.
+    const session = buildWorkspaceSessionPayload(useAppStore.getState())
+    const results = await window.api.remoteWorkspace.setForConnectedTargets({
+      session,
+      hydratedTargetIds: [targetId]
+    })
+    const result = results.find((entry) => entry.targetId === targetId)?.result
+    applyRemoteWorkspacePatchStatus(targetId, result)
+    if (result?.ok) {
+      useAppStore.getState().markRemoteWorkspaceHydrated(targetId)
+    }
+    return
+  }
+  useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+    phase: 'idle',
+    revision: snapshot.revision,
+    updatedAt: snapshot.updatedAt,
+    message: 'No remote workspace yet'
+  })
+}
+
+function applyRemoteWorkspacePatchStatus(
+  targetId: string,
+  result: RemoteWorkspacePatchResult | undefined
+): void {
+  if (!result) {
+    useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'offline',
+      direction: 'push',
+      lastSyncedAt: Date.now(),
+      message: 'Remote workspace sync unavailable'
+    })
+    return
+  }
+  if (result.ok) {
+    useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'synced',
+      direction: 'push',
+      revision: result.snapshot.revision,
+      updatedAt: result.snapshot.updatedAt,
+      lastSyncedAt: Date.now(),
+      message: 'Workspace uploaded'
+    })
+    return
+  }
+  useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+    phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
+    direction: 'push',
+    revision: result.snapshot?.revision,
+    updatedAt: result.snapshot?.updatedAt,
+    lastSyncedAt: Date.now(),
+    message:
+      result.message ??
+      (result.reason === 'stale-revision'
+        ? 'Workspace changed on another device'
+        : 'Remote workspace sync unavailable')
+  })
+}
 
 function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
@@ -905,15 +1176,9 @@ export function useIpcEvents(): void {
     // reflect the correct connected/disconnected state on app launch.
     void (async () => {
       try {
-        const targets = (await window.api.ssh.listTargets()) as {
-          id: string
-          label: string
-        }[]
-        // Why: populate target labels map so WorktreeCard (and other components)
-        // can look up display labels without issuing per-card IPC calls.
-        const labels = new Map<string, string>()
+        const targets = await window.api.ssh.listTargets()
+        useAppStore.getState().setSshTargetsMetadata(targets)
         for (const target of targets) {
-          labels.set(target.id, target.label)
           const state = await window.api.ssh.getState({ targetId: target.id })
           if (state) {
             useAppStore.getState().setSshConnectionState(target.id, state as SshConnectionState)
@@ -934,10 +1199,17 @@ export function useIpcEvents(): void {
                 useAppStore.getState().setPortForwards(target.id, forwards)
                 useAppStore.getState().setDetectedPorts(target.id, detected)
               }
+              if (target.remoteWorkspaceSyncEnabled) {
+                void syncRemoteWorkspaceAfterConnect(target.id).catch((err) => {
+                  useAppStore.getState().setRemoteWorkspaceSyncStatus(target.id, {
+                    phase: 'error',
+                    message: err instanceof Error ? err.message : 'Workspace sync failed'
+                  })
+                })
+              }
             }
           }
         }
-        useAppStore.getState().setSshTargetLabels(labels)
       } catch {
         // SSH may not be configured
       }
@@ -980,11 +1252,7 @@ export function useIpcEvents(): void {
           window.api.ssh
             .listTargets()
             .then((targets) => {
-              const labels = new Map<string, string>()
-              for (const t of targets as { id: string; label: string }[]) {
-                labels.set(t.id, t.label)
-              }
-              useAppStore.getState().setSshTargetLabels(labels)
+              useAppStore.getState().setSshTargetsMetadata(targets)
             })
             .catch(() => {})
         }
@@ -1054,10 +1322,58 @@ export function useIpcEvents(): void {
                 }))
               }
             }
+            void syncRemoteWorkspaceAfterConnect(data.targetId).catch((err) => {
+              useAppStore.getState().setRemoteWorkspaceSyncStatus(data.targetId, {
+                phase: 'error',
+                message: err instanceof Error ? err.message : 'Workspace sync failed'
+              })
+            })
           })
         }
       })
     )
+
+    let remoteWorkspaceClientId: string | null = null
+    let remoteWorkspaceClientIdPromise: Promise<string | null> | null = null
+    const getRemoteWorkspaceClientId = (): Promise<string | null> => {
+      const remoteWorkspace = window.api.remoteWorkspace
+      if (!remoteWorkspace) {
+        return Promise.resolve(null)
+      }
+      if (remoteWorkspaceClientId) {
+        return Promise.resolve(remoteWorkspaceClientId)
+      }
+      remoteWorkspaceClientIdPromise ??= remoteWorkspace
+        .clientId()
+        .then((id) => {
+          remoteWorkspaceClientId = id
+          return id
+        })
+        .catch(() => null)
+      return remoteWorkspaceClientIdPromise
+    }
+    if (window.api.remoteWorkspace) {
+      void getRemoteWorkspaceClientId()
+      unsubs.push(
+        window.api.remoteWorkspace.onChanged((event) => {
+          void (async () => {
+            // Why: relay notifications can race the initial client-id IPC.
+            // Self-originated writes must never bounce back into restore.
+            const clientId = await getRemoteWorkspaceClientId()
+            if (event.sourceClientId && clientId && event.sourceClientId === clientId) {
+              return
+            }
+            await applyRemoteWorkspaceSnapshot(event.targetId, event.snapshot).catch((err) => {
+              useAppStore.getState().setRemoteWorkspaceSyncStatus(event.targetId, {
+                phase: 'error',
+                revision: event.snapshot.revision,
+                message: err instanceof Error ? err.message : 'Failed to apply remote workspace'
+              })
+            })
+          })()
+        })
+      )
+    }
 
     // Zoom handling for menu accelerators and keyboard fallback paths.
     unsubs.push(

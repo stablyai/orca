@@ -461,10 +461,10 @@ function SourceControlInner(): React.JSX.Element {
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const hostedReviewCacheKey =
-    activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
-  const hostedReviewEntry = hostedReviewCacheKey
-    ? hostedReviewCache[hostedReviewCacheKey]
-    : undefined
+    activeRepo && branchName
+      ? getHostedReviewCacheKey(activeRepo.path, branchName, settings, activeRepo.id)
+      : null
+  const hostedReviewEntry = hostedReviewCacheKey ? hostedReviewCache[hostedReviewCacheKey] : undefined
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
     ? (hostedReviewEntry?.data ?? null)
     : null
@@ -477,16 +477,16 @@ function SourceControlInner(): React.JSX.Element {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
     }
-    if (activeRepo.connectionId) {
-      return
-    }
-
     // Why: the Source Control panel renders branch review status directly.
     // When a terminal checkout moves this worktree onto a new branch, we need
     // to fetch that branch's PR/MR immediately instead of waiting for the user
     // to reselect the worktree. The linked ids handle create-from-review
     // worktrees whose local branch differs from the remote head branch.
-    void fetchHostedReviewForBranch(activeRepo.path, branchName, { linkedGitHubPR, linkedGitLabMR })
+    void fetchHostedReviewForBranch(activeRepo.path, branchName, {
+      repoId: activeRepo.id,
+      linkedGitHubPR,
+      linkedGitLabMR
+    })
   }, [
     activeRepo,
     branchName,

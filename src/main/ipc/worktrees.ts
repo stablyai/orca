@@ -377,13 +377,20 @@ export function registerWorktreeHandlers(
       if (!repo) {
         return { error: 'Repo not found' }
       }
-      // Why: remote SSH repos are out of scope in v1. The picker already
-      // disables its PR tab for them — this guard belt-and-suspenders it.
-      if (repo.connectionId) {
-        return { error: 'PR start points are not supported for remote repos yet.' }
-      }
       if (isFolderRepo(repo)) {
         return { error: 'Folder mode does not support creating worktrees.' }
+      }
+      const gitExec = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
+        if (!repo.connectionId) {
+          return gitExecFileAsync(args, { cwd: repo.path })
+        }
+        const provider = getSshGitProvider(repo.connectionId)
+        if (!provider) {
+          throw new Error(
+            'SSH Git provider is not available. Reconnect to this target and try again.'
+          )
+        }
+        return provider.exec(args, repo.path)
       }
 
       let headRefName = args.headRefName?.trim() ?? ''
@@ -395,7 +402,7 @@ export function registerWorktreeHandlers(
         // Why: the caller already knows this is a PR number, so scope the
         // lookup to `type: 'pr'` and skip the speculative issue-first probe
         // that would hit the upstream issue tracker for fork checkouts.
-        const item = await getWorkItem(repo.path, args.prNumber, 'pr')
+        const item = await getWorkItem(repo.path, args.prNumber, 'pr', repo.connectionId ?? null)
         if (!item || item.type !== 'pr') {
           return { error: `PR #${args.prNumber} not found.` }
         }
@@ -409,7 +416,9 @@ export function registerWorktreeHandlers(
       }
       if (isCrossRepository) {
         try {
-          pushTarget = (await getPullRequestPushTarget(repo.path, args.prNumber)) ?? undefined
+          pushTarget =
+            (await getPullRequestPushTarget(repo.path, args.prNumber, repo.connectionId ?? null)) ??
+            undefined
         } catch (error) {
           return {
             error:
@@ -425,7 +434,16 @@ export function registerWorktreeHandlers(
 
       let remote: string
       try {
-        remote = await getDefaultRemote(repo.path)
+        if (repo.connectionId) {
+          const { stdout } = await gitExec(['remote'])
+          remote =
+            stdout
+              .split('\n')
+              .map((line) => line.trim())
+              .find(Boolean) ?? 'origin'
+        } else {
+          remote = await getDefaultRemote(repo.path)
+        }
       } catch (error) {
         return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
       }
@@ -440,7 +458,7 @@ export function registerWorktreeHandlers(
       if (isCrossRepository) {
         const pullRef = `refs/pull/${args.prNumber}/head`
         try {
-          await gitExecFileAsync(['fetch', remote, pullRef], { cwd: repo.path })
+          await gitExec(['fetch', remote, pullRef])
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           return {
@@ -449,9 +467,7 @@ export function registerWorktreeHandlers(
         }
         let sha: string
         try {
-          const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'FETCH_HEAD'], {
-            cwd: repo.path
-          })
+          const { stdout } = await gitExec(['rev-parse', '--verify', 'FETCH_HEAD'])
           sha = stdout.trim()
         } catch {
           return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
@@ -463,10 +479,11 @@ export function registerWorktreeHandlers(
       }
 
       try {
-        await gitExecFileAsync(
-          ['fetch', remote, `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`],
-          { cwd: repo.path }
-        )
+        await gitExec([
+          'fetch',
+          remote,
+          `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`
+        ])
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return {
@@ -476,7 +493,7 @@ export function registerWorktreeHandlers(
 
       const remoteRef = `${remote}/${headRefName}`
       try {
-        await gitExecFileAsync(['rev-parse', '--verify', remoteRef], { cwd: repo.path })
+        await gitExec(['rev-parse', '--verify', remoteRef])
       } catch {
         return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
       }

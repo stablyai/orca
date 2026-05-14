@@ -963,6 +963,7 @@ export type CreateWorktreeArgs = {
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
+  linkedLinearIssue?: string
   pushTarget?: GitPushTarget
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent

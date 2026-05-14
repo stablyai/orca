@@ -128,6 +128,42 @@ describe('GitHub issue source split', () => {
     )
   })
 
+  it('lists SSH repo work items with explicit owner/repo and no local cwd', async () => {
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: { owner: 'stablyai', repo: 'orca' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      stdout: '[]'
+    })
+
+    await listWorkItems('/home/jinwoo/orca', 10, undefined, undefined, 'auto', 'openclaw-2')
+
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'auto', 'openclaw-2')
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'api',
+        '--cache',
+        '120s',
+        'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+      ],
+      {}
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'api',
+        '--cache',
+        '120s',
+        'repos/fork/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'
+      ],
+      {}
+    )
+  })
+
   it('uses upstream for issue-only queries and origin for PR-only queries', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
@@ -332,7 +368,7 @@ describe('GitHub issue source split', () => {
 
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
 
-      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto')
+      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined)
       expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
         1,
         [

@@ -207,6 +207,12 @@ import type {
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type {
+  RemoteWorkspaceChangedEvent,
+  RemoteWorkspaceConnectedClient,
+  RemoteWorkspacePatchResult,
+  RemoteWorkspaceSnapshot
+} from '../shared/remote-workspace-types'
+import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchRequest,
@@ -618,20 +624,30 @@ export type PreloadApi = {
   export: ExportApi
   gh: {
     viewer: () => Promise<GitHubViewer | null>
-    repoSlug: (args: { repoPath: string }) => Promise<{ owner: string; repo: string } | null>
+    repoSlug: (args: {
+      repoPath: string
+      repoId?: string
+    }) => Promise<{ owner: string; repo: string } | null>
     prForBranch: (args: {
       repoPath: string
+      repoId?: string
       branch: string
       linkedPRNumber?: number | null
     }) => Promise<PRInfo | null>
-    issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
+    issue: (args: {
+      repoPath: string
+      repoId?: string
+      number: number
+    }) => Promise<IssueInfo | null>
     workItem: (args: {
       repoPath: string
+      repoId?: string
       number: number
       type?: 'issue' | 'pr'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
     workItemByOwnerRepo: (args: {
       repoPath: string
+      repoId?: string
       owner: string
       repo: string
       number: number
@@ -639,11 +655,13 @@ export type PreloadApi = {
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
     workItemDetails: (args: {
       repoPath: string
+      repoId?: string
       number: number
       type?: 'issue' | 'pr'
     }) => Promise<GitHubWorkItemDetails | null>
     prFileContents: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       path: string
       oldPath?: string
@@ -651,48 +669,65 @@ export type PreloadApi = {
       headSha: string
       baseSha: string
     }) => Promise<GitHubPRFileContents>
-    listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>
+    listIssues: (args: {
+      repoPath: string
+      repoId?: string
+      limit?: number
+    }) => Promise<IssueInfo[]>
     createIssue: (args: {
       repoPath: string
+      repoId?: string
       title: string
       body: string
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
-    countWorkItems: (args: { repoPath: string; query?: string }) => Promise<number>
+    countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
       repoPath: string
+      repoId?: string
       limit?: number
       query?: string
       before?: string
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       headSha?: string
       noCache?: boolean
     }) => Promise<PRCheckDetail[]>
     prComments: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       noCache?: boolean
     }) => Promise<PRComment[]>
     resolveReviewThread: (args: {
       repoPath: string
+      repoId?: string
       threadId: string
       resolve: boolean
     }) => Promise<boolean>
-    updatePRTitle: (args: { repoPath: string; prNumber: number; title: string }) => Promise<boolean>
+    updatePRTitle: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      title: string
+    }) => Promise<boolean>
     mergePR: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     updateIssue: (args: {
       repoPath: string
+      repoId?: string
       number: number
       updates: GitHubIssueUpdate
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     addIssueComment: (args: {
       repoPath: string
+      repoId?: string
       number: number
       body: string
       /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
@@ -704,6 +739,7 @@ export type PreloadApi = {
     }) => Promise<GitHubCommentResult>
     addPRReviewCommentReply: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       commentId: number
       body: string
@@ -711,16 +747,26 @@ export type PreloadApi = {
       path?: string
       line?: number
     }) => Promise<GitHubCommentResult>
-    addPRReviewComment: (args: GitHubPRReviewCommentInput) => Promise<GitHubCommentResult>
-    listLabels: (args: { repoPath: string }) => Promise<string[]>
-    listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
+    addPRReviewComment: (
+      args: GitHubPRReviewCommentInput & { repoId?: string }
+    ) => Promise<GitHubCommentResult>
+    listLabels: (args: { repoPath: string; repoId?: string }) => Promise<string[]>
+    listAssignableUsers: (args: {
+      repoPath: string
+      repoId?: string
+    }) => Promise<GitHubAssignableUser[]>
     /**
      * Subscribe to local-mutation broadcasts. Used by the work-item-drawer
      * cache to invalidate entries across windows after a successful mutation.
      * Returns an unsubscribe function.
      */
     onWorkItemMutated: (
-      callback: (payload: { repoPath: string; type: 'issue' | 'pr'; number: number }) => void
+      callback: (payload: {
+        repoPath: string
+        repoId?: string
+        type: 'issue' | 'pr'
+        number: number
+      }) => void
     ) => () => void
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
@@ -1051,6 +1097,19 @@ export type PreloadApi = {
     get: () => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState) => Promise<void>
     setSync: (args: WorkspaceSessionState) => void
+  }
+  remoteWorkspace: {
+    get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
+    setForConnectedTargets: (args: {
+      session: WorkspaceSessionState
+      hydratedTargetIds?: string[]
+    }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
+    listEnabledConnectedTargets: () => Promise<string[]>
+    listConnectedClients: (args?: {
+      targetIds?: string[]
+    }) => Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]>
+    clientId: () => Promise<string>
+    onChanged: (callback: (event: RemoteWorkspaceChangedEvent) => void) => () => void
   }
   updater: {
     getVersion: () => Promise<string>

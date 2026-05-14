@@ -1,7 +1,7 @@
 // Why: Project mode rows carry a GitHub `owner/repo` slug, but Orca's
 // `state.repos` stores only absolute paths. Before any repo-context action
 // (opening the item dialog in repo-backed mode, launching a worktree) can
-// dispatch correctly, we need a renderer-side index mapping slug → Repo.
+// dispatch correctly, we need a renderer-side index mapping slug → Repo[].
 //
 // The index is built lazily from `window.api.gh.repoSlug({ repoPath })` —
 // the main-process resolver that reads `git remote` and classifies the
@@ -19,11 +19,11 @@ import type { Repo } from '../../../shared/types'
 import type { GlobalSettings } from '../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
-/** Lowercased `owner/repo` → Repo. Case folded because GitHub treats slugs
+/** Lowercased `owner/repo` → Repo[]. Case folded because GitHub treats slugs
  *  case-insensitively but displays the canonical casing; the lookup side
  *  uses the row's `content.repository` which may or may not match the
  *  canonical casing depending on when the project item was indexed. */
-type SlugIndex = Map<string, Repo>
+type SlugIndex = Map<string, Repo[]>
 
 /** Module-scope cache keyed by runtime scope + repo.id. A Repo that has already failed
  *  resolution is not retried on re-mount; the value in the map is `null`
@@ -73,7 +73,7 @@ async function resolveRepoSlug(
             { repo: repo.id },
             { timeoutMs: 30_000 }
           )
-        : await window.api.gh.repoSlug({ repoPath: repo.path })
+        : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
     if (!result) {
       slugByRepoId.set(cacheKey, null)
       return null
@@ -109,16 +109,16 @@ async function buildIndex(
   )
   for (const { repo, slug } of results) {
     if (slug) {
-      next.set(slug, repo)
+      next.set(slug, [...(next.get(slug) ?? []), repo])
     }
   }
   return next
 }
 
-/** Returns a lookup function `(slug) => Repo | null`. The lookup is stable
+/** Returns a lookup function `(slug) => Repo[]`. The lookup is stable
  *  across renders until `state.repos` changes; callers in deep trees can
  *  treat it as referentially equal inside a single render cycle. */
-export function useRepoSlugIndex(): (slug: string | null | undefined) => Repo | null {
+export function useRepoSlugIndex(): (slug: string | null | undefined) => Repo[] {
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const [index, setIndex] = useState<SlugIndex>(() => new Map())
@@ -138,11 +138,11 @@ export function useRepoSlugIndex(): (slug: string | null | undefined) => Repo | 
 
   return useMemo(
     () =>
-      (slug: string | null | undefined): Repo | null => {
+      (slug: string | null | undefined): Repo[] => {
         if (!slug) {
-          return null
+          return []
         }
-        return index.get(slug.toLowerCase()) ?? null
+        return index.get(slug.toLowerCase()) ?? []
       },
     [index]
   )

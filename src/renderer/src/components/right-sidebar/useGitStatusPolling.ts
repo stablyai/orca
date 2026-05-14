@@ -19,12 +19,19 @@ export function useGitStatusPolling(): void {
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const repoMap = useRepoMap()
 
   const worktreePath = activeWorktree?.path ?? null
   const activeRepoId = activeWorktree?.repoId ?? null
   const activeRepo = useRepoById(activeRepoId)
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
+  const activeConnectionId = activeRepo?.connectionId ?? null
+  const isConnectionReady = useCallback(
+    (connectionId: string | null | undefined): boolean =>
+      !connectionId || sshConnectionStates.get(connectionId)?.status === 'connected',
+    [sshConnectionStates]
+  )
 
   // Why: build a list of non-active worktrees that still have a known conflict
   // operation (merge/rebase/cherry-pick). These need lightweight polling so
@@ -52,6 +59,9 @@ export function useGitStatusPolling(): void {
     if (!activeWorktreeId || !worktreePath || !activeRepoSupportsGit) {
       return
     }
+    if (!isConnectionReady(activeConnectionId)) {
+      return
+    }
     try {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       await refreshGitStatusForWorktree({
@@ -71,8 +81,10 @@ export function useGitStatusPolling(): void {
     }
   }, [
     activeRepoSupportsGit,
+    activeConnectionId,
     activeWorktreeId,
     fetchUpstreamStatus,
+    isConnectionReady,
     worktreePath,
     setGitStatus,
     setUpstreamStatus,
@@ -111,11 +123,17 @@ export function useGitStatusPolling(): void {
     const pollStale = async (): Promise<void> => {
       for (const { id, path } of staleConflictWorktrees) {
         try {
+          const connectionId = getConnectionId(id) ?? undefined
+          // Why: after explicit SSH disconnect the provider is intentionally
+          // gone; keep remote polling quiet until the target reconnects.
+          if (!isConnectionReady(connectionId)) {
+            continue
+          }
           const op = (await getRuntimeGitConflictOperation({
             settings: useAppStore.getState().settings,
             worktreeId: id,
             worktreePath: path,
-            connectionId: getConnectionId(id) ?? undefined
+            connectionId
           })) as GitConflictOperation
           setConflictOperation(id, op)
         } catch {
@@ -136,5 +154,5 @@ export function useGitStatusPolling(): void {
       clearInterval(intervalId)
       window.removeEventListener('focus', onFocus)
     }
-  }, [staleConflictWorktrees, setConflictOperation])
+  }, [staleConflictWorktrees, setConflictOperation, isConnectionReady])
 }

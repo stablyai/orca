@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeDeleteWithToast } from '../sidebar/delete-worktree-flow'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 const MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 
@@ -40,20 +39,12 @@ export default function PRActions({
       setMergeError(null)
       setMergeMenuOpen(false)
       try {
-        const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-        const result =
-          target.kind === 'environment'
-            ? await callRuntimeRpc<{ ok: true } | { ok: false; error: string }>(
-                target,
-                'github.mergePR',
-                { repo: repo.id, prNumber: pr.number, method },
-                { timeoutMs: 30_000 }
-              )
-            : await window.api.gh.mergePR({
-                repoPath: repo.path,
-                prNumber: pr.number,
-                method
-              })
+        const result = await window.api.gh.mergePR({
+          repoPath: repo.path,
+          repoId: repo.id,
+          prNumber: pr.number,
+          method
+        })
         if (!result.ok) {
           setMergeError(result.error)
         } else {

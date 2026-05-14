@@ -17,7 +17,6 @@ import {
 } from './checks-panel-content'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 export default function ChecksPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
@@ -76,7 +75,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // Find active worktree and repo
   const branch = activeWorktree ? activeWorktree.branch.replace(/^refs\/heads\//, '') : ''
   const isFolder = repo ? isFolderRepo(repo) : false
-  const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
+  const prCacheKey = repo && branch ? `${repo.id}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
   const prNumber = pr?.number ?? null
   const conflictOperation = activeWorktreeId
@@ -89,8 +88,8 @@ export default function ChecksPanel(): React.JSX.Element {
   const prFetchedAt = useAppStore((s) =>
     prCacheKey ? s.prCache[prCacheKey]?.fetchedAt : undefined
   )
-  const checksCacheKey = repo && prNumber ? `${repo.path}::pr-checks::${prNumber}` : ''
-  const commentsCacheKey = repo && prNumber ? `${repo.path}::pr-comments::${prNumber}` : ''
+  const checksCacheKey = repo && prNumber ? `${repo.id}::pr-checks::${prNumber}` : ''
+  const commentsCacheKey = repo && prNumber ? `${repo.id}::pr-comments::${prNumber}` : ''
   const checksFetchedAt = useAppStore((s) =>
     checksCacheKey ? s.checksCache[checksCacheKey]?.fetchedAt : undefined
   )
@@ -104,7 +103,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const linkedPR = activeWorktree?.linkedPR ?? null
   useEffect(() => {
     if (repo && !isFolder && branch) {
-      void fetchPRForBranch(repo.path, branch, { linkedPRNumber: linkedPR })
+      void fetchPRForBranch(repo.path, branch, { repoId: repo.id, linkedPRNumber: linkedPR })
     }
   }, [repo, isFolder, branch, linkedPR, fetchPRForBranch])
 
@@ -126,16 +125,18 @@ export default function ChecksPanel(): React.JSX.Element {
     // lists from an older payload.
     conflictSummaryRefreshKeyRef.current = refreshKey
     setConflictDetailsRefreshing(true)
-    void fetchPRForBranch(repo.path, branch, { force: true, linkedPRNumber: linkedPR }).finally(
-      () => {
-        // Why: fetchPRForBranch updates the PR cache before resolving, which
-        // can rerun this effect. Only the current refresh key may clear the
-        // spinner so stale requests don't race newer worktrees/branches.
-        if (conflictSummaryRefreshKeyRef.current === refreshKey) {
-          setConflictDetailsRefreshing(false)
-        }
+    void fetchPRForBranch(repo.path, branch, {
+      force: true,
+      repoId: repo.id,
+      linkedPRNumber: linkedPR
+    }).finally(() => {
+      // Why: fetchPRForBranch updates the PR cache before resolving, which
+      // can rerun this effect. Only the current refresh key may clear the
+      // spinner so stale requests don't race newer worktrees/branches.
+      if (conflictSummaryRefreshKeyRef.current === refreshKey) {
+        setConflictDetailsRefreshing(false)
       }
-    )
+    })
   }, [repo, isFolder, branch, pr, linkedPR, fetchPRForBranch])
 
   // Fetch checks via cached store method
@@ -151,7 +152,8 @@ export default function ChecksPanel(): React.JSX.Element {
       setChecksLoading(true)
       try {
         const result = await fetchPRChecks(repo.path, targetPRNumber, branch, pr?.headSha, {
-          force
+          force,
+          repoId: repo.id
         })
         setChecks(result)
 
@@ -219,7 +221,7 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       setCommentsLoading(true)
       try {
-        const result = await fetchPRComments(repo.path, targetPRNumber, { force })
+        const result = await fetchPRComments(repo.path, targetPRNumber, { force, repoId: repo.id })
         setComments(result)
       } catch (err) {
         console.warn('Failed to fetch PR comments:', err)
@@ -240,7 +242,7 @@ export default function ChecksPanel(): React.JSX.Element {
     // state after the user switches worktrees, showing the wrong PR's comments.
     let cancelled = false
     setCommentsLoading(true)
-    void fetchPRComments(repo.path, prNumber).then(
+    void fetchPRComments(repo.path, prNumber, { repoId: repo.id }).then(
       (result) => {
         if (!cancelled) {
           setComments(result)
@@ -267,6 +269,7 @@ export default function ChecksPanel(): React.JSX.Element {
     try {
       const refreshedPR = await fetchPRForBranch(repo.path, branch, {
         force: true,
+        repoId: repo.id,
         linkedPRNumber: linkedPR
       })
       if (refreshedPR) {
@@ -279,7 +282,7 @@ export default function ChecksPanel(): React.JSX.Element {
           refreshedPR.number,
           branch,
           refreshedPR.headSha,
-          { force: true }
+          { force: true, repoId: repo.id }
         ).then(
           (result) => {
             setChecks(result)
@@ -378,23 +381,19 @@ export default function ChecksPanel(): React.JSX.Element {
     }
     setTitleSaving(true)
     try {
-      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-      const ok =
-        target.kind === 'environment'
-          ? await callRuntimeRpc<boolean>(
-              target,
-              'github.updatePRTitle',
-              { repo: repo.id, prNumber: pr.number, title: titleDraft.trim() },
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.updatePRTitle({
-              repoPath: repo.path,
-              prNumber: pr.number,
-              title: titleDraft.trim()
-            })
+      const ok = await window.api.gh.updatePRTitle({
+        repoPath: repo.path,
+        repoId: repo.id,
+        prNumber: pr.number,
+        title: titleDraft.trim()
+      })
       if (ok) {
         // Re-fetch PR to get updated title
-        await fetchPRForBranch(repo.path, branch, { force: true, linkedPRNumber: linkedPR })
+        await fetchPRForBranch(repo.path, branch, {
+          force: true,
+          repoId: repo.id,
+          linkedPRNumber: linkedPR
+        })
       }
     } finally {
       setTitleSaving(false)
@@ -419,14 +418,16 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!repo || !prNumber) {
         return
       }
-      void resolveReviewThread(repo.path, prNumber, threadId, resolve).then((ok) => {
-        if (ok) {
-          // Update local state to match the optimistic store update
-          setComments((prev) =>
-            prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
-          )
+      void resolveReviewThread(repo.path, prNumber, threadId, resolve, { repoId: repo.id }).then(
+        (ok) => {
+          if (ok) {
+            // Update local state to match the optimistic store update
+            setComments((prev) =>
+              prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
+            )
+          }
         }
-      })
+      )
     },
     [repo, prNumber, resolveReviewThread]
   )
@@ -434,7 +435,11 @@ export default function ChecksPanel(): React.JSX.Element {
   // Refresh PR (passed to PRActions)
   const handleRefreshPR = useCallback(async () => {
     if (repo && branch) {
-      await fetchPRForBranch(repo.path, branch, { force: true, linkedPRNumber: linkedPR })
+      await fetchPRForBranch(repo.path, branch, {
+        force: true,
+        repoId: repo.id,
+        linkedPRNumber: linkedPR
+      })
     }
   }, [repo, branch, linkedPR, fetchPRForBranch])
 

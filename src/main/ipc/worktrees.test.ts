@@ -427,20 +427,23 @@ describe('registerWorktreeHandlers', () => {
       repoId: 'repo-1',
       name: 'improve-dashboard',
       linkedIssue: 123,
-      linkedPR: 456
+      linkedPR: 456,
+      linkedLinearIssue: 'ENG-123'
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
         linkedIssue: 123,
-        linkedPR: 456
+        linkedPR: 456,
+        linkedLinearIssue: 'ENG-123'
       })
     )
     expect(result).toEqual({
       worktree: expect.objectContaining({
         linkedIssue: 123,
-        linkedPR: 456
+        linkedPR: 456,
+        linkedLinearIssue: 'ENG-123'
       })
     })
   })
@@ -602,7 +605,8 @@ describe('registerWorktreeHandlers', () => {
       name: 'improve-dashboard',
       linkedIssue: 123,
       linkedPR: 456,
-      createdWithAgent: 'codex'
+      createdWithAgent: 'codex',
+      linkedLinearIssue: 'ENG-123'
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -610,14 +614,16 @@ describe('registerWorktreeHandlers', () => {
       expect.objectContaining({
         linkedIssue: 123,
         linkedPR: 456,
-        createdWithAgent: 'codex'
+        createdWithAgent: 'codex',
+        linkedLinearIssue: 'ENG-123'
       })
     )
     expect(result).toEqual({
       worktree: expect.objectContaining({
         linkedIssue: 123,
         linkedPR: 456,
-        createdWithAgent: 'codex'
+        createdWithAgent: 'codex',
+        linkedLinearIssue: 'ENG-123'
       })
     })
   })

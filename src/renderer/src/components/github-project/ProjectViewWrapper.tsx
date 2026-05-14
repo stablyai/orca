@@ -317,6 +317,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const [dialogRepoItem, setDialogRepoItem] = useState<{
     workItem: GitHubWorkItem
     repoPath: string
+    repoId: string
     origin: GitHubItemDialogProjectOrigin
   } | null>(null)
   // Why: the slug dialog is only opened for rows whose repo isn't registered
@@ -405,11 +406,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         }
         return
       }
-      const matched = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matches = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matched = matches.length === 1 ? matches[0] : null
       if (matched) {
         const workItem = buildWorkItem(row, matched.id)
         if (workItem) {
-          setDialogRepoItem({ workItem, repoPath: matched.path, origin })
+          setDialogRepoItem({ workItem, repoPath: matched.path, repoId: matched.id, origin })
           return
         }
       }
@@ -428,7 +430,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       if (!origin) {
         return
       }
-      const matched = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matches = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matched = matches.length === 1 ? matches[0] : null
       if (!matched) {
         setRepoNotInOrca({
           owner: origin.owner,
@@ -700,6 +703,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       <GitHubItemDialog
         workItem={dialogRepoItem?.workItem ?? null}
         repoPath={dialogRepoItem?.repoPath ?? null}
+        repoId={dialogRepoItem?.repoId ?? null}
         projectOrigin={dialogRepoItem?.origin}
         onUse={(item) => {
           const current = dialogRepoItem
