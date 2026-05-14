@@ -117,7 +117,8 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         <div className="space-y-0.5">
           <Label>Dictation Mode</Label>
           <p className="text-xs text-muted-foreground">
-            Toggle: press once to start, again to stop. Hold: dictate while key is held.
+            Toggle: press {SHORTCUT_LABEL} once to start, again to stop. Hold: dictate while{' '}
+            {SHORTCUT_LABEL} is held.
           </p>
         </div>
         <div className="flex shrink-0 items-center rounded-md border border-border/60 bg-background/50 p-0.5">
