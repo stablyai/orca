@@ -161,6 +161,9 @@ const Settings = lazy(() => import('./components/settings/Settings'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
+const WorkspaceCleanupDialog = lazy(
+  () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
+)
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
@@ -979,7 +982,8 @@ function App(): React.JSX.Element {
     if (
       activeModal !== 'quick-open' &&
       activeModal !== 'worktree-palette' &&
-      activeModal !== 'new-workspace-composer'
+      activeModal !== 'new-workspace-composer' &&
+      activeModal !== 'workspace-cleanup'
     ) {
       return
     }
@@ -1338,6 +1342,7 @@ function App(): React.JSX.Element {
             whether triggered from Cmd+J or any future entry point. */}
         <Suspense fallback={null}>
           {mountedLazyModalIds.has('new-workspace-composer') ? <NewWorkspaceComposerModal /> : null}
+          {mountedLazyModalIds.has('workspace-cleanup') ? <WorkspaceCleanupDialog /> : null}
         </Suspense>
       </TooltipProvider>
       <Suspense fallback={null}>

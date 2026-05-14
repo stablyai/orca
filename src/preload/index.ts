@@ -477,6 +477,14 @@ const api = {
     }
   },
 
+  workspaceCleanup: {
+    scan: (args?: { worktreeId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('workspaceCleanup:scan', args),
+    dismiss: (args: { dismissals: unknown[] }): Promise<void> =>
+      ipcRenderer.invoke('workspaceCleanup:dismiss', args),
+    clearDismissals: (): Promise<void> => ipcRenderer.invoke('workspaceCleanup:clearDismissals')
+  },
+
   pty: {
     spawn: (opts: {
       cols: number

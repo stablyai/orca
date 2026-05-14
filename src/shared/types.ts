@@ -4,6 +4,7 @@ import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
 import type { VoiceSettings } from './speech-types'
+import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1618,6 +1619,7 @@ export type PersistedUIState = {
    *  using their existing settings paths; this only restores transient tabs
    *  and applied searches. */
   taskResumeState?: TaskResumeState
+  workspaceCleanup?: WorkspaceCleanupUIState
 }
 
 export const PET_SIZE_MIN = 60

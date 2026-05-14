@@ -197,6 +197,11 @@ import type {
   NotesPanelOpenState,
   NotesPanelStateArgs
 } from '../shared/notes-types'
+import type {
+  WorkspaceCleanupDismissArgs,
+  WorkspaceCleanupScanArgs,
+  WorkspaceCleanupScanResult
+} from '../shared/workspace-cleanup'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -496,6 +501,11 @@ export type PreloadApi = {
     onRemoteBranchConflict: (
       callback: (data: WorktreeRemoteBranchConflictEvent) => void
     ) => () => void
+  }
+  workspaceCleanup: {
+    scan: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
+    dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
+    clearDismissals: () => Promise<void>
   }
   pty: {
     spawn: (opts: {
