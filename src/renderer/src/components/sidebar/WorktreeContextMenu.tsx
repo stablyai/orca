@@ -37,6 +37,7 @@ type Props = {
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
@@ -119,30 +120,54 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       worktreeId: worktree.id,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
       currentComment: worktree.comment,
       focus: 'displayName'
     })
-  }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+  }, [
+    worktree.id,
+    worktree.displayName,
+    worktree.linkedIssue,
+    worktree.linkedPR,
+    worktree.comment,
+    openModal
+  ])
 
   const handleLinkIssue = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
       currentComment: worktree.comment,
       focus: 'issue'
     })
-  }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+  }, [
+    worktree.id,
+    worktree.displayName,
+    worktree.linkedIssue,
+    worktree.linkedPR,
+    worktree.comment,
+    openModal
+  ])
 
   const handleComment = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
       currentComment: worktree.comment,
       focus: 'comment'
     })
-  }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+  }, [
+    worktree.id,
+    worktree.displayName,
+    worktree.linkedIssue,
+    worktree.linkedPR,
+    worktree.comment,
+    openModal
+  ])
 
   const handleCloseTerminals = useCallback(async () => {
     await runSleepWorktrees(sleepableWorktrees.map((item) => item.id))
@@ -186,6 +211,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       <div
         className="relative"
         onContextMenuCapture={(event) => {
+          const target = event.target
+          if (
+            target instanceof Element &&
+            target.closest(`[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`)
+          ) {
+            return
+          }
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
           setContextWorktrees(onContextMenuSelect?.(event) ?? selectedWorktrees)
@@ -295,3 +327,4 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
 })
 
 export default WorktreeContextMenu
+export { CLOSE_ALL_CONTEXT_MENUS_EVENT, WORKTREE_CONTEXT_MENU_SCOPE_ATTR }
