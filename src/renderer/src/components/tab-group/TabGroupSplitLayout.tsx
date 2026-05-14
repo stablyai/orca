@@ -5,7 +5,6 @@ import { useAppStore } from '../../store'
 import TabGroupPanel from './TabGroupPanel'
 import TabDragPreview from '../tab-bar/TabDragPreview'
 import { type HoveredTabInsertion, type TabDropZone, useTabDragSplit } from './useTabDragSplit'
-import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
@@ -96,8 +95,7 @@ function SplitNode({
   isTabDragActive,
   activeDropGroupId,
   activeDropZone,
-  hoveredTabInsertion,
-  activityTerminalPortals
+  hoveredTabInsertion
 }: {
   node: TabGroupLayoutNode
   nodePath: string
@@ -112,7 +110,6 @@ function SplitNode({
   activeDropGroupId: string | null
   activeDropZone: TabDropZone | null
   hoveredTabInsertion: HoveredTabInsertion | null
-  activityTerminalPortals: ActivityTerminalPortalTarget[]
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
 
@@ -121,7 +118,6 @@ function SplitNode({
       <TabGroupPanel
         groupId={node.groupId}
         worktreeId={worktreeId}
-        isWorktreeActive={isWorktreeActive}
         // Why: hidden worktrees stay mounted so their PTYs and split layouts
         // survive worktree switches, but only the visible worktree may own the
         // global terminal shortcuts. If an offscreen group's pane stays
@@ -137,7 +133,6 @@ function SplitNode({
         hoveredTabInsertion={
           hoveredTabInsertion?.groupId === node.groupId ? hoveredTabInsertion : null
         }
-        activityTerminalPortals={activityTerminalPortals}
       />
     )
   }
@@ -165,7 +160,6 @@ function SplitNode({
           activeDropGroupId={activeDropGroupId}
           activeDropZone={activeDropZone}
           hoveredTabInsertion={hoveredTabInsertion}
-          activityTerminalPortals={activityTerminalPortals}
         />
       </div>
       <ResizeHandle
@@ -187,7 +181,6 @@ function SplitNode({
           activeDropGroupId={activeDropGroupId}
           activeDropZone={activeDropZone}
           hoveredTabInsertion={hoveredTabInsertion}
-          activityTerminalPortals={activityTerminalPortals}
         />
       </div>
     </div>
@@ -198,14 +191,12 @@ export default function TabGroupSplitLayout({
   layout,
   worktreeId,
   focusedGroupId,
-  isWorktreeActive,
-  activityTerminalPortals = []
+  isWorktreeActive
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
-  activityTerminalPortals?: ActivityTerminalPortalTarget[]
 }): React.JSX.Element {
   const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
   const hasSplits = layout.type === 'split'
@@ -262,7 +253,6 @@ export default function TabGroupSplitLayout({
             activeDropGroupId={dragSplit.hoveredDropTarget?.groupId ?? null}
             activeDropZone={dragSplit.hoveredDropTarget?.zone ?? null}
             hoveredTabInsertion={dragSplit.hoveredTabInsertion}
-            activityTerminalPortals={activityTerminalPortals}
           />
         </div>
       </div>
