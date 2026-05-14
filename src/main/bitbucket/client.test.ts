@@ -122,28 +122,4 @@ describe('Bitbucket client', () => {
       account: 'bitbucket-user'
     })
   })
-
-  it('accepts T3Code-compatible Bitbucket environment variable names', async () => {
-    delete process.env.ORCA_BITBUCKET_EMAIL
-    delete process.env.ORCA_BITBUCKET_API_TOKEN
-    process.env.T3CODE_BITBUCKET_EMAIL = 't3@example.com'
-    process.env.T3CODE_BITBUCKET_API_TOKEN = 't3-token'
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
-      Response.json({ username: 't3-user' })
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(getBitbucketAuthStatus()).resolves.toEqual({
-      configured: true,
-      authenticated: true,
-      account: 't3-user'
-    })
-    const init = fetchMock.mock.calls[0]?.[1]
-    if (!init) {
-      throw new Error('expected request init')
-    }
-    expect((init.headers as Record<string, string>).Authorization).toBe(
-      `Basic ${Buffer.from('t3@example.com:t3-token').toString('base64')}`
-    )
-  })
 })

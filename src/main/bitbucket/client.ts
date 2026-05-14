@@ -31,19 +31,17 @@ type RequestOptions = {
   timeoutMs?: number
 }
 
-function envValue(primary: string, fallback: string): string | null {
-  const value = process.env[primary]?.trim() || process.env[fallback]?.trim() || ''
+function envValue(name: string): string | null {
+  const value = process.env[name]?.trim() ?? ''
   return value.length > 0 ? value : null
 }
 
 function getAuthConfig(): BitbucketAuthConfig {
   return {
-    baseUrl:
-      envValue('ORCA_BITBUCKET_API_BASE_URL', 'T3CODE_BITBUCKET_API_BASE_URL') ??
-      DEFAULT_API_BASE_URL,
-    accessToken: envValue('ORCA_BITBUCKET_ACCESS_TOKEN', 'T3CODE_BITBUCKET_ACCESS_TOKEN'),
-    email: envValue('ORCA_BITBUCKET_EMAIL', 'T3CODE_BITBUCKET_EMAIL'),
-    apiToken: envValue('ORCA_BITBUCKET_API_TOKEN', 'T3CODE_BITBUCKET_API_TOKEN')
+    baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL') ?? DEFAULT_API_BASE_URL,
+    accessToken: envValue('ORCA_BITBUCKET_ACCESS_TOKEN'),
+    email: envValue('ORCA_BITBUCKET_EMAIL'),
+    apiToken: envValue('ORCA_BITBUCKET_API_TOKEN')
   }
 }
 

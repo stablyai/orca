@@ -1,8 +1,6 @@
 // Root-mounted gate for the existing-user first-launch notice. New users
-// get NO first-launch surface — default-on with no first-run notice
-// matches the category norm set by every direct-shape competitor (emdash,
-// Conductor, superset-sh, cmux, T3 Code, Continue, GitButler); see
-// telemetry-plan.md §First-launch experience for the rationale.
+// get NO first-launch surface; see telemetry-plan.md §First-launch experience
+// for the rationale.
 //
 // Cohort marker populated by the migration in `src/main/persistence.ts`:
 //
