@@ -97,6 +97,19 @@ yay -S stably-orca-git
 
 ---
 
+## Companion móvil
+
+Supervisa agentes y uso desde tu teléfono.
+
+<p align="center">
+  <picture><source srcset="assets/feature-wall/mobile-companion-showcase.gif" type="image/gif"><img src="assets/feature-wall/mobile-companion-showcase.jpg" alt="Orca de escritorio con la app companion móvil" width="720" /></picture>
+</p>
+
+- **iOS:** [Descargar Orca IDE desde App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
+- **Android:** [Descargar el APK desde GitHub Releases](https://github.com/stablyai/orca/releases)
+
+---
+
 ## Showcase de funciones
 
 Haz clic en cualquier tarjeta para explorar el flujo de trabajo.
@@ -105,14 +118,15 @@ Haz clic en cualquier tarjeta para explorar el flujo de trabajo.
   <a href="https://www.onorca.dev/docs/model/worktrees"><kbd><strong>Worktrees en paralelo</strong><br/><br/><picture><source srcset="assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="assets/feature-wall/parallel-worktrees.jpg" alt="Orquestación de worktrees en paralelo" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
   <a href="https://www.onorca.dev/docs/terminal"><kbd><strong>Terminales divididas</strong><br/><br/><picture><source srcset="assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="assets/feature-wall/terminal-splits.jpg" alt="Terminales divididas de nivel Ghostty" width="390" /></picture><br/></kbd></a><br/><br/>
   <a href="https://www.onorca.dev/docs/browser/design-mode"><kbd><strong>Modo diseño</strong><br/><br/><picture><source srcset="assets/feature-wall/design-mode.gif" type="image/gif"><img src="assets/feature-wall/design-mode.jpg" alt="Navegador integrado y modo diseño" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/agents/supported"><kbd><strong>Cualquier agente CLI</strong><br/><br/><picture><source srcset="assets/feature-wall/cli-agents.gif" type="image/gif"><img src="assets/feature-wall/cli-agents.jpg" alt="Compatible con cualquier agente CLI" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/ssh"><kbd><strong>Worktrees por SSH</strong><br/><br/><picture><source srcset="assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="assets/feature-wall/ssh-worktrees.jpg" alt="Worktrees remotos por SSH" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/editing/file-explorer"><kbd><strong>Archivos a agentes</strong><br/><br/><picture><source srcset="assets/feature-wall/file-drag.gif" type="image/gif"><img src="assets/feature-wall/file-drag.jpg" alt="Arrastra archivos e imágenes al prompt de un agente" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><kbd><strong>Anotar diffs de IA</strong><br/><br/><picture><source srcset="assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="assets/feature-wall/annotate-diff.jpg" alt="Anotar diffs generados por IA" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/cli/overview"><kbd><strong>Orca CLI</strong><br/><br/><picture><source srcset="assets/feature-wall/orca-cli.gif" type="image/gif"><img src="assets/feature-wall/orca-cli.jpg" alt="Automatiza Orca desde la CLI" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/settings"><kbd><strong>Nativo de teclado</strong><br/><br/><picture><source srcset="assets/feature-wall/keyboard-native.gif" type="image/gif"><img src="assets/feature-wall/keyboard-native.jpg" alt="Flujos de teclado y atajos reasignables" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/agents/usage-tracking"><kbd><strong>Cambio de cuenta y seguimiento de uso</strong><br/><br/><picture><source srcset="assets/feature-wall/codex-accounts.gif" type="image/gif"><img src="assets/feature-wall/codex-accounts.jpg" alt="Cambio de cuenta y seguimiento de uso" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/editing/markdown"><kbd><strong>Previews ricos del repo</strong><br/><br/><picture><source srcset="assets/feature-wall/markdown-editor.gif" type="image/gif"><img src="assets/feature-wall/markdown-editor.jpg" alt="Previsualización de Markdown, imágenes, PDFs y documentos del repo" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/review/linear"><kbd><strong>GitHub y Linear nativos</strong><br/><br/><picture><source srcset="assets/feature-wall/github-linear.gif" type="image/gif"><img src="assets/feature-wall/github-linear.jpg" alt="Flujos de GitHub y Linear en Orca" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/agents/supported"><kbd><strong>Cualquier agente CLI</strong><br/><br/><picture><source srcset="assets/feature-wall/cli-agents.gif" type="image/gif"><img src="assets/feature-wall/cli-agents.jpg" alt="Compatible con cualquier agente CLI" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/ssh"><kbd><strong>Worktrees por SSH</strong><br/><br/><picture><source srcset="assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="assets/feature-wall/ssh-worktrees.jpg" alt="Worktrees remotos por SSH" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/editing/file-explorer"><kbd><strong>Archivos a agentes</strong><br/><br/><picture><source srcset="assets/feature-wall/file-drag.gif" type="image/gif"><img src="assets/feature-wall/file-drag.jpg" alt="Arrastra archivos e imágenes al prompt de un agente" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><kbd><strong>Anotar diffs de IA</strong><br/><br/><picture><source srcset="assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="assets/feature-wall/annotate-diff.jpg" alt="Anotar diffs generados por IA" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/cli/overview"><kbd><strong>Orca CLI</strong><br/><br/><picture><source srcset="assets/feature-wall/orca-cli.gif" type="image/gif"><img src="assets/feature-wall/orca-cli.jpg" alt="Automatiza Orca desde la CLI" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/settings"><kbd><strong>Nativo de teclado</strong><br/><br/><picture><source srcset="assets/feature-wall/keyboard-native.gif" type="image/gif"><img src="assets/feature-wall/keyboard-native.jpg" alt="Flujos de teclado y atajos reasignables" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/agents/usage-tracking"><kbd><strong>Cambio de cuenta y seguimiento de uso</strong><br/><br/><picture><source srcset="assets/feature-wall/codex-accounts.gif" type="image/gif"><img src="assets/feature-wall/codex-accounts.jpg" alt="Cambio de cuenta y seguimiento de uso" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/editing/markdown"><kbd><strong>Previews ricos del repo</strong><br/><br/><picture><source srcset="assets/feature-wall/markdown-editor.gif" type="image/gif"><img src="assets/feature-wall/markdown-editor.jpg" alt="Previsualización de Markdown, imágenes, PDFs y documentos del repo" width="390" /></picture><br/></kbd></a><br/><br/>
   <a href="https://www.onorca.dev/docs/model/tabs-panes-splits"><kbd><strong>Divide cualquier cosa</strong><br/><br/><picture><source srcset="assets/feature-wall/split-screen.gif" type="image/gif"><img src="assets/feature-wall/split-screen.jpg" alt="Paneles divididos para agentes, terminales, navegadores y archivos" width="390" /></picture><br/></kbd></a>
 </p>
 
