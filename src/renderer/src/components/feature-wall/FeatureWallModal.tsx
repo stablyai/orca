@@ -152,7 +152,7 @@ export default function FeatureWallModal(): JSX.Element | null {
     open: boolean
     openedAtMs: number
   }>({ open: false, openedAtMs: 0 })
-  const manualTileId = focusedTileId ?? hoveredTileId
+  const manualTileId = hoveredTileId ?? focusedTileId
   const autoTileId =
     isOpen && !prefersReducedMotion && manualTileId === null
       ? FEATURE_WALL_TILES[autoIndex]?.id
@@ -202,6 +202,15 @@ export default function FeatureWallModal(): JSX.Element | null {
   useEffect(() => {
     return () => emitCloseTelemetry()
   }, [emitCloseTelemetry])
+
+  useEffect(() => {
+    if (isOpen) {
+      return
+    }
+    setHoveredTileId(null)
+    setFocusedTileId(null)
+    setRovingIndex(0)
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen || prefersReducedMotion || manualTileId !== null) {
@@ -261,8 +270,16 @@ export default function FeatureWallModal(): JSX.Element | null {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] gap-4 overflow-y-auto p-5 sm:max-w-[1040px]"
+        className="scrollbar-sleek max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] gap-4 overflow-y-auto p-5 sm:max-w-[1040px]"
         showCloseButton={false}
+        tabIndex={-1}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          // Why: Radix would otherwise focus the first roving tile on open,
+          // which counts as user interaction and disables auto-rotation.
+          const content = event.currentTarget as HTMLElement
+          content.focus({ preventScroll: true })
+        }}
       >
         <DialogHeader className="gap-1">
           <DialogTitle>Feature tour</DialogTitle>
@@ -307,7 +324,7 @@ export default function FeatureWallModal(): JSX.Element | null {
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Close</Button>
+            <Button variant="ghost">Close</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
