@@ -252,7 +252,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[min(760px,88vh)] max-w-[1040px] flex-col overflow-hidden p-0"
+        className="flex h-[min(820px,90vh)] w-[min(1280px,calc(100vw-3rem))] max-w-none flex-col overflow-hidden p-0"
       >
         {!confirming ? (
           <>
@@ -289,7 +289,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 Scanning workspaces
               </div>
             ) : (
-              <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-5 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
                 <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Badge variant="outline">{readyCount} ready</Badge>
                   <Badge variant="outline">{groups.review.length} review</Badge>
@@ -538,10 +538,11 @@ function CandidateRow({
     ? REASON_LABELS[candidate.reasons[0]]
     : 'No ready signal'
   const blockers = candidate.blockers.map((blocker) => BLOCKER_LABELS[blocker])
+  const contextSummary = formatContextSummary(candidate)
 
   return (
-    <div className="rounded-md border border-border bg-card px-3 py-3 text-card-foreground">
-      <div className="flex items-start gap-3">
+    <div className="rounded-md border border-border bg-card px-3 py-2.5 text-card-foreground">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 xl:grid-cols-[auto_minmax(0,1.35fr)_minmax(15rem,0.65fr)_auto] xl:items-center">
         <button
           type="button"
           role="checkbox"
@@ -560,37 +561,27 @@ function CandidateRow({
           <div className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 truncate text-sm font-semibold">{candidate.displayName}</span>
             <span className="shrink-0 text-xs text-muted-foreground">·</span>
-            <span className="shrink-0 truncate text-xs text-muted-foreground">
+            <span className="max-w-36 shrink-0 truncate text-xs text-muted-foreground">
               {candidate.repoName}
             </span>
-            <Badge
-              variant={
-                candidate.tier === 'ready'
-                  ? 'secondary'
-                  : candidate.tier === 'protected'
-                    ? 'outline'
-                    : 'dot'
-              }
-              className="ml-auto"
-            >
-              {candidate.tier}
-            </Badge>
           </div>
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span className="min-w-0 truncate font-mono">{candidate.branch}</span>
-            <span className="min-w-0 truncate font-mono">{candidate.path}</span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <span className="font-medium">{primaryReason}</span>
             {blockers.length > 0 ? (
-              <span className="text-muted-foreground">{blockers.slice(0, 3).join(', ')}</span>
+              <span className="min-w-0 truncate text-muted-foreground">
+                {blockers.slice(0, 2).join(', ')}
+              </span>
             ) : (
-              <span className="text-muted-foreground">Clean and safe evidence refreshed</span>
+              <span className="text-muted-foreground">Clean</span>
             )}
           </div>
-          <details className="mt-2 text-xs text-muted-foreground">
-            <summary className="cursor-pointer select-none">Evidence</summary>
+          <details className="mt-1 text-xs text-muted-foreground">
+            <summary className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-foreground">
+              Details
+            </summary>
             <div className="mt-2 grid gap-1 sm:grid-cols-2">
+              <span className="min-w-0 truncate font-mono">{candidate.branch}</span>
+              <span className="min-w-0 truncate font-mono">{candidate.path}</span>
               <span>
                 {candidate.git.clean === true
                   ? 'Clean'
@@ -629,34 +620,50 @@ function CandidateRow({
               {failure}
             </div>
           ) : null}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <Button variant="ghost" size="xs" onClick={() => onView(candidate.worktreeId)}>
-              <Search className="size-3.5" />
-              View
+        </div>
+        <div className="col-start-2 min-w-0 text-xs text-muted-foreground xl:col-start-auto">
+          {contextSummary}
+        </div>
+        <div className="col-start-2 flex flex-wrap items-center gap-1.5 xl:col-start-auto xl:justify-end">
+          <Button variant="ghost" size="xs" onClick={() => onView(candidate.worktreeId)}>
+            <Search className="size-3.5" />
+            View
+          </Button>
+          {hasLiveSurfaces ? (
+            <Button variant="ghost" size="xs" onClick={() => onSleep(candidate)}>
+              <Moon className="size-3.5" />
+              Sleep
             </Button>
-            {hasLiveSurfaces ? (
-              <Button variant="ghost" size="xs" onClick={() => onSleep(candidate)}>
-                <Moon className="size-3.5" />
-                Sleep
-              </Button>
-            ) : null}
-            <Button variant="ghost" size="xs" onClick={() => onKeep(candidate)}>
-              Keep
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="text-destructive hover:text-destructive"
-              disabled={!selectable}
-              onClick={() => onRemove(candidate)}
-            >
-              Remove
-            </Button>
-          </div>
+          ) : null}
+          <Button variant="ghost" size="xs" onClick={() => onKeep(candidate)}>
+            Keep
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-destructive hover:text-destructive"
+            disabled={!selectable}
+            onClick={() => onRemove(candidate)}
+          >
+            Remove
+          </Button>
         </div>
       </div>
     </div>
   )
+}
+
+function formatContextSummary(candidate: WorkspaceCleanupCandidate): string {
+  const parts = [`Last active ${formatRelativeTime(candidate.lastActivityAt)}`]
+  const contextCount =
+    candidate.localContext.terminalTabCount +
+    candidate.localContext.cleanEditorTabCount +
+    candidate.localContext.browserTabCount +
+    candidate.localContext.diffCommentCount
+  if (contextCount > 0) {
+    parts.push(`${contextCount} saved item${contextCount === 1 ? '' : 's'}`)
+  }
+  return parts.join(' · ')
 }
 
 function ConfirmRemove({
