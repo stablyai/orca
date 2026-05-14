@@ -118,15 +118,14 @@ const SidebarFilter = React.memo(function SidebarFilter() {
       <PopoverContent align="end" className="w-72 p-0">
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <span className="text-xs font-medium text-foreground">Filters</span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {hasAnyFilter ? (
               <button
                 type="button"
                 onClick={clearAll}
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                className="inline-flex h-6 items-center rounded-md bg-accent/70 px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               >
-                <X className="size-3" />
-                Clear all
+                Reset filters
               </button>
             ) : null}
             <Tooltip>
