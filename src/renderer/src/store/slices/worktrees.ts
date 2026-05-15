@@ -59,13 +59,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
 }
 
 function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
-  return contentType === 'browser'
-    ? 'browser'
-    : contentType === 'terminal'
-      ? 'terminal'
-      : contentType === 'notes'
-        ? 'notes'
-        : 'editor'
+  return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
 }
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({

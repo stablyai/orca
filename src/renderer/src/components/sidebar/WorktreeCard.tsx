@@ -153,9 +153,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
-  const hasNotesSurface = useAppStore((s) =>
-    (s.unifiedTabsByWorktree[worktree.id] ?? []).some((tab) => tab.contentType === 'notes')
-  )
   // Why: keep these as separate shallow selectors. Combining them into one
   // returned object nests freshly-created maps under fresh keys, so Zustand's
   // shallow memoization sees every unrelated store write as a change and
@@ -291,7 +288,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
         browserTabs,
         ptyIdsByTabId: ptyIdsForWorktree,
         runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        hasNotesSurface,
         hasPermission,
         hasLiveDone,
         hasRetainedDone
@@ -301,7 +297,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
       browserTabs,
       ptyIdsForWorktree,
       runtimePaneTitlesForWorktree,
-      hasNotesSurface,
       hasPermission,
       hasLiveDone,
       hasRetainedDone

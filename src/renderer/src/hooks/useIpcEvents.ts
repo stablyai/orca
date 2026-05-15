@@ -34,7 +34,6 @@ import { destroyPersistentWebview } from '@/components/browser-pane/webview-regi
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
 import { track } from '@/lib/telemetry'
-import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -779,15 +778,6 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
           store.closeBrowserTab(store.activeBrowserTabId)
-          return
-        }
-        if (store.activeTabType === 'notes' && store.activeWorktreeId) {
-          const activeTab = store.getActiveTab(store.activeWorktreeId)
-          if (activeTab?.contentType === 'notes') {
-            requestProjectNotesTabClose(activeTab.id, () => {
-              store.closeUnifiedTab(activeTab.id)
-            })
-          }
         }
       })
     )

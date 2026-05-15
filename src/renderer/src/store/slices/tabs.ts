@@ -60,9 +60,7 @@ export type TabsSlice = {
     tabId: string
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (groupId: string, tabIds: string[]) => void
-  setTabEntityId: (tabId: string, entityId: string) => void
   setTabLabel: (tabId: string, label: string) => void
-  setTabDirty: (tabId: string, isDirty: boolean) => void
   setTabCustomLabel: (tabId: string, label: string | null) => void
   setUnifiedTabColor: (tabId: string, color: string | null) => void
   pinTab: (tabId: string) => void
@@ -229,13 +227,7 @@ function collapseGroupLayout(
 }
 
 function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  return contentType === 'browser'
-    ? 'browser'
-    : contentType === 'terminal'
-      ? 'terminal'
-      : contentType === 'notes'
-        ? 'notes'
-        : 'editor'
+  return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
 }
 
 function deriveActiveSurfaceForWorktree(
@@ -438,8 +430,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         sortOrder: nextOrder.length,
         createdAt: Date.now(),
         isPreview: init?.isPreview,
-        isPinned: init?.isPinned,
-        isDirty: false
+        isPinned: init?.isPinned
       }
 
       nextOrder = dedupeTabOrder([...nextOrder, created.id])
@@ -736,12 +727,6 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   setTabLabel: (tabId, label) =>
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {}),
-
-  setTabEntityId: (tabId, entityId) =>
-    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { entityId }) ?? {}),
-
-  setTabDirty: (tabId, isDirty) =>
-    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { isDirty }) ?? {}),
 
   setTabCustomLabel: (tabId, label) =>
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? {}),
@@ -1373,12 +1358,6 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
       if (tab.contentType === 'browser') {
         return liveBrowserIds.has(tab.entityId)
-      }
-      if (tab.contentType === 'notes') {
-        // Why: project notes are backed by the project notes store, not by
-        // openFiles. Treating them as editor-backed files makes reconcile
-        // prune valid notes tabs and can leave the workspace looking empty.
-        return true
       }
       return liveEditorIds.has(tab.entityId)
     }

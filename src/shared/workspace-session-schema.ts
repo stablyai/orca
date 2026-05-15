@@ -65,16 +65,9 @@ const terminalTabSchema = z.object({
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
-const tabContentTypeSchema = z.enum([
-  'terminal',
-  'editor',
-  'diff',
-  'conflict-review',
-  'browser',
-  'notes'
-])
+const tabContentTypeSchema = z.enum(['terminal', 'editor', 'diff', 'conflict-review', 'browser'])
 
-const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'notes'])
+const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser'])
 
 const tabSchema = z.object({
   id: z.string(),
@@ -88,8 +81,7 @@ const tabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   isPreview: z.boolean().optional(),
-  isPinned: z.boolean().optional(),
-  isDirty: z.boolean().optional()
+  isPinned: z.boolean().optional()
 })
 
 const tabGroupSchema = z.object({
