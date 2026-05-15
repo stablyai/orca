@@ -89,10 +89,16 @@ export function scheduleSplitScrollRestore(
         return
       }
       const live = getPaneById(paneId)
-      if (live?.pendingSplitScrollState) {
-        restoreScrollState(live.terminal, scrollState)
-        refreshAfterReparent(live)
+      if (!live?.pendingSplitScrollState) {
+        return
       }
+      // Why: see the 200ms timer below — the alt-screen buffer belongs to a
+      // TUI and restore-during-draw knocks its cursor one row off (#1298).
+      if (live.terminal.buffer.active.type === 'alternate') {
+        return
+      }
+      restoreScrollState(live.terminal, scrollState)
+      refreshAfterReparent(live)
     })
   })
 
@@ -107,6 +113,16 @@ export function scheduleSplitScrollRestore(
     live.pendingSplitScrollState = null
     if (reattachWebgl) {
       reattachWebgl(live)
+    }
+    // Why: the alt-screen buffer belongs to a full-screen TUI (Claude Code,
+    // vim, less) that owns its cursor position. Re-running scroll restore
+    // and a full refresh here clobbers an in-progress draw — refresh(0,
+    // rows-1) repaints rows from xterm's buffer, racing the TUI's next
+    // write and leaving its cursor one row off (#1298 regression).
+    // Alt-screen has no scrollback, so scroll restore has nothing
+    // legitimate to do — skip it. Normal-screen splits still need it.
+    if (live.terminal.buffer.active.type === 'alternate') {
+      return
     }
     restoreScrollState(live.terminal, scrollState)
     refreshAfterReparent(live)
