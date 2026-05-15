@@ -462,12 +462,15 @@ function SourceControlInner(): React.JSX.Element {
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const hostedReviewCacheKey =
     activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
+  const hostedReviewEntry = hostedReviewCacheKey ? hostedReviewCache[hostedReviewCacheKey] : undefined
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? (hostedReviewCache[hostedReviewCacheKey]?.data ?? null)
+    ? (hostedReviewEntry?.data ?? null)
     : null
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const isHostedReviewStateLoading =
+    (linkedGitHubPR !== null || linkedGitLabMR !== null) && hostedReviewEntry === undefined
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
@@ -894,6 +897,8 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind
       }),
     [
@@ -903,6 +908,8 @@ function SourceControlInner(): React.JSX.Element {
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -918,6 +925,8 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind
       }),
     [
@@ -927,6 +936,8 @@ function SourceControlInner(): React.JSX.Element {
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]
