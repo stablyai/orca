@@ -4,7 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'fs'
+import { spawnSync } from 'child_process'
 import type * as pty from 'node-pty'
 import type * as LocalPtyShellReadyModule from './local-pty-shell-ready'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready'
@@ -342,5 +343,198 @@ describePosix('local PTY shell-ready launch config', () => {
         process.env.ZDOTDIR = previousZdotdir
       }
     }
+  })
+
+  it('discovers ZDOTDIR from user .zshenv in a subshell to preserve scoping', async () => {
+    // Why: PR #1737 sourced .zshenv inside a wrapper function, which broke
+    // common patterns like "typeset -U path". The safer fix sources .zshenv in
+    // a subshell to preserve top-level zsh scoping and isolate early returns.
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+
+    // The wrapper must:
+    // 1. Unset ZDOTDIR before sourcing user .zshenv (so ${ZDOTDIR:-...} defaults work)
+    expect(zshenv).toContain('unset ZDOTDIR')
+
+    // 2. Source user .zshenv in a subshell $(...) to preserve top-level scoping
+    expect(zshenv).toMatch(/_orca_discovered_zdotdir=\$\(\s*unset ZDOTDIR/)
+    expect(zshenv).toContain('[[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"')
+
+    // 3. Capture the ZDOTDIR value via printf (safer than echo for special chars)
+    expect(zshenv).toMatch(/printf '%s\\n' "\$\{ZDOTDIR\}"/)
+
+    // 4. Use discovered ZDOTDIR with fallback chain
+    expect(zshenv).toContain(
+      'export ORCA_ORIG_ZDOTDIR="${_orca_discovered_zdotdir:-${_orca_spawn_orig_zdotdir:-$HOME}}"'
+    )
+  })
+
+  it('preserves spawn-env ORCA_ORIG_ZDOTDIR as fallback when discovery yields nothing', async () => {
+    // Why: if user .zshenv returns early or doesn't set ZDOTDIR, the subshell
+    // yields an empty string. The wrapper should then fall back to the spawn-env
+    // ORCA_ORIG_ZDOTDIR (if present), then HOME.
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+
+    // Save spawn-env value before subshell
+    expect(zshenv).toContain('_orca_spawn_orig_zdotdir="${ORCA_ORIG_ZDOTDIR:-}"')
+
+    // Fallback chain: discovered → spawn-env → HOME
+    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_spawn_orig_zdotdir:-$HOME}}')
+  })
+})
+
+// Why: end-to-end validation that the subshell discovery approach actually
+// preserves top-level zsh scoping for common patterns like "typeset -U path".
+// These tests spawn real zsh subprocesses, so they're gated on zsh availability
+// and skipped on platforms where zsh is not found.
+describePosix('live zsh subprocess tests', () => {
+  const hasZsh = (() => {
+    const result = spawnSync('which', ['zsh'], { encoding: 'utf8' })
+    return result.status === 0
+  })()
+
+  const describeIfZsh = hasZsh ? describe : describe.skip
+
+  describeIfZsh('ZDOTDIR discovery with real zsh', () => {
+    let testHome: string
+    let userDataPath: string
+
+    beforeEach(async () => {
+      testHome = mkdtempSync(join(tmpdir(), 'orca-zsh-test-home-'))
+      userDataPath = mkdtempSync(join(tmpdir(), 'orca-zsh-test-userdata-'))
+      getUserDataPathMock.mockReturnValue(userDataPath)
+    })
+
+    afterEach(() => {
+      rmSync(testHome, { recursive: true, force: true })
+      rmSync(userDataPath, { recursive: true, force: true })
+    })
+
+    it('preserves typeset -U path scoping when user .zshrc uses it', async () => {
+      // Why: this was the breakage pattern in PR #1737. The function-wrapper
+      // approach made "typeset -U path" function-scoped. The subshell discovery
+      // fix isolates only the ZDOTDIR capture; user rcfiles (.zshrc) are still
+      // sourced at the wrapper's top level, preserving scoping.
+
+      // Create XDG-style config: .zshenv sets ZDOTDIR, .zshrc modifies PATH
+      const xdgZshDir = join(testHome, '.config', 'zsh')
+      mkdirSync(xdgZshDir, { recursive: true })
+      writeFileSync(
+        join(testHome, '.zshenv'),
+        `export ZDOTDIR="$HOME/.config/zsh"
+`
+      )
+      writeFileSync(
+        join(xdgZshDir, '.zshrc'),
+        `typeset -U path
+path=(/custom/bin $path)
+`
+      )
+
+      // Generate the Orca wrapper
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      // Spawn interactive zsh with the wrapper and verify:
+      // 1. Wrapper discovered XDG ZDOTDIR from .zshenv
+      // 2. User's .zshrc was sourced from discovered ZDOTDIR
+      // 3. typeset -U path modification persisted (proving top-level scoping)
+      // Build clean env: use wrapper ZDOTDIR but let wrapper discover ORCA_ORIG_ZDOTDIR at runtime
+      const cleanEnv: Record<string, string | undefined> = {
+        ...process.env,
+        HOME: testHome,
+        PATH: '/usr/bin:/bin'
+      }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
+
+      const result = spawnSync(
+        'zsh',
+        [
+          '-i',
+          '-c',
+          'echo "ORCA_ORIG_ZDOTDIR=${ORCA_ORIG_ZDOTDIR}" && echo "PATH_HAS_CUSTOM=${PATH%%:*}"'
+        ],
+        {
+          env: cleanEnv as NodeJS.ProcessEnv,
+          encoding: 'utf8'
+        }
+      )
+
+      expect(result.status).toBe(0)
+      const output = result.stdout
+      expect(output).toContain(`ORCA_ORIG_ZDOTDIR=${xdgZshDir}`)
+      expect(output).toContain('PATH_HAS_CUSTOM=/custom/bin')
+    })
+
+    it('survives early return in user .zshenv without crashing', async () => {
+      // Why: common pattern to skip non-interactive sourcing. The subshell
+      // must isolate this return so the wrapper continues.
+      writeFileSync(
+        join(testHome, '.zshenv'),
+        `[[ -o interactive ]] || return 0
+export ZDOTDIR="$HOME/.config/zsh"
+`
+      )
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      // Build clean env: use wrapper ZDOTDIR but let wrapper discover ORCA_ORIG_ZDOTDIR at runtime
+      const cleanEnv: Record<string, string | undefined> = { ...process.env, HOME: testHome }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
+
+      const result = spawnSync(
+        'zsh',
+        ['-c', 'echo "survived" && echo "ORCA_ORIG_ZDOTDIR=${ORCA_ORIG_ZDOTDIR}"'],
+        {
+          env: cleanEnv as NodeJS.ProcessEnv,
+          encoding: 'utf8'
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('survived')
+      // ZDOTDIR discovery yields nothing (early return before export), fallback to HOME
+      expect(result.stdout).toContain(`ORCA_ORIG_ZDOTDIR=${testHome}`)
+    })
+
+    it('falls back to HOME when user .zshenv does not set ZDOTDIR', async () => {
+      // Why: vanilla zsh users don't set ZDOTDIR. The subshell should yield
+      // an empty string, and the fallback chain should land on HOME.
+      writeFileSync(
+        join(testHome, '.zshenv'),
+        `# Vanilla zsh config, no ZDOTDIR
+export MY_VAR=foo
+`
+      )
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      // Build clean env: use wrapper ZDOTDIR but let wrapper discover ORCA_ORIG_ZDOTDIR at runtime
+      const cleanEnv: Record<string, string | undefined> = { ...process.env, HOME: testHome }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
+
+      const result = spawnSync('zsh', ['-c', 'echo "ORCA_ORIG_ZDOTDIR=${ORCA_ORIG_ZDOTDIR}"'], {
+        env: cleanEnv as NodeJS.ProcessEnv,
+        encoding: 'utf8'
+      })
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain(`ORCA_ORIG_ZDOTDIR=${testHome}`)
+    })
   })
 })

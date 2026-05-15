@@ -278,4 +278,48 @@ describePosix('daemon shell-ready launch config', () => {
       }
     }
   })
+
+  it('discovers ZDOTDIR from user .zshenv in a subshell to preserve scoping', async () => {
+    // Why: PR #1737 sourced .zshenv inside a wrapper function, which broke
+    // common patterns like "typeset -U path". The safer fix sources .zshenv in
+    // a subshell to preserve top-level zsh scoping and isolate early returns.
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+
+    // The wrapper must:
+    // 1. Unset ZDOTDIR before sourcing user .zshenv (so ${ZDOTDIR:-...} defaults work)
+    expect(zshenv).toContain('unset ZDOTDIR')
+
+    // 2. Source user .zshenv in a subshell $(...) to preserve top-level scoping
+    expect(zshenv).toMatch(/_orca_discovered_zdotdir=\$\(\s*unset ZDOTDIR/)
+    expect(zshenv).toContain('[[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"')
+
+    // 3. Capture the ZDOTDIR value via printf (safer than echo for special chars)
+    expect(zshenv).toMatch(/printf '%s\\n' "\$\{ZDOTDIR\}"/)
+
+    // 4. Use discovered ZDOTDIR with fallback chain
+    expect(zshenv).toContain(
+      'export ORCA_ORIG_ZDOTDIR="${_orca_discovered_zdotdir:-${_orca_spawn_orig_zdotdir:-$HOME}}"'
+    )
+  })
+
+  it('preserves spawn-env ORCA_ORIG_ZDOTDIR as fallback when discovery yields nothing', async () => {
+    // Why: if user .zshenv returns early or doesn't set ZDOTDIR, the subshell
+    // yields an empty string. The wrapper should then fall back to the spawn-env
+    // ORCA_ORIG_ZDOTDIR (if present), then HOME.
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+
+    // Save spawn-env value before subshell
+    expect(zshenv).toContain('_orca_spawn_orig_zdotdir="${ORCA_ORIG_ZDOTDIR:-}"')
+
+    // Fallback chain: discovered → spawn-env → HOME
+    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_spawn_orig_zdotdir:-$HOME}}')
+  })
 })

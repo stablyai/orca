@@ -14,12 +14,9 @@ import { basename } from 'path'
 import { mkdirSync, writeFileSync, chmodSync } from 'fs'
 import { app } from 'electron'
 import type * as pty from 'node-pty'
+import { getZshEnvTemplate } from '../shell-templates'
 
 let didEnsureShellReadyWrappers = false
-
-function quotePosixSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
 
 const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
 const OSC_133_A = '\x1b]133;A'
@@ -170,14 +167,7 @@ function ensureShellReadyWrappers(): void {
   const zshDir = `${root}/zsh`
   const bashDir = `${root}/bash`
 
-  const zshEnv = `# Orca zsh shell-ready wrapper
-export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${ORCA_ORIG_ZDOTDIR%/}" in
-  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
-esac
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-`
+  const zshEnv = getZshEnvTemplate(zshDir)
   const zshProfile = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${_orca_home%/}" in

@@ -1,15 +1,12 @@
 import { tmpdir } from 'os'
 import { basename, dirname, join } from 'path'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'fs'
+import { getZshEnvTemplate } from '../shell-templates'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'
 
 let didEnsureShellReadyWrappers = false
-
-function quotePosixSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
 
 function getShellReadyWrapperRoot(): string {
   const userDataPath = process.env[ORCA_USER_DATA_PATH_ENV]
@@ -82,14 +79,7 @@ function ensureShellReadyWrappers(): void {
   const zshDir = join(root, 'zsh')
   const bashDir = join(root, 'bash')
 
-  const zshEnv = `# Orca daemon zsh shell-ready wrapper
-export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${ORCA_ORIG_ZDOTDIR%/}" in
-  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
-esac
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-`
+  const zshEnv = getZshEnvTemplate(zshDir, 'daemon')
   const zshProfile = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${_orca_home%/}" in
