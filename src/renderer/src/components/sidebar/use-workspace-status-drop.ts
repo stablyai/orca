@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus } from '../../../../shared/types'
-import { hasWorkspaceDragData, readWorkspaceDragData } from './workspace-status'
+import { hasWorkspaceDragData, readWorkspaceDragDataIds } from './workspace-status'
 
 const WORKSPACE_STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
 const WORKSPACE_PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
@@ -47,8 +47,8 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
         return
       }
 
-      const worktreeId = readWorkspaceDragData(dataTransfer)
-      if (!worktreeId) {
+      const worktreeIds = readWorkspaceDragDataIds(dataTransfer)
+      if (worktreeIds.length === 0) {
         return
       }
 
@@ -57,13 +57,17 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
       event.preventDefault()
       event.stopPropagation()
       if (dropTarget === pinTarget) {
-        onPinWorktree(worktreeId)
+        for (const worktreeId of worktreeIds) {
+          onPinWorktree(worktreeId)
+        }
         return
       }
 
       const status = dropTarget.dataset.workspaceStatus
       if (status) {
-        onMoveWorktreeToStatus(worktreeId, status)
+        for (const worktreeId of worktreeIds) {
+          onMoveWorktreeToStatus(worktreeId, status)
+        }
       }
     }
 
