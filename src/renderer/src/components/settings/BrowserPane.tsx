@@ -228,7 +228,7 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
         <SearchableSetting
           id="browser-session-cookies"
           title="Session & Cookies"
-          description="Manage browser profiles and import cookies from Chrome, Edge, or other browsers."
+          description="Manage browser profiles and import cookies from Chrome, Edge, Comet, or other browsers."
           keywords={[
             'cookies',
             'session',
