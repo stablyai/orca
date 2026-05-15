@@ -90,9 +90,9 @@ describe('WorktreeOpenInMenu', () => {
   })
 
   it('maps file manager labels by platform', () => {
-    expect(getLocalFileManagerLabel('Mozilla/5.0 Mac OS X')).toBe('Open in Finder')
-    expect(getLocalFileManagerLabel('Mozilla/5.0 Windows NT 10.0')).toBe('Open in File Explorer')
-    expect(getLocalFileManagerLabel('Mozilla/5.0 X11 Linux x86_64')).toBe('Open in File Manager')
+    expect(getLocalFileManagerLabel('Mozilla/5.0 Mac OS X')).toBe('Finder')
+    expect(getLocalFileManagerLabel('Mozilla/5.0 Windows NT 10.0')).toBe('File Explorer')
+    expect(getLocalFileManagerLabel('Mozilla/5.0 X11 Linux x86_64')).toBe('File Manager')
   })
 
   it('disables the Open in submenu while deleting', () => {

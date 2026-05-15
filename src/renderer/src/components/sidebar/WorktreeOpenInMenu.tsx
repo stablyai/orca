@@ -21,12 +21,12 @@ export function getLocalFileManagerLabel(userAgent?: string): string {
   const resolvedUserAgent =
     userAgent ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent)
   if (resolvedUserAgent.includes('Mac')) {
-    return 'Open in Finder'
+    return 'Finder'
   }
   if (resolvedUserAgent.includes('Windows')) {
-    return 'Open in File Explorer'
+    return 'File Explorer'
   }
-  return 'Open in File Manager'
+  return 'File Manager'
 }
 
 function showOpenFailureToast(reason: ShellOpenLocalPathFailureReason): void {

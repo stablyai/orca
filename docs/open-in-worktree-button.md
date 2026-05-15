@@ -63,9 +63,9 @@ Keep file-manager action separate from editor action.
 
 Platform-aware label in renderer:
 
-- macOS: `Open in Finder`
-- Windows: `Open in File Explorer`
-- Linux: `Open in File Manager`
+- macOS: `Finder`
+- Windows: `File Explorer`
+- Linux: `File Manager`
 
 If using reveal semantics, document that behavior explicitly and keep it consistent in the context menu.
 
