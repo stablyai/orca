@@ -616,6 +616,7 @@ describe('OrcaRuntimeRpcServer', () => {
       kind: 'markdown',
       opened: true
     })
+    const browserTabCreate = vi.fn().mockResolvedValue({ page: 'page-1' })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' }),
@@ -629,7 +630,8 @@ describe('OrcaRuntimeRpcServer', () => {
       bulkStageRuntimeGitPaths,
       bulkUnstageRuntimeGitPaths,
       getRuntimeGitDiff,
-      openMobileDiff
+      openMobileDiff,
+      browserTabCreate
     } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
@@ -765,6 +767,16 @@ describe('OrcaRuntimeRpcServer', () => {
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
     )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_browser_tab_create',
+        method: 'browser.tabCreate',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', url: 'about:blank' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
 
     expect(replies).toContainEqual(
       expect.objectContaining({
@@ -787,6 +799,9 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_files_open_diff', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_diff', ok: true }))
     expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_browser_tab_create', ok: true })
+    )
+    expect(replies).toContainEqual(
       expect.objectContaining({
         id: 'req_remove_claude',
         ok: false,
@@ -803,6 +818,7 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
     expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
     expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
+    expect(browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
     expect(removeClaudeAccount).not.toHaveBeenCalled()
   })
 

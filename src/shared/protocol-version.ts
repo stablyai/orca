@@ -24,6 +24,7 @@ export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
   'runtime.environments.v1',
+  'browser.screencast.v1',
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1'
 ] as const

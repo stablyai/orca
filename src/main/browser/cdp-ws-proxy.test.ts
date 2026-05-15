@@ -10,11 +10,16 @@ type DebuggerListener = (...args: unknown[]) => void
 
 function createMockWebContents() {
   const listeners = new Map<string, DebuggerListener[]>()
+  let debuggerAttached = false
 
   const debuggerObj = {
-    isAttached: vi.fn(() => false),
-    attach: vi.fn(),
-    detach: vi.fn(),
+    isAttached: vi.fn(() => debuggerAttached),
+    attach: vi.fn(() => {
+      debuggerAttached = true
+    }),
+    detach: vi.fn(() => {
+      debuggerAttached = false
+    }),
     sendCommand: vi.fn(async () => ({})),
     on: vi.fn((event: string, handler: DebuggerListener) => {
       const arr = listeners.get(event) ?? []

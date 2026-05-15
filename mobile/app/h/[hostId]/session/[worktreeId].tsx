@@ -25,6 +25,7 @@ import {
   File,
   FileText,
   GitBranch,
+  Globe2,
   Mic,
   Monitor,
   Plus,
@@ -50,6 +51,7 @@ import {
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
+import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
@@ -70,6 +72,8 @@ type Terminal = {
   title: string
   isActive: boolean
 }
+
+type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
 
 type MobileSessionTab =
   | {
@@ -104,6 +108,7 @@ type MobileSessionTab =
       isDirty: boolean
       isActive: boolean
     }
+  | MobileBrowserTab
 
 type SessionTabsResult = {
   worktree: string
@@ -111,7 +116,11 @@ type SessionTabsResult = {
   snapshotVersion: number
   tabs: MobileSessionTab[]
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | null
+  activeTabType: MobileSessionTabType | null
+}
+
+type RuntimeStatusResult = {
+  capabilities?: string[]
 }
 
 type MarkdownDocState =
@@ -500,6 +509,7 @@ export default function SessionScreen() {
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
   const [creating, setCreating] = useState(false)
+  const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [createError, setCreateError] = useState('')
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
@@ -509,6 +519,10 @@ export default function SessionScreen() {
   const [fileActionTarget, setFileActionTarget] = useState<Extract<
     MobileSessionTab,
     { type: 'file' }
+  > | null>(null)
+  const [browserActionTarget, setBrowserActionTarget] = useState<Extract<
+    MobileSessionTab,
+    { type: 'browser' }
   > | null>(null)
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
@@ -559,7 +573,7 @@ export default function SessionScreen() {
   // and may not render reliably.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
-  const activeSessionTabTypeRef = useRef<'terminal' | 'markdown' | 'file' | null>(null)
+  const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
@@ -583,7 +597,9 @@ export default function SessionScreen() {
     connState === 'connected' &&
     activeHandle != null &&
     activeSessionTab?.type !== 'markdown' &&
-    activeSessionTab?.type !== 'file'
+    activeSessionTab?.type !== 'file' &&
+    activeSessionTab?.type !== 'browser'
+  const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
 
   const showToast = useCallback((message: string, durationMs = 1200) => {
     setToastMessage(message)
@@ -1414,6 +1430,29 @@ export default function SessionScreen() {
     terminalGestureInputInFlightRef.current.clear()
   }, [connState])
 
+  useEffect(() => {
+    if (!client || connState !== 'connected') {
+      setBrowserScreencastSupported(null)
+      return
+    }
+    let stale = false
+    void client
+      .sendRequest('status.get')
+      .then((response) => {
+        if (stale || !response.ok) return
+        const status = (response as RpcSuccess).result as RuntimeStatusResult
+        setBrowserScreencastSupported(
+          status.capabilities?.includes('browser.screencast.v1') === true
+        )
+      })
+      .catch(() => {
+        if (!stale) setBrowserScreencastSupported(false)
+      })
+    return () => {
+      stale = true
+    }
+  }, [client, connState])
+
   // Why: only clear terminal cache on actual unmount. Running it whenever
   // `client` changes — including the initial null → real-client transition
   // from useHostClient's async open path — would unsubscribe terminals and
@@ -1562,6 +1601,7 @@ export default function SessionScreen() {
     setSessionTabs([])
     setActiveSessionTabId(null)
     setMarkdownDocs(new Map())
+    setFileDocs(new Map())
   }, [clearTerminalCache, worktreeId])
 
   useEffect(() => {
@@ -1753,6 +1793,9 @@ export default function SessionScreen() {
             tabId: tab.id
           })
           .catch(() => {})
+      }
+      if (tab.type === 'browser') {
+        return
       }
       if (tab.type === 'file') {
         void readFileTab(tab)
@@ -2285,6 +2328,37 @@ export default function SessionScreen() {
     }
   }
 
+  async function handleCreateBrowser() {
+    if (!client || creatingBrowser) return
+    if (browserScreencastSupported !== true) {
+      showToast('Desktop update required for mobile browser streaming', 1600)
+      return
+    }
+
+    setCreatingBrowser(true)
+    setCreateError('')
+    try {
+      const response = await client.sendRequest(
+        'browser.tabCreate',
+        {
+          worktree: `id:${worktreeId}`,
+          url: 'about:blank'
+        },
+        { timeoutMs: 30_000 }
+      )
+      if (!response.ok) {
+        throw new Error((response as RpcFailure).error.message)
+      }
+      setTimeout(() => void fetchSessionTabs(), 300)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create browser'
+      setCreateError(message)
+      showToast(message, 1800)
+    } finally {
+      setCreatingBrowser(false)
+    }
+  }
+
   async function handleRenameTerminal(value: string) {
     if (!client || !renameTarget) return
     const target = renameTarget
@@ -2379,6 +2453,7 @@ export default function SessionScreen() {
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
   const activeFileTab = activeSessionTab?.type === 'file' ? activeSessionTab : null
+  const activeBrowserTab = activeSessionTab?.type === 'browser' ? activeSessionTab : null
   const activePendingTerminalTab =
     activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal !== 'string'
       ? activeSessionTab
@@ -2389,7 +2464,7 @@ export default function SessionScreen() {
   const terminalSummary =
     connState === 'connected'
       ? showLoadingState
-        ? 'Loading terminals'
+        ? 'Loading tabs'
         : visibleTabs.length === 1
           ? '1 tab'
           : `${visibleTabs.length} tabs`
@@ -2505,13 +2580,18 @@ export default function SessionScreen() {
                         })
                       } else if (t.type === 'markdown') {
                         setMarkdownActionTarget(t)
-                      } else {
+                      } else if (t.type === 'file') {
                         setFileActionTarget(t)
+                      } else {
+                        setBrowserActionTarget(t)
                       }
                     }}
                     delayLongPress={400}
                   >
                     <View style={styles.tabLabelRow}>
+                      {t.type === 'browser' && (
+                        <Globe2 size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                      )}
                       {t.type === 'markdown' && (
                         <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
                       )}
@@ -2525,7 +2605,7 @@ export default function SessionScreen() {
                         ]}
                         numberOfLines={1}
                       >
-                        {t.title || 'Terminal'}
+                        {t.title || (t.type === 'browser' ? 'Browser' : 'Terminal')}
                       </Text>
                     </View>
                   </Pressable>
@@ -2542,6 +2622,25 @@ export default function SessionScreen() {
                 >
                   <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
                 </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.newTerminalButton,
+                    pressed && styles.newTerminalButtonPressed,
+                    (creatingBrowser ||
+                      connState !== 'connected' ||
+                      browserScreencastSupported !== true) &&
+                      styles.newTerminalButtonDisabled
+                  ]}
+                  disabled={
+                    creatingBrowser ||
+                    connState !== 'connected' ||
+                    browserScreencastSupported !== true
+                  }
+                  onPress={() => void handleCreateBrowser()}
+                  accessibilityLabel="New browser"
+                >
+                  <Globe2 size={15} color={colors.textSecondary} strokeWidth={2.2} />
+                </Pressable>
               </ScrollView>
             </View>
           )}
@@ -2553,17 +2652,32 @@ export default function SessionScreen() {
           </View>
         ) : showEmptyState ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No terminals in this session</Text>
+            <Text style={styles.emptyText}>No tabs in this session</Text>
             {createError ? <Text style={styles.createError}>{createError}</Text> : null}
-            <Pressable
-              style={[styles.createButton, creating && styles.createButtonDisabled]}
-              disabled={creating}
-              onPress={() => void handleCreateTerminal()}
-            >
-              <Text style={styles.createButtonText}>
-                {creating ? 'Creating…' : 'Create Terminal'}
-              </Text>
-            </Pressable>
+            <View style={styles.emptyActions}>
+              <Pressable
+                style={[styles.createButton, creating && styles.createButtonDisabled]}
+                disabled={creating}
+                onPress={() => void handleCreateTerminal()}
+              >
+                <Text style={styles.createButtonText}>
+                  {creating ? 'Creating…' : 'Create Terminal'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.createButton,
+                  (creatingBrowser || browserScreencastSupported !== true) &&
+                    styles.createButtonDisabled
+                ]}
+                disabled={creatingBrowser || browserScreencastSupported !== true}
+                onPress={() => void handleCreateBrowser()}
+              >
+                <Text style={styles.createButtonText}>
+                  {creatingBrowser ? 'Creating…' : 'Create Browser'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         ) : activeMarkdownTab ? (
           <View style={[styles.markdownFrame, { paddingBottom: keyboardLift }]}>
@@ -2586,6 +2700,23 @@ export default function SessionScreen() {
             <FileReader
               doc={fileDocs.get(activeFileTab.id)}
               title={activeFileTab.title || 'File'}
+            />
+            {toastMessage && (
+              <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
+                <Text style={styles.toastText}>{toastMessage}</Text>
+              </Animated.View>
+            )}
+          </View>
+        ) : activeBrowserTab ? (
+          <View style={styles.browserFrame}>
+            <MobileBrowserPane
+              client={client}
+              worktreeId={worktreeId}
+              tab={activeBrowserTab}
+              screencastSupported={browserScreencastSupported}
+              keyboardLift={keyboardLift}
+              bottomInset={insets.bottom}
+              onToast={showToast}
             />
             {toastMessage && (
               <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
@@ -2634,7 +2765,7 @@ export default function SessionScreen() {
 
         {/* Why: translate instead of resizing so keyboard open/close does not
             trigger a server-side PTY viewport change. */}
-        {!activeMarkdownTab && !activeFileTab && (
+        {!activeMarkdownTab && !activeFileTab && !activeBrowserTab && (
           <View
             style={[
               styles.commandDock,
@@ -2955,6 +3086,24 @@ export default function SessionScreen() {
         onClose={() => setFileActionTarget(null)}
       />
       <ActionSheetModal
+        visible={browserActionTarget != null}
+        title={browserActionTarget?.title || 'Browser'}
+        actions={[
+          {
+            label: 'Close',
+            destructive: true,
+            onPress: () => {
+              const target = browserActionTarget
+              setBrowserActionTarget(null)
+              if (target) {
+                void handleCloseSessionTab(target)
+              }
+            }
+          }
+        ]}
+        onClose={() => setBrowserActionTarget(null)}
+      />
+      <ActionSheetModal
         visible={leaveDrafts != null}
         title="Unsaved markdown changes"
         message="Copy or discard phone drafts before leaving."
@@ -3170,6 +3319,11 @@ const styles = StyleSheet.create({
     minHeight: 0,
     backgroundColor: colors.bgBase
   },
+  browserFrame: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: colors.bgBase
+  },
   markdownEditor: {
     flex: 1,
     position: 'relative'
@@ -3350,6 +3504,12 @@ const styles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: 13,
     marginBottom: spacing.sm
+  },
+  emptyActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm
   },
   createButton: {
     backgroundColor: colors.bgRaised,

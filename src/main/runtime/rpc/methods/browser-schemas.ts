@@ -57,6 +57,18 @@ export const Screenshot = BrowserTarget.extend({
     .optional()
 })
 
+export const Screencast = BrowserTarget.extend({
+  format: z
+    .unknown()
+    .optional()
+    .transform((v) => (v === 'png' ? 'png' : 'jpeg'))
+    .pipe(z.enum(['png', 'jpeg'])),
+  quality: OptionalFiniteNumber,
+  maxWidth: OptionalFiniteNumber,
+  maxHeight: OptionalFiniteNumber,
+  everyNthFrame: OptionalFiniteNumber
+})
+
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()

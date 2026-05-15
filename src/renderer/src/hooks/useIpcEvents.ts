@@ -48,6 +48,8 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
+import type { AppState } from '../store/types'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -317,6 +319,30 @@ function applyRemoteWorkspacePatchStatus(
         ? 'Workspace changed on another device'
         : 'Remote workspace sync unavailable')
   })
+}
+
+type BrowserSessionTabTarget =
+  | { kind: 'unified-browser'; unifiedTabId: string; workspaceId: string; groupId: string }
+  | { kind: 'fallback-browser'; workspaceId: string }
+
+export function resolveBrowserSessionTabTarget(
+  state: Pick<AppState, 'browserTabsByWorktree' | 'unifiedTabsByWorktree'>,
+  worktreeId: string,
+  tabId: string
+): BrowserSessionTabTarget | null {
+  const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
+  if (tab?.contentType === 'browser') {
+    return {
+      kind: 'unified-browser',
+      unifiedTabId: tab.id,
+      workspaceId: tab.entityId,
+      groupId: tab.groupId
+    }
+  }
+  const fallbackBrowser = (state.browserTabsByWorktree[worktreeId] ?? []).find(
+    (workspace) => workspace.id === tabId
+  )
+  return fallbackBrowser ? { kind: 'fallback-browser', workspaceId: fallbackBrowser.id } : null
 }
 
 function isRuntimeEnvironmentActive(): boolean {
@@ -776,7 +802,18 @@ export function useIpcEvents(): void {
         const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
           (item) => item.id === tabId
         )
+        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
         if (!tab) {
+          if (browserTarget) {
+            // Why: older/mobile fallback snapshots can identify browser tabs
+            // by workspace id when no unified tab wrapper exists.
+            store.setActiveWorktree(worktreeId)
+            store.markWorktreeVisited(worktreeId)
+            store.setActiveView('terminal')
+            store.setActiveBrowserTab(browserTarget.workspaceId)
+            store.setActiveTabType('browser')
+            store.revealWorktreeInSidebar(worktreeId)
+          }
           return
         }
         store.setActiveWorktree(worktreeId)
@@ -784,15 +821,29 @@ export function useIpcEvents(): void {
         store.setActiveView('terminal')
         store.focusGroup(worktreeId, tab.groupId)
         store.activateTab(tab.id)
-        store.setActiveFile(tab.entityId)
-        store.setActiveTabType('editor')
+        if (browserTarget) {
+          // Why: mobile session tabs reuse this IPC for renderer-owned
+          // unified tabs. Browser tabs need their own active-page state,
+          // not the editor file activation path.
+          store.setActiveBrowserTab(browserTarget.workspaceId)
+          store.setActiveTabType('browser')
+        } else {
+          store.setActiveFile(tab.entityId)
+          store.setActiveTabType('editor')
+        }
         store.revealWorktreeInSidebar(worktreeId)
       })
     )
 
     unsubs.push(
-      window.api.ui.onCloseSessionTab(({ tabId }) => {
-        useAppStore.getState().closeUnifiedTab(tabId)
+      window.api.ui.onCloseSessionTab(({ tabId, worktreeId }) => {
+        const store = useAppStore.getState()
+        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+        if (browserTarget) {
+          store.closeBrowserTab(browserTarget.workspaceId)
+          return
+        }
+        store.closeUnifiedTab(tabId)
       })
     )
 

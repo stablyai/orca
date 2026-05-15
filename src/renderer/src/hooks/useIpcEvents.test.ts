@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this test file keeps the hook wiring mocks close to the assertions so IPC event behavior stays understandable and maintainable. */
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveZoomTarget } from './useIpcEvents'
+import { resolveBrowserSessionTabTarget, resolveZoomTarget } from './useIpcEvents'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -65,6 +65,55 @@ describe('resolveZoomTarget', () => {
         activeElement: makeTarget({ hasXtermClass: true })
       })
     ).toBe('ui')
+  })
+})
+
+describe('resolveBrowserSessionTabTarget', () => {
+  it('resolves unified browser tabs to their browser workspace', () => {
+    expect(
+      resolveBrowserSessionTabTarget(
+        {
+          unifiedTabsByWorktree: {
+            'wt-1': [
+              {
+                id: 'unified-browser',
+                groupId: 'group-1',
+                contentType: 'browser',
+                entityId: 'browser-workspace'
+              }
+            ]
+          },
+          browserTabsByWorktree: {
+            'wt-1': [{ id: 'browser-workspace' }]
+          }
+        } as never,
+        'wt-1',
+        'unified-browser'
+      )
+    ).toEqual({
+      kind: 'unified-browser',
+      unifiedTabId: 'unified-browser',
+      workspaceId: 'browser-workspace',
+      groupId: 'group-1'
+    })
+  })
+
+  it('resolves fallback mobile browser tabs by workspace id', () => {
+    expect(
+      resolveBrowserSessionTabTarget(
+        {
+          unifiedTabsByWorktree: { 'wt-1': [] },
+          browserTabsByWorktree: {
+            'wt-1': [{ id: 'browser-workspace' }]
+          }
+        } as never,
+        'wt-1',
+        'browser-workspace'
+      )
+    ).toEqual({
+      kind: 'fallback-browser',
+      workspaceId: 'browser-workspace'
+    })
   })
 })
 

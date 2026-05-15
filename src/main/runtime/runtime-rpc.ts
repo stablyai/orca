@@ -123,6 +123,19 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.selectCodex',
   'accounts.subscribe',
   'accounts.unsubscribe',
+  'browser.back',
+  'browser.forward',
+  'browser.goto',
+  'browser.keyboardInsertText',
+  'browser.keypress',
+  'browser.mouseDown',
+  'browser.mouseMove',
+  'browser.mouseUp',
+  'browser.mouseWheel',
+  'browser.reload',
+  'browser.screencast',
+  'browser.screencast.unsubscribe',
+  'browser.tabCreate',
   'files.list',
   'files.open',
   'files.openDiff',
@@ -722,17 +735,17 @@ export class OrcaRuntimeRpcServer {
 
     let abortController: AbortController | null = null
     let abortOnClose: (() => void) | null = null
+    if (ws) {
+      abortController = new AbortController()
+      abortOnClose = () => abortController?.abort()
+      ws.once('close', abortOnClose)
+      ws.once('error', abortOnClose)
+      if (ws.readyState !== ws.OPEN) {
+        abortController.abort()
+      }
+    }
     if (longPoll) {
       this.activeLongPolls += 1
-      abortController = new AbortController()
-      if (ws) {
-        abortOnClose = () => abortController?.abort()
-        ws.once('close', abortOnClose)
-        ws.once('error', abortOnClose)
-        if (ws.readyState !== ws.OPEN) {
-          abortController.abort()
-        }
-      }
     }
 
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined

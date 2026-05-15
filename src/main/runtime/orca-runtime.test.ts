@@ -2197,6 +2197,109 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('cancels an in-flight same-connection browser screencast before replacing it', async () => {
+    const runtime = createRuntime()
+    const firstStart = deferred<{
+      subscriptionId: string
+      ready: never
+      session: { stop: () => void; done: Promise<void> }
+    }>()
+    const firstDone = deferred<void>()
+    const secondDone = deferred<void>()
+    const thirdDone = deferred<void>()
+    const firstStop = vi.fn(() => firstDone.resolve())
+    const secondStop = vi.fn(() => secondDone.resolve())
+    const thirdStop = vi.fn(() => thirdDone.resolve())
+    const browserScreencast = vi
+      .fn()
+      .mockImplementationOnce(() => firstStart.promise)
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:second',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:second',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: secondStop, done: secondDone.promise }
+      })
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:third',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:third',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: thirdStop, done: thirdDone.promise }
+      })
+
+    ;(
+      runtime as unknown as { browserCommands: { browserScreencast: typeof browserScreencast } }
+    ).browserCommands = { browserScreencast }
+
+    const firstEmit = vi.fn()
+    const secondEmit = vi.fn()
+    const first = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: firstEmit }
+    )
+    await Promise.resolve()
+
+    const second = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: secondEmit }
+    )
+    const thirdEmit = vi.fn()
+    const third = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: thirdEmit }
+    )
+    await Promise.resolve()
+
+    expect(browserScreencast).toHaveBeenCalledTimes(1)
+
+    firstStart.resolve({
+      subscriptionId: 'browser-screencast:page-1:first',
+      ready: {} as never,
+      session: { stop: firstStop, done: firstDone.promise }
+    })
+    await first
+    await Promise.resolve()
+
+    expect(firstStop).toHaveBeenCalledTimes(1)
+    expect(firstEmit).not.toHaveBeenCalled()
+    expect(browserScreencast).toHaveBeenCalledTimes(2)
+
+    await second
+    await Promise.resolve()
+
+    expect(secondStop).toHaveBeenCalledTimes(1)
+    expect(browserScreencast).toHaveBeenCalledTimes(3)
+    expect(thirdEmit).toHaveBeenCalledWith(
+      expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:third' })
+    )
+
+    runtime.cleanupSubscription('browser-screencast:page-1:third')
+    await third
+
+    expect(thirdStop).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps already-idle status after tui-idle wait for immediate message delivery', async () => {
     const runtime = new OrcaRuntimeService(store)
     const db = new OrchestrationDb(':memory:')

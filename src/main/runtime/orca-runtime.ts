@@ -80,7 +80,8 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
-  RuntimeWorktreeListResult
+  RuntimeWorktreeListResult,
+  BrowserScreencastResult
 } from '../../shared/runtime-types'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { RuntimeFileCommands } from './orca-runtime-files'
@@ -88,6 +89,7 @@ import { RuntimeGitCommands } from './orca-runtime-git'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import { BrowserError } from '../browser/cdp-bridge'
 import {
   getPRForBranch,
   getPullRequestPushTarget,
@@ -682,6 +684,10 @@ export class OrcaRuntimeService {
   // deviceToken (multi-screen mobile).
   private subscriptionsByConnection = new Map<string, Set<string>>()
   private subscriptionConnectionByEntry = new Map<string, string>()
+  private activeBrowserScreencastsByConnection = new Map<
+    string,
+    { cancel: () => void; done: Promise<void> }
+  >()
   // Why: mobile clients subscribe to desktop notifications via
   // notifications.subscribe. This set enables fan-out — each connected
   // mobile client gets its own listener, and dispatchMobileNotification
@@ -1115,6 +1121,10 @@ export class OrcaRuntimeService {
 
     if (tab.type === 'terminal') {
       this.notifier?.focusTerminal(tab.parentTabId, worktreeId, tab.leafId)
+    } else if (tab.type === 'browser') {
+      // Why: browser mobile tabs are renderer-owned unified tabs; focusing the
+      // session tab keeps desktop tab order/group state authoritative.
+      this.notifier?.focusEditorTab?.(tab.id, worktreeId)
     } else {
       this.notifier?.focusEditorTab?.(tab.id, worktreeId)
     }
@@ -7765,7 +7775,7 @@ export class OrcaRuntimeService {
   ): RuntimeMobileSessionTabsResult {
     const tabs: RuntimeMobileSessionClientTab[] = []
     for (const tab of snapshot.tabs) {
-      if (tab.type === 'markdown' || tab.type === 'file') {
+      if (tab.type === 'markdown' || tab.type === 'file' || tab.type === 'browser') {
         tabs.push(tab)
         continue
       }
@@ -8580,6 +8590,103 @@ export class OrcaRuntimeService {
 
   browserScreenshot: RuntimeBrowserCommands['browserScreenshot'] =
     this.browserCommands.browserScreenshot.bind(this.browserCommands)
+
+  async browserScreencast(
+    params: Parameters<RuntimeBrowserCommands['browserScreencast']>[0],
+    options: {
+      connectionId?: string
+      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+      signal?: AbortSignal
+      emit: (result: BrowserScreencastResult) => void
+    }
+  ): Promise<void> {
+    if (!options.sendBinary) {
+      throw new BrowserError(
+        'browser_error',
+        'Browser screencast requires a binary streaming transport.'
+      )
+    }
+
+    const connectionKey = options.connectionId ?? 'local'
+    let existingStream = this.activeBrowserScreencastsByConnection.get(connectionKey)
+    while (existingStream) {
+      existingStream.cancel()
+      await existingStream.done
+      existingStream = this.activeBrowserScreencastsByConnection.get(connectionKey)
+    }
+    if (options.signal?.aborted) {
+      throw new BrowserError('browser_error', 'Browser screencast was cancelled.')
+    }
+
+    let screencast: Awaited<ReturnType<RuntimeBrowserCommands['browserScreencast']>> | null = null
+    let registeredSubscriptionId: string | null = null
+    let ended = false
+    let cancelledBeforeStart = false
+    let resolveActiveDone!: () => void
+    const activeDone = new Promise<void>((resolve) => {
+      resolveActiveDone = resolve
+    })
+    const end = (emitEnd: boolean): void => {
+      if (ended) {
+        return
+      }
+      ended = true
+      screencast?.session.stop()
+      if (emitEnd && screencast) {
+        options.emit({ type: 'end', subscriptionId: screencast.subscriptionId })
+      }
+    }
+    const cancel = (): void => {
+      if (!screencast) {
+        cancelledBeforeStart = true
+        return
+      }
+      end(false)
+    }
+
+    // Why: a phone can rotate before the first stream reaches `ready`, so it
+    // has no subscriptionId to unsubscribe. A same-socket replacement cancels
+    // and waits here instead of racing the active connection/page gates.
+    this.activeBrowserScreencastsByConnection.set(connectionKey, { cancel, done: activeDone })
+    options.signal?.addEventListener('abort', cancel, { once: true })
+    try {
+      screencast = await this.browserCommands.browserScreencast(params, {
+        sendBinary: options.sendBinary
+      })
+      if (cancelledBeforeStart || options.signal?.aborted) {
+        end(false)
+        await screencast.session.done
+        return
+      }
+
+      // Why: browser screencast frames are connection-scoped media. Registering
+      // cleanup ties Page.stopScreencast to the exact remote socket so hidden
+      // client panes and dropped connections do not leave Chromium streaming.
+      this.registerSubscriptionCleanup(
+        screencast.subscriptionId,
+        () => end(true),
+        options.connectionId
+      )
+      registeredSubscriptionId = screencast.subscriptionId
+      options.emit(screencast.ready)
+      await screencast.session.done
+      end(true)
+      this.cleanupSubscription(screencast.subscriptionId)
+    } finally {
+      options.signal?.removeEventListener('abort', cancel)
+      if (!ended) {
+        end(false)
+      }
+      if (registeredSubscriptionId) {
+        this.cleanupSubscription(registeredSubscriptionId)
+      }
+      const active = this.activeBrowserScreencastsByConnection.get(connectionKey)
+      if (active?.done === activeDone) {
+        this.activeBrowserScreencastsByConnection.delete(connectionKey)
+      }
+      resolveActiveDone()
+    }
+  }
 
   browserEval: RuntimeBrowserCommands['browserEval'] = this.browserCommands.browserEval.bind(
     this.browserCommands
