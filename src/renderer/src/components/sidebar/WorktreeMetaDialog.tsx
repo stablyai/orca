@@ -10,14 +10,27 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
+import { ExternalLink, LoaderCircle } from 'lucide-react'
 import type { WorktreeMeta } from '../../../../shared/types'
+
+function parseExplicitGitHubIssueUrl(input: string): string | null {
+  const trimmed = input.trim()
+  const link = parseGitHubIssueOrPRLink(trimmed)
+  if (!link || link.type !== 'issue') {
+    return null
+  }
+
+  return trimmed
+}
 
 const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const fetchIssue = useAppStore((s) => s.fetchIssue)
 
   const isEditMeta = activeModal === 'edit-meta'
   const isOpen = isEditMeta
@@ -37,6 +50,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [prInput, setPrInput] = useState('')
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
+  const [openingIssue, setOpeningIssue] = useState(false)
   const isMac = navigator.userAgent.includes('Mac')
 
   const issueInputRef = useRef<HTMLInputElement>(null)
@@ -49,8 +63,34 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     setIssueInput(currentIssue)
     setPrInput(currentPR)
     setCommentInput(currentComment)
+    setOpeningIssue(false)
   }
   prevIsOpenRef.current = isOpen
+
+  const issueNumber = useMemo(() => parseGitHubIssueOrPRNumber(issueInput), [issueInput])
+  const issueUrlFromInput = useMemo(() => parseExplicitGitHubIssueUrl(issueInput), [issueInput])
+  const issueInputLooksLikeUrl = useMemo(
+    () => /^https?:\/\//i.test(issueInput.trim()),
+    [issueInput]
+  )
+  const issueRepo = useAppStore((s) => {
+    const worktree = Object.values(s.worktreesByRepo)
+      .flat()
+      .find((item) => item.id === worktreeId)
+    if (!worktree) {
+      return undefined
+    }
+    return s.repos.find((repo) => repo.id === worktree.repoId)
+  })
+  const cachedIssueUrl = useAppStore((s) => {
+    if (!issueRepo || issueNumber === null) {
+      return null
+    }
+    return s.issueCache[`${issueRepo.id}::${issueNumber}`]?.data?.url ?? null
+  })
+  const canOpenIssue = issueInputLooksLikeUrl
+    ? Boolean(issueUrlFromInput)
+    : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const autoResize = useCallback(() => {
     const ta = textareaRef.current
@@ -154,6 +194,48 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     [handleSave]
   )
 
+  const handleOpenIssue = useCallback(async () => {
+    if (openingIssue) {
+      return
+    }
+
+    if (issueUrlFromInput) {
+      void window.api.shell.openUrl(issueUrlFromInput)
+      return
+    }
+
+    if (issueInputLooksLikeUrl) {
+      return
+    }
+
+    if (cachedIssueUrl) {
+      void window.api.shell.openUrl(cachedIssueUrl)
+      return
+    }
+
+    if (!issueRepo || issueNumber === null) {
+      return
+    }
+
+    setOpeningIssue(true)
+    try {
+      const issue = await fetchIssue(issueRepo.path, issueNumber, { repoId: issueRepo.id })
+      if (issue?.url) {
+        void window.api.shell.openUrl(issue.url)
+      }
+    } finally {
+      setOpeningIssue(false)
+    }
+  }, [
+    cachedIssueUrl,
+    fetchIssue,
+    issueInputLooksLikeUrl,
+    issueNumber,
+    issueRepo,
+    issueUrlFromInput,
+    openingIssue
+  ])
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
@@ -197,14 +279,38 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground">GH Issue</label>
-            <Input
-              ref={issueInputRef}
-              value={issueInput}
-              onChange={(e) => setIssueInput(e.target.value)}
-              onKeyDown={handleIssueKeyDown}
-              placeholder="Issue # or GitHub URL"
-              className="h-8 text-xs"
-            />
+            <div className="relative">
+              <Input
+                ref={issueInputRef}
+                value={issueInput}
+                onChange={(e) => setIssueInput(e.target.value)}
+                onKeyDown={handleIssueKeyDown}
+                placeholder="Issue # or GitHub URL"
+                className="h-8 pr-9 text-xs"
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Open GitHub issue"
+                    disabled={!canOpenIssue || openingIssue}
+                    onClick={handleOpenIssue}
+                    className="absolute right-1 top-1 text-muted-foreground"
+                  >
+                    {openingIssue ? (
+                      <LoaderCircle className="size-3 animate-spin" />
+                    ) : (
+                      <ExternalLink className="size-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  Open GitHub issue
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <p className="text-[10px] text-muted-foreground">
               Paste an issue URL, or enter a number. Leave blank to remove the link.
             </p>
