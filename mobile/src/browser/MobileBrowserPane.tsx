@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ActivityIndicator,
@@ -55,10 +56,31 @@ type BrowserPoint = {
   y: number
 }
 
+type FrameGeometry = {
+  sourceWidth: number
+  sourceHeight: number
+  renderedWidth: number
+  renderedHeight: number
+  offsetX: number
+  offsetY: number
+  scale: number
+  rotated: boolean
+}
+
+type StreamViewport = {
+  width: number
+  height: number
+}
+
 const TAP_SLOP = 10
 const LONG_PRESS_MS = 550
 const WHEEL_INTERVAL_MS = 70
 const BROWSER_FRAME_FORMAT = 'jpeg'
+const BROWSER_FRAME_QUALITY = 62
+const BROWSER_MIN_VIEWPORT_WIDTH = 320
+const BROWSER_MIN_VIEWPORT_HEIGHT = 240
+const BROWSER_MAX_VIEWPORT_WIDTH = 1600
+const BROWSER_MAX_VIEWPORT_HEIGHT = 2200
 
 export function MobileBrowserPane({
   client,
@@ -128,10 +150,20 @@ export function MobileBrowserPane({
 
   const applyFrame = useCallback((frame: BrowserScreencastFrame): void => {
     setFrameMetadata(frame.metadata)
-    setFrameUri(`data:image/${frame.format};base64,${bytesToBase64(frame.image)}`)
+    setFrameUri(`data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`)
     setBusy(false)
     setReady(true)
   }, [])
+
+  const streamViewport = useMemo(
+    () => computeStreamViewport(layout, rotated),
+    [layout, rotated]
+  )
+
+  const frameGeometry = useMemo(
+    () => computeFrameGeometry(layout, frameMetadata, rotated),
+    [frameMetadata, layout, rotated]
+  )
 
   useEffect(() => {
     streamGenerationRef.current += 1
@@ -140,7 +172,13 @@ export function MobileBrowserPane({
     setFrameMetadata(null)
     setReady(false)
     setError(null)
-    if (!client || screencastSupported !== true || !tab.browserPageId || !appActive) {
+    if (
+      !client ||
+      screencastSupported !== true ||
+      !tab.browserPageId ||
+      !appActive ||
+      !streamViewport
+    ) {
       setBusy(false)
       if (screencastSupported === false) {
         setError('Update desktop Orca to stream browser tabs on mobile.')
@@ -169,10 +207,12 @@ export function MobileBrowserPane({
         worktree: `id:${worktreeId}`,
         page: tab.browserPageId,
         format: BROWSER_FRAME_FORMAT,
-        quality: 64,
-        maxWidth: rotated ? 1200 : 900,
-        maxHeight: rotated ? 900 : 1400,
-        everyNthFrame: 2
+        quality: BROWSER_FRAME_QUALITY,
+        viewportWidth: streamViewport.width,
+        viewportHeight: streamViewport.height,
+        maxWidth: streamViewport.width,
+        maxHeight: streamViewport.height,
+        everyNthFrame: 1
       },
       (payload) => {
         if (streamGenerationRef.current !== generation) return
@@ -212,7 +252,15 @@ export function MobileBrowserPane({
       clearStartupTimer()
       unsubscribe()
     }
-  }, [appActive, applyFrame, client, rotated, screencastSupported, tab.browserPageId, worktreeId])
+  }, [
+    appActive,
+    applyFrame,
+    client,
+    screencastSupported,
+    streamViewport,
+    tab.browserPageId,
+    worktreeId
+  ])
 
   const sendBrowserRequest = useCallback(
     async (
@@ -300,9 +348,18 @@ export function MobileBrowserPane({
       if (!client || !base) {
         return
       }
+      const currentLayout = layoutRef.current
+      const geometry = computeFrameGeometry(
+        currentLayout,
+        frameMetadataRef.current,
+        rotatedRef.current
+      )
+      const scale = geometry?.scale ?? 1
+      const cssDx = screenDx / scale
+      const cssDy = screenDy / scale
       const delta = rotatedRef.current
-        ? { dx: Math.round(-screenDy), dy: Math.round(screenDx) }
-        : { dx: Math.round(-screenDx), dy: Math.round(-screenDy) }
+        ? { dx: Math.round(-cssDy), dy: Math.round(cssDx) }
+        : { dx: Math.round(-cssDx), dy: Math.round(-cssDy) }
       if (Math.abs(delta.dx) < 1 && Math.abs(delta.dy) < 1) {
         return
       }
@@ -337,24 +394,47 @@ export function MobileBrowserPane({
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
     const currentLayout = layoutRef.current
     const metadata = frameMetadataRef.current
-    if (!currentLayout || currentLayout.width <= 0 || currentLayout.height <= 0) {
+    const geometry = computeFrameGeometry(currentLayout, metadata, rotatedRef.current)
+    if (!geometry) {
       return null
     }
-    const viewportWidth = getPositiveFiniteNumber(metadata?.deviceWidth) ?? currentLayout.width
-    const viewportHeight = getPositiveFiniteNumber(metadata?.deviceHeight) ?? currentLayout.height
+    const localX = locationX - geometry.offsetX
+    const localY = locationY - geometry.offsetY
+    if (
+      localX < 0 ||
+      localY < 0 ||
+      localX > geometry.renderedWidth ||
+      localY > geometry.renderedHeight
+    ) {
+      return null
+    }
     if (rotatedRef.current) {
       return {
-        x: clamp(Math.round((locationY / currentLayout.height) * viewportWidth), 0, viewportWidth),
-        y: clamp(
-          Math.round(((currentLayout.width - locationX) / currentLayout.width) * viewportHeight),
+        x: clamp(
+          Math.round((localY / geometry.renderedHeight) * geometry.sourceWidth),
           0,
-          viewportHeight
+          geometry.sourceWidth
+        ),
+        y: clamp(
+          Math.round(
+            ((geometry.renderedWidth - localX) / geometry.renderedWidth) * geometry.sourceHeight
+          ),
+          0,
+          geometry.sourceHeight
         )
       }
     }
     return {
-      x: clamp(Math.round((locationX / currentLayout.width) * viewportWidth), 0, viewportWidth),
-      y: clamp(Math.round((locationY / currentLayout.height) * viewportHeight), 0, viewportHeight)
+      x: clamp(
+        Math.round((localX / geometry.renderedWidth) * geometry.sourceWidth),
+        0,
+        geometry.sourceWidth
+      ),
+      y: clamp(
+        Math.round((localY / geometry.renderedHeight) * geometry.sourceHeight),
+        0,
+        geometry.sourceHeight
+      )
     }
   }, [])
 
@@ -459,15 +539,6 @@ export function MobileBrowserPane({
     [sendBrowserRequest]
   )
 
-  const rotatedImageStyle =
-    rotated && layout
-      ? {
-          width: layout.height,
-          height: layout.width,
-          transform: [{ rotate: '90deg' }]
-        }
-      : styles.browserImageFill
-
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
 
   return (
@@ -504,6 +575,7 @@ export function MobileBrowserPane({
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
+          numberOfLines={1}
           returnKeyType="go"
           placeholder="URL"
           placeholderTextColor={colors.textMuted}
@@ -526,6 +598,10 @@ export function MobileBrowserPane({
             width: event.nativeEvent.layout.width,
             height: event.nativeEvent.layout.height
           }
+          const current = layoutRef.current
+          if (current && current.width === next.width && current.height === next.height) {
+            return
+          }
           layoutRef.current = next
           setLayout(next)
         }}
@@ -533,7 +609,49 @@ export function MobileBrowserPane({
       >
         {frameUri ? (
           <View style={styles.browserImageHost}>
-            <Image source={{ uri: frameUri }} resizeMode="stretch" style={rotatedImageStyle} />
+            {frameGeometry ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.browserFrameBox,
+                  {
+                    width: frameGeometry.renderedWidth,
+                    height: frameGeometry.renderedHeight
+                  }
+                ]}
+              >
+                <Image
+                  source={{ uri: frameUri }}
+                  resizeMode="stretch"
+                  fadeDuration={0}
+                  style={
+                    frameGeometry.rotated
+                      ? [
+                          styles.browserImage,
+                          {
+                            width: frameGeometry.renderedHeight,
+                            height: frameGeometry.renderedWidth,
+                            transform: [{ rotate: '90deg' }]
+                          }
+                        ]
+                      : [
+                          styles.browserImage,
+                          {
+                            width: frameGeometry.renderedWidth,
+                            height: frameGeometry.renderedHeight
+                          }
+                        ]
+                  }
+                />
+              </View>
+            ) : (
+              <Image
+                source={{ uri: frameUri }}
+                resizeMode="contain"
+                fadeDuration={0}
+                style={styles.browserImageFill}
+              />
+            )}
           </View>
         ) : null}
         {!frameUri || busy || error ? (
@@ -664,24 +782,50 @@ function getPositiveFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
+function computeStreamViewport(layout: ViewportLayout | null, rotated: boolean): StreamViewport | null {
+  if (!layout || layout.width <= 0 || layout.height <= 0) {
+    return null
+  }
+  const width = rotated ? layout.height : layout.width
+  const height = rotated ? layout.width : layout.height
+  return {
+    width: clamp(Math.round(width), BROWSER_MIN_VIEWPORT_WIDTH, BROWSER_MAX_VIEWPORT_WIDTH),
+    height: clamp(Math.round(height), BROWSER_MIN_VIEWPORT_HEIGHT, BROWSER_MAX_VIEWPORT_HEIGHT)
+  }
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  let result = ''
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i] ?? 0
-    const b = bytes[i + 1] ?? 0
-    const c = bytes[i + 2] ?? 0
-    const triple = (a << 16) | (b << 8) | c
-    result += chars[(triple >> 18) & 63]
-    result += chars[(triple >> 12) & 63]
-    result += i + 1 < bytes.length ? chars[(triple >> 6) & 63] : '='
-    result += i + 2 < bytes.length ? chars[triple & 63] : '='
+function computeFrameGeometry(
+  layout: ViewportLayout | null,
+  metadata: BrowserScreencastFrameMetadata | null,
+  rotated: boolean
+): FrameGeometry | null {
+  if (!layout || layout.width <= 0 || layout.height <= 0) {
+    return null
   }
-  return result
+  const sourceWidth = getPositiveFiniteNumber(metadata?.deviceWidth) ?? layout.width
+  const sourceHeight = getPositiveFiniteNumber(metadata?.deviceHeight) ?? layout.height
+  const visualSourceWidth = rotated ? sourceHeight : sourceWidth
+  const visualSourceHeight = rotated ? sourceWidth : sourceHeight
+  const scale = Math.min(layout.width / visualSourceWidth, layout.height / visualSourceHeight)
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return null
+  }
+  const renderedWidth = visualSourceWidth * scale
+  const renderedHeight = visualSourceHeight * scale
+  return {
+    sourceWidth,
+    sourceHeight,
+    renderedWidth,
+    renderedHeight,
+    offsetX: (layout.width - renderedWidth) / 2,
+    offsetY: (layout.height - renderedHeight) / 2,
+    scale,
+    rotated
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
 }
 
 const styles = StyleSheet.create({
@@ -724,7 +868,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     paddingHorizontal: spacing.sm,
+    paddingVertical: 0,
     fontSize: 13,
+    lineHeight: 17,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
     fontFamily: typography.monoFamily
   },
   viewport: {
@@ -742,6 +890,14 @@ const styles = StyleSheet.create({
   browserImageFill: {
     width: '100%',
     height: '100%'
+  },
+  browserFrameBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden'
+  },
+  browserImage: {
+    backgroundColor: colors.bgBase
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
