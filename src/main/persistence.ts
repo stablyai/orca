@@ -60,6 +60,7 @@ import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-command
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardOpacity,
+  normalizeWorkspaceBoardCompact,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
 
@@ -1213,7 +1214,8 @@ export class Store {
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
-      workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity)
+      workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact)
     }
   }
 
@@ -1232,6 +1234,9 @@ export class Store {
       ),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
         updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
+      ),
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(
+        updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
       )
     }
     this.scheduleSave()

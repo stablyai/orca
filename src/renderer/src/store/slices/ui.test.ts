@@ -116,6 +116,24 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
+  it('restores compact workspace board mode only from an explicit true', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardCompact: true
+      })
+    )
+    expect(store.getState().workspaceBoardCompact).toBe(true)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardCompact: 'yes' as unknown as boolean
+      })
+    )
+    expect(store.getState().workspaceBoardCompact).toBe(false)
+  })
+
   it('hydrates a valid Kagi session link', () => {
     const store = createUIStore()
 

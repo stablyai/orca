@@ -8,14 +8,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
-import {
-  WORKSPACE_STATUS_COLOR_OPTIONS,
-  WORKSPACE_STATUS_ICON_OPTIONS,
-  getWorkspaceStatusVisualMeta
-} from './workspace-status'
+import { getWorkspaceStatusVisualMeta } from './workspace-status'
+import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
 
 type WorkspaceKanbanSettingsMenuProps = {
   opacityPercent: number
@@ -41,7 +37,7 @@ export default function WorkspaceKanbanSettingsMenu({
   onAddStatus
 }: WorkspaceKanbanSettingsMenuProps): React.JSX.Element {
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-xs" aria-label="Workspace board settings">
           <Settings2 className="size-3.5" />
@@ -51,6 +47,15 @@ export default function WorkspaceKanbanSettingsMenu({
         align="end"
         sideOffset={8}
         className="max-h-[min(80vh,720px)] w-80 overflow-y-auto p-2 scrollbar-sleek"
+        onInteractOutside={(event) => {
+          const target = event.target
+          if (
+            target instanceof Element &&
+            target.closest('[data-workspace-status-appearance-popover]')
+          ) {
+            event.preventDefault()
+          }
+        }}
       >
         <DropdownMenuLabel>Board opacity</DropdownMenuLabel>
         <div className="px-2 pb-2">
@@ -76,7 +81,7 @@ export default function WorkspaceKanbanSettingsMenu({
             return (
               <div
                 key={status.id}
-                className="space-y-1.5 rounded-md border border-border/70 bg-background/40 p-1.5"
+                className="rounded-md border border-border/70 bg-background/40 p-1.5"
               >
                 <div className="flex items-center gap-1">
                   <meta.icon className={cn('size-3.5 shrink-0', meta.tone)} />
@@ -91,6 +96,11 @@ export default function WorkspaceKanbanSettingsMenu({
                     }}
                     className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-[12px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     aria-label={`Rename ${status.label}`}
+                  />
+                  <WorkspaceStatusAppearancePopover
+                    status={status}
+                    onChangeColor={onChangeStatusColor}
+                    onChangeIcon={onChangeStatusIcon}
                   />
                   <Button
                     type="button"
@@ -125,49 +135,6 @@ export default function WorkspaceKanbanSettingsMenu({
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
-                </div>
-                <div className="flex items-center gap-1">
-                  {WORKSPACE_STATUS_COLOR_OPTIONS.map((color) => (
-                    <Tooltip key={color.id}>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className={cn(
-                            'flex size-5 items-center justify-center rounded-full border border-transparent',
-                            status.color === color.id && 'border-ring bg-accent'
-                          )}
-                          onClick={() => onChangeStatusColor(status.id, color.id)}
-                          aria-label={`Set ${status.label} color to ${color.label}`}
-                        >
-                          <span className={cn('size-3 rounded-full', color.swatch)} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" sideOffset={4}>
-                        {color.label}
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
-                <div className="grid grid-cols-6 gap-1">
-                  {WORKSPACE_STATUS_ICON_OPTIONS.map((icon) => (
-                    <Tooltip key={icon.id}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant={status.icon === icon.id ? 'secondary' : 'ghost'}
-                          size="icon-xs"
-                          className="size-7"
-                          onClick={() => onChangeStatusIcon(status.id, icon.id)}
-                          aria-label={`Set ${status.label} icon to ${icon.label}`}
-                        >
-                          <icon.icon className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" sideOffset={4}>
-                        {icon.label}
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
                 </div>
               </div>
             )

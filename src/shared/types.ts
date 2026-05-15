@@ -1585,6 +1585,7 @@ export type PersistedUIState = {
   worktreeCardProperties: WorktreeCardProperty[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
+  workspaceBoardCompact?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null

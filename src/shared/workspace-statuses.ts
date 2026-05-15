@@ -153,6 +153,10 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
   return Math.min(1, Math.max(0.2, Math.round(value * 100) / 100))
 }
 
+export function normalizeWorkspaceBoardCompact(value: unknown): boolean {
+  return value === true
+}
+
 export function isWorkspaceStatusId(
   value: string,
   statuses: readonly WorkspaceStatusDefinition[]

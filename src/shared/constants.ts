@@ -327,6 +327,7 @@ export function getDefaultUIState(): PersistedUIState {
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
+    workspaceBoardCompact: false,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     dismissedUpdateVersion: null,

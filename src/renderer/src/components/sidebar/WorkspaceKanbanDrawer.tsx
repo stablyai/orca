@@ -11,9 +11,9 @@ import {
   SheetTitle
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Pin, X } from 'lucide-react'
-import WorktreeCard from './WorktreeCard'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { LayoutList, Pin, Rows3, X } from 'lucide-react'
+import WorkspaceKanbanCard from './WorkspaceKanbanCard'
 import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
 import {
   getWorkspaceStatus,
@@ -46,6 +46,8 @@ export default function WorkspaceKanbanDrawer({
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
   const workspaceBoardOpacity = useAppStore((s) => s.workspaceBoardOpacity)
   const setWorkspaceBoardOpacity = useAppStore((s) => s.setWorkspaceBoardOpacity)
+  const workspaceBoardCompact = useAppStore((s) => s.workspaceBoardCompact)
+  const setWorkspaceBoardCompact = useAppStore((s) => s.setWorkspaceBoardCompact)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
@@ -234,9 +236,10 @@ export default function WorkspaceKanbanDrawer({
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
+  const BoardModeIcon = workspaceBoardCompact ? Rows3 : LayoutList
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetContent
         side="left"
         showCloseButton={false}
@@ -253,6 +256,12 @@ export default function WorkspaceKanbanDrawer({
             opacity: workspaceBoardOpacity
           } as React.CSSProperties
         }
+        data-workspace-board-compact={workspaceBoardCompact ? 'true' : 'false'}
+        onInteractOutside={(event) => {
+          // Why: users need to scroll, click, and drag from the workspace
+          // sidebar while the companion board stays open.
+          event.preventDefault()
+        }}
       >
         <SheetHeader className="border-b border-sidebar-border px-4 py-3 pr-24">
           <SheetTitle className="text-sm">Workspace board</SheetTitle>
@@ -262,6 +271,25 @@ export default function WorkspaceKanbanDrawer({
         </SheetHeader>
 
         <div className="absolute right-3 top-2.5 flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={workspaceBoardCompact ? 'secondary' : 'ghost'}
+                size="icon-xs"
+                aria-pressed={workspaceBoardCompact}
+                aria-label={
+                  workspaceBoardCompact ? 'Compact workspace cards' : 'Detailed workspace cards'
+                }
+                onClick={() => setWorkspaceBoardCompact(!workspaceBoardCompact)}
+              >
+                <BoardModeIcon className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {workspaceBoardCompact ? 'Show detailed cards' : 'Show compact cards'}
+            </TooltipContent>
+          </Tooltip>
           <WorkspaceKanbanSettingsMenu
             opacityPercent={opacityPercent}
             workspaceStatuses={workspaceStatuses}
@@ -336,23 +364,14 @@ export default function WorkspaceKanbanDrawer({
                       {items.length > 0 ? (
                         <div className="space-y-2">
                           {items.map((worktree) => (
-                            <div key={worktree.id} className="relative">
-                              {worktree.isPinned ? (
-                                <Badge
-                                  variant="outline"
-                                  className="pointer-events-none absolute right-2 top-1.5 z-10 h-4 gap-1 rounded-full bg-background/90 px-1.5 text-[9px] leading-none text-muted-foreground"
-                                >
-                                  <Pin className="size-2.5" />
-                                  Pinned
-                                </Badge>
-                              ) : null}
-                              <WorktreeCard
-                                worktree={worktree}
-                                repo={repoMap.get(worktree.repoId)}
-                                isActive={activeWorktreeId === worktree.id}
-                                onActivate={handleWorktreeActivate}
-                              />
-                            </div>
+                            <WorkspaceKanbanCard
+                              key={worktree.id}
+                              worktree={worktree}
+                              repo={repoMap.get(worktree.repoId)}
+                              isActive={activeWorktreeId === worktree.id}
+                              compact={workspaceBoardCompact}
+                              onActivate={handleWorktreeActivate}
+                            />
                           ))}
                         </div>
                       ) : (

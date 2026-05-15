@@ -24,6 +24,7 @@ import {
 import {
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
+  normalizeWorkspaceBoardCompact,
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
@@ -318,6 +319,8 @@ export type UISlice = {
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
+  workspaceBoardCompact: boolean
+  setWorkspaceBoardCompact: (compact: boolean) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
@@ -700,6 +703,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardOpacity: clamped })
   },
 
+  workspaceBoardCompact: false,
+  setWorkspaceBoardCompact: (compact) => {
+    const normalized = normalizeWorkspaceBoardCompact(compact)
+    window.api.ui.set({ workspaceBoardCompact: normalized }).catch(console.error)
+    set({ workspaceBoardCompact: normalized })
+  },
+
   statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
   toggleStatusBarItem: (item) =>
     set((s) => {
@@ -841,6 +851,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
+        workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
         statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time
