@@ -800,13 +800,18 @@ export default function MarkdownPreview({
                 return
               }
               const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
-              if (classified?.kind === 'markdown') {
+              if (
+                classified?.kind === 'markdown' ||
+                (classified?.kind === 'file' && classified.line !== undefined)
+              ) {
                 // Why: use the classifier's stripped absolutePath (no `:line:col`
                 // or `#L10` suffix) so the OS handler receives a clean file URI.
                 const cleanUri = absolutePathToFileUri(classified.absolutePath)
                 void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
                   if (!exists) {
-                    toast.error(`File not found: ${classified.relativePath}`)
+                    toast.error(
+                      `File not found: ${classified.relativePath ?? classified.absolutePath}`
+                    )
                     return
                   }
                   void window.api.shell.openFileUri(cleanUri)
@@ -832,12 +837,19 @@ export default function MarkdownPreview({
             return
           }
 
-          const absolutePath = fileUrlToAbsolutePath(target)
+          const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+          const classifiedFileTarget =
+            classified?.kind === 'markdown' || classified?.kind === 'file' ? classified : null
+          const absolutePath = classifiedFileTarget?.absolutePath ?? fileUrlToAbsolutePath(target)
           if (!absolutePath) {
             return
           }
+          const lineTarget =
+            classifiedFileTarget?.line !== undefined
+              ? { line: classifiedFileTarget.line, column: classifiedFileTarget.column }
+              : parseLineTarget(target.hash)
 
-          if (absolutePath === filePath && target.hash) {
+          if (absolutePath === filePath && target.hash && !lineTarget) {
             void scrollToAnchor(target.hash.slice(1))
             return
           }
@@ -874,13 +886,12 @@ export default function MarkdownPreview({
           const relativePath = absolutePath.slice(targetWorktree.path.length + 1)
           const language = detectLanguage(absolutePath)
 
-          // Why: line-target fragments like #L10 or #L10C5 should open the
-          // source editor and reveal the line, not open a preview tab that
-          // treats "L10" as a heading anchor.
-          const lineTarget = parseLineTarget(target.hash)
-          if (language === 'markdown' && lineTarget) {
-            const fileId = absolutePath
-            setMarkdownViewMode(fileId, 'source')
+          // Why: line targets like #L10 and path.ts:10 should reveal in Monaco,
+          // not open a preview tab or a literal path with the suffix included.
+          if (lineTarget) {
+            if (language === 'markdown') {
+              setMarkdownViewMode(absolutePath, 'source')
+            }
             openFile({
               filePath: absolutePath,
               relativePath,

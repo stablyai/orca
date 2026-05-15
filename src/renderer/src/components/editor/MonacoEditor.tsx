@@ -11,7 +11,7 @@ import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
-import { performReveal } from './monaco-reveal'
+import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
 import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
 import {
   beginProgrammaticContentSync,
@@ -104,6 +104,21 @@ export default function MonacoEditor({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+  // Why: `keepCurrentModel` retains Monaco models across unmounts, and
+  // @monaco-editor/react skips its value→model sync on the first render after
+  // a remount. Without explicit sync, external file changes that arrived
+  // while the tab was unmounted leave the retained model showing stale text.
+  // contentRef lets handleMount read the current content without re-binding;
+  // lastSyncedContentRef lets the update effect distinguish our own onChange
+  // emissions from real prop drift.
+  // Invariant: the mount path (handleMount's syncContentOnMount call) MUST
+  // read `contentRef.current`, never `lastSyncedContentRef.current`. The
+  // useLayoutEffect below can run before mount with `editorRef.current === null`
+  // and bails without updating lastSyncedContentRef, so that ref may be stale
+  // pre-mount; only contentRef is guaranteed to reflect the latest prop.
+  const contentRef = useRef(content)
+  contentRef.current = content
+  const lastSyncedContentRef = useRef<string>(content)
   const markdownComments = useMemo(
     () =>
       (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isMarkdownComment(c)),
@@ -197,46 +212,46 @@ export default function MonacoEditor({
       onApplied?: () => void
     ) => {
       cancelScheduledReveal()
+      let waitFrames = 0
 
-      // Why: the search click path already waits two frames before publishing
-      // the reveal intent, but Monaco can still mount before its viewport math
-      // settles. Deferring the actual reveal by two editor-owned frames keeps
-      // scroll-to-match and inline highlight deterministic on fresh opens.
-      revealRafRef.current = requestAnimationFrame(() => {
-        revealInnerRafRef.current = requestAnimationFrame(() => {
-          performReveal(
-            editorInstance,
-            line,
-            column,
-            matchLength,
-            clearTransientRevealHighlight,
-            revealDecorationRef,
-            revealHighlightTimerRef
-          )
-          onApplied?.()
-          revealRafRef.current = null
-          revealInnerRafRef.current = null
+      const schedule = (): void => {
+        // Why: the search click path already waits two frames before publishing
+        // the reveal intent, but Monaco can still mount before its viewport math
+        // settles. Deferring the actual reveal by two editor-owned frames keeps
+        // scroll-to-match and inline highlight deterministic on fresh opens.
+        revealRafRef.current = requestAnimationFrame(() => {
+          revealInnerRafRef.current = requestAnimationFrame(() => {
+            revealRafRef.current = null
+            revealInnerRafRef.current = null
+            const modelLineCount = editorInstance.getModel()?.getLineCount() ?? 0
+            if (line > 1 && modelLineCount < line && waitFrames < MAX_REVEAL_CONTENT_WAIT_FRAMES) {
+              // Why: fresh file opens can mount Monaco against an empty one-line
+              // model before the async file read arrives. Waiting prevents the
+              // requested line from being clamped to 1 and then cleared.
+              waitFrames += 2
+              schedule()
+              return
+            }
+
+            performReveal(
+              editorInstance,
+              line,
+              column,
+              matchLength,
+              clearTransientRevealHighlight,
+              revealDecorationRef,
+              revealHighlightTimerRef
+            )
+            onApplied?.()
+          })
         })
-      })
+      }
+
+      schedule()
     },
     [cancelScheduledReveal, clearTransientRevealHighlight]
   )
 
-  // Why: `keepCurrentModel` retains Monaco models across unmounts, and
-  // @monaco-editor/react skips its value→model sync on the first render after
-  // a remount. Without explicit sync, external file changes that arrived
-  // while the tab was unmounted leave the retained model showing stale text.
-  // contentRef lets handleMount read the current content without re-binding;
-  // lastSyncedContentRef lets the update effect distinguish our own onChange
-  // emissions from real prop drift.
-  // Invariant: the mount path (handleMount's syncContentOnMount call) MUST
-  // read `contentRef.current`, never `lastSyncedContentRef.current`. The
-  // useLayoutEffect below can run before mount with `editorRef.current === null`
-  // and bails without updating lastSyncedContentRef, so that ref may be stale
-  // pre-mount; only contentRef is guaranteed to reflect the latest prop.
-  const contentRef = useRef(content)
-  contentRef.current = content
-  const lastSyncedContentRef = useRef<string>(content)
   // Why: Monaco model reconciliation reuses real edit operations so retained
   // models keep sane undo behavior. Those edits are programmatic, not user
   // typing, so split panes must suppress the resulting onChange callback or a

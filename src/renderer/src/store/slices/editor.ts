@@ -157,6 +157,27 @@ export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
+function scheduleEditorLineReveal(
+  get: () => AppState,
+  filePath: string,
+  line: number,
+  column?: number
+): void {
+  // Why: openFile can replace a preview and remount Monaco asynchronously; the
+  // reveal must land after that remount or the old editor can clear it.
+  get().setPendingEditorReveal(null)
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      get().setPendingEditorReveal({
+        filePath,
+        line,
+        column: column ?? 1,
+        matchLength: 0
+      })
+    })
+  })
+}
+
 export type EditorSlice = {
   // Why: #300 originally kept EditorPanel mounted while hidden so unsaved
   // drafts and autosave timers could survive tab switches. Drafts live in the
@@ -2226,6 +2247,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'file') {
+      const { line, column } = target
       if (target.relativePath === undefined) {
         if (sourceSettings?.activeRuntimeEnvironmentId?.trim()) {
           // Why: a file:// link outside the worktree is a client-local escape
@@ -2255,6 +2277,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           recordReplacedPreview: true
         }
       )
+      if (line !== undefined) {
+        scheduleEditorLineReveal(get, target.absolutePath, line, column)
+      }
       return
     }
 
@@ -2311,21 +2336,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
 
     if (line !== undefined) {
-      // Why: double-RAF matches search-match-open.ts. openFile may replace a
-      // preview, remounting Monaco asynchronously; the mount's own
-      // setPendingEditorReveal(null) would otherwise clobber a reveal scheduled
-      // in the same tick.
-      get().setPendingEditorReveal(null)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          get().setPendingEditorReveal({
-            filePath: absolutePath,
-            line,
-            column: column ?? 1,
-            matchLength: 0
-          })
-        })
-      })
+      scheduleEditorLineReveal(get, absolutePath, line, column)
     }
   },
 

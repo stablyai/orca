@@ -1457,6 +1457,30 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
+  it('reveals line targets for non-markdown file links', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('../src/PdfViewer.tsx:142:7', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/src/PdfViewer.tsx',
+        relativePath: 'src/PdfViewer.tsx',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/src/PdfViewer.tsx',
+      line: 142,
+      column: 7,
+      matchLength: 0
+    })
+  })
+
   it('opens explicit file URLs inside the worktree in Orca', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('file:///repo/docs/image.png', {
