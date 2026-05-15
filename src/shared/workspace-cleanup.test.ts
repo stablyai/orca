@@ -25,7 +25,7 @@ function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCand
     path: '/tmp/feature',
     tier: 'review',
     selectedByDefault: false,
-    reasons: ['pr-merged'],
+    reasons: ['idle-clean'],
     blockers: [],
     lastActivityAt: 1_700_000_000_000,
     localContext: {
@@ -40,11 +40,8 @@ function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCand
       clean: true,
       upstreamAhead: 0,
       upstreamBehind: 0,
-      branchCompareChangedFiles: null,
       checkedAt: 1_700_000_000_000
     },
-    prStateCheckedAt: 1_700_000_000_000,
-    staleEvidence: false,
     fingerprint: 'fingerprint',
     ...candidateOverrides
   }
@@ -56,7 +53,7 @@ function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCand
 }
 
 describe('workspace cleanup policy', () => {
-  it('marks clean merged workspaces with base proof as ready and selected', () => {
+  it('marks clean inactive workspaces as ready and selected', () => {
     const candidate = applyWorkspaceCleanupPolicy(makeCandidate())
 
     expect(candidate.tier).toBe('ready')
@@ -64,10 +61,10 @@ describe('workspace cleanup policy', () => {
     expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(true)
   })
 
-  it('requires a cleanup reason before defaulting a selectable workspace to ready', () => {
+  it('requires an inactivity reason before selecting a workspace', () => {
     const candidate = applyWorkspaceCleanupPolicy(makeCandidate({ reasons: [] }))
 
-    expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(true)
+    expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(false)
     expect(candidate.tier).toBe('review')
     expect(candidate.selectedByDefault).toBe(false)
   })
@@ -80,15 +77,14 @@ describe('workspace cleanup policy', () => {
     expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(false)
   })
 
-  it('treats missing base proof as not selectable', () => {
+  it('requires current git status before selecting a workspace', () => {
     const candidate = applyWorkspaceCleanupPolicy(
       makeCandidate({
-        blockers: ['unknown-base'],
-        git: { upstreamAhead: null, branchCompareChangedFiles: null }
+        git: { clean: null, checkedAt: null }
       })
     )
 
-    expect(candidate.tier).toBe('protected')
+    expect(candidate.tier).toBe('review')
     expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(false)
   })
 
@@ -96,7 +92,6 @@ describe('workspace cleanup policy', () => {
     const fingerprint = createWorkspaceCleanupFingerprint({
       branch: 'feature',
       head: 'abc123',
-      prState: 'merged',
       gitClean: true,
       lastActivityAt: 1_700_000_000_000
     })

@@ -23,7 +23,7 @@ function makeCandidate(
     path: '/tmp/old-workspace',
     tier: 'ready',
     selectedByDefault: true,
-    reasons: ['pr-merged'],
+    reasons: ['idle-clean'],
     blockers: [],
     lastActivityAt: NOW - 30 * 24 * 60 * 60 * 1000,
     localContext: {
@@ -38,11 +38,8 @@ function makeCandidate(
       clean: true,
       upstreamAhead: 0,
       upstreamBehind: 0,
-      branchCompareChangedFiles: 0,
       checkedAt: NOW
     },
-    prStateCheckedAt: NOW,
-    staleEvidence: false,
     fingerprint: 'fingerprint-1',
     ...overrides
   }

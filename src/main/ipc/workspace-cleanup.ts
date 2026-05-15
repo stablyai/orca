@@ -2,12 +2,13 @@
 import { ipcMain } from 'electron'
 import { basename } from 'node:path'
 import type { Store } from '../persistence'
-import { getStatus, getBranchCompare } from '../git/status'
+import { getStatus } from '../git/status'
+import { gitExecFileAsync } from '../git/runner'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { GitStatusResult, GitWorktreeInfo, PRInfo, Repo, Worktree } from '../../shared/types'
+import type { GitStatusResult, GitWorktreeInfo, Repo, Worktree } from '../../shared/types'
 import { mergeWorktree } from './worktree-logic'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import {
@@ -16,7 +17,6 @@ import {
   WORKSPACE_CLEANUP_IDLE_MS,
   applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
-  hasWorkspaceCleanupDivergenceProof,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissArgs,
@@ -27,22 +27,13 @@ import {
 
 const GIT_READ_TIMEOUT_MS = 8_000
 const WORKTREE_SCAN_CONCURRENCY = 3
-const GITHUB_PR_CACHE_TTL_MS = 5 * 60_000
 const REMOTE_WORKSPACES_NOT_CONNECTED_MESSAGE =
   'Remote workspaces are not connected. Reconnect and refresh to check them.'
-
-type PrCacheHit = {
-  pr: PRInfo | null
-  fetchedAt: number
-  trustedForReady: boolean
-  stale: boolean
-}
 
 type GitEvidence = {
   clean: boolean | null
   upstreamAhead: number | null
   upstreamBehind: number | null
-  branchCompareChangedFiles: number | null
   checkedAt: number | null
   blockers: WorkspaceCleanupBlocker[]
 }
@@ -85,7 +76,6 @@ export async function scanWorkspaceCleanup(
 ): Promise<WorkspaceCleanupScanResult> {
   const scannedAt = Date.now()
   const repos = store.getRepos()
-  const duplicateRepoPaths = findDuplicateRepoPaths(repos)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
 
@@ -94,7 +84,6 @@ export async function scanWorkspaceCleanup(
       store,
       repo,
       scannedAt,
-      duplicateRepoPaths,
       targetWorktreeId: args.worktreeId,
       skipGitWorktreeIds: new Set(args.skipGitWorktreeIds ?? [])
     })
@@ -109,11 +98,10 @@ async function scanRepoWorkspaces(args: {
   store: Store
   repo: Repo
   scannedAt: number
-  duplicateRepoPaths: Set<string>
   targetWorktreeId?: string
   skipGitWorktreeIds: Set<string>
 }): Promise<WorkspaceCleanupScanResult> {
-  const { store, repo, scannedAt, duplicateRepoPaths, targetWorktreeId, skipGitWorktreeIds } = args
+  const { store, repo, scannedAt, targetWorktreeId, skipGitWorktreeIds } = args
   const errors: WorkspaceCleanupScanResult['errors'] = []
   let provider: IGitProvider | null = null
   let gitWorktrees: GitWorktreeInfo[] = []
@@ -156,17 +144,25 @@ async function scanRepoWorkspaces(args: {
       const meta = store.getWorktreeMeta(worktreeId)
       return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
     })
-    .filter((worktree) => !targetWorktreeId || worktree.id === targetWorktreeId)
+    .filter((worktree) => {
+      if (targetWorktreeId) {
+        return worktree.id === targetWorktreeId
+      }
+      return (
+        !repoIsFolder &&
+        !worktree.isMainWorktree &&
+        isWorkspaceInactiveForCleanup(worktree, scannedAt)
+      )
+    })
 
   const candidates = await mapWithConcurrency(worktrees, WORKTREE_SCAN_CONCURRENCY, (worktree) =>
     buildCandidate({
-      store,
       repo,
       worktree,
       scannedAt,
       provider,
-      prCacheAmbiguous: Boolean(repo.connectionId) || duplicateRepoPaths.has(repo.path),
-      skipGit: skipGitWorktreeIds.has(worktree.id)
+      skipGit: skipGitWorktreeIds.has(worktree.id),
+      forceGitCheck: Boolean(targetWorktreeId)
     }).catch((error) => {
       console.error('Workspace cleanup candidate scan failed', error)
       errors.push({ repoId: repo.id, message: toSafeWorkspaceCleanupError(error) })
@@ -178,17 +174,16 @@ async function scanRepoWorkspaces(args: {
 }
 
 async function buildCandidate(args: {
-  store: Store
   repo: Repo
   worktree: Worktree
   scannedAt: number
   provider: IGitProvider | null
-  prCacheAmbiguous: boolean
   skipGit: boolean
+  forceGitCheck: boolean
 }): Promise<WorkspaceCleanupCandidate> {
-  const { store, repo, worktree, scannedAt, provider, prCacheAmbiguous, skipGit } = args
+  const { repo, worktree, scannedAt, provider, skipGit, forceGitCheck } = args
   const blockers: WorkspaceCleanupBlocker[] = []
-  const reasons: WorkspaceCleanupReason[] = []
+  const reasons = getInactivityReasons(worktree, scannedAt)
   const repoIsFolder = isFolderRepo(repo)
 
   if (worktree.isMainWorktree) {
@@ -201,57 +196,18 @@ async function buildCandidate(args: {
     blockers.push('pinned')
   }
 
-  const rawPrHit = findCachedPR(
-    store,
-    repo,
-    shortBranchName(worktree.branch),
-    worktree.linkedPR,
-    scannedAt
-  )
-  const prHit = rawPrHit
-    ? {
-        ...rawPrHit,
-        trustedForReady:
-          rawPrHit.trustedForReady &&
-          !prCacheAmbiguous &&
-          (!rawPrHit.stale || rawPrHit.pr?.state === 'merged')
-      }
-    : null
-  const linkedPR = prHit?.pr
-    ? { number: prHit.pr.number, state: prHit.pr.state }
-    : worktree.linkedPR !== null
-      ? { number: worktree.linkedPR, state: 'unknown' as const }
-      : undefined
-
-  if (prHit?.pr?.state === 'open' || prHit?.pr?.state === 'draft') {
-    blockers.push('open-pr')
-  }
-  if (prHit?.trustedForReady && prHit.pr?.state === 'merged') {
-    reasons.push('pr-merged')
-  }
-  if (
-    worktree.isArchived &&
-    scannedAt - worktree.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
-  ) {
-    reasons.push('archived')
-  }
-
   const localContext = buildLocalContext(worktree)
-  const forceBranchCompare = prHit?.trustedForReady === true && prHit.pr?.state === 'closed'
   const shouldReadGit = shouldReadGitEvidence({
     repoIsFolder,
     blockers,
     worktree,
-    scannedAt,
-    localContext,
-    prHit,
-    linkedPR,
-    skipGit
+    skipGit,
+    forceGitCheck
   })
 
   const gitEvidence = !shouldReadGit
     ? createEmptyGitEvidence()
-    : await readGitEvidence(worktree, repo, provider, { forceBranchCompare })
+    : await readGitEvidence(worktree, repo, provider)
   blockers.push(...gitEvidence.blockers)
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
@@ -268,55 +224,19 @@ async function buildCandidate(args: {
     blockers: uniqueBlockers(blockers),
     lastActivityAt: worktree.lastActivityAt,
     ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
-    ...(linkedPR ? { linkedPR } : {}),
     localContext,
     git: {
       clean: gitEvidence.clean,
       upstreamAhead: gitEvidence.upstreamAhead,
       upstreamBehind: gitEvidence.upstreamBehind,
-      branchCompareChangedFiles: gitEvidence.branchCompareChangedFiles,
       checkedAt: gitEvidence.checkedAt
     },
-    prStateCheckedAt: prHit?.fetchedAt ?? null,
-    staleEvidence: rawPrHit?.stale === true && prHit?.trustedForReady !== true,
     fingerprint: ''
-  }
-
-  if (
-    prHit?.trustedForReady &&
-    prHit.pr?.state === 'closed' &&
-    gitEvidence.branchCompareChangedFiles === 0
-  ) {
-    reasons.push('pr-closed-clean')
-  }
-  const hasIdleOnlyLocalContext =
-    localContext.diffCommentCount > 0 &&
-    !(
-      prHit?.trustedForReady &&
-      (prHit.pr?.state === 'merged' ||
-        (prHit.pr?.state === 'closed' && gitEvidence.branchCompareChangedFiles === 0))
-    ) &&
-    gitEvidence.branchCompareChangedFiles !== 0
-  const linkedPrStateCanMakeIdleReady =
-    worktree.linkedPR === null || prHit?.trustedForReady === true
-
-  if (
-    scannedAt - worktree.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS &&
-    !worktree.linkedIssue &&
-    prHit?.pr?.state !== 'open' &&
-    prHit?.pr?.state !== 'draft' &&
-    linkedPR?.state !== 'unknown' &&
-    linkedPrStateCanMakeIdleReady &&
-    !hasIdleOnlyLocalContext &&
-    hasWorkspaceCleanupDivergenceProof(candidateWithoutFingerprint)
-  ) {
-    reasons.push('idle-clean')
   }
 
   const fingerprint = createWorkspaceCleanupFingerprint({
     branch: candidateWithoutFingerprint.branch,
     head: worktree.head,
-    prState: linkedPR?.state ?? null,
     gitClean: gitEvidence.clean,
     lastActivityAt: worktree.lastActivityAt
   })
@@ -333,56 +253,34 @@ function shouldReadGitEvidence(args: {
   repoIsFolder: boolean
   blockers: WorkspaceCleanupBlocker[]
   worktree: Worktree
-  scannedAt: number
-  localContext: WorkspaceCleanupCandidate['localContext']
-  prHit: PrCacheHit | null
-  linkedPR: { number: number; state: PRInfo['state'] | 'unknown' } | undefined
   skipGit: boolean
+  forceGitCheck: boolean
 }): boolean {
-  const { repoIsFolder, blockers, worktree, scannedAt, localContext, prHit, linkedPR, skipGit } =
-    args
-  if (skipGit || repoIsFolder || worktree.isMainWorktree) {
+  const { repoIsFolder, blockers, worktree, skipGit, forceGitCheck } = args
+  if ((skipGit && !forceGitCheck) || repoIsFolder || worktree.isMainWorktree) {
     return false
   }
   if (
     blockers.includes('pinned') ||
-    blockers.includes('open-pr') ||
     blockers.includes('main-worktree') ||
     blockers.includes('folder-repo')
   ) {
     return false
   }
 
-  const trustedMerged = prHit?.trustedForReady === true && prHit.pr?.state === 'merged'
-  const trustedClosed = prHit?.trustedForReady === true && prHit.pr?.state === 'closed'
-  const archivedOld =
-    worktree.isArchived && scannedAt - worktree.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
-  const linkedPrStateCanMakeIdleReady =
-    worktree.linkedPR === null || prHit?.trustedForReady === true
-  const idleOnlyLocalContext = localContext.diffCommentCount > 0 && !trustedMerged && !trustedClosed
-  const idleCandidate =
-    scannedAt - worktree.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS &&
-    !worktree.linkedIssue &&
-    prHit?.pr?.state !== 'open' &&
-    prHit?.pr?.state !== 'draft' &&
-    linkedPR?.state !== 'unknown' &&
-    linkedPrStateCanMakeIdleReady &&
-    !idleOnlyLocalContext
-
-  // Why: git status/diff are the expensive part of cleanup scans. Only rows
-  // that can plausibly become auto-removable need that evidence up front.
-  return trustedMerged || trustedClosed || archivedOld || idleCandidate
+  // Why: inactivity is the only recommendation signal now. Git is read only
+  // to keep the destructive path from deleting dirty or local-only branch work.
+  return true
 }
 
 async function readGitEvidence(
   worktree: Worktree,
   repo: Repo,
-  provider: IGitProvider | null,
-  options: { forceBranchCompare?: boolean } = {}
+  provider: IGitProvider | null
 ): Promise<GitEvidence> {
   const blockers: WorkspaceCleanupBlocker[] = []
   let status: GitStatusResult
-  let checkedAt = Date.now()
+  const checkedAt = Date.now()
 
   try {
     status = await withTimeout(
@@ -414,25 +312,12 @@ async function readGitEvidence(
   if (upstreamAhead !== null && upstreamAhead > 0) {
     blockers.push('unpushed-commits')
   }
-
-  let branchCompareChangedFiles: number | null = null
-  const shouldCompareBranch =
-    clean && worktree.baseRef && (options.forceBranchCompare || upstreamAhead === null)
-  if (shouldCompareBranch) {
-    try {
-      const compare = await withTimeout(
-        repo.connectionId
-          ? provider!.getBranchCompare(worktree.path, worktree.baseRef)
-          : getBranchCompare(worktree.path, worktree.baseRef),
-        GIT_READ_TIMEOUT_MS,
-        'Timed out comparing branch to base.'
-      )
-      if (compare.summary.status === 'ready') {
-        branchCompareChangedFiles = compare.summary.changedFiles
-        checkedAt = Date.now()
-      }
-    } catch {
-      // Missing compare keeps the row visible but cannot make it ready.
+  if (clean && upstreamAhead === null) {
+    const unpushedCommitCount = await readUnpushedCommitCount(worktree, repo, provider)
+    if (unpushedCommitCount === null) {
+      blockers.push('unknown-base')
+    } else if (unpushedCommitCount > 0) {
+      blockers.push('unpushed-commits')
     }
   }
 
@@ -440,20 +325,33 @@ async function readGitEvidence(
     clean,
     upstreamAhead,
     upstreamBehind,
-    branchCompareChangedFiles,
     checkedAt,
     blockers
   }
 
-  if (
-    !hasWorkspaceCleanupDivergenceProof({ git: evidence }) &&
-    !blockers.includes('dirty-files') &&
-    !blockers.includes('unpushed-commits')
-  ) {
-    blockers.push('unknown-base')
-  }
-
   return { ...evidence, blockers: uniqueBlockers(blockers) }
+}
+
+async function readUnpushedCommitCount(
+  worktree: Worktree,
+  repo: Repo,
+  provider: IGitProvider | null
+): Promise<number | null> {
+  try {
+    const result = await withTimeout(
+      repo.connectionId
+        ? provider!.exec(['rev-list', '--count', 'HEAD', '--not', '--remotes'], worktree.path)
+        : gitExecFileAsync(['rev-list', '--count', 'HEAD', '--not', '--remotes'], {
+            cwd: worktree.path
+          }),
+      GIT_READ_TIMEOUT_MS,
+      'Timed out checking unpushed commits.'
+    )
+    const count = Number.parseInt(result.stdout.trim(), 10)
+    return Number.isFinite(count) ? count : null
+  } catch {
+    return null
+  }
 }
 
 function buildCandidateFromError(
@@ -472,7 +370,7 @@ function buildCandidateFromError(
     path: worktree.path,
     tier: 'protected',
     selectedByDefault: false,
-    reasons: [],
+    reasons: getInactivityReasons(worktree, scannedAt),
     blockers: ['git-status-error'],
     lastActivityAt: worktree.lastActivityAt,
     ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
@@ -481,15 +379,11 @@ function buildCandidateFromError(
       clean: null,
       upstreamAhead: null,
       upstreamBehind: null,
-      branchCompareChangedFiles: null,
       checkedAt: scannedAt
     },
-    prStateCheckedAt: null,
-    staleEvidence: false,
     fingerprint: createWorkspaceCleanupFingerprint({
       branch: shortBranchName(worktree.branch),
       head: worktree.head,
-      prState: null,
       gitClean: null,
       lastActivityAt: worktree.lastActivityAt
     })
@@ -503,15 +397,19 @@ function synthesizeDisconnectedSshCandidates(
   targetWorktreeId?: string
 ): WorkspaceCleanupCandidate[] {
   return Object.entries(store.getAllWorktreeMeta())
-    .filter(([worktreeId]) => {
+    .filter(([worktreeId, meta]) => {
       if (!worktreeId.startsWith(`${repo.id}::`)) {
         return false
       }
-      return !targetWorktreeId || targetWorktreeId === worktreeId
+      if (targetWorktreeId) {
+        return targetWorktreeId === worktreeId
+      }
+      return isWorkspaceInactiveForCleanup(meta, scannedAt)
     })
     .map(([worktreeId, meta]) => {
       const parsed = splitWorktreeId(worktreeId)
       const path = parsed?.worktreePath ?? worktreeId
+      const reasons = getInactivityReasons(meta, scannedAt)
       return applyWorkspaceCleanupPolicy({
         worktreeId,
         repoId: repo.id,
@@ -522,10 +420,7 @@ function synthesizeDisconnectedSshCandidates(
         path,
         tier: 'protected',
         selectedByDefault: false,
-        reasons:
-          meta.isArchived && scannedAt - meta.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
-            ? ['archived']
-            : [],
+        reasons,
         blockers: ['ssh-disconnected'],
         lastActivityAt: meta.lastActivityAt,
         ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
@@ -541,61 +436,16 @@ function synthesizeDisconnectedSshCandidates(
           clean: null,
           upstreamAhead: null,
           upstreamBehind: null,
-          branchCompareChangedFiles: null,
           checkedAt: null
         },
-        prStateCheckedAt: null,
-        staleEvidence: false,
         fingerprint: createWorkspaceCleanupFingerprint({
           branch: basename(path),
           head: '',
-          prState: null,
           gitClean: null,
           lastActivityAt: meta.lastActivityAt
         })
       })
     })
-}
-
-function findCachedPR(
-  store: Store,
-  repo: Repo,
-  branch: string,
-  linkedPR: number | null,
-  now: number
-): PrCacheHit | null {
-  const cache = store.getGitHubCache().pr
-  const exact = cache[`${repo.path}::${branch}`]
-  if (exact) {
-    return {
-      pr: exact.data,
-      fetchedAt: exact.fetchedAt,
-      trustedForReady: true,
-      stale: isPrCacheStale(exact.fetchedAt, now)
-    }
-  }
-
-  if (!linkedPR) {
-    return null
-  }
-
-  const repoPrefix = `${repo.path}::`
-  for (const [key, value] of Object.entries(cache)) {
-    if (key.startsWith(repoPrefix) && value.data?.number === linkedPR) {
-      return {
-        pr: value.data,
-        fetchedAt: value.fetchedAt,
-        trustedForReady: true,
-        stale: isPrCacheStale(value.fetchedAt, now)
-      }
-    }
-  }
-
-  return null
-}
-
-function isPrCacheStale(fetchedAt: number, now: number): boolean {
-  return now - fetchedAt >= GITHUB_PR_CACHE_TTL_MS
 }
 
 function buildLocalContext(worktree: Worktree): WorkspaceCleanupCandidate['localContext'] {
@@ -621,7 +471,6 @@ function createEmptyGitEvidence(): GitEvidence {
     clean: null,
     upstreamAhead: null,
     upstreamBehind: null,
-    branchCompareChangedFiles: null,
     checkedAt: null,
     blockers: []
   }
@@ -639,12 +488,28 @@ function uniqueReasons(reasons: WorkspaceCleanupReason[]): WorkspaceCleanupReaso
   return [...new Set(reasons)]
 }
 
-function findDuplicateRepoPaths(repos: Repo[]): Set<string> {
-  const counts = new Map<string, number>()
-  for (const repo of repos) {
-    counts.set(repo.path, (counts.get(repo.path) ?? 0) + 1)
+function isWorkspaceInactiveForCleanup(
+  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
+  scannedAt: number
+): boolean {
+  return getInactivityReasons(workspace, scannedAt).length > 0
+}
+
+function getInactivityReasons(
+  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
+  scannedAt: number
+): WorkspaceCleanupReason[] {
+  const reasons: WorkspaceCleanupReason[] = []
+  if (
+    workspace.isArchived &&
+    scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
+  ) {
+    reasons.push('archived')
   }
-  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([path]) => path))
+  if (scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS) {
+    reasons.push('idle-clean')
+  }
+  return reasons
 }
 
 async function mapWithConcurrency<T, R>(

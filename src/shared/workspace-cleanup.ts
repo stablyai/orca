@@ -1,12 +1,10 @@
-import type { PRState } from './types'
-
-export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 1
+export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
 export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
 
-export type WorkspaceCleanupReason = 'pr-merged' | 'pr-closed-clean' | 'archived' | 'idle-clean'
+export type WorkspaceCleanupReason = 'archived' | 'idle-clean'
 
 export type WorkspaceCleanupBlocker =
   | 'main-worktree'
@@ -23,7 +21,6 @@ export type WorkspaceCleanupBlocker =
   | 'git-status-error'
   | 'dirty-files'
   | 'unpushed-commits'
-  | 'open-pr'
   | 'unknown-base'
   | 'dismissed'
 
@@ -52,7 +49,6 @@ export type WorkspaceCleanupCandidate = {
   blockers: WorkspaceCleanupBlocker[]
   lastActivityAt: number
   createdAt?: number
-  linkedPR?: { number: number; state: PRState | 'unknown' }
   localContext: {
     terminalTabCount: number
     cleanEditorTabCount: number
@@ -65,11 +61,8 @@ export type WorkspaceCleanupCandidate = {
     clean: boolean | null
     upstreamAhead: number | null
     upstreamBehind: number | null
-    branchCompareChangedFiles: number | null
     checkedAt: number | null
   }
-  prStateCheckedAt: number | null
-  staleEvidence: boolean
   fingerprint: string
 }
 
@@ -102,7 +95,6 @@ export const WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocke
   'git-status-error',
   'dirty-files',
   'unpushed-commits',
-  'open-pr',
   'unknown-base',
   'dismissed'
 ])
@@ -111,23 +103,13 @@ export function isWorkspaceCleanupHardBlocker(blocker: WorkspaceCleanupBlocker):
   return WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
 }
 
-export function hasWorkspaceCleanupDivergenceProof(
-  candidate: Pick<WorkspaceCleanupCandidate, 'git'>
-): boolean {
-  const checked = candidate.git.checkedAt !== null
-  if (!checked) {
-    return false
-  }
-  return candidate.git.upstreamAhead === 0 || candidate.git.branchCompareChangedFiles === 0
-}
-
 export function canSelectWorkspaceCleanupCandidate(
-  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git' | 'staleEvidence'>
+  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git' | 'reasons'>
 ): boolean {
   return (
-    !candidate.staleEvidence &&
+    candidate.reasons.length > 0 &&
     candidate.git.clean === true &&
-    hasWorkspaceCleanupDivergenceProof(candidate) &&
+    candidate.git.checkedAt !== null &&
     !candidate.blockers.some(isWorkspaceCleanupHardBlocker)
   )
 }
@@ -137,12 +119,7 @@ export function applyWorkspaceCleanupPolicy(
 ): WorkspaceCleanupCandidate {
   const canSelect = canSelectWorkspaceCleanupCandidate(candidate)
   const hasHardBlocker = candidate.blockers.some(isWorkspaceCleanupHardBlocker)
-  const hasReadyReason = candidate.reasons.length > 0
-  const tier: WorkspaceCleanupTier = hasHardBlocker
-    ? 'protected'
-    : canSelect && hasReadyReason
-      ? 'ready'
-      : 'review'
+  const tier: WorkspaceCleanupTier = hasHardBlocker ? 'protected' : canSelect ? 'ready' : 'review'
 
   return {
     ...candidate,
@@ -154,7 +131,6 @@ export function applyWorkspaceCleanupPolicy(
 export function createWorkspaceCleanupFingerprint(args: {
   branch: string
   head: string
-  prState: PRState | 'unknown' | null
   gitClean: boolean | null
   lastActivityAt: number
   classifierVersion?: number
@@ -165,7 +141,6 @@ export function createWorkspaceCleanupFingerprint(args: {
     version,
     args.branch,
     args.head,
-    args.prState ?? 'none',
     args.gitClean === null ? 'unknown' : args.gitClean ? 'clean' : 'dirty',
     lastActivityBucket
   ].join('|')

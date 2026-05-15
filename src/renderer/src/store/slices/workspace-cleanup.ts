@@ -494,11 +494,7 @@ function hasIdleAgentTitle(state: AppState, tabs: { id: string; title: string }[
 }
 
 function hasStrongCompletionEvidence(candidate: WorkspaceCleanupCandidate): boolean {
-  return (
-    candidate.reasons.includes('pr-merged') ||
-    candidate.reasons.includes('pr-closed-clean') ||
-    candidate.git.branchCompareChangedFiles === 0
-  )
+  return candidate.reasons.includes('idle-clean') || candidate.reasons.includes('archived')
 }
 
 function getPaneKeyTabId(paneKey: AgentStatusEntry['paneKey']): string {

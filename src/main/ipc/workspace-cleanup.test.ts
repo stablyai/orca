@@ -1,18 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
-import type {
-  DiffComment,
-  GitBranchCompareResult,
-  GitStatusResult,
-  PRInfo,
-  Repo
-} from '../../shared/types'
+import type { DiffComment, GitStatusResult, Repo } from '../../shared/types'
 
-const { listRepoWorktreesMock, getStatusMock, getBranchCompareMock, getSshGitProviderMock } =
+const { listRepoWorktreesMock, getStatusMock, gitExecFileAsyncMock, getSshGitProviderMock } =
   vi.hoisted(() => ({
     listRepoWorktreesMock: vi.fn(),
     getStatusMock: vi.fn(),
-    getBranchCompareMock: vi.fn(),
+    gitExecFileAsyncMock: vi.fn(),
     getSshGitProviderMock: vi.fn()
   }))
 
@@ -29,8 +23,11 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 vi.mock('../git/status', () => ({
-  getStatus: getStatusMock,
-  getBranchCompare: getBranchCompareMock
+  getStatus: getStatusMock
+}))
+
+vi.mock('../git/runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -49,40 +46,19 @@ const REPO: Repo = {
 }
 
 function makeStore(
-  prFetchedAt: number | null,
   options: {
     baseRef?: string
     diffComments?: DiffComment[]
     lastActivityAt?: number
     linkedIssue?: number | null
-    linkedPR?: number | null
-    prState?: PRInfo['state']
     repos?: Repo[]
   } = {}
 ): Store {
-  const linkedPR = options.linkedPR === undefined ? 123 : options.linkedPR
   const baseRef = Object.hasOwn(options, 'baseRef') ? options.baseRef : 'origin/main'
-  const pr =
-    prFetchedAt === null
-      ? {}
-      : {
-          '/repo::feature': {
-            fetchedAt: prFetchedAt,
-            data: {
-              number: 123,
-              title: 'Feature',
-              state: options.prState ?? 'merged',
-              url: 'https://github.example/pull/123',
-              checksStatus: 'success',
-              updatedAt: '2026-05-14T00:00:00Z',
-              mergeable: 'MERGEABLE'
-            } satisfies PRInfo
-          }
-        }
   return {
     getRepos: () => options.repos ?? [REPO],
     getWorktreeMeta: () => ({
-      linkedPR,
+      linkedPR: null,
       linkedIssue: options.linkedIssue ?? null,
       lastActivityAt: options.lastActivityAt ?? NOW - 40 * 24 * 60 * 60 * 1000,
       baseRef,
@@ -90,7 +66,7 @@ function makeStore(
     }),
     getAllWorktreeMeta: () => ({}),
     getGitHubCache: () => ({
-      pr,
+      pr: {},
       issue: {}
     })
   } as unknown as Store
@@ -102,7 +78,7 @@ describe('workspace cleanup scan', () => {
     vi.setSystemTime(NOW)
     listRepoWorktreesMock.mockReset()
     getStatusMock.mockReset()
-    getBranchCompareMock.mockReset()
+    gitExecFileAsyncMock.mockReset()
     getSshGitProviderMock.mockReset()
     listRepoWorktreesMock.mockResolvedValue([
       {
@@ -118,18 +94,7 @@ describe('workspace cleanup scan', () => {
       conflictOperation: 'unknown',
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
     } satisfies GitStatusResult)
-    getBranchCompareMock.mockResolvedValue({
-      summary: {
-        baseRef: 'origin/main',
-        baseOid: 'base',
-        compareRef: 'feature',
-        headOid: 'abc123',
-        mergeBase: 'base',
-        changedFiles: 0,
-        status: 'ready'
-      },
-      entries: []
-    } satisfies GitBranchCompareResult)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '0\n', stderr: '' })
     getSshGitProviderMock.mockReturnValue(undefined)
   })
 
@@ -137,33 +102,15 @@ describe('workspace cleanup scan', () => {
     vi.useRealTimers()
   })
 
-  it('does not default-select from stale non-merged PR evidence', async () => {
-    const staleFetchedAt = NOW - 5 * 60_000
-
-    const result = await scanWorkspaceCleanup(makeStore(staleFetchedAt, { prState: 'closed' }))
-
-    expect(result.candidates[0]).toMatchObject({
-      tier: 'review',
-      selectedByDefault: false,
-      staleEvidence: true,
-      prStateCheckedAt: staleFetchedAt
-    })
-    expect(result.candidates[0].reasons).not.toContain('pr-merged')
-    expect(getStatusMock).not.toHaveBeenCalled()
-  })
-
-  it('can default-select stale merged PR evidence after git proves the workspace clean', async () => {
-    const staleFetchedAt = NOW - 5 * 60_000
-
-    const result = await scanWorkspaceCleanup(makeStore(staleFetchedAt))
+  it('default-selects inactive workspaces when git status is clean', async () => {
+    const result = await scanWorkspaceCleanup(makeStore())
 
     expect(getStatusMock).toHaveBeenCalledTimes(1)
+    expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]).toMatchObject({
       tier: 'ready',
       selectedByDefault: true,
-      staleEvidence: false,
-      prStateCheckedAt: staleFetchedAt,
-      reasons: ['pr-merged', 'idle-clean'],
+      reasons: ['idle-clean'],
       git: {
         clean: true,
         upstreamAhead: 0
@@ -174,7 +121,7 @@ describe('workspace cleanup scan', () => {
   it('keeps raw scan errors out of renderer-facing results', async () => {
     listRepoWorktreesMock.mockRejectedValue(new Error('fatal: path /Users/alice/private failed'))
 
-    const result = await scanWorkspaceCleanup(makeStore(NOW))
+    const result = await scanWorkspaceCleanup(makeStore())
 
     expect(result.errors).toEqual([
       {
@@ -186,7 +133,7 @@ describe('workspace cleanup scan', () => {
 
   it('uses user-facing copy when remote workspaces are unavailable', async () => {
     const result = await scanWorkspaceCleanup(
-      makeStore(NOW, {
+      makeStore({
         repos: [{ ...REPO, connectionId: 'ssh-1' }]
       })
     )
@@ -200,28 +147,40 @@ describe('workspace cleanup scan', () => {
     expect(result.candidates).toEqual([])
   })
 
-  it('skips git status for workspaces with no cleanup signal', async () => {
+  it('filters out recent workspaces before running git status', async () => {
     const result = await scanWorkspaceCleanup(
-      makeStore(null, {
-        linkedPR: null,
+      makeStore({
         lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
       })
     )
 
     expect(getStatusMock).not.toHaveBeenCalled()
-    expect(getBranchCompareMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(result.candidates).toEqual([])
+  })
+
+  it('includes focused remove preflight rows even when they are recent', async () => {
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
+      }),
+      { worktreeId: 'repo-1::/repo-feature' }
+    )
+
+    expect(getStatusMock).toHaveBeenCalledTimes(1)
     expect(result.candidates[0]).toMatchObject({
       tier: 'review',
       selectedByDefault: false,
+      reasons: [],
       git: {
-        clean: null,
-        checkedAt: null
+        clean: true,
+        checkedAt: expect.any(Number)
       }
     })
   })
 
   it('honors renderer git deferrals without hiding the workspace', async () => {
-    const result = await scanWorkspaceCleanup(makeStore(NOW), {
+    const result = await scanWorkspaceCleanup(makeStore(), {
       skipGitWorktreeIds: ['repo-1::/repo-feature']
     })
 
@@ -229,7 +188,7 @@ describe('workspace cleanup scan', () => {
     expect(result.candidates[0]).toMatchObject({
       tier: 'review',
       selectedByDefault: false,
-      reasons: ['pr-merged'],
+      reasons: ['idle-clean'],
       git: {
         clean: null,
         checkedAt: null
@@ -237,42 +196,55 @@ describe('workspace cleanup scan', () => {
     })
   })
 
-  it('skips branch compare when upstream status already proves no unpushed commits', async () => {
-    const result = await scanWorkspaceCleanup(makeStore(NOW))
+  it('uses remote commit presence when a clean inactive workspace has no upstream', async () => {
+    getStatusMock.mockResolvedValue({
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    } satisfies GitStatusResult)
+
+    const result = await scanWorkspaceCleanup(makeStore())
 
     expect(getStatusMock).toHaveBeenCalledTimes(1)
-    expect(getBranchCompareMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-list', '--count', 'HEAD', '--not', '--remotes'],
+      { cwd: '/repo-feature' }
+    )
     expect(result.candidates[0]).toMatchObject({
       tier: 'ready',
       selectedByDefault: true,
       git: {
         clean: true,
-        upstreamAhead: 0,
-        branchCompareChangedFiles: null
+        upstreamAhead: null
       }
     })
   })
 
-  it('runs branch compare for trusted closed PRs before marking them clean', async () => {
-    const result = await scanWorkspaceCleanup(makeStore(NOW, { prState: 'closed' }))
+  it('protects clean inactive workspaces with local-only commits', async () => {
+    getStatusMock.mockResolvedValue({
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    } satisfies GitStatusResult)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '2\n', stderr: '' })
 
-    expect(getStatusMock).toHaveBeenCalledTimes(1)
-    expect(getBranchCompareMock).toHaveBeenCalledTimes(1)
+    const result = await scanWorkspaceCleanup(makeStore())
+
     expect(result.candidates[0]).toMatchObject({
-      tier: 'ready',
-      selectedByDefault: true,
-      reasons: ['pr-closed-clean', 'idle-clean'],
+      tier: 'protected',
+      selectedByDefault: false,
+      blockers: ['unpushed-commits'],
       git: {
-        branchCompareChangedFiles: 0
+        clean: true,
+        upstreamAhead: null
       }
     })
   })
 
-  it('does not default-select idle-only workspaces with local diff comments', async () => {
+  it('keeps diff notes as context instead of blocking inactive cleanup', async () => {
     const result = await scanWorkspaceCleanup(
-      makeStore(null, {
+      makeStore({
         baseRef: undefined,
-        linkedPR: null,
         diffComments: [
           {
             id: 'comment-1',
@@ -288,29 +260,28 @@ describe('workspace cleanup scan', () => {
     )
 
     expect(result.candidates[0]).toMatchObject({
-      tier: 'review',
-      selectedByDefault: false,
+      tier: 'ready',
+      selectedByDefault: true,
+      reasons: ['idle-clean'],
       localContext: {
         diffCommentCount: 1,
         newestDiffCommentAt: NOW - 1_000
       }
     })
-    expect(result.candidates[0].reasons).not.toContain('idle-clean')
   })
 
-  it('does not use ambiguous PR cache state to make linked PR workspaces idle-ready', async () => {
+  it('does not expose PR cache state in inactivity cleanup results', async () => {
     const result = await scanWorkspaceCleanup(
-      makeStore(NOW, {
+      makeStore({
         repos: [REPO, { ...REPO, id: 'repo-2' }]
       })
     )
 
     expect(result.candidates[0]).toMatchObject({
-      tier: 'review',
-      selectedByDefault: false,
-      linkedPR: { number: 123, state: 'merged' }
+      tier: 'ready',
+      selectedByDefault: true,
+      reasons: ['idle-clean']
     })
-    expect(result.candidates[0].reasons).not.toContain('pr-merged')
-    expect(result.candidates[0].reasons).not.toContain('idle-clean')
+    expect(result.candidates[0]).not.toHaveProperty('linkedPR')
   })
 })

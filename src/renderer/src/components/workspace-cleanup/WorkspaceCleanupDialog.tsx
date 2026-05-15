@@ -44,8 +44,6 @@ const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
 }
 
 const REASON_LABELS: Record<WorkspaceCleanupReason, string> = {
-  'pr-merged': 'PR merged',
-  'pr-closed-clean': 'PR closed and branch is clean',
   archived: 'Archived',
   'idle-clean': 'No recent activity'
 }
@@ -65,8 +63,7 @@ const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'git-status-error': 'Git status unavailable',
   'dirty-files': 'Changed files',
   'unpushed-commits': 'Unpushed commits',
-  'open-pr': 'Open PR',
-  'unknown-base': 'No clean base proof',
+  'unknown-base': 'Could not verify unpushed commits',
   dismissed: 'Hidden from cleanup'
 }
 
@@ -718,11 +715,6 @@ function CandidateRow({
               {branchSafetyDetails.map((detail) => (
                 <span key={detail}>{detail}</span>
               ))}
-              <span>
-                {candidate.linkedPR
-                  ? `PR #${candidate.linkedPR.number} ${candidate.linkedPR.state}`
-                  : 'No cached PR'}
-              </span>
               {contextDetails ? <span className="sm:col-span-2">{contextDetails}</span> : null}
               <span>Last activity {formatRelativeTime(candidate.lastActivityAt)}</span>
               {candidate.git.checkedAt ? (
@@ -777,16 +769,7 @@ function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate): string
           }`
     )
   }
-  if (candidate.git.branchCompareChangedFiles !== null) {
-    details.push(
-      candidate.git.branchCompareChangedFiles === 0
-        ? 'No changes vs base'
-        : `${candidate.git.branchCompareChangedFiles} changed file${
-            candidate.git.branchCompareChangedFiles === 1 ? '' : 's'
-          } vs base`
-    )
-  }
-  return details.length > 0 ? details : ['Branch not verified']
+  return details
 }
 
 function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | null {
@@ -854,7 +837,7 @@ function ConfirmRemove({
       </DialogHeader>
       <div className="flex-1 px-5 py-4 text-sm">
         Cleanup rechecks each selected workspace before deletion. Rows that are now dirty, active,
-        running, disconnected, or missing base proof are skipped.
+        running, disconnected, or have unverified commits are skipped.
       </div>
       <DialogFooter className="border-t border-border px-5 py-3">
         <Button variant="outline" onClick={onCancel} disabled={removing}>
