@@ -78,9 +78,10 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  * Apply the WorktreeCard priority overlay (permission > working > done >
  * heuristic) on top of the title-heuristic base. Live PTY liveness still gates
  * title-derived working/permission, but explicit agent rows are allowed to
- * promote the dot: if the sidebar shows a completed/blocking inline agent row,
- * the worktree status must agree with that visible row. Sleep cleanup owns
- * removing stale retained rows; once they are gone, no promotion occurs.
+ * promote the dot: if the sidebar shows a running/completed/blocking inline
+ * agent row, the worktree status must agree with that visible row. Sleep
+ * cleanup owns removing stale retained rows; once they are gone, no promotion
+ * occurs.
  *
  * Argument semantics (sourced by the WorktreeCard caller from the store):
  * - `tabs`, `browserTabs`: the worktree's terminal and browser tabs.
@@ -90,6 +91,8 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  *   worktree (used by the title-heuristic for split-pane spinners).
  * - `hasPermission`: any fresh hook entry in {blocked, waiting} for a tab in
  *   this worktree.
+ * - `hasLiveWorking`: any fresh hook entry in {working} for a tab in this
+ *   worktree.
  * - `hasLiveDone`: any fresh hook entry in {done} for a tab in this worktree.
  * - `hasRetainedDone`: any retained-agent snapshot scoped to this worktreeId.
  */
@@ -99,6 +102,7 @@ export function resolveWorktreeStatus(args: {
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   hasPermission: boolean
+  hasLiveWorking: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
 }): WorktreeStatus {
@@ -119,7 +123,10 @@ export function resolveWorktreeStatus(args: {
   if (heuristic === 'permission') {
     return 'permission'
   }
-  if (heuristic === 'working') {
+  // Why: restored-but-unfocused cards may have the startup hook snapshot before
+  // their terminal pane mounts and repopulates runtimePaneTitlesByTabId.
+  // Trust the fresh explicit working row so those cards stay yellow on restart.
+  if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
   }
   if (args.hasLiveDone || args.hasRetainedDone) {
