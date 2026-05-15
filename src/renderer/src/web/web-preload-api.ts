@@ -908,9 +908,12 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
 }
 
 function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
+  const openResult = { ok: true } as const
   return {
     openPath: (path) =>
       Promise.resolve(window.open(path, '_blank', 'noopener,noreferrer') as never),
+    openInFileManager: () => Promise.resolve(openResult),
+    openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
     openFilePath: () => Promise.resolve(),
     openFileUri: (uri) =>

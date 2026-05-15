@@ -141,6 +141,9 @@ import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+
+export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 
 type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -992,6 +995,8 @@ export type PreloadApi = {
   }
   shell: {
     openPath: (path: string) => Promise<void>
+    openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
+    openInExternalEditor: (path: string) => Promise<ShellOpenLocalPathResult>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<void>
     openFileUri: (uri: string) => Promise<void>

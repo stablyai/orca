@@ -1,185 +1,25 @@
-/* eslint-disable max-lines -- Why: EditorPanel still owns the visible editor
-save/load/render lifecycle for many modes (edit, diff, conflict review), and
-keeping that UI state together is easier to reason about than scattering it
-across multiple components. Autosave now lives in a smaller headless controller
-so hidden editor UI no longer participates in shutdown. */
-import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react'
-import * as monaco from 'monaco-editor'
-import {
-  Columns2,
-  Copy,
-  Eye,
-  ExternalLink,
-  FileText,
-  ListTree,
-  MoreHorizontal,
-  Rows2
-} from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
-import { canPreviewLanguage, openFilePreviewToSide } from '@/lib/file-preview'
-import { getEditorHeaderCopyState, getEditorHeaderOpenFileState } from './editor-header'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
-import EditorViewToggle, {
-  CSV_VIEW_MODE_METADATA,
-  NOTEBOOK_VIEW_MODE_METADATA
-} from './EditorViewToggle'
-import { EditorContent } from './EditorContent'
-import { scrollTopCache, cursorPositionCache, diffViewStateCache } from '@/lib/scroll-cache'
+import { openFilePreviewToSide } from '@/lib/file-preview'
+import { getEditorHeaderCopyState } from './editor-header'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import type { GitDiffResult } from '../../../../shared/types'
-import {
-  getOpenFilesForExternalFileChange,
-  ORCA_EDITOR_FILE_SAVED_EVENT,
-  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
-  requestEditorFileSave,
-  requestEditorSaveQuiesce,
-  ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
-  type EditorFileSavedDetail,
-  type EditorPathMutationTarget
-} from './editor-autosave'
-import { UntitledFileRenameDialog } from './UntitledFileRenameDialog'
-import { exportActiveMarkdownToPdf } from './export-active-markdown'
-import {
-  canOpenMarkdownPreview,
-  getDefaultMarkdownViewMode,
-  getEditorToggleModes,
-  getMarkdownPreviewShortcutLabel,
-  getMarkdownViewModes,
-  isMarkdownPreviewShortcut
-} from './markdown-preview-controls'
-import type { EditorToggleValue } from './EditorViewToggle'
-import {
-  createRuntimePath,
-  getRuntimeFileReadScope,
-  readRuntimeFileContent,
-  renameRuntimePath,
-  runtimePathExists
-} from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import {
-  getRuntimeGitBranchDiff,
-  getRuntimeGitDiff,
-  getRuntimeGitScope
-} from '@/runtime/runtime-git-client'
+import { requestEditorFileSave } from './editor-autosave'
+import { exportActiveMarkdownToPdf } from './export-active-markdown'
+import type { EditorToggleValue } from './EditorViewToggle'
+import { EditorPanelShell } from './EditorPanelShell'
+import { acquireExportPdfListener } from './editor-panel-export-pdf-listener'
+import { canUseChangesModeForFile } from './editor-panel-file-mode'
+import { getEditorPanelRenderModel } from './editor-panel-render-model'
+import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
+import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
+import { useEditorPanelContentState } from './useEditorPanelContentState'
+import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
+import { useUntitledFileRename } from './useUntitledFileRename'
 
 const isMac = navigator.userAgent.includes('Mac')
-const isLinux = navigator.userAgent.includes('Linux')
-
-/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
-const revealLabel = isMac
-  ? 'Reveal in Finder'
-  : isLinux
-    ? 'Open Containing Folder'
-    : 'Reveal in File Explorer'
-const markdownPreviewShortcutLabel = getMarkdownPreviewShortcutLabel(isMac)
-
-type FileContent = {
-  content: string
-  isBinary: boolean
-  isImage?: boolean
-  mimeType?: string
-  loadError?: string
-}
-
-type DiffContent = GitDiffResult
-const FILE_LOAD_RETRY_DELAYS_MS = [250, 1000, 2500]
-
-function shouldRetryFileLoadError(message: string): boolean {
-  const lower = message.toLowerCase()
-  return (
-    !lower.includes('access denied') &&
-    !lower.includes('enoent') &&
-    !lower.includes('no such file') &&
-    !lower.includes('file too large')
-  )
-}
-
-function isAbsolutePathLike(value: string): boolean {
-  return value.startsWith('/') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value)
-}
-
-function canUseChangesModeForFile(file: OpenFile): boolean {
-  return (
-    file.mode === 'edit' &&
-    !file.isUntitled &&
-    file.relativePath !== file.filePath &&
-    !isAbsolutePathLike(file.relativePath)
-  )
-}
-
-// Why: split-pane layouts mount one EditorPanel per pane, and each panel
-// attaches its own listener to `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT`.
-// Without coordination, a single external write fans out into N concurrent
-// `readFile` IPCs for the same path plus N independent `setContent`
-// transactions on the downstream rich editors — a meaningful contributor to
-// the black-window wedge reported in issue #826. Sharing a module-level
-// in-flight promise per (connectionId, filePath) collapses those N reads
-// into one round-trip while still letting each panel update its own local
-// state with the result.
-const inFlightFileReads = new Map<string, Promise<FileContent>>()
-const inFlightDiffReads = new Map<string, Promise<DiffContent>>()
-
-// Why: the "File → Export as PDF..." menu IPC fans out to every EditorPanel
-// instance, and split-pane layouts mount N panels concurrently. Without a
-// guard, a single menu click would spawn N concurrent exports — each racing
-// its own save dialog, toast, and printToPDF — producing duplicate output
-// files and confusing UX. This module-level ref-counted singleton installs
-// exactly one IPC subscription the first time any panel mounts, and tears
-// it down only when the last panel unmounts. A simple "first mounter wins"
-// counter would go dead if the first-mounting panel unmounted while others
-// were still mounted — survivors never re-subscribed and the menu silently
-// stopped working. The singleton pattern avoids that handoff bug entirely.
-let exportPdfListenerOwners = 0
-let exportPdfListenerUnsubscribe: (() => void) | null = null
-function acquireExportPdfListener(): () => void {
-  exportPdfListenerOwners += 1
-  if (exportPdfListenerOwners === 1) {
-    exportPdfListenerUnsubscribe = window.api.ui.onExportPdfRequested(() => {
-      void exportActiveMarkdownToPdf()
-    })
-  }
-  return () => {
-    exportPdfListenerOwners -= 1
-    if (exportPdfListenerOwners === 0 && exportPdfListenerUnsubscribe) {
-      exportPdfListenerUnsubscribe()
-      exportPdfListenerUnsubscribe = null
-    }
-  }
-}
-
-function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
-  return `${connectionId ?? ''}::${filePath}`
-}
-
-function inFlightDiffKey(
-  file: OpenFile,
-  connectionId: string | undefined,
-  compareAgainstHead = false
-): string {
-  // Why: diff content depends on the file path AND which diff source is
-  // being rendered (unstaged/staged/branch). Branch diffs further depend
-  // on the base+head oids so switching compare points doesn't alias, and
-  // on branchOldPath so rename-detected diffs don't alias with the same
-  // post-rename path viewed without rename metadata.
-  const branch =
-    file.diffSource === 'branch' && file.branchCompare
-      ? `${file.branchCompare.baseOid ?? ''}..${file.branchCompare.headOid ?? ''}::${file.branchOldPath ?? ''}`
-      : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}`
-}
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -191,6 +31,8 @@ function EditorPanelInner({
   const openFiles = useAppStore((s) => s.openFiles)
   const globalActiveFileId = useAppStore((s) => s.activeFileId)
   const activeFileId = activeFileIdProp ?? globalActiveFileId
+  const activeViewStateId = activeViewStateIdProp ?? activeFileId
+  const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
@@ -206,57 +48,14 @@ function EditorPanelInner({
   const editorDrafts = useAppStore((s) => s.editorDrafts)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
-
-  const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
-  const activeFilePath = activeFile?.filePath ?? null
-  const activeFileRelativePath = activeFile?.relativePath ?? null
-  const activeFileWorktreeId = activeFile?.worktreeId ?? null
-  const activeFileMode = activeFile?.mode ?? null
-  const activeFileDiffSource = activeFile?.diffSource
-  const activeFileRuntimeEnvironmentId = activeFile?.runtimeEnvironmentId
-  const activeViewStateId = activeViewStateIdProp ?? activeFileId
-  const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
-  const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
-  // Why: Changes view mode only applies on top of a regular edit-mode tab. It
-  // swaps the MonacoEditor for a DiffViewer (HEAD vs working tree incl. unsaved
-  // draft) without creating a new tab. Transient tabs (diff, conflict-review,
-  // markdown-preview) keep their own rendering pipeline.
-  // Binary content short-circuits to the binary placeholder in EditorContent
-  // before isChangesMode is consulted, so we must also exclude binary files
-  // here — otherwise the header toggle would still show Changes as selected
-  // and expose the inline/side-by-side toggle even though no diff is rendered.
-  const isChangesMode =
-    !!activeFile &&
-    activeFile.mode === 'edit' &&
-    canUseChangesModeForFile(activeFile) &&
-    editorViewMode[activeFile.id] === 'changes' &&
-    !fileContents[activeFile.id]?.isBinary &&
-    !fileContents[activeFile.id]?.loadError
+  const panelRef = useRef<HTMLDivElement>(null)
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
   const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
-  const [renameDialogFileId, setRenameDialogFileId] = useState<string | null>(null)
-  const renameDialogFile = renameDialogFileId
-    ? openFiles.find((f) => f.id === renameDialogFileId)
-    : null
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
-  const [pathMenuOpen, setPathMenuOpen] = useState(false)
-  const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
-  const panelRef = useRef<HTMLDivElement>(null)
-  const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
 
-  const deleteCacheEntriesByPrefix = useCallback(<T,>(cache: Map<string, T>, prefix: string) => {
-    for (const key of cache.keys()) {
-      if (key.startsWith(prefix)) {
-        cache.delete(key)
-      }
-    }
-  }, [])
-
-  // Why: When the user changes their global diff-view preference in Settings,
-  // sync the local toggle to match during render (avoids flash of stale diff mode).
   if (settings?.diffDefaultView !== prevDiffView) {
     setPrevDiffView(settings?.diffDefaultView)
     if (settings?.diffDefaultView !== undefined) {
@@ -264,133 +63,34 @@ function EditorPanelInner({
     }
   }
 
-  const openFilesRef = useRef(openFiles)
-  openFilesRef.current = openFiles
+  const requestedChangesMode =
+    !!activeFile &&
+    activeFile.mode === 'edit' &&
+    canUseChangesModeForFile(activeFile) &&
+    editorViewMode[activeFile.id] === 'changes'
+  const { fileContents, diffContents, reloadFileContent } = useEditorPanelContentState({
+    activeFile,
+    isChangesMode: requestedChangesMode,
+    openFiles,
+    gitStatusByWorktree,
+    editorViewMode
+  })
+  const isChangesMode =
+    requestedChangesMode &&
+    !!activeFile &&
+    !fileContents[activeFile.id]?.isBinary &&
+    !fileContents[activeFile.id]?.loadError
+  const {
+    renameDialogFile,
+    renameError,
+    requestRenameForFile,
+    closeRenameDialog,
+    handleRenameConfirm
+  } = useUntitledFileRename({ openFiles, closeFile, openFile, clearUntitled })
 
-  // Why: the external-file-change handler below needs to consult the latest
-  // editorViewMode, but we do not want to re-register its window listener
-  // every time an unrelated editor-mode toggle flips. A ref lets the handler
-  // read the current value without adding editorViewMode to the effect deps.
-  const editorViewModeRef = useRef(editorViewMode)
-  editorViewModeRef.current = editorViewMode
-
-  useEffect(() => {
-    const closeMenu = (): void => setPathMenuOpen(false)
-    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
-    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
-  }, [])
-
-  // Why: the system "File → Export as PDF..." menu item sends a one-way IPC
-  // event that reaches whichever renderer has focus. The EditorPanel is the
-  // natural owner of the active markdown surface, so the listener lives here
-  // and delegates to the shared export helper. Both entry points (menu and
-  // overflow button) funnel through exportActiveMarkdownToPdf so toasts and
-  // no-op gating stay consistent.
-  // Why (guard): split-pane layouts mount multiple EditorPanelInner instances.
-  // We ref-count via `acquireExportPdfListener` so exactly one IPC subscription
-  // exists regardless of how many panels are mounted — and it survives panel
-  // churn as long as at least one panel is still mounted.
   useEffect(() => acquireExportPdfListener(), [])
-
-  // Why: keepCurrentModel / keepCurrent*Model retain Monaco models after unmount
-  // so undo history survives tab switches. When a tab is *closed*, the user has
-  // signalled they're done with the file — dispose the models to reclaim memory
-  // and delete cache entries so a reopened file starts fresh.
-  const prevOpenFilesRef = useRef<Map<string, OpenFile>>(new Map())
-
-  useEffect(() => {
-    const currentFilesById = new Map(openFiles.map((f) => [f.id, f]))
-    for (const [prevId, prevFile] of prevOpenFilesRef.current) {
-      if (!currentFilesById.has(prevId)) {
-        // Dispose only the kept-alive Monaco state that this tab mode owns.
-        // Why: edit and diff tabs use different retained-model keys, while the
-        // conflict-review surface does not create kept Monaco models today. An
-        // explicit switch makes that ownership boundary visible so future mode
-        // additions do not silently fall through without considering cleanup.
-        switch (prevFile.mode) {
-          case 'edit':
-            // Why: the edit model URI is constructed via monaco.Uri.parse(filePath)
-            // to match what @monaco-editor/react creates internally when the `path`
-            // prop is provided. This convention is version-dependent.
-            monaco.editor.getModel(monaco.Uri.parse(prevFile.filePath))?.dispose()
-            scrollTopCache.delete(prevFile.filePath)
-            deleteCacheEntriesByPrefix(scrollTopCache, `${prevFile.filePath}::`)
-            // Why: markdown edit tabs keep separate source/rich scroll caches,
-            // and older sessions may still have the legacy in-place preview key.
-            // Clear all of them so reopened files never inherit stale viewport
-            // state from a prior tab incarnation.
-            scrollTopCache.delete(`${prevFile.filePath}:rich`)
-            scrollTopCache.delete(`${prevFile.filePath}:preview`)
-            // Why: mermaid files use a mode-scoped cache key just like markdown.
-            // Without this, a reopened .mmd file would restore a stale scroll
-            // position from the previous session even if the content changed.
-            scrollTopCache.delete(`${prevFile.filePath}:mermaid-diagram`)
-            cursorPositionCache.delete(prevFile.filePath)
-            deleteCacheEntriesByPrefix(cursorPositionCache, `${prevFile.filePath}::`)
-            break
-          case 'markdown-preview':
-            // Why: preview tabs have no retained Monaco models, but they do
-            // own pane-scoped preview scroll cache entries that should be
-            // dropped on close so reopening the preview starts fresh.
-            scrollTopCache.delete(`${prevFile.id}:preview`)
-            deleteCacheEntriesByPrefix(scrollTopCache, `${prevFile.id}::`)
-            break
-          case 'diff':
-            // Why: kept diff models are keyed by tab id, not file path, because the
-            // same file can appear in multiple diff tabs with different contents.
-            monaco.editor.getModel(monaco.Uri.parse(`diff:original:${prevId}`))?.dispose()
-            monaco.editor.getModel(monaco.Uri.parse(`diff:modified:${prevId}`))?.dispose()
-            diffViewStateCache.delete(prevId)
-            deleteCacheEntriesByPrefix(diffViewStateCache, `${prevId}::`)
-            // Why: single-file markdown diffs now have a rendered preview mode
-            // whose scroll position is keyed off the diff tab identity rather
-            // than a Monaco view-state cache entry. Clear those mode-scoped
-            // keys alongside the diff models so reopened diff tabs start fresh.
-            scrollTopCache.delete(`${prevId}:preview`)
-            deleteCacheEntriesByPrefix(scrollTopCache, `${prevId}::`)
-            break
-          case 'conflict-review':
-            break
-        }
-      }
-    }
-    prevOpenFilesRef.current = currentFilesById
-  }, [deleteCacheEntriesByPrefix, openFiles])
-
-  // Load file content when active file changes
-  useEffect(() => {
-    if (!activeFile) {
-      return
-    }
-    if (activeFile.mode === 'conflict-review') {
-      return
-    }
-    if (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview') {
-      if (activeFile.conflict?.kind === 'conflict-placeholder') {
-        return
-      }
-      if (!fileContents[activeFile.id]) {
-        void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
-      }
-      // Why: Changes view mode needs the HEAD-side blob as well as the
-      // working-tree content. Kick off the diff load alongside the normal
-      // file read so both are ready by the time DiffViewer mounts.
-      if (isChangesMode && !diffContents[activeFile.id]) {
-        void loadDiffContent(activeFile)
-      }
-    } else if (
-      activeFile.mode === 'diff' &&
-      activeFile.diffSource !== undefined &&
-      activeFile.diffSource !== 'combined-uncommitted' &&
-      activeFile.diffSource !== 'combined-branch'
-    ) {
-      if (diffContents[activeFile.id]) {
-        return
-      }
-      void loadDiffContent(activeFile)
-    }
-  }, [activeFile?.id, isChangesMode]) // eslint-disable-line react-hooks/exhaustive-deps
-
+  useClosedEditorTabCleanup(openFiles)
+  useMarkdownPreviewShortcut({ activeFile, panelRef, isMac, openMarkdownPreview })
   useEffect(() => {
     if (!copiedPathToast) {
       return
@@ -399,298 +99,35 @@ function EditorPanelInner({
     return () => window.clearTimeout(timeout)
   }, [copiedPathToast])
 
-  const loadFileContent = useCallback(
-    async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
-      try {
-        const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
-        const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
-        const activeSettings = useAppStore.getState().settings
-        const readSettings = settingsForRuntimeOwner(
-          activeSettings,
-          restoredOpenFile?.runtimeEnvironmentId
-        )
-        if (restoredOpenFile?.filePath === filePath && restoredOpenFile.relativePath === filePath) {
-          if (readSettings?.activeRuntimeEnvironmentId?.trim() || connectionId) {
-            // Why: restored external-file tabs contain client-local absolute
-            // paths. Remote runtime and SSH workspaces cannot read those paths
-            // without an explicit upload/import flow.
-            throw new Error('External local files are not available for remote workspaces.')
-          }
-          // Why: external files selected through OS/browser/drop flows are
-          // authorized in the main process, but that grant is in-memory. On
-          // session restore, re-authorize only tabs that were stored with an
-          // absolute relativePath because they came from outside a worktree.
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-        }
-        const readScope = getRuntimeFileReadScope(readSettings, connectionId)
-        const key = inFlightReadKey(readScope, filePath)
-        // Why: share the IPC round-trip across split-pane EditorPanels viewing
-        // the same file. The first caller starts the read and registers the
-        // promise; concurrent callers (triggered by the same external-change
-        // event) await it instead of firing duplicate reads and duplicate
-        // downstream setContent transactions.
-        let pending = inFlightFileReads.get(key)
-        if (!pending) {
-          pending = readRuntimeFileContent({
-            settings: readSettings,
-            filePath,
-            relativePath: restoredOpenFile?.relativePath,
-            worktreeId,
-            connectionId
-          }) as Promise<FileContent>
-          inFlightFileReads.set(key, pending)
-          // Why: limit deduplication to synchronous callers (like N split panes
-          // responding to the exact same event loop dispatch). Caching the promise
-          // across time (e.g. until the IPC returns) means a new change event that
-          // fires while the read is in-flight would receive stale content.
-          queueMicrotask(() => {
-            if (inFlightFileReads.get(key) === pending) {
-              inFlightFileReads.delete(key)
-            }
-          })
-        }
-        const result = await pending
-        delete fileLoadRetryAttemptsRef.current[id]
-        setFileContents((prev) => ({ ...prev, [id]: result }))
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        setFileContents((prev) => ({
-          ...prev,
-          [id]: { content: '', isBinary: false, loadError: message }
-        }))
-      }
-    },
-    []
-  )
-
-  const reloadFileContent = useCallback(
-    (file: OpenFile): void => {
-      delete fileLoadRetryAttemptsRef.current[file.id]
-      setFileContents((prev) => {
-        if (!prev[file.id]) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[file.id]
-        return next
-      })
-      void loadFileContent(file.filePath, file.id, file.worktreeId)
-    },
-    [loadFileContent]
-  )
-
-  const loadDiffContent = useCallback(async (file: OpenFile | null): Promise<void> => {
-    if (!file) {
-      return
-    }
-    try {
-      if (file.mode === 'edit' && !canUseChangesModeForFile(file)) {
-        return
-      }
-      // Extract worktree path from absolute file path and relative path
-      const worktreePath = file.filePath.slice(
-        0,
-        file.filePath.length - file.relativePath.length - 1
-      )
-      const branchCompare =
-        file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
-          ? file.branchCompare
-          : null
-      const connectionId = getConnectionId(file.worktreeId) ?? undefined
-      const activeSettings = useAppStore.getState().settings
-      const fileSettings = settingsForRuntimeOwner(activeSettings, file.runtimeEnvironmentId)
-      const gitScope = getRuntimeGitScope(fileSettings, connectionId)
-      // Why: Changes view mode runs on top of an edit-mode tab and asks git
-      // for an unstaged diff against HEAD for that file. Use the 'unstaged'
-      // diff-source key so multiple Changes tabs across split panes share one
-      // IPC round-trip with any open unstaged diff-tab for the same path.
-      // Compute this once and reuse it for both the dedup key and the IPC
-      // branch selection so the two can never drift apart.
-      const effectiveDiffSource: typeof file.diffSource =
-        file.mode === 'edit' ? 'unstaged' : file.diffSource
-      const compareAgainstHead = file.mode === 'edit'
-      const key = inFlightDiffKey(
-        { ...file, diffSource: effectiveDiffSource },
-        gitScope,
-        compareAgainstHead
-      )
-      // Why: same rationale as inFlightFileReads above — a single external
-      // change fans out to every mounted EditorPanel, and two split panes
-      // showing the same diff tab should share one git.diff IPC instead of
-      // racing two identical calls through the same git repo lock.
-      let pending = inFlightDiffReads.get(key)
-      if (!pending) {
-        pending = (
-          effectiveDiffSource === 'branch' && branchCompare
-            ? getRuntimeGitBranchDiff(
-                {
-                  settings: fileSettings,
-                  worktreeId: file.worktreeId,
-                  worktreePath,
-                  connectionId
-                },
-                {
-                  compare: {
-                    baseRef: branchCompare.baseRef,
-                    baseOid: branchCompare.baseOid!,
-                    headOid: branchCompare.headOid!,
-                    mergeBase: branchCompare.mergeBase!
-                  },
-                  filePath: file.relativePath,
-                  oldPath: file.branchOldPath
-                }
-              )
-            : getRuntimeGitDiff(
-                {
-                  settings: fileSettings,
-                  worktreeId: file.worktreeId,
-                  worktreePath,
-                  connectionId
-                },
-                {
-                  filePath: file.relativePath,
-                  staged: effectiveDiffSource === 'staged',
-                  compareAgainstHead
-                }
-              )
-        ) as Promise<DiffContent>
-        inFlightDiffReads.set(key, pending)
-        queueMicrotask(() => {
-          if (inFlightDiffReads.get(key) === pending) {
-            inFlightDiffReads.delete(key)
-          }
-        })
-      }
-      const result = await pending
-      setDiffContents((prev) => ({ ...prev, [file.id]: result }))
-    } catch (err) {
-      setDiffContents((prev) => ({
-        ...prev,
-        [file.id]: {
-          kind: 'text',
-          originalContent: '',
-          modifiedContent: `Error loading diff: ${err}`,
-          originalIsBinary: false,
-          modifiedIsBinary: false
-        }
-      }))
-    }
-  }, [])
-
-  const activeFileLoadRetryId = activeFile?.id ?? null
-  const activeFileLoadError = activeFileLoadRetryId
-    ? fileContents[activeFileLoadRetryId]?.loadError
-    : undefined
-  useEffect(() => {
-    if (
-      !activeFileLoadRetryId ||
-      !activeFileLoadError ||
-      !shouldRetryFileLoadError(activeFileLoadError)
-    ) {
-      return
-    }
-    const retryCount = fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] ?? 0
-    if (retryCount >= FILE_LOAD_RETRY_DELAYS_MS.length) {
-      return
-    }
-    const delayMs = FILE_LOAD_RETRY_DELAYS_MS[retryCount] ?? FILE_LOAD_RETRY_DELAYS_MS[0]
-    fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] = retryCount + 1
-
-    // Why: restored tabs can race app/worktree startup and get a transient
-    // read failure. Retry briefly, but keep permanent filesystem errors quiet.
-    const timeoutId = window.setTimeout(() => {
-      const currentFile = openFilesRef.current.find((file) => file.id === activeFileLoadRetryId)
-      if (
-        !currentFile ||
-        (currentFile.mode !== 'edit' && currentFile.mode !== 'markdown-preview')
-      ) {
-        return
-      }
-      setFileContents((prev) => {
-        if (prev[currentFile.id]?.loadError !== activeFileLoadError) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[currentFile.id]
-        return next
-      })
-      void loadFileContent(currentFile.filePath, currentFile.id, currentFile.worktreeId)
-    }, delayMs)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [activeFileLoadRetryId, activeFileLoadError, loadFileContent])
-
-  // Why: refetch the HEAD-side blob for Changes mode when the worktree's git
-  // status array identity changes. A commit, pull, or rebase updates the
-  // status poll result, which is the cheapest signal we have that HEAD moved
-  // — without this, users see a stale diff after committing from Changes mode.
-  // Subscribing to the status array keeps parity with the Changes sidebar.
-  const changesStatusEntries = activeFile?.worktreeId
-    ? gitStatusByWorktree[activeFile.worktreeId]
-    : undefined
-  // Why: depend on the primitive identifiers of the active file rather than
-  // the `activeFile` object. `openFiles` is rebuilt on any store update that
-  // touches an open file (dirty flips, saves, status polling), so the
-  // `activeFile` object reference changes on many unrelated renders. Each
-  // identity change would otherwise retrigger the effect and dispatch a
-  // spurious git.diff IPC that the in-flight dedup map cannot coalesce
-  // across time. Resolve the current file via `openFilesRef` inside the
-  // effect so we still pass a live OpenFile to loadDiffContent.
-  useEffect(() => {
-    if (!isChangesMode || !activeFile?.id) {
-      return
-    }
-    const current = openFilesRef.current.find((f) => f.id === activeFile.id)
-    if (!current) {
-      return
-    }
-    void loadDiffContent(current)
-  }, [
-    changesStatusEntries,
-    isChangesMode,
-    activeFile?.id,
-    activeFile?.worktreeId,
-    activeFile?.relativePath,
-    loadDiffContent
-  ])
-
   const handleContentChange = useCallback(
     (content: string) => {
       if (!activeFile) {
         return
       }
       setEditorDraft(activeFile.id, content)
-      // Why: TipTap's getMarkdown() always appends a trailing newline to the
-      // serialized output. If the file on disk lacks that newline the naive
-      // strict-equality check treats the file as dirty even though no user edit
-      // occurred. Normalising trailing whitespace for markdown files mirrors the
-      // same trimEnd() used in the round-trip checker (markdown-round-trip.ts).
-      const isMarkdown = activeFile.language === 'markdown'
-      const normalize = isMarkdown ? (s: string): string => s.trimEnd() : (s: string): string => s
+      const normalize =
+        activeFile.language === 'markdown'
+          ? (value: string): string => value.trimEnd()
+          : (value: string): string => value
       if (activeFile.mode === 'edit') {
-        const saved = fileContents[activeFile.id]?.content ?? ''
-        markFileDirty(activeFile.id, normalize(content) !== normalize(saved))
-      } else {
-        // Diff mode: compare against the original modified content from git
-        const dc = diffContents[activeFile.id]
-        const original = dc?.kind === 'text' ? dc.modifiedContent : ''
-        markFileDirty(activeFile.id, normalize(content) !== normalize(original))
+        markFileDirty(
+          activeFile.id,
+          normalize(content) !== normalize(fileContents[activeFile.id]?.content ?? '')
+        )
+        return
       }
+      const diffContent = diffContents[activeFile.id]
+      const original = diffContent?.kind === 'text' ? diffContent.modifiedContent : ''
+      markFileDirty(activeFile.id, normalize(content) !== normalize(original))
     },
     [activeFile, diffContents, fileContents, markFileDirty, setEditorDraft]
   )
 
   const handleDirtyStateHint = useCallback(
     (dirty: boolean) => {
-      if (!activeFile) {
-        return
+      if (activeFile) {
+        markFileDirty(activeFile.id, dirty)
       }
-
-      // Why: RichMarkdownEditor debounces markdown serialization to keep
-      // typing responsive on large documents. The store still needs an
-      // immediate dirty signal so close prompts and window-unload guards do
-      // not miss edits made in the last debounce window.
-      markFileDirty(activeFile.id, dirty)
     },
     [activeFile, markFileDirty]
   )
@@ -710,25 +147,18 @@ function EditorPanelInner({
       if (!saveTargetFile) {
         return
       }
-      // Why: for untitled files, Cmd+S should prompt for a name before
-      // writing anything. Saving first would make Cancel misleading since
-      // the write already happened. Show the dialog and let the confirm
-      // handler do the save + rename atomically.
       if (saveTargetFile.isUntitled) {
-        setRenameDialogFileId(saveTargetFile.id)
+        requestRenameForFile(saveTargetFile.id)
         return
       }
       try {
         await requestEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
       } catch {}
     },
-    [activeFile, openFiles]
+    [activeFile, openFiles, requestRenameForFile]
   )
+  useEditorCmdSaveRequest({ activeFile, openFiles, fileContents, handleSave })
 
-  // Why: hooks must run unconditionally, so this useCallback lives above the
-  // `if (!activeFile) return null` guard; the callback itself no-ops when
-  // no file is active. Memoised to match the other editor handlers in this
-  // file and avoid churning EditorViewToggle's onChange identity.
   const handleEditorToggleChange = useCallback(
     (next: EditorToggleValue): void => {
       const fileId = activeFile?.id
@@ -739,275 +169,12 @@ function EditorPanelInner({
         setEditorViewMode(fileId, 'changes')
         return
       }
-      // Why: selecting any non-Changes segment implicitly exits Changes mode.
-      // For markdown/mermaid files, also persist the chosen language sub-mode
-      // so that next time Changes is toggled off, the file returns to that view.
       setEditorViewMode(fileId, 'edit')
       if (next !== 'edit') {
         setMarkdownViewMode(fileId, next)
       }
     },
     [activeFile?.id, setEditorViewMode, setMarkdownViewMode]
-  )
-
-  // Why: global Cmd+S (from Terminal.tsx) dispatches this event when
-  // focus is outside the editor content area. Delegate to handleSave
-  // so untitled files still show the rename dialog.
-  useEffect(() => {
-    const handler = (): void => {
-      if (!activeFile) {
-        return
-      }
-      const saveTargetFile =
-        activeFile.mode === 'markdown-preview'
-          ? (openFilesRef.current.find(
-              (openFile) =>
-                openFile.id === activeFile.markdownPreviewSourceFileId && openFile.mode === 'edit'
-            ) ?? null)
-          : activeFile
-      if (!saveTargetFile) {
-        return
-      }
-      // Why: a markdown preview tab is read-only but still fronts the same
-      // underlying document. Cmd/Ctrl+S should save that source editor's draft
-      // instead of no-oping just because the preview tab currently has focus.
-      const state = useAppStore.getState()
-      const draft = state.editorDrafts[saveTargetFile.id]
-      if (!draft && !saveTargetFile.isUntitled && !saveTargetFile.isDirty) {
-        return
-      }
-      const fallbackContent =
-        draft ??
-        (activeFile.mode === 'markdown-preview' ? fileContents[activeFile.id]?.content : '')
-      void handleSave(fallbackContent ?? '')
-    }
-    window.addEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
-    return () => window.removeEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
-  }, [activeFile, fileContents, handleSave])
-
-  useEffect(() => {
-    const handler = (event: Event): void => {
-      const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
-      if (!detail) {
-        return
-      }
-
-      const matchingFiles = getOpenFilesForExternalFileChange(openFilesRef.current, detail)
-      if (matchingFiles.length === 0) {
-        return
-      }
-      // Why: do NOT delete fileContents[file.id] here before the reload
-      // completes. Dropping the entry renders EditorContent's "Loading..."
-      // placeholder and unmounts MonacoEditor. On remount, @monaco-editor/react
-      // skips its value-sync effect on the first render, and `keepCurrentModel`
-      // retains the prior model — so the new content prop never reaches the
-      // editor and the user sees the pre-external-edit text linger.
-      // loadFileContent / loadDiffContent overwrite the entry atomically once
-      // the fresh read returns, which is what Monaco's value-sync can observe.
-      for (const file of matchingFiles) {
-        if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-          void loadFileContent(file.filePath, file.id, file.worktreeId)
-          // Why: if this edit tab is currently in Changes view mode, the
-          // rendered DiffViewer also depends on the HEAD-side blob. An
-          // external write (e.g. a git checkout) can change both the working
-          // tree *and* shift the reference blob, so refetch the diff too.
-          // Read through a ref so the handler reflects the subscribed store
-          // value without forcing the listener to re-register on every mode
-          // toggle.
-          if (editorViewModeRef.current[file.id] === 'changes') {
-            void loadDiffContent(file)
-          }
-        } else if (
-          file.mode === 'diff' &&
-          file.diffSource !== 'combined-uncommitted' &&
-          file.diffSource !== 'combined-branch'
-        ) {
-          void loadDiffContent(file)
-        }
-      }
-    }
-
-    window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
-    return () =>
-      window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
-  }, [loadDiffContent, loadFileContent])
-
-  useEffect(() => {
-    const openIds = new Set(openFiles.map((f) => f.id))
-    for (const fileId of Object.keys(fileLoadRetryAttemptsRef.current)) {
-      if (!openIds.has(fileId)) {
-        delete fileLoadRetryAttemptsRef.current[fileId]
-      }
-    }
-    setFileContents((prev) => {
-      const next: Record<string, FileContent> = {}
-      for (const [k, v] of Object.entries(prev)) {
-        if (openIds.has(k)) {
-          next[k] = v
-        }
-      }
-      return next
-    })
-    setDiffContents((prev) => {
-      const next: Record<string, DiffContent> = {}
-      for (const [k, v] of Object.entries(prev)) {
-        if (openIds.has(k)) {
-          next[k] = v
-        }
-      }
-      return next
-    })
-  }, [openFiles])
-
-  useEffect(() => {
-    const handler = (event: Event): void => {
-      const detail = (event as CustomEvent<EditorFileSavedDetail>).detail
-      if (!detail) {
-        return
-      }
-
-      const file = openFilesRef.current.find((openFile) => openFile.id === detail.fileId)
-      if (!file) {
-        return
-      }
-
-      if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-        setFileContents((prev) => ({
-          ...prev,
-          [file.id]: { content: detail.content, isBinary: false }
-        }))
-      }
-
-      const previewTabs = openFilesRef.current.filter(
-        (openFile) =>
-          openFile.mode === 'markdown-preview' &&
-          openFile.markdownPreviewSourceFileId === detail.fileId
-      )
-      if (previewTabs.length > 0) {
-        setFileContents((prev) => {
-          const next = { ...prev }
-          for (const previewTab of previewTabs) {
-            next[previewTab.id] = { content: detail.content, isBinary: false }
-          }
-          return next
-        })
-      }
-
-      if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-        return
-      }
-
-      setDiffContents((prev) => {
-        const existing = prev[file.id]
-        if (!existing || existing.kind !== 'text') {
-          return prev
-        }
-        return {
-          ...prev,
-          [file.id]: { ...existing, modifiedContent: detail.content }
-        }
-      })
-    }
-
-    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
-    return () => window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
-  }, [])
-
-  const [renameError, setRenameError] = useState<string | null>(null)
-
-  const handleRenameConfirm = useCallback(
-    async (newRelPath: string) => {
-      if (!renameDialogFile) {
-        return
-      }
-      const oldPath = renameDialogFile.filePath
-      // Why: worktree path is derived by stripping the old relativePath
-      // suffix, so subdirectory-relative names (e.g. "notes/ideas.md")
-      // resolve correctly against the worktree root.
-      const worktreeRoot = oldPath.slice(
-        0,
-        oldPath.length - renameDialogFile.relativePath.length - 1
-      )
-      const newPath = `${worktreeRoot}/${newRelPath}`
-      const connectionId = getConnectionId(renameDialogFile.worktreeId) ?? undefined
-      const fileContext = {
-        settings: settingsForRuntimeOwner(
-          useAppStore.getState().settings,
-          renameDialogFile.runtimeEnvironmentId
-        ),
-        worktreeId: renameDialogFile.worktreeId,
-        worktreePath: worktreeRoot,
-        connectionId
-      }
-
-      // Prevent silently overwriting an existing file (but allow keeping
-      // the current name — the file's own path is not a conflict).
-      if (newPath !== oldPath && (await runtimePathExists(fileContext, newPath))) {
-        setRenameError('A file with that name already exists')
-        return
-      }
-
-      // Why: Cmd+S no longer pre-saves for untitled files — it just opens
-      // this dialog. Flush any pending autosave, then save the current
-      // content so the file on disk is up-to-date before we rename it.
-      await requestEditorSaveQuiesce({ fileId: renameDialogFile.id })
-      // Why: only trigger a save if there's actually unsaved content.
-      // Passing an empty fallbackContent when the draft is absent would
-      // overwrite the file with nothing, wiping user content.
-      const draft = useAppStore.getState().editorDrafts[renameDialogFile.id]
-      if (draft !== undefined) {
-        try {
-          await requestEditorFileSave({ fileId: renameDialogFile.id, fallbackContent: draft })
-        } catch {
-          // Why: if the save fails (disk full, permissions, etc.), abort the
-          // rename to avoid moving a stale/empty file and losing content.
-          setRenameError('Failed to save file')
-          return
-        }
-      }
-
-      // User kept the same name — just save in place, no rename needed.
-      if (newPath === oldPath) {
-        clearUntitled(renameDialogFile.id)
-        setRenameDialogFileId(null)
-        setRenameError(null)
-        return
-      }
-
-      // Why: if the target path includes subdirectories (e.g. "notes/ideas.md"),
-      // ensure the parent directory exists before renaming. createDir throws
-      // if the directory already exists (assertNotExists guard), so only call
-      // it when the directory is not yet on disk.
-      const newDir = newPath.slice(0, newPath.lastIndexOf('/'))
-      if (newDir !== worktreeRoot && !(await runtimePathExists(fileContext, newDir))) {
-        await createRuntimePath(fileContext, newDir, 'directory')
-      }
-
-      try {
-        await renameRuntimePath(fileContext, oldPath, newPath)
-      } catch (err) {
-        setRenameError(err instanceof Error ? err.message : 'Failed to rename file')
-        return
-      }
-
-      closeFile(oldPath)
-      openFile({
-        filePath: newPath,
-        relativePath: newRelPath,
-        worktreeId: renameDialogFile.worktreeId,
-        runtimeEnvironmentId: renameDialogFile.runtimeEnvironmentId,
-        language: detectLanguage(newRelPath),
-        mode: 'edit'
-      })
-
-      // Why: Cmd+S already saved the content before the rename dialog opened,
-      // and quiesce flushed any remaining writes. The renamed file on disk
-      // matches the editor content, so the new tab should start clean.
-
-      setRenameDialogFileId(null)
-      setRenameError(null)
-    },
-    [renameDialogFile, closeFile, openFile, clearUntitled]
   )
 
   const handleCopyPath = useCallback(async (): Promise<void> => {
@@ -1026,116 +193,19 @@ function EditorPanelInner({
     }
   }, [activeFile])
 
-  useEffect(() => {
-    if (!activeFilePath || !activeFileRelativePath || !activeFileWorktreeId || !activeFileMode) {
-      return
-    }
-
-    const shortcutLanguage =
-      activeFileMode === 'diff'
-        ? detectLanguage(activeFileRelativePath)
-        : detectLanguage(activeFilePath)
-    const canShowMarkdownPreview = canOpenMarkdownPreview({
-      language: shortcutLanguage,
-      mode: activeFileMode,
-      diffSource: activeFileDiffSource
-    })
-    if (!canShowMarkdownPreview) {
-      return
-    }
-
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || !isMarkdownPreviewShortcut(event, isMac)) {
-        return
-      }
-      const root = panelRef.current
-      if (!root) {
-        return
-      }
-      const target = event.target
-      const targetInsidePanel = target instanceof Node && root.contains(target)
-      if (!targetInsidePanel) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      openMarkdownPreview({
-        filePath: activeFilePath,
-        relativePath: activeFileRelativePath,
-        worktreeId: activeFileWorktreeId,
-        runtimeEnvironmentId: activeFileRuntimeEnvironmentId,
-        language: shortcutLanguage
-      })
-    }
-
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [
-    activeFileDiffSource,
-    activeFileMode,
-    activeFilePath,
-    activeFileRelativePath,
-    activeFileRuntimeEnvironmentId,
-    activeFileWorktreeId,
-    openMarkdownPreview
-  ])
-
   if (!activeFile) {
     return null
   }
-
-  const isSingleDiff =
-    activeFile.mode === 'diff' &&
-    activeFile.diffSource !== undefined &&
-    activeFile.diffSource !== 'combined-uncommitted' &&
-    activeFile.diffSource !== 'combined-branch'
-  // Why: Changes view mode renders a DiffViewer, so expose the same inline /
-  // side-by-side toggle the diff-tab path already offers.
-  const isDiffSurface = isSingleDiff || isChangesMode
-  const isCombinedDiff =
-    activeFile.mode === 'diff' &&
-    (activeFile.diffSource === 'combined-uncommitted' ||
-      activeFile.diffSource === 'combined-branch')
-  const headerCopyState = getEditorHeaderCopyState(activeFile)
-  const worktreeEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
-  const branchEntries = gitBranchChangesByWorktree[activeFile.worktreeId] ?? []
-  const resolvedLanguage =
-    activeFile.mode === 'diff'
-      ? detectLanguage(activeFile.relativePath)
-      : detectLanguage(activeFile.filePath)
-  const matchingWorktreeEntry =
-    activeFile.mode === 'diff' && activeFile.diffSource !== 'branch'
-      ? (worktreeEntries.find(
-          (entry) =>
-            entry.path === activeFile.relativePath &&
-            (activeFile.diffSource === 'staged'
-              ? entry.area === 'staged'
-              : entry.area === 'unstaged')
-        ) ?? null)
-      : null
-  const matchingBranchEntry =
-    activeFile.mode === 'diff' && activeFile.diffSource === 'branch'
-      ? (branchEntries.find((entry) => entry.path === activeFile.relativePath) ?? null)
-      : null
-  const openFileState = getEditorHeaderOpenFileState(
+  const model = getEditorPanelRenderModel({
     activeFile,
-    matchingWorktreeEntry,
-    matchingBranchEntry
-  )
+    fileContents,
+    gitStatusByWorktree,
+    gitBranchChangesByWorktree,
+    markdownViewMode,
+    isChangesMode
+  })
 
-  const isMarkdown = resolvedLanguage === 'markdown'
-  const isMermaid = resolvedLanguage === 'mermaid'
-  const isCsv = resolvedLanguage === 'csv' || resolvedLanguage === 'tsv'
-  const isNotebook = resolvedLanguage === 'notebook'
-  // Why: "Open Preview to the Side" only applies to edit-mode tabs whose
-  // language has a registered renderer. Diff tabs already have their own
-  // toggle set and there is no clear semantic for previewing a diff.
-  const canOpenPreviewToSide = activeFile.mode === 'edit' && canPreviewLanguage(resolvedLanguage)
   const handleOpenPreviewToSide = (): void => {
-    // Split-pane layouts mount one EditorPanel per pane, each with its own
-    // activeViewStateId (the unified-tab id). Resolve the owning group from
-    // that tab so the preview lands beside *this* pane rather than whichever
-    // group happens to be the ambient active one.
     const state = useAppStore.getState()
     const sourceGroupId = activeViewStateId
       ? ((state.unifiedTabsByWorktree[activeFile.worktreeId] ?? []).find(
@@ -1143,366 +213,86 @@ function EditorPanelInner({
         )?.groupId ?? null)
       : null
     openFilePreviewToSide({
-      language: resolvedLanguage,
+      language: model.resolvedLanguage,
       filePath: activeFile.filePath,
       worktreeId: activeFile.worktreeId,
       sourceGroupId
     })
   }
-  const markdownViewModes = getMarkdownViewModes({
-    language: resolvedLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
-  const hasViewModeToggle = markdownViewModes.length > 0
-  const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
-    language: resolvedLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
-  const storedMarkdownViewMode = markdownViewMode[activeFile.id]
-  const mdViewMode: MarkdownViewMode =
-    hasViewModeToggle &&
-    storedMarkdownViewMode !== undefined &&
-    markdownViewModes.includes(storedMarkdownViewMode)
-      ? storedMarkdownViewMode
-      : defaultMarkdownViewMode
-  // Why: the header toggle surfaces both the language-specific view mode
-  // (Source / Rich / Preview) and the orthogonal Changes view mode in one
-  // segmented control. Plain code files (no language-specific modes) still get
-  // an Edit | Changes toggle because Changes applies to every editable tab.
-  const editorToggleModes = getEditorToggleModes({
-    language: resolvedLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
-  const isBinaryEditSurface =
-    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
-  const canUseChangesMode = canUseChangesModeForFile(activeFile)
-  // Why: edit-mode binary/image tabs already have their own dedicated renderers
-  // and external files have no repo-relative path for git diff. Hide Changes
-  // rather than offering a segment the renderer will immediately ignore.
-  const availableEditorToggleModes =
-    isBinaryEditSurface || !canUseChangesMode
-      ? editorToggleModes.filter((mode) => mode !== 'changes')
-      : editorToggleModes
-  // Why: a toggle with a single option is just a decorative pill with nothing
-  // to switch to. Binary plain-code tabs end up here after 'changes' is
-  // stripped — on main they had no header toggle at all, so requiring >1 mode
-  // preserves that behavior instead of leaving a lone "Edit" segment.
-  const hasEditorToggle = availableEditorToggleModes.length > 1
-  const effectiveToggleValue: EditorToggleValue = isChangesMode
-    ? 'changes'
-    : hasViewModeToggle
-      ? mdViewMode
-      : 'edit'
-  const isMarkdownTableOfContentsDisabled = hasViewModeToggle && mdViewMode === 'source'
-  const canShowMarkdownTableOfContents =
-    isMarkdown && (hasViewModeToggle || activeFile.mode === 'markdown-preview')
-  const canShowMarkdownPreview = canOpenMarkdownPreview({
-    language: resolvedLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
-
   const handleOpenDiffTargetFile = (): void => {
-    if (!openFileState.canOpen) {
+    if (!model.openFileState.canOpen) {
       return
     }
     openFile({
       filePath: activeFile.filePath,
       relativePath: activeFile.relativePath,
       worktreeId: activeFile.worktreeId,
+      runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
       language: detectLanguage(activeFile.relativePath),
       mode: 'edit'
     })
   }
-
-  const loadingFallback = (
-    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      Loading editor...
-    </div>
+  const handleOpenMarkdownPreview = (): void => {
+    openMarkdownPreview({
+      filePath: activeFile.filePath,
+      relativePath: activeFile.relativePath,
+      worktreeId: activeFile.worktreeId,
+      runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+      language: model.resolvedLanguage
+    })
+  }
+  const handleOpenContainingFolder = (): void => {
+    if (
+      isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId), {
+        connectionId: getConnectionId(activeFile.worktreeId)
+      })
+    ) {
+      showLocalPathOpenBlockedToast()
+      return
+    }
+    window.api.shell.openPath(activeFile.filePath)
+  }
+  const disableRenameBrowse = Boolean(
+    settingsForRuntimeOwner(
+      settings,
+      renameDialogFile?.runtimeEnvironmentId
+    )?.activeRuntimeEnvironmentId?.trim() ||
+      (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
 
   return (
-    <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
-      {!isCombinedDiff && (
-        <div className="editor-header">
-          <div className="editor-header-text">
-            <div
-              className="editor-header-path-row"
-              onContextMenuCapture={(event) => {
-                event.preventDefault()
-                window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-                setPathMenuPoint({ x: event.clientX, y: event.clientY })
-                setPathMenuOpen(true)
-              }}
-            >
-              <button
-                type="button"
-                className="editor-header-path"
-                onClick={() => void handleCopyPath()}
-                title={headerCopyState.pathTitle}
-              >
-                {headerCopyState.pathLabel}
-              </button>
-              <span
-                className={`editor-header-copy-toast${copiedPathToast?.fileId === activeFile.id ? ' is-visible' : ''}`}
-                aria-live="polite"
-              >
-                {headerCopyState.copyToastLabel}
-              </span>
-            </div>
-            <DropdownMenu open={pathMenuOpen} onOpenChange={setPathMenuOpen} modal={false}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-hidden
-                  tabIndex={-1}
-                  className="pointer-events-none fixed size-px opacity-0"
-                  style={{ left: pathMenuPoint.x, top: pathMenuPoint.y }}
-                />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" sideOffset={0} align="start">
-                <DropdownMenuItem
-                  onSelect={() => {
-                    void window.api.ui.writeClipboardText(activeFile.filePath)
-                  }}
-                >
-                  <Copy className="w-3.5 h-3.5 mr-1.5" />
-                  Copy Path
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    void window.api.ui.writeClipboardText(activeFile.relativePath)
-                  }}
-                >
-                  <Copy className="w-3.5 h-3.5 mr-1.5" />
-                  Copy Relative Path
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {canShowMarkdownPreview && (
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      openMarkdownPreview({
-                        filePath: activeFile.filePath,
-                        relativePath: activeFile.relativePath,
-                        worktreeId: activeFile.worktreeId,
-                        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-                        language: resolvedLanguage
-                      })
-                    }
-                  >
-                    <Eye className="w-3.5 h-3.5 mr-1.5" />
-                    Open Markdown Preview
-                    <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                )}
-                {canShowMarkdownPreview && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  onSelect={() => {
-                    if (
-                      isLocalPathOpenBlocked(
-                        settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId),
-                        {
-                          connectionId: getConnectionId(activeFile.worktreeId)
-                        }
-                      )
-                    ) {
-                      showLocalPathOpenBlockedToast()
-                      return
-                    }
-                    window.api.shell.openPath(activeFile.filePath)
-                  }}
-                >
-                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                  {revealLabel}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          {isSingleDiff && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                    onClick={handleOpenDiffTargetFile}
-                    aria-label="Open file"
-                    disabled={!openFileState.canOpen}
-                  >
-                    <FileText size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}>
-                  {openFileState.canOpen
-                    ? isMarkdown
-                      ? 'Open file tab to use rich markdown editing'
-                      : 'Open file tab'
-                    : 'This diff has no modified-side file to open'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {canOpenPreviewToSide && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                    onClick={handleOpenPreviewToSide}
-                    aria-label="Open Preview to the Side"
-                  >
-                    <Eye size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}>
-                  Open Preview to the Side
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {isDiffSurface && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                    onClick={() => setSideBySide((prev) => !prev)}
-                  >
-                    {sideBySide ? <Rows2 size={14} /> : <Columns2 size={14} />}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}>
-                  {sideBySide ? 'Switch to inline diff' : 'Switch to side-by-side diff'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {hasEditorToggle && (
-            <EditorViewToggle
-              value={effectiveToggleValue}
-              modes={availableEditorToggleModes}
-              onChange={handleEditorToggleChange}
-              metadataOverride={
-                isCsv
-                  ? CSV_VIEW_MODE_METADATA
-                  : isNotebook
-                    ? NOTEBOOK_VIEW_MODE_METADATA
-                    : undefined
-              }
-            />
-          )}
-          {canShowMarkdownTableOfContents && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className={`p-1 rounded hover:bg-accent hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground ${
-                      showMarkdownTableOfContents && !isMarkdownTableOfContentsDisabled
-                        ? 'bg-accent text-foreground'
-                        : 'text-muted-foreground'
-                    }`}
-                    onClick={() => setShowMarkdownTableOfContents((shown) => !shown)}
-                    disabled={isMarkdownTableOfContentsDisabled}
-                    aria-label="Table of Contents"
-                    aria-pressed={showMarkdownTableOfContents}
-                  >
-                    <ListTree size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}>
-                  {isMarkdownTableOfContentsDisabled
-                    ? 'Table of Contents is available in rich or preview mode'
-                    : 'Table of Contents'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {hasViewModeToggle && isMarkdown && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                  aria-label="More actions"
-                  title="More actions"
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={4}>
-                <DropdownMenuItem
-                  // Why: the item is disabled (not hidden) only in source/Monaco
-                  // mode, which has no document DOM to export. We intentionally
-                  // don't poll the DOM (canExportActiveMarkdown) at render time:
-                  // the Radix content renders in a Portal and the lookup can
-                  // race with the active surface's paint, producing a stuck
-                  // disabled state. exportActiveMarkdownToPdf is a safe no-op
-                  // when no subtree is found.
-                  disabled={mdViewMode === 'source'}
-                  onSelect={() => {
-                    void exportActiveMarkdownToPdf()
-                  }}
-                >
-                  Export as PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      )}
-      <Suspense fallback={loadingFallback}>
-        <EditorContent
-          activeFile={activeFile}
-          viewStateScopeId={activeViewStateId ?? activeFile.id}
-          fileContents={fileContents}
-          diffContents={diffContents}
-          editBuffers={editorDrafts}
-          worktreeEntries={worktreeEntries}
-          resolvedLanguage={resolvedLanguage}
-          isMarkdown={isMarkdown}
-          isMermaid={isMermaid}
-          isCsv={isCsv}
-          isNotebook={isNotebook}
-          mdViewMode={mdViewMode}
-          isChangesMode={isChangesMode}
-          sideBySide={sideBySide}
-          pendingEditorReveal={pendingEditorReveal}
-          handleContentChange={handleContentChange}
-          handleDirtyStateHint={handleDirtyStateHint}
-          handleSave={handleSave}
-          reloadFileContent={reloadFileContent}
-          showMarkdownTableOfContents={showMarkdownTableOfContents}
-          onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
-        />
-      </Suspense>
-      <UntitledFileRenameDialog
-        open={renameDialogFile !== undefined && renameDialogFile !== null}
-        currentName={renameDialogFile?.relativePath ?? ''}
-        worktreePath={
-          renameDialogFile
-            ? (findWorktreeById(useAppStore.getState().worktreesByRepo, renameDialogFile.worktreeId)
-                ?.path ?? '')
-            : ''
-        }
-        disableBrowse={Boolean(
-          settingsForRuntimeOwner(
-            settings,
-            renameDialogFile?.runtimeEnvironmentId
-          )?.activeRuntimeEnvironmentId?.trim() ||
-          (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
-        )}
-        externalError={renameError}
-        onClose={() => {
-          setRenameDialogFileId(null)
-          setRenameError(null)
-        }}
-        onConfirm={handleRenameConfirm}
-      />
-    </div>
+    <EditorPanelShell
+      panelRef={panelRef}
+      activeFile={activeFile}
+      activeViewStateId={activeViewStateId}
+      model={model}
+      copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
+      showMarkdownTableOfContents={showMarkdownTableOfContents}
+      sideBySide={sideBySide}
+      fileContents={fileContents}
+      diffContents={diffContents}
+      editorDrafts={editorDrafts}
+      pendingEditorReveal={pendingEditorReveal}
+      renameDialogFile={renameDialogFile}
+      renameError={renameError}
+      disableRenameBrowse={disableRenameBrowse}
+      onCopyPath={() => void handleCopyPath()}
+      onOpenDiffTargetFile={handleOpenDiffTargetFile}
+      onOpenPreviewToSide={handleOpenPreviewToSide}
+      onOpenMarkdownPreview={handleOpenMarkdownPreview}
+      onOpenContainingFolder={handleOpenContainingFolder}
+      onToggleSideBySide={() => setSideBySide((prev) => !prev)}
+      onEditorToggleChange={handleEditorToggleChange}
+      onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
+      onExportMarkdownToPdf={() => void exportActiveMarkdownToPdf()}
+      onContentChange={handleContentChange}
+      onDirtyStateHint={handleDirtyStateHint}
+      onSave={handleSave}
+      onReloadFileContent={reloadFileContent}
+      onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
+      onCloseRenameDialog={closeRenameDialog}
+      onRenameConfirm={handleRenameConfirm}
+    />
   )
 }
 

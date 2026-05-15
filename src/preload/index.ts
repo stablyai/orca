@@ -32,6 +32,7 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
+import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
@@ -1178,6 +1179,12 @@ const api = {
 
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
+
+    openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
+      ipcRenderer.invoke('shell:openInFileManager', path),
+
+    openInExternalEditor: (path: string): Promise<ShellOpenLocalPathResult> =>
+      ipcRenderer.invoke('shell:openInExternalEditor', path),
 
     openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
 
