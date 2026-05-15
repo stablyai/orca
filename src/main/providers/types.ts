@@ -4,6 +4,7 @@ import type {
   GitStatusResult,
   GitDiffResult,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitPushTarget,
   GitUpstreamStatus,
@@ -11,6 +12,7 @@ import type {
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
@@ -143,6 +145,7 @@ export type IFilesystemProvider = {
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: { includeIgnored?: boolean }): Promise<GitStatusResult>
+  getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
@@ -159,6 +162,7 @@ export type IGitProvider = {
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
+  getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
   getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus>
   pushBranch(worktreePath: string, publish?: boolean, pushTarget?: GitPushTarget): Promise<void>
   pullBranch(worktreePath: string): Promise<void>
@@ -168,6 +172,10 @@ export type IGitProvider = {
     baseRef: string,
     options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]>
+  getCommitDiff(
+    worktreePath: string,
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+  ): Promise<GitDiffResult>
   listWorktrees(repoPath: string, options?: { signal?: AbortSignal }): Promise<GitWorktreeInfo[]>
   addWorktree(
     repoPath: string,

@@ -3,6 +3,7 @@ runtime-aware routing so source-control callers have one typed boundary instead
 of reimplementing local-vs-environment branching per operation. */
 import type {
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
   GitPushTarget,
@@ -10,6 +11,7 @@ import type {
   GitUpstreamStatus,
   GlobalSettings
 } from '../../../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
 export type RuntimeGenerateCommitMessageResult =
@@ -76,6 +78,26 @@ export async function getRuntimeGitStatus(
   )
 }
 
+export async function getRuntimeGitHistory(
+  context: RuntimeGitContext,
+  options: GitHistoryOptions = {}
+): Promise<GitHistoryResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.history({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId,
+      ...options
+    })
+  }
+  return callRuntimeRpc<GitHistoryResult>(
+    target,
+    'git.history',
+    { worktree: context.worktreeId, ...options },
+    { timeoutMs: 15_000 }
+  )
+}
+
 export async function getRuntimeGitConflictOperation(
   context: RuntimeGitContext
 ): Promise<GitConflictOperation> {
@@ -132,6 +154,26 @@ export async function getRuntimeGitBranchCompare(
     target,
     'git.branchCompare',
     { worktree: context.worktreeId, baseRef },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitCommitCompare(
+  context: RuntimeGitContext,
+  commitId: string
+): Promise<GitCommitCompareResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.commitCompare({
+      worktreePath: context.worktreePath,
+      commitId,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitCommitCompareResult>(
+    target,
+    'git.commitCompare',
+    { worktree: context.worktreeId, commitId },
     { timeoutMs: 15_000 }
   )
 }
@@ -221,6 +263,34 @@ export async function getRuntimeGitBranchDiff(
   return callRuntimeRpc<GitDiffResult>(
     target,
     'git.branchDiff',
+    { worktree: context.worktreeId, ...args },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitCommitDiff(
+  context: RuntimeGitContext,
+  args: {
+    commitOid: string
+    parentOid?: string | null
+    filePath: string
+    oldPath?: string
+  }
+): Promise<GitDiffResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.commitDiff({
+      worktreePath: context.worktreePath,
+      commitOid: args.commitOid,
+      parentOid: args.parentOid,
+      filePath: args.filePath,
+      oldPath: args.oldPath,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitDiffResult>(
+    target,
+    'git.commitDiff',
     { worktree: context.worktreeId, ...args },
     { timeoutMs: 15_000 }
   )

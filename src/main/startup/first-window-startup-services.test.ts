@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { startFirstWindowStartupServices } from './first-window-startup-services'
+import {
+  FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS,
+  startFirstWindowStartupServices
+} from './first-window-startup-services'
 
 describe('startFirstWindowStartupServices', () => {
   it('starts daemon and hook services concurrently before awaiting either', async () => {
@@ -54,5 +57,28 @@ describe('startFirstWindowStartupServices', () => {
 
     expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
     expect(onAgentHookServerError).toHaveBeenCalledWith(expect.any(Error))
+  })
+
+  it('fails open when a pre-window startup service hangs', async () => {
+    vi.useFakeTimers()
+    const onDaemonError = vi.fn()
+    const onAgentHookServerError = vi.fn()
+
+    try {
+      const started = startFirstWindowStartupServices({
+        startDaemonPtyProvider: () => new Promise<void>(() => {}),
+        startAgentHookServer: () => Promise.resolve(),
+        onDaemonError,
+        onAgentHookServerError
+      })
+
+      await vi.advanceTimersByTimeAsync(FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
+      await expect(started).resolves.toBeUndefined()
+
+      expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
+      expect(onAgentHookServerError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

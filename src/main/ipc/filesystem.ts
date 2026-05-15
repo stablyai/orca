@@ -9,6 +9,7 @@ import type { Store } from '../persistence'
 import type {
   DirEntry,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
   GitPushTarget,
@@ -18,6 +19,7 @@ import type {
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import {
   buildRgArgs,
   createAccumulator,
@@ -39,8 +41,11 @@ import {
   discardChanges,
   getStagedCommitContext,
   getBranchCompare,
-  getBranchDiff
+  getBranchDiff,
+  getCommitCompare,
+  getCommitDiff
 } from '../git/status'
+import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
   generateCommitMessageFromContext,
@@ -75,6 +80,7 @@ import {
 // ordinary JSON/log files inaccessible before the editor can degrade features.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const BINARY_PROBE_BYTES = 8192
+const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 // Why: previewable binaries (PDFs, images) are rendered by the viewer as
 // base64 blobs, not parsed as text — 5MB is tight for real-world PDFs, and
 // raising this cap only affects binary preview, not text/search paths.
@@ -93,6 +99,13 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+function validateFullGitObjectId(value: string, label: string): string {
+  if (!FULL_GIT_OBJECT_ID_PATTERN.test(value)) {
+    throw new Error(`${label} must be a full git object id`)
+  }
+  return value
 }
 
 /**
@@ -499,6 +512,25 @@ export function registerFilesystemHandlers(
     }
   )
 
+  ipcMain.handle(
+    'git:history',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    ): Promise<GitHistoryResult> => {
+      const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getHistory(args.worktreePath, options)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getHistory(worktreePath, options)
+    }
+  )
+
   // Why: lightweight fs-only check for conflict operation state. Used to poll
   // non-active worktrees so their "Rebasing"/"Merging" badges clear when the
   // operation finishes, without running a full `git status`.
@@ -678,6 +710,25 @@ export function registerFilesystemHandlers(
   )
 
   ipcMain.handle(
+    'git:commitCompare',
+    async (
+      _event,
+      args: { worktreePath: string; commitId: string; connectionId?: string }
+    ): Promise<GitCommitCompareResult> => {
+      const commitId = validateFullGitObjectId(args.commitId, 'commitId')
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getCommitCompare(args.worktreePath, commitId)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getCommitCompare(worktreePath, commitId)
+    }
+  )
+
+  ipcMain.handle(
     'git:upstreamStatus',
     async (
       _event,
@@ -803,6 +854,47 @@ export function registerFilesystemHandlers(
       return getBranchDiff(worktreePath, {
         mergeBase: args.compare.mergeBase,
         headOid: args.compare.headOid,
+        filePath,
+        oldPath
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'git:commitDiff',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        commitOid: string
+        parentOid?: string | null
+        filePath: string
+        oldPath?: string
+        connectionId?: string
+      }
+    ): Promise<GitDiffResult> => {
+      const commitOid = validateFullGitObjectId(args.commitOid, 'commitOid')
+      const parentOid = args.parentOid ? validateFullGitObjectId(args.parentOid, 'parentOid') : null
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getCommitDiff(args.worktreePath, {
+          commitOid,
+          parentOid,
+          filePath: args.filePath,
+          oldPath: args.oldPath
+        })
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const oldPath = args.oldPath
+        ? validateGitRelativeFilePath(worktreePath, args.oldPath)
+        : undefined
+      return getCommitDiff(worktreePath, {
+        commitOid,
+        parentOid,
         filePath,
         oldPath
       })

@@ -2002,6 +2002,8 @@ export type GitBranchChangeEntry = {
   path: string
   status: GitBranchChangeStatus
   oldPath?: string
+  added?: number
+  removed?: number
 }
 
 export type GitBranchCompareSummary = {
@@ -2018,6 +2020,21 @@ export type GitBranchCompareSummary = {
 
 export type GitBranchCompareResult = {
   summary: GitBranchCompareSummary
+  entries: GitBranchChangeEntry[]
+}
+
+export type GitCommitCompareSummary = {
+  commitOid: string
+  parentOid: string | null
+  compareRef: string
+  baseRef: string
+  changedFiles: number
+  status: 'ready' | 'invalid-commit' | 'error'
+  errorMessage?: string
+}
+
+export type GitCommitCompareResult = {
+  summary: GitCommitCompareSummary
   entries: GitBranchChangeEntry[]
 }
 

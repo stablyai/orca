@@ -484,6 +484,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
     },
+    history: async ({ worktreePath, limit, baseRef }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.history', { worktree: worktree.id, limit, baseRef })
+    },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.conflictOperation', { worktree: worktree.id })
@@ -500,6 +504,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     branchCompare: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.branchCompare', { worktree: worktree.id, baseRef })
+    },
+    commitCompare: async ({ worktreePath, commitId }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.commitCompare', { worktree: worktree.id, commitId })
     },
     upstreamStatus: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -523,6 +531,16 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: file.worktree.id,
         filePath: file.relativePath,
         compare,
+        oldPath
+      })
+    },
+    commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath }) => {
+      const file = await resolveRuntimeFilePath(filePath, worktreePath)
+      return callRuntimeResult('git.commitDiff', {
+        worktree: file.worktree.id,
+        filePath: file.relativePath,
+        commitOid,
+        parentOid,
         oldPath
       })
     },

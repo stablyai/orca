@@ -116,12 +116,16 @@ import {
   discardRuntimeGitPath,
   generateRuntimeCommitMessage,
   getRuntimeGitBranchCompare,
+  getRuntimeGitCommitCompare,
+  getRuntimeGitHistory,
   stageRuntimeGitPath,
   unstageRuntimeGitPath
 } from '@/runtime/runtime-git-client'
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
+import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
+import type { GitHistoryItem } from '../../../../shared/git-history'
 import type {
   DiffComment,
   GitBranchChangeEntry,
@@ -185,6 +189,7 @@ const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
 const SOURCE_CONTROL_TREE_INDENT_PX = 12
 const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
+const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 
 // Why: the pure state-machine logic now lives in
 // ./source-control-primary-action.ts. It is imported directly by callers
@@ -344,6 +349,7 @@ function SourceControlInner(): React.JSX.Element {
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
+  const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
   const clearDiffCommentsForFile = useAppStore((s) => s.clearDiffCommentsForFile)
@@ -514,6 +520,14 @@ function SourceControlInner(): React.JSX.Element {
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
   const remoteActionError = remoteActionErrors[activeWorktreeId ?? ''] ?? null
+  const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
+    Record<string, GitHistoryPanelState>
+  >({})
+  const gitHistoryRequestSeqRef = useRef(0)
+  const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
+  const gitHistoryState = activeWorktreeId
+    ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
+    : EMPTY_GIT_HISTORY_STATE
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
@@ -862,6 +876,7 @@ function SourceControlInner(): React.JSX.Element {
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
+    setGitHistoryByWorktree((prev) => pruneRecord(prev))
     // Refs don't need setState — mutate in place to drop stale keys.
     for (const key of Object.keys(commitInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
@@ -871,6 +886,11 @@ function SourceControlInner(): React.JSX.Element {
     for (const key of Object.keys(generateInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
         delete generateInFlightRef.current[key]
+      }
+    }
+    for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete gitHistoryRequestByWorktreeRef.current[key]
       }
     }
   }, [worktreeMap])
@@ -981,6 +1001,7 @@ function SourceControlInner(): React.JSX.Element {
         )
       }
       void refreshBranchCompareRef.current()
+      void refreshGitHistoryRef.current()
       return true
     } catch (error) {
       setCommitErrors((prev) => ({
@@ -1148,6 +1169,8 @@ function SourceControlInner(): React.JSX.Element {
             message: resolveRemoteActionError(kind, error)
           }
         }))
+      } finally {
+        void refreshGitHistoryRef.current()
       }
     },
     [
@@ -1795,6 +1818,60 @@ function SourceControlInner(): React.JSX.Element {
   const refreshBranchCompareRef = useRef(refreshBranchCompare)
   refreshBranchCompareRef.current = refreshBranchCompare
 
+  const refreshGitHistory = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || isFolder || !isBranchVisible) {
+      return
+    }
+
+    const worktreeId = activeWorktreeId
+    const requestId = gitHistoryRequestSeqRef.current + 1
+    gitHistoryRequestSeqRef.current = requestId
+    gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
+    setGitHistoryByWorktree((prev) => {
+      const previous = prev[worktreeId]
+      return {
+        ...prev,
+        [worktreeId]: previous?.result
+          ? { status: 'refreshing', result: previous.result }
+          : { status: 'loading' }
+      }
+    })
+
+    try {
+      const connectionId = getConnectionId(worktreeId) ?? undefined
+      const result = await getRuntimeGitHistory(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId,
+          worktreePath,
+          connectionId
+        },
+        { limit: 50, baseRef: effectiveBaseRef }
+      )
+      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+        return
+      }
+      setGitHistoryByWorktree((prev) => ({ ...prev, [worktreeId]: { status: 'ready', result } }))
+    } catch (error) {
+      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+        return
+      }
+      const message = error instanceof Error ? error.message : 'Failed to load git graph'
+      setGitHistoryByWorktree((prev) => {
+        const previous = prev[worktreeId]
+        return {
+          ...prev,
+          [worktreeId]: previous?.result
+            ? { status: 'error', result: previous.result, error: message }
+            : { status: 'error', error: message }
+        }
+      })
+    }
+  }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
+
+  const refreshGitHistoryRef = useRef(refreshGitHistory)
+  refreshGitHistoryRef.current = refreshGitHistory
+
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !effectiveBaseRef || isFolder) {
       return
@@ -1815,6 +1892,16 @@ function SourceControlInner(): React.JSX.Element {
       window.clearInterval(intervalId)
       window.removeEventListener('focus', refreshIfFocused)
     }
+  }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
+
+  useEffect(() => {
+    // Why: history shells out to git, but unlike branch compare it only needs
+    // visible-load and mutation refreshes. Avoid polling so long sessions don't
+    // spawn git processes for a decorative graph.
+    if (!isBranchVisible) {
+      return
+    }
+    void refreshGitHistoryRef.current()
   }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
 
   useEffect(() => {
@@ -1872,6 +1959,41 @@ function SourceControlInner(): React.JSX.Element {
       )
     },
     [activeWorktreeId, branchSummary, openBranchDiff, worktreePath]
+  )
+
+  const openHistoryCommitDiff = useCallback(
+    async (item: GitHistoryItem): Promise<void> => {
+      if (!activeWorktreeId || !worktreePath) {
+        return
+      }
+
+      try {
+        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const result = await getRuntimeGitCommitCompare(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          item.id
+        )
+        if (result.summary.status !== 'ready') {
+          toast.error(result.summary.errorMessage ?? 'Failed to load commit diff')
+          return
+        }
+        openCommitAllDiffs(
+          activeWorktreeId,
+          worktreePath,
+          result.summary,
+          result.entries,
+          item.subject
+        )
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load commit diff')
+      }
+    },
+    [activeWorktreeId, openCommitAllDiffs, worktreePath]
   )
 
   // Why: a note's filePath is the same relative path used by GitStatusEntry /
@@ -2480,7 +2602,7 @@ function SourceControlInner(): React.JSX.Element {
         </div>
 
         <div
-          className="relative flex-1 overflow-auto scrollbar-sleek py-1"
+          className="relative flex flex-1 flex-col overflow-auto scrollbar-sleek py-1"
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
         >
           {unresolvedConflictReviewEntries.length > 0 && (
@@ -2857,6 +2979,21 @@ function SourceControlInner(): React.JSX.Element {
                         commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                       />
                     )))}
+            </div>
+          )}
+
+          {scope === 'all' && !normalizedFilter && (
+            // Why: the graph is reference context for the whole panel, so when
+            // file sections are short it should occupy the bottom instead of
+            // crowding the commit controls.
+            <div className="mt-auto">
+              <GitHistoryPanel
+                state={gitHistoryState}
+                collapsed={collapsedSections.has('history')}
+                onToggle={() => toggleSection('history')}
+                onRefresh={() => void refreshGitHistory()}
+                onOpenCommit={(item) => void openHistoryCommitDiff(item)}
+              />
             </div>
           )}
         </div>

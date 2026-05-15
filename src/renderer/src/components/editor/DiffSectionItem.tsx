@@ -8,10 +8,10 @@ import {
   useState,
   type MutableRefObject
 } from 'react'
+import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
-import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -30,6 +30,7 @@ import type { DiffSection } from './diff-section-types'
 import type { DiffComment } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
+import { Button } from '@/components/ui/button'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -42,9 +43,11 @@ export function DiffSectionItem({
   settings,
   sectionHeight,
   worktreeId,
-  worktreeRoot,
   loadSection,
+  retrySection,
   toggleSection,
+  openSection,
+  openSectionTitle,
   setSectionHeights,
   setSections,
   modifiedEditorsRef,
@@ -58,16 +61,16 @@ export function DiffSectionItem({
   settings: { terminalFontSize?: number; terminalFontFamily?: string } | null
   sectionHeight: number | undefined
   worktreeId: string
-  /** The worktree root directory — not a file path; used to resolve absolute paths for opening files. */
-  worktreeRoot: string
   loadSection: (index: number) => void
+  retrySection: (index: number) => void
   toggleSection: (index: number) => void
+  openSection: (index: number) => void
+  openSectionTitle: string
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   handleSectionSaveRef: MutableRefObject<(index: number) => Promise<void>>
 }): React.JSX.Element {
-  const openFile = useAppStore((s) => s.openFile)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
@@ -228,10 +231,16 @@ export function DiffSectionItem({
 
   const lineStats = useMemo(
     () =>
-      section.loading
+      section.loading || section.error
         ? null
         : computeLineStats(section.originalContent, section.modifiedContent, section.status),
-    [section.loading, section.originalContent, section.modifiedContent, section.status]
+    [
+      section.error,
+      section.loading,
+      section.originalContent,
+      section.modifiedContent,
+      section.status
+    ]
   )
   // Why: image diffs need document-flow height in the combined view; the text
   // fallback only knows line counts and would squash screenshots into one row.
@@ -242,18 +251,6 @@ export function DiffSectionItem({
     modifiedContent: section.modifiedContent,
     useIntrinsicImageHeight
   })
-
-  const handleOpenInEditor = (e: React.MouseEvent): void => {
-    e.stopPropagation()
-    const absolutePath = joinPath(worktreeRoot, section.path)
-    openFile({
-      filePath: absolutePath,
-      relativePath: section.path,
-      worktreeId,
-      language,
-      mode: 'edit'
-    })
-  }
 
   const handleMount: DiffOnMount = (editor, monaco) => {
     diffEditorRef.current = editor
@@ -334,10 +331,14 @@ export function DiffSectionItem({
         path={section.path}
         dirty={section.dirty}
         collapsed={section.collapsed}
-        added={lineStats?.added ?? 0}
-        removed={lineStats?.removed ?? 0}
+        added={lineStats?.added ?? section.added ?? 0}
+        removed={lineStats?.removed ?? section.removed ?? 0}
         onToggle={() => toggleSection(index)}
-        onOpenInEditor={handleOpenInEditor}
+        onOpenSection={(event) => {
+          event.stopPropagation()
+          openSection(index)
+        }}
+        openSectionTitle={openSectionTitle}
       />
 
       {!section.collapsed && (
@@ -361,8 +362,29 @@ export function DiffSectionItem({
             />
           )}
           {section.loading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
-              Loading...
+            <div className="flex h-full items-center gap-2 bg-muted/10 px-3 text-[11px] text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+              <span>Loading diff...</span>
+            </div>
+          ) : section.error ? (
+            <div className="flex h-full items-center justify-between gap-3 bg-muted/10 px-3 text-[11px] text-muted-foreground">
+              <div className="flex min-w-0 items-center gap-2">
+                <AlertCircle className="size-3.5 shrink-0 text-destructive" />
+                <span className="truncate">{section.error}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="h-6 shrink-0 px-2 text-[11px]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  retrySection(index)
+                }}
+              >
+                <RefreshCw className="size-3" />
+                Retry
+              </Button>
             </div>
           ) : section.diffResult?.kind === 'binary' ? (
             section.diffResult.isImage ? (

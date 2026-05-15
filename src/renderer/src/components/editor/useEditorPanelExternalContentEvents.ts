@@ -44,7 +44,8 @@ export function useEditorPanelExternalContentEvents({
         } else if (
           file.mode === 'diff' &&
           file.diffSource !== 'combined-uncommitted' &&
-          file.diffSource !== 'combined-branch'
+          file.diffSource !== 'combined-branch' &&
+          file.diffSource !== 'combined-commit'
         ) {
           void loadDiffContent(file)
         }

@@ -10,6 +10,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
+  GitCommitCompareSummary,
   GitConflictKind,
   GitConflictOperation,
   GitConflictResolutionStatus,
@@ -42,8 +43,10 @@ export type DiffSource =
   | 'unstaged'
   | 'staged'
   | 'branch'
+  | 'commit'
   | 'combined-uncommitted'
   | 'combined-branch'
+  | 'combined-commit'
 
 export type BranchCompareSnapshot = Pick<
   GitBranchCompareSummary,
@@ -51,6 +54,24 @@ export type BranchCompareSnapshot = Pick<
 > & {
   compareVersion: string
 }
+
+export type CommitCompareSnapshot = Pick<
+  GitCommitCompareSummary,
+  'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
+> & {
+  compareVersion: string
+  subject?: string
+}
+
+type BranchCompareLike = Pick<
+  GitBranchCompareSummary,
+  'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
+>
+
+type CommitCompareLike = Pick<
+  GitCommitCompareSummary,
+  'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
+>
 
 type CombinedDiffAlternate = {
   source: 'combined-uncommitted' | 'combined-branch'
@@ -119,10 +140,12 @@ export type OpenFile = {
   markdownPreviewAnchor?: string
   diffSource?: DiffSource
   branchCompare?: BranchCompareSnapshot
+  commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
   combinedAlternate?: CombinedDiffAlternate
   combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
   branchEntriesSnapshot?: GitBranchChangeEntry[]
+  commitEntriesSnapshot?: GitBranchChangeEntry[]
   /** Why: snapshot uncommitted entries at tab-open time so a subsequent commit
    *  does not yank entries out from under the combined diff, which would rebuild
    *  all sections and lose loaded content + scroll position. */
@@ -280,7 +303,14 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     entry: GitBranchChangeEntry,
-    compare: GitBranchCompareSummary,
+    compare: BranchCompareLike,
+    language: string
+  ) => void
+  openCommitDiff: (
+    worktreeId: string,
+    worktreePath: string,
+    entry: GitBranchChangeEntry,
+    compare: CommitCompareLike,
     language: string
   ) => void
   openAllDiffs: (
@@ -306,6 +336,13 @@ export type EditorSlice = {
     worktreePath: string,
     compare: GitBranchCompareSummary,
     alternate?: CombinedDiffAlternate
+  ) => void
+  openCommitAllDiffs: (
+    worktreeId: string,
+    worktreePath: string,
+    compare: GitCommitCompareSummary,
+    entries: GitBranchChangeEntry[],
+    subject?: string
   ) => void
 
   // Cursor line tracking per file
@@ -745,6 +782,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.mode !== file.mode ||
           existing.diffSource !== file.diffSource ||
           existing.branchCompare?.compareVersion !== file.branchCompare?.compareVersion ||
+          existing.commitCompare?.compareVersion !== file.commitCompare?.compareVersion ||
           existing.conflict?.kind !== file.conflict?.kind ||
           existing.conflict?.conflictKind !== file.conflict?.conflictKind ||
           existing.conflict?.conflictStatus !== file.conflict?.conflictStatus ||
@@ -769,9 +807,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   mode: file.mode,
                   diffSource: file.diffSource,
                   branchCompare: file.branchCompare,
+                  commitCompare: file.commitCompare,
                   branchOldPath: file.branchOldPath,
                   combinedAlternate: file.combinedAlternate,
                   combinedAreaFilter: file.combinedAreaFilter,
+                  commitEntriesSnapshot: file.commitEntriesSnapshot,
                   conflict: file.conflict,
                   skippedConflicts: file.skippedConflicts,
                   conflictReview: file.conflictReview,
@@ -1574,6 +1614,59 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     void openWorkspaceEditorItem(get(), id, worktreeId, entry.path, 'diff')
   },
 
+  openCommitDiff: (worktreeId, worktreePath, entry, compare, language) => {
+    const commitCompare = toCommitCompareSnapshot(compare)
+    const id = `${worktreeId}::diff::commit::${commitCompare.compareVersion}::${entry.path}`
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'diff' as const,
+                  diffSource: 'commit' as const,
+                  commitCompare,
+                  branchOldPath: entry.oldPath,
+                  conflict: undefined,
+                  skippedConflicts: undefined,
+                  conflictReview: undefined
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+      const newFile: OpenFile = {
+        id,
+        filePath: joinPath(worktreePath, entry.path),
+        relativePath: entry.path,
+        worktreeId,
+        language,
+        isDirty: false,
+        mode: 'diff',
+        diffSource: 'commit',
+        commitCompare,
+        branchOldPath: entry.oldPath,
+        conflict: undefined,
+        skippedConflicts: undefined,
+        conflictReview: undefined
+      }
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, entry.path, 'diff')
+  },
+
   openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
     const id = areaFilter
       ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
@@ -1844,6 +1937,62 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       `Branch Changes (${compare.baseRef})`,
       'diff'
     )
+  },
+
+  openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject) => {
+    const commitCompare = toCommitCompareSnapshot(compare, subject)
+    const id = `${worktreeId}::all-diffs::commit::${commitCompare.commitOid}`
+    const label = subject
+      ? `Commit ${commitCompare.compareRef}: ${subject}`
+      : `Commit ${commitCompare.compareRef}`
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  relativePath: label,
+                  commitCompare,
+                  commitEntriesSnapshot: entries,
+                  conflict: undefined,
+                  skippedConflicts: undefined,
+                  conflictReview: undefined
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+
+      const newFile: OpenFile = {
+        id,
+        filePath: worktreePath,
+        relativePath: label,
+        worktreeId,
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'diff',
+        diffSource: 'combined-commit',
+        commitCompare,
+        commitEntriesSnapshot: entries,
+        conflict: undefined,
+        skippedConflicts: undefined,
+        conflictReview: undefined
+      }
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
   },
 
   // Cursor line tracking
@@ -2570,7 +2719,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 })
 
 function getCompareVersion(
-  compare: Pick<GitBranchCompareSummary, 'baseOid' | 'headOid' | 'mergeBase'>
+  compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>
 ): string {
   return [
     compare.baseOid ?? 'no-base',
@@ -2579,7 +2728,7 @@ function getCompareVersion(
   ].join(':')
 }
 
-function toBranchCompareSnapshot(compare: GitBranchCompareSummary): BranchCompareSnapshot {
+function toBranchCompareSnapshot(compare: BranchCompareLike): BranchCompareSnapshot {
   return {
     baseRef: compare.baseRef,
     baseOid: compare.baseOid,
@@ -2587,6 +2736,22 @@ function toBranchCompareSnapshot(compare: GitBranchCompareSummary): BranchCompar
     headOid: compare.headOid,
     mergeBase: compare.mergeBase,
     compareVersion: getCompareVersion(compare)
+  }
+}
+
+function toCommitCompareSnapshot(
+  compare: CommitCompareLike,
+  subject?: string
+): CommitCompareSnapshot {
+  return {
+    commitOid: compare.commitOid,
+    parentOid: compare.parentOid,
+    compareRef: compare.compareRef,
+    baseRef: compare.baseRef,
+    compareVersion: `${compare.parentOid ?? 'empty-tree'}:${compare.commitOid}`,
+    subject:
+      subject ??
+      ('subject' in compare && typeof compare.subject === 'string' ? compare.subject : undefined)
   }
 }
 

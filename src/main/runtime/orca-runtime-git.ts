@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: runtime git dispatch stays in one boundary so local, SSH, and runtime-environment behavior remains comparable. */
 import type {
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
   GitPushTarget,
@@ -11,6 +12,7 @@ import type {
   Worktree
 } from '../../shared/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { getRemoteFileUrl } from '../git/repo'
 import {
   bulkDiscardChanges,
@@ -21,12 +23,15 @@ import {
   discardChanges,
   getBranchCompare,
   getBranchDiff,
+  getCommitCompare,
+  getCommitDiff,
   getDiff,
   getStagedCommitContext,
   getStatus as getGitStatus,
   stageFile,
   unstageFile
 } from '../git/status'
+import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -85,6 +90,21 @@ export class RuntimeGitCommands {
       : getGitStatus(target.worktree.path)
   }
 
+  async getRuntimeGitHistory(
+    worktreeSelector: string,
+    options: GitHistoryOptions = {}
+  ): Promise<GitHistoryResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      return provider.getHistory(target.worktree.path, options)
+    }
+    return getGitHistory(target.worktree.path, options)
+  }
+
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
@@ -128,6 +148,21 @@ export class RuntimeGitCommands {
       return provider.getBranchCompare(target.worktree.path, baseRef)
     }
     return getBranchCompare(target.worktree.path, baseRef)
+  }
+
+  async getRuntimeGitCommitCompare(
+    worktreeSelector: string,
+    commitId: string
+  ): Promise<GitCommitCompareResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      return provider.getCommitCompare(target.worktree.path, commitId)
+    }
+    return getCommitCompare(target.worktree.path, commitId)
   }
 
   async getRuntimeGitUpstreamStatus(worktreeSelector: string): Promise<GitUpstreamStatus> {
@@ -220,6 +255,33 @@ export class RuntimeGitCommands {
     return getBranchDiff(target.worktree.path, {
       mergeBase: compare.mergeBase,
       headOid: compare.headOid,
+      filePath: relativePath,
+      oldPath: oldRelativePath
+    })
+  }
+
+  async getRuntimeGitCommitDiff(
+    worktreeSelector: string,
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+  ): Promise<GitDiffResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeRelativePath(args.filePath)
+    const oldRelativePath = args.oldPath ? normalizeRuntimeRelativePath(args.oldPath) : undefined
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      return provider.getCommitDiff(target.worktree.path, {
+        commitOid: args.commitOid,
+        parentOid: args.parentOid,
+        filePath: relativePath,
+        oldPath: oldRelativePath
+      })
+    }
+    return getCommitDiff(target.worktree.path, {
+      commitOid: args.commitOid,
+      parentOid: args.parentOid,
       filePath: relativePath,
       oldPath: oldRelativePath
     })

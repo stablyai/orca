@@ -57,6 +57,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-git-graph-ref: var(--git-graph-ref);
+  --color-git-graph-remote-ref: var(--git-graph-remote-ref);
+  --color-git-graph-base-ref: var(--git-graph-base-ref);
+  --color-git-graph-lane-1: var(--git-graph-lane-1);
+  --color-git-graph-lane-2: var(--git-graph-lane-2);
+  --color-git-graph-lane-3: var(--git-graph-lane-3);
+  --color-git-graph-lane-4: var(--git-graph-lane-4);
+  --color-git-graph-lane-5: var(--git-graph-lane-5);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -115,6 +123,14 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
+  --git-graph-ref: #007acc;
+  --git-graph-remote-ref: #b66dff;
+  --git-graph-base-ref: #ea5c00;
+  --git-graph-lane-1: #ffb000;
+  --git-graph-lane-2: #dc267f;
+  --git-graph-lane-3: #994f00;
+  --git-graph-lane-4: #40b0a6;
+  --git-graph-lane-5: #b66dff;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -160,6 +176,14 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
+  --git-graph-ref: #3794ff;
+  --git-graph-remote-ref: #b66dff;
+  --git-graph-base-ref: #ea5c00;
+  --git-graph-lane-1: #ffb000;
+  --git-graph-lane-2: #dc267f;
+  --git-graph-lane-3: #ce9178;
+  --git-graph-lane-4: #40b0a6;
+  --git-graph-lane-5: #b66dff;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */

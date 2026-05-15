@@ -6,6 +6,7 @@ import {
   commitRuntimeGit,
   generateRuntimeCommitMessage,
   getRuntimeGitDiff,
+  getRuntimeGitHistory,
   getRuntimeGitStatus,
   pushRuntimeGit
 } from './runtime-git-client'
@@ -17,6 +18,7 @@ import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitStatus = vi.fn()
 const gitDiff = vi.fn()
+const gitHistory = vi.fn()
 const gitBulkStage = vi.fn()
 const gitBulkDiscard = vi.fn()
 const gitCommit = vi.fn()
@@ -31,6 +33,7 @@ beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   gitStatus.mockReset()
   gitDiff.mockReset()
+  gitHistory.mockReset()
   gitBulkStage.mockReset()
   gitBulkDiscard.mockReset()
   gitCommit.mockReset()
@@ -48,6 +51,7 @@ beforeEach(() => {
       git: {
         status: gitStatus,
         diff: gitDiff,
+        history: gitHistory,
         bulkStage: gitBulkStage,
         bulkDiscard: gitBulkDiscard,
         commit: gitCommit,
@@ -107,6 +111,34 @@ describe('runtime git client', () => {
     })
   })
 
+  it('uses local git IPC for history when no remote runtime is active', async () => {
+    gitHistory.mockResolvedValue({
+      items: [],
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: false,
+      limit: 50
+    })
+
+    await getRuntimeGitHistory(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      { limit: 25, baseRef: 'origin/main' }
+    )
+
+    expect(gitHistory).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      limit: 25,
+      baseRef: 'origin/main'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('routes status and diffs through the active runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -128,6 +160,14 @@ describe('runtime git client', () => {
       },
       { filePath: 'src/a.ts', staged: false, compareAgainstHead: true }
     )
+    await getRuntimeGitHistory(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { limit: 50, baseRef: 'origin/main' }
+    )
 
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
@@ -144,6 +184,12 @@ describe('runtime git client', () => {
         staged: false,
         compareAgainstHead: true
       },
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
+      selector: 'env-1',
+      method: 'git.history',
+      params: { worktree: 'wt-1', limit: 50, baseRef: 'origin/main' },
       timeoutMs: 15_000
     })
   })

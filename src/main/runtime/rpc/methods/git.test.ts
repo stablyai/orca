@@ -83,6 +83,35 @@ describe('git RPC methods', () => {
     })
   })
 
+  it('returns bounded git history for a selected worktree', async () => {
+    const history = {
+      items: [],
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: false,
+      limit: 50
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitHistory: vi.fn().mockResolvedValue(history)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        limit: 25,
+        baseRef: 'origin/main'
+      })
+    )
+
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledWith('id:wt-1', {
+      limit: 25,
+      baseRef: 'origin/main'
+    })
+    expect(response).toMatchObject({ ok: true, result: history })
+  })
+
   it('routes common mutations to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -266,5 +295,23 @@ describe('git RPC methods', () => {
 
     expect(response.ok).toBe(false)
     expect(runtime.getRuntimeGitBranchCompare).not.toHaveBeenCalled()
+  })
+
+  it('rejects git history limits above the runtime cap', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitHistory: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        limit: 201
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.getRuntimeGitHistory).not.toHaveBeenCalled()
   })
 })

@@ -1200,12 +1200,16 @@ export class OrcaRuntimeService {
 
   getRuntimeGitStatus: RuntimeGitCommands['getRuntimeGitStatus'] =
     this.gitCommands.getRuntimeGitStatus.bind(this.gitCommands)
+  getRuntimeGitHistory: RuntimeGitCommands['getRuntimeGitHistory'] =
+    this.gitCommands.getRuntimeGitHistory.bind(this.gitCommands)
   getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation'] =
     this.gitCommands.getRuntimeGitConflictOperation.bind(this.gitCommands)
   getRuntimeGitDiff: RuntimeGitCommands['getRuntimeGitDiff'] =
     this.gitCommands.getRuntimeGitDiff.bind(this.gitCommands)
   getRuntimeGitBranchCompare: RuntimeGitCommands['getRuntimeGitBranchCompare'] =
     this.gitCommands.getRuntimeGitBranchCompare.bind(this.gitCommands)
+  getRuntimeGitCommitCompare: RuntimeGitCommands['getRuntimeGitCommitCompare'] =
+    this.gitCommands.getRuntimeGitCommitCompare.bind(this.gitCommands)
   getRuntimeGitUpstreamStatus: RuntimeGitCommands['getRuntimeGitUpstreamStatus'] =
     this.gitCommands.getRuntimeGitUpstreamStatus.bind(this.gitCommands)
   fetchRuntimeGit: RuntimeGitCommands['fetchRuntimeGit'] = this.gitCommands.fetchRuntimeGit.bind(
@@ -1219,6 +1223,8 @@ export class OrcaRuntimeService {
   )
   getRuntimeGitBranchDiff: RuntimeGitCommands['getRuntimeGitBranchDiff'] =
     this.gitCommands.getRuntimeGitBranchDiff.bind(this.gitCommands)
+  getRuntimeGitCommitDiff: RuntimeGitCommands['getRuntimeGitCommitDiff'] =
+    this.gitCommands.getRuntimeGitCommitDiff.bind(this.gitCommands)
   commitRuntimeGit: RuntimeGitCommands['commitRuntimeGit'] = this.gitCommands.commitRuntimeGit.bind(
     this.gitCommands
   )

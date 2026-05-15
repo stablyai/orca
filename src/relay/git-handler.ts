@@ -7,17 +7,19 @@ import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
-import { parseBranchDiff, parseWorktreeList } from './git-handler-utils'
+import { parseBranchDiff, parseBranchDiffNumstat, parseWorktreeList } from './git-handler-utils'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
   branchDiffEntries,
   validateGitExecArgs
 } from './git-handler-ops'
+import { commitCompare as commitCompareOp, commitDiffEntry } from './git-handler-commit-diff-ops'
 import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
+import { loadGitHistoryFromExecutor } from '../shared/git-history'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -35,6 +37,7 @@ export class GitHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('git.status', (p) => this.getStatus(p))
+    this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
     this.dispatcher.onRequest('git.diff', (p) => this.getDiff(p))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
@@ -45,11 +48,13 @@ export class GitHandler {
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
+    this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
+    this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
@@ -80,6 +85,14 @@ export class GitHandler {
 
   private async getStatus(params: Record<string, unknown>) {
     return getStatusOp(this.git.bind(this), params)
+  }
+
+  private async history(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    return loadGitHistoryFromExecutor(this.git.bind(this), worktreePath, {
+      limit: typeof params.limit === 'number' ? params.limit : undefined,
+      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
+    })
   }
 
   private async getDiff(params: Record<string, unknown>) {
@@ -245,8 +258,18 @@ export class GitHandler {
         ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
         worktreePath
       )
-      return parseBranchDiff(stdout)
+      const { stdout: numstat } = await gitBound(
+        ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
+        worktreePath
+      )
+      return parseBranchDiff(stdout, parseBranchDiffNumstat(numstat))
     })
+  }
+
+  private async commitCompare(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const commitId = params.commitId as string
+    return commitCompareOp(this.git.bind(this), worktreePath, commitId)
   }
 
   private async upstreamStatus(params: Record<string, unknown>) {
@@ -360,6 +383,16 @@ export class GitHandler {
         oldPath: params.oldPath as string | undefined
       }
     )
+  }
+
+  private async commitDiff(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    return commitDiffEntry(this.gitBuffer.bind(this), worktreePath, {
+      commitOid: params.commitOid as string,
+      parentOid: params.parentOid as string | null | undefined,
+      filePath: params.filePath as string,
+      oldPath: params.oldPath as string | undefined
+    })
   }
 
   private async exec(params: Record<string, unknown>) {

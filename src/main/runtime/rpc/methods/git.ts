@@ -41,6 +41,18 @@ const FullGitObjectId = z
   .string()
   .regex(/^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/, 'Expected a full git object id')
 
+const GitCommitCompare = WorktreeSelector.extend({
+  commitId: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(FullGitObjectId)
+})
+
+const GitHistory = WorktreeSelector.extend({
+  limit: z.number().int().min(1).max(200).optional(),
+  baseRef: z.string().nullable().optional()
+})
+
 const GitBranchDiff = GitFilePath.extend({
   compare: z.object({
     baseRef: z.string().optional(),
@@ -48,6 +60,12 @@ const GitBranchDiff = GitFilePath.extend({
     headOid: FullGitObjectId,
     mergeBase: FullGitObjectId
   }),
+  oldPath: z.string().optional()
+})
+
+const GitCommitDiff = GitFilePath.extend({
+  commitOid: FullGitObjectId,
+  parentOid: FullGitObjectId.nullable().optional(),
   oldPath: z.string().optional()
 })
 
@@ -100,6 +118,15 @@ export const GIT_METHODS: RpcMethod[] = [
         : runtime.getRuntimeGitStatus(params.worktree, { includeIgnored: params.includeIgnored })
   }),
   defineMethod({
+    name: 'git.history',
+    params: GitHistory,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitHistory(params.worktree, {
+        limit: params.limit,
+        baseRef: params.baseRef
+      })
+  }),
+  defineMethod({
     name: 'git.conflictOperation',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
@@ -120,6 +147,12 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitBranchCompare,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitBranchCompare(params.worktree, params.baseRef)
+  }),
+  defineMethod({
+    name: 'git.commitCompare',
+    params: GitCommitCompare,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitCommitCompare(params.worktree, params.commitId)
   }),
   defineMethod({
     name: 'git.upstreamStatus',
@@ -152,6 +185,17 @@ export const GIT_METHODS: RpcMethod[] = [
         params.filePath,
         params.oldPath
       )
+  }),
+  defineMethod({
+    name: 'git.commitDiff',
+    params: GitCommitDiff,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitCommitDiff(params.worktree, {
+        commitOid: params.commitOid,
+        parentOid: params.parentOid,
+        filePath: params.filePath,
+        oldPath: params.oldPath
+      })
   }),
   defineMethod({
     name: 'git.commit',
