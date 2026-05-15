@@ -15,10 +15,12 @@ import {
   ArrowRight,
   ArrowUp,
   Braces,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleDashed,
   CircleDot,
+  Copy,
   ExternalLink,
   FileText,
   Folder,
@@ -299,6 +301,26 @@ function getStateTone(item: GitHubWorkItem): string {
     return 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
   }
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+}
+
+function WorkItemStateBadge({
+  item,
+  className
+}: {
+  item: GitHubWorkItem
+  className?: string
+}): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-medium',
+        getStateTone(item),
+        className
+      )}
+    >
+      {getStateLabel(item)}
+    </span>
+  )
 }
 
 function fileStatusTone(status: GitHubPRFile['status']): string {
@@ -1429,11 +1451,13 @@ function ConversationTab({
     item.type === 'pr' ? (
       <div className="flex h-fit flex-col gap-3 xl:sticky xl:top-4">
         {startWorkspaceButton}
-        <aside className="rounded-lg border border-border/50 bg-background/30">
+        <aside className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
             <CircleDashed className="size-3.5 text-muted-foreground" />
             <span className="text-[13px] font-medium text-foreground">Checks</span>
-            <span className="text-[12px] text-muted-foreground">{(checks ?? []).length}</span>
+            <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+              {(checks ?? []).length}
+            </span>
           </div>
           <ChecksTab checks={checks} loading={loading} />
         </aside>
@@ -1444,7 +1468,7 @@ function ConversationTab({
     <div
       key={comment.id}
       className={cn(
-        'rounded-lg border border-border/40 bg-background/30',
+        'rounded-lg border border-border/40 bg-card/50 shadow-xs',
         isReply && 'ml-6',
         comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
@@ -1570,7 +1594,7 @@ function ConversationTab({
       <Accordion key={getPRCommentGroupId(group)} type="single" collapsible>
         <AccordionItem
           value={getPRCommentGroupId(group)}
-          className="rounded-lg border border-border/40 bg-background/20"
+          className="rounded-lg border border-border/40 bg-card/40"
         >
           <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
             <span className="min-w-0 truncate">
@@ -1589,17 +1613,17 @@ function ConversationTab({
   return (
     <div
       className={cn(
-        'grid gap-4 px-4 py-4',
-        item.type === 'pr' && 'xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]'
+        'grid gap-5 px-4 py-4',
+        item.type === 'pr' && 'xl:grid-cols-[minmax(0,1fr)_280px]'
       )}
     >
       <div className="flex min-w-0 flex-col gap-4">
-        <div className="rounded-lg border border-border/50 bg-background/40">
+        <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{authorLabel}</span>
-            <span>· {formatRelativeTime(item.updatedAt)}</span>
+            <span>updated {formatRelativeTime(item.updatedAt)}</span>
           </div>
-          <div className="px-3 py-3 text-[14px] leading-relaxed text-foreground">
+          <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
             {body.trim() ? (
               <CommentMarkdown
                 content={body}
@@ -1616,7 +1640,9 @@ function ConversationTab({
           <MessageSquare className="size-4 text-muted-foreground" />
           <span className="text-[13px] font-medium text-foreground">Comments</span>
           {comments.length > 0 && (
-            <span className="text-[12px] text-muted-foreground">{comments.length}</span>
+            <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+              {comments.length}
+            </span>
           )}
         </div>
 
@@ -1644,15 +1670,17 @@ function ConversationTab({
         )}
 
         {loading && comments.length === 0 ? (
-          <div className="flex items-center justify-center py-6">
+          <div className="flex items-center justify-center rounded-lg border border-dashed border-border/50 py-8">
             <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
           </div>
         ) : comments.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">No comments yet.</p>
+          <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+            No comments yet.
+          </div>
         ) : visibleComments.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
             {getPRCommentAudienceEmptyLabel(commentFilter)}
-          </p>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">{visibleCommentGroups.map(renderCommentGroup)}</div>
         )}
@@ -2668,6 +2696,7 @@ export default function GitHubItemDialog({
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('flat')
+  const [linkCopied, setLinkCopied] = useState(false)
   const workItemId = workItem?.id
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
@@ -2912,6 +2941,33 @@ export default function GitHubItemDialog({
   const files = details?.files ?? []
   const checks = details?.checks ?? []
 
+  useEffect(() => {
+    setLinkCopied(false)
+  }, [workItemId])
+
+  useEffect(() => {
+    if (!linkCopied) {
+      return
+    }
+    const handle = window.setTimeout(() => setLinkCopied(false), 1500)
+    return () => window.clearTimeout(handle)
+  }, [linkCopied])
+
+  const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
+    if (!workItem) {
+      return
+    }
+    try {
+      // Why: Electron's clipboard IPC is reliable even when browser clipboard
+      // APIs lose focus/activation inside nested overlay surfaces.
+      await window.api.ui.writeClipboardText(workItem.url)
+      setLinkCopied(true)
+      toast.success('GitHub link copied')
+    } catch {
+      toast.error('Failed to copy GitHub link')
+    }
+  }, [workItem])
+
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data
@@ -2974,22 +3030,26 @@ export default function GitHubItemDialog({
 
         {workItem && (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="flex-none border-b border-border/60 px-4 py-3">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <span className="font-mono text-[12px] text-muted-foreground">
-                    #{workItem.number}
-                  </span>
-                  <h2 className="mt-1 flex items-start gap-2 text-[15px] font-semibold leading-tight text-foreground">
-                    <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">{workItem.title}</span>
+            <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
+                  <Icon className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                    <WorkItemStateBadge item={{ ...workItem, state: localState }} />
+                    <span className="font-mono">#{workItem.number}</span>
+                    <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
+                  </div>
+                  <h2 className="text-[15px] font-semibold leading-snug text-foreground">
+                    {workItem.title}
                   </h2>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                     <span>{workItem.author ?? 'unknown'}</span>
-                    <span>· {formatRelativeTime(workItem.updatedAt)}</span>
+                    <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
                     {workItem.branchName && (
-                      <span className="font-mono text-[10px] text-muted-foreground/80">
-                        · {workItem.branchName}
+                      <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {workItem.branchName}
                       </span>
                     )}
                   </div>
@@ -3001,9 +3061,28 @@ export default function GitHubItemDialog({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
+                        type="button"
                         variant="ghost"
-                        size="icon"
-                        className="size-7"
+                        size="icon-sm"
+                        onClick={() => void handleCopyWorkItemLink()}
+                        aria-label="Copy GitHub link"
+                      >
+                        {linkCopied ? (
+                          <Check className="size-4 text-emerald-500" />
+                        ) : (
+                          <Copy className="size-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => window.api.shell.openUrl(workItem.url)}
                         aria-label="Open on GitHub"
                       >
@@ -3018,8 +3097,7 @@ export default function GitHubItemDialog({
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="size-7"
+                        size="icon-sm"
                         onClick={onClose}
                         aria-label="Close preview"
                       >
@@ -3073,7 +3151,7 @@ export default function GitHubItemDialog({
                 >
                   <TabsList
                     variant="line"
-                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60"
+                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"
                   >
                     <TabsTrigger value="conversation" className="px-2">
                       <MessageSquare className="size-3.5" />
