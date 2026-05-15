@@ -25,6 +25,10 @@ type RegisteredTerminalTab = {
 }
 
 type OpenFileByWorktreeAndId = Map<string, Map<string, AppState['openFiles'][number]>>
+type OpenFileIndexes = {
+  byWorktreeAndId: OpenFileByWorktreeAndId
+  idsByWorktree: Map<string, string[]>
+}
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // Why: track when each tab was registered so we can suppress the "no live
@@ -38,6 +42,10 @@ let syncScheduled = false
 let syncEnabled = false
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
+let cachedOpenFileIndexesSource: AppState['openFiles'] | null = null
+let cachedOpenFileIndexes: OpenFileIndexes | null = null
+let cachedEditorDraftsSource: AppState['editorDrafts'] | null = null
+let cachedEditorDraftVersionByFileId: Map<string, string> | null = null
 const mobileSessionPublicationEpoch =
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -120,7 +128,13 @@ export type RuntimeMobileSessionSyncKey = {
   editorDraftsProjection: string
 }
 
-export function getRuntimeMobileSessionSyncKey(state: AppState): RuntimeMobileSessionSyncKey {
+export function getRuntimeMobileSessionSyncKey(
+  state: AppState,
+  previousState?: AppState,
+  previousKey?: RuntimeMobileSessionSyncKey
+): RuntimeMobileSessionSyncKey {
+  const canReusePrevious = previousState !== undefined && previousKey !== undefined
+
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
@@ -130,41 +144,64 @@ export function getRuntimeMobileSessionSyncKey(state: AppState): RuntimeMobileSe
     tabBarOrderByWorktree: state.tabBarOrderByWorktree,
     activeFileId: state.activeFileId,
     activeFileIdByWorktree: state.activeFileIdByWorktree,
-    tabsProjection: JSON.stringify(
-      Object.fromEntries(
-        Object.entries(state.tabsByWorktree).map(([worktreeId, tabs]) => [
-          worktreeId,
-          tabs.map((tab) => ({
-            id: tab.id,
-            title: tab.title,
-            customTitle: tab.customTitle,
-            active: state.activeTabId === tab.id
-          }))
-        ])
-      )
-    ),
-    openFilesProjection: JSON.stringify(
-      state.openFiles.map((file) => ({
-        id: file.id,
-        filePath: file.filePath,
-        relativePath: file.relativePath,
-        worktreeId: file.worktreeId,
-        language: file.language,
-        mode: file.mode,
-        isDirty: file.isDirty,
-        isUntitled: file.isUntitled,
-        markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
-      }))
-    ),
-    editorDraftsProjection: JSON.stringify(
-      Object.fromEntries(
-        Object.entries(state.editorDrafts).map(([fileId, content]) => [
-          fileId,
-          stableHashString(content)
-        ])
-      )
-    )
+    // Why: background agent title ticks can change runtimePaneTitlesByTabId
+    // many times per second while the user types elsewhere. Reuse unchanged
+    // projections so those ticks do not rescan all tabs, files, and drafts.
+    tabsProjection:
+      canReusePrevious &&
+      state.tabsByWorktree === previousState.tabsByWorktree &&
+      state.activeTabId === previousState.activeTabId
+        ? previousKey.tabsProjection
+        : buildRuntimeMobileTabsProjection(state),
+    openFilesProjection:
+      canReusePrevious && state.openFiles === previousState.openFiles
+        ? previousKey.openFilesProjection
+        : buildRuntimeMobileOpenFilesProjection(state.openFiles),
+    editorDraftsProjection:
+      canReusePrevious && state.editorDrafts === previousState.editorDrafts
+        ? previousKey.editorDraftsProjection
+        : buildRuntimeMobileEditorDraftsProjection(state.editorDrafts)
   }
+}
+
+function buildRuntimeMobileTabsProjection(state: AppState): string {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(state.tabsByWorktree).map(([worktreeId, tabs]) => [
+        worktreeId,
+        tabs.map((tab) => ({
+          id: tab.id,
+          title: tab.title,
+          customTitle: tab.customTitle,
+          active: state.activeTabId === tab.id
+        }))
+      ])
+    )
+  )
+}
+
+function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
+  return JSON.stringify(
+    openFiles.map((file) => ({
+      id: file.id,
+      filePath: file.filePath,
+      relativePath: file.relativePath,
+      worktreeId: file.worktreeId,
+      language: file.language,
+      mode: file.mode,
+      isDirty: file.isDirty,
+      isUntitled: file.isUntitled,
+      markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
+    }))
+  )
+}
+
+function buildRuntimeMobileEditorDraftsProjection(editorDrafts: AppState['editorDrafts']): string {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(editorDrafts).map(([fileId, content]) => [fileId, stableHashString(content)])
+    )
+  )
 }
 
 export function runtimeMobileSessionSyncKeysEqual(
@@ -267,10 +304,11 @@ async function syncRuntimeGraph(): Promise<void> {
 export function buildMobileSessionTabSnapshots(
   state: AppState
 ): RuntimeMobileSessionTabsSnapshot[] {
-  // Why: mobile publication walks the tab order for every worktree. A single
-  // worktree-scoped file map keeps large editor sessions linear without
-  // collapsing SSH worktrees that expose the same absolute remote path.
-  const openFileByWorktreeAndId = indexOpenFilesByWorktreeAndId(state.openFiles)
+  // Why: mobile publication can run on high-frequency background agent title
+  // ticks. Cache open-file indexes and draft hashes by immutable store-slice
+  // reference so title-only syncs do not rescan or rehash editor state.
+  const openFileIndexes = getOpenFileIndexes(state.openFiles)
+  const editorDraftVersionByFileId = getEditorDraftVersionByFileId(state.editorDrafts)
   const worktreeIds = new Set<string>([
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.groupsByWorktree),
@@ -281,7 +319,9 @@ export function buildMobileSessionTabSnapshots(
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
   for (const worktreeId of worktreeIds) {
     const activeGroupId = state.activeGroupIdByWorktree[worktreeId] ?? null
-    const order = getActiveTabNavOrder(state, worktreeId)
+    const order = getActiveTabNavOrder(state, worktreeId, {
+      editorIds: openFileIndexes.idsByWorktree.get(worktreeId) ?? []
+    })
     const terminalTabByIdForWorktree = new Map(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
@@ -295,11 +335,17 @@ export function buildMobileSessionTabSnapshots(
         }
         tabs.push(...buildMobileTerminalSurfaceTabs(state, terminal, worktreeId, item.tabId))
       } else if (item.type === 'editor') {
-        const file = openFileByWorktreeAndId.get(worktreeId)?.get(item.id)
+        const file = openFileIndexes.byWorktreeAndId.get(worktreeId)?.get(item.id)
         if (!file) {
           continue
         }
-        const markdown = buildMobileMarkdownTab(state, openFileByWorktreeAndId, file, item.tabId)
+        const markdown = buildMobileMarkdownTab(
+          state,
+          openFileIndexes.byWorktreeAndId,
+          editorDraftVersionByFileId,
+          file,
+          item.tabId
+        )
         if (markdown) {
           tabs.push(markdown)
         } else {
@@ -323,19 +369,49 @@ export function buildMobileSessionTabSnapshots(
   return snapshots
 }
 
-function indexOpenFilesByWorktreeAndId(openFiles: AppState['openFiles']): OpenFileByWorktreeAndId {
+function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
+  if (cachedOpenFileIndexesSource === openFiles && cachedOpenFileIndexes) {
+    return cachedOpenFileIndexes
+  }
+
   const byWorktreeAndId: OpenFileByWorktreeAndId = new Map()
+  const idsByWorktree = new Map<string, string[]>()
   for (const file of openFiles) {
     let filesById = byWorktreeAndId.get(file.worktreeId)
     if (!filesById) {
       filesById = new Map()
       byWorktreeAndId.set(file.worktreeId, filesById)
     }
+    let ids = idsByWorktree.get(file.worktreeId)
+    if (!ids) {
+      ids = []
+      idsByWorktree.set(file.worktreeId, ids)
+    }
     if (!filesById.has(file.id)) {
       filesById.set(file.id, file)
+      ids.push(file.id)
     }
   }
-  return byWorktreeAndId
+
+  cachedOpenFileIndexesSource = openFiles
+  cachedOpenFileIndexes = { byWorktreeAndId, idsByWorktree }
+  return cachedOpenFileIndexes
+}
+
+function getEditorDraftVersionByFileId(
+  editorDrafts: AppState['editorDrafts']
+): Map<string, string> {
+  if (cachedEditorDraftsSource === editorDrafts && cachedEditorDraftVersionByFileId) {
+    return cachedEditorDraftVersionByFileId
+  }
+
+  const versions = new Map<string, string>()
+  for (const [fileId, content] of Object.entries(editorDrafts)) {
+    versions.set(fileId, stableHashString(content))
+  }
+  cachedEditorDraftsSource = editorDrafts
+  cachedEditorDraftVersionByFileId = versions
+  return versions
 }
 
 function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
@@ -399,6 +475,7 @@ function buildMobileTerminalSurfaceTabs(
 function buildMobileMarkdownTab(
   state: AppState,
   openFileByWorktreeAndId: OpenFileByWorktreeAndId,
+  editorDraftVersionByFileId: ReadonlyMap<string, string>,
   file: AppState['openFiles'][number],
   unifiedTabId?: string
 ): RuntimeMobileSessionMarkdownTab | null {
@@ -414,7 +491,7 @@ function buildMobileMarkdownTab(
       ? (openFileByWorktreeAndId.get(file.worktreeId)?.get(file.markdownPreviewSourceFileId) ??
         file)
       : file
-  const draftContent = state.editorDrafts[sourceFile.id]
+  const draftVersion = editorDraftVersionByFileId.get(sourceFile.id)
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
 
   return {
@@ -434,8 +511,7 @@ function buildMobileMarkdownTab(
     sourceFileId: sourceFile.id,
     sourceFilePath: sourceFile.filePath,
     sourceRelativePath: sourceFile.relativePath,
-    documentVersion:
-      draftContent !== undefined ? stableHashString(draftContent) : `file:${sourceFile.id}`
+    documentVersion: draftVersion ?? `file:${sourceFile.id}`
   }
 }
 

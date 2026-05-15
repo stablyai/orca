@@ -617,11 +617,10 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      // Why: skip the key build entirely when no input field has changed by
-      // reference. Mirrors every field used by getRuntimeMobileSessionSyncKey
-      // so this gate covers every "could the key have changed?" case.
-      // — if any field's reference is unchanged, neither the projection
-      // serialized from it nor the reference-compared map can have changed.
+      // Why: skip the key build entirely when every input field is unchanged
+      // by reference. Mirrors every field used by
+      // getRuntimeMobileSessionSyncKey so this gate covers every "could the
+      // key have changed?" case.
       if (
         state.tabsByWorktree === previousState.tabsByWorktree &&
         state.groupsByWorktree === previousState.groupsByWorktree &&
@@ -638,7 +637,7 @@ function App(): React.JSX.Element {
       ) {
         return
       }
-      const nextKey = getRuntimeMobileSessionSyncKey(state)
+      const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
       if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
         return
       }
