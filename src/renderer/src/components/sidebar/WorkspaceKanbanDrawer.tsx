@@ -232,7 +232,13 @@ export default function WorkspaceKanbanDrawer({
     [allWorktrees, setWorkspaceStatuses, updateWorktreeMeta, workspaceStatuses]
   )
 
-  useWorkspaceStatusDocumentDrop(boardRef, moveWorktreeToStatus, pinWorktree, handleDragFinish)
+  useWorkspaceStatusDocumentDrop(
+    boardRef,
+    moveWorktreeToStatus,
+    pinWorktree,
+    handleDragFinish,
+    open
+  )
 
   useEffect(() => {
     if (!open) {

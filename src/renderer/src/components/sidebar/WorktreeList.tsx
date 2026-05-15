@@ -423,6 +423,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       ? getWorktreeOptionId(activeWorktreeId)
       : undefined
 
+  const hasWorkspaceDropTargets = useMemo(
+    () =>
+      groupBy === 'none' ||
+      rows.some((row) => row.type === 'header' && row.key === PINNED_GROUP_KEY),
+    [groupBy, rows]
+  )
+
   const handleWorkspaceStatusDragOver = useCallback(
     (event: React.DragEvent, status: WorkspaceStatus) => {
       if (!hasWorkspaceDragData(event.dataTransfer)) {
@@ -482,7 +489,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     scrollRef,
     onMoveWorktreeToStatus,
     onPinWorktree,
-    handleWorkspaceStatusDragFinish
+    handleWorkspaceStatusDragFinish,
+    hasWorkspaceDropTargets
   )
 
   return (

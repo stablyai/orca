@@ -13,9 +13,14 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
   containerRef: React.RefObject<T | null>,
   onMoveWorktreeToStatus: MoveWorktreeToStatus,
   onPinWorktree: PinWorktree,
-  onDragFinish: () => void
+  onDragFinish: () => void,
+  enabled = true
 ): void {
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
     const handleDrop = (event: DragEvent): void => {
       const dataTransfer = event.dataTransfer
       if (!dataTransfer || !hasWorkspaceDragData(dataTransfer)) {
@@ -72,5 +77,5 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
       document.removeEventListener('drop', handleDrop, true)
       document.removeEventListener('dragend', handleDragFinish, true)
     }
-  }, [containerRef, onDragFinish, onMoveWorktreeToStatus, onPinWorktree])
+  }, [containerRef, enabled, onDragFinish, onMoveWorktreeToStatus, onPinWorktree])
 }
