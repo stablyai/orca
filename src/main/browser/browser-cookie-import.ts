@@ -2,12 +2,13 @@
    that must stay together so the encryption, schema, and staging steps remain in sync. */
 import { app, type BrowserWindow, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
-import { createDecipheriv, pbkdf2Sync } from 'node:crypto'
+import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
   appendFileSync,
   copyFileSync,
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -1358,8 +1359,14 @@ export async function importCookiesFromBrowser(
     return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
   }
 
-  const stagingCookiesPath = join(app.getPath('userData'), 'Cookies-staged')
+  const stagingDir = join(app.getPath('userData'), 'cookie-import-staging')
+  const partitionSegment = partitionName.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const stagingCookiesPath = join(
+    stagingDir,
+    `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
+  )
   try {
+    mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
     rmSync(tmpDir, { recursive: true, force: true })
@@ -1580,7 +1587,7 @@ export async function importCookiesFromBrowser(
       // Why: some cookies couldn't be loaded via cookies.set() (non-ASCII values
       // or other validation failures). Keep the staging DB so the next cold start
       // picks them up from SQLite where CookieMonster reads them without validation.
-      browserSessionRegistry.setPendingCookieImport(stagingCookiesPath)
+      browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
       diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
     } else {
       try {
@@ -1595,7 +1602,7 @@ export async function importCookiesFromBrowser(
     if (ua) {
       targetSession.setUserAgent(ua)
       setupClientHintsOverride(targetSession, ua)
-      browserSessionRegistry.persistUserAgent(ua)
+      browserSessionRegistry.persistUserAgent(targetPartition, ua)
       diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
     }
 
