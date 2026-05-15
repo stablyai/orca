@@ -211,6 +211,16 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSummary
 } from '../shared/codex-usage-types'
+import type {
+  OpenCodeUsageBreakdownKind,
+  OpenCodeUsageBreakdownRow,
+  OpenCodeUsageDailyPoint,
+  OpenCodeUsageRange,
+  OpenCodeUsageScanState,
+  OpenCodeUsageScope,
+  OpenCodeUsageSessionRow,
+  OpenCodeUsageSummary
+} from '../shared/opencode-usage-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type {
@@ -447,6 +457,30 @@ export type CodexUsageApi = {
     range: CodexUsageRange
     limit?: number
   }) => Promise<CodexUsageSessionRow[]>
+}
+
+export type OpenCodeUsageApi = {
+  getScanState: () => Promise<OpenCodeUsageScanState>
+  setEnabled: (args: { enabled: boolean }) => Promise<OpenCodeUsageScanState>
+  refresh: (args?: { force?: boolean }) => Promise<OpenCodeUsageScanState>
+  getSummary: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+  }) => Promise<OpenCodeUsageSummary>
+  getDaily: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+  }) => Promise<OpenCodeUsageDailyPoint[]>
+  getBreakdown: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+    kind: OpenCodeUsageBreakdownKind
+  }) => Promise<OpenCodeUsageBreakdownRow[]>
+  getRecentSessions: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+    limit?: number
+  }) => Promise<OpenCodeUsageSessionRow[]>
 }
 
 export type AppApi = {
@@ -1162,6 +1196,7 @@ export type PreloadApi = {
   memory: MemoryApi
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
+  openCodeUsage: OpenCodeUsageApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {

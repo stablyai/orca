@@ -13,6 +13,7 @@ import { Store, initDataPath } from './persistence'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
+import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
@@ -78,6 +79,7 @@ let store: Store | null = null
 let stats: StatsCollector | null = null
 let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
+let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let claudeAccounts: ClaudeAccountService | null = null
@@ -190,6 +192,7 @@ if (hasSingleInstanceLock) {
   initStatsPath()
   initClaudeUsagePath()
   initCodexUsagePath()
+  initOpenCodeUsagePath()
   enableMainProcessGpuFeatures()
 }
 
@@ -208,6 +211,9 @@ function openMainWindow(): BrowserWindow {
   }
   if (!codexUsage) {
     throw new Error('Codex usage store must be initialized before opening the main window')
+  }
+  if (!openCodeUsage) {
+    throw new Error('OpenCode usage store must be initialized before opening the main window')
   }
   if (!rateLimits) {
     throw new Error('Rate limit service must be initialized before opening the main window')
@@ -272,6 +278,7 @@ function openMainWindow(): BrowserWindow {
     stats,
     claudeUsage,
     codexUsage,
+    openCodeUsage,
     codexAccounts,
     claudeAccounts,
     rateLimits,
@@ -664,6 +671,7 @@ app.whenReady().then(async () => {
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
+  openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)

@@ -16,6 +16,7 @@ import { createMemorySlice } from './slices/memory'
 import { createWorkspaceSpaceSlice } from './slices/workspace-space'
 import { createClaudeUsageSlice } from './slices/claude-usage'
 import { createCodexUsageSlice } from './slices/codex-usage'
+import { createOpenCodeUsageSlice } from './slices/opencode-usage'
 import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
@@ -45,6 +46,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createWorkspaceSpaceSlice(...a),
   ...createClaudeUsageSlice(...a),
   ...createCodexUsageSlice(...a),
+  ...createOpenCodeUsageSlice(...a),
   ...createBrowserSlice(...a),
   ...createRateLimitSlice(...a),
   ...createSshSlice(...a),

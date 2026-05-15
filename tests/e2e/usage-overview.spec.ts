@@ -19,17 +19,29 @@ test.describe('usage overview', () => {
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('settings')
     await expect(orcaPage.getByRole('heading', { name: 'Usage Analytics' })).toBeVisible()
-    const providerTabs = orcaPage.getByRole('group', { name: 'Usage analytics provider' })
-    await expect(
-      providerTabs.getByRole('button', { name: 'Overview', exact: true })
-    ).toHaveAttribute('aria-pressed', 'true')
+    const providerDropdown = orcaPage.getByTestId('usage-provider-select')
+    await expect(providerDropdown).toHaveAttribute(
+      'aria-label',
+      'Usage analytics provider: Overview'
+    )
     await expect(orcaPage.getByTestId('usage-overview-pane')).toBeVisible()
     await expect(orcaPage.getByRole('heading', { name: 'Usage Overview' })).toBeVisible()
     await expect(orcaPage.getByRole('heading', { name: 'Providers' })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Enable Claude' })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Enable Codex' })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: 'Enable OpenCode' })).toBeVisible()
 
-    await providerTabs.getByRole('button', { name: 'Codex', exact: true }).click()
+    await providerDropdown.click()
+    await orcaPage.getByRole('menuitem', { name: 'Codex', exact: true }).click()
     await expect(orcaPage.getByRole('heading', { name: 'Codex Usage Tracking' })).toBeVisible()
+    await expect(providerDropdown).toHaveAttribute('aria-label', 'Usage analytics provider: Codex')
+
+    await providerDropdown.click()
+    await orcaPage.getByRole('menuitem', { name: 'OpenCode', exact: true }).click()
+    await expect(orcaPage.getByRole('heading', { name: 'OpenCode Usage Tracking' })).toBeVisible()
+    await expect(providerDropdown).toHaveAttribute(
+      'aria-label',
+      'Usage analytics provider: OpenCode'
+    )
   })
 })

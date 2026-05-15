@@ -14,6 +14,7 @@ import type { MemorySlice } from './slices/memory'
 import type { WorkspaceSpaceSlice } from './slices/workspace-space'
 import type { ClaudeUsageSlice } from './slices/claude-usage'
 import type { CodexUsageSlice } from './slices/codex-usage'
+import type { OpenCodeUsageSlice } from './slices/opencode-usage'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
@@ -40,6 +41,7 @@ export type AppState = RepoSlice &
   WorkspaceSpaceSlice &
   ClaudeUsageSlice &
   CodexUsageSlice &
+  OpenCodeUsageSlice &
   BrowserSlice &
   RateLimitSlice &
   SshSlice &
