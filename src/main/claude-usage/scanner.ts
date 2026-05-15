@@ -51,6 +51,13 @@ type ClaudeUsageParsedSourceTurn = ClaudeUsageParsedTurn & {
   dedupeKey: string | null
 }
 
+type ClaudeUsageWorktreeEntry = [string, ClaudeUsageWorktreeRef]
+
+const sortedWorktreeEntriesByLookup = new WeakMap<
+  Map<string, ClaudeUsageWorktreeRef>,
+  ClaudeUsageWorktreeEntry[]
+>()
+
 function getDefaultProjectLabel(cwd: string | null): string {
   if (!cwd) {
     return 'Unknown location'
@@ -92,16 +99,27 @@ function findContainingWorktree(
     return exact
   }
 
-  const sortedWorktrees = [...worktreeLookup.entries()].sort(
-    ([leftPath], [rightPath]) => rightPath.length - leftPath.length
-  )
-  for (const [worktreePath, worktree] of sortedWorktrees) {
+  for (const [worktreePath, worktree] of getSortedWorktreeEntries(worktreeLookup)) {
     if (isContainedPath(worktreePath, normalizedCwd)) {
       return worktree
     }
   }
 
   return null
+}
+
+function getSortedWorktreeEntries(
+  worktreeLookup: Map<string, ClaudeUsageWorktreeRef>
+): ClaudeUsageWorktreeEntry[] {
+  const cached = sortedWorktreeEntriesByLookup.get(worktreeLookup)
+  if (cached) {
+    return cached
+  }
+  const sorted = [...worktreeLookup.entries()].sort(
+    ([leftPath], [rightPath]) => rightPath.length - leftPath.length
+  )
+  sortedWorktreeEntriesByLookup.set(worktreeLookup, sorted)
+  return sorted
 }
 
 async function yieldToEventLoop(): Promise<void> {
@@ -337,6 +355,7 @@ export async function attributeClaudeUsageTurns(
   worktreeLookup: Map<string, ClaudeUsageWorktreeRef>
 ): Promise<ClaudeUsageAttributedTurn[]> {
   const attributed: ClaudeUsageAttributedTurn[] = []
+  const canonicalCwdByPath = new Map<string, string>()
 
   for (const turn of turns) {
     const day = localDayFromTimestamp(turn.timestamp)
@@ -350,7 +369,14 @@ export async function attributeClaudeUsageTurns(
     let projectLabel = getDefaultProjectLabel(turn.cwd)
 
     if (turn.cwd) {
-      const worktree = findContainingWorktree(await canonicalizePath(turn.cwd), worktreeLookup)
+      let canonicalCwd = canonicalCwdByPath.get(turn.cwd)
+      if (canonicalCwd === undefined) {
+        // Why: Claude transcripts repeat the same cwd for many consecutive
+        // turns. Cache realpath work so attribution scales with unique paths.
+        canonicalCwd = await canonicalizePath(turn.cwd)
+        canonicalCwdByPath.set(turn.cwd, canonicalCwd)
+      }
+      const worktree = findContainingWorktree(canonicalCwd, worktreeLookup)
       if (worktree) {
         repoId = worktree.repoId
         worktreeId = worktree.worktreeId

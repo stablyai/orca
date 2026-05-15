@@ -3,6 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as Os from 'os'
+import type * as FsPromises from 'fs/promises'
 
 const tempRoots: string[] = []
 
@@ -16,6 +17,7 @@ async function makeClaudeProjectsRoot(): Promise<string> {
 
 afterEach(async () => {
   vi.doUnmock('os')
+  vi.doUnmock('fs/promises')
   vi.resetModules()
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -161,5 +163,59 @@ describe('scanClaudeUsageFiles', () => {
 
     expect(second.processedFiles[0]?.sessions[0]?.totalInputTokens).toBe(999)
     expect(second.dailyAggregates[0]?.inputTokens).toBe(999)
+  })
+
+  it('canonicalizes repeated cwd paths once per scan file', async () => {
+    const root = await makeClaudeProjectsRoot()
+    const projectDir = join(root, '.claude', 'projects', 'project-a')
+    const transcriptFile = join(projectDir, 'session-1.jsonl')
+    const repeatedCwd = '/workspace/repo-a/packages/app'
+
+    await writeFile(
+      transcriptFile,
+      [1, 2, 3]
+        .map((index) =>
+          JSON.stringify({
+            type: 'assistant',
+            sessionId: 'session-1',
+            timestamp: `2026-04-09T10:0${index}:00.000Z`,
+            cwd: repeatedCwd,
+            message: {
+              model: 'claude-sonnet-4-6',
+              usage: {
+                input_tokens: 100,
+                output_tokens: 20
+              }
+            }
+          })
+        )
+        .join('\n')
+    )
+
+    const realpathCalls: string[] = []
+    vi.resetModules()
+    vi.doMock('os', async () => ({
+      ...(await vi.importActual<typeof Os>('os')),
+      homedir: () => root
+    }))
+    vi.doMock('fs/promises', async () => ({
+      ...(await vi.importActual<typeof FsPromises>('fs/promises')),
+      realpath: vi.fn(async (pathValue: string) => {
+        realpathCalls.push(pathValue)
+        return pathValue
+      })
+    }))
+    const { scanClaudeUsageFiles } = await import('./scanner')
+
+    await scanClaudeUsageFiles([
+      {
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        path: '/workspace/repo-a',
+        displayName: 'Repo A'
+      }
+    ])
+
+    expect(realpathCalls.filter((pathValue) => pathValue === repeatedCwd)).toHaveLength(1)
   })
 })
