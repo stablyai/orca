@@ -14,6 +14,7 @@ type MockState = {
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  migrationUnsupportedByPtyId: Record<string, never>
   retainedAgentsByPaneKey: Record<string, unknown>
 }
 
@@ -64,6 +65,7 @@ describe('useWorktreeActivityStatus', () => {
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
       retainedAgentsByPaneKey: {}
     }
   })

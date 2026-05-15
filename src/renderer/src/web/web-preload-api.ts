@@ -1160,6 +1160,11 @@ function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {
   if (selector === environment.id || selector === environment.name || selector === 'active') {
     return environment
   }
+  if (selector.startsWith('web-') && environment.id.startsWith('web-')) {
+    // Why: persisted terminal ids can outlive a web-client re-pair, which creates
+    // a fresh web-* environment id even when it points at the same active server.
+    return environment
+  }
   throw new Error(`Unknown Orca runtime environment: ${selector}`)
 }
 

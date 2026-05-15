@@ -588,6 +588,74 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('shares one socket close listener across concurrent WebSocket dispatches', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
+    const ws = new FakeWebSocket()
+    server['wsConnectionIds'].set(ws as unknown as WebSocket, 'conn-test')
+    let activeDispatches = 0
+    ;(
+      server as unknown as {
+        dispatcher: {
+          dispatchStreaming: (
+            request: unknown,
+            reply: unknown,
+            context: { signal?: AbortSignal }
+          ) => Promise<void>
+        }
+      }
+    ).dispatcher = {
+      dispatchStreaming: vi.fn(
+        async (
+          _request: unknown,
+          _reply: unknown,
+          context: { signal?: AbortSignal }
+        ): Promise<void> => {
+          activeDispatches += 1
+          await new Promise<void>((resolve) => {
+            context.signal?.addEventListener(
+              'abort',
+              () => {
+                activeDispatches -= 1
+                resolve()
+              },
+              { once: true }
+            )
+          })
+        }
+      )
+    } as never
+
+    const pending = Array.from({ length: 12 }, (_entry, index) =>
+      server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: `req_${index}`,
+          method: 'status.get',
+          deviceToken: entry.token
+        }),
+        () => {},
+        () => {},
+        undefined,
+        ws as unknown as WebSocket
+      )
+    )
+
+    await waitFor(() => activeDispatches === 12)
+    expect(ws.listenerCount('close')).toBe(1)
+    expect(ws.listenerCount('error')).toBe(1)
+
+    ws.readyState = 3
+    ws.emit('close')
+    await Promise.all(pending)
+
+    expect(activeDispatches).toBe(0)
+    expect(ws.listenerCount('close')).toBe(0)
+    expect(ws.listenerCount('error')).toBe(0)
+  })
+
   it('limits mobile-scoped WebSocket tokens to the mobile RPC surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
@@ -617,6 +685,7 @@ describe('OrcaRuntimeRpcServer', () => {
       opened: true
     })
     const browserTabCreate = vi.fn().mockResolvedValue({ page: 'page-1' })
+    const browserSetViewport = vi.fn().mockResolvedValue({ ok: true })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' }),
@@ -631,7 +700,8 @@ describe('OrcaRuntimeRpcServer', () => {
       bulkUnstageRuntimeGitPaths,
       getRuntimeGitDiff,
       openMobileDiff,
-      browserTabCreate
+      browserTabCreate,
+      browserSetViewport
     } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
@@ -777,6 +847,16 @@ describe('OrcaRuntimeRpcServer', () => {
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
     )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_browser_viewport',
+        method: 'browser.viewport',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', page: 'page-1', width: 390, height: 844 }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
 
     expect(replies).toContainEqual(
       expect.objectContaining({
@@ -802,6 +882,9 @@ describe('OrcaRuntimeRpcServer', () => {
       expect.objectContaining({ id: 'req_browser_tab_create', ok: true })
     )
     expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_browser_viewport', ok: true })
+    )
+    expect(replies).toContainEqual(
       expect.objectContaining({
         id: 'req_remove_claude',
         ok: false,
@@ -819,6 +902,12 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
     expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
     expect(browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
+    expect(browserSetViewport).toHaveBeenCalledWith({
+      worktree: 'id:wt-1',
+      page: 'page-1',
+      width: 390,
+      height: 844
+    })
     expect(removeClaudeAccount).not.toHaveBeenCalled()
   })
 

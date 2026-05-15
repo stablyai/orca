@@ -48,7 +48,6 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 import type { AppState } from '../store/types'
 
 export { resolveZoomTarget } from './resolve-zoom-target'

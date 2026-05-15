@@ -85,6 +85,8 @@ type BrowserScreencastParams = {
   quality?: number
   maxWidth?: number
   maxHeight?: number
+  viewportWidth?: number
+  viewportHeight?: number
   everyNthFrame?: number
 } & BrowserCommandTargetParams
 
@@ -102,6 +104,17 @@ function clampInteger(
 ): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback
+  }
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+function clampOptionalInteger(
+  value: number | undefined,
+  min: number,
+  max: number
+): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
   }
   return Math.min(max, Math.max(min, Math.round(value)))
 }
@@ -424,6 +437,8 @@ export class RuntimeBrowserCommands {
         quality: clampInteger(params.quality, 10, 100, 70),
         maxWidth: clampInteger(params.maxWidth, 320, 3840, 1440),
         maxHeight: clampInteger(params.maxHeight, 240, 2160, 1200),
+        viewportWidth: clampOptionalInteger(params.viewportWidth, 320, 3840),
+        viewportHeight: clampOptionalInteger(params.viewportHeight, 240, 2160),
         everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
         onFrame: stream.sendBinary
       })

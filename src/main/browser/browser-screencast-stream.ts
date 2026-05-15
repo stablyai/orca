@@ -16,6 +16,8 @@ export type BrowserScreencastOptions = {
   quality: number
   maxWidth: number
   maxHeight: number
+  viewportWidth?: number
+  viewportHeight?: number
   everyNthFrame: number
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (message: string) => void
@@ -41,6 +43,10 @@ function readFrameMetadata(raw: unknown): BrowserScreencastFrameMetadata {
     scrollOffsetY: finiteNumber(metadata.scrollOffsetY),
     timestamp: finiteNumber(metadata.timestamp)
   }
+}
+
+function positiveInteger(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : null
 }
 
 async function sendDebuggerCommand(
@@ -136,11 +142,58 @@ export async function startBrowserScreencast(
     }
   }
 
+  const emitInitialFrameIfNeeded = async (): Promise<void> => {
+    if (closed || seq > 0) {
+      return
+    }
+    try {
+      // Why: Page.startScreencast may not produce a frame for an already-painted
+      // blank/static page, which leaves remote browser clients showing only the shell.
+      const result = await sendDebuggerCommand(dbg, 'Page.captureScreenshot', {
+        format: options.format,
+        ...(options.format === 'jpeg' ? { quality: options.quality } : {}),
+        captureBeyondViewport: false
+      })
+      if (closed || seq > 0) {
+        return
+      }
+      const payload =
+        result && typeof result === 'object' ? (result as Record<string, unknown>) : {}
+      const data = typeof payload.data === 'string' ? payload.data : null
+      if (!data) {
+        return
+      }
+      options.onFrame(
+        encodeBrowserScreencastFrame({
+          opcode: BrowserScreencastOpcode.Frame,
+          seq: seq++,
+          format: options.format,
+          metadata: {},
+          image: new Uint8Array(Buffer.from(data, 'base64'))
+        })
+      )
+    } catch {
+      // Best effort only: live Page.screencastFrame events still drive the stream.
+    }
+  }
+
   dbg.on('message', handleMessage as never)
   dbg.on('detach', handleDetach as never)
 
   try {
     await sendDebuggerCommand(dbg, 'Page.enable')
+    const viewportWidth = positiveInteger(options.viewportWidth)
+    const viewportHeight = positiveInteger(options.viewportHeight)
+    if (viewportWidth && viewportHeight) {
+      // Why: the first frame must use the same CSS viewport as the client pane,
+      // otherwise the image is scaled and input coordinates land off target.
+      await sendDebuggerCommand(dbg, 'Emulation.setDeviceMetricsOverride', {
+        width: viewportWidth,
+        height: viewportHeight,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+    }
     await sendDebuggerCommand(dbg, 'Page.startScreencast', {
       format: options.format,
       quality: options.quality,
@@ -148,6 +201,7 @@ export async function startBrowserScreencast(
       maxHeight: options.maxHeight,
       everyNthFrame: options.everyNthFrame
     })
+    void emitInitialFrameIfNeeded()
   } catch (error) {
     finish()
     throw new BrowserError(

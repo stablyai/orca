@@ -12,6 +12,16 @@ import {
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 type ShouldForwardDictationShortcut = () => boolean
 
+function readGuestNavigationState(guest: Electron.WebContents): {
+  canGoBack: boolean
+  canGoForward: boolean
+} {
+  return {
+    canGoBack: guest.navigationHistory.canGoBack(),
+    canGoForward: guest.navigationHistory.canGoForward()
+  }
+}
+
 function isTerminalTabSwitchChord(input: Electron.Input): boolean {
   return (
     Boolean(input.control) &&
@@ -59,6 +69,7 @@ export function setupGuestContextMenu(args: {
     // immune to guest/renderer coordinate space mismatches) and fall back to
     // guest coords if the screen API is unavailable.
     const cursor = screen.getCursorScreenPoint()
+    const navigationState = readGuestNavigationState(guest)
     renderer.send('browser:context-menu-requested', {
       browserPageId: browserTabId,
       x: params.x,
@@ -67,8 +78,7 @@ export function setupGuestContextMenu(args: {
       screenY: cursor.y,
       pageUrl,
       linkUrl,
-      canGoBack: guest.canGoBack(),
-      canGoForward: guest.canGoForward()
+      ...navigationState
     })
   }
 

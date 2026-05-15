@@ -177,6 +177,18 @@ type RemoteBrowserOperationToken = {
   generation: number
 }
 
+type RemoteBrowserContextMenu = {
+  x: number
+  y: number
+  linkUrl: string | null
+  pageUrl: string
+}
+
+type RemoteBrowserViewportSize = {
+  width: number
+  height: number
+}
+
 const EMPTY_BROWSER_PAGES: BrowserPageState[] = []
 const EMPTY_BROWSER_ANNOTATIONS: BrowserPageAnnotation[] = []
 const PENDING_ANNOTATION_CARD_HEIGHT = 330
@@ -394,10 +406,17 @@ function browserPageExists(tabId: string): boolean {
 }
 
 function isRemoteBrowserPageMissingError(error: unknown): boolean {
-  if (!(error instanceof RuntimeRpcCallError)) {
+  if (error instanceof RuntimeRpcCallError) {
+    return isRemoteBrowserPageMissingCode(error.code)
+  }
+  if (!error || typeof error !== 'object' || !('code' in error)) {
     return false
   }
-  return error.code === 'browser_tab_not_found' || error.code === 'browser_no_tab'
+  return isRemoteBrowserPageMissingCode((error as { code: unknown }).code)
+}
+
+function isRemoteBrowserPageMissingCode(code: unknown): boolean {
+  return code === 'browser_tab_not_found' || code === 'browser_no_tab'
 }
 
 function buildLoadError(event: {
@@ -458,7 +477,7 @@ function getNotebookPathFromBrowserUrl(url: string): string | null {
 
 function getRemoteBrowserKeypressKey(event: React.KeyboardEvent): string | null {
   if (event.key.length === 1) {
-    return null
+    return event.key === ' ' ? 'Space' : event.key
   }
   if (event.metaKey || event.ctrlKey || event.altKey) {
     return null
@@ -481,7 +500,91 @@ function getRemoteBrowserKeypressKey(event: React.KeyboardEvent): string | null 
   return supported.has(event.key) ? event.key : null
 }
 
-function getPositiveFiniteNumber(value: number | null | undefined): number | null {
+function getRemoteBrowserKeyboardShortcut(event: React.KeyboardEvent): string | null {
+  const modifiers: string[] = []
+  if (event.metaKey) {
+    modifiers.push('Meta')
+  }
+  if (event.ctrlKey) {
+    modifiers.push('Control')
+  }
+  if (event.altKey) {
+    modifiers.push('Alt')
+  }
+  if (event.shiftKey && event.key.length !== 1) {
+    modifiers.push('Shift')
+  }
+  if (modifiers.length === 0 || ['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) {
+    return null
+  }
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
+  return `${modifiers.join('+')}+${key}`
+}
+
+function getRemoteBrowserMouseButton(button: number): 'left' | 'middle' | 'right' | null {
+  if (button === 0) {
+    return 'left'
+  }
+  if (button === 1) {
+    return 'middle'
+  }
+  if (button === 2) {
+    return 'right'
+  }
+  return null
+}
+
+function buildRemoteContextMenuExpression(x: number, y: number): string {
+  return `(() => {
+    const target = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
+    const anchor = target && typeof target.closest === 'function' ? target.closest('a[href]') : null;
+    return JSON.stringify({
+      linkUrl: anchor && anchor.href ? anchor.href : null,
+      pageUrl: location.href || 'about:blank'
+    });
+  })()`
+}
+
+function readRemoteContextMenuResult(
+  result: unknown
+): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl'> | null {
+  if (!result || typeof result !== 'object') {
+    return null
+  }
+  const raw = (result as { result?: unknown }).result
+  if (typeof raw !== 'string') {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(raw) as { linkUrl?: unknown; pageUrl?: unknown }
+    return {
+      linkUrl: typeof parsed.linkUrl === 'string' && parsed.linkUrl ? parsed.linkUrl : null,
+      pageUrl: typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank'
+    }
+  } catch {
+    return null
+  }
+}
+
+function readRemoteCssViewportSize(result: unknown): RemoteBrowserViewportSize | null {
+  if (!result || typeof result !== 'object') {
+    return null
+  }
+  const raw = (result as { result?: unknown }).result
+  if (typeof raw !== 'string') {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(raw) as { width?: unknown; height?: unknown }
+    const width = getPositiveFiniteNumber(parsed.width)
+    const height = getPositiveFiniteNumber(parsed.height)
+    return width && height ? { width, height } : null
+  } catch {
+    return null
+  }
+}
+
+function getPositiveFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
@@ -676,15 +779,23 @@ function RemoteBrowserPagePane({
   const settings = useAppStore((s) => s.settings)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
+  const remoteViewportRef = useRef<HTMLDivElement | null>(null)
   const [addressBarValue, setAddressBarValue] = useState(toDisplayUrl(browserTab.url))
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
   const [remoteError, setRemoteError] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<RemoteBrowserContextMenu | null>(null)
   const [busy, setBusy] = useState(false)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
   const remotePageIdRef = useRef<string | null>(null)
+  const remoteViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
+  const remoteCssViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
+  const remoteViewportTimerRef = useRef<number | null>(null)
   const streamFrameUrlRef = useRef<string | null>(null)
   const streamSubscriptionRef = useRef<RemoteBrowserStreamSubscription | null>(null)
   const streamRestartTimerRef = useRef<number | null>(null)
+  const remoteTabRefreshTimerRef = useRef<number | null>(null)
+  const remoteInputQueueRef = useRef<Promise<unknown>>(Promise.resolve())
   const streamGenerationRef = useRef(0)
   const remoteOperationGenerationRef = useRef(0)
   const activeStreamTokenRef = useRef<RemoteBrowserStreamToken | null>(null)
@@ -700,6 +811,9 @@ function RemoteBrowserPagePane({
     (token: RemoteBrowserOperationToken) => Promise<BrowserTabInfo | null>
   >(async () => null)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
+  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
+  const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
+  const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
 
   currentBrowserTabIdRef.current = browserTab.id
   activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
@@ -713,11 +827,118 @@ function RemoteBrowserPagePane({
   const clearStreamFrame = useCallback((): void => {
     const prevUrl = streamFrameUrlRef.current
     streamFrameUrlRef.current = null
+    remoteCssViewportSizeRef.current = null
     setFrameMetadata(null)
     setFrameUrl(null)
     if (prevUrl) {
       URL.revokeObjectURL(prevUrl)
     }
+  }, [])
+
+  const closeMissingRemotePage = useCallback(
+    (remotePageId: string | null = remotePageIdRef.current): void => {
+      const state = useAppStore.getState()
+      if (remotePageId) {
+        state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
+      }
+      remotePageIdRef.current = null
+      remoteOperationGenerationRef.current += 1
+      streamGenerationRef.current += 1
+      activeStreamTokenRef.current = null
+      streamSubscriptionRef.current?.unsubscribe()
+      streamSubscriptionRef.current = null
+      if (streamRestartTimerRef.current !== null) {
+        window.clearTimeout(streamRestartTimerRef.current)
+        streamRestartTimerRef.current = null
+      }
+      if (remoteViewportTimerRef.current !== null) {
+        window.clearTimeout(remoteViewportTimerRef.current)
+        remoteViewportTimerRef.current = null
+      }
+      if (remoteTabRefreshTimerRef.current !== null) {
+        window.clearTimeout(remoteTabRefreshTimerRef.current)
+        remoteTabRefreshTimerRef.current = null
+      }
+      remoteInputQueueRef.current = Promise.resolve()
+      clearStreamFrame()
+      setRemoteError(null)
+      setBusy(false)
+      // Why: a runtime-side tab close is the remote equivalent of closing the
+      // visible browser tab; don't leave a dead pane behind with a not-found RPC.
+      const workspacePageCount = state.browserPagesByWorkspace[browserTab.workspaceId]?.length ?? 0
+      if (workspacePageCount <= 1) {
+        closeBrowserTab(browserTab.workspaceId)
+        return
+      }
+      closeBrowserPage(browserTab.id)
+    },
+    [browserTab.id, browserTab.workspaceId, clearStreamFrame, closeBrowserPage, closeBrowserTab]
+  )
+
+  const readRemoteViewportSize = useCallback((): RemoteBrowserViewportSize | null => {
+    const element = remoteViewportRef.current
+    if (!element) {
+      return remoteViewportSizeRef.current
+    }
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      return remoteViewportSizeRef.current
+    }
+    const next = {
+      width: Math.max(320, Math.round(rect.width)),
+      height: Math.max(240, Math.round(rect.height))
+    }
+    const prev = remoteViewportSizeRef.current
+    if (!prev || Math.abs(prev.width - next.width) > 3 || Math.abs(prev.height - next.height) > 3) {
+      remoteViewportSizeRef.current = next
+    }
+    return remoteViewportSizeRef.current
+  }, [])
+
+  const syncRemoteViewport = useCallback(
+    async (pageId: string): Promise<void> => {
+      const target = runtimeTarget()
+      const size = readRemoteViewportSize()
+      if (!target || !size) {
+        return
+      }
+      await callRuntimeRpc(
+        target,
+        'browser.viewport',
+        {
+          worktree: `id:${worktreeId}`,
+          page: pageId,
+          width: size.width,
+          height: size.height,
+          deviceScaleFactor: 1,
+          mobile: false
+        },
+        { timeoutMs: 15_000 }
+      )
+      try {
+        // Why: the streamed bitmap can include the host compositor surface,
+        // while CDP input wants the guest page's CSS viewport coordinates.
+        const viewport = await callRuntimeRpc(
+          target,
+          'browser.eval',
+          {
+            worktree: `id:${worktreeId}`,
+            page: pageId,
+            expression: 'JSON.stringify({ width: window.innerWidth, height: window.innerHeight })'
+          },
+          { timeoutMs: 15_000 }
+        )
+        remoteCssViewportSizeRef.current = readRemoteCssViewportSize(viewport) ?? size
+      } catch {
+        remoteCssViewportSizeRef.current = size
+      }
+    },
+    [readRemoteViewportSize, runtimeTarget, worktreeId]
+  )
+
+  const enqueueRemoteInput = useCallback((operation: () => Promise<void>): void => {
+    const next = remoteInputQueueRef.current.catch(() => {}).then(operation)
+    remoteInputQueueRef.current = next.catch(() => {})
   }, [])
 
   const createRemoteOperationToken = useCallback(
@@ -784,6 +1005,14 @@ function RemoteBrowserPagePane({
         window.clearTimeout(streamRestartTimerRef.current)
         streamRestartTimerRef.current = null
       }
+      if (remoteViewportTimerRef.current !== null) {
+        window.clearTimeout(remoteViewportTimerRef.current)
+        remoteViewportTimerRef.current = null
+      }
+      if (remoteTabRefreshTimerRef.current !== null) {
+        window.clearTimeout(remoteTabRefreshTimerRef.current)
+        remoteTabRefreshTimerRef.current = null
+      }
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
@@ -799,11 +1028,81 @@ function RemoteBrowserPagePane({
   }, [activeRuntimeEnvironmentId, browserTab.id, clearStreamFrame])
 
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const element = remoteViewportRef.current
+    if (!element) {
+      return
+    }
+    const scheduleSync = (): void => {
+      readRemoteViewportSize()
+      if (remoteViewportTimerRef.current !== null) {
+        window.clearTimeout(remoteViewportTimerRef.current)
+      }
+      remoteViewportTimerRef.current = window.setTimeout(() => {
+        remoteViewportTimerRef.current = null
+        const pageId = remotePageIdRef.current
+        if (!pageId || !isActiveRef.current) {
+          return
+        }
+        void syncRemoteViewport(pageId).catch(() => {})
+      }, 150)
+    }
+    scheduleSync()
+    const observer = new ResizeObserver(scheduleSync)
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+      if (remoteViewportTimerRef.current !== null) {
+        window.clearTimeout(remoteViewportTimerRef.current)
+        remoteViewportTimerRef.current = null
+      }
+    }
+  }, [isActive, readRemoteViewportSize, syncRemoteViewport])
+
+  useEffect(() => {
     if (document.activeElement === addressBarInputRef.current) {
       return
     }
     setAddressBarValue(toDisplayUrl(browserTab.url))
   }, [browserTab.url])
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setContextMenu(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [contextMenu])
+
+  useLayoutEffect(() => {
+    const el = contextMenuRef.current
+    if (!el || !contextMenu) {
+      return
+    }
+    el.style.left = `${contextMenu.x}px`
+    el.style.top = `${contextMenu.y}px`
+    const rect = el.getBoundingClientRect()
+    const offsetX = contextMenu.x - rect.left
+    const offsetY = contextMenu.y - rect.top
+    let renderX = contextMenu.x
+    let renderY = contextMenu.y
+    if (rect.right > window.innerWidth) {
+      renderX = contextMenu.x - rect.width
+    }
+    if (rect.bottom > window.innerHeight) {
+      renderY = contextMenu.y - rect.height
+    }
+    el.style.left = `${Math.max(0, renderX) + offsetX}px`
+    el.style.top = `${Math.max(0, renderY) + offsetY}px`
+  }, [contextMenu])
 
   useEffect(() => {
     if (!activeRuntimeEnvironmentId) {
@@ -883,14 +1182,21 @@ function RemoteBrowserPagePane({
   const getRemoteImagePoint = useCallback(
     (event: { clientX: number; clientY: number }): { x: number; y: number } | null => {
       const image = imageRef.current
-      if (!image) {
+      const viewport = remoteViewportRef.current
+      if (!image || !viewport) {
         return null
       }
-      const rect = image.getBoundingClientRect()
+      const rect = viewport.getBoundingClientRect()
       const viewportWidth =
-        getPositiveFiniteNumber(frameMetadata?.deviceWidth) ?? image.naturalWidth
+        getPositiveFiniteNumber(remoteCssViewportSizeRef.current?.width) ??
+        getPositiveFiniteNumber(remoteViewportSizeRef.current?.width) ??
+        getPositiveFiniteNumber(frameMetadata?.deviceWidth) ??
+        image.naturalWidth
       const viewportHeight =
-        getPositiveFiniteNumber(frameMetadata?.deviceHeight) ?? image.naturalHeight
+        getPositiveFiniteNumber(remoteCssViewportSizeRef.current?.height) ??
+        getPositiveFiniteNumber(remoteViewportSizeRef.current?.height) ??
+        getPositiveFiniteNumber(frameMetadata?.deviceHeight) ??
+        image.naturalHeight
       if (rect.width <= 0 || rect.height <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
         return null
       }
@@ -959,7 +1265,8 @@ function RemoteBrowserPagePane({
           if (!isCurrentRemoteOperationToken(token)) {
             return null
           }
-          return createRemotePage()
+          closeMissingRemotePage(existingHandle.remotePageId)
+          return null
         }
       }
       return createRemotePage()
@@ -967,6 +1274,7 @@ function RemoteBrowserPagePane({
     [
       browserTab.id,
       browserTab.url,
+      closeMissingRemotePage,
       isCurrentRemoteOperationToken,
       setRemoteBrowserPageHandle,
       worktreeId
@@ -989,6 +1297,35 @@ function RemoteBrowserPagePane({
     [isCurrentRemoteOperationToken, worktreeId]
   )
   fetchRemoteTabInfoRef.current = fetchRemoteTabInfo
+
+  const scheduleRemoteTabInfoRefresh = useCallback(
+    (token: RemoteBrowserOperationToken, delayMs = 250): void => {
+      if (!isCurrentRemoteOperationToken(token)) {
+        return
+      }
+      if (remoteTabRefreshTimerRef.current !== null) {
+        window.clearTimeout(remoteTabRefreshTimerRef.current)
+      }
+      remoteTabRefreshTimerRef.current = window.setTimeout(() => {
+        remoteTabRefreshTimerRef.current = null
+        if (!isCurrentRemoteOperationToken(token)) {
+          return
+        }
+        void fetchRemoteTabInfo(token)
+          .then((tab) => {
+            if (tab && isCurrentRemoteOperationToken(token)) {
+              applyRemoteTabInfo(tab)
+            }
+          })
+          .catch((error: unknown) => {
+            if (isCurrentRemoteOperationToken(token) && isRemoteBrowserPageMissingError(error)) {
+              closeMissingRemotePage(token.remotePageId)
+            }
+          })
+      }, delayMs)
+    },
+    [applyRemoteTabInfo, closeMissingRemotePage, fetchRemoteTabInfo, isCurrentRemoteOperationToken]
+  )
 
   const scheduleRemoteStreamRestart = useCallback(
     (token: RemoteBrowserStreamToken): void => {
@@ -1035,6 +1372,10 @@ function RemoteBrowserPagePane({
             if (!isCurrentRemoteStreamOperation(token)) {
               return
             }
+            if (isRemoteBrowserPageMissingError(error)) {
+              closeMissingRemotePage(token.remotePageId)
+              return
+            }
             setRemoteError(
               error instanceof Error ? error.message : 'Failed to restart remote browser stream.'
             )
@@ -1044,6 +1385,7 @@ function RemoteBrowserPagePane({
     },
     [
       applyRemoteTabInfo,
+      closeMissingRemotePage,
       fetchRemoteTabInfo,
       isCurrentRemoteStreamOperation,
       isCurrentRemoteStreamToken
@@ -1089,6 +1431,7 @@ function RemoteBrowserPagePane({
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return null
       }
+      const viewportSize = readRemoteViewportSize()
       const token: RemoteBrowserStreamToken = {
         tabId: browserTab.id,
         environmentId: target.environmentId,
@@ -1108,8 +1451,10 @@ function RemoteBrowserPagePane({
               page: pageId,
               format: 'jpeg',
               quality: 70,
-              maxWidth: 1440,
-              maxHeight: 1200,
+              maxWidth: 3840,
+              maxHeight: 2160,
+              viewportWidth: viewportSize?.width,
+              viewportHeight: viewportSize?.height,
               everyNthFrame: 2
             },
             timeoutMs: 15_000
@@ -1120,6 +1465,10 @@ function RemoteBrowserPagePane({
                 return
               }
               if (response.ok === false) {
+                if (isRemoteBrowserPageMissingCode(response.error.code)) {
+                  closeMissingRemotePage(pageId)
+                  return
+                }
                 setRemoteError(response.error.message)
                 handleRemoteStreamClosed(token, false)
                 return
@@ -1127,6 +1476,7 @@ function RemoteBrowserPagePane({
               const event = response.result as BrowserScreencastResult
               if (event.type === 'ready') {
                 applyRemoteTabInfo(event.tab)
+                void syncRemoteViewport(event.browserPageId).catch(() => {})
                 setBusy(false)
               } else if (event.type === 'end') {
                 handleRemoteStreamClosed(token, true)
@@ -1135,6 +1485,10 @@ function RemoteBrowserPagePane({
             onBinary: (bytes) => updateStreamFrame(token, bytes),
             onError: (error) => {
               if (!isCurrentRemoteStreamToken(token)) {
+                return
+              }
+              if (isRemoteBrowserPageMissingError(error)) {
+                closeMissingRemotePage(pageId)
                 return
               }
               setRemoteError(error.message)
@@ -1156,11 +1510,14 @@ function RemoteBrowserPagePane({
     [
       applyRemoteTabInfo,
       browserTab.id,
+      closeMissingRemotePage,
       createRemoteOperationToken,
       handleRemoteStreamClosed,
       isCurrentRemoteOperationToken,
       isCurrentRemoteStreamToken,
+      readRemoteViewportSize,
       runtimeTarget,
+      syncRemoteViewport,
       updateStreamFrame,
       worktreeId
     ]
@@ -1218,6 +1575,10 @@ function RemoteBrowserPagePane({
       })
       .catch((error: unknown) => {
         if (!cancelled) {
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage()
+            return
+          }
           setRemoteError(error instanceof Error ? error.message : 'Failed to open remote browser.')
           setBusy(false)
         }
@@ -1240,6 +1601,7 @@ function RemoteBrowserPagePane({
     ensureRemotePage,
     fetchRemoteTabInfo,
     isActive,
+    closeMissingRemotePage,
     isCurrentRemoteOperationToken,
     isCurrentRemoteStreamToken,
     applyRemoteTabInfo,
@@ -1295,6 +1657,10 @@ function RemoteBrowserPagePane({
         if (!isCurrentRemoteOperationToken(pageToken)) {
           return
         }
+        if (isRemoteBrowserPageMissingError(error)) {
+          closeMissingRemotePage(pageId)
+          return
+        }
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
         setRemoteError(message)
         onUpdatePageState(browserTab.id, {
@@ -1313,6 +1679,7 @@ function RemoteBrowserPagePane({
       browserTab.url,
       createRemoteOperationToken,
       ensureRemotePage,
+      closeMissingRemotePage,
       isCurrentRemoteOperationToken,
       onUpdatePageState,
       runtimeTarget,
@@ -1348,19 +1715,27 @@ function RemoteBrowserPagePane({
     navigateToUrl(nextUrl)
   }
 
-  const clickRemoteScreenshot = (event: React.MouseEvent<HTMLImageElement>): void => {
+  const handleRemotePointerDown = (event: React.PointerEvent<HTMLImageElement>): void => {
     const target = runtimeTarget()
     const pageId = remotePageIdRef.current
     const image = imageRef.current
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = getRemoteImagePoint(event)
-    if (!target || !pageId || !image || !operationToken || !point) {
+    const button = getRemoteBrowserMouseButton(event.button)
+    if (button === 'right') {
       return
     }
+    if (!target || !pageId || !image || !operationToken || !point || !button) {
+      return
+    }
+    event.preventDefault()
     image.focus()
-    setBusy(true)
+    setContextMenu(null)
     setRemoteError(null)
-    void (async () => {
+    enqueueRemoteInput(async () => {
+      if (!isCurrentRemoteOperationToken(operationToken)) {
+        return
+      }
       try {
         const params = { worktree: `id:${worktreeId}`, page: pageId }
         await callRuntimeRpc(
@@ -1369,23 +1744,123 @@ function RemoteBrowserPagePane({
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000 }
         )
-        await callRuntimeRpc(target, 'browser.mouseDown', params, { timeoutMs: 15_000 })
-        await callRuntimeRpc(target, 'browser.mouseUp', params, { timeoutMs: 15_000 })
-        await new Promise((resolve) => window.setTimeout(resolve, 300))
-        const tab = await fetchRemoteTabInfo(operationToken)
-        if (tab && isCurrentRemoteOperationToken(operationToken)) {
-          applyRemoteTabInfo(tab)
-        }
+        await callRuntimeRpc(
+          target,
+          'browser.mouseDown',
+          { ...params, button },
+          { timeoutMs: 15_000 }
+        )
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
-          setRemoteError(error instanceof Error ? error.message : 'Remote click failed.')
-        }
-      } finally {
-        if (isCurrentRemoteOperationToken(operationToken)) {
-          setBusy(false)
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage(pageId)
+            return
+          }
+          setRemoteError(error instanceof Error ? error.message : 'Remote mouse input failed.')
         }
       }
-    })()
+    })
+  }
+
+  const handleRemotePointerUp = (event: React.PointerEvent<HTMLImageElement>): void => {
+    const target = runtimeTarget()
+    const pageId = remotePageIdRef.current
+    const operationToken = pageId ? createRemoteOperationToken(pageId) : null
+    const point = getRemoteImagePoint(event)
+    const button = getRemoteBrowserMouseButton(event.button)
+    if (button === 'right') {
+      return
+    }
+    if (!target || !pageId || !operationToken || !point || !button) {
+      return
+    }
+    event.preventDefault()
+    setRemoteError(null)
+    enqueueRemoteInput(async () => {
+      if (!isCurrentRemoteOperationToken(operationToken)) {
+        return
+      }
+      try {
+        const params = { worktree: `id:${worktreeId}`, page: pageId }
+        await callRuntimeRpc(
+          target,
+          'browser.mouseMove',
+          { ...params, x: point.x, y: point.y },
+          { timeoutMs: 15_000 }
+        )
+        await callRuntimeRpc(
+          target,
+          'browser.mouseUp',
+          { ...params, button },
+          { timeoutMs: 15_000 }
+        )
+        scheduleRemoteTabInfoRefresh(operationToken, 250)
+      } catch (error) {
+        if (isCurrentRemoteOperationToken(operationToken)) {
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage(pageId)
+            return
+          }
+          setRemoteError(error instanceof Error ? error.message : 'Remote mouse input failed.')
+        }
+      }
+    })
+  }
+
+  const handleRemoteContextMenu = (event: React.MouseEvent<HTMLImageElement>): void => {
+    const target = runtimeTarget()
+    const pageId = remotePageIdRef.current
+    const point = getRemoteImagePoint(event)
+    if (!target || !pageId || !point) {
+      return
+    }
+    event.preventDefault()
+    imageRef.current?.focus()
+    setRemoteError(null)
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      linkUrl: null,
+      pageUrl: browserTab.url || 'about:blank'
+    })
+    enqueueRemoteInput(async () => {
+      const operationToken = createRemoteOperationToken(pageId)
+      if (!operationToken || !isCurrentRemoteOperationToken(operationToken)) {
+        return
+      }
+      try {
+        const result = await callRuntimeRpc(
+          target,
+          'browser.eval',
+          {
+            worktree: `id:${worktreeId}`,
+            page: pageId,
+            expression: buildRemoteContextMenuExpression(point.x, point.y)
+          },
+          { timeoutMs: 15_000 }
+        )
+        const parsed = readRemoteContextMenuResult(result)
+        if (parsed) {
+          setContextMenu((current) =>
+            current
+              ? {
+                  ...current,
+                  linkUrl: parsed.linkUrl,
+                  pageUrl: redactKagiSessionToken(parsed.pageUrl)
+                }
+              : current
+          )
+        }
+      } catch (error) {
+        if (
+          isCurrentRemoteOperationToken(operationToken) &&
+          isRemoteBrowserPageMissingError(error)
+        ) {
+          closeMissingRemotePage(pageId)
+        }
+        // Keep the basic menu open even if element inspection is unavailable.
+      }
+    })
   }
 
   const handleRemoteScreenshotKeyDown = (event: React.KeyboardEvent<HTMLImageElement>): void => {
@@ -1399,42 +1874,31 @@ function RemoteBrowserPagePane({
       return
     }
     const params = { worktree: `id:${worktreeId}`, page: pageId }
-    const text =
-      event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey ? event.key : null
-    const key = text ? null : getRemoteBrowserKeypressKey(event)
-    if (!text && !key) {
+    const key = getRemoteBrowserKeyboardShortcut(event) ?? getRemoteBrowserKeypressKey(event)
+    if (!key) {
       return
     }
     event.preventDefault()
     setRemoteError(null)
-    void (async () => {
+    enqueueRemoteInput(async () => {
+      if (!isCurrentRemoteOperationToken(operationToken)) {
+        return
+      }
       try {
-        if (text) {
-          await callRuntimeRpc(
-            target,
-            'browser.keyboardInsertText',
-            { ...params, text },
-            { timeoutMs: 15_000 }
-          )
-        } else if (key) {
-          await callRuntimeRpc(
-            target,
-            'browser.keypress',
-            { ...params, key },
-            { timeoutMs: 15_000 }
-          )
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, 100))
-        const tab = await fetchRemoteTabInfo(operationToken)
-        if (tab && isCurrentRemoteOperationToken(operationToken)) {
-          applyRemoteTabInfo(tab)
+        await callRuntimeRpc(target, 'browser.keypress', { ...params, key }, { timeoutMs: 15_000 })
+        if (key === 'Enter' || key === 'Meta+r' || key === 'Control+r') {
+          scheduleRemoteTabInfoRefresh(operationToken, 400)
         }
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage(pageId)
+            return
+          }
           setRemoteError(error instanceof Error ? error.message : 'Remote keyboard input failed.')
         }
       }
-    })()
+    })
   }
 
   const handleRemoteScreenshotWheel = (event: React.WheelEvent<HTMLImageElement>): void => {
@@ -1447,7 +1911,10 @@ function RemoteBrowserPagePane({
     }
     event.preventDefault()
     setRemoteError(null)
-    void (async () => {
+    enqueueRemoteInput(async () => {
+      if (!isCurrentRemoteOperationToken(operationToken)) {
+        return
+      }
       const params = { worktree: `id:${worktreeId}`, page: pageId }
       try {
         await callRuntimeRpc(
@@ -1466,21 +1933,131 @@ function RemoteBrowserPagePane({
           },
           { timeoutMs: 15_000 }
         )
-        await new Promise((resolve) => window.setTimeout(resolve, 100))
-        const tab = await fetchRemoteTabInfo(operationToken)
-        if (tab && isCurrentRemoteOperationToken(operationToken)) {
-          applyRemoteTabInfo(tab)
-        }
+        scheduleRemoteTabInfoRefresh(operationToken, 400)
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage(pageId)
+            return
+          }
           setRemoteError(error instanceof Error ? error.message : 'Remote scroll failed.')
         }
       }
-    })()
+    })
   }
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
+      {contextMenu
+        ? createPortal(
+            <>
+              <div className="fixed inset-0 z-50" onPointerDown={() => setContextMenu(null)} />
+              <div
+                ref={contextMenuRef}
+                role="menu"
+                data-testid="remote-browser-context-menu"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+                className="fixed z-50 min-w-[13rem] overflow-hidden rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-1 text-black shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
+              >
+                {contextMenu.linkUrl ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        createBrowserTab(worktreeId, contextMenu.linkUrl!, {
+                          title: contextMenu.linkUrl!
+                        })
+                        setContextMenu(null)
+                      }}
+                    >
+                      Open Link In Orca Browser
+                    </button>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        const targetUrl = normalizeExternalBrowserUrl(contextMenu.linkUrl!)
+                        if (targetUrl) {
+                          void window.api.shell.openUrl(targetUrl)
+                        }
+                        setContextMenu(null)
+                      }}
+                    >
+                      Open Link In Default Browser
+                    </button>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        void window.api.ui.writeClipboardText(contextMenu.linkUrl ?? '')
+                        setContextMenu(null)
+                      }}
+                    >
+                      Copy Link Address
+                    </button>
+                    <div className="my-1 h-px bg-border/70" />
+                  </>
+                ) : null}
+                <button
+                  role="menuitem"
+                  className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                  onClick={() => {
+                    void runRemoteNavigation('browser.back')
+                    setContextMenu(null)
+                  }}
+                >
+                  Back
+                </button>
+                <button
+                  role="menuitem"
+                  className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                  onClick={() => {
+                    void runRemoteNavigation('browser.forward')
+                    setContextMenu(null)
+                  }}
+                >
+                  Forward
+                </button>
+                <button
+                  role="menuitem"
+                  className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                  onClick={() => {
+                    void runRemoteNavigation('browser.reload')
+                    setContextMenu(null)
+                  }}
+                >
+                  Reload
+                </button>
+                <div className="my-1 h-px bg-border/70" />
+                <button
+                  role="menuitem"
+                  className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                  onClick={() => {
+                    const targetUrl = normalizeExternalBrowserUrl(contextMenu.pageUrl)
+                    if (targetUrl) {
+                      void window.api.shell.openUrl(targetUrl)
+                    }
+                    setContextMenu(null)
+                  }}
+                >
+                  Open Page In Default Browser
+                </button>
+                <button
+                  role="menuitem"
+                  className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                  onClick={() => {
+                    void window.api.ui.writeClipboardText(contextMenu.pageUrl)
+                    setContextMenu(null)
+                  }}
+                >
+                  Copy Page URL
+                </button>
+              </div>
+            </>,
+            document.body
+          )
+        : null}
       <div className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5">
         <Button
           size="icon"
@@ -1537,31 +2114,38 @@ function RemoteBrowserPagePane({
           </TooltipContent>
         </Tooltip>
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/20">
+      <div
+        ref={remoteViewportRef}
+        className="relative min-h-0 flex-1 overflow-hidden bg-background"
+      >
         {frameUrl ? (
           <img
             ref={imageRef}
             src={frameUrl}
             alt=""
             tabIndex={0}
-            className="max-h-full max-w-full cursor-crosshair bg-white object-contain"
-            onClick={clickRemoteScreenshot}
+            className="absolute top-0 left-0 h-auto w-auto max-w-none cursor-default bg-white outline-none"
+            onPointerDown={handleRemotePointerDown}
+            onPointerUp={handleRemotePointerUp}
+            onContextMenu={handleRemoteContextMenu}
             onKeyDown={handleRemoteScreenshotKeyDown}
             onWheel={handleRemoteScreenshotWheel}
             draggable={false}
           />
         ) : (
-          <div className="flex max-w-sm flex-col items-center gap-2 px-6 text-center">
-            {busy ? (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            ) : (
-              <Globe className="size-5 text-muted-foreground" />
-            )}
-            <div className="text-sm font-medium text-foreground">
-              {busy ? 'Opening remote browser' : 'Remote browser'}
-            </div>
-            <div className="text-xs leading-5 text-muted-foreground">
-              This pane is rendered from the active runtime server.
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+            <div className="flex max-w-sm flex-col items-center gap-2">
+              {busy ? (
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              ) : (
+                <Globe className="size-5 text-muted-foreground" />
+              )}
+              <div className="text-sm font-medium text-foreground">
+                {busy ? 'Opening remote browser' : 'Remote browser'}
+              </div>
+              <div className="text-xs leading-5 text-muted-foreground">
+                This pane is rendered from the active runtime server.
+              </div>
             </div>
           </div>
         )}

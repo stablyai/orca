@@ -136,6 +136,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'browser.screencast',
   'browser.screencast.unsubscribe',
   'browser.tabCreate',
+  'browser.viewport',
   'files.list',
   'files.open',
   'files.openDiff',
@@ -232,6 +233,10 @@ export class OrcaRuntimeRpcServer {
   private readonly binaryStreamHandlers = new Map<
     string,
     Map<number, (frame: TerminalStreamFrame) => void>
+  >()
+  private readonly wsDispatchAbortStates = new Map<
+    WebSocket,
+    { controllers: Set<AbortController>; abortOnClose: () => void }
   >()
   // Why: separate from Node's server.maxConnections because we need to count
   // only long-running dispatches, not every in-flight short RPC. See §3.1 +
@@ -371,6 +376,62 @@ export class OrcaRuntimeRpcServer {
     this.binaryStreamHandlers.get(connectionId)?.get(frame.streamId)?.(frame)
   }
 
+  private registerWebSocketDispatchAbort(ws: WebSocket): {
+    signal: AbortSignal
+    dispose: () => void
+  } {
+    const abortController = new AbortController()
+    if (ws.readyState !== ws.OPEN) {
+      abortController.abort()
+      return { signal: abortController.signal, dispose: () => {} }
+    }
+
+    let state = this.wsDispatchAbortStates.get(ws)
+    if (!state) {
+      state = {
+        controllers: new Set(),
+        abortOnClose: () => this.abortWebSocketDispatches(ws)
+      }
+      this.wsDispatchAbortStates.set(ws, state)
+      // Why: many streaming RPCs can share one WebSocket. A single socket-level
+      // abort fan-out avoids MaxListenersExceededWarning while preserving cleanup.
+      ws.on('close', state.abortOnClose)
+      ws.on('error', state.abortOnClose)
+    }
+    state.controllers.add(abortController)
+
+    return {
+      signal: abortController.signal,
+      dispose: () => {
+        const current = this.wsDispatchAbortStates.get(ws)
+        if (!current) {
+          return
+        }
+        current.controllers.delete(abortController)
+        if (current.controllers.size > 0) {
+          return
+        }
+        this.wsDispatchAbortStates.delete(ws)
+        ws.off('close', current.abortOnClose)
+        ws.off('error', current.abortOnClose)
+      }
+    }
+  }
+
+  private abortWebSocketDispatches(ws: WebSocket): void {
+    const state = this.wsDispatchAbortStates.get(ws)
+    if (!state) {
+      return
+    }
+    this.wsDispatchAbortStates.delete(ws)
+    ws.off('close', state.abortOnClose)
+    ws.off('error', state.abortOnClose)
+    for (const controller of state.controllers) {
+      controller.abort()
+    }
+    state.controllers.clear()
+  }
+
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
@@ -508,6 +569,7 @@ export class OrcaRuntimeRpcServer {
         // so destroy the channel for THIS exact ws and skip the per-client
         // teardown when other sockets for the same token are still alive.
         wsTransport.onConnectionClose((clientId, ws, hasOtherConnections) => {
+          this.abortWebSocketDispatches(ws)
           // Why: sweep streaming subscriptions for THIS ws regardless of
           // hasOtherConnections, so per-ws listeners (notifications,
           // accounts, terminal) don't leak across reconnects. This is
@@ -733,17 +795,7 @@ export class OrcaRuntimeRpcServer {
       return
     }
 
-    let abortController: AbortController | null = null
-    let abortOnClose: (() => void) | null = null
-    if (ws) {
-      abortController = new AbortController()
-      abortOnClose = () => abortController?.abort()
-      ws.once('close', abortOnClose)
-      ws.once('error', abortOnClose)
-      if (ws.readyState !== ws.OPEN) {
-        abortController.abort()
-      }
-    }
+    const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
     if (longPoll) {
       this.activeLongPolls += 1
     }
@@ -753,16 +805,13 @@ export class OrcaRuntimeRpcServer {
       await this.dispatcher.dispatchStreaming(request, reply, {
         connectionId,
         clientId: token,
-        signal: abortController?.signal,
+        signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler)
       })
     } finally {
-      if (abortOnClose && ws) {
-        ws.off('close', abortOnClose)
-        ws.off('error', abortOnClose)
-      }
+      abortRegistration?.dispose()
       if (longPoll) {
         this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
       }

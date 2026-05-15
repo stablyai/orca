@@ -97,7 +97,9 @@ describe('browser RPC methods', () => {
         page: 'page-1',
         format: 'jpeg',
         quality: 80,
-        maxWidth: 1024
+        maxWidth: 1024,
+        viewportWidth: 900,
+        viewportHeight: 600
       }),
       (reply) => replies.push(reply),
       { connectionId: 'conn-1', sendBinary }
@@ -109,7 +111,9 @@ describe('browser RPC methods', () => {
         page: 'page-1',
         format: 'jpeg',
         quality: 80,
-        maxWidth: 1024
+        maxWidth: 1024,
+        viewportWidth: 900,
+        viewportHeight: 600
       },
       {
         connectionId: 'conn-1',
