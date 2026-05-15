@@ -5,6 +5,7 @@ import {
   AppState,
   Image,
   PanResponder,
+  PixelRatio,
   Platform,
   Pressable,
   StyleSheet,
@@ -59,6 +60,8 @@ type BrowserPoint = {
 type FrameGeometry = {
   sourceWidth: number
   sourceHeight: number
+  viewportWidth: number
+  viewportHeight: number
   renderedWidth: number
   renderedHeight: number
   offsetX: number
@@ -72,15 +75,39 @@ type StreamViewport = {
   height: number
 }
 
+type ZoomState = {
+  scale: number
+  offsetX: number
+  offsetY: number
+}
+
+type PinchGesture = {
+  distance: number
+  scale: number
+  anchorX: number
+  anchorY: number
+}
+
+type PanGesture = {
+  x: number
+  y: number
+  offsetX: number
+  offsetY: number
+}
+
 const TAP_SLOP = 10
 const LONG_PRESS_MS = 550
 const WHEEL_INTERVAL_MS = 70
 const BROWSER_FRAME_FORMAT = 'jpeg'
-const BROWSER_FRAME_QUALITY = 62
+const BROWSER_FRAME_QUALITY = 72
 const BROWSER_MIN_VIEWPORT_WIDTH = 320
 const BROWSER_MIN_VIEWPORT_HEIGHT = 240
-const BROWSER_MAX_VIEWPORT_WIDTH = 1600
-const BROWSER_MAX_VIEWPORT_HEIGHT = 2200
+const BROWSER_MAX_VIEWPORT_WIDTH = 2400
+const BROWSER_MAX_VIEWPORT_HEIGHT = 2160
+const BROWSER_MAX_STREAM_SCALE = 2.5
+const MIN_ZOOM = 1
+const MAX_ZOOM = 3.5
+const DEFAULT_ZOOM: ZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
 
 export function MobileBrowserPane({
   client,
@@ -100,6 +127,7 @@ export function MobileBrowserPane({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [rotated, setRotated] = useState(false)
+  const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM)
   const [layout, setLayout] = useState<ViewportLayout | null>(null)
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   const streamGenerationRef = useRef(0)
@@ -110,6 +138,9 @@ export function MobileBrowserPane({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rightClickSentRef = useRef(false)
   const lastWheelRef = useRef<{ dx: number; dy: number; at: number }>({ dx: 0, dy: 0, at: 0 })
+  const zoomRef = useRef<ZoomState>(DEFAULT_ZOOM)
+  const pinchRef = useRef<PinchGesture | null>(null)
+  const panRef = useRef<PanGesture | null>(null)
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -138,6 +169,15 @@ export function MobileBrowserPane({
     rotatedRef.current = rotated
   }, [rotated])
 
+  useEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
+
+  useEffect(() => {
+    zoomRef.current = DEFAULT_ZOOM
+    setZoom(DEFAULT_ZOOM)
+  }, [rotated, tab.browserPageId])
+
   const pageParams = useCallback(() => {
     if (!tab.browserPageId) {
       return null
@@ -155,10 +195,7 @@ export function MobileBrowserPane({
     setReady(true)
   }, [])
 
-  const streamViewport = useMemo(
-    () => computeStreamViewport(layout, rotated),
-    [layout, rotated]
-  )
+  const streamViewport = useMemo(() => computeStreamViewport(layout, rotated), [layout, rotated])
 
   const frameGeometry = useMemo(
     () => computeFrameGeometry(layout, frameMetadata, rotated),
@@ -233,9 +270,12 @@ export function MobileBrowserPane({
           setBusy(false)
         } else if (event.type === 'error') {
           clearStartupTimer()
-          setReady(false)
           setBusy(false)
-          setError(event.message ?? event.error?.message ?? 'Browser stream failed.')
+          const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
+          if (shouldSurfaceBrowserError(message)) {
+            setReady(false)
+            setError(message)
+          }
         }
       },
       {
@@ -264,7 +304,7 @@ export function MobileBrowserPane({
     async (
       method: string,
       params: Record<string, unknown> = {},
-      opts: { showBusy?: boolean; timeoutMs?: number } = {}
+      opts: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number } = {}
     ): Promise<unknown | null> => {
       const base = pageParams()
       if (!client || !base) {
@@ -285,8 +325,10 @@ export function MobileBrowserPane({
         setError(null)
         return (response as RpcSuccess).result
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Browser command failed'
-        setError(message)
+        const message = browserErrorMessage(err, 'Browser command failed')
+        if (!opts.suppressError && shouldSurfaceBrowserError(message)) {
+          setError(message)
+        }
         return null
       } finally {
         if (opts.showBusy) {
@@ -333,8 +375,9 @@ export function MobileBrowserPane({
           'Browser pointer up failed'
         )
         setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Browser click failed')
+      } catch {
+        // Pointer commands can race page navigation. Keep the stream visible;
+        // actionable failures still surface through navigation/stream errors.
       }
     },
     [client, pageParams]
@@ -352,7 +395,8 @@ export function MobileBrowserPane({
         frameMetadataRef.current,
         rotatedRef.current
       )
-      const scale = geometry?.scale ?? 1
+      const localZoom = zoomRef.current.scale
+      const scale = (geometry?.scale ?? 1) * localZoom
       const cssDx = screenDx / scale
       const cssDy = screenDy / scale
       const delta = rotatedRef.current
@@ -372,8 +416,9 @@ export function MobileBrowserPane({
             'Browser scroll failed'
           )
           setError(null)
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Browser scroll failed')
+        } catch {
+          // Scroll bursts commonly race page reload/navigation. Avoid replacing
+          // the live browser with transient command errors like selector_not_found.
         }
       })()
     },
@@ -396,8 +441,12 @@ export function MobileBrowserPane({
     if (!geometry) {
       return null
     }
-    const localX = locationX - geometry.offsetX
-    const localY = locationY - geometry.offsetY
+    const zoomState = zoomRef.current
+    const local = screenToFrameLocal(locationX, locationY, geometry, zoomState)
+    if (!local) {
+      return null
+    }
+    const { localX, localY } = local
     if (
       localX < 0 ||
       localY < 0 ||
@@ -438,10 +487,27 @@ export function MobileBrowserPane({
 
   const handleResponderGrant = useCallback(
     (event: GestureResponderEvent) => {
+      const pinch = createPinchGesture(event, frameGeometry, zoomRef.current)
+      if (pinch) {
+        clearLongPressTimer()
+        pinchRef.current = pinch
+        panRef.current = null
+        startPointRef.current = null
+        return
+      }
       const { locationX, locationY } = event.nativeEvent
       startPointRef.current = { x: locationX, y: locationY, t: Date.now() }
       rightClickSentRef.current = false
       lastWheelRef.current = { dx: 0, dy: 0, at: 0 }
+      panRef.current =
+        zoomRef.current.scale > MIN_ZOOM
+          ? {
+              x: locationX,
+              y: locationY,
+              offsetX: zoomRef.current.offsetX,
+              offsetY: zoomRef.current.offsetY
+            }
+          : null
       clearLongPressTimer()
       longPressTimerRef.current = setTimeout(() => {
         const start = startPointRef.current
@@ -453,13 +519,47 @@ export function MobileBrowserPane({
         onToast('Right click')
       }, LONG_PRESS_MS)
     },
-    [clearLongPressTimer, mapTouchPoint, onToast, sendPointerClick]
+    [clearLongPressTimer, frameGeometry, mapTouchPoint, onToast, sendPointerClick]
   )
 
   const handleResponderMove = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
+      const startedPinch = pinchRef.current
+        ? null
+        : createPinchGesture(event, frameGeometry, zoomRef.current)
+      if (startedPinch) {
+        clearLongPressTimer()
+        pinchRef.current = startedPinch
+        panRef.current = null
+        startPointRef.current = null
+      }
+      const activePinch = pinchRef.current
+      const nextPinch = activePinch ? updatePinchZoom(event, frameGeometry, activePinch) : null
+      if (nextPinch) {
+        clearLongPressTimer()
+        zoomRef.current = nextPinch
+        setZoom(nextPinch)
+        return
+      }
+      if (activePinch) {
+        pinchRef.current = null
+      }
       if (Math.abs(gesture.dx) > TAP_SLOP || Math.abs(gesture.dy) > TAP_SLOP) {
         clearLongPressTimer()
+      }
+      const activePan = panRef.current
+      if (activePan && frameGeometry) {
+        const nextZoom = clampZoomState(
+          {
+            scale: zoomRef.current.scale,
+            offsetX: activePan.offsetX + event.nativeEvent.locationX - activePan.x,
+            offsetY: activePan.offsetY + event.nativeEvent.locationY - activePan.y
+          },
+          frameGeometry
+        )
+        zoomRef.current = nextZoom
+        setZoom(nextZoom)
+        return
       }
       const now = Date.now()
       if (now - lastWheelRef.current.at < WHEEL_INTERVAL_MS) {
@@ -477,12 +577,14 @@ export function MobileBrowserPane({
       lastWheelRef.current = { dx: gesture.dx, dy: gesture.dy, at: now }
       sendWheel(point, deltaX, deltaY)
     },
-    [clearLongPressTimer, mapTouchPoint, sendWheel]
+    [clearLongPressTimer, frameGeometry, mapTouchPoint, sendWheel]
   )
 
   const handleResponderRelease = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
       clearLongPressTimer()
+      pinchRef.current = null
+      panRef.current = null
       const start = startPointRef.current
       startPointRef.current = null
       if (!start || rightClickSentRef.current) {
@@ -509,6 +611,8 @@ export function MobileBrowserPane({
         onPanResponderRelease: handleResponderRelease,
         onPanResponderTerminate: () => {
           clearLongPressTimer()
+          pinchRef.current = null
+          panRef.current = null
           startPointRef.current = null
         },
         onPanResponderTerminationRequest: () => true
@@ -522,7 +626,11 @@ export function MobileBrowserPane({
       return
     }
     setKeyboardValue('')
-    const result = await sendBrowserRequest('browser.keyboardInsertText', { text })
+    const result = await sendBrowserRequest(
+      'browser.keyboardInsertText',
+      { text },
+      { suppressError: true }
+    )
     if (result !== null) {
       onToast('Sent')
     } else {
@@ -532,7 +640,7 @@ export function MobileBrowserPane({
 
   const sendKeypress = useCallback(
     async (key: string) => {
-      await sendBrowserRequest('browser.keypress', { key })
+      await sendBrowserRequest('browser.keypress', { key }, { suppressError: true })
     },
     [sendBrowserRequest]
   )
@@ -590,36 +698,48 @@ export function MobileBrowserPane({
               <View
                 pointerEvents="none"
                 style={[
-                  styles.browserFrameBox,
+                  styles.browserZoomOffset,
                   {
                     width: frameGeometry.renderedWidth,
-                    height: frameGeometry.renderedHeight
+                    height: frameGeometry.renderedHeight,
+                    transform: [{ translateX: zoom.offsetX }, { translateY: zoom.offsetY }]
                   }
                 ]}
               >
-                <Image
-                  source={{ uri: frameUri }}
-                  resizeMode="stretch"
-                  fadeDuration={0}
-                  style={
-                    frameGeometry.rotated
-                      ? [
-                          styles.browserImage,
-                          {
-                            width: frameGeometry.renderedHeight,
-                            height: frameGeometry.renderedWidth,
-                            transform: [{ rotate: '90deg' }]
-                          }
-                        ]
-                      : [
-                          styles.browserImage,
-                          {
-                            width: frameGeometry.renderedWidth,
-                            height: frameGeometry.renderedHeight
-                          }
-                        ]
-                  }
-                />
+                <View
+                  style={[
+                    styles.browserFrameBox,
+                    {
+                      width: frameGeometry.renderedWidth,
+                      height: frameGeometry.renderedHeight,
+                      transform: [{ scale: zoom.scale }]
+                    }
+                  ]}
+                >
+                  <Image
+                    source={{ uri: frameUri }}
+                    resizeMode="stretch"
+                    fadeDuration={0}
+                    style={
+                      frameGeometry.rotated
+                        ? [
+                            styles.browserImage,
+                            {
+                              width: frameGeometry.renderedHeight,
+                              height: frameGeometry.renderedWidth,
+                              transform: [{ rotate: '90deg' }]
+                            }
+                          ]
+                        : [
+                            styles.browserImage,
+                            {
+                              width: frameGeometry.renderedWidth,
+                              height: frameGeometry.renderedHeight
+                            }
+                          ]
+                    }
+                  />
+                </View>
               </View>
             ) : (
               <Image
@@ -759,12 +879,18 @@ function getPositiveFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
-function computeStreamViewport(layout: ViewportLayout | null, rotated: boolean): StreamViewport | null {
+function computeStreamViewport(
+  layout: ViewportLayout | null,
+  rotated: boolean
+): StreamViewport | null {
   if (!layout || layout.width <= 0 || layout.height <= 0) {
     return null
   }
-  const width = rotated ? layout.height : layout.width
-  const height = rotated ? layout.width : layout.height
+  // Why: React Native layout is in density-independent points; requesting
+  // point-sized frames makes desktop pages unreadably soft on high-DPI phones.
+  const streamScale = clamp(PixelRatio.get(), 1, BROWSER_MAX_STREAM_SCALE)
+  const width = (rotated ? layout.height : layout.width) * streamScale
+  const height = (rotated ? layout.width : layout.height) * streamScale
   return {
     width: clamp(Math.round(width), BROWSER_MIN_VIEWPORT_WIDTH, BROWSER_MAX_VIEWPORT_WIDTH),
     height: clamp(Math.round(height), BROWSER_MIN_VIEWPORT_HEIGHT, BROWSER_MAX_VIEWPORT_HEIGHT)
@@ -792,12 +918,158 @@ function computeFrameGeometry(
   return {
     sourceWidth,
     sourceHeight,
+    viewportWidth: layout.width,
+    viewportHeight: layout.height,
     renderedWidth,
     renderedHeight,
     offsetX: (layout.width - renderedWidth) / 2,
     offsetY: (layout.height - renderedHeight) / 2,
     scale,
     rotated
+  }
+}
+
+function browserErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
+function shouldSurfaceBrowserError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  // Why: selector_not_found can be emitted by in-flight page automation while
+  // the browser is still usable; replacing the frame with it feels like a crash.
+  return !normalized.includes('selector_not_found') && !normalized.includes('selector not found')
+}
+
+function screenToFrameLocal(
+  x: number,
+  y: number,
+  geometry: FrameGeometry,
+  zoom: ZoomState
+): { localX: number; localY: number } | null {
+  if (zoom.scale <= 0) {
+    return null
+  }
+  const frameCenterX = geometry.offsetX + geometry.renderedWidth / 2 + zoom.offsetX
+  const frameCenterY = geometry.offsetY + geometry.renderedHeight / 2 + zoom.offsetY
+  return {
+    localX: (x - frameCenterX) / zoom.scale + geometry.renderedWidth / 2,
+    localY: (y - frameCenterY) / zoom.scale + geometry.renderedHeight / 2
+  }
+}
+
+function touchPoint(touch: unknown): BrowserPoint | null {
+  if (!touch || typeof touch !== 'object') {
+    return null
+  }
+  const eventTouch = touch as {
+    locationX?: unknown
+    locationY?: unknown
+    pageX?: unknown
+    pageY?: unknown
+  }
+  if (
+    typeof eventTouch.locationX === 'number' &&
+    Number.isFinite(eventTouch.locationX) &&
+    typeof eventTouch.locationY === 'number' &&
+    Number.isFinite(eventTouch.locationY)
+  ) {
+    return { x: eventTouch.locationX, y: eventTouch.locationY }
+  }
+  if (
+    typeof eventTouch.pageX === 'number' &&
+    Number.isFinite(eventTouch.pageX) &&
+    typeof eventTouch.pageY === 'number' &&
+    Number.isFinite(eventTouch.pageY)
+  ) {
+    return { x: eventTouch.pageX, y: eventTouch.pageY }
+  }
+  return null
+}
+
+function touchPair(event: GestureResponderEvent): { a: BrowserPoint; b: BrowserPoint } | null {
+  const touches = event.nativeEvent.touches
+  if (!touches || touches.length < 2) {
+    return null
+  }
+  const a = touchPoint(touches[0])
+  const b = touchPoint(touches[1])
+  return a && b ? { a, b } : null
+}
+
+function pointDistance(a: BrowserPoint, b: BrowserPoint): number {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+function createPinchGesture(
+  event: GestureResponderEvent,
+  geometry: FrameGeometry | null,
+  zoom: ZoomState
+): PinchGesture | null {
+  if (!geometry) {
+    return null
+  }
+  const pair = touchPair(event)
+  if (!pair) {
+    return null
+  }
+  const distance = pointDistance(pair.a, pair.b)
+  if (distance < 8) {
+    return null
+  }
+  const centerX = (pair.a.x + pair.b.x) / 2
+  const centerY = (pair.a.y + pair.b.y) / 2
+  const frameCenterX = geometry.offsetX + geometry.renderedWidth / 2 + zoom.offsetX
+  const frameCenterY = geometry.offsetY + geometry.renderedHeight / 2 + zoom.offsetY
+  return {
+    distance,
+    scale: zoom.scale,
+    anchorX: (centerX - frameCenterX) / zoom.scale,
+    anchorY: (centerY - frameCenterY) / zoom.scale
+  }
+}
+
+function updatePinchZoom(
+  event: GestureResponderEvent,
+  geometry: FrameGeometry | null,
+  pinch: PinchGesture
+): ZoomState | null {
+  if (!geometry) {
+    return null
+  }
+  const pair = touchPair(event)
+  if (!pair) {
+    return null
+  }
+  const nextScale = clamp(
+    (pinch.scale * pointDistance(pair.a, pair.b)) / pinch.distance,
+    MIN_ZOOM,
+    MAX_ZOOM
+  )
+  const centerX = (pair.a.x + pair.b.x) / 2
+  const centerY = (pair.a.y + pair.b.y) / 2
+  const baseCenterX = geometry.offsetX + geometry.renderedWidth / 2
+  const baseCenterY = geometry.offsetY + geometry.renderedHeight / 2
+  return clampZoomState(
+    {
+      scale: nextScale,
+      offsetX: centerX - baseCenterX - pinch.anchorX * nextScale,
+      offsetY: centerY - baseCenterY - pinch.anchorY * nextScale
+    },
+    geometry
+  )
+}
+
+function clampZoomState(next: ZoomState, geometry: FrameGeometry): ZoomState {
+  const scale = clamp(next.scale, MIN_ZOOM, MAX_ZOOM)
+  if (scale <= MIN_ZOOM + 0.01) {
+    return DEFAULT_ZOOM
+  }
+  const maxOffsetX = Math.max(0, (geometry.renderedWidth * scale - geometry.viewportWidth) / 2)
+  const maxOffsetY = Math.max(0, (geometry.renderedHeight * scale - geometry.viewportHeight) / 2)
+  return {
+    scale,
+    offsetX: clamp(next.offsetX, -maxOffsetX, maxOffsetX),
+    offsetY: clamp(next.offsetY, -maxOffsetY, maxOffsetY)
   }
 }
 
@@ -812,7 +1084,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgBase
   },
   toolbar: {
-    minHeight: 42,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -823,8 +1095,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgPanel
   },
   iconButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: radii.button,
     alignItems: 'center',
     justifyContent: 'center'
@@ -840,14 +1112,14 @@ const styles = StyleSheet.create({
   addressInput: {
     flex: 1,
     minWidth: 0,
-    height: 32,
+    height: 36,
     borderRadius: radii.input,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     paddingHorizontal: spacing.sm,
     paddingVertical: 0,
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 14,
+    lineHeight: 19,
     includeFontPadding: false,
     textAlignVertical: 'center',
     fontFamily: typography.monoFamily
@@ -867,6 +1139,10 @@ const styles = StyleSheet.create({
   browserImageFill: {
     width: '100%',
     height: '100%'
+  },
+  browserZoomOffset: {
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   browserFrameBox: {
     alignItems: 'center',
