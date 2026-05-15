@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this component owns diff rendering, image previews, comment popovers, and expansion state as one synchronized editor row. */
 import {
   lazy,
   useCallback,
