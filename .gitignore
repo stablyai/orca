@@ -67,9 +67,14 @@ design-docs/
 .context/
 .atl/
 
+# Machine-local agent hook endpoint files may contain auth tokens.
+/agent-hooks/
+
 # Local-only design/planning docs (not checked in)
 docs/*.md
+docs/**/*.md
 !docs/README*.md
+!docs/**/README*.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
@@ -88,5 +93,5 @@ playwright-report/
 /.agents/skills/
 /skills-lock.json
 
-# Agent hook runtime credentials (machine-local)
+# Agent hook runtime endpoints (machine-local secrets)
 /agent-hooks/
