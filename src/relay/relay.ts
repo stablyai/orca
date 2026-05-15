@@ -31,8 +31,10 @@ import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
+import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
+import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
@@ -60,8 +62,10 @@ function parseArgs(argv: string[]): {
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = parseInt(argv[i + 1], 10)
-      // Why: the CLI flag is in seconds for ergonomics, but internally we track ms.
-      if (!isNaN(parsed) && parsed > 0) {
+      // Why: the CLI flag is in seconds for ergonomics, but internally we track
+      // ms. 0 is allowed for opt-in synced workspaces that intentionally keep a
+      // relay alive until explicitly terminated.
+      if (!isNaN(parsed) && parsed >= 0) {
         graceTimeMs = parsed * 1000
       }
       i++
@@ -232,13 +236,18 @@ async function main(): Promise<void> {
   void _gitHandler
 
   const _preflightHandler = new PreflightHandler(dispatcher)
+  const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
   void _preflightHandler
+  void _externalAutomationsHandler
 
   const _portScanHandler = new PortScanHandler(dispatcher)
   void _portScanHandler
 
   const _agentExecHandler = new AgentExecHandler(dispatcher)
   void _agentExecHandler
+
+  const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
+  void _workspaceSessionHandler
 
   // ── Agent-hook server ─────────────────────────────────────────────
   // Why: hosts a loopback HTTP receiver inside the relay process so agent
@@ -380,53 +389,37 @@ async function main(): Promise<void> {
   // a new --connect bridge pipe data to the same dispatcher that owns the
   // live PTYs — no serialization or process handoff needed.
 
-  let activeSocket: Socket | null = null
+  const socketClients = new Map<Socket, number>()
   let socketServer: Server | null = null
   const launchVersion = readLaunchVersion()
 
   function attachAcceptedSocket(sock: Socket, leftover: Buffer): void {
-    // Why: only one client at a time. If a second reconnect arrives (e.g.
-    // user restarts again quickly), close the stale bridge so the new one
-    // takes over cleanly. We null activeSocket BEFORE destroying so the old
-    // socket's close handler sees it's been replaced and skips starting the
-    // grace timer.
-    if (activeSocket) {
-      process.stderr.write('[relay] Replacing existing socket client with new connection\n')
-      const replaced = activeSocket
-      activeSocket = null
-      replaced.destroy()
-    }
-    activeSocket = sock
-
-    // Why: stdin's data listener is still registered from the initial
-    // connection. If the old SSH channel hasn't fully closed yet (TCP FIN
-    // delayed), buffered stdin data would interleave with the new socket
-    // client's frames, corrupting the frame decoder.
+    // Why: stdin's data listener is still registered from the initial connection.
+    // Pause/remove it once the first socket client is accepted so stale bytes
+    // from the original SSH channel cannot interleave with socket frames.
     process.stdin.pause()
     process.stdin.removeAllListeners('data')
 
     ptyHandler.cancelGraceTimer()
 
-    dispatcher.setWrite((data) => {
+    const clientId = dispatcher.attachClient((data) => {
       if (!sock.destroyed) {
         sock.write(data)
       }
     })
+    socketClients.set(sock, clientId)
 
     // Why: bytes that arrived in the same TCP send as the handshake frame
     // were buffered inside the handshake's FrameDecoder. Feed them into the
     // dispatcher BEFORE wiring sock.on('data'), so frame ordering is
     // preserved and no client data is silently dropped at the transition.
     if (leftover.length > 0) {
-      dispatcher.feed(leftover)
+      dispatcher.feedClient(clientId, leftover)
     }
 
     sock.on('data', (chunk: Buffer) => {
-      if (activeSocket !== sock) {
-        return
-      }
       ptyHandler.cancelGraceTimer()
-      dispatcher.feed(chunk)
+      dispatcher.feedClient(clientId, chunk)
     })
   }
 
@@ -451,9 +444,12 @@ async function main(): Promise<void> {
       })
 
       sock.on('close', () => {
-        if (activeSocket === sock) {
-          activeSocket = null
-          dispatcher.invalidateClient()
+        const clientId = socketClients.get(sock)
+        socketClients.delete(sock)
+        if (clientId !== undefined) {
+          dispatcher.detachClient(clientId)
+        }
+        if (!stdoutAlive && socketClients.size === 0) {
           startGrace()
         }
       })
@@ -486,6 +482,7 @@ async function main(): Promise<void> {
   // before the grace period starts.
   process.stdout.on('error', () => {
     stdoutAlive = false
+    dispatcher.invalidateClient()
   })
 
   function startGrace(): void {
@@ -512,19 +509,19 @@ async function main(): Promise<void> {
     process.stdin.on('end', () => {
       // Why: stdout is piped to the SSH channel — once stdin closes the
       // channel is gone and stdout writes would hit a dead pipe.  Mark it
-      // dead so the dispatcher's write callback becomes a no-op until a
-      // socket client reconnects and calls setWrite with a live target.
+      // dead so the primary client write callback becomes a no-op while
+      // socket clients, if any, keep their own live transports.
       stdoutAlive = false
-      if (!activeSocket) {
-        dispatcher.invalidateClient()
+      dispatcher.invalidateClient()
+      if (socketClients.size === 0) {
         startGrace()
       }
     })
 
     process.stdin.on('error', () => {
       stdoutAlive = false
-      if (!activeSocket) {
-        dispatcher.invalidateClient()
+      dispatcher.invalidateClient()
+      if (socketClients.size === 0) {
         startGrace()
       }
     })

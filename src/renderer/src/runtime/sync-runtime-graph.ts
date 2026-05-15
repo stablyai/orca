@@ -1,12 +1,12 @@
 /* eslint-disable max-lines -- Why: runtime graph sync and mobile session-tab publication share the same injected renderer state and terminal registry. Keeping them together prevents a second store/registry reader from drifting. */
 import {
   collectLeafIdsInOrder,
-  paneLeafId,
   serializePaneTree
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionFileTab,
@@ -15,6 +15,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
+import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { getActiveTabNavOrder } from '../components/tab-bar/group-tab-order'
 
 type RegisteredTerminalTab = {
@@ -30,6 +31,16 @@ type OpenFileIndexes = {
   byWorktreeAndId: OpenFileByWorktreeAndId
   idsByWorktree: Map<string, string[]>
 }
+type TabsProjectionCacheEntry = {
+  tabs: NonNullable<AppState['tabsByWorktree'][string]>
+  worktreeIdJson: string
+  projection: string
+}
+type TabsProjectionCache = {
+  source: AppState['tabsByWorktree']
+  entries: Map<string, TabsProjectionCacheEntry>
+  projection: string
+}
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // Why: track when each tab was registered so we can suppress the "no live
@@ -43,6 +54,7 @@ let syncScheduled = false
 let syncEnabled = false
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
+let cachedTabsProjection: TabsProjectionCache | null = null
 let cachedOpenFileIndexesSource: AppState['openFiles'] | null = null
 let cachedOpenFileIndexes: OpenFileIndexes | null = null
 let cachedEditorDraftsSource: AppState['editorDrafts'] | null = null
@@ -74,11 +86,11 @@ export function focusRuntimeTerminalSurface(tabId: string, leafId?: string | nul
     manager.getActivePane()?.terminal.focus()
     return true
   }
-  const pane = manager.getPanes().find((candidate) => paneLeafId(candidate.id) === leafId)
-  if (!pane) {
+  const resolution = resolveLeafIdForManager(tabId, leafId, manager)
+  if (resolution.status !== 'resolved') {
     return false
   }
-  manager.setActivePane(pane.id, { focus: true })
+  manager.setActivePane(resolution.numericPaneId, { focus: true })
   scheduleRuntimeGraphSync()
   return true
 }
@@ -117,10 +129,11 @@ export type RuntimeMobileSessionSyncKey = {
   tabBarOrderByWorktree: AppState['tabBarOrderByWorktree']
   activeFileId: AppState['activeFileId']
   activeFileIdByWorktree: AppState['activeFileIdByWorktree']
+  activeTabId: AppState['activeTabId']
   // Why: these projections still need value-level inspection because the
   // underlying references churn even when the mobile-relevant shape is
-  // unchanged (`tabsByWorktree` reallocates on every OSC title frame; the
-  // active-tab marker depends on `activeTabId`). Pre-serialize them once.
+  // unchanged (`tabsByWorktree` reallocates on every OSC title frame).
+  // Pre-serialize them once.
   tabsProjection: string
   openFilesProjection: string
   editorDraftsProjection: string
@@ -142,15 +155,14 @@ export function getRuntimeMobileSessionSyncKey(
     tabBarOrderByWorktree: state.tabBarOrderByWorktree,
     activeFileId: state.activeFileId,
     activeFileIdByWorktree: state.activeFileIdByWorktree,
+    activeTabId: state.activeTabId,
     // Why: background agent title ticks can change runtimePaneTitlesByTabId
     // many times per second while the user types elsewhere. Reuse unchanged
     // projections so those ticks do not rescan all tabs, files, and drafts.
     tabsProjection:
-      canReusePrevious &&
-      state.tabsByWorktree === previousState.tabsByWorktree &&
-      state.activeTabId === previousState.activeTabId
+      canReusePrevious && state.tabsByWorktree === previousState.tabsByWorktree
         ? previousKey.tabsProjection
-        : buildRuntimeMobileTabsProjection(state),
+        : buildRuntimeMobileTabsProjection(state.tabsByWorktree),
     openFilesProjection:
       canReusePrevious && state.openFiles === previousState.openFiles
         ? previousKey.openFilesProjection
@@ -162,20 +174,41 @@ export function getRuntimeMobileSessionSyncKey(
   }
 }
 
-function buildRuntimeMobileTabsProjection(state: AppState): string {
-  return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(state.tabsByWorktree).map(([worktreeId, tabs]) => [
-        worktreeId,
-        tabs.map((tab) => ({
-          id: tab.id,
-          title: tab.title,
-          customTitle: tab.customTitle,
-          active: state.activeTabId === tab.id
-        }))
-      ])
-    )
-  )
+function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktree']): string {
+  if (cachedTabsProjection?.source === tabsByWorktree) {
+    return cachedTabsProjection.projection
+  }
+
+  const previousEntries = cachedTabsProjection?.entries
+  const entries = new Map<string, TabsProjectionCacheEntry>()
+  const parts: string[] = []
+
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const previous = previousEntries?.get(worktreeId)
+    const entry =
+      previous?.tabs === tabs
+        ? previous
+        : {
+            tabs,
+            worktreeIdJson: previous?.worktreeIdJson ?? JSON.stringify(worktreeId),
+            projection: JSON.stringify(
+              tabs.map((tab) => ({
+                id: tab.id,
+                title: tab.title,
+                customTitle: tab.customTitle
+              }))
+            )
+          }
+    entries.set(worktreeId, entry)
+    parts.push(`${entry.worktreeIdJson}:${entry.projection}`)
+  }
+
+  cachedTabsProjection = {
+    source: tabsByWorktree,
+    entries,
+    projection: `{${parts.join(',')}}`
+  }
+  return cachedTabsProjection.projection
 }
 
 function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
@@ -215,6 +248,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.tabBarOrderByWorktree === b.tabBarOrderByWorktree &&
     a.activeFileId === b.activeFileId &&
     a.activeFileIdByWorktree === b.activeFileIdByWorktree &&
+    a.activeTabId === b.activeTabId &&
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
     a.editorDraftsProjection === b.editorDraftsProjection
@@ -260,13 +294,13 @@ async function syncRuntimeGraph(): Promise<void> {
       tabId,
       worktreeId: registeredTab.worktreeId,
       title: tab.customTitle ?? tab.title,
-      activeLeafId: activePaneId === null ? null : paneLeafId(activePaneId),
+      activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
 
     const savedPtyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
     for (const pane of manager?.getPanes() ?? []) {
-      const leafId = paneLeafId(pane.id)
+      const leafId = pane.leafId
       const ptyId = registeredTab.getPtyIdForPane(pane.id)
       const savedPtyId = savedPtyIdsByLeafId[leafId] ?? null
       const registeredTime = tabRegisteredAt.get(tabId) ?? 0
@@ -419,21 +453,21 @@ function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
 function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] {
   const registered = registeredTabs.get(tabId)
   const manager = registered?.getManager()
-  const liveLeafIds = manager?.getPanes().map((pane) => paneLeafId(pane.id)) ?? []
+  const liveLeafIds = manager?.getPanes().map((pane) => pane.leafId) ?? []
   if (liveLeafIds.length > 0) {
     return liveLeafIds
   }
 
   const layout = state.terminalLayoutsByTabId[tabId]
-  const persistedLeafIds = collectLeafIdsInOrder(layout?.root)
+  const persistedLeafIds = collectLeafIdsInOrder(layout?.root).filter(isTerminalLeafId)
   if (persistedLeafIds.length > 0) {
     return persistedLeafIds
   }
 
   // Why: a newly-created terminal tab can be in the store before TerminalPane
-  // mounts. Publish its deterministic first-pane surface so mobile does not
-  // fill the startup gap from terminal.list.
-  return [paneLeafId(1)]
+  // mounts. Without a live or persisted UUID leaf, there is no stable mobile
+  // surface to publish yet; fabricating pane:1 would become stale after mount.
+  return []
 }
 
 function buildMobileTerminalSurfaceTabs(
@@ -449,16 +483,23 @@ function buildMobileTerminalSurfaceTabs(
           group.activeTabId === unifiedTabId
       ) === true
     : state.activeTabId === terminal.id
-  const liveActiveLeafId =
-    registeredTabs.get(terminal.id)?.getManager()?.getActivePane()?.id ?? null
+  const manager = registeredTabs.get(terminal.id)?.getManager()
+  const liveActivePaneId = manager?.getActivePane()?.id ?? null
+  const leafIds = getRuntimeLeafIdsForTerminal(terminal.id, state)
   const activeLeafId =
-    liveActiveLeafId !== null
-      ? paneLeafId(liveActiveLeafId)
-      : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? paneLeafId(1))
+    liveActivePaneId !== null
+      ? (manager?.getLeafId(liveActivePaneId) ?? null)
+      : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
-  return getRuntimeLeafIdsForTerminal(terminal.id, state).map((leafId) => {
-    const paneId = /^pane:(\d+)$/.exec(leafId)?.[1]
-    const paneTitle = paneId ? paneTitles[Number(paneId)] : undefined
+  return leafIds.map((leafId) => {
+    const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
+    const paneTitle =
+      numericPaneId !== null
+        ? paneTitles[numericPaneId]
+        : legacyPaneId
+          ? paneTitles[Number(legacyPaneId)]
+          : undefined
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),

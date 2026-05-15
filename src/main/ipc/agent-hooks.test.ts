@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as AgentHookServerModule from '../agent-hooks/server'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
 // Why: cover the agentStatus:drop IPC handler — it must propagate the
 // renderer dismissal to dropStatusEntry so the on-disk last-status file
@@ -12,6 +13,7 @@ const onHandlers = new Map<string, (event: unknown, ...args: unknown[]) => void>
 const handleHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
 const removeHandler = vi.fn()
 const removeAllListeners = vi.fn()
+const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -69,7 +71,7 @@ describe('agentStatus:getSnapshot IPC', () => {
   it('returns the hook cache snapshot', async () => {
     const snapshot = [
       {
-        paneKey: 'tab-1:0',
+        paneKey: PANE_KEY,
         state: 'done',
         prompt: 'p',
         agentType: 'claude',
@@ -94,8 +96,8 @@ describe('agentStatus:drop IPC', () => {
 
     const handler = onHandlers.get('agentStatus:drop')
     expect(handler).toBeDefined()
-    handler!({}, 'tab-1:0')
-    expect(dropStatusEntry).toHaveBeenCalledWith('tab-1:0')
+    handler!({}, PANE_KEY)
+    expect(dropStatusEntry).toHaveBeenCalledWith(PANE_KEY)
   })
 
   it('rejects non-string paneKey (defensive against a malformed renderer message)', async () => {
@@ -110,9 +112,10 @@ describe('agentStatus:drop IPC', () => {
       null,
       {},
       [],
+      'tab-1:0', // legacy numeric pane-key suffix
       'no-colon', // missing colon — rejected by isValidPaneKey
       ':leading', // empty tabId half
-      'trailing:', // empty paneId half
+      'trailing:', // empty leafId half
       'a:b:c' // multiple colons
     ]
     for (const value of bad) {

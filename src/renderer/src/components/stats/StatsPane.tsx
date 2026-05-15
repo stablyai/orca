@@ -4,6 +4,7 @@ import { useAppStore } from '../../store'
 import { StatCard } from './StatCard'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
+import { UsageOverviewPane } from './UsageOverviewPane'
 import type { SettingsSearchEntry } from '../settings/settings-search'
 import { cn } from '@/lib/utils'
 
@@ -11,7 +12,7 @@ export const STATS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Stats & Usage',
     description:
-      'Orca stats plus Claude and Codex usage analytics, tokens, cache, models, and sessions.',
+      'Orca stats plus combined Claude and Codex usage analytics, tokens, cache, models, and sessions.',
     keywords: [
       'stats',
       'usage',
@@ -59,7 +60,7 @@ function formatTrackingSince(timestamp: number | null): string {
 export function StatsPane(): React.JSX.Element {
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
-  const [activeUsageTab, setActiveUsageTab] = useState<'claude' | 'codex'>('claude')
+  const [activeUsageTab, setActiveUsageTab] = useState<'overview' | 'claude' | 'codex'>('overview')
 
   useEffect(() => {
     void fetchStatsSummary()
@@ -110,7 +111,7 @@ export function StatsPane(): React.JSX.Element {
             aria-label="Usage analytics provider"
             className="inline-flex w-fit items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground"
           >
-            {(['claude', 'codex'] as const).map((tab) => (
+            {(['overview', 'claude', 'codex'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -123,7 +124,7 @@ export function StatsPane(): React.JSX.Element {
                     : 'text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground'
                 )}
               >
-                {tab === 'claude' ? 'Claude' : 'Codex'}
+                {tab === 'overview' ? 'Overview' : tab === 'claude' ? 'Claude' : 'Codex'}
               </button>
             ))}
           </div>
@@ -132,7 +133,15 @@ export function StatsPane(): React.JSX.Element {
         {/* Why: the Stats section lives inside the scroll-tracked settings page. Keeping only the
             active panel mounted avoids hidden tab-content layout/focus churn that produced a visible
             vertical jitter below the usage card when switching disabled providers. */}
-        <div>{activeUsageTab === 'claude' ? <ClaudeUsagePane /> : <CodexUsagePane />}</div>
+        <div>
+          {activeUsageTab === 'overview' ? (
+            <UsageOverviewPane />
+          ) : activeUsageTab === 'claude' ? (
+            <ClaudeUsagePane />
+          ) : (
+            <CodexUsagePane />
+          )}
+        </div>
       </div>
     </div>
   )

@@ -17,6 +17,7 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
 
   ;(store as unknown as { state: ClaudeUsagePersistedState }).state = {
     schemaVersion: 1,
+    worktreeFingerprint: null,
     processedFiles: [],
     sessions: [],
     dailyAggregates: [],
@@ -230,5 +231,30 @@ describe('ClaudeUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(110.25)
+  })
+
+  it('prices Sonnet long-context usage with threshold rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'claude-sonnet-4-6',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 300_000,
+          outputTokens: 300_000,
+          cacheReadTokens: 300_000,
+          cacheWriteTokens: 300_000
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(8.07)
   })
 })

@@ -240,6 +240,7 @@ function Settings(): React.JSX.Element {
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
+  const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
   // Experimental sidebar entry reveals it for the remainder of the session.
   // Not persisted on purpose: it's a power-user affordance we don't want to
@@ -558,7 +559,7 @@ function Settings(): React.JSX.Element {
       {
         id: 'stats',
         title: 'Stats & Usage',
-        description: 'Orca stats and Claude usage analytics.',
+        description: 'Orca stats plus Claude and Codex usage analytics.',
         icon: BarChart3,
         searchEntries: STATS_PANE_SEARCH_ENTRIES
       },
@@ -628,7 +629,13 @@ function Settings(): React.JSX.Element {
     if (!visibleIds.has(activeSectionId) && visibleNavSections.length > 0) {
       setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
     }
-  }, [activeSectionId, setSettingsSearchQuery, settingsSearchQuery, visibleNavSections])
+  }, [
+    activeSectionId,
+    pendingNavRequestTick,
+    setSettingsSearchQuery,
+    settingsSearchQuery,
+    visibleNavSections
+  ])
 
   useEffect(() => {
     const container = contentScrollRef.current
@@ -719,6 +726,18 @@ function Settings(): React.JSX.Element {
     },
     []
   )
+
+  const openComputerUseFromBrowser = useCallback(() => {
+    pendingNavSectionRef.current = 'computer-use'
+    pendingScrollTargetRef.current = 'computer-use'
+    if (settingsSearchQuery !== '') {
+      setSettingsSearchQuery('')
+      return
+    }
+    // Why: the pending section refs do not schedule a render by themselves.
+    // When search is already clear, this reruns the centralized jump effect.
+    setPendingNavRequestTick((tick) => tick + 1)
+  }, [setSettingsSearchQuery, settingsSearchQuery])
 
   if (!settings) {
     return (
@@ -866,7 +885,11 @@ function Settings(): React.JSX.Element {
                       description="Home page, link routing, and session cookies."
                       searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
                     >
-                      <BrowserPane settings={settings} updateSettings={updateSettings} />
+                      <BrowserPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        onOpenComputerUse={openComputerUseFromBrowser}
+                      />
                     </SettingsSection>
 
                     <SettingsSection

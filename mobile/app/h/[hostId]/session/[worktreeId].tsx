@@ -48,6 +48,7 @@ import {
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
+import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
@@ -205,6 +206,28 @@ const STATUS_LABELS: Record<ConnectionState, string> = {
   'auth-failed': 'Auth failed'
 }
 
+const TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY = 64
+const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
+const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
+const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 32
+const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
+
+type TerminalGestureInputBucket = {
+  tokens: number
+  lastRefillMs: number
+}
+
+type TerminalGestureInputQueue = {
+  bytes: string
+  sequenceCount: number
+  timer: ReturnType<typeof setTimeout> | null
+  lastUpdatedMs: number
+}
+
+function isWheelMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
+  return mode === 'vt200' || mode === 'drag' || mode === 'any'
+}
+
 function TerminalPaneView({
   handle,
   active,
@@ -216,7 +239,8 @@ function TerminalPaneView({
   onSelectionEvicted,
   onModesChanged,
   onKeyboardAvoidanceMetrics,
-  onHaptic
+  onHaptic,
+  onTerminalInput
 }: {
   handle: string
   active: boolean
@@ -229,6 +253,7 @@ function TerminalPaneView({
   onModesChanged: (handle: string, modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
+  onTerminalInput: (handle: string, bytes: string) => void
 }) {
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
@@ -256,6 +281,7 @@ function TerminalPaneView({
         onModesChanged={(m) => onModesChanged(handle, m)}
         onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
         onHaptic={onHaptic}
+        onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
       />
     </View>
   )
@@ -466,9 +492,13 @@ export default function SessionScreen() {
   // Why: WebView pushes terminal modes (bracketed-paste, alt-screen) on every
   // change so paste reads a synchronous snapshot — no round-trip required.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
+  const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
+  const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
+  const terminalGestureInputInFlightRef = useRef<Set<string>>(new Set())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
+  const connStateRef = useRef<ConnectionState>(connState)
   // Why: measured once from TerminalWebView on mount, then passed with every
   // subscribe call so the server can auto-fit the PTY to phone dimensions.
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
@@ -1295,6 +1325,16 @@ export default function SessionScreen() {
     clientRef.current = client
   }, [client])
 
+  useEffect(() => {
+    connStateRef.current = connState
+    if (connState === 'connected') return
+    for (const queued of terminalGestureInputQueuesRef.current.values()) {
+      if (queued.timer) clearTimeout(queued.timer)
+    }
+    terminalGestureInputQueuesRef.current.clear()
+    terminalGestureInputInFlightRef.current.clear()
+  }, [connState])
+
   // Why: only clear terminal cache on actual unmount. Running it whenever
   // `client` changes — including the initial null → real-client transition
   // from useHostClient's async open path — would unsubscribe terminals and
@@ -1432,6 +1472,11 @@ export default function SessionScreen() {
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
+    for (const queued of terminalGestureInputQueuesRef.current.values()) {
+      if (queued.timer) clearTimeout(queued.timer)
+    }
+    terminalGestureInputQueuesRef.current.clear()
+    terminalGestureInputInFlightRef.current.clear()
     setActiveHandle(null)
     setTerminals([])
     terminalsRef.current = []
@@ -1654,6 +1699,13 @@ export default function SessionScreen() {
       terminalRefs.current.set(handle, ref)
     } else {
       terminalRefs.current.delete(handle)
+      terminalGestureInputBucketsRef.current.delete(handle)
+      const queued = terminalGestureInputQueuesRef.current.get(handle)
+      if (queued?.timer) {
+        clearTimeout(queued.timer)
+      }
+      terminalGestureInputQueuesRef.current.delete(handle)
+      terminalGestureInputInFlightRef.current.delete(handle)
     }
   }, [])
 
@@ -1753,6 +1805,132 @@ export default function SessionScreen() {
       // Transient failure
     }
   }
+
+  const allowTerminalGestureInput = useCallback(
+    (handle: string, sequenceCount: number): boolean => {
+      const now = Date.now()
+      const current = terminalGestureInputBucketsRef.current.get(handle) ?? {
+        tokens: TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
+        lastRefillMs: now
+      }
+      const elapsedSeconds = Math.max(0, now - current.lastRefillMs) / 1000
+      const tokens = Math.min(
+        TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
+        current.tokens + elapsedSeconds * TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
+      )
+
+      // Why: tokens represent terminal control sequences, not WebView messages;
+      // one legitimate gesture message may batch up to 32 wheel/key reports.
+      if (tokens < sequenceCount) {
+        terminalGestureInputBucketsRef.current.set(handle, { tokens, lastRefillMs: now })
+        return false
+      }
+
+      terminalGestureInputBucketsRef.current.set(handle, {
+        tokens: tokens - sequenceCount,
+        lastRefillMs: now
+      })
+      return true
+    },
+    []
+  )
+
+  const flushTerminalGestureInput = useCallback(async (handle: string) => {
+    const queued = terminalGestureInputQueuesRef.current.get(handle)
+    if (!queued) return
+    if (queued.timer) {
+      clearTimeout(queued.timer)
+      queued.timer = null
+    }
+    if (terminalGestureInputInFlightRef.current.has(handle)) return
+
+    terminalGestureInputQueuesRef.current.delete(handle)
+    const isActive =
+      handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
+    const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
+    const rpc = clientRef.current
+    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) return
+
+    terminalGestureInputInFlightRef.current.add(handle)
+    try {
+      await rpc.sendRequest('terminal.send', {
+        terminal: handle,
+        text: queued.bytes,
+        enter: false,
+        ...(deviceTokenRef.current
+          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+          : {})
+      })
+    } catch {
+      // Transient failure
+    } finally {
+      terminalGestureInputInFlightRef.current.delete(handle)
+      const next = terminalGestureInputQueuesRef.current.get(handle)
+      if (next) {
+        if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
+          if (next.timer) clearTimeout(next.timer)
+          terminalGestureInputQueuesRef.current.delete(handle)
+        } else {
+          void flushTerminalGestureInput(handle)
+        }
+      }
+    }
+  }, [])
+
+  const enqueueTerminalGestureInput = useCallback(
+    (handle: string, bytes: string, sequenceCount: number) => {
+      const now = Date.now()
+      const current = terminalGestureInputQueuesRef.current.get(handle)
+      if (
+        current &&
+        current.sequenceCount + sequenceCount <= TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
+      ) {
+        current.bytes += bytes
+        current.sequenceCount += sequenceCount
+        current.lastUpdatedMs = now
+        return
+      }
+
+      if (current) {
+        if (current.timer) clearTimeout(current.timer)
+        if (!terminalGestureInputInFlightRef.current.has(handle)) {
+          void flushTerminalGestureInput(handle)
+        } else {
+          terminalGestureInputQueuesRef.current.delete(handle)
+        }
+      }
+
+      const queued: TerminalGestureInputQueue = {
+        bytes,
+        sequenceCount,
+        timer: null,
+        lastUpdatedMs: now
+      }
+      queued.timer = setTimeout(() => {
+        queued.timer = null
+        void flushTerminalGestureInput(handle)
+      }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
+      terminalGestureInputQueuesRef.current.set(handle, queued)
+    },
+    [flushTerminalGestureInput]
+  )
+
+  const handleTerminalInput = useCallback(
+    async (handle: string, bytes: string) => {
+      if (!client || connState !== 'connected' || bytes.length === 0) return
+      if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal')
+        return
+      const modes = ptyModesRef.current.get(handle)
+      // Why: WebView messages can become PTY input here. Only TUI scroll paths
+      // generate gesture input, and the bridge is rate-limited for SSH safety.
+      if (!modes?.altScreen && !isWheelMouseTrackingMode(modes?.mouseTrackingMode)) return
+      const sequenceCount = countTerminalGestureInputSequences(bytes)
+      if (sequenceCount == null) return
+      if (!allowTerminalGestureInput(handle, sequenceCount)) return
+      enqueueTerminalGestureInput(handle, bytes, sequenceCount)
+    },
+    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
+  )
 
   async function handleClearTerminal(target: Terminal) {
     if (!client) return
@@ -1890,7 +2068,10 @@ export default function SessionScreen() {
       if (text.length === 0) return
       const modes = ptyModesRef.current.get(activeHandle) || {
         bracketedPasteMode: false,
-        altScreen: false
+        altScreen: false,
+        mouseTrackingMode: 'none',
+        sgrMouseMode: false,
+        sgrMousePixelsMode: false
       }
       const wrap = modes.bracketedPasteMode && !modes.altScreen
       // Why: strip embedded bracketed-paste markers from clipboard text so a
@@ -2335,6 +2516,7 @@ export default function SessionScreen() {
                 onModesChanged={handleModesChanged}
                 onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
                 onHaptic={handleHaptic}
+                onTerminalInput={handleTerminalInput}
               />
             ))}
             {toastMessage && (

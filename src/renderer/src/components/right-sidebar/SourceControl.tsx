@@ -88,6 +88,7 @@ import {
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
+import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
@@ -265,6 +266,8 @@ function SourceControlInner(): React.JSX.Element {
   const openDiff = useAppStore((s) => s.openDiff)
   const openFile = useAppStore((s) => s.openFile)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
+  const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
@@ -461,8 +464,12 @@ function SourceControlInner(): React.JSX.Element {
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const hostedReviewCacheKey =
-    activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
-  const hostedReviewEntry = hostedReviewCacheKey ? hostedReviewCache[hostedReviewCacheKey] : undefined
+    activeRepo && branchName
+      ? getHostedReviewCacheKey(activeRepo.path, branchName, settings, activeRepo.id)
+      : null
+  const hostedReviewEntry = hostedReviewCacheKey
+    ? hostedReviewCache[hostedReviewCacheKey]
+    : undefined
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
     ? (hostedReviewEntry?.data ?? null)
     : null
@@ -475,16 +482,16 @@ function SourceControlInner(): React.JSX.Element {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
     }
-    if (activeRepo.connectionId) {
-      return
-    }
-
     // Why: the Source Control panel renders branch review status directly.
     // When a terminal checkout moves this worktree onto a new branch, we need
     // to fetch that branch's PR/MR immediately instead of waiting for the user
     // to reselect the worktree. The linked ids handle create-from-review
     // worktrees whose local branch differs from the remote head branch.
-    void fetchHostedReviewForBranch(activeRepo.path, branchName, { linkedGitHubPR, linkedGitLabMR })
+    void fetchHostedReviewForBranch(activeRepo.path, branchName, {
+      repoId: activeRepo.id,
+      linkedGitHubPR,
+      linkedGitLabMR
+    })
   }, [
     activeRepo,
     branchName,
@@ -1422,13 +1429,41 @@ function SourceControlInner(): React.JSX.Element {
   // first, so the editor-tab fallback then leaves the global null and a
   // future DiffViewer mount can't accidentally consume a stale id.
   const handleOpenComment = useCallback(
-    (filePath: string, commentId?: string) => {
+    (comment: DiffComment) => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+      const filePath = comment.filePath
+      const commentId = comment.id
       // Defensively clear any dangling prior scroll request before routing
       // this click; only the diff branches below will re-stamp it.
       setScrollToDiffCommentId(null)
+      if (getDiffCommentSource(comment) === 'markdown') {
+        const absPath = joinPath(worktreePath, filePath)
+        const language = detectLanguage(filePath)
+        setEditorViewMode(absPath, 'edit')
+        setMarkdownViewMode(absPath, 'source')
+        openFile({
+          filePath: absPath,
+          relativePath: filePath,
+          worktreeId: activeWorktreeId,
+          language,
+          mode: 'edit'
+        })
+        setPendingEditorReveal(null)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setPendingEditorReveal({
+              filePath: absPath,
+              line: comment.lineNumber,
+              column: 1,
+              matchLength: 0
+            })
+            setScrollToDiffCommentId(commentId)
+          })
+        })
+        return
+      }
       const matches = entries.filter((e) => e.path === filePath)
       const uncommitted =
         matches.find((e) => e.area === 'unstaged') ??
@@ -1480,6 +1515,8 @@ function SourceControlInner(): React.JSX.Element {
       openFile,
       setEditorViewMode,
       setScrollToDiffCommentId,
+      setMarkdownViewMode,
+      setPendingEditorReveal,
       worktreePath
     ]
   )
@@ -1857,7 +1894,7 @@ function SourceControlInner(): React.JSX.Element {
                     groupId={activeGroupId ?? activeWorktreeId}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={diffCommentsPrompt}
-                    launchSource="diff_notes_send"
+                    launchSource="notes_send"
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1889,7 +1926,7 @@ function SourceControlInner(): React.JSX.Element {
               <DiffCommentsInlineList
                 comments={diffCommentsForActive}
                 onDelete={(id) => void deleteDiffComment(activeWorktreeId, id)}
-                onOpen={(filePath, commentId) => handleOpenComment(filePath, commentId)}
+                onOpen={(comment) => handleOpenComment(comment)}
               />
             )}
           </div>
@@ -2738,7 +2775,7 @@ function DiffCommentsInlineList({
   // Why: clicking the note row navigates the user to that file's diff (or
   // editor as a fallback) and, when a `commentId` is supplied, scrolls the
   // diff to that specific note via the scrollToDiffCommentId UI slice.
-  onOpen: (filePath: string, commentId?: string) => void
+  onOpen: (comment: DiffComment) => void
 }): React.JSX.Element {
   // Why: group by filePath so the inline list mirrors the structure in the
   // Notes tab — a compact section per file with line-number prefixes.
@@ -2792,7 +2829,12 @@ function DiffCommentsInlineList({
           <button
             type="button"
             className="block w-full truncate text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => onOpen(filePath)}
+            onClick={() => {
+              const first = list[0]
+              if (first) {
+                onOpen(first)
+              }
+            }}
             title={`Open ${filePath}`}
           >
             {filePath}
@@ -2812,12 +2854,15 @@ function DiffCommentsInlineList({
                   // for buttons and lets bubbled key events from the children
                   // fire the row's open handler.
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
-                  onClick={() => onOpen(c.filePath, c.id)}
-                  title={`Open ${c.filePath} (line ${c.lineNumber})`}
-                  aria-label={`Open note on line ${c.lineNumber}`}
+                  onClick={() => onOpen(c)}
+                  title={`Open ${c.filePath} (${getDiffCommentLineLabel(c).toLowerCase()})`}
+                  aria-label={`Open note on ${getDiffCommentLineLabel(c).toLowerCase()}`}
                 >
                   <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
-                    L{c.lineNumber}
+                    {getDiffCommentLineLabel(c, true)}
+                  </span>
+                  <span className="shrink-0 rounded bg-muted/70 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    {getDiffCommentSource(c) === 'markdown' ? 'MD' : 'Diff'}
                   </span>
                   <span className="block min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
                     {c.body}

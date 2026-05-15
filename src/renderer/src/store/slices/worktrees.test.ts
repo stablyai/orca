@@ -289,7 +289,8 @@ describe('createWorktree base status merge', () => {
       path: '/path/wt1',
       linkedIssue: 123,
       linkedPR: 456,
-      createdWithAgent: 'codex'
+      createdWithAgent: 'codex',
+      linkedLinearIssue: 'ENG-123'
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
@@ -306,7 +307,8 @@ describe('createWorktree base status merge', () => {
         123,
         456,
         undefined,
-        'codex'
+        'codex',
+        'ENG-123'
       )
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
@@ -315,13 +317,15 @@ describe('createWorktree base status merge', () => {
         name: 'feature',
         linkedIssue: 123,
         linkedPR: 456,
-        createdWithAgent: 'codex'
+        createdWithAgent: 'codex',
+        linkedLinearIssue: 'ENG-123'
       })
     )
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       linkedIssue: 123,
       linkedPR: 456,
-      createdWithAgent: 'codex'
+      createdWithAgent: 'codex',
+      linkedLinearIssue: 'ENG-123'
     })
   })
 

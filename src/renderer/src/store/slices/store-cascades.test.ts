@@ -1614,10 +1614,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   })
 })
 
-// Why: CLI-spawned background terminals stamp ORCA_PANE_KEY=`${tabId}:1` into
-// the PTY env at spawn time. The renderer must adopt the tab under the same
-// id so hook events route to the correct slot. See
-// docs/cli-terminal-hook-pane-key.md.
+// Why: CLI-spawned background terminals stamp ORCA_PANE_KEY into the PTY env
+// at spawn time. The renderer must adopt the tab under the same id so hook
+// events route to the correct slot.
 describe('createTab tabId hint', () => {
   it('uses the supplied id when no collision exists', () => {
     const store = createTestStore()

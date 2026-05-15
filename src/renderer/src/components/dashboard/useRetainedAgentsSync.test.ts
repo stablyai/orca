@@ -5,10 +5,15 @@ import {
   type AgentStatusState
 } from '../../../../shared/agent-status-types'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   buildRetainedAgentsSyncSignature,
   buildRetainedAgentsSyncSnapshot
 } from './useRetainedAgents'
+
+const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+const ACTIVE_PANE_KEY = makePaneKey('tab-active', '22222222-2222-4222-8222-222222222222')
+const ARCHIVED_PANE_KEY = makePaneKey('tab-archived', '33333333-3333-4333-8333-333333333333')
 
 function makeRepo(): Repo {
   return {
@@ -95,8 +100,8 @@ describe('buildRetainedAgentsSyncSignature', () => {
   it('ignores fresh same-state working ping details but changes on state transitions', () => {
     const first = buildRetainedAgentsSyncSignature(
       makeSyncInputs({
-        'tab-1:1': makeEntry({
-          paneKey: 'tab-1:1',
+        [PANE_KEY]: makeEntry({
+          paneKey: PANE_KEY,
           state: 'working',
           updatedAt: 1_000,
           stateStartedAt: 1_000,
@@ -107,8 +112,8 @@ describe('buildRetainedAgentsSyncSignature', () => {
     )
     const sameState = buildRetainedAgentsSyncSignature(
       makeSyncInputs({
-        'tab-1:1': makeEntry({
-          paneKey: 'tab-1:1',
+        [PANE_KEY]: makeEntry({
+          paneKey: PANE_KEY,
           state: 'working',
           updatedAt: 2_000,
           stateStartedAt: 1_000,
@@ -119,8 +124,8 @@ describe('buildRetainedAgentsSyncSignature', () => {
     )
     const done = buildRetainedAgentsSyncSignature(
       makeSyncInputs({
-        'tab-1:1': makeEntry({
-          paneKey: 'tab-1:1',
+        [PANE_KEY]: makeEntry({
+          paneKey: PANE_KEY,
           state: 'done',
           updatedAt: 3_000,
           stateStartedAt: 3_000,
@@ -136,8 +141,8 @@ describe('buildRetainedAgentsSyncSignature', () => {
   it('tracks same-state done updates so retention keeps the final snapshot', () => {
     const done = buildRetainedAgentsSyncSignature(
       makeSyncInputs({
-        'tab-1:1': makeEntry({
-          paneKey: 'tab-1:1',
+        [PANE_KEY]: makeEntry({
+          paneKey: PANE_KEY,
           state: 'done',
           updatedAt: 3_000,
           stateStartedAt: 3_000
@@ -146,8 +151,8 @@ describe('buildRetainedAgentsSyncSignature', () => {
     )
     const updatedDone = buildRetainedAgentsSyncSignature(
       makeSyncInputs({
-        'tab-1:1': makeEntry({
-          paneKey: 'tab-1:1',
+        [PANE_KEY]: makeEntry({
+          paneKey: PANE_KEY,
           state: 'done',
           updatedAt: 4_000,
           stateStartedAt: 3_000
@@ -175,14 +180,14 @@ describe('buildRetainedAgentsSyncSnapshot', () => {
         [archivedWorktree.id]: [archivedTab]
       },
       agentStatusByPaneKey: {
-        'tab-active:1': makeEntry({
-          paneKey: 'tab-active:1',
+        [ACTIVE_PANE_KEY]: makeEntry({
+          paneKey: ACTIVE_PANE_KEY,
           state: 'working',
           updatedAt: 10_000,
           stateStartedAt: 10_000
         }),
-        'tab-archived:1': makeEntry({
-          paneKey: 'tab-archived:1',
+        [ARCHIVED_PANE_KEY]: makeEntry({
+          paneKey: ARCHIVED_PANE_KEY,
           state: 'done',
           updatedAt: 20_000,
           stateStartedAt: 20_000
@@ -192,7 +197,7 @@ describe('buildRetainedAgentsSyncSnapshot', () => {
     })
 
     expect([...snapshot.existingWorktreeIds]).toEqual(['wt-active'])
-    expect(snapshot.currentAgents.get('tab-active:1')?.row.state).toBe('idle')
-    expect(snapshot.currentAgents.get('tab-archived:1')).toBeUndefined()
+    expect(snapshot.currentAgents.get(ACTIVE_PANE_KEY)?.row.state).toBe('idle')
+    expect(snapshot.currentAgents.get(ARCHIVED_PANE_KEY)).toBeUndefined()
   })
 })

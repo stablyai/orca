@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: repo metadata hooks share TTL caches and
 Linear/GitHub cache invalidation entrypoints used by the issue dialog. */
 import { useEffect, useRef, useState } from 'react'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   linearTeamLabels,
   linearTeamMembers,
@@ -34,8 +34,7 @@ const ghAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
 export function useRepoLabels(
   repoPath: string | null,
-  repoId?: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  repoId?: string | null
 ): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
     data: [],
@@ -45,13 +44,10 @@ export function useRepoLabels(
   const activeKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const target = getActiveRuntimeTarget(settings)
-    if (!repoPath && !(target.kind === 'environment' && repoId)) {
+    if (!repoPath && !repoId) {
       return
     }
-    const cacheKey =
-      target.kind === 'environment' ? `runtime:${target.environmentId}:${repoId}` : (repoPath ?? '')
-
+    const cacheKey = repoId ?? repoPath ?? ''
     const cached = getFreshMetadata(ghLabelStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -70,16 +66,9 @@ export function useRepoLabels(
       error: null
     }))
     loadMetadata(ghLabelStore, cacheKey, () =>
-      target.kind === 'environment'
-        ? callRuntimeRpc<string[]>(
-            target,
-            'github.listLabels',
-            { repo: repoId ?? '' },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh
-            .listLabels({ repoPath: repoPath ?? '' })
-            .then((labels) => labels as string[])
+      window.api.gh
+        .listLabels({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
+        .then((labels) => labels as string[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -98,15 +87,14 @@ export function useRepoLabels(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [repoId, repoPath, settings])
+  }, [repoPath, repoId])
 
   return state
 }
 
 export function useRepoAssignees(
   repoPath: string | null,
-  repoId?: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  repoId?: string | null
 ): MetadataState<GitHubAssignableUser[]> {
   const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
@@ -116,13 +104,10 @@ export function useRepoAssignees(
   const activeKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const target = getActiveRuntimeTarget(settings)
-    if (!repoPath && !(target.kind === 'environment' && repoId)) {
+    if (!repoPath && !repoId) {
       return
     }
-    const cacheKey =
-      target.kind === 'environment' ? `runtime:${target.environmentId}:${repoId}` : (repoPath ?? '')
-
+    const cacheKey = repoId ?? repoPath ?? ''
     const cached = getFreshMetadata(ghAssigneeStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -141,16 +126,9 @@ export function useRepoAssignees(
       error: null
     }))
     loadMetadata(ghAssigneeStore, cacheKey, () =>
-      target.kind === 'environment'
-        ? callRuntimeRpc<GitHubAssignableUser[]>(
-            target,
-            'github.listAssignableUsers',
-            { repo: repoId ?? '' },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh
-            .listAssignableUsers({ repoPath: repoPath ?? '' })
-            .then((users) => users as GitHubAssignableUser[])
+      window.api.gh
+        .listAssignableUsers({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
+        .then((users) => users as GitHubAssignableUser[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -169,7 +147,7 @@ export function useRepoAssignees(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [repoId, repoPath, settings])
+  }, [repoPath, repoId])
 
   return state
 }

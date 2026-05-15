@@ -13,7 +13,7 @@ import type {
 } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
 // prettier-ignore
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
 
 // Why: distinguishes a successful-empty listing from a failed fetch. The
 // previous `catch { return [] }` conflated a 403 on a private upstream with an
@@ -40,8 +40,14 @@ export type IssueListResult = {
  * #1186 / the parent design doc guard against. List and create paths honor
  * preference; number-resolution stays on the heuristic.
  */
-export async function getIssue(repoPath: string, issueNumber: number): Promise<IssueInfo | null> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+export async function getIssue(
+  repoPath: string,
+  issueNumber: number,
+  connectionId?: string | null
+): Promise<IssueInfo | null> {
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
   await acquire()
   try {
     if (ownerRepo) {
@@ -52,7 +58,7 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
           '300s',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`
         ],
-        { cwd: repoPath }
+        ghOptions
       )
       const data = JSON.parse(stdout)
       return mapIssueInfo(data)
@@ -60,7 +66,7 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
       ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels'],
-      { cwd: repoPath }
+      ghOptions
     )
     const data = JSON.parse(stdout)
     return mapIssueInfo(data)
@@ -85,9 +91,12 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
 export async function listIssues(
   repoPath: string,
   limit = 20,
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  connectionId?: string | null
 ): Promise<IssueListResult> {
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
   await acquire()
   try {
     if (ownerRepo) {
@@ -98,7 +107,7 @@ export async function listIssues(
           '120s',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
         ],
-        { cwd: repoPath }
+        ghOptions
       )
       const data = JSON.parse(stdout) as Record<string, unknown>[]
       // Why: the GitHub REST `/repos/{owner}/{repo}/issues` endpoint returns
@@ -114,7 +123,7 @@ export async function listIssues(
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
       ['issue', 'list', '--json', 'number,title,state,url,labels', '--limit', String(limit)],
-      { cwd: repoPath }
+      ghOptions
     )
     const data = JSON.parse(stdout) as unknown[]
     return {
@@ -140,13 +149,16 @@ export async function createIssue(
   repoPath: string,
   title: string,
   body: string,
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  connectionId?: string | null
 ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -163,7 +175,7 @@ export async function createIssue(
         '--raw-field',
         `body=${body}`
       ],
-      { cwd: repoPath }
+      ghOptions
     )
     const data = JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
     if (typeof data.number !== 'number') {
@@ -198,9 +210,12 @@ export async function createIssue(
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
-  updates: GitHubIssueUpdate
+  updates: GitHubIssueUpdate,
+  connectionId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -214,7 +229,7 @@ export async function updateIssue(
     try {
       const cmd = updates.state === 'closed' ? 'close' : 'reopen'
       await ghExecFileAsync(['issue', cmd, String(issueNumber), '--repo', repo], {
-        cwd: repoPath
+        ...ghOptions
       })
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
@@ -255,7 +270,7 @@ export async function updateIssue(
   if (hasEditArgs) {
     await acquire()
     try {
-      await ghExecFileAsync(editArgs, { cwd: repoPath })
+      await ghExecFileAsync(editArgs, ghOptions)
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
       errors.push(classifyGhError(stderr).message)
@@ -285,9 +300,12 @@ export async function updateIssue(
 export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
-  body: string
+  body: string,
+  connectionId?: string | null
 ): Promise<GitHubCommentResult> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -302,7 +320,7 @@ export async function addIssueComment(
         '--raw-field',
         `body=${body}`
       ],
-      { cwd: repoPath }
+      ghOptions
     )
     const data = JSON.parse(stdout) as {
       id?: number
@@ -331,9 +349,12 @@ export async function addIssueComment(
 
 export async function listLabels(
   repoPath: string,
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  connectionId?: string | null
 ): Promise<string[]> {
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
   if (!ownerRepo) {
     return []
   }
@@ -347,7 +368,7 @@ export async function listLabels(
         '--jq',
         '.[].name'
       ],
-      { cwd: repoPath }
+      ghOptions
     )
     return stdout
       .trim()
@@ -362,9 +383,12 @@ export async function listLabels(
 
 export async function listAssignableUsers(
   repoPath: string,
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  connectionId?: string | null
 ): Promise<GitHubAssignableUser[]> {
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
   if (!ownerRepo) {
     return []
   }
@@ -383,7 +407,7 @@ export async function listAssignableUsers(
         '--jq',
         '.[] | {login, avatar_url}'
       ],
-      { cwd: repoPath }
+      ghOptions
     )
     type RESTAssignee = { login?: string; avatar_url?: string | null }
     const users: GitHubAssignableUser[] = []

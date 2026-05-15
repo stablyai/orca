@@ -58,6 +58,7 @@ export const AGENT_KIND_VALUES = [
   'qwen-code',
   'rovo',
   'hermes',
+  'openclaw',
   'copilot',
   'other'
 ] as const
@@ -133,6 +134,7 @@ export const launchSourceSchema = z.enum([
   'shortcut',
   'onboarding',
   'diff_notes_send',
+  'notes_send',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>

@@ -1,10 +1,10 @@
 // ─── Protocol Version ────────────────────────────────────────────────
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bumped from 5 -> 6 for OSC 133 shell wrapper changes layered on top of
-// OpenCode/Pi overlay restoration, both of which are baked into daemon spawns.
-export const PROTOCOL_VERSION = 6
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5] as const
+// Why: bumped from 6 -> 7 so existing daemons restart with the headless
+// emulator's mouse-mode snapshot tracking for mobile alternate-screen TUIs.
+export const PROTOCOL_VERSION = 7
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -28,6 +28,9 @@ export type TerminalSnapshot = {
 export type TerminalModes = {
   bracketedPaste: boolean
   mouseTracking: boolean
+  mouseTrackingMode?: 'none' | 'x10' | 'vt200' | 'drag' | 'any'
+  sgrMouseMode?: boolean
+  sgrMousePixelsMode?: boolean
   applicationCursor: boolean
   alternateScreen: boolean
 }

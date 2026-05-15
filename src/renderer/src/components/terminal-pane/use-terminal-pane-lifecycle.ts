@@ -19,10 +19,11 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
-  collectLeafIdsInReplayCreationOrder,
+  normalizeTerminalLayoutSnapshot,
   replayTerminalLayout,
   restoreScrollbackBuffers
 } from './layout-serialization'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import {
   applyTerminalAppearance,
@@ -335,11 +336,12 @@ export function useTerminalPaneLifecycle({
       setPaneCount(managerRef.current?.getPanes().length ?? 0)
     }
 
+    const normalizedInitialLayout = normalizeTerminalLayoutSnapshot(initialLayoutRef.current)
+    if (normalizedInitialLayout.changed) {
+      initialLayoutRef.current = normalizedInitialLayout.snapshot
+      useAppStore.getState().setTabLayout(tabId, normalizedInitialLayout.snapshot)
+    }
     let shouldPersistLayout = false
-    const restoredLeafIdsInCreationOrder = collectLeafIdsInReplayCreationOrder(
-      initialLayoutRef.current.root
-    )
-    let restoredPaneCreateIndex = 0
     const ptyDeps = {
       tabId,
       worktreeId,
@@ -519,15 +521,13 @@ export function useTerminalPaneLifecycle({
           }
         }
         applyAppearance(manager)
-        const restoredLeafId = restoredLeafIdsInCreationOrder[restoredPaneCreateIndex] ?? null
-        restoredPaneCreateIndex += 1
         const panePtyBinding = connectPanePty(pane, manager, {
           ...ptyDeps,
           // Why: spread order matters — spawnHints.cwd (inherited from the
           // source pane) must override the tab-level ptyDeps.cwd (worktree
           // root) so Cmd+D splits boot in the live cwd.
           ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
-          restoredLeafId
+          restoredLeafId: pane.leafId
         })
         // Why: connectPanePty receives a spread copy of ptyDeps, so the
         // `deps.startup = undefined` it performs internally only clears its
@@ -546,7 +546,7 @@ export function useTerminalPaneLifecycle({
         scheduleRuntimeGraphSync()
         queueResizeAll(true)
       },
-      onPaneClosed: (paneId) => {
+      onPaneClosed: (paneId, closedPane) => {
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
@@ -600,7 +600,12 @@ export function useTerminalPaneLifecycle({
           // (not remove) so any retained `done` snapshot for this pane is also
           // cleared and a same-frame live→gone transition cannot re-snapshot
           // it via the retention sync.
-          useAppStore.getState().dropAgentStatus(`${tabId}:${paneId}`)
+          const leafId = closedPane?.leafId
+          if (leafId) {
+            const paneKey = makePaneKey(tabId, leafId)
+            useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+            useAppStore.getState().dropAgentStatus(paneKey)
+          }
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }

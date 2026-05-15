@@ -282,6 +282,7 @@ function GHStatusCell({
             )
           : window.api.gh.updateIssue({
               repoPath: repo.path,
+              repoId: repo.id,
               number: item.number,
               updates: { state: newState }
             })
@@ -658,6 +659,7 @@ export default function TaskPage(): React.JSX.Element {
 
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
+  const taskSearchInputRef = useRef<HTMLInputElement>(null)
   const [activeTaskPreset, setActiveTaskPreset] = useState<TaskViewPresetId | null>(
     defaultTaskViewPreset
   )
@@ -684,7 +686,7 @@ export default function TaskPage(): React.JSX.Element {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, trimmed)
+      const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, trimmed)
       if (cached) {
         merged.push(...cached)
       }
@@ -1282,7 +1284,7 @@ export default function TaskPage(): React.JSX.Element {
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, q)
+      const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, q)
       if (cached === null) {
         anyUncached = true
       } else {
@@ -1382,7 +1384,7 @@ export default function TaskPage(): React.JSX.Element {
     // The search API is cached 120s server-side so this doesn't add
     // meaningful latency or rate-limit pressure.
     void countWorkItemsAcrossRepos(
-      selectedRepos.map((r) => ({ path: r.path })),
+      selectedRepos.map((r) => ({ repoId: r.id, path: r.path })),
       q
     ).then((count) => {
       if (!cancelled) {
@@ -1454,6 +1456,59 @@ export default function TaskPage(): React.JSX.Element {
     [handleApplyTaskSearch]
   )
 
+  useEffect(() => {
+    if (
+      taskSource !== 'github' ||
+      githubMode !== 'items' ||
+      dialogWorkItem ||
+      drawerLinearIssue ||
+      newIssueOpen ||
+      newLinearIssueOpen ||
+      activeModal !== 'none'
+    ) {
+      return
+    }
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const isMac = navigator.userAgent.includes('Mac')
+      const modifierPressed = isMac ? event.metaKey : event.ctrlKey
+      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
+        return
+      }
+
+      const input = taskSearchInputRef.current
+      if (!input) {
+        return
+      }
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        target !== input &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      input.focus()
+      input.select()
+    }
+
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [
+    activeModal,
+    dialogWorkItem,
+    drawerLinearIssue,
+    githubMode,
+    newIssueOpen,
+    newLinearIssueOpen,
+    taskSource
+  ])
+
   const openComposerForItem = useCallback(
     (item: GitHubWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
@@ -1506,6 +1561,7 @@ export default function TaskPage(): React.JSX.Element {
           )
         : await window.api.gh.createIssue({
             repoPath: newIssueTargetRepo.path,
+            repoId: newIssueTargetRepo.id,
             title,
             body: newIssueBody
           })
@@ -1553,6 +1609,7 @@ export default function TaskPage(): React.JSX.Element {
           )
         : window.api.gh.workItem({
             repoPath: newIssueTargetRepo.path,
+            repoId: newIssueTargetRepo.id,
             number: result.number,
             type: 'issue'
           })
@@ -1799,7 +1856,8 @@ export default function TaskPage(): React.JSX.Element {
         type: 'issue',
         number: 0,
         title: issue.title,
-        url: issue.url
+        url: issue.url,
+        linearIdentifier: issue.identifier
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -2124,6 +2182,8 @@ export default function TaskPage(): React.JSX.Element {
                       <div className="relative min-w-[320px] flex-1">
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
+                          ref={taskSearchInputRef}
+                          data-github-items-search-input
                           value={taskSearchInput}
                           onChange={handleTaskSearchChange}
                           onKeyDown={handleTaskSearchKeyDown}
@@ -3457,6 +3517,7 @@ export default function TaskPage(): React.JSX.Element {
           // scan on every render while the dialog is open.
           dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
         }
+        repoId={dialogWorkItem?.repoId ?? null}
         onUse={(item) => {
           setDialogWorkItem(null)
           handleUseWorkItem(item)

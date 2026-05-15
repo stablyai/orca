@@ -41,13 +41,7 @@ import {
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import type {
-  GitHubWorkItem,
-  GitLabWorkItem,
-  GlobalSettings,
-  LinearIssue
-} from '../../../../shared/types'
+import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../../shared/types'
 
 type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'text'
 
@@ -63,7 +57,6 @@ const MR_STATE_FILTERS: { id: MrStateFilter; label: string }[] = [
 ]
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
-type GitHubWorkItemWithoutRepo = Omit<GitHubWorkItem, 'repoId'>
 
 type SmartWorkspaceNameFieldProps = {
   repos: RepoOption[]
@@ -166,8 +159,6 @@ export default function SmartWorkspaceNameField({
       searchLinearIssues: s.searchLinearIssues
     }))
   )
-  const settings = useAppStore((s) => s.settings)
-
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === repoId) ?? null,
     [repoId, repos]
@@ -235,7 +226,7 @@ export default function SmartWorkspaceNameField({
   const shouldQueryLinear = mode === 'smart' || mode === 'linear'
 
   useEffect(() => {
-    if (!shouldQueryGithub || !selectedRepo?.path || selectedRepo.connectionId) {
+    if (!shouldQueryGithub || !selectedRepo?.path) {
       setGithubItems([])
       setGithubLoading(false)
       return
@@ -245,20 +236,21 @@ export default function SmartWorkspaceNameField({
     const directLink = parsedGhLink
     if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
       setGithubLoading(true)
-      void getRepoSlugCached(selectedRepo, repoSlugCacheRef.current, settings)
+      void getRepoSlugCached(selectedRepo, repoSlugCacheRef.current)
         .then(async (selectedSlug) => {
           if (stale) {
             return
           }
           if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
             handledCrossRepoUrlRef.current = debouncedQuery.trim()
-            const item = await getWorkItemByOwnerRepo(
-              selectedRepo,
-              directLink.slug,
-              directLink.number,
-              directLink.type,
-              settings
-            )
+            const item = await window.api.gh.workItemByOwnerRepo({
+              repoPath: selectedRepo.path,
+              repoId: selectedRepo.id,
+              owner: directLink.slug.owner,
+              repo: directLink.slug.repo,
+              number: directLink.number,
+              type: directLink.type
+            })
             if (!stale) {
               setGithubItems(item ? [{ ...item, repoId: selectedRepo.id } as GitHubWorkItem] : [])
             }
@@ -267,8 +259,7 @@ export default function SmartWorkspaceNameField({
           const matchingRepo = await findMatchingRepoForSlug(
             repos,
             directLink.slug,
-            repoSlugCacheRef.current,
-            settings
+            repoSlugCacheRef.current
           )
           if (!stale) {
             setGithubItems([])
@@ -289,14 +280,19 @@ export default function SmartWorkspaceNameField({
       setGithubLoading(true)
       const request =
         directLink !== null
-          ? getWorkItemByOwnerRepo(
-              selectedRepo,
-              directLink.slug,
-              directLink.number,
-              directLink.type,
-              settings
-            )
-          : getWorkItem(selectedRepo, directNumber, undefined, settings)
+          ? window.api.gh.workItemByOwnerRepo({
+              repoPath: selectedRepo.path,
+              repoId: selectedRepo.id,
+              owner: directLink.slug.owner,
+              repo: directLink.slug.repo,
+              number: directLink.number,
+              type: directLink.type
+            })
+          : window.api.gh.workItem({
+              repoPath: selectedRepo.path,
+              repoId: selectedRepo.id,
+              number: directNumber
+            })
       void request
         .then((item) => {
           if (!stale) {
@@ -320,7 +316,7 @@ export default function SmartWorkspaceNameField({
 
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
-    const cached = getCachedWorkItems(selectedRepo.path, RESULT_LIMIT, query)
+    const cached = getCachedWorkItems(selectedRepo.id, RESULT_LIMIT, query)
     if (cached) {
       setGithubItems(cached.slice(0, RESULT_LIMIT))
       setGithubLoading(false)
@@ -354,7 +350,6 @@ export default function SmartWorkspaceNameField({
     parsedGhLink,
     repos,
     selectedRepo,
-    settings,
     shouldQueryGithub
   ])
 
@@ -715,13 +710,14 @@ export default function SmartWorkspaceNameField({
       handledCrossRepoUrlRef.current = debouncedQuery.trim()
       setGithubLoading(true)
       try {
-        const item = await getWorkItemByOwnerRepo(
-          targetRepo,
-          crossRepoPrompt.link.slug,
-          crossRepoPrompt.link.number,
-          crossRepoPrompt.link.type,
-          settings
-        )
+        const item = await window.api.gh.workItemByOwnerRepo({
+          repoPath: targetRepo.path,
+          repoId: targetRepo.id,
+          owner: crossRepoPrompt.link.slug.owner,
+          repo: crossRepoPrompt.link.slug.repo,
+          number: crossRepoPrompt.link.number,
+          type: crossRepoPrompt.link.type
+        })
         if (!item) {
           return
         }
@@ -733,7 +729,7 @@ export default function SmartWorkspaceNameField({
         setGithubLoading(false)
       }
     },
-    [crossRepoPrompt, debouncedQuery, onGitHubItemSelect, onRepoChange, settings]
+    [crossRepoPrompt, debouncedQuery, onGitHubItemSelect, onRepoChange]
   )
 
   const handleUseCurrentRepo = useCallback(async (): Promise<void> => {
@@ -753,11 +749,11 @@ export default function SmartWorkspaceNameField({
       return
     }
     repoSlugCacheRef.current.delete(added.id)
-    const slug = await getRepoSlugCached(added, repoSlugCacheRef.current, settings)
+    const slug = await getRepoSlugCached(added, repoSlugCacheRef.current)
     if (slug && sameSlug(slug, crossRepoPrompt.link.slug)) {
       await acceptGitHubLink(added)
     }
-  }, [acceptGitHubLink, addRepo, crossRepoPrompt, settings])
+  }, [acceptGitHubLink, addRepo, crossRepoPrompt])
 
   const dismissCrossRepoPrompt = useCallback((): void => {
     handledCrossRepoUrlRef.current = debouncedQuery.trim()
@@ -1175,37 +1171,16 @@ function sameSlug(left: RepoSlug, right: RepoSlug): boolean {
   )
 }
 
-function runtimeSlugScope(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): string {
-  const target = getActiveRuntimeTarget(settings)
-  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
-}
-
 async function getRepoSlugCached(
   repo: RepoOption,
-  cache: Map<string, RepoSlug | null>,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  cache: Map<string, RepoSlug | null>
 ): Promise<RepoSlug | null> {
-  const cacheKey = `${runtimeSlugScope(settings)}:${repo.id}`
+  const cacheKey = repo.id
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey) ?? null
   }
-  if (repo.connectionId) {
-    cache.set(cacheKey, null)
-    return null
-  }
   try {
-    const target = getActiveRuntimeTarget(settings)
-    const slug =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<RepoSlug | null>(
-            target,
-            'github.repoSlug',
-            { repo: repo.id },
-            { timeoutMs: 30_000 }
-          )
-        : await window.api.gh.repoSlug({ repoPath: repo.path })
+    const slug = await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
     cache.set(cacheKey, slug)
     return slug
   } catch {
@@ -1217,63 +1192,13 @@ async function getRepoSlugCached(
 async function findMatchingRepoForSlug(
   repos: RepoOption[],
   slug: RepoSlug,
-  cache: Map<string, RepoSlug | null>,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  cache: Map<string, RepoSlug | null>
 ): Promise<RepoOption | null> {
   for (const repo of repos) {
-    const candidate = await getRepoSlugCached(repo, cache, settings)
+    const candidate = await getRepoSlugCached(repo, cache)
     if (candidate && sameSlug(candidate, slug)) {
       return repo
     }
   }
   return null
-}
-
-function getWorkItem(
-  repo: RepoOption,
-  number: number,
-  type: 'issue' | 'pr' | undefined,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Promise<GitHubWorkItemWithoutRepo | null> {
-  const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
-      target,
-      'github.workItem',
-      { repo: repo.id, number, ...(type ? { type } : {}) },
-      { timeoutMs: 30_000 }
-    )
-  }
-  return window.api.gh.workItem({ repoPath: repo.path, number, ...(type ? { type } : {}) })
-}
-
-function getWorkItemByOwnerRepo(
-  repo: RepoOption,
-  slug: RepoSlug,
-  number: number,
-  type: 'issue' | 'pr',
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Promise<GitHubWorkItemWithoutRepo | null> {
-  const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
-      target,
-      'github.workItemByOwnerRepo',
-      {
-        repo: repo.id,
-        owner: slug.owner,
-        ownerRepo: slug.repo,
-        number,
-        type
-      },
-      { timeoutMs: 30_000 }
-    )
-  }
-  return window.api.gh.workItemByOwnerRepo({
-    repoPath: repo.path,
-    owner: slug.owner,
-    repo: slug.repo,
-    number,
-    type
-  })
 }

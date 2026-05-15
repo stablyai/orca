@@ -19,6 +19,7 @@ export type HostedReviewInfo = {
 
 export type HostedReviewForBranchArgs = {
   repoPath: string
+  repoId?: string
   branch: string
   linkedGitHubPR?: number | null
   linkedGitLabMR?: number | null

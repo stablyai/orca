@@ -103,3 +103,51 @@ export type AutomationDispatchResult = {
   terminalSessionId?: string | null
   error?: string | null
 }
+
+export type ExternalAutomationProvider = 'hermes' | 'openclaw'
+export type ExternalAutomationManagerStatus = 'available' | 'unavailable'
+export type ExternalAutomationAction = 'pause' | 'resume' | 'run' | 'delete'
+
+export type ExternalAutomationTarget =
+  | {
+      type: 'local'
+    }
+  | {
+      type: 'ssh'
+      connectionId: string
+    }
+
+export type ExternalAutomationJob = {
+  id: string
+  managerId: string
+  provider: ExternalAutomationProvider
+  name: string
+  schedule: string
+  enabled: boolean
+  state: string
+  promptPreview: string
+  nextRunAt: string | null
+  lastRunAt: string | null
+  lastStatus: string | null
+  lastError: string | null
+  workdir: string | null
+}
+
+export type ExternalAutomationManager = {
+  id: string
+  provider: ExternalAutomationProvider
+  label: string
+  target: ExternalAutomationTarget
+  status: ExternalAutomationManagerStatus
+  error: string | null
+  canManage: boolean
+  jobs: ExternalAutomationJob[]
+}
+
+export type ExternalAutomationActionInput = {
+  managerId: string
+  provider: ExternalAutomationProvider
+  target: ExternalAutomationTarget
+  jobId: string
+  action: ExternalAutomationAction
+}

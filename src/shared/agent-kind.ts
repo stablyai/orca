@@ -37,6 +37,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   'qwen-code': 'qwen-code',
   rovo: 'rovo',
   hermes: 'hermes',
+  openclaw: 'openclaw',
   copilot: 'copilot'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 

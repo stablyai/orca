@@ -29,6 +29,7 @@ import { join } from 'path'
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
+import { parsePaneKey } from './stable-pane-id'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -41,7 +42,7 @@ const MAX_WARNED_KEYS = 32
 /** Slowloris cap: drop requests that have not finished sending after 5 s. */
 export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
-/** Bound paneKey size — `${tabId}:${paneId}` is well under 200 chars in
+/** Bound paneKey size — `${tabId}:${leafUuid}` is well under 200 chars in
  *  practice; cap defends per-pane caches against pathological input.
  *  Exported so non-HTTP ingest paths (e.g. Orca's `ingestRemote`) can apply
  *  the same cap as defense-in-depth. */
@@ -1161,6 +1162,7 @@ export function normalizeHookPayload(
 
   const record = body as Record<string, unknown>
   const paneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
+  const parsedPaneKey = parsePaneKey(paneKey)
   const rawPayload = record.payload
   const hookPayload =
     typeof rawPayload === 'string'
@@ -1175,6 +1177,7 @@ export function normalizeHookPayload(
   if (
     !paneKey ||
     paneKey.length > MAX_PANE_KEY_LEN ||
+    !parsedPaneKey ||
     typeof hookPayload !== 'object' ||
     hookPayload === null
   ) {
@@ -1188,6 +1191,9 @@ export function normalizeHookPayload(
   })
 
   const tabId = readStringField(record, 'tabId')
+  if (tabId && tabId !== parsedPaneKey.tabId) {
+    return null
+  }
   const worktreeId = readStringField(record, 'worktreeId')
 
   const eventName = (hookPayload as Record<string, unknown>).hook_event_name

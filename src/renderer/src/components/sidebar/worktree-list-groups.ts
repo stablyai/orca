@@ -9,10 +9,18 @@ import {
   getWorkspaceStatusVisualMeta
 } from './workspace-status'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import type { SortBy } from './smart-sort'
 
 export { branchName }
 
 export type WorktreeGroupBy = 'none' | 'repo' | 'pr-status'
+export type RepoGroupOrdering = 'manual' | 'visible-worktree-order'
+
+export function getRepoGroupOrdering(groupBy: WorktreeGroupBy, sortBy: SortBy): RepoGroupOrdering {
+  return groupBy === 'repo' && (sortBy === 'recent' || sortBy === 'smart')
+    ? 'visible-worktree-order'
+    : 'manual'
+}
 
 export type GroupHeaderRow = {
   type: 'header'
@@ -146,7 +154,8 @@ export function buildRows(
   prCache: Record<string, unknown> | null,
   collapsedGroups: Set<string>,
   repoOrder?: Map<string, number>,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
+  repoGroupOrdering: RepoGroupOrdering = 'manual'
 ): Row[] {
   const result: Row[] = []
 
@@ -199,13 +208,11 @@ export function buildRows(
       }
     }
   } else {
-    // Why: header order must follow the canonical state.repos array order, not
-    // first-encounter from the smart-sorted worktree stream — otherwise sorting
-    // or filtering side effects could shuffle which repo header appears first,
-    // and manual reorder would have nothing to bind to. Unknown ids (no entry
-    // in repoOrder) sort last by label so they remain deterministic.
+    // Why: dynamic sorts need repo headers to follow their highest-ranked
+    // visible child. Manual ordering still uses the canonical state.repos
+    // order so repo-header drag has a stable source of truth.
     const entries = Array.from(grouped.entries())
-    if (repoOrder) {
+    if (repoGroupOrdering === 'manual' && repoOrder) {
       const rankFor = (key: string): number => {
         const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
         const rank = repoOrder.get(repoId)

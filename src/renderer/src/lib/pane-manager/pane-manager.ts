@@ -11,35 +11,21 @@ import {
   applyPaneOpacity,
   applyRootBackground
 } from './pane-divider'
-import {
-  createDragReorderState,
-  hideDropOverlay,
-  handlePaneDrop,
-  updateMultiPaneState
-} from './pane-drag-reorder'
+import { createDragReorderState, hideDropOverlay, handlePaneDrop } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
-import { disposeWebgl } from './pane-webgl-renderer'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
-import {
-  findPaneChildren,
-  removeDividers,
-  promoteSibling,
-  wrapInSplit,
-  safeFit,
-  fitAllPanesInternal,
-  captureScrollState,
-  refitPanesUnder
-} from './pane-tree-ops'
-import { scheduleSplitScrollRestore } from './pane-split-scroll'
+import { safeFit, fitAllPanesInternal, refitPanesUnder } from './pane-tree-ops'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
-import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
   resumePaneRendering,
   setPaneGpuRenderingState,
   suspendPaneRendering
 } from './pane-rendering-control'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { PaneIdentityRegistry } from './pane-identity-registry'
+import { closeManagedPane, splitManagedPane } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
@@ -53,6 +39,7 @@ export class PaneManager {
   private styleOptions: PaneStyleOptions = {}
   private destroyed = false
   private renderingSuspended: boolean
+  private identities = new PaneIdentityRegistry()
 
   // Drag-to-reorder state
   private dragState = createDragReorderState()
@@ -63,8 +50,8 @@ export class PaneManager {
     this.renderingSuspended = options.initialRenderingSuspended === true
   }
 
-  createInitialPane(opts?: { focus?: boolean }): ManagedPane {
-    const pane = this.createPaneInternal()
+  createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {
+    const pane = this.createPaneInternal(opts?.leafId)
     Object.assign(pane.container.style, {
       width: '100%',
       height: '100%',
@@ -80,99 +67,48 @@ export class PaneManager {
       pane.terminal.focus()
     }
 
-    void this.options.onPaneCreated?.(toPublicPane(pane))
+    this.publishPaneCreated(pane)
     return toPublicPane(pane)
   }
 
   splitPane(
     paneId: number,
     direction: 'vertical' | 'horizontal',
-    opts?: { ratio?: number; cwd?: string }
+    opts?: { ratio?: number; cwd?: string; leafId?: string }
   ): ManagedPane | null {
-    const existing = this.panes.get(paneId)
-    if (!existing) {
-      return null
-    }
-    const newPane = this.createPaneInternal()
-    const parent = existing.container.parentElement
-    if (!parent) {
-      return null
-    }
-
-    const isVertical = direction === 'vertical'
-    const divider = this.createDividerWrapped(isVertical)
-
-    // Why: wrapInSplit reparents the existing container, resetting scrollTop.
-    const scrollState = captureScrollState(existing.terminal)
-    // Why: lock prevents safeFit/fitAllPanes from restoring scroll during
-    // the async settle window — scheduleSplitScrollRestore owns the restore.
-    existing.pendingSplitScrollState = scrollState
-
-    // Why: DOM reparenting can silently invalidate a WebGL context without
-    // firing contextlost — Chromium reclaims the oldest context near its
-    // ~8–16 limit. Dispose before the move, reattach in the 200ms timer.
-    const hadWebgl = !!existing.webglAddon
-    disposeWebgl(existing)
-
-    wrapInSplit(existing.container, newPane.container, isVertical, divider, opts)
-
-    openTerminal(newPane)
-    this.activePaneId = newPane.id
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
-    applyDividerStyles(this.root, this.styleOptions)
-    newPane.terminal?.focus()
-    updateMultiPaneState(this.getDragCallbacks())
-    // Why: forward cwd hint so the new PTY spawns in the source pane's cwd.
-    void this.options.onPaneCreated?.(
-      toPublicPane(newPane),
-      opts?.cwd ? { cwd: opts.cwd } : undefined
-    )
-    this.options.onLayoutChanged?.()
-
-    const reattach = hadWebgl ? reattachWebglIfNeeded : undefined
-    scheduleSplitScrollRestore(
-      (id) => this.panes.get(id),
-      existing.id,
-      scrollState,
-      () => this.destroyed,
-      reattach
-    )
-
-    return toPublicPane(newPane)
+    return splitManagedPane({
+      paneId,
+      direction,
+      opts,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      createPaneInternal: (leafIdHint) => this.createPaneInternal(leafIdHint),
+      createDivider: (isVertical) => this.createDividerWrapped(isVertical),
+      publishPaneCreated: (pane, spawnHints) => this.publishPaneCreated(pane, spawnHints),
+      getDragCallbacks: () => this.getDragCallbacks(),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      },
+      isDestroyed: () => this.destroyed
+    })
   }
 
   closePane(paneId: number): void {
-    const pane = this.panes.get(paneId)
-    if (!pane) {
-      return
-    }
-    const paneContainer = pane.container
-    const parent = paneContainer.parentElement
-    if (!parent) {
-      return
-    }
-    disposePane(pane, this.panes)
-    if (parent.classList.contains('pane-split')) {
-      const siblings = findPaneChildren(parent)
-      const sibling = siblings.find((c) => c !== paneContainer) ?? null
-      paneContainer.remove()
-      removeDividers(parent)
-      promoteSibling(sibling, parent, this.root)
-    } else {
-      paneContainer.remove()
-    }
-    if (this.activePaneId === paneId) {
-      const next = this.panes.values().next().value as ManagedPaneInternal | undefined
-      this.activePaneId = next?.id ?? null
-      next?.terminal.focus()
-    }
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
-    for (const p of this.panes.values()) {
-      safeFit(p)
-    }
-    updateMultiPaneState(this.getDragCallbacks())
-    this.options.onPaneClosed?.(paneId)
-    this.options.onLayoutChanged?.()
+    closeManagedPane({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
   }
 
   getPanes(): ManagedPane[] {
@@ -189,6 +125,26 @@ export class PaneManager {
     }
     const pane = this.panes.get(this.activePaneId)
     return pane ? toPublicPane(pane) : null
+  }
+
+  getLeafId(numericPaneId: number): TerminalLeafId | null {
+    return this.identities.getLeafId(numericPaneId)
+  }
+
+  getNumericIdForLeaf(leafId: string): number | null {
+    return this.identities.getNumericIdForLeaf(leafId)
+  }
+
+  getLeafIdMap(): Map<number, TerminalLeafId> {
+    return this.identities.getLeafIdMap()
+  }
+
+  adoptLeafId(numericPaneId: number, leafId: string): boolean {
+    const pane = this.panes.get(numericPaneId)
+    if (!pane) {
+      return false
+    }
+    return this.identities.adoptPaneLeafId(numericPaneId, pane, leafId)
   }
 
   setActivePane(paneId: number, opts?: { focus?: boolean }): void {
@@ -256,14 +212,17 @@ export class PaneManager {
     for (const pane of this.panes.values()) {
       disposePane(pane, this.panes)
     }
+    this.identities.clear()
     this.root.innerHTML = ''
     this.activePaneId = null
   }
 
-  private createPaneInternal(): ManagedPaneInternal {
+  private createPaneInternal(leafIdHint?: string): ManagedPaneInternal {
     const id = this.nextPaneId++
+    const leafId = this.identities.claimLeafId(leafIdHint)
     const pane = createPaneDOM(
       id,
+      leafId,
       this.options,
       this.dragState,
       this.getDragCallbacks(),
@@ -280,7 +239,18 @@ export class PaneManager {
     )
     pane.webglAttachmentDeferred = this.renderingSuspended
     this.panes.set(id, pane)
+    this.identities.register(id, leafId)
     return pane
+  }
+
+  private publishPaneCreated(
+    pane: ManagedPaneInternal,
+    spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
+  ): void {
+    // Why: onPaneCreated wires PTY/status identity synchronously. After this
+    // point, replacing the leaf id would fork ORCA_PANE_KEY from layout state.
+    this.identities.markPublished(pane.id)
+    void this.options.onPaneCreated?.(toPublicPane(pane), spawnHints)
   }
 
   private handlePaneMouseEnter(paneId: number, event: MouseEvent): void {

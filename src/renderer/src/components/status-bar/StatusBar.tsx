@@ -38,6 +38,7 @@ import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
+import { GitHubRateLimitCompact } from '@/components/github/github-rate-limit-display'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -855,6 +856,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       }}
     >
       <div className="flex items-center gap-3">
+        <GitHubRateLimitCompact label="GitHub API budget" />
         {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
         {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
         {showGemini && (

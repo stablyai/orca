@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
 import { useAppStore } from '@/store'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
-import { FIRST_PANE_ID } from '../../../shared/pane-key'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 
@@ -151,10 +151,14 @@ export function useAutomationDispatchEvents(): void {
           void markCompletionResult()
         }
         const observeAgentStatus = (tabId: string): void => {
-          const paneKey = `${tabId}:${FIRST_PANE_ID}`
           const checkCurrentStatus = (): void => {
-            if (useAppStore.getState().agentStatusByPaneKey[paneKey]?.state === 'done') {
-              handleAgentDone()
+            const { agentStatusByPaneKey } = useAppStore.getState()
+            for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
+              const parsed = parsePaneKey(paneKey)
+              if (parsed?.tabId === tabId && entry.state === 'done') {
+                handleAgentDone()
+                return
+              }
             }
           }
           // Why: Codex/Claude completion normally arrives through the global

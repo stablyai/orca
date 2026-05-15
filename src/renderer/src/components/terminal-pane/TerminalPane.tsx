@@ -15,7 +15,8 @@ import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import { getConnectionId } from '@/lib/connection-context'
 import { resolveTerminalDropTargetShell } from './terminal-drop-handler'
-import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
+import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyExpandedLayoutTo,
   createExpandCollapseActions,
@@ -38,6 +39,7 @@ import { connectPanePty } from './pty-connection'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
+import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
@@ -64,7 +66,7 @@ type TerminalPaneProps = {
   // override (separate snapshot ref) — does NOT touch expandedPaneId state
   // or persist to the layout snapshot, so returning to the workspace shows
   // the original split layout unchanged.
-  isolatedPaneId?: number | null
+  isolatedPaneKey?: string | null
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -75,7 +77,7 @@ export default function TerminalPane({
   cwd,
   isActive,
   isVisible = true,
-  isolatedPaneId = null,
+  isolatedPaneKey = null,
   onPtyExit,
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
@@ -319,10 +321,16 @@ export default function TerminalPane({
       return
     }
     const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
-    const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
+    const leafIdByPaneId = manager.getLeafIdMap()
+    const layout = serializeTerminalLayout(
+      container,
+      activePaneId,
+      expandedPaneIdRef.current,
+      leafIdByPaneId
+    )
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
     const currentPanes = manager.getPanes()
-    const currentLeafIds = new Set(currentPanes.map((p) => paneLeafId(p.id)))
+    const currentLeafIds = new Set(currentPanes.map((p) => p.leafId))
     // Preserve existing buffersByLeafId so layout-only persists (resize, split,
     // reorder) don't clobber previously captured scrollback. Drop entries for
     // leaves that no longer exist.
@@ -341,10 +349,11 @@ export default function TerminalPane({
     // successive remount (tab moved again before the first rAF) would lose
     // the mappings and force fresh PTY spawns.
     const livePtyEntries = currentPanes
-      .map(
-        (p) => [paneLeafId(p.id), paneTransportsRef.current.get(p.id)?.getPtyId() ?? null] as const
+      .map((p) => [p.leafId, paneTransportsRef.current.get(p.id)?.getPtyId() ?? null] as const)
+      .filter(
+        (entry): entry is readonly [(typeof currentPanes)[number]['leafId'], string] =>
+          entry[1] !== null
       )
-      .filter((entry): entry is readonly [string, string] => entry[1] !== null)
     const mergedPtyIds = mergeCapturedLeafState({
       prior: existing?.ptyIdsByLeafId,
       fresh: Object.fromEntries(livePtyEntries),
@@ -359,7 +368,7 @@ export default function TerminalPane({
     const titles = paneTitlesRef.current
     const titleEntries = currentPanes
       .filter((p) => titles[p.id])
-      .map((p) => [paneLeafId(p.id), titles[p.id]] as const)
+      .map((p) => [p.leafId, titles[p.id]] as const)
     if (titleEntries.length > 0) {
       layout.titlesByLeafId = Object.fromEntries(titleEntries)
     }
@@ -372,7 +381,10 @@ export default function TerminalPane({
       const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
         existingLayout
       const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
-      const leafId = paneLeafId(paneId)
+      const leafId = managerRef.current?.getLeafId(paneId)
+      if (!leafId) {
+        return
+      }
 
       if (ptyId) {
         setTabLayout(tabId, {
@@ -429,13 +441,12 @@ export default function TerminalPane({
         // so the sidebar doesn't show a stale countdown for a pane that no
         // longer exists. The closeTab path handles bulk cleanup, but closing
         // a single split pane doesn't go through closeTab.
-        useAppStore.getState().setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
+        const leafId = manager.getLeafId(paneId)
+        if (leafId) {
+          useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
+          useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId))
+        }
         syncPanePtyLayoutBinding(paneId, null)
-        // Why: Cmd+W on a split pane is user-initiated teardown — drop (not
-        // remove) so any retained `done` snapshot for this pane is also cleared
-        // and a same-frame live→gone transition cannot re-snapshot it via the
-        // retention sync.
-        useAppStore.getState().dropAgentStatus(`${tabId}:${paneId}`)
         manager.closePane(paneId)
       }
     },
@@ -559,20 +570,33 @@ export default function TerminalPane({
           safeFit(pane)
         }
       })
-    if (isolatedPaneId === null) {
+    if (isolatedPaneKey === null) {
       restoreExpandedLayoutFrom(snapshots)
       const frame = scheduleRefit()
       return () => {
         cancelAnimationFrame(frame)
       }
     }
-    const applied = applyExpandedLayoutTo(isolatedPaneId, {
-      managerRef,
-      containerRef,
-      expandedStyleSnapshotRef: activityIsolationSnapshotRef
-    })
+    const manager = managerRef.current
+    const resolution = resolvePaneKeyForManager(tabId, isolatedPaneKey, manager)
+    const resolvedPaneId = resolution.status === 'resolved' ? resolution.numericPaneId : null
+    const applied =
+      resolvedPaneId !== null &&
+      ((manager?.getPanes().length ?? 0) <= 1 ||
+        applyExpandedLayoutTo(resolvedPaneId, {
+          managerRef,
+          containerRef,
+          expandedStyleSnapshotRef: activityIsolationSnapshotRef
+        }))
     if (!applied) {
       restoreExpandedLayoutFrom(snapshots)
+      const root = containerRef.current?.firstElementChild
+      if (root instanceof HTMLElement) {
+        // Why: Activity requested an exact pane. If it cannot be resolved, fail
+        // closed instead of showing the whole split terminal as a fallback.
+        snapshots.set(root, { display: root.style.display, flex: root.style.flex })
+        root.style.display = 'none'
+      }
       const frame = scheduleRefit()
       return () => {
         cancelAnimationFrame(frame)
@@ -582,7 +606,7 @@ export default function TerminalPane({
     return () => {
       cancelAnimationFrame(frame)
     }
-  }, [isolatedPaneId, paneCount])
+  }, [isolatedPaneKey, paneCount, tabId])
 
   // Why: belt-and-suspenders unmount cleanup. If the component unmounts
   // while isolation is active (e.g. tab closed mid-Activity-view), restore
@@ -621,7 +645,7 @@ export default function TerminalPane({
       syncPanePtyLayoutBinding(paneId, null)
       transport?.destroy?.()
       paneTransportsRef.current.delete(paneId)
-      setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
+      setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
 
       const newPaneBinding = connectPanePty(pane, manager, {

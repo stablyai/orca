@@ -666,7 +666,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       command: 'claude',
       env: { ORCA_TAB_ID: 'tab-1' },
       tabId: 'tab-1',
-      leafId: 'pane:1'
+      leafId: '11111111-1111-4111-8111-111111111111'
     })
 
     const result = await transport.connect({
@@ -682,6 +682,8 @@ describe('createRemoteRuntimePtyTransport', () => {
         worktree: 'repo1::/remote/wt',
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
+        tabId: 'tab-1',
+        leafId: '11111111-1111-4111-8111-111111111111',
         focus: false
       },
       timeoutMs: 15_000

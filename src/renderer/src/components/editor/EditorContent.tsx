@@ -158,6 +158,8 @@ export function EditorContent({
       language={monacoLanguage}
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
+      worktreeId={activeFile.worktreeId}
+      markdownAnnotationsEnabled={isMarkdown && mdViewMode !== 'rich'}
       revealLine={
         pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
       }
@@ -279,6 +281,7 @@ export function EditorContent({
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
+              markdownAnnotationsEnabled={mdViewMode !== 'rich'}
               {...md.previewProps}
             />
           </div>
@@ -368,6 +371,7 @@ export function EditorContent({
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
           onCloseTableOfContents={onCloseMarkdownTableOfContents}
+          markdownAnnotationsEnabled={mdViewMode !== 'rich'}
           {...md.previewProps}
         />
       </div>
@@ -511,6 +515,7 @@ export function EditorContent({
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled
             {...md.previewProps}
           />
         </div>

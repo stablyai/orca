@@ -11,6 +11,7 @@ import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorato
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
+import { isDiffComment } from '@/lib/diff-comment-compat'
 
 type DiffViewerProps = {
   modelKey: string
@@ -70,7 +71,7 @@ export default function DiffViewer({
     worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
   )
   const diffComments = useMemo(
-    () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath),
+    () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
   const editorFontSize = computeEditorFontSize(
@@ -250,6 +251,8 @@ export default function DiffViewer({
     const result = await addDiffComment({
       worktreeId,
       filePath: relativePath,
+      source: 'diff',
+      startLine: popover.startLine,
       lineNumber: popover.lineNumber,
       body,
       side: 'modified'

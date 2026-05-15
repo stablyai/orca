@@ -34,6 +34,7 @@ import { splitWorktreeId } from '../../shared/worktree-id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -381,7 +382,13 @@ type RuntimeNotifier = {
   createTerminal(worktreeId: string, opts: { command?: string; title?: string }): void
   revealTerminalSession?(
     worktreeId: string,
-    opts: { ptyId: string; title?: string | null; activate?: boolean; tabId?: string }
+    opts: {
+      ptyId: string
+      title?: string | null
+      activate?: boolean
+      tabId?: string
+      leafId?: string
+    }
   ):
     | Promise<{ tabId: string; title?: string | null }>
     | { tabId: string; title?: string | null }
@@ -914,7 +921,7 @@ export class OrcaRuntimeService {
           lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,
           preview: existing?.ptyId === leaf.ptyId ? existing.preview : '',
           tabId: leaf.tabId,
-          paneKey: `${leaf.tabId}:${leaf.paneRuntimeId}`
+          paneKey: this.makeRuntimePaneKey(leaf)
         })
       }
 
@@ -1257,7 +1264,7 @@ export class OrcaRuntimeService {
         lastOutputAt: pty?.lastOutputAt ?? at,
         preview: pty?.preview ?? leaf.preview,
         tabId: leaf.tabId,
-        paneKey: `${leaf.tabId}:${leaf.paneRuntimeId}`
+        paneKey: this.makeRuntimePaneKey(leaf)
       })
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
@@ -4936,6 +4943,7 @@ export class OrcaRuntimeService {
     baseBranch?: string
     linkedIssue?: number | null
     linkedPR?: number | null
+    linkedLinearIssue?: string
     comment?: string
     displayName?: string
     sparseCheckout?: { directories: string[]; presetId?: string }
@@ -5093,6 +5101,9 @@ export class OrcaRuntimeService {
         : {}),
       ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
       ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+      ...(args.linkedLinearIssue !== undefined
+        ? { linkedLinearIssue: args.linkedLinearIssue }
+        : {}),
       ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {})
     })
@@ -5842,7 +5853,14 @@ export class OrcaRuntimeService {
 
   async createTerminal(
     worktreeSelector?: string,
-    opts: { command?: string; env?: Record<string, string>; title?: string; focus?: boolean } = {}
+    opts: {
+      command?: string
+      env?: Record<string, string>
+      title?: string
+      focus?: boolean
+      tabId?: string
+      leafId?: string
+    } = {}
   ): Promise<RuntimeTerminalCreate> {
     if (opts.focus !== true) {
       if (!worktreeSelector) {
@@ -5856,13 +5874,20 @@ export class OrcaRuntimeService {
       const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
       // Why: mint tabId in main before spawn so paneKey is known at PTY env
       // build time. Hook-based agent status (Claude/Codex/Cursor/Gemini) keys
-      // off `${tabId}:${paneId}` — without these vars set on the PTY, the
+      // off `${tabId}:${leafId}` — without these vars set on the PTY, the
       // hook payload arrives with an empty paneKey and the renderer cannot
-      // attribute the event. paneId is hard-coded to 1 because this path
-      // never splits and the renderer's nextPaneId starts at 1 for a fresh
-      // tab. See docs/cli-terminal-hook-pane-key.md.
-      const tabId = randomUUID()
-      const paneKey = `${tabId}:${FIRST_PANE_ID}`
+      // attribute the event. Use a stable UUID leaf because hooks reject the
+      // legacy numeric pane keys after the pane-id migration.
+      const hintedTabId = opts.tabId?.trim()
+      const canAdoptPaneIdentity =
+        hintedTabId !== undefined &&
+        hintedTabId.length > 0 &&
+        !hintedTabId.includes(':') &&
+        opts.leafId !== undefined &&
+        isTerminalLeafId(opts.leafId)
+      const tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
+      const leafId = canAdoptPaneIdentity ? (opts.leafId as string) : randomUUID()
+      const paneKey = makePaneKey(tabId, leafId)
       const env = {
         ...opts.env,
         ORCA_PANE_KEY: paneKey,
@@ -5899,7 +5924,8 @@ export class OrcaRuntimeService {
             ptyId: result.id,
             title: opts.title ?? null,
             activate: false,
-            tabId
+            tabId,
+            leafId
           })
           surface = 'visible'
         } catch (err) {
@@ -6013,7 +6039,7 @@ export class OrcaRuntimeService {
     })
 
     if (opts.activate !== false) {
-      this.notifier?.focusTerminal(reply.tabId, worktreeId, 'pane:1')
+      this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
     }
     return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
   }
@@ -6029,7 +6055,7 @@ export class OrcaRuntimeService {
       throw new Error('terminal_handle_stale')
     }
     const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
-    const leafId = `pane:${FIRST_PANE_ID}`
+    const leafId = parsePaneKey(livePty.pty.paneKey ?? '')?.leafId ?? randomUUID()
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${parentTabId}::${leafId}`,
@@ -6245,10 +6271,12 @@ export class OrcaRuntimeService {
       if (!pty.pty.connected) {
         throw new Error('terminal_exited')
       }
+      const parsedPaneKey = parsePaneKey(pty.pty.paneKey ?? '')
       const revealed = await this.notifier?.revealTerminalSession?.(pty.pty.worktreeId, {
         ptyId: pty.pty.ptyId,
         title: pty.pty.title ?? pty.pty.lastOscTitle,
-        ...(pty.pty.tabId !== null ? { tabId: pty.pty.tabId } : {})
+        ...(pty.pty.tabId !== null ? { tabId: pty.pty.tabId } : {}),
+        ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
       })
       return {
         handle,
@@ -6257,7 +6285,7 @@ export class OrcaRuntimeService {
       }
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId)
+    this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId, leaf.leafId)
     return { handle, tabId: leaf.tabId, worktreeId: leaf.worktreeId }
   }
 
@@ -6659,6 +6687,14 @@ export class OrcaRuntimeService {
       pty.preview = state.preview
     }
     return pty
+  }
+
+  private makeRuntimePaneKey(
+    leaf: Pick<RuntimeSyncedLeaf, 'tabId' | 'leafId' | 'paneRuntimeId'>
+  ): string {
+    return isTerminalLeafId(leaf.leafId)
+      ? makePaneKey(leaf.tabId, leaf.leafId)
+      : `${leaf.tabId}:${leaf.paneRuntimeId}`
   }
 
   private getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {

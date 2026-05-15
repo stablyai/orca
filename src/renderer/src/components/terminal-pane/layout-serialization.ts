@@ -3,8 +3,16 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from '../../../../shared/types'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
+import { getLeftmostLeafId, normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
+
+export {
+  collectLeafIdsInOrder,
+  collectLeafIdsInReplayCreationOrder,
+  normalizeTerminalLayoutSnapshot
+} from './terminal-layout-leaf-ids'
 
 export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -48,54 +56,6 @@ export const POST_REPLAY_MODE_RESET =
 //          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
 //          as unbound key input).
 export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?25h\x1b[?1004l'
-
-export function paneLeafId(paneId: number): string {
-  return `pane:${paneId}`
-}
-
-export function collectLeafIdsInOrder(node: TerminalPaneLayoutNode | null | undefined): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLeafIdsInOrder(node.first), ...collectLeafIdsInOrder(node.second)]
-}
-
-function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
-  return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)
-}
-
-function collectReplayCreatedPaneLeafIds(
-  node: Extract<TerminalPaneLayoutNode, { type: 'split' }>,
-  leafIdsInReplayCreationOrder: string[]
-): void {
-  // Why: replayTerminalLayout() creates one new pane per split and assigns it
-  // to the split's second subtree before recursing, so the new pane maps to
-  // the leftmost leaf reachable within that second subtree.
-  leafIdsInReplayCreationOrder.push(getLeftmostLeafId(node.second))
-
-  if (node.first.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node.first, leafIdsInReplayCreationOrder)
-  }
-  if (node.second.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node.second, leafIdsInReplayCreationOrder)
-  }
-}
-
-export function collectLeafIdsInReplayCreationOrder(
-  node: TerminalPaneLayoutNode | null | undefined
-): string[] {
-  if (!node) {
-    return []
-  }
-  const leafIdsInReplayCreationOrder = [getLeftmostLeafId(node)]
-  if (node.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node, leafIdsInReplayCreationOrder)
-  }
-  return leafIdsInReplayCreationOrder
-}
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
@@ -156,11 +116,11 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
   }
 
   if (node.classList.contains('pane')) {
-    const paneId = Number(node.dataset.paneId ?? '')
-    if (!Number.isFinite(paneId)) {
+    const leafId = node.dataset.leafId
+    if (!leafId || !isTerminalLeafId(leafId)) {
       return null
     }
-    return { type: 'leaf', leafId: paneLeafId(paneId) }
+    return { type: 'leaf', leafId }
   }
 
   if (!node.classList.contains('pane-split')) {
@@ -201,29 +161,19 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
 export function serializeTerminalLayout(
   root: HTMLDivElement | null,
   activePaneId: number | null,
-  expandedPaneId: number | null
+  expandedPaneId: number | null,
+  leafIdByPaneId?: ReadonlyMap<number, string>
 ): TerminalLayoutSnapshot {
   const rootNode = serializePaneTree(
     root?.firstElementChild instanceof HTMLElement ? root.firstElementChild : null
   )
+  const activeLeafId = activePaneId === null ? null : leafIdByPaneId?.get(activePaneId)
+  const expandedLeafId = expandedPaneId === null ? null : leafIdByPaneId?.get(expandedPaneId)
   return {
     root: rootNode,
-    activeLeafId: activePaneId === null ? null : paneLeafId(activePaneId),
-    expandedLeafId: expandedPaneId === null ? null : paneLeafId(expandedPaneId)
+    activeLeafId: activeLeafId && isTerminalLeafId(activeLeafId) ? activeLeafId : null,
+    expandedLeafId: expandedLeafId && isTerminalLeafId(expandedLeafId) ? expandedLeafId : null
   }
-}
-
-function collectLeafIds(
-  node: TerminalPaneLayoutNode,
-  paneByLeafId: Map<string, number>,
-  paneId: number
-): void {
-  if (node.type === 'leaf') {
-    paneByLeafId.set(node.leafId, paneId)
-    return
-  }
-  collectLeafIds(node.first, paneByLeafId, paneId)
-  collectLeafIds(node.second, paneByLeafId, paneId)
 }
 
 /**
@@ -289,9 +239,12 @@ export function replayTerminalLayout(
 ): Map<string, number> {
   const paneByLeafId = new Map<string, number>()
 
-  const initialPane = manager.createInitialPane({ focus: focusInitialPane })
+  const normalized = normalizeTerminalLayoutSnapshot(snapshot)
+  snapshot = normalized.snapshot
+  const initialLeafId = snapshot.root ? getLeftmostLeafId(snapshot.root) : undefined
+  const initialPane = manager.createInitialPane({ focus: focusInitialPane, leafId: initialLeafId })
   if (!snapshot?.root) {
-    paneByLeafId.set(paneLeafId(initialPane.id), initialPane.id)
+    paneByLeafId.set(initialPane.leafId, initialPane.id)
     return paneByLeafId
   }
 
@@ -302,10 +255,11 @@ export function replayTerminalLayout(
     }
 
     const createdPane = manager.splitPane(paneId, node.direction as TerminalPaneSplitDirection, {
-      ratio: node.ratio
+      ratio: node.ratio,
+      leafId: getLeftmostLeafId(node.second)
     })
     if (!createdPane) {
-      collectLeafIds(node, paneByLeafId, paneId)
+      restoreNode(node.first, paneId)
       return
     }
 

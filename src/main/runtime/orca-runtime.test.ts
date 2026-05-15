@@ -138,6 +138,15 @@ const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+function expectStablePaneKeyEnv(env: Record<string, string>): string {
+  expect(env.ORCA_TAB_ID).toMatch(UUID_RE)
+  const leafId = env.ORCA_PANE_KEY?.slice(`${env.ORCA_TAB_ID}:`.length)
+  expect(leafId).toMatch(UUID_RE)
+  expect(env.ORCA_PANE_KEY).toBe(`${env.ORCA_TAB_ID}:${leafId}`)
+  return env.ORCA_PANE_KEY
+}
 
 function createRuntime(): OrcaRuntimeService {
   return new OrcaRuntimeService(store)
@@ -952,22 +961,50 @@ describe('OrcaRuntimeService', () => {
     })
     expect(result.handle).toMatch(/^term_/)
     expect(createTerminal).not.toHaveBeenCalled()
-    // Why: hook-based agent status keys off `${tabId}:${paneId}`, so main must
+    // Why: hook-based agent status keys off `${tabId}:${leafId}`, so main must
     // pre-allocate the tabId and stamp ORCA_PANE_KEY/TAB_ID/WORKTREE_ID into
     // the PTY env before spawn. The same tabId is then handed to the renderer
-    // via `revealTerminalSession` so adoption preserves attribution. See
-    // docs/cli-terminal-hook-pane-key.md.
+    // via `revealTerminalSession` so adoption preserves attribution.
     const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
     const spawnedEnv = spawnCall?.env ?? {}
-    expect(spawnedEnv.ORCA_TAB_ID).toMatch(/^[0-9a-f-]+$/)
-    expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${spawnedEnv.ORCA_TAB_ID}:1`)
+    expectStablePaneKeyEnv(spawnedEnv)
+    const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
       activate: false,
-      tabId: spawnedEnv.ORCA_TAB_ID
+      tabId: spawnedEnv.ORCA_TAB_ID,
+      leafId: spawnedLeafId
     })
+  })
+
+  it('adopts renderer pane identity for remote runtime terminal creates', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    const tabId = 'tab-remote-runtime'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      focus: false,
+      tabId,
+      leafId,
+      env: {
+        ORCA_PANE_KEY: `${tabId}:${leafId}`,
+        ORCA_TAB_ID: tabId
+      }
+    })
+
+    const spawnedEnv =
+      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    expect(spawnedEnv.ORCA_TAB_ID).toBe(tabId)
+    expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${tabId}:${leafId}`)
   })
 
   it('creates background terminal sessions while the renderer graph is unavailable', async () => {
@@ -1025,13 +1062,14 @@ describe('OrcaRuntimeService', () => {
       })
       const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
       const spawnedEnv = spawnCall?.env ?? {}
-      expect(spawnedEnv.ORCA_TAB_ID).toMatch(/^[0-9a-f-]+$/)
-      expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${spawnedEnv.ORCA_TAB_ID}:1`)
+      expectStablePaneKeyEnv(spawnedEnv)
+      const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
       expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
         ptyId: 'pty-bg',
         title: null,
         activate: false,
-        tabId: spawnedEnv.ORCA_TAB_ID
+        tabId: spawnedEnv.ORCA_TAB_ID,
+        leafId: spawnedLeafId
       })
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('[terminal-create] failed to create inactive tab for pty-bg:'),
@@ -1127,7 +1165,8 @@ describe('OrcaRuntimeService', () => {
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
-      tabId: expect.stringMatching(/^[0-9a-f-]+$/)
+      tabId: expect.stringMatching(UUID_RE),
+      leafId: expect.stringMatching(UUID_RE)
     })
   })
 
@@ -1588,6 +1627,89 @@ describe('OrcaRuntimeService', () => {
     if (left?.type === 'terminal' && right?.type === 'terminal') {
       expect(left.terminal).not.toBe(right.terminal)
     }
+  })
+
+  it('closes the matching mobile terminal UUID leaf without closing the whole tab', async () => {
+    const closeTerminal = vi.fn()
+    const kill = vi.fn(() => true)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(),
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal,
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const leftLeafId = '11111111-1111-4111-8111-111111111111'
+    const rightLeafId = '22222222-2222-4222-8222-222222222222'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: rightLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: leftLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-left',
+          paneTitle: 'left'
+        },
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: rightLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'pty-right',
+          paneTitle: 'right'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `tab-1::${rightLeafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${rightLeafId}`,
+              parentTabId: 'tab-1',
+              leafId: rightLeafId,
+              title: 'right',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, `tab-1::${rightLeafId}`)
+
+    expect(kill).toHaveBeenCalledWith('pty-right')
+    expect(closeTerminal).not.toHaveBeenCalled()
   })
 
   it('creates mobile session terminals in a headless runtime server', async () => {
@@ -2255,12 +2377,12 @@ describe('OrcaRuntimeService', () => {
         command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
         // Why: createTerminal stamps ORCA_PANE_KEY/TAB_ID/WORKTREE_ID into the
         // PTY env on top of the caller-supplied env so hook-based agent status
-        // can attribute hook events to a pane. See docs/cli-terminal-hook-pane-key.md.
+        // can attribute hook events to a stable pane.
         env: expect.objectContaining({
           ORCA_ROOT_PATH: '/tmp/repo',
           ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-hook-skip',
-          ORCA_TAB_ID: expect.stringMatching(/^[0-9a-f-]+$/),
-          ORCA_PANE_KEY: expect.stringMatching(/^[0-9a-f-]+:1$/),
+          ORCA_TAB_ID: expect.stringMatching(UUID_RE),
+          ORCA_PANE_KEY: expect.any(String),
           ORCA_WORKTREE_ID: result.worktree.id
         }),
         worktreeId: result.worktree.id
@@ -2268,12 +2390,14 @@ describe('OrcaRuntimeService', () => {
     )
     const setupSpawnEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    expect(setupSpawnEnv.ORCA_PANE_KEY).toBe(`${setupSpawnEnv.ORCA_TAB_ID}:1`)
+    expectStablePaneKeyEnv(setupSpawnEnv)
+    const setupLeafId = setupSpawnEnv.ORCA_PANE_KEY.slice(`${setupSpawnEnv.ORCA_TAB_ID}:`.length)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(result.worktree.id, {
       ptyId: 'pty-setup',
       title: 'Setup',
       activate: false,
-      tabId: setupSpawnEnv.ORCA_TAB_ID
+      tabId: setupSpawnEnv.ORCA_TAB_ID,
+      leafId: setupLeafId
     })
   })
 
@@ -2332,13 +2456,16 @@ describe('OrcaRuntimeService', () => {
     )
     const initialSpawnEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    expect(initialSpawnEnv.ORCA_TAB_ID).toMatch(/^[0-9a-f-]+$/)
-    expect(initialSpawnEnv.ORCA_PANE_KEY).toBe(`${initialSpawnEnv.ORCA_TAB_ID}:1`)
+    expectStablePaneKeyEnv(initialSpawnEnv)
+    const initialLeafId = initialSpawnEnv.ORCA_PANE_KEY.slice(
+      `${initialSpawnEnv.ORCA_TAB_ID}:`.length
+    )
     expect(revealTerminalSession).toHaveBeenCalledWith(result.worktree.id, {
       ptyId: 'pty-created-worktree',
       title: null,
       activate: false,
-      tabId: initialSpawnEnv.ORCA_TAB_ID
+      tabId: initialSpawnEnv.ORCA_TAB_ID,
+      leafId: initialLeafId
     })
   })
 

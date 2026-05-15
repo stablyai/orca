@@ -22,6 +22,7 @@ import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
 import PortsPanel from './PortsPanel'
+import { GitHubRateLimitCompact } from '@/components/github/github-rate-limit-display'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -213,6 +214,8 @@ function RightSidebarInner(): React.JSX.Element {
   const effectiveTab = visibleItems.some((item) => item.id === rightSidebarTab)
     ? rightSidebarTab
     : visibleItems[0].id
+  const showGitHubBudgetInPanel =
+    !isFolder && (effectiveTab === 'source-control' || effectiveTab === 'checks')
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const maxWidth = useWindowAwareMaxWidth()
@@ -332,6 +335,13 @@ function RightSidebarInner(): React.JSX.Element {
             </TooltipProvider>
           </div>
         )}
+
+        {showGitHubBudgetInPanel ? (
+          <GitHubRateLimitCompact
+            className="mx-2 my-1.5 max-w-[calc(100%-1rem)] self-start"
+            label="GitHub API budget for this panel"
+          />
+        ) : null}
 
         {panelContent}
 

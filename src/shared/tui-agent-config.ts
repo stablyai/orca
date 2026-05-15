@@ -211,6 +211,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'hermes',
     promptInjectionMode: 'stdin-after-start'
   },
+  openclaw: {
+    detectCmd: 'openclaw',
+    launchCmd: 'openclaw',
+    expectedProcess: 'openclaw',
+    promptInjectionMode: 'stdin-after-start'
+  },
   copilot: {
     detectCmd: 'copilot',
     launchCmd: 'copilot',

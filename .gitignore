@@ -72,7 +72,9 @@ design-docs/
 
 # Local-only design/planning docs (not checked in)
 docs/*.md
+docs/**/*.md
 !docs/README*.md
+!docs/**/README*.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

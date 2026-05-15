@@ -9,6 +9,8 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 
 // Why: stable empty-array references so narrow selectors return the same
 // reference when there's nothing for this worktree. Without stable empties,
@@ -29,16 +31,15 @@ export function buildWorktreeAgentRows(args: {
 
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
   for (const entry of args.entries) {
-    const colonIndex = entry.paneKey.indexOf(':')
-    if (colonIndex === -1) {
+    const parsed = parsePaneKey(entry.paneKey)
+    if (!parsed) {
       continue
     }
-    const tabId = entry.paneKey.slice(0, colonIndex)
-    const bucket = entriesByTabId.get(tabId)
+    const bucket = entriesByTabId.get(parsed.tabId)
     if (bucket) {
       bucket.push(entry)
     } else {
-      entriesByTabId.set(tabId, [entry])
+      entriesByTabId.set(parsed.tabId, [entry])
     }
   }
 
@@ -105,12 +106,22 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
       const tabIds = new Set(wtTabs.map((t) => t.id))
       const out: AgentStatusEntry[] = []
       for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-        const sepIdx = paneKey.indexOf(':')
-        if (sepIdx <= 0) {
+        const parsed = parsePaneKey(paneKey)
+        if (!parsed) {
           continue
         }
-        const tabId = paneKey.slice(0, sepIdx)
-        if (!tabIds.has(tabId)) {
+        if (!tabIds.has(parsed.tabId)) {
+          continue
+        }
+        out.push(entry)
+      }
+      for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
+        const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+        if (!entry) {
+          continue
+        }
+        const parsed = parsePaneKey(entry.paneKey)
+        if (!parsed || !tabIds.has(parsed.tabId)) {
           continue
         }
         out.push(entry)

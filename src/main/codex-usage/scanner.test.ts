@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { attributeCodexUsageEvent, parseCodexUsageRecord } from './scanner'
 
 describe('parseCodexUsageRecord', () => {
-  it('uses cumulative totals to avoid double-counting repeated token snapshots', () => {
+  it('uses token totals only as a duplicate baseline', () => {
     const context = {
       sessionId: 'session-1',
       sessionCwd: null,
@@ -100,7 +100,7 @@ describe('parseCodexUsageRecord', () => {
     expect(duplicate).toBeNull()
   })
 
-  it('falls back to inferred gpt-5 pricing when model metadata is missing', () => {
+  it('preserves unknown model metadata instead of assigning fallback pricing', () => {
     const context = {
       sessionId: 'session-1',
       sessionCwd: '/workspace/repo',
@@ -129,8 +129,53 @@ describe('parseCodexUsageRecord', () => {
       context
     )
 
-    expect(parsed?.model).toBe('gpt-5')
+    expect(parsed?.model).toBeNull()
     expect(parsed?.hasInferredPricing).toBe(true)
+  })
+
+  it('uses last token usage for the first resumed-session event', () => {
+    const context = {
+      sessionId: 'session-1',
+      sessionCwd: '/workspace/repo',
+      currentCwd: '/workspace/repo',
+      currentModel: 'gpt-5.5',
+      previousTotals: null
+    }
+
+    const parsed = parseCodexUsageRecord(
+      JSON.stringify({
+        timestamp: '2026-04-09T10:00:00.000Z',
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: {
+            total_token_usage: {
+              input_tokens: 50_000,
+              cached_input_tokens: 40_000,
+              output_tokens: 5_000,
+              reasoning_output_tokens: 1_000,
+              total_tokens: 55_000
+            },
+            last_token_usage: {
+              input_tokens: 2_000,
+              cached_input_tokens: 1_500,
+              output_tokens: 500,
+              reasoning_output_tokens: 100,
+              total_tokens: 2_500
+            }
+          }
+        }
+      }),
+      context
+    )
+
+    expect(parsed).toMatchObject({
+      inputTokens: 2_000,
+      cachedInputTokens: 1_500,
+      outputTokens: 500,
+      reasoningOutputTokens: 100,
+      totalTokens: 2_500
+    })
   })
 })
 

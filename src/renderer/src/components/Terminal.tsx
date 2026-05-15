@@ -1304,8 +1304,7 @@ function Terminal(): React.JSX.Element | null {
                     {(tabsByWorktree[worktree.id] ?? []).map((tab) => {
                       const activityTerminalPortal = findActivityTerminalPortal(
                         activityTerminalPortals,
-                        worktree.id,
-                        tab.id
+                        { worktreeId: worktree.id, tabId: tab.id }
                       )
                       const isActivityPortalTab = activityTerminalPortal !== null
                       const isActiveTerminalTab =
@@ -1325,7 +1324,7 @@ function Terminal(): React.JSX.Element | null {
                           // Why: when portaled to Activity for a specific agent
                           // pane, isolate that leaf so split siblings stay
                           // hidden. Workspace renders pass null → no override.
-                          isolatedPaneId={activityTerminalPortal?.paneId ?? null}
+                          isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
                           onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
                           onCloseTab={() => handleCloseTab(tab.id)}
                         />

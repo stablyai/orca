@@ -39,6 +39,7 @@ import {
   type AgentStatusState,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 
 export type { AgentHookSource }
 
@@ -95,26 +96,18 @@ type LastStatusFile = {
   entries: Record<string, EnrichedAgentHookEventPayload>
 }
 
-// Why: paneKey is `${tabId}:${paneId}` — exactly one ':' with non-empty
-// segments on either side. Used both at write time (defensive) and at
-// hydrate time (drop on mismatch).
+// Why: paneKey is `${tabId}:${leafUuid}` — validate the durable leaf suffix
+// at write/hydrate time so legacy numeric rows fail closed.
 export function isValidPaneKey(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length === 0) {
-    return false
-  }
-  const colon = value.indexOf(':')
-  if (colon <= 0 || colon === value.length - 1) {
-    return false
-  }
-  // Why: exactly one colon. Anything weirder is corruption.
-  return !value.includes(':', colon + 1)
+  return typeof value === 'string' && parsePaneKey(value) !== null
 }
 
 function sanitizeHydratedEntry(
   paneKey: string,
   rawEntry: unknown
 ): EnrichedAgentHookEventPayload | null {
-  if (!isValidPaneKey(paneKey)) {
+  const parsedPaneKey = parsePaneKey(paneKey)
+  if (!parsedPaneKey) {
     return null
   }
   if (typeof rawEntry !== 'object' || rawEntry === null) {
@@ -128,10 +121,10 @@ function sanitizeHydratedEntry(
   if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
     return null
   }
-  // Why: paneKey is `${tabId}:${paneId}`; a stored entry whose tabId field
+  // Why: paneKey is `${tabId}:${leafUuid}`; a stored entry whose tabId field
   // diverges from the key's tab segment is corruption (renamer bug, manual
   // edit, future shape drift). Drop instead of hydrating an inconsistent row.
-  if (typeof tabId === 'string' && tabId !== paneKey.slice(0, paneKey.indexOf(':'))) {
+  if (typeof tabId === 'string' && tabId !== parsedPaneKey.tabId) {
     return null
   }
   const worktreeId = record.worktreeId
@@ -349,11 +342,15 @@ export class AgentHookServer {
     // length-caps paneKey before caching, so the cache key here must follow
     // the same rule or remote-vs-local events for the same pane would diverge.
     const paneKey = envelope.paneKey.trim()
+    const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN) {
+      return
+    }
+    if (!parsedPaneKey) {
       return
     }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
@@ -369,6 +366,9 @@ export class AgentHookServer {
       envelope.tabId !== undefined && envelope.tabId.trim().length > 0
         ? envelope.tabId.trim()
         : undefined
+    if (tabId !== undefined && tabId !== parsedPaneKey.tabId) {
+      return
+    }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()

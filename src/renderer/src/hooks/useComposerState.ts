@@ -143,7 +143,7 @@ export type ComposerCardProps = {
   baseBranchLinkedPrNumber: number | null
   /** Absolute path of the selected repo, used by Start-from picker for SWR. */
   selectedRepoPath: string | null
-  /** True when the selected repo is a remote SSH repo; disables the PR tab in v1. */
+  /** True when the selected repo is a remote SSH repo. */
   selectedRepoIsRemote: boolean
   /** Transient inline hint shown next to the Start-from trigger after a repo
    *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
@@ -286,7 +286,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (persistDraft && newWorkspaceDraft?.linkedIssue) {
       return newWorkspaceDraft.linkedIssue
     }
-    if (initialLinkedWorkItem?.type === 'issue') {
+    if (initialLinkedWorkItem?.type === 'issue' && !initialLinkedWorkItem.linearIdentifier) {
       return String(initialLinkedWorkItem.number)
     }
     return ''
@@ -420,20 +420,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       return
     }
     let cancelled = false
-    const target = getActiveRuntimeTarget(settings)
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<{ owner: string; repo: string } | null>(
-            target,
-            'github.repoSlug',
-            { repo: selectedRepo.id },
-            { timeoutMs: 30_000 }
-          )
-        : (window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
-            owner: string
-            repo: string
-          } | null>)
-    void request
+    void (
+      window.api.gh.repoSlug({ repoPath: selectedRepoPath, repoId }) as Promise<{
+        owner: string
+        repo: string
+      } | null>
+    )
       .then((result) => {
         if (cancelled) {
           return
@@ -448,7 +440,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [selectedRepo, selectedRepoPath, settings])
+  }, [repoId, selectedRepo, selectedRepoPath])
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
   const sparsePresets = sparsePresetsForRepo ?? EMPTY_SPARSE_PRESETS
   const normalizedSparseDirectories = useMemo(
@@ -755,13 +747,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   // Why: warm the Start-from picker's PR cache on composer mount and whenever
   // the selected repo changes so opening the picker paints instantly from
-  // cache. Local repos only — remote SSH repos disable the PR tab in v1.
+  // cache.
   useEffect(() => {
-    if (!selectedRepo?.path || selectedRepo.connectionId) {
+    if (!selectedRepo?.path) {
       return
     }
     prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
-  }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
+  }, [prefetchWorkItems, selectedRepo?.id, selectedRepo?.path])
 
   // Reset setup decision when config / policy changes.
   useEffect(() => {
@@ -795,17 +787,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkItemsLoading(true)
 
     const lookupRepoId = selectedRepo.id
-    const target = getActiveRuntimeTarget(settings)
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>(
-            target,
-            'github.listWorkItems',
-            { repo: selectedRepo.id, limit: 100 },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
-    void request
+    void window.api.gh
+      .listWorkItems({ repoPath: selectedRepo.path, repoId: selectedRepo.id, limit: 100 })
       .then((envelope) => {
         if (!cancelled) {
           // Why: IPC payload omits repoId — stamp it here from the repo we
@@ -852,7 +835,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, selectedRepo, settings])
+  }, [linkPopoverOpen, selectedRepo])
 
   useEffect(() => {
     if (!linkPopoverOpen || !selectedRepo || normalizedLinkQuery.directNumber === null) {
@@ -868,20 +851,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // resolving direct lookups against the selected repo instead of requiring a
     // text match in the recent-items list.
     const lookupRepoId = selectedRepo.id
-    const target = getActiveRuntimeTarget(settings)
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
-            target,
-            'github.workItem',
-            { repo: selectedRepo.id, number: normalizedLinkQuery.directNumber },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.workItem({
-            repoPath: selectedRepo.path,
-            number: normalizedLinkQuery.directNumber
-          })
-    void request
+    void window.api.gh
+      .workItem({
+        repoPath: selectedRepo.path,
+        repoId: selectedRepo.id,
+        number: normalizedLinkQuery.directNumber
+      })
       .then((item) => {
         if (!cancelled) {
           setLinkDirectItem(
@@ -903,7 +878,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo, settings])
+  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo])
 
   const applyLinkedWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
@@ -1551,6 +1526,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
       }
 
+      const linkedLinearIssue = linkedWorkItem?.linearIdentifier
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -1567,7 +1543,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         parsedLinkedIssueNumber ?? undefined,
         effectiveLinkedPR ?? undefined,
         pushTarget,
-        tuiAgent
+        tuiAgent,
+        linkedLinearIssue
       )
       const worktree = result.worktree
 
@@ -1652,6 +1629,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     effectiveLinkedPR,
     linkedGitLabIssue,
     linkedGitLabMR,
+    linkedWorkItem?.linearIdentifier,
     linkedWorkItem?.title,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
@@ -1711,6 +1689,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? 'skip'
             : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
 
+        const linkedLinearIssue = linkedWorkItem?.linearIdentifier
         const result = await createWorktree(
           repoId,
           workspaceName,
@@ -1727,7 +1706,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           parsedLinkedIssueNumber ?? undefined,
           effectiveLinkedPR ?? undefined,
           pushTarget,
-          agent ?? undefined
+          agent ?? undefined,
+          linkedLinearIssue
         )
         const worktree = result.worktree
 

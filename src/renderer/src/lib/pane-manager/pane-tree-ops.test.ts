@@ -20,6 +20,7 @@ function createPane({
   terminalRows: number
   paneId?: number
 }): ManagedPaneInternal {
+  const leafId = '11111111-1111-4111-8111-111111111111' as never
   const fit = vi.fn()
   const proposeDimensions = vi.fn(() => ({ cols: proposedCols, rows: proposedRows }))
   const terminal = {
@@ -44,6 +45,8 @@ function createPane({
 
   return {
     id: paneId,
+    leafId,
+    stablePaneId: leafId,
     terminal: terminal as never,
     container: { dataset: {} } as never,
     xtermContainer: {} as never,

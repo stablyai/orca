@@ -30,6 +30,13 @@ type FloatingTerminalPanelProps = {
   onOpenChange: (open: boolean) => void
 }
 
+const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
+  'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
+
+function isFloatingTerminalDragTarget(target: EventTarget): boolean {
+  return !(target instanceof HTMLElement && target.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR))
+}
+
 export function FloatingTerminalPanel({
   open,
   onOpenChange
@@ -211,12 +218,7 @@ export function FloatingTerminalPanel({
       return
     }
     const target = event.target
-    if (
-      target instanceof HTMLElement &&
-      target.closest(
-        'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
-      )
-    ) {
+    if (!isFloatingTerminalDragTarget(target)) {
       return
     }
     dragRef.current = {
@@ -247,6 +249,14 @@ export function FloatingTerminalPanel({
     if (dragRef.current?.pointerId === event.pointerId) {
       dragRef.current = null
     }
+  }
+
+  const handleTitlebarDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (event.button !== 0 || !isFloatingTerminalDragTarget(event.target)) {
+      return
+    }
+    event.preventDefault()
+    toggleMaximized()
   }
 
   const dismissOrchestrationSetup = useCallback(() => {
@@ -285,6 +295,7 @@ export function FloatingTerminalPanel({
           onPointerMove={handleDragMove}
           onPointerUp={handleDragEnd}
           onPointerCancel={handleDragEnd}
+          onDoubleClick={handleTitlebarDoubleClick}
         >
           <div className="flex h-full min-w-0 flex-1">
             <TabBar

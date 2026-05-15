@@ -186,7 +186,9 @@ export function getVisibleWorktreeIds(): string[] {
       repoMap,
       state.agentStatusByPaneKey,
       state.runtimePaneTitlesByTabId,
-      state.ptyIdsByTabId
+      state.ptyIdsByTabId,
+      state.migrationUnsupportedByPtyId,
+      state.terminalLayoutsByTabId
     ).map((w) => w.id)
   } else {
     // Why empty map: non-smart branches don't read attentionByWorktree, but

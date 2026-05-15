@@ -16,6 +16,27 @@ function generateId(): string {
   return createBrowserUuid()
 }
 
+function normalizeDiffComment(comment: DiffComment): DiffComment {
+  const rawSource = (comment as { source?: unknown }).source
+  const source = rawSource === 'markdown' || rawSource === 'diff' ? rawSource : undefined
+  const rawStartLine = (comment as { startLine?: unknown }).startLine
+  const startLine =
+    Number.isInteger(rawStartLine) &&
+    typeof rawStartLine === 'number' &&
+    rawStartLine >= 1 &&
+    rawStartLine <= comment.lineNumber
+      ? rawStartLine
+      : undefined
+
+  return {
+    ...comment,
+    ...(source !== undefined ? { source } : {}),
+    ...(source === undefined ? { source: undefined } : {}),
+    ...(startLine !== undefined ? { startLine } : {}),
+    ...(startLine === undefined ? { startLine: undefined } : {})
+  }
+}
+
 // Why: return a stable reference when no comments exist so selectors don't
 // produce a fresh `[]` on every store update. A new array identity would
 // trigger re-renders in any consumer using referential equality.
@@ -70,7 +91,7 @@ function enqueuePersist(worktreeId: string, get: () => AppState): Promise<void> 
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     const repoList = get().worktreesByRepo[repoId]
     const target = repoList?.find((w) => w.id === worktreeId)
-    const latest = target?.diffComments ?? []
+    const latest = (target?.diffComments ?? []).map(normalizeDiffComment)
     await persist(get().settings, worktreeId, latest)
   }
   const next = prior.then(run, run)
@@ -196,11 +217,11 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   },
 
   addDiffComment: async (input) => {
-    const comment: DiffComment = {
+    const comment: DiffComment = normalizeDiffComment({
       ...input,
       id: generateId(),
       createdAt: Date.now()
-    }
+    })
     const result = mutateComments(set, input.worktreeId, (existing) => [...existing, comment])
     if (!result) {
       return null

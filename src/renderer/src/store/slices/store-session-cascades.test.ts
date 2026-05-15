@@ -9,6 +9,7 @@ import type {
   TerminalTab,
   Worktree
 } from '../../../../shared/types'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -1305,12 +1306,15 @@ describe('reconnectPersistedTerminals', () => {
     // sees the tab as active (green dot) even before the terminal mounts.
     // connectPanePty reads ptyIdsByLeafId for per-leaf daemon sessions.
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('daemon-session-B')
-    // ptyIdsByLeafId preserved from hydration for connectPanePty to consume
+    // ptyIdsByLeafId preserved from hydration for connectPanePty to consume,
+    // but legacy pane:* leaves are reminted to durable UUID leaves at hydration.
     const layout = s.terminalLayoutsByTabId['tab1']
-    expect(layout.ptyIdsByLeafId).toEqual({
-      'pane:1': 'daemon-session-A',
-      'pane:3': 'daemon-session-B'
-    })
+    const bindings = layout.ptyIdsByLeafId ?? {}
+    expect(Object.keys(bindings)).toHaveLength(2)
+    expect(Object.keys(bindings).every(isTerminalLeafId)).toBe(true)
+    expect(Object.keys(bindings)).not.toContain('pane:1')
+    expect(Object.keys(bindings)).not.toContain('pane:3')
+    expect(Object.values(bindings).sort()).toEqual(['daemon-session-A', 'daemon-session-B'])
     expect(s.workspaceSessionReady).toBe(true)
   })
 })

@@ -36,6 +36,7 @@ export const SSH_TERMINATE_RECONNECT_REQUIRED = 'SSH_TERMINATE_RECONNECT_REQUIRE
 export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chrome: 'Google Chrome',
   chromium: 'Chromium',
+  comet: 'Comet',
   arc: 'Arc',
   edge: 'Microsoft Edge',
   brave: 'Brave',
@@ -317,6 +318,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     workspaceSession: getDefaultWorkspaceSession(),
     sshTargets: [],
     sshRemotePtyLeases: [],
+    migrationUnsupportedPtyEntries: [],
     automations: [],
     automationRuns: [],
     onboarding: getDefaultOnboardingState()
