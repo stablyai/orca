@@ -22,18 +22,25 @@ export async function refreshGitStatusForWorktree({
   connectionId,
   deps
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId' | 'showGitIgnoredFiles'> | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
   deps: GitStatusRefreshDeps
 }): Promise<void> {
-  const status = (await getRuntimeGitStatus({
-    settings,
-    worktreeId,
-    worktreePath,
-    connectionId
-  })) as GitStatusResult
+  // Why: setting is optional in the type for backward-compat with pre-feature
+  // profiles, but the persistence merge fills the default before this runs.
+  // Fall back to true so first-launch behavior matches getDefaultSettings.
+  const includeIgnored = settings?.showGitIgnoredFiles ?? true
+  const status = (await getRuntimeGitStatus(
+    {
+      settings,
+      worktreeId,
+      worktreePath,
+      connectionId
+    },
+    { includeIgnored }
+  )) as GitStatusResult
 
   deps.setGitStatus(worktreeId, status)
   // Why: branch switches can happen inside a terminal. `git status --branch`

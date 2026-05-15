@@ -8,6 +8,10 @@ const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+const GitStatusParams = WorktreeSelector.extend({
+  includeIgnored: z.boolean().optional()
+})
+
 const GitFilePath = WorktreeSelector.extend({
   filePath: z
     .unknown()
@@ -73,8 +77,14 @@ const GitRemoteFileUrl = WorktreeSelector.extend({
 export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.getRuntimeGitStatus(params.worktree)
+    params: GitStatusParams,
+    // Why: only forward the options bag when the request actually carried
+    // includeIgnored, so the call shape stays identical to the pre-feature
+    // signature for legacy callers (matters because tests assert exact argv).
+    handler: async (params, { runtime }) =>
+      params.includeIgnored === undefined
+        ? runtime.getRuntimeGitStatus(params.worktree)
+        : runtime.getRuntimeGitStatus(params.worktree, { includeIgnored: params.includeIgnored })
   }),
   defineMethod({
     name: 'git.conflictOperation',

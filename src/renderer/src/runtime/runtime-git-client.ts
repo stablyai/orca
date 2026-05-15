@@ -27,18 +27,26 @@ export function getRuntimeGitScope(
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : connectionId
 }
 
-export async function getRuntimeGitStatus(context: RuntimeGitContext): Promise<GitStatusResult> {
+export async function getRuntimeGitStatus(
+  context: RuntimeGitContext,
+  options?: { includeIgnored?: boolean }
+): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
+  // Why: only attach includeIgnored when explicitly requested so the params
+  // shape stays identical to the pre-feature contract for callers that don't
+  // opt in. Both downstream branches treat a missing key as `false`.
+  const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.status({
       worktreePath: context.worktreePath,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...includeIgnoredArgs
     })
   }
   return callRuntimeRpc<GitStatusResult>(
     target,
     'git.status',
-    { worktree: context.worktreeId },
+    { worktree: context.worktreeId, ...includeIgnoredArgs },
     { timeoutMs: 15_000 }
   )
 }

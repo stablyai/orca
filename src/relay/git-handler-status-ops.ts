@@ -60,8 +60,10 @@ export async function getStatusOp(
     ahead: number
     behind: number
   }
+  ignoredPaths?: string[]
 }> {
   const worktreePath = params.worktreePath as string
+  const includeIgnored = params.includeIgnored === true
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
@@ -74,28 +76,34 @@ export async function getStatusOp(
         behind: number
       }
     | undefined
+  let ignoredPaths: string[] = []
 
   try {
     // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8 in
     // git's stdout instead of C-style octal escapes; without it the parsed
     // entry.path renders as gibberish in the source-control sidebar and
     // downstream blob lookups miss.
-    const { stdout } = await git(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all'
-      ],
-      worktreePath
-    )
+    // Why --ignored=matching is gated on the caller flag: lists only files
+    // that match .gitignore patterns (not the recursive contents of ignored
+    // directories), keeping the remote payload bounded for large repos.
+    const statusArgs = [
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all'
+    ]
+    if (includeIgnored) {
+      statusArgs.push('--ignored=matching')
+    }
+    const { stdout } = await git(statusArgs, worktreePath)
     const parsed = parseStatusOutput(stdout)
     entries.push(...parsed.entries)
     head = parsed.head
     branch = parsed.branch
     upstreamStatus = parsed.upstreamStatus
+    ignoredPaths = parsed.ignoredPaths
 
     for (const uLine of parsed.unmergedLines) {
       const entry = parseUnmergedEntry(worktreePath, uLine)
@@ -107,5 +115,12 @@ export async function getStatusOp(
     // not a git repo or git not available
   }
 
-  return { entries, conflictOperation, head, branch, upstreamStatus }
+  return {
+    entries,
+    conflictOperation,
+    head,
+    branch,
+    upstreamStatus,
+    ...(includeIgnored ? { ignoredPaths } : {})
+  }
 }

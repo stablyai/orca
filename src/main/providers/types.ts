@@ -142,7 +142,10 @@ export type IFilesystemProvider = {
 // ─── Git Provider ───────────────────────────────────────────────────
 
 export type IGitProvider = {
-  getStatus(worktreePath: string): Promise<GitStatusResult>
+  getStatus(
+    worktreePath: string,
+    options?: { includeIgnored?: boolean }
+  ): Promise<GitStatusResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(

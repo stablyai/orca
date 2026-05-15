@@ -40,7 +40,13 @@ describe('refreshGitStatusForWorktree', () => {
       deps
     })
 
-    expect(gitStatus).toHaveBeenCalledWith({ worktreePath: '/repo', connectionId: 'ssh-1' })
+    // Why: settings is undefined in this test, which the refresh helper treats
+    // as the default-on case for showGitIgnoredFiles (matches getDefaultSettings).
+    expect(gitStatus).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      includeIgnored: true
+    })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-1', status)
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-1', {
       head: 'abc123',

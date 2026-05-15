@@ -1264,6 +1264,13 @@ export type GlobalSettings = {
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
   rightSidebarOpenByDefault: boolean
+  /** Why: surfaces `.gitignore`d files in the explorer with a dimmed/italic
+   *  decoration so users can still see them at a glance. Off skips the
+   *  `--ignored=matching` flag on `git status`, keeping the porcelain payload
+   *  small for large repos with heavy build artifacts (mostly relevant for
+   *  remote SSH worktrees). Optional + default true via the persistence merge
+   *  so existing profiles inherit the new behavior on upgrade. */
+  showGitIgnoredFiles?: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
@@ -1868,6 +1875,11 @@ export type GitStatusResult = {
   // Why: porcelain v2 status already includes upstream/ahead/behind metadata.
   // Folding it in lets refresh polling avoid a second pair of git subprocesses.
   upstreamStatus?: GitUpstreamStatus
+  // Why: optional so existing callers and pre-feature relay versions keep
+  // typing as before. Populated only when the caller opts in via
+  // `includeIgnored` — the file explorer reads this to dim ignored paths
+  // without polluting GitStatusEntry / staging-area grouping in Source Control.
+  ignoredPaths?: string[]
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a

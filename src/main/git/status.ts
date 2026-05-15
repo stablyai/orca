@@ -21,11 +21,23 @@ const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
 
+export type GetStatusOptions = {
+  /** When true, adds `--ignored=matching` so the porcelain output includes
+   *  `!` records for files matched by `.gitignore`. Results are surfaced via
+   *  `GitStatusResult.ignoredPaths`, not the `entries` array, so staging-area
+   *  consumers (Source Control) are unaffected. */
+  includeIgnored?: boolean
+}
+
 /**
  * Parse `git status --porcelain=v2` output into structured entries.
  */
-export async function getStatus(worktreePath: string): Promise<GitStatusResult> {
+export async function getStatus(
+  worktreePath: string,
+  options: GetStatusOptions = {}
+): Promise<GitStatusResult> {
   const entries: GitStatusEntry[] = []
+  const ignoredPaths: string[] = []
   let head: string | undefined
   let branch: string | undefined
   let upstreamName: string | undefined
@@ -39,10 +51,22 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
   // etc.) as raw UTF-8 instead of git's default C-style octal escapes wrapped
   // in double quotes. Without it, the parsed entry.path is unreadable in the
   // sidebar and downstream `git show :"docs/\346..."` lookups silently miss.
-  const statusPromise = gitExecFileAsync(
-    ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--branch', '--untracked-files=all'],
-    { cwd: worktreePath }
-  )
+  // Why --ignored=matching (only when requested): lists only files that match
+  // a pattern in .gitignore, NOT the contents of ignored directories. That
+  // keeps the payload bounded on repos with heavy build artifacts while
+  // still letting the explorer dim the matched paths it already shows.
+  const statusArgs = [
+    '-c',
+    'core.quotePath=false',
+    'status',
+    '--porcelain=v2',
+    '--branch',
+    '--untracked-files=all'
+  ]
+  if (options.includeIgnored) {
+    statusArgs.push('--ignored=matching')
+  }
+  const statusPromise = gitExecFileAsync(statusArgs, { cwd: worktreePath })
   const conflictOperation = await conflictPromise
 
   try {
@@ -116,6 +140,10 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
         // Untracked file
         const path = line.slice(2)
         entries.push({ path, status: 'untracked', area: 'untracked' })
+      } else if (line.startsWith('! ')) {
+        // Why: porcelain v2 `!` records are emitted only when --ignored is set.
+        // Path runs from index 2 to end of line, with no further fields.
+        ignoredPaths.push(line.slice(2))
       } else if (line.startsWith('u ')) {
         const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
         if (unmergedEntry) {
@@ -133,6 +161,10 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
     conflictOperation,
     head,
     branch,
+    // Why: only attach ignoredPaths when the caller asked for them — keeps the
+    // response shape identical to the pre-feature contract when the setting is
+    // off, so downstream consumers that branch on key presence stay correct.
+    ...(options.includeIgnored ? { ignoredPaths } : {}),
     ...(statusSucceeded
       ? {
           upstreamStatus: upstreamName

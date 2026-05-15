@@ -95,3 +95,54 @@ export function buildFolderStatusMap(entries: GitStatusEntry[]): Map<string, Git
 export function shouldPropagateStatus(status: GitFileStatus): boolean {
   return status !== 'deleted'
 }
+
+/**
+ * Build a set of normalized relative paths reported by git as ignored.
+ *
+ * Why a separate Set instead of folding into the status map: ignored is not a
+ * file *change* — Source Control groups entries by `area` and would break if
+ * we extended GitStagingArea. Keeping ignored as a peer to the status map lets
+ * the explorer decorate paths without touching staging-area code.
+ */
+/**
+ * Whether `relativePath` is ignored, walking up ancestors so children of an
+ * ignored directory inherit the decoration.
+ *
+ * Why ancestor walk: `--ignored=matching` reports the matched pattern, so a
+ * `dist/` rule produces a single `dist` entry. Without the walk, expanding
+ * `dist/` would show its children with normal styling.
+ */
+export function isPathIgnored(ignored: Set<string>, relativePath: string): boolean {
+  if (ignored.size === 0) {
+    return false
+  }
+  if (ignored.has(relativePath)) {
+    return true
+  }
+  let candidate = relativePath
+  for (;;) {
+    const idx = candidate.lastIndexOf('/')
+    if (idx <= 0) {
+      return false
+    }
+    candidate = candidate.slice(0, idx)
+    if (ignored.has(candidate)) {
+      return true
+    }
+  }
+}
+
+export function buildIgnoredSet(ignoredPaths: readonly string[] | undefined): Set<string> {
+  const set = new Set<string>()
+  if (!ignoredPaths) {
+    return set
+  }
+  for (const rawPath of ignoredPaths) {
+    // Why: porcelain v2 emits directories with a trailing slash (e.g.
+    // `dist/`). Strip it so lookups against TreeNode.relativePath — which
+    // never has a trailing separator — hit correctly.
+    const trimmed = rawPath.endsWith('/') ? rawPath.slice(0, -1) : rawPath
+    set.add(normalizeRelativePath(trimmed))
+  }
+  return set
+}

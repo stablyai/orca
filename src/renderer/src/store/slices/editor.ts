@@ -298,6 +298,12 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  // Why: stored separately from gitStatusByWorktree (which is GitStatusEntry[]
+  // for Source Control grouping) so the file explorer's ignored decoration
+  // does not pollute staging-area code. Absent entries mean "ignored data
+  // wasn't requested or unavailable" — the explorer treats that as no
+  // decoration.
+  gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
   trackConflictPath: (worktreeId: string, path: string, conflictKind: GitConflictKind) => void
@@ -1809,6 +1815,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
   trackConflictPath: (worktreeId, path, conflictKind) =>
@@ -1897,7 +1904,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const openFilesUnchanged = nextOpenFiles === s.openFiles
       const operationUnchanged = prevOperation === status.conflictOperation
 
-      if (statusUnchanged && trackedUnchanged && openFilesUnchanged && operationUnchanged) {
+      // Why: only write the ignored slice when this status response actually
+      // carried ignored data — `ignoredPaths` is undefined when the caller
+      // didn't pass --ignored. Leaving the previous slice in place lets
+      // toggling the setting off keep the last-known decoration until the
+      // next poll without a flicker; the next on-poll (with the new flag)
+      // overwrites it anyway.
+      const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
+      const nextIgnored = status.ignoredPaths
+      const ignoredUnchanged =
+        nextIgnored === undefined ||
+        (prevIgnored !== undefined &&
+          prevIgnored.length === nextIgnored.length &&
+          prevIgnored.every((p, i) => p === nextIgnored[i]))
+
+      if (
+        statusUnchanged &&
+        trackedUnchanged &&
+        openFilesUnchanged &&
+        operationUnchanged &&
+        ignoredUnchanged
+      ) {
         return s
       }
 
@@ -1906,6 +1933,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
+        gitIgnoredPathsByWorktree: ignoredUnchanged
+          ? s.gitIgnoredPathsByWorktree
+          : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored ?? [] },
         gitConflictOperationByWorktree: operationUnchanged
           ? s.gitConflictOperationByWorktree
           : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },

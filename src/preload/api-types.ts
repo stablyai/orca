@@ -1168,7 +1168,11 @@ export type PreloadApi = {
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   git: {
-    status: (args: { worktreePath: string; connectionId?: string }) => Promise<GitStatusResult>
+    status: (args: {
+      worktreePath: string
+      connectionId?: string
+      includeIgnored?: boolean
+    }) => Promise<GitStatusResult>
     conflictOperation: (args: {
       worktreePath: string
       connectionId?: string

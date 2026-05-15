@@ -439,9 +439,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
 
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
-    status: async ({ worktreePath }) => {
+    status: async ({ worktreePath, includeIgnored }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.status', { worktree: worktree.id })
+      return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
     },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
