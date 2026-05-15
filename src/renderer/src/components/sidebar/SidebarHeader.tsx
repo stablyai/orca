@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Kanban, Plus, SlidersHorizontal } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -51,9 +51,18 @@ const SORT_OPTIONS = [
 
 const isMac = navigator.userAgent.includes('Mac')
 const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
+const WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS = 50
+// Why: gives the pointer room to travel from the header into the board before
+// the temporary hover preview collapses.
+const WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS = 220
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
+  // Why: entering the board turns the hover preview into a persistent drawer
+  // until the user explicitly closes it or clicks outside.
+  const workspaceBoardPinnedOpenRef = useRef(false)
+  const workspaceBoardHoverOpenTimerRef = useRef<number | null>(null)
+  const workspaceBoardHoverCloseTimerRef = useRef<number | null>(null)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
   const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
@@ -64,30 +73,107 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+
+  const clearWorkspaceBoardHoverClose = useCallback(() => {
+    if (workspaceBoardHoverCloseTimerRef.current === null) {
+      return
+    }
+    window.clearTimeout(workspaceBoardHoverCloseTimerRef.current)
+    workspaceBoardHoverCloseTimerRef.current = null
+  }, [])
+
+  const clearWorkspaceBoardHoverOpen = useCallback(() => {
+    if (workspaceBoardHoverOpenTimerRef.current === null) {
+      return
+    }
+    window.clearTimeout(workspaceBoardHoverOpenTimerRef.current)
+    workspaceBoardHoverOpenTimerRef.current = null
+  }, [])
+
+  useEffect(
+    () => () => {
+      clearWorkspaceBoardHoverOpen()
+      clearWorkspaceBoardHoverClose()
+    },
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
+  )
+
+  const setWorkspaceBoardPinned = useCallback((pinned: boolean) => {
+    workspaceBoardPinnedOpenRef.current = pinned
+  }, [])
+
+  const handleWorkspaceBoardOpenChange = useCallback(
+    (open: boolean) => {
+      clearWorkspaceBoardHoverOpen()
+      clearWorkspaceBoardHoverClose()
+      setWorkspaceBoardOpen(open)
+      if (!open) {
+        setWorkspaceBoardPinned(false)
+      }
+    },
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardPinned]
+  )
+
+  const handleWorkspaceHeaderPointerEnter = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== 'mouse') {
+        return
+      }
+      clearWorkspaceBoardHoverClose()
+      if (workspaceBoardOpen) {
+        return
+      }
+      clearWorkspaceBoardHoverOpen()
+      workspaceBoardHoverOpenTimerRef.current = window.setTimeout(() => {
+        workspaceBoardHoverOpenTimerRef.current = null
+        setWorkspaceBoardOpen(true)
+      }, WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS)
+    },
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, workspaceBoardOpen]
+  )
+
+  const handleWorkspaceHeaderPointerLeave = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      clearWorkspaceBoardHoverOpen()
+      if (event.pointerType !== 'mouse' || workspaceBoardPinnedOpenRef.current) {
+        return
+      }
+      clearWorkspaceBoardHoverClose()
+      workspaceBoardHoverCloseTimerRef.current = window.setTimeout(() => {
+        workspaceBoardHoverCloseTimerRef.current = null
+        if (workspaceBoardPinnedOpenRef.current) {
+          return
+        }
+        setWorkspaceBoardOpen(false)
+      }, WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS)
+    },
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
+  )
+
+  const handleWorkspaceBoardPointerEnter = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== 'mouse') {
+        return
+      }
+      clearWorkspaceBoardHoverOpen()
+      clearWorkspaceBoardHoverClose()
+      setWorkspaceBoardPinned(true)
+      setWorkspaceBoardOpen(true)
+    },
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardPinned]
+  )
+
   return (
     <>
-      <div className="flex h-8 items-center justify-between px-2 gap-2">
+      <div
+        className="flex h-8 items-center justify-between px-2 gap-2"
+        onPointerEnter={handleWorkspaceHeaderPointerEnter}
+        onPointerLeave={handleWorkspaceHeaderPointerLeave}
+      >
         <div className="flex min-w-0 items-center gap-1">
           <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
             Workspaces
           </span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-muted-foreground"
-                aria-label="Workspace board"
-                aria-pressed={workspaceBoardOpen}
-                onClick={() => setWorkspaceBoardOpen((open) => !open)}
-              >
-                <Kanban className="size-3.5" strokeWidth={2.25} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              Workspace board
-            </TooltipContent>
-          </Tooltip>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <SidebarFilter />
@@ -208,7 +294,11 @@ const SidebarHeader = React.memo(function SidebarHeader() {
           </Tooltip>
         </div>
       </div>
-      <WorkspaceKanbanDrawer open={workspaceBoardOpen} onOpenChange={setWorkspaceBoardOpen} />
+      <WorkspaceKanbanDrawer
+        open={workspaceBoardOpen}
+        onOpenChange={handleWorkspaceBoardOpenChange}
+        onPointerEnter={handleWorkspaceBoardPointerEnter}
+      />
     </>
   )
 })
