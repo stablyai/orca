@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 type MockState = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -71,6 +74,7 @@ describe('useWorktreeActivityStatus', () => {
 
   it('keeps a restored offscreen working agent yellow from the hook snapshot', () => {
     const worktreeId = 'repo1::/path/wt1'
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
     mockState = {
       ...mockState,
       tabsByWorktree: {
@@ -80,7 +84,7 @@ describe('useWorktreeActivityStatus', () => {
         'tab-1': ['pty-1']
       },
       agentStatusByPaneKey: {
-        'tab-1:1': makeAgentStatusEntry({ paneKey: 'tab-1:1', state: 'working' })
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'working' })
       }
     }
 

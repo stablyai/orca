@@ -49,7 +49,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
             done = true
           }
         }
-        for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
+        for (const unsupported of Object.values(s.migrationUnsupportedByPtyId ?? {})) {
           const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
           if (!entry) {
             continue
