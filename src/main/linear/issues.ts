@@ -100,6 +100,12 @@ export async function searchIssues(
       }
     })
   )
+  // Why: searchIssues returns Linear's relevance ranking. Re-sorting by
+  // updatedAt would discard relevance order for single-workspace results,
+  // diverging from Linear's web UI and pre-PR behavior.
+  if (entries.length === 1) {
+    return results.flat().slice(0, limit)
+  }
   return sortAndLimitIssues(results.flat(), limit)
 }
 
