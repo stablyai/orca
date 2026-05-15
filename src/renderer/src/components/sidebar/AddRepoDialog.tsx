@@ -21,6 +21,7 @@ import { getDefaultCloneParent } from './clone-defaults'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
+import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -299,14 +300,26 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     openSettingsPage()
   }, [closeModal, openSettingsTarget, openSettingsPage, repoId])
 
+  const finishImportedRepoWithoutOpening = useCallback(async () => {
+    const importedRepoId = repoId
+    closeModal()
+    resetState()
+    if (!importedRepoId) {
+      return
+    }
+
+    await fetchWorktrees(importedRepoId)
+    const state = useAppStore.getState()
+    finalizeImportedRepoAfterSkip(state, importedRepoId)
+  }, [closeModal, fetchWorktrees, repoId, resetState])
+
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = resetState
 
   const handleSkip = useCallback(() => {
     track('add_repo_setup_step_action', { action: 'skip' })
-    closeModal()
-    resetState()
-  }, [closeModal, resetState])
+    void finishImportedRepoWithoutOpening()
+  }, [finishImportedRepoWithoutOpening])
 
   // Why: only the Setup step's "Add another project" back arrow counts as a
   // funnel event — the in-flight Back arrows on clone/remote/create are not
@@ -328,6 +341,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           // on the Setup step are funnel-equivalent to Skip.
           if (step === 'setup') {
             track('add_repo_setup_step_action', { action: 'skip' })
+            void finishImportedRepoWithoutOpening()
+            return
           }
           closeModal()
           resetState()
