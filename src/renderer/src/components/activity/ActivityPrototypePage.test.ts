@@ -17,6 +17,22 @@ import {
   getActivityThreadGroup,
   groupActivityThreadsByStatus
 } from './ActivityPrototypePage'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
+const LEAF_ID_3 = '33333333-3333-4333-8333-333333333333'
+const LEAF_ID_UNKNOWN = '44444444-4444-4444-8444-444444444444'
+const LEAF_ID_A1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+const LEAF_ID_B1 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
+const LEAF_ID_A2 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
+const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+const PANE_KEY_2 = makePaneKey('tab-2', LEAF_ID_2)
+const PANE_KEY_3 = makePaneKey('tab-3', LEAF_ID_3)
+const UNKNOWN_PANE_KEY = makePaneKey('tab-unknown', LEAF_ID_UNKNOWN)
+const PANE_KEY_A1 = makePaneKey('tab-a1', LEAF_ID_A1)
+const PANE_KEY_B1 = makePaneKey('tab-b1', LEAF_ID_B1)
+const PANE_KEY_A2 = makePaneKey('tab-a2', LEAF_ID_A2)
 
 function makeRepo(): Repo {
   return {
@@ -89,7 +105,7 @@ function makeWorkingEntryWithPriorDone(): AgentStatusEntry {
     prompt: 'Second prompt',
     updatedAt: 2_000,
     stateStartedAt: 2_000,
-    paneKey: 'tab-1:1',
+    paneKey: PANE_KEY,
     terminalTitle: 'Claude',
     stateHistory: [
       {
@@ -108,7 +124,7 @@ function makeWorkingEntryWithoutHistory(): AgentStatusEntry {
     prompt: 'New run',
     updatedAt: 3_000,
     stateStartedAt: 3_000,
-    paneKey: 'tab-1:1',
+    paneKey: PANE_KEY,
     terminalTitle: 'Claude',
     stateHistory: [],
     agentType: 'claude'
@@ -122,7 +138,7 @@ function makeRetainedDoneEntry(tab: TerminalTab): RetainedAgentEntry {
       prompt: 'Retained prior run',
       updatedAt: 1_000,
       stateStartedAt: 1_000,
-      paneKey: 'tab-1:1',
+      paneKey: PANE_KEY,
       terminalTitle: 'Claude',
       stateHistory: [],
       agentType: 'claude',
@@ -169,7 +185,7 @@ describe('buildActivityEvents', () => {
   it('keeps a prior done event after the same pane starts working again', () => {
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': makeWorkingEntryWithPriorDone()
+        [PANE_KEY]: makeWorkingEntryWithPriorDone()
       },
       now: 2_000
     })
@@ -180,8 +196,8 @@ describe('buildActivityEvents', () => {
       timestamp: 1_000
     })
     expect(result.events[0].entry.prompt).toBe('First prompt')
-    expect(result.liveAgentByPaneKey['tab-1:1'].state).toBe('working')
-    expect(result.liveAgentByPaneKey['tab-1:1'].entry.prompt).toBe('Second prompt')
+    expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
+    expect(result.liveAgentByPaneKey[PANE_KEY].entry.prompt).toBe('Second prompt')
 
     const threads = makeThreads(result)
 
@@ -194,19 +210,19 @@ describe('buildActivityEvents', () => {
   it('does not keep showing a stale live agent as running', () => {
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': makeWorkingEntryWithPriorDone()
+        [PANE_KEY]: makeWorkingEntryWithPriorDone()
       },
       now: 2_000 + AGENT_STATUS_STALE_AFTER_MS + 1
     })
 
     expect(result.events).toHaveLength(1)
-    expect(result.liveAgentByPaneKey['tab-1:1']).toBeUndefined()
+    expect(result.liveAgentByPaneKey[PANE_KEY]).toBeUndefined()
   })
 
   it('creates a thread for a fresh running agent with no historical events', () => {
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': makeWorkingEntryWithoutHistory()
+        [PANE_KEY]: makeWorkingEntryWithoutHistory()
       }
     })
 
@@ -215,7 +231,7 @@ describe('buildActivityEvents', () => {
     expect(result.events).toHaveLength(0)
     expect(threads).toHaveLength(1)
     expect(threads[0]).toMatchObject({
-      paneKey: 'tab-1:1',
+      paneKey: PANE_KEY,
       paneTitle: 'New run',
       currentAgentState: 'working',
       latestTimestamp: 3_000,
@@ -233,7 +249,7 @@ describe('buildActivityEvents', () => {
 
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': entry
+        [PANE_KEY]: entry
       },
       tab
     })
@@ -257,7 +273,7 @@ describe('buildActivityEvents', () => {
 
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': entry
+        [PANE_KEY]: entry
       }
     })
 
@@ -281,7 +297,7 @@ describe('buildActivityEvents', () => {
 
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': entry
+        [PANE_KEY]: entry
       }
     })
 
@@ -315,7 +331,7 @@ describe('buildActivityEvents', () => {
 
     const result = makeActivityResult({
       retained: {
-        'tab-1:1': makeRetainedDoneEntry(tab)
+        [PANE_KEY]: makeRetainedDoneEntry(tab)
       },
       tab
     })
@@ -330,10 +346,10 @@ describe('buildActivityEvents', () => {
 
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': makeWorkingEntryWithoutHistory()
+        [PANE_KEY]: makeWorkingEntryWithoutHistory()
       },
       retained: {
-        'tab-1:1': makeRetainedDoneEntry(tab)
+        [PANE_KEY]: makeRetainedDoneEntry(tab)
       },
       tab
     })
@@ -344,7 +360,7 @@ describe('buildActivityEvents', () => {
       timestamp: 1_000
     })
     expect(result.events[0].entry.prompt).toBe('Retained prior run')
-    expect(result.liveAgentByPaneKey['tab-1:1'].state).toBe('working')
+    expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
 
     const threads = makeThreads(result)
 
@@ -363,22 +379,22 @@ describe('buildActivityEvents', () => {
     const doneTab = { ...makeTab(), id: 'tab-3', ptyId: 'pty-3' }
     const result = buildActivityEvents({
       agentStatusByPaneKey: {
-        'tab-1:1': makeWorkingEntryWithoutHistory(),
-        'tab-2:1': {
+        [PANE_KEY]: makeWorkingEntryWithoutHistory(),
+        [PANE_KEY_2]: {
           ...makeWorkingEntryWithoutHistory(),
           state: 'blocked',
           prompt: 'Needs approval',
           updatedAt: 4_000,
           stateStartedAt: 4_000,
-          paneKey: 'tab-2:1'
+          paneKey: PANE_KEY_2
         },
-        'tab-3:1': {
+        [PANE_KEY_3]: {
           ...makeWorkingEntryWithoutHistory(),
           state: 'done',
           prompt: 'Finished work',
           updatedAt: 5_000,
           stateStartedAt: 5_000,
-          paneKey: 'tab-3:1'
+          paneKey: PANE_KEY_3
         }
       },
       retainedAgentsByPaneKey: {},
@@ -400,9 +416,9 @@ describe('buildActivityEvents', () => {
 
     expect(groups.map((group) => group.id)).toEqual(['working', 'blocked', 'done'])
     expect(groups.map((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
-      ['tab-1:1'],
-      ['tab-2:1'],
-      ['tab-3:1']
+      [PANE_KEY],
+      [PANE_KEY_2],
+      [PANE_KEY_3]
     ])
   })
 })
@@ -425,16 +441,16 @@ describe('activity thread grouping', () => {
     }
     const { events, liveAgentByPaneKey } = buildActivityEvents({
       agentStatusByPaneKey: {
-        'tab-1:1': {
+        [PANE_KEY]: {
           ...sharedDone,
-          paneKey: 'tab-1:1',
+          paneKey: PANE_KEY,
           interrupted: true,
           updatedAt: 3_000,
           stateStartedAt: 3_000
         },
-        'tab-2:1': {
+        [PANE_KEY_2]: {
           ...sharedDone,
-          paneKey: 'tab-2:1',
+          paneKey: PANE_KEY_2,
           interrupted: false,
           updatedAt: 2_000,
           stateStartedAt: 2_000
@@ -462,12 +478,12 @@ describe('activity thread grouping', () => {
     const tab = makeTabWithIds('tab-unknown', worktree.id)
     const { events, liveAgentByPaneKey } = buildActivityEvents({
       agentStatusByPaneKey: {
-        'tab-unknown:1': {
+        [UNKNOWN_PANE_KEY]: {
           state: 'done',
           prompt: 'Prompt',
           updatedAt: 1_000,
           stateStartedAt: 1_000,
-          paneKey: 'tab-unknown:1',
+          paneKey: UNKNOWN_PANE_KEY,
           terminalTitle: 'Claude',
           stateHistory: [],
           agentType: 'claude'
@@ -489,7 +505,7 @@ describe('activity thread grouping', () => {
   it('worktree and agent grouping use expected keys and labels', () => {
     const result = makeActivityResult({
       entries: {
-        'tab-1:1': makeWorkingEntryWithoutHistory()
+        [PANE_KEY]: makeWorkingEntryWithoutHistory()
       }
     })
     const threads = makeThreads(result)
@@ -513,32 +529,32 @@ describe('activity thread grouping', () => {
     const tabA2 = makeTabWithIds('tab-a2', wtA.id)
     const { events, liveAgentByPaneKey } = buildActivityEvents({
       agentStatusByPaneKey: {
-        'tab-a1:1': {
+        [PANE_KEY_A1]: {
           state: 'done',
           prompt: 'A1',
           updatedAt: 3_000,
           stateStartedAt: 3_000,
-          paneKey: 'tab-a1:1',
+          paneKey: PANE_KEY_A1,
           terminalTitle: 'Claude',
           stateHistory: [],
           agentType: 'claude'
         },
-        'tab-b1:1': {
+        [PANE_KEY_B1]: {
           state: 'done',
           prompt: 'B1',
           updatedAt: 2_000,
           stateStartedAt: 2_000,
-          paneKey: 'tab-b1:1',
+          paneKey: PANE_KEY_B1,
           terminalTitle: 'Claude',
           stateHistory: [],
           agentType: 'claude'
         },
-        'tab-a2:1': {
+        [PANE_KEY_A2]: {
           state: 'done',
           prompt: 'A2',
           updatedAt: 1_000,
           stateStartedAt: 1_000,
-          paneKey: 'tab-a2:1',
+          paneKey: PANE_KEY_A2,
           terminalTitle: 'Claude',
           stateHistory: [],
           agentType: 'claude'
@@ -558,8 +574,8 @@ describe('activity thread grouping', () => {
     const groups = buildActivityThreadGroups(threads, 'worktree')
 
     expect(groups.map((group) => group.key)).toEqual(['worktree:wt-a', 'worktree:wt-b'])
-    expect(groups[0].threads.map((thread) => thread.paneKey)).toEqual(['tab-a1:1', 'tab-a2:1'])
-    expect(groups[1].threads.map((thread) => thread.paneKey)).toEqual(['tab-b1:1'])
+    expect(groups[0].threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_A1, PANE_KEY_A2])
+    expect(groups[1].threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_B1])
   })
 
   it('returns no groups for empty thread input', () => {

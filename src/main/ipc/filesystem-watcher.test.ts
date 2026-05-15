@@ -98,7 +98,10 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       '[filesystem-watcher] SSH filesystem provider unavailable; retrying watch for /home/me/repo on connection conn-1'
     )
-    handlers['fs:unwatchWorktree'](null, { worktreePath: '/home/me/repo', connectionId: 'conn-1' })
+    handlers['fs:unwatchWorktree'](
+      { sender: { id: 1 } },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
     warnSpy.mockRestore()
     vi.useRealTimers()
   })
@@ -128,7 +131,10 @@ describe('registerFilesystemWatcherHandlers', () => {
       events: [{ path: '/home/me/repo/file.txt', type: 'update' }]
     })
     warnSpy.mockRestore()
-    handlers['fs:unwatchWorktree'](null, { worktreePath: '/home/me/repo', connectionId: 'conn-1' })
+    handlers['fs:unwatchWorktree'](
+      { sender: { id: 1 } },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
     vi.useRealTimers()
   })
 
@@ -150,5 +156,42 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(watchMock).not.toHaveBeenCalled()
     warnSpy.mockRestore()
     vi.useRealTimers()
+  })
+
+  it('shares SSH worktree watchers across renderer senders until the last unwatch', async () => {
+    const sendOne = vi.fn()
+    const sendTwo = vi.fn()
+    const senderOne = { isDestroyed: () => false, send: sendOne, once: vi.fn(), id: 1 }
+    const senderTwo = { isDestroyed: () => false, send: sendTwo, once: vi.fn(), id: 2 }
+    const unwatchMock = vi.fn()
+    const watchMock = vi.fn().mockResolvedValue(unwatchMock)
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    await handlers['fs:watchWorktree'](
+      { sender: senderOne },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    await handlers['fs:watchWorktree'](
+      { sender: senderTwo },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    const onEvents = watchMock.mock.calls[0][1]
+    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    expect(sendOne).toHaveBeenCalledTimes(1)
+    expect(sendTwo).toHaveBeenCalledTimes(1)
+
+    handlers['fs:unwatchWorktree'](
+      { sender: { id: 1 } },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    expect(unwatchMock).not.toHaveBeenCalled()
+
+    handlers['fs:unwatchWorktree'](
+      { sender: { id: 2 } },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    expect(unwatchMock).toHaveBeenCalledTimes(1)
   })
 })

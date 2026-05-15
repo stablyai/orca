@@ -61,13 +61,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
 }
 
 function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
-  return contentType === 'browser'
-    ? 'browser'
-    : contentType === 'terminal'
-      ? 'terminal'
-      : contentType === 'notes'
-        ? 'notes'
-        : 'editor'
+  return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
 }
 
 async function listWorktreesForRepo(
@@ -277,7 +271,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedIssue,
     linkedPR,
     pushTarget,
-    createdWithAgent
+    createdWithAgent,
+    linkedLinearIssue
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -302,7 +297,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedIssue !== undefined ? { linkedIssue } : {}),
             ...(linkedPR !== undefined ? { linkedPR } : {}),
             ...(pushTarget ? { pushTarget } : {}),
-            ...(createdWithAgent ? { createdWithAgent } : {})
+            ...(createdWithAgent ? { createdWithAgent } : {}),
+            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -321,7 +317,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedIssue !== undefined ? { linkedIssue } : {}),
                     ...(linkedPR !== undefined ? { linkedPR } : {}),
                     ...(pushTarget ? { pushTarget } : {}),
-                    ...(createdWithAgent ? { createdWithAgent } : {})
+                    ...(createdWithAgent ? { createdWithAgent } : {}),
+                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
                   },
                   { timeoutMs: 10 * 60_000 }
                 )

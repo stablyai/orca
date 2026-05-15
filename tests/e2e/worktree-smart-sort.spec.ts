@@ -1,5 +1,6 @@
 import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
+import type { TerminalPaneLayoutNode } from '../../src/shared/types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 type SmartSortScenario = {
@@ -85,31 +86,72 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
       throw new Error('Smart sort E2E failed to create terminal tabs')
     }
 
+    const blockedPtyId = stateWithTabs.ptyIdsByTabId[blockedTab.id]?.[0] ?? `e2e-${blockedTab.id}`
+    const donePtyId = stateWithTabs.ptyIdsByTabId[doneTab.id]?.[0] ?? `e2e-${doneTab.id}`
+    const firstLayoutLeafId = (node: TerminalPaneLayoutNode | null | undefined): string | null => {
+      if (!node) {
+        return null
+      }
+      return node.type === 'leaf'
+        ? node.leafId
+        : (firstLayoutLeafId(node.first) ?? firstLayoutLeafId(node.second))
+    }
+    let blockedLeafId = ''
+    let doneLeafId = ''
+
     // Why: WorktreeList intentionally holds cold-start ordering until a live
     // PTY exists. E2E hidden windows can create tabs before panes mount, so
-    // seed the live-PTY map explicitly and let agent-status writes drive the
-    // same sortEpoch path that hook events use in the app.
-    store.setState((current) => ({
-      ptyIdsByTabId: {
-        ...current.ptyIdsByTabId,
-        [blockedTab.id]: current.ptyIdsByTabId[blockedTab.id]?.length
-          ? current.ptyIdsByTabId[blockedTab.id]
-          : [`e2e-${blockedTab.id}`],
-        [doneTab.id]: current.ptyIdsByTabId[doneTab.id]?.length
-          ? current.ptyIdsByTabId[doneTab.id]
-          : [`e2e-${doneTab.id}`]
+    // seed the live-PTY and stable-layout maps explicitly and let agent-status
+    // writes drive the same sortEpoch path that hook events use in the app.
+    store.setState((current) => {
+      const blockedLayout = current.terminalLayoutsByTabId[blockedTab.id]
+      const doneLayout = current.terminalLayoutsByTabId[doneTab.id]
+      blockedLeafId = firstLayoutLeafId(blockedLayout?.root) ?? crypto.randomUUID()
+      doneLeafId = firstLayoutLeafId(doneLayout?.root) ?? crypto.randomUUID()
+
+      return {
+        ptyIdsByTabId: {
+          ...current.ptyIdsByTabId,
+          [blockedTab.id]: current.ptyIdsByTabId[blockedTab.id]?.length
+            ? current.ptyIdsByTabId[blockedTab.id]
+            : [blockedPtyId],
+          [doneTab.id]: current.ptyIdsByTabId[doneTab.id]?.length
+            ? current.ptyIdsByTabId[doneTab.id]
+            : [donePtyId]
+        },
+        terminalLayoutsByTabId: {
+          ...current.terminalLayoutsByTabId,
+          [blockedTab.id]: {
+            root: blockedLayout?.root ?? { type: 'leaf', leafId: blockedLeafId },
+            activeLeafId: blockedLayout?.activeLeafId ?? blockedLeafId,
+            expandedLeafId: blockedLayout?.expandedLeafId ?? null,
+            ptyIdsByLeafId: {
+              ...blockedLayout?.ptyIdsByLeafId,
+              [blockedLeafId]: blockedPtyId
+            }
+          },
+          [doneTab.id]: {
+            root: doneLayout?.root ?? { type: 'leaf', leafId: doneLeafId },
+            activeLeafId: doneLayout?.activeLeafId ?? doneLeafId,
+            expandedLeafId: doneLayout?.expandedLeafId ?? null,
+            ptyIdsByLeafId: {
+              ...doneLayout?.ptyIdsByLeafId,
+              [doneLeafId]: donePtyId
+            }
+          }
+        }
       }
-    }))
+    })
 
     const actions = store.getState()
     actions.setAgentStatus(
-      `${doneTab.id}:1`,
+      `${doneTab.id}:${doneLeafId}`,
       { state: 'done', prompt: 'Finished', agentType: 'codex' },
       'codex',
       { updatedAt: now, stateStartedAt: now - 1_000 }
     )
     actions.setAgentStatus(
-      `${blockedTab.id}:1`,
+      `${blockedTab.id}:${blockedLeafId}`,
       { state: 'blocked', prompt: 'Needs approval', agentType: 'codex' },
       'codex',
       { updatedAt: now, stateStartedAt: now - 60_000 }

@@ -12,7 +12,7 @@ import {
   resolveAttention,
   type PaneInput
 } from './smart-attention'
-import type { TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
 
 function hookPane(entry: AgentStatusEntry): PaneInput {
   return { kind: 'hook', entry }
@@ -23,6 +23,31 @@ function hookPanes(entries: AgentStatusEntry[]): PaneInput[] {
 }
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
+const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
+function paneKey(tabId: string, leafId: string): string {
+  return `${tabId}:${leafId}`
+}
+
+function splitLayout(
+  tabId: string,
+  firstLeafId = LEAF_1,
+  secondLeafId = LEAF_2
+): Record<string, TerminalLayoutSnapshot> {
+  return {
+    [tabId]: {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: firstLeafId },
+        second: { type: 'leaf', leafId: secondLeafId }
+      },
+      activeLeafId: firstLeafId,
+      expandedLeafId: null
+    }
+  }
+}
 
 function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): AgentStatusEntry {
   return {
@@ -382,14 +407,14 @@ describe('buildAttentionByWorktree', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const entries: Record<string, AgentStatusEntry> = {
-      'tab-1:1': makeEntry({
-        paneKey: 'tab-1:1',
+      [paneKey(tab.id, LEAF_1)]: makeEntry({
+        paneKey: paneKey(tab.id, LEAF_1),
         state: 'working',
         stateStartedAt: NOW - 10_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-1:2': makeEntry({
-        paneKey: 'tab-1:2',
+      [paneKey(tab.id, LEAF_2)]: makeEntry({
+        paneKey: paneKey(tab.id, LEAF_2),
         state: 'blocked',
         stateStartedAt: NOW - 5_000,
         updatedAt: NOW - 1_000
@@ -460,8 +485,8 @@ describe('buildAttentionByWorktree', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const entries: Record<string, AgentStatusEntry> = {
-      'tab-1:1': makeEntry({
-        paneKey: 'tab-1:1',
+      [paneKey(tab.id, LEAF_1)]: makeEntry({
+        paneKey: paneKey(tab.id, LEAF_1),
         state: 'done',
         stateStartedAt: NOW - 30_000,
         updatedAt: NOW - 1_000
@@ -474,7 +499,9 @@ describe('buildAttentionByWorktree', () => {
       // Same paneId 1 — must NOT double-promote into Class 3.
       { [tab.id]: { 1: '⠋ Claude' } },
       ptyMap([tab.id]),
-      NOW
+      NOW,
+      undefined,
+      splitLayout(tab.id)
     )
     expect(map.get(w.id)).toEqual({ cls: 2, attentionTimestamp: NOW - 30_000 })
   })
@@ -483,8 +510,8 @@ describe('buildAttentionByWorktree', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const entries: Record<string, AgentStatusEntry> = {
-      'tab-1:1': makeEntry({
-        paneKey: 'tab-1:1',
+      [paneKey(tab.id, LEAF_1)]: makeEntry({
+        paneKey: paneKey(tab.id, LEAF_1),
         state: 'done',
         stateStartedAt: NOW - 30_000,
         updatedAt: NOW - 1_000
@@ -497,7 +524,9 @@ describe('buildAttentionByWorktree', () => {
       // Pane 2 has no hook — title fallback fires for it.
       { [tab.id]: { 1: 'something', 2: '✋ Gemini CLI' } },
       ptyMap([tab.id]),
-      NOW
+      NOW,
+      undefined,
+      splitLayout(tab.id)
     )
     expect(map.get(w.id)).toEqual({
       cls: 1,

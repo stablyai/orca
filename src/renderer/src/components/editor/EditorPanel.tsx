@@ -257,7 +257,7 @@ function EditorPanelInner({
       settings,
       renameDialogFile?.runtimeEnvironmentId
     )?.activeRuntimeEnvironmentId?.trim() ||
-      (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
+    (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
 
   return (

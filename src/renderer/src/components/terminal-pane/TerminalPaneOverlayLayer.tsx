@@ -91,7 +91,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       // TerminalPane mounted here preserves alt-screen TUI state while this
       // flag still lets hidden tabs throttle rendering.
       isVisible={isVisible || activityTerminalPortal !== null}
-      isolatedPaneId={activityTerminalPortal?.paneId ?? null}
+      isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
       onPtyExit={(ptyId) => {
         if (consumeSuppressedPtyExit(ptyId)) {
           return
@@ -205,11 +205,10 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
         const assignment = assignments.get(terminalTab.id)
         const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
         const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
-        const activityTerminalPortal = findActivityTerminalPortal(
-          activityTerminalPortals,
+        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
           worktreeId,
-          terminalTab.id
-        )
+          tabId: terminalTab.id
+        })
         return (
           <TerminalOverlaySlot
             key={terminalTab.id}

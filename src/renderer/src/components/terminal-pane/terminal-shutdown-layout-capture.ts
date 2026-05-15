@@ -2,12 +2,12 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { paneLeafId, serializeTerminalLayout } from './layout-serialization'
+import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 
 const MAX_BUFFER_BYTES = 512 * 1024
 
-type ShutdownPane = Pick<ManagedPane, 'id' | 'terminal' | 'serializeAddon'>
+type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeAddon'>
 
 type ShutdownPaneManager = {
   getPanes(): ShutdownPane[]
@@ -42,7 +42,7 @@ export function captureTerminalShutdownLayout({
         // Why: non-focused panes may have renderer-throttled PTY bytes queued;
         // push them into xterm before taking the shutdown scrollback snapshot.
         flushTerminalOutput(pane.terminal)
-        const leafId = paneLeafId(pane.id)
+        const leafId = pane.leafId
         let scrollback = pane.terminal.options.scrollback ?? 10_000
         let serialized = pane.serializeAddon.serialize({ scrollback })
         // Cap at 512KB — binary search for largest scrollback that fits.
@@ -72,11 +72,16 @@ export function captureTerminalShutdownLayout({
   }
 
   const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
-  const layout = serializeTerminalLayout(container, activePaneId, expandedPaneId)
-  const currentLeafIds = new Set(panes.map((p) => paneLeafId(p.id)))
+  const layout = serializeTerminalLayout(
+    container,
+    activePaneId,
+    expandedPaneId,
+    new Map(panes.map((pane) => [pane.id, pane.leafId]))
+  )
+  const currentLeafIds = new Set(panes.map((p) => p.leafId))
   const ptyEntries = panes
-    .map((pane) => [paneLeafId(pane.id), paneTransports.get(pane.id)?.getPtyId() ?? null] as const)
-    .filter((entry): entry is readonly [string, string] => entry[1] !== null)
+    .map((pane) => [pane.leafId, paneTransports.get(pane.id)?.getPtyId() ?? null] as const)
+    .filter((entry): entry is readonly [ShutdownPane['leafId'], string] => entry[1] !== null)
 
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
@@ -99,7 +104,7 @@ export function captureTerminalShutdownLayout({
 
   const titleEntries = panes
     .filter((p) => paneTitlesByPaneId[p.id])
-    .map((p) => [paneLeafId(p.id), paneTitlesByPaneId[p.id]] as const)
+    .map((p) => [p.leafId, paneTitlesByPaneId[p.id]] as const)
   if (titleEntries.length > 0) {
     layout.titlesByLeafId = Object.fromEntries(titleEntries)
   }

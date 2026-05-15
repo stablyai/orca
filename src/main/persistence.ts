@@ -37,8 +37,12 @@ import type {
   OnboardingChecklistState,
   OnboardingOutcome,
   OnboardingState,
-  TerminalPaneLayoutNode
+  TerminalPaneLayoutNode,
+  TerminalLayoutSnapshot,
+  TerminalTab,
+  WorkspaceSessionState
 } from '../shared/types'
+import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
@@ -53,6 +57,11 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import {
+  setMigrationUnsupportedPty,
+  setMigrationUnsupportedPtyPersistenceListener
+} from './agent-hooks/migration-unsupported-pty-state'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
@@ -261,13 +270,534 @@ function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
     ptyId: raw.ptyId,
     ...(typeof raw.worktreeId === 'string' ? { worktreeId: raw.worktreeId } : {}),
     ...(typeof raw.tabId === 'string' ? { tabId: raw.tabId } : {}),
-    ...(typeof raw.leafId === 'string' ? { leafId: raw.leafId } : {}),
+    ...(typeof raw.leafId === 'string' && raw.leafId.length <= 256 ? { leafId: raw.leafId } : {}),
     state,
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
     ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
   }
+}
+
+type LayoutLeafNormalization = {
+  snapshot: TerminalLayoutSnapshot
+  changed: boolean
+  leafIdByInputLeafId: Map<string, string>
+}
+
+function collectLayoutLeafCounts(
+  node: TerminalPaneLayoutNode,
+  counts: Map<string, number> = new Map()
+): Map<string, number> {
+  if (node.type === 'leaf') {
+    counts.set(node.leafId, (counts.get(node.leafId) ?? 0) + 1)
+    return counts
+  }
+  collectLayoutLeafCounts(node.first, counts)
+  collectLayoutLeafCounts(node.second, counts)
+  return counts
+}
+
+function collectLayoutLeafIdsInOrder(node: TerminalPaneLayoutNode | null | undefined): string[] {
+  if (!node) {
+    return []
+  }
+  if (node.type === 'leaf') {
+    return [node.leafId]
+  }
+  return [...collectLayoutLeafIdsInOrder(node.first), ...collectLayoutLeafIdsInOrder(node.second)]
+}
+
+function firstLayoutLeafId(node: TerminalPaneLayoutNode | null): string | null {
+  if (!node) {
+    return null
+  }
+  return node.type === 'leaf' ? node.leafId : firstLayoutLeafId(node.first)
+}
+
+function layoutContainsLeafId(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
+  if (!node) {
+    return false
+  }
+  if (node.type === 'leaf') {
+    return node.leafId === leafId
+  }
+  return layoutContainsLeafId(node.first, leafId) || layoutContainsLeafId(node.second, leafId)
+}
+
+function cloneLayoutNode(node: TerminalPaneLayoutNode): TerminalPaneLayoutNode {
+  if (node.type === 'leaf') {
+    return { type: 'leaf', leafId: node.leafId }
+  }
+  return {
+    ...node,
+    first: cloneLayoutNode(node.first),
+    second: cloneLayoutNode(node.second)
+  }
+}
+
+function cloneLayoutWithLeafIds(
+  node: TerminalPaneLayoutNode,
+  leafIdByInputLeafId: Map<string, string>,
+  duplicatedInputLeafIds: Set<string>
+): TerminalPaneLayoutNode {
+  if (node.type === 'leaf') {
+    return {
+      type: 'leaf',
+      leafId: duplicatedInputLeafIds.has(node.leafId)
+        ? randomUUID()
+        : (leafIdByInputLeafId.get(node.leafId) ?? randomUUID())
+    }
+  }
+  return {
+    ...node,
+    first: cloneLayoutWithLeafIds(node.first, leafIdByInputLeafId, duplicatedInputLeafIds),
+    second: cloneLayoutWithLeafIds(node.second, leafIdByInputLeafId, duplicatedInputLeafIds)
+  }
+}
+
+function remapLeafRecordForPersistence(
+  source: Record<string, string> | undefined,
+  leafIdByInputLeafId: Map<string, string>,
+  duplicatedInputLeafIds: Set<string>
+): Record<string, string> | undefined {
+  if (!source) {
+    return undefined
+  }
+  const next: Record<string, string> = {}
+  for (const [leafId, value] of Object.entries(source)) {
+    if (duplicatedInputLeafIds.has(leafId)) {
+      continue
+    }
+    const nextLeafId = leafIdByInputLeafId.get(leafId)
+    if (nextLeafId) {
+      next[nextLeafId] = value
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
+function leafRecordEquivalent(
+  left: Record<string, string> | undefined,
+  right: Record<string, string> | undefined
+): boolean {
+  const leftEntries = Object.entries(left ?? {})
+  const rightRecord = right ?? {}
+  if (leftEntries.length !== Object.keys(rightRecord).length) {
+    return false
+  }
+  return leftEntries.every(([key, value]) => rightRecord[key] === value)
+}
+
+function preserveMissingLeafRecordEntries(
+  priorRecord: Record<string, string> | undefined,
+  incomingRecord: Record<string, string> | undefined,
+  liveLeafIds: Set<string>
+): Record<string, string> | undefined {
+  const preserved = Object.fromEntries(
+    Object.entries(priorRecord ?? {}).filter(
+      ([leafId]) => liveLeafIds.has(leafId) && incomingRecord?.[leafId] === undefined
+    )
+  )
+  const next = { ...preserved, ...incomingRecord }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
+function findWorktreeIdForTab(session: WorkspaceSessionState, tabId: string): string | undefined {
+  for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+    if (tabs.some((tab) => tab.id === tabId)) {
+      return worktreeId
+    }
+  }
+  return undefined
+}
+
+function collectMigrationUnsupportedPtyEntries(args: {
+  session: WorkspaceSessionState
+  tabId: string
+  inputLayout: TerminalLayoutSnapshot
+  normalizedLayout: TerminalLayoutSnapshot
+  leafIdByInputLeafId: Map<string, string>
+  sourceForPtyId: (ptyId: string) => 'local' | 'ssh'
+}): MigrationUnsupportedPtyEntry[] {
+  const entries: MigrationUnsupportedPtyEntry[] = []
+  const worktreeId = findWorktreeIdForTab(args.session, args.tabId)
+  const tab = worktreeId
+    ? args.session.tabsByWorktree?.[worktreeId]?.find((entry) => entry.id === args.tabId)
+    : undefined
+  const pushEntry = (ptyId: string, leafId: string): void => {
+    if (!isTerminalLeafId(leafId)) {
+      return
+    }
+    let paneKey: string
+    try {
+      paneKey = makePaneKey(args.tabId, leafId)
+    } catch {
+      return
+    }
+    entries.push({
+      ptyId,
+      ...(worktreeId ? { worktreeId } : {}),
+      tabId: args.tabId,
+      leafId,
+      paneKey,
+      reason: 'legacy-numeric-pane-key',
+      source: args.sourceForPtyId(ptyId),
+      updatedAt: Date.now()
+    })
+  }
+  for (const [inputLeafId, ptyId] of Object.entries(args.inputLayout.ptyIdsByLeafId ?? {})) {
+    if (isTerminalLeafId(inputLeafId)) {
+      continue
+    }
+    const leafId = args.leafIdByInputLeafId.get(inputLeafId)
+    if (leafId) {
+      pushEntry(ptyId, leafId)
+    }
+  }
+  if (
+    entries.length === 0 &&
+    tab?.ptyId &&
+    Object.keys(args.inputLayout.ptyIdsByLeafId ?? {}).length === 0
+  ) {
+    const fallbackLeafId =
+      args.normalizedLayout.activeLeafId ?? firstLayoutLeafId(args.normalizedLayout.root)
+    if (fallbackLeafId) {
+      // Why: older single-pane sessions can reattach from tab.ptyId only, with
+      // no leaf binding to migrate. Their live shell env can still hold the
+      // legacy pane key, so surface the restart-required row for that PTY.
+      pushEntry(tab.ptyId, fallbackLeafId)
+    }
+  }
+  return entries
+}
+
+function normalizeTerminalLayoutSnapshotForPersistence(
+  snapshot: TerminalLayoutSnapshot,
+  preferredLayout?: TerminalLayoutSnapshot
+): LayoutLeafNormalization {
+  let inputSnapshot = snapshot
+  let changed = false
+  if (!inputSnapshot.root) {
+    if (!preferredLayout?.root) {
+      return { snapshot, changed: false, leafIdByInputLeafId: new Map() }
+    }
+    const root = cloneLayoutNode(preferredLayout.root)
+    const rootLeafIds = new Set(collectLayoutLeafIdsInOrder(root))
+    const activeLeafId =
+      (inputSnapshot.activeLeafId && rootLeafIds.has(inputSnapshot.activeLeafId)
+        ? inputSnapshot.activeLeafId
+        : null) ??
+      (preferredLayout.activeLeafId && rootLeafIds.has(preferredLayout.activeLeafId)
+        ? preferredLayout.activeLeafId
+        : null) ??
+      firstLayoutLeafId(root)
+    const expandedLeafId =
+      (inputSnapshot.expandedLeafId && rootLeafIds.has(inputSnapshot.expandedLeafId)
+        ? inputSnapshot.expandedLeafId
+        : null) ??
+      (preferredLayout.expandedLeafId && rootLeafIds.has(preferredLayout.expandedLeafId)
+        ? preferredLayout.expandedLeafId
+        : null)
+    inputSnapshot = { ...inputSnapshot, root, activeLeafId, expandedLeafId }
+    // Why: a debounced renderer writer can still hold the createTab-era empty
+    // layout after persistPtyBinding has already sync-flushed the UUID root.
+    changed = true
+  }
+  const inputRoot = inputSnapshot.root
+  if (!inputRoot) {
+    return { snapshot, changed: false, leafIdByInputLeafId: new Map() }
+  }
+  const counts = collectLayoutLeafCounts(inputRoot)
+  const duplicatedInputLeafIds = new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([leafId]) => leafId)
+  )
+  const inputLeafIdsInOrder = collectLayoutLeafIdsInOrder(inputRoot)
+  const preferredLeafIdsInOrder = collectLayoutLeafIdsInOrder(preferredLayout?.root)
+  const usePreferredLeafIds = preferredLeafIdsInOrder.length === inputLeafIdsInOrder.length
+  const leafIdByInputLeafId = new Map<string, string>()
+  for (const [index, leafId] of inputLeafIdsInOrder.entries()) {
+    const count = counts.get(leafId) ?? 0
+    if (count !== 1 || leafIdByInputLeafId.has(leafId)) {
+      changed = true
+      continue
+    }
+    if (isTerminalLeafId(leafId)) {
+      leafIdByInputLeafId.set(leafId, leafId)
+      continue
+    }
+    changed = true
+    const preferredLeafId = usePreferredLeafIds ? preferredLeafIdsInOrder[index] : undefined
+    leafIdByInputLeafId.set(
+      leafId,
+      preferredLeafId && isTerminalLeafId(preferredLeafId) ? preferredLeafId : randomUUID()
+    )
+  }
+  const root = changed
+    ? cloneLayoutWithLeafIds(inputRoot, leafIdByInputLeafId, duplicatedInputLeafIds)
+    : inputRoot
+  const activeLeafId =
+    inputSnapshot.activeLeafId && !duplicatedInputLeafIds.has(inputSnapshot.activeLeafId)
+      ? (leafIdByInputLeafId.get(inputSnapshot.activeLeafId) ?? firstLayoutLeafId(root))
+      : inputSnapshot.activeLeafId === null
+        ? null
+        : firstLayoutLeafId(root)
+  const expandedLeafId =
+    inputSnapshot.expandedLeafId && !duplicatedInputLeafIds.has(inputSnapshot.expandedLeafId)
+      ? (leafIdByInputLeafId.get(inputSnapshot.expandedLeafId) ?? null)
+      : null
+  const ptyIdsByLeafId = remapLeafRecordForPersistence(
+    inputSnapshot.ptyIdsByLeafId,
+    leafIdByInputLeafId,
+    duplicatedInputLeafIds
+  )
+  const buffersByLeafId = remapLeafRecordForPersistence(
+    inputSnapshot.buffersByLeafId,
+    leafIdByInputLeafId,
+    duplicatedInputLeafIds
+  )
+  const titlesByLeafId = remapLeafRecordForPersistence(
+    inputSnapshot.titlesByLeafId,
+    leafIdByInputLeafId,
+    duplicatedInputLeafIds
+  )
+  const recordsChanged =
+    !leafRecordEquivalent(inputSnapshot.ptyIdsByLeafId, ptyIdsByLeafId) ||
+    !leafRecordEquivalent(inputSnapshot.buffersByLeafId, buffersByLeafId) ||
+    !leafRecordEquivalent(inputSnapshot.titlesByLeafId, titlesByLeafId)
+  const metadataChanged =
+    activeLeafId !== inputSnapshot.activeLeafId || expandedLeafId !== inputSnapshot.expandedLeafId
+  if (!changed && !recordsChanged && !metadataChanged) {
+    return { snapshot, changed: false, leafIdByInputLeafId }
+  }
+  const {
+    ptyIdsByLeafId: _oldPtyIdsByLeafId,
+    buffersByLeafId: _oldBuffersByLeafId,
+    titlesByLeafId: _oldTitlesByLeafId,
+    ...snapshotWithoutLeafRecords
+  } = inputSnapshot
+  return {
+    snapshot: {
+      ...snapshotWithoutLeafRecords,
+      root,
+      activeLeafId,
+      expandedLeafId,
+      ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
+      ...(buffersByLeafId ? { buffersByLeafId } : {}),
+      ...(titlesByLeafId ? { titlesByLeafId } : {})
+    },
+    changed: true,
+    leafIdByInputLeafId
+  }
+}
+
+function normalizeWorkspaceSessionPaneIdentities(
+  session: WorkspaceSessionState,
+  priorLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {},
+  sourceForPtyId: (ptyId: string) => 'local' | 'ssh' = () => 'local'
+): {
+  session: WorkspaceSessionState
+  changed: boolean
+  leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>
+  leafIdByPtyIdByTabId: Map<string, Map<string, string>>
+  migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[]
+} {
+  let changed = false
+  const leafIdByInputLeafIdByTabId = new Map<string, Map<string, string>>()
+  const leafIdByPtyIdByTabId = new Map<string, Map<string, string>>()
+  const migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
+  const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
+  for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+    const normalized = normalizeTerminalLayoutSnapshotForPersistence(
+      layout,
+      priorLayoutsByTabId[tabId]
+    )
+    terminalLayoutsByTabId[tabId] = normalized.snapshot
+    leafIdByInputLeafIdByTabId.set(tabId, normalized.leafIdByInputLeafId)
+    migrationUnsupportedEntries.push(
+      ...collectMigrationUnsupportedPtyEntries({
+        session,
+        tabId,
+        inputLayout: layout,
+        normalizedLayout: normalized.snapshot,
+        leafIdByInputLeafId: normalized.leafIdByInputLeafId,
+        sourceForPtyId
+      })
+    )
+    const leafIdByPtyId = new Map<string, string>()
+    const duplicatePtyIds = new Set<string>()
+    for (const [leafId, ptyId] of Object.entries(normalized.snapshot.ptyIdsByLeafId ?? {})) {
+      if (duplicatePtyIds.has(ptyId)) {
+        continue
+      }
+      if (leafIdByPtyId.has(ptyId)) {
+        leafIdByPtyId.delete(ptyId)
+        duplicatePtyIds.add(ptyId)
+        continue
+      }
+      leafIdByPtyId.set(ptyId, leafId)
+    }
+    leafIdByPtyIdByTabId.set(tabId, leafIdByPtyId)
+    changed ||= normalized.changed
+  }
+  return {
+    session: changed ? { ...session, terminalLayoutsByTabId } : session,
+    changed,
+    leafIdByInputLeafIdByTabId,
+    leafIdByPtyIdByTabId,
+    migrationUnsupportedEntries
+  }
+}
+
+function remapSshRemotePtyLeaseLeafIds(
+  leases: SshRemotePtyLease[],
+  leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>,
+  leafIdByPtyIdByTabId: Map<string, Map<string, string>>
+): { leases: SshRemotePtyLease[]; changed: boolean } {
+  let changed = false
+  const nextLeases = leases.map((lease) => {
+    if (lease.leafId === undefined || isTerminalLeafId(lease.leafId)) {
+      return lease
+    }
+    const remappedLeafId = lease.tabId
+      ? leafIdByInputLeafIdByTabId.get(lease.tabId)?.get(lease.leafId)
+      : undefined
+    const leafIdForPty = lease.tabId
+      ? leafIdByPtyIdByTabId.get(lease.tabId)?.get(lease.ptyId)
+      : undefined
+    changed = true
+    const nextLeafId = remappedLeafId ?? leafIdForPty
+    if (nextLeafId) {
+      return { ...lease, leafId: nextLeafId }
+    }
+    const next = { ...lease }
+    // Why: unmatched legacy leaf ids are ambiguous after migration; do not
+    // re-persist them as durable pane identity.
+    delete next.leafId
+    return next
+  })
+  return { leases: nextLeases, changed }
+}
+
+function normalizePersistedPaneIdentityState(state: PersistedState): {
+  state: PersistedState
+  changed: boolean
+  migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[]
+} {
+  const sshPtyIds = new Set((state.sshRemotePtyLeases ?? []).map((lease) => lease.ptyId))
+  const normalizedSession = normalizeWorkspaceSessionPaneIdentities(
+    state.workspaceSession,
+    {},
+    (ptyId) => (sshPtyIds.has(ptyId) ? 'ssh' : 'local')
+  )
+  const remappedLeases = remapSshRemotePtyLeaseLeafIds(
+    state.sshRemotePtyLeases ?? [],
+    normalizedSession.leafIdByInputLeafIdByTabId,
+    normalizedSession.leafIdByPtyIdByTabId
+  )
+  const mergedMigrationUnsupportedEntries = mergeMigrationUnsupportedPtyEntries([
+    ...(state.migrationUnsupportedPtyEntries ?? []),
+    ...normalizedSession.migrationUnsupportedEntries
+  ])
+  const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
+    state.migrationUnsupportedPtyEntries ?? [],
+    mergedMigrationUnsupportedEntries
+  )
+  if (!normalizedSession.changed && !remappedLeases.changed && !migrationUnsupportedChanged) {
+    return {
+      state,
+      changed: false,
+      migrationUnsupportedEntries: mergedMigrationUnsupportedEntries
+    }
+  }
+  return {
+    state: {
+      ...state,
+      workspaceSession: normalizedSession.session,
+      sshRemotePtyLeases: remappedLeases.leases,
+      migrationUnsupportedPtyEntries: mergedMigrationUnsupportedEntries
+    },
+    changed: true,
+    migrationUnsupportedEntries: mergedMigrationUnsupportedEntries
+  }
+}
+
+function mergeMigrationUnsupportedPtyEntries(
+  entries: MigrationUnsupportedPtyEntry[]
+): MigrationUnsupportedPtyEntry[] {
+  const byPtyId = new Map<string, MigrationUnsupportedPtyEntry>()
+  for (const entry of entries) {
+    const existing = byPtyId.get(entry.ptyId)
+    if (!existing || existing.updatedAt <= entry.updatedAt) {
+      byPtyId.set(entry.ptyId, entry)
+    }
+  }
+  return [...byPtyId.values()]
+}
+
+function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter((entry): entry is MigrationUnsupportedPtyEntry => {
+    if (!entry || typeof entry !== 'object') {
+      return false
+    }
+    const candidate = entry as Partial<MigrationUnsupportedPtyEntry>
+    return (
+      typeof candidate.ptyId === 'string' &&
+      candidate.ptyId.length > 0 &&
+      (candidate.worktreeId === undefined || typeof candidate.worktreeId === 'string') &&
+      (candidate.tabId === undefined || typeof candidate.tabId === 'string') &&
+      (candidate.leafId === undefined || isTerminalLeafId(candidate.leafId)) &&
+      (candidate.paneKey === undefined || typeof candidate.paneKey === 'string') &&
+      candidate.reason === 'legacy-numeric-pane-key' &&
+      (candidate.source === 'local' || candidate.source === 'ssh') &&
+      Number.isFinite(candidate.updatedAt)
+    )
+  })
+}
+
+function migrationUnsupportedEntriesEqual(
+  left: MigrationUnsupportedPtyEntry[],
+  right: MigrationUnsupportedPtyEntry[]
+): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  const rightByPtyId = new Map(right.map((entry) => [entry.ptyId, entry]))
+  return left.every((entry) => {
+    const other = rightByPtyId.get(entry.ptyId)
+    return other ? JSON.stringify(entry) === JSON.stringify(other) : false
+  })
+}
+
+function createMinimalPersistedTerminalTab(args: {
+  worktreeId: string
+  tabId: string
+  ptyId: string
+  existingTabCount: number
+}): TerminalTab {
+  const ordinal = args.existingTabCount + 1
+  const defaultTitle = `Terminal ${ordinal}`
+  return {
+    id: args.tabId,
+    ptyId: args.ptyId,
+    worktreeId: args.worktreeId,
+    title: defaultTitle,
+    defaultTitle,
+    customTitle: null,
+    color: null,
+    sortOrder: args.existingTabCount,
+    createdAt: Date.now(),
+    pendingActivationSpawn: true
+  }
+}
+
+function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSessionState {
+  return structuredClone(session)
 }
 
 export class Store {
@@ -278,7 +808,21 @@ export class Store {
   private gitUsernameCache = new Map<string, string>()
 
   constructor() {
-    this.state = this.load()
+    const loaded = this.load()
+    const normalized = normalizePersistedPaneIdentityState(loaded)
+    this.state = normalized.state
+    for (const entry of normalized.migrationUnsupportedEntries) {
+      setMigrationUnsupportedPty(entry)
+    }
+    setMigrationUnsupportedPtyPersistenceListener((entries) => {
+      this.state.migrationUnsupportedPtyEntries = entries
+      this.scheduleSave()
+    })
+    if (normalized.changed) {
+      // Why: upgraded sessions may contain legacy pane:1 leaves. Rewrite them at
+      // the main persistence boundary so older renderer writes cannot revive them.
+      this.scheduleSave()
+    }
   }
 
   // Why (issue #1158): debounced writes fire as often as every 300ms during
@@ -547,6 +1091,9 @@ export class Store {
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
+            parsed.migrationUnsupportedPtyEntries
+          ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
           automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
           onboarding: (() => {
@@ -807,6 +1354,18 @@ export class Store {
     if (this.shouldRotateBackups(now, dataFile)) {
       this.rotateBackupsSync(dataFile)
     }
+  }
+
+  private flushOrThrow(): void {
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+      this.writeTimer = null
+    }
+    // Why: bump writeGeneration so any in-flight async writeToDiskAsync skips
+    // its rename, preventing a stale snapshot from overwriting this sync write.
+    this.writeGeneration++
+    this.pendingWrite = null
+    this.writeToDiskSync()
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -1304,6 +1863,24 @@ export class Store {
     // the durable binding and re-open the orphan window. Merge in any
     // existing bindings whenever the incoming snapshot's binding is empty.
     const prior = this.state.workspaceSession
+    const sshPtyIds = new Set((this.state.sshRemotePtyLeases ?? []).map((lease) => lease.ptyId))
+    const normalized = normalizeWorkspaceSessionPaneIdentities(
+      session,
+      prior?.terminalLayoutsByTabId,
+      (ptyId) => (sshPtyIds.has(ptyId) ? 'ssh' : 'local')
+    )
+    for (const entry of normalized.migrationUnsupportedEntries) {
+      setMigrationUnsupportedPty(entry)
+    }
+    session = normalized.session
+    const remappedLeases = remapSshRemotePtyLeaseLeafIds(
+      this.state.sshRemotePtyLeases ?? [],
+      normalized.leafIdByInputLeafIdByTabId,
+      normalized.leafIdByPtyIdByTabId
+    )
+    if (remappedLeases.changed) {
+      this.state.sshRemotePtyLeases = remappedLeases.leases
+    }
     if (session && prior) {
       const priorTabs = prior.tabsByWorktree ?? {}
       const nextTabs = session.tabsByWorktree ?? {}
@@ -1368,6 +1945,24 @@ export class Store {
         )
         if (Object.keys(restorableBindings).length > 0) {
           layout.ptyIdsByLeafId = { ...restorableBindings, ...incoming }
+          // Why: the same stale session write that drops ptyIdsByLeafId can
+          // also be from an older renderer that lacks UUID-keyed metadata.
+          const buffersByLeafId = preserveMissingLeafRecordEntries(
+            priorLayout.buffersByLeafId,
+            layout.buffersByLeafId,
+            liveLeafIds
+          )
+          const titlesByLeafId = preserveMissingLeafRecordEntries(
+            priorLayout.titlesByLeafId,
+            layout.titlesByLeafId,
+            liveLeafIds
+          )
+          if (buffersByLeafId) {
+            layout.buffersByLeafId = buffersByLeafId
+          }
+          if (titlesByLeafId) {
+            layout.titlesByLeafId = titlesByLeafId
+          }
         }
       }
     }
@@ -1382,7 +1977,9 @@ export class Store {
         return
       }
       if (node.type === 'leaf') {
-        leafIds.add(node.leafId)
+        if (isTerminalLeafId(node.leafId)) {
+          leafIds.add(node.leafId)
+        }
         return
       }
       visit(node.first)
@@ -1497,13 +2094,67 @@ export class Store {
     if (!session) {
       return
     }
+    const sessionBeforeBinding = cloneWorkspaceSessionState(session)
     const tabs = session.tabsByWorktree?.[args.worktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
+    } else {
+      // Why: pty:spawn can beat the debounced session writer for a newly
+      // created tab. Persist a minimal tab so hydration does not prune the
+      // crash-safe layout binding below as an orphaned tab id.
+      const nextTabs = [
+        ...(tabs ?? []),
+        createMinimalPersistedTerminalTab({
+          ...args,
+          existingTabCount: tabs?.length ?? 0
+        })
+      ]
+      session.tabsByWorktree = {
+        ...session.tabsByWorktree,
+        [args.worktreeId]: nextTabs
+      }
+      session.activeWorktreeId ??= args.worktreeId
+      session.activeTabId ??= args.tabId
+      session.activeTabIdByWorktree = {
+        ...session.activeTabIdByWorktree,
+        [args.worktreeId]: session.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId
+      }
+    }
+    if (!isTerminalLeafId(args.leafId)) {
+      // Why: legacy renderer-local pane ids may arrive from older callers; keep
+      // them out of durable leaf-keyed layout state after the UUID migration.
+      try {
+        this.flushOrThrow()
+      } catch (err) {
+        this.state.workspaceSession = sessionBeforeBinding
+        throw err
+      }
+      return
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
+      if (!layout.root) {
+        // Why: createTab can persist an empty layout before TerminalPane mounts.
+        // The sync spawn binding must still leave a durable UUID root behind.
+        layout.root = { type: 'leaf', leafId: args.leafId }
+        layout.activeLeafId = args.leafId
+        layout.expandedLeafId = null
+      } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
+        // Why: splitPane publishes the new pane and starts pty:spawn before the
+        // debounced full layout snapshot reaches main. Add a minimal leaf so a
+        // crash in that window cannot make the new pane's binding unreachable.
+        layout.root = {
+          type: 'split',
+          direction: 'vertical',
+          first: cloneLayoutNode(layout.root),
+          second: { type: 'leaf', leafId: args.leafId }
+        }
+        layout.activeLeafId = args.leafId
+        if (layout.expandedLeafId && !layoutContainsLeafId(layout.root, layout.expandedLeafId)) {
+          layout.expandedLeafId = null
+        }
+      }
       layout.ptyIdsByLeafId = {
         ...layout.ptyIdsByLeafId,
         [args.leafId]: args.ptyId
@@ -1525,7 +2176,12 @@ export class Store {
         }
       }
     }
-    this.flush()
+    try {
+      this.flushOrThrow()
+    } catch (err) {
+      this.state.workspaceSession = sessionBeforeBinding
+      throw err
+    }
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────
@@ -1575,16 +2231,21 @@ export class Store {
       Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
   ): void {
     this.state.sshRemotePtyLeases ??= []
+    const normalizedLease = { ...lease }
+    if (normalizedLease.leafId !== undefined && !isTerminalLeafId(normalizedLease.leafId)) {
+      delete normalizedLease.leafId
+    }
     const now = Date.now()
     const existingIndex = this.state.sshRemotePtyLeases.findIndex(
-      (entry) => entry.targetId === lease.targetId && entry.ptyId === lease.ptyId
+      (entry) =>
+        entry.targetId === normalizedLease.targetId && entry.ptyId === normalizedLease.ptyId
     )
     const existing = existingIndex >= 0 ? this.state.sshRemotePtyLeases[existingIndex] : undefined
     const next: SshRemotePtyLease = {
       ...existing,
-      ...lease,
-      createdAt: existing?.createdAt ?? lease.createdAt ?? now,
-      updatedAt: lease.updatedAt ?? now
+      ...normalizedLease,
+      createdAt: existing?.createdAt ?? normalizedLease.createdAt ?? now,
+      updatedAt: normalizedLease.updatedAt ?? now
     }
     if (existingIndex >= 0) {
       this.state.sshRemotePtyLeases[existingIndex] = next
@@ -1637,6 +2298,20 @@ export class Store {
     this.flush()
   }
 
+  removeSshRemotePtyLease(targetId: string, ptyId: string): void {
+    const leases = (this.state.sshRemotePtyLeases ?? []).filter(
+      (lease) => lease.targetId === targetId && lease.ptyId === ptyId
+    )
+    const before = this.state.sshRemotePtyLeases?.length ?? 0
+    this.clearSshRemotePtyBindingsForLeases(targetId, leases)
+    this.state.sshRemotePtyLeases = (this.state.sshRemotePtyLeases ?? []).filter(
+      (lease) => lease.targetId !== targetId || lease.ptyId !== ptyId
+    )
+    if (this.state.sshRemotePtyLeases.length !== before) {
+      this.flush()
+    }
+  }
+
   removeSshRemotePtyLeases(targetId: string): void {
     this.state.sshRemotePtyLeases ??= []
     this.clearSshRemotePtyBindingsForTarget(targetId)
@@ -1651,6 +2326,10 @@ export class Store {
 
   private clearSshRemotePtyBindingsForTarget(targetId: string): void {
     const leases = this.state.sshRemotePtyLeases?.filter((lease) => lease.targetId === targetId)
+    this.clearSshRemotePtyBindingsForLeases(targetId, leases ?? [])
+  }
+
+  private clearSshRemotePtyBindingsForLeases(targetId: string, leases: SshRemotePtyLease[]): void {
     const session = this.state.workspaceSession
     if (!leases?.length || !session) {
       return
@@ -1709,16 +2388,8 @@ export class Store {
   // ── Flush (for shutdown) ───────────────────────────────────────────
 
   flush(): void {
-    if (this.writeTimer) {
-      clearTimeout(this.writeTimer)
-      this.writeTimer = null
-    }
-    // Why: bump writeGeneration so any in-flight async writeToDiskAsync skips
-    // its rename, preventing a stale snapshot from overwriting this sync write.
-    this.writeGeneration++
-    this.pendingWrite = null
     try {
-      this.writeToDiskSync()
+      this.flushOrThrow()
     } catch (err) {
       console.error('[persistence] Failed to flush state:', err)
     }

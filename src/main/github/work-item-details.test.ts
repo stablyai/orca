@@ -7,6 +7,8 @@ const {
   getWorkItemMock,
   getPRChecksMock,
   getPRCommentsMock,
+  ghRepoExecOptionsMock,
+  githubRepoContextMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
@@ -16,6 +18,13 @@ const {
   getWorkItemMock: vi.fn(),
   getPRChecksMock: vi.fn(),
   getPRCommentsMock: vi.fn(),
+  ghRepoExecOptionsMock: vi.fn((context) =>
+    context.connectionId ? {} : { cwd: context.repoPath }
+  ),
+  githubRepoContextMock: vi.fn((repoPath, connectionId) => ({
+    repoPath,
+    connectionId: connectionId ?? null
+  })),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -24,6 +33,8 @@ vi.mock('./gh-utils', () => ({
   ghExecFileAsync: ghExecFileAsyncMock,
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
+  ghRepoExecOptions: ghRepoExecOptionsMock,
+  githubRepoContext: githubRepoContextMock,
   acquire: acquireMock,
   release: releaseMock
 }))
@@ -44,6 +55,8 @@ describe('getWorkItemDetails', () => {
     getWorkItemMock.mockReset()
     getPRChecksMock.mockReset()
     getPRCommentsMock.mockReset()
+    ghRepoExecOptionsMock.mockClear()
+    githubRepoContextMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -91,7 +104,7 @@ describe('getWorkItemDetails', () => {
 
     const details = await getWorkItemDetails('/repo-root', 923, 'issue')
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue', undefined)
     // Why: a single gh subprocess call replaces the previous REST + REST + GraphQL fan-out.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock.mock.calls[0][0][0]).toBe('api')
@@ -143,5 +156,41 @@ describe('getWorkItemDetails', () => {
       { cwd: '/repo-root' }
     )
     expect(details?.body).toBe('Issue body')
+  })
+
+  it('uses SSH connection context for issue details without local cwd', async () => {
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'issue:923',
+      type: 'issue',
+      number: 923,
+      title: 'Use upstream issues',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/issues/923',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'octocat'
+    })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          repository: {
+            issue: {
+              body: 'Remote issue body',
+              assignees: { nodes: [] },
+              participants: { nodes: [] },
+              comments: { nodes: [] }
+            }
+          }
+        }
+      })
+    })
+
+    const details = await getWorkItemDetails('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
+
+    expect(getWorkItemMock).toHaveBeenCalledWith('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
+    expect(getIssueOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({})
+    expect(details?.body).toBe('Remote issue body')
   })
 })

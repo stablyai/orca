@@ -22,6 +22,7 @@ import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { validateGitPushTarget } from '../git/push-target-validation'
+import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -150,6 +151,108 @@ export async function configureCreatedWorktreePushTarget(
   return target
 }
 
+async function findRemoteForUrlSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  remoteUrl: string
+): Promise<string | null> {
+  const target = parseGitHubOwnerRepo(remoteUrl)
+  try {
+    const { stdout } = await provider.exec(['remote'], repoPath)
+    for (const remote of stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)) {
+      try {
+        const { stdout: urlStdout } = await provider.exec(['remote', 'get-url', remote], repoPath)
+        const candidateUrl = urlStdout.trim()
+        const candidate = parseGitHubOwnerRepo(candidateUrl)
+        if (
+          target &&
+          candidate &&
+          target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
+          target.repo.toLowerCase() === candidate.repo.toLowerCase()
+        ) {
+          return remote
+        }
+        if (candidateUrl === remoteUrl) {
+          return remote
+        }
+      } catch {
+        // Ignore a remote that disappeared or has no fetch URL.
+      }
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function ensureUniqueRemoteNameSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  preferred: string
+): Promise<string> {
+  const { stdout } = await provider.exec(['remote'], repoPath)
+  const existing = new Set(
+    stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  )
+  if (!existing.has(preferred)) {
+    return preferred
+  }
+  for (let suffix = 2; suffix < 100; suffix += 1) {
+    const candidate = `${preferred}-${suffix}`
+    if (!existing.has(candidate)) {
+      return candidate
+    }
+  }
+  throw new Error(`Could not find an available remote name for ${preferred}.`)
+}
+
+async function prepareWorktreePushTargetSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  target: GitPushTarget
+): Promise<GitPushTarget> {
+  assertGitPushTargetShape(target)
+  await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
+  let remoteName = target.remoteName
+  if (target.remoteUrl) {
+    const existingRemote = await findRemoteForUrlSsh(provider, repoPath, target.remoteUrl)
+    if (existingRemote) {
+      remoteName = existingRemote
+    } else {
+      remoteName = await ensureUniqueRemoteNameSsh(provider, repoPath, target.remoteName)
+      await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+    }
+  }
+  await provider.exec(
+    [
+      'fetch',
+      remoteName,
+      `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
+    ],
+    repoPath
+  )
+  return { ...target, remoteName }
+}
+
+async function configureCreatedWorktreePushTargetSsh(
+  provider: SshGitProvider,
+  worktreePath: string,
+  branchName: string,
+  target: GitPushTarget
+): Promise<GitPushTarget> {
+  await provider.exec(
+    ['branch', '--set-upstream-to', `${target.remoteName}/${target.branchName}`, branchName],
+    worktreePath
+  )
+  return target
+}
+
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
@@ -250,6 +353,13 @@ export async function createRemoteWorktree(
     /* best-effort */
   }
 
+  let preparedPushTarget: GitPushTarget | undefined
+  if (args.pushTarget) {
+    // Why: fork-PR SSH worktrees need the same contributor-remote setup as
+    // local worktrees before creation, otherwise Push/Sync can target origin.
+    preparedPushTarget = await prepareWorktreePushTargetSsh(provider, repo.path, args.pushTarget)
+  }
+
   const mux = getActiveMultiplexer(repo.connectionId!)
   if (!mux) {
     throw new Error('SSH connection is not available. Please reconnect and try again.')
@@ -310,6 +420,15 @@ export async function createRemoteWorktree(
 
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
+  let configuredPushTarget: GitPushTarget | undefined
+  if (preparedPushTarget) {
+    configuredPushTarget = await configureCreatedWorktreePushTargetSsh(
+      provider,
+      created.path,
+      branchName,
+      preparedPushTarget
+    )
+  }
   const metaUpdates: Partial<WorktreeMeta> = {
     lastActivityAt: now,
     // Why: grants the new worktree a short grace window at the top of the
@@ -319,6 +438,8 @@ export async function createRemoteWorktree(
     // max(lastActivityAt, createdAt + GRACE_MS) to keep it on top until the
     // window elapses. See smart-sort.ts `CREATE_GRACE_MS`.
     createdAt: now,
+    baseRef: baseBranch,
+    ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...(requestedDisplayName
       ? { displayName: requestedDisplayName }
       : shouldSetDisplayName(requestedName, branchName, sanitizedName)
@@ -326,7 +447,8 @@ export async function createRemoteWorktree(
         : {}),
     ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
-    ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {})
+    ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+    ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {})
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
   const worktree = mergeWorktree(repo.id, created, meta)
@@ -617,7 +739,8 @@ export async function createLocalWorktree(
       : {}),
     ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
-    ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {})
+    ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+    ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {})
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
   const worktree = mergeWorktree(repo.id, created, meta)

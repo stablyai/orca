@@ -21,6 +21,11 @@ const {
 vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
+  githubRepoContext: (repoPath: string, connectionId?: string | null) => ({
+    repoPath,
+    connectionId: connectionId ?? null
+  }),
+  ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   acquire: acquireMock,
@@ -91,7 +96,7 @@ describe('getPRChecks', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['pr', 'checks', '42', '--json', 'name,state,link'],
+      ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
       { cwd: '/repo-root' }
     )
     expect(checks).toEqual([

@@ -98,7 +98,6 @@ export function resolveWorktreeStatus(args: {
   browserTabs: { id: string }[]
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
-  hasNotesSurface?: boolean
   hasPermission: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
@@ -125,9 +124,6 @@ export function resolveWorktreeStatus(args: {
   }
   if (args.hasLiveDone || args.hasRetainedDone) {
     return 'done'
-  }
-  if (heuristic === 'inactive' && args.hasNotesSurface) {
-    return 'active'
   }
   return heuristic
 }

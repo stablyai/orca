@@ -2,7 +2,7 @@
 // Why: top-level container for Project mode. Handles the picker, header,
 // filter label, count pill, Open-in-GitHub, and all Interaction States
 // documented in the design doc.
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ExternalLink,
   Loader,
@@ -317,6 +317,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const [dialogRepoItem, setDialogRepoItem] = useState<{
     workItem: GitHubWorkItem
     repoPath: string
+    repoId: string
     origin: GitHubItemDialogProjectOrigin
   } | null>(null)
   // Why: the slug dialog is only opened for rows whose repo isn't registered
@@ -405,11 +406,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         }
         return
       }
-      const matched = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matches = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matched = matches.length === 1 ? matches[0] : null
       if (matched) {
         const workItem = buildWorkItem(row, matched.id)
         if (workItem) {
-          setDialogRepoItem({ workItem, repoPath: matched.path, origin })
+          setDialogRepoItem({ workItem, repoPath: matched.path, repoId: matched.id, origin })
           return
         }
       }
@@ -428,7 +430,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       if (!origin) {
         return
       }
-      const matched = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matches = lookupSlug(`${origin.owner}/${origin.repo}`)
+      const matched = matches.length === 1 ? matches[0] : null
       if (!matched) {
         setRepoNotInOrca({
           owner: origin.owner,
@@ -700,6 +703,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       <GitHubItemDialog
         workItem={dialogRepoItem?.workItem ?? null}
         repoPath={dialogRepoItem?.repoPath ?? null}
+        repoId={dialogRepoItem?.repoId ?? null}
         projectOrigin={dialogRepoItem?.origin}
         onUse={(item) => {
           const current = dialogRepoItem
@@ -799,6 +803,7 @@ function ProjectSearchInput({
 }): React.JSX.Element {
   const initial = appliedOverride !== undefined ? appliedOverride : viewFilter
   const [value, setValue] = useState<string>(initial)
+  const inputRef = useRef<HTMLInputElement>(null)
   const applied = appliedOverride !== undefined ? appliedOverride : viewFilter
   const dirty = value !== applied
 
@@ -808,14 +813,55 @@ function ProjectSearchInput({
     onApply(next === viewFilter ? undefined : next)
   }
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const isMac = navigator.userAgent.includes('Mac')
+      const modifierPressed = isMac ? event.metaKey : event.ctrlKey
+      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
+        return
+      }
+      if (document.querySelector('[role="dialog"]')) {
+        return
+      }
+
+      const input = inputRef.current
+      if (!input) {
+        return
+      }
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        target !== input &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      input.focus()
+      input.select()
+    }
+
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [])
+
   return (
     <div className="relative min-w-[280px] flex-1 max-w-xl">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
+        ref={inputRef}
+        data-github-project-search-input
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
+            if (e.nativeEvent.isComposing) {
+              return
+            }
             e.preventDefault()
             apply(value)
           } else if (e.key === 'Escape') {
@@ -835,13 +881,14 @@ function ProjectSearchInput({
           dirty && 'border-amber-500/50'
         )}
       />
-      {value && value !== viewFilter ? (
+      {value ? (
         <button
           type="button"
-          aria-label="Reset to view filter"
+          aria-label="Clear search"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            setValue(viewFilter)
-            apply(viewFilter)
+            setValue('')
+            apply('')
           }}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
         >

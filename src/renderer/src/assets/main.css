@@ -470,6 +470,15 @@
   width: var(--window-controls-width, 0px);
 }
 
+.right-sidebar-header-drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.right-sidebar-header-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Why: the right sidebar header extends to the window's right edge. On Windows
    the fixed-position window-controls overlay sits on top of that edge, so we
    add matching padding-right so the header's close button (pr-1) isn't hidden

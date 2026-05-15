@@ -38,6 +38,7 @@ import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
@@ -908,17 +909,10 @@ export function ResourceUsageStatusSegment({
         }
       }
       setActiveView('terminal')
-      // Why: snapshot-derived rows carry a `${tabId}:${paneId}` paneKey from
-      // the main-process pty registry — parse the paneId tail so split-tab
-      // clicks land focus on the *clicked* pane rather than whichever pane
-      // was last active. Daemon-only rows have paneKey=null and degrade to
-      // tab-only activation.
-      const colon = paneKey ? paneKey.indexOf(':') : -1
-      const tail = colon > 0 && paneKey ? paneKey.slice(colon + 1) : ''
-      const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
-      const paneId =
-        Number.isFinite(parsed) && parsed > 0 && paneKey?.slice(0, colon) === tabId ? parsed : null
-      activateTabAndFocusPane(tabId, paneId)
+      // Why: paneKey suffixes are stable UUID leaf ids after replay/reload.
+      // Legacy numeric keys degrade to tab-only activation instead of guessing.
+      const parsed = paneKey ? parsePaneKey(paneKey) : null
+      activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null)
     },
     [tabsByWorktree, setActiveView]
   )

@@ -28,6 +28,9 @@ import {
 } from '../shared/agent-hook-relay'
 import { AgentHookServer } from '../main/agent-hooks/server'
 
+const LEAF_7 = '77777777-7777-4777-8777-777777777777'
+const LEAF_9 = '99999999-9999-4999-8999-999999999999'
+
 describe('Integration: relay hook server → mux → AgentHookServer.ingestRemote', () => {
   let tmpDir: string
   let mux: SshChannelMultiplexer
@@ -128,7 +131,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         'X-Orca-Agent-Hook-Token': token
       },
       body: JSON.stringify({
-        paneKey: 'tab-7:0',
+        paneKey: `tab-7:${LEAF_7}`,
         tabId: 'tab-7',
         worktreeId: 'wt-7',
         env: 'remote',
@@ -146,7 +149,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       await new Promise((r) => setImmediate(r))
     }
     expect(events).toHaveLength(1)
-    expect(events[0].paneKey).toBe('tab-7:0')
+    expect(events[0].paneKey).toBe(`tab-7:${LEAF_7}`)
     expect(events[0].connectionId).toBe('conn-test')
     const payload = events[0].payload as { state: string; prompt: string; agentType: string }
     expect(payload.state).toBe('working')
@@ -172,7 +175,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         'X-Orca-Agent-Hook-Token': token
       },
       body: JSON.stringify({
-        paneKey: 'tab-9:0',
+        paneKey: `tab-9:${LEAF_9}`,
         payload: { hook_event_name: 'UserPromptSubmit', prompt: 'cached' }
       })
     })
@@ -198,6 +201,6 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       await new Promise((r) => setImmediate(r))
     }
     expect(events).toHaveLength(2)
-    expect(events[1].paneKey).toBe('tab-9:0')
+    expect(events[1].paneKey).toBe(`tab-9:${LEAF_9}`)
   })
 })

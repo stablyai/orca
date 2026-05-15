@@ -112,6 +112,45 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('updates its baseline without scheduling when shouldSchedulePersist returns false', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    let shouldSchedule = false
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    useAppStore.setState({ activeTabId: 'tab-1' })
+    vi.advanceTimersByTime(200)
+    expect(persist).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('cancels a pending debounce when shouldSchedulePersist returns false', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true })
+    vi.advanceTimersByTime(50)
+    shouldSchedule = false
+    useAppStore.setState({ activeTabId: 'remote-tab' })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
   it('coalesces multiple relevant mutations within a debounce window', () => {
     const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

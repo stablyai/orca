@@ -146,8 +146,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
   const hostedReviewCacheKey =
-    repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings) : ''
-  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.path}::${worktree.linkedIssue}` : ''
+    repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id) : ''
+  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.id}::${worktree.linkedIssue}` : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.
   const hostedReviewEntry = useAppStore((s) =>
@@ -185,18 +185,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
-    if (
-      repo &&
-      !repo.connectionId &&
-      !isFolder &&
-      !worktree.isBare &&
-      hostedReviewCacheKey &&
-      (showPR || showCI)
-    ) {
+    if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && (showPR || showCI)) {
       // Why: pass linkedPR so worktrees created from a PR (whose new local
       // branch differs from the remote head ref) still resolve their PR/MR via
       // a number-based fallback in the main process.
       fetchHostedReviewForBranch(repo.path, branch, {
+        repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null
       })
@@ -221,11 +215,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
       return
     }
 
-    fetchIssue(repo.path, worktree.linkedIssue)
+    fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
 
     // Background poll as fallback (activity triggers handle the fast path)
     const interval = setInterval(() => {
-      fetchIssue(repo.path, worktree.linkedIssue!)
+      fetchIssue(repo.path, worktree.linkedIssue!, { repoId: repo.id })
     }, 5 * 60_000) // 5 minutes
 
     return () => clearInterval(interval)

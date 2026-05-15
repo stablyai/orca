@@ -1,5 +1,8 @@
-import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { Worktree, Repo, TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type {
+  AgentStatusEntry,
+  MigrationUnsupportedPtyEntry
+} from '../../../../shared/agent-status-types'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-attention'
 
@@ -121,7 +124,9 @@ export function sortWorktreesSmart(
   repoMap: Map<string, Repo>,
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
-  ptyIdsByTabId: Record<string, string[]>
+  ptyIdsByTabId: Record<string, string[]>,
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 ): Worktree[] {
   // Why: `tabHasLivePty` (over `ptyIdsByTabId`) is the source of truth for
   // liveness — slept terminals retain `tab.ptyId` as a wake hint, so reading
@@ -145,7 +150,9 @@ export function sortWorktreesSmart(
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
-    now
+    now,
+    migrationUnsupportedByPtyId,
+    terminalLayoutsByTabId
   )
 
   return [...worktrees].sort(buildWorktreeComparator('smart', repoMap, now, attentionByWorktree))

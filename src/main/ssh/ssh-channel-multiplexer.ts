@@ -216,10 +216,12 @@ export class SshChannelMultiplexer {
     if (this.disposed) {
       return
     }
-    console.warn(
-      `[ssh-mux] Disposing multiplexer (reason: ${reason})`,
-      new Error('dispose trace').stack
-    )
+    if (process.env.ORCA_SSH_MUX_DEBUG === '1') {
+      console.warn(
+        `[ssh-mux] Disposing multiplexer (reason: ${reason})`,
+        new Error('dispose trace').stack
+      )
+    }
     this.disposed = true
 
     if (this.keepaliveTimer) {

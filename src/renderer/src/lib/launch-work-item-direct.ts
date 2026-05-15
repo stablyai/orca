@@ -223,26 +223,13 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       telemetrySource,
       item.title,
       item.type === 'issue' && item.number ? item.number : undefined,
-      item.type === 'pr' && item.number ? item.number : undefined
+      item.type === 'pr' && item.number ? item.number : undefined,
+      undefined,
+      undefined,
+      item.linearIdentifier
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
-    const meta: {
-      linkedLinearIssue?: string
-    } = {}
-    if (item.linearIdentifier) {
-      meta.linkedLinearIssue = item.linearIdentifier
-    }
-    if (Object.keys(meta).length > 0) {
-      // Why: Project direct-launch activates the new workspace immediately.
-      // GitHub issue/PR links are persisted during create; Linear metadata
-      // still uses a best-effort follow-up because create args do not carry it.
-      // Best-effort: the worktree is already created on disk, so a meta
-      // write failure must not abort activation and orphan it.
-      void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
-        // Non-critical: continue into activation without the link metadata.
-      })
-    }
 
     const detectedIds = new Set(await detectedAgentsPromise)
     effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)

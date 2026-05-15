@@ -49,6 +49,7 @@ import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
+import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import { claudeHookService } from './claude/hook-service'
 import { codexHookService } from './codex/hook-service'
 import { geminiHookService } from './gemini/hook-service'
@@ -309,6 +310,7 @@ function openMainWindow(): BrowserWindow {
     // replay-loop through lastStatusByPaneKey runs only on deliberate
     // window recreations instead of stacking on top of stale listeners.
     agentHookServer.setListener(null)
+    setMigrationUnsupportedPtyListener(null)
     // Why: any running synthesized-title spinner intervals would fire into a
     // destroyed webContents; stop them all here instead of deferring to
     // per-pane teardown, which may never run for restored-but-never-torn-down
@@ -347,6 +349,18 @@ function openMainWindow(): BrowserWindow {
       }
     }
   )
+  setMigrationUnsupportedPtyListener((event) => {
+    if (mainWindow?.isDestroyed()) {
+      return
+    }
+    if (event.type === 'set') {
+      mainWindow?.webContents.send('agentStatus:migrationUnsupported', event.entry)
+    } else {
+      mainWindow?.webContents.send('agentStatus:migrationUnsupportedClear', {
+        ptyId: event.ptyId
+      })
+    }
+  })
   return window
 }
 

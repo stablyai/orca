@@ -731,9 +731,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   const needsTabs = showActiveOnly || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
   const ptyIdsByTabId = useAppStore((s) => (needsTabs ? s.ptyIdsByTabId : null))
-  const unifiedTabsByWorktree = useAppStore((s) =>
-    showActiveOnly ? s.unifiedTabsByWorktree : null
-  )
   const browserTabsByWorktree = useAppStore((s) =>
     showActiveOnly ? s.browserTabsByWorktree : null
   )
@@ -862,7 +859,9 @@ const WorktreeList = React.memo(function WorktreeList() {
             state.agentStatusByPaneKey,
             state.runtimePaneTitlesByTabId,
             state.ptyIdsByTabId,
-            now
+            now,
+            state.migrationUnsupportedByPtyId,
+            state.terminalLayoutsByTabId
           )
         : new Map<string, WorktreeAttention>()
     lastAttentionByWorktreeRef.current = sortBy === 'smart' ? attentionByWorktree : null
@@ -989,7 +988,6 @@ const WorktreeList = React.memo(function WorktreeList() {
       showActiveOnly,
       tabsByWorktree,
       ptyIdsByTabId,
-      unifiedTabsByWorktree,
       browserTabsByWorktree,
       activeWorktreeId,
       hideDefaultBranchWorkspace,
@@ -1004,7 +1002,6 @@ const WorktreeList = React.memo(function WorktreeList() {
     repoMap,
     tabsByWorktree,
     ptyIdsByTabId,
-    unifiedTabsByWorktree,
     browserTabsByWorktree,
     sortedIds,
     worktreeMap,

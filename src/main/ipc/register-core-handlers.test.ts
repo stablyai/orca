@@ -12,7 +12,6 @@ const {
   registerStatsHandlersMock,
   registerMemoryHandlersMock,
   registerNotebookHandlersMock,
-  registerNotesHandlersMock,
   registerNotificationHandlersMock,
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
@@ -54,7 +53,6 @@ const {
   registerStatsHandlersMock: vi.fn(),
   registerMemoryHandlersMock: vi.fn(),
   registerNotebookHandlersMock: vi.fn(),
-  registerNotesHandlersMock: vi.fn(),
   registerNotificationHandlersMock: vi.fn(),
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
@@ -134,10 +132,6 @@ vi.mock('./memory', () => ({
 
 vi.mock('./notebook', () => ({
   registerNotebookHandlers: registerNotebookHandlersMock
-}))
-
-vi.mock('./notes', () => ({
-  registerNotesHandlers: registerNotesHandlersMock
 }))
 
 vi.mock('./notifications', () => ({
@@ -256,7 +250,6 @@ describe('registerCoreHandlers', () => {
     registerStatsHandlersMock.mockReset()
     registerMemoryHandlersMock.mockReset()
     registerNotebookHandlersMock.mockReset()
-    registerNotesHandlersMock.mockReset()
     registerNotificationHandlersMock.mockReset()
     registerDeveloperPermissionHandlersMock.mockReset()
     registerComputerUsePermissionHandlersMock.mockReset()
