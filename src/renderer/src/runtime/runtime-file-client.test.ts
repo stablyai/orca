@@ -19,6 +19,11 @@ import {
   subscribeRuntimeFileChanges,
   type RuntimeReadableFileContent
 } from './runtime-file-client'
+import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
 
 const fsReadFile = vi.fn()
 const fsOnChanged = vi.fn()
@@ -31,10 +36,12 @@ const fsStat = vi.fn()
 const fsImportExternalPaths = vi.fn()
 const fsStageExternalPathsForRuntimeUpload = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 const runtimeEnvironmentSubscribe = vi.fn()
 const runtimeCall = vi.fn()
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   fsReadFile.mockReset()
   fsOnChanged.mockReset()
   fsCopy.mockReset()
@@ -46,8 +53,23 @@ beforeEach(() => {
   fsImportExternalPaths.mockReset()
   fsStageExternalPathsForRuntimeUpload.mockReset()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentSubscribe.mockReset()
   runtimeCall.mockReset()
+  runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
+    if (args.method === 'status.get') {
+      return Promise.resolve({
+        id: 'status',
+        ok: true,
+        result: {
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    }
+    return runtimeEnvironmentCall(args)
+  })
   vi.stubGlobal('window', {
     api: {
       fs: {
@@ -63,7 +85,10 @@ beforeEach(() => {
         stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload
       },
       runtime: { call: runtimeCall },
-      runtimeEnvironments: { call: runtimeEnvironmentCall, subscribe: runtimeEnvironmentSubscribe }
+      runtimeEnvironments: {
+        call: runtimeEnvironmentTransportCall,
+        subscribe: runtimeEnvironmentSubscribe
+      }
     }
   })
 })

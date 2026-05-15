@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: filesystem, editor-file, and search commands share the same local/SSH path authorization rules. Keeping that IO adapter together prevents separate command paths from drifting on safety checks. */
 import type { ChildProcess } from 'child_process'
+import { watch as watchFs } from 'fs'
 import {
   constants,
   copyFile,
@@ -54,6 +55,7 @@ import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtim
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
+const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
 const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -223,6 +225,9 @@ export class RuntimeFileCommands {
     const rootStats = await stat(rootPath)
     if (!rootStats.isDirectory()) {
       throw new Error('not_a_directory')
+    }
+    if (process.platform === 'win32') {
+      return watchWindowsRuntimeFileExplorer(rootPath, callback)
     }
     const watcher = await import('@parcel/watcher')
     const subscription = await watcher.subscribe(
@@ -758,6 +763,54 @@ export class RuntimeFileCommands {
       throw new Error('binary_file')
     }
     return result.content
+  }
+}
+
+function watchWindowsRuntimeFileExplorer(
+  rootPath: string,
+  callback: (events: FsChangeEvent[]) => void
+): () => void {
+  let disposed = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  const emitOverflow = (): void => {
+    timer = null
+    if (disposed) {
+      return
+    }
+    callback([{ kind: 'overflow', absolutePath: rootPath }])
+  }
+
+  const scheduleOverflow = (): void => {
+    if (disposed) {
+      return
+    }
+    if (timer) {
+      clearTimeout(timer)
+    }
+    timer = setTimeout(emitOverflow, WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS)
+  }
+
+  // Why: Parcel probes Watchman before the Windows backend and its native
+  // watcher can abort the headless server process. For remote Windows runtimes,
+  // a conservative overflow refresh is safer than a process-wide native crash.
+  const watcher = watchFs(rootPath, { recursive: true }, scheduleOverflow)
+  watcher.on('error', (err) => {
+    console.error('[runtime-files.watch] Windows watcher error', { rootPath, err })
+    scheduleOverflow()
+  })
+
+  return () => {
+    disposed = true
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    try {
+      watcher.close()
+    } catch (err) {
+      console.error('[runtime-files.watch] Windows watcher close error', { rootPath, err })
+    }
   }
 }
 
