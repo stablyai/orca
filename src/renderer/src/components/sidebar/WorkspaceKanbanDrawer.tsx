@@ -252,8 +252,7 @@ export default function WorkspaceKanbanDrawer({
       if (!content) {
         return
       }
-      const target = event.target
-      if (target instanceof Node && content.contains(target)) {
+      if (event.target instanceof Node && content.contains(event.target)) {
         return
       }
       const rect = content.getBoundingClientRect()
@@ -297,9 +296,13 @@ export default function WorkspaceKanbanDrawer({
         }}
         onInteractOutside={(event) => {
           const originalEvent = event.detail.originalEvent
+          const target = originalEvent.target
+          if (target instanceof Element && target.closest('[data-workspace-board-trigger]')) {
+            event.preventDefault()
+            return
+          }
           if (originalEvent instanceof PointerEvent && originalEvent.clientX < drawerLeft) {
-            // Why: users need to scroll, click, and drag from the workspace
-            // sidebar while the companion board stays open.
+            // Why: keep the workspace sidebar interactive while the companion board stays open.
             event.preventDefault()
           }
         }}

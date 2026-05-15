@@ -42,6 +42,7 @@ type WorktreeCardProps = {
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  hideCiCheck?: boolean
   onActivate?: () => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
@@ -61,7 +62,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
-  hideRepoBadge
+  hideRepoBadge,
+  hideCiCheck = false
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
@@ -178,7 +180,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const status = useWorktreeActivityStatus(worktree.id)
 
   const showPR = cardProps.includes('pr')
-  const showCI = cardProps.includes('ci')
+  const showCI = !hideCiCheck && cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.

@@ -45,13 +45,19 @@ export default function WorkspaceKanbanCard({
       {worktree.isPinned ? (
         <Badge
           variant="outline"
-          className="pointer-events-none absolute right-2 top-1.5 z-10 h-4 gap-1 rounded-full bg-background/90 px-1.5 text-[9px] leading-none text-muted-foreground"
+          className="pointer-events-none absolute right-2 top-1.5 z-10 flex size-4 items-center justify-center rounded-full bg-background/90 p-0 text-muted-foreground"
+          aria-label="Pinned"
         >
           <Pin className="size-2.5" />
-          Pinned
         </Badge>
       ) : null}
-      <WorktreeCard worktree={worktree} repo={repo} isActive={isActive} onActivate={onActivate} />
+      <WorktreeCard
+        worktree={worktree}
+        repo={repo}
+        isActive={isActive}
+        hideCiCheck={worktree.isPinned}
+        onActivate={onActivate}
+      />
     </div>
   )
 }
