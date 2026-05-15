@@ -4,9 +4,14 @@ import { WebView } from 'react-native-webview'
 import type { WebViewMessageEvent } from 'react-native-webview'
 import { colors } from '../theme/mobile-theme'
 
+type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
+
 export type TerminalModes = {
   bracketedPasteMode: boolean
   altScreen: boolean
+  mouseTrackingMode: TerminalMouseTrackingMode
+  sgrMouseMode: boolean
+  sgrMousePixelsMode: boolean
 }
 
 export type TerminalKeyboardAvoidanceMetrics = {
@@ -22,6 +27,7 @@ export type TerminalSelectionEvents = {
   onModesChanged?: (modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
+  onTerminalInput?: (bytes: string) => void
 }
 
 export type TerminalWebViewHandle = {
@@ -178,6 +184,8 @@ const XTERM_HTML = `<!DOCTYPE html>
 (function() {
   var surface = document.getElementById('terminal-surface');
   var ESC = String.fromCharCode(27);
+  var C1_CSI = String.fromCharCode(155);
+  var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
   var term = null;
   var writeQueue = [];
   var writesDraining = false;
@@ -190,6 +198,10 @@ const XTERM_HTML = `<!DOCTYPE html>
   var initRows = 24;
   var terminalGeneration = 0;
   var activeAltScreenSnapshot = false;
+  var trackedMouseTrackingMode = 'none';
+  var sgrMouseMode = false;
+  var sgrMousePixelsMode = false;
+  var mouseModeScanTail = '';
   var handledMessageIds = [];
   // Why: after init() the initial scrollback applyFitScale may have run
   // against an empty buffer (or one without the widest line yet). Re-fit
@@ -406,6 +418,58 @@ const XTERM_HTML = `<!DOCTYPE html>
     return on > 0 ? data.slice(on) : data;
   }
 
+  function updateMouseModeFromData(data) {
+    if (typeof data !== 'string' || data.length === 0) return;
+    var input = mouseModeScanTail + data;
+    mouseModeScanTail = extractMouseModeScanTail(input);
+    var re = new RegExp(ESC + 'c|' + ESC + '\\\\[\\\\?([0-9;]+)([hl])|' + C1_CSI + '\\\\?([0-9;]+)([hl])', 'g');
+    var match;
+    while ((match = re.exec(input)) !== null) {
+      if (match[0] === ESC + 'c') {
+        trackedMouseTrackingMode = 'none';
+        sgrMouseMode = false;
+        sgrMousePixelsMode = false;
+        continue;
+      }
+      var enabled = (match[2] || match[4]) === 'h';
+      var params = (match[1] || match[3]).split(';');
+      for (var i = 0; i < params.length; i++) {
+        if (params[i] === '') continue;
+        var param = Number(params[i]);
+        if (!Number.isInteger(param)) continue;
+        if (param === 9) trackedMouseTrackingMode = enabled ? 'x10' : 'none';
+        if (param === 1000) trackedMouseTrackingMode = enabled ? 'vt200' : 'none';
+        if (param === 1002) trackedMouseTrackingMode = enabled ? 'drag' : 'none';
+        if (param === 1003) trackedMouseTrackingMode = enabled ? 'any' : 'none';
+        if (param === 1006) {
+          sgrMouseMode = enabled;
+          sgrMousePixelsMode = false;
+        }
+        if (param === 1016) {
+          sgrMouseMode = false;
+          sgrMousePixelsMode = enabled;
+        }
+      }
+    }
+  }
+
+  function extractMouseModeScanTail(input) {
+    var start = Math.max(input.lastIndexOf(ESC), input.lastIndexOf(C1_CSI));
+    if (start === -1) return '';
+    var tail = input.slice(start);
+    // Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
+    // Keep parser state far beyond normal mode lists while still bounding memory.
+    if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) return '';
+    if (tail === ESC || tail === ESC + '[' || tail === C1_CSI) return tail;
+    if (tail.indexOf(ESC + '[?') === 0) {
+      return /^[0-9;]*$/.test(tail.slice(3)) ? tail : '';
+    }
+    if (tail.indexOf(C1_CSI + '?') === 0) {
+      return /^[0-9;]*$/.test(tail.slice(2)) ? tail : '';
+    }
+    return '';
+  }
+
   function pumpWrites(gen) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
     var next = writeQueue.shift();
@@ -439,7 +503,21 @@ const XTERM_HTML = `<!DOCTYPE html>
     afterDrainCallbacks = [];
     initRows = rows || 24;
     firstDataPending = true;
+    mouseModeScanTail = '';
+    trackedMouseTrackingMode = 'none';
+    sgrMouseMode = false;
+    sgrMousePixelsMode = false;
+    lastEmittedModes = {
+      bracketedPasteMode: false,
+      altScreen: false,
+      mouseTrackingMode: 'none',
+      sgrMouseMode: false,
+      sgrMousePixelsMode: false
+    };
     var replayData = normalizeInitialData(initialData);
+    // Why: normalizeInitialData can discard pre-alt-screen bytes. Keep the
+    // mirrored modes aligned with exactly what this mobile xterm replays.
+    updateMouseModeFromData(replayData);
     activeAltScreenSnapshot = isAltScreenActive(replayData);
     var oldTerm = term;
     var oldSurface = surface;
@@ -522,6 +600,7 @@ const XTERM_HTML = `<!DOCTYPE html>
   }
 
   function write(data) {
+    updateMouseModeFromData(data);
     writeQueue.push(data);
     pumpWrites(terminalGeneration);
     // Why: first live data chunk after init may widen the buffer past
@@ -623,7 +702,12 @@ const XTERM_HTML = `<!DOCTYPE html>
       writeQueue = [];
       afterDrainCallbacks = [];
       writesDraining = false;
+      mouseModeScanTail = '';
+      trackedMouseTrackingMode = 'none';
+      sgrMouseMode = false;
+      sgrMousePixelsMode = false;
       if (term) { term.clear(); term.reset(); }
+      emitModesIfChanged();
       resetEvictionCounter();
       if (selMode === 'select') {
         notify({ type: 'selection-evicted' });
@@ -715,13 +799,39 @@ const XTERM_HTML = `<!DOCTYPE html>
     if (!term) return;
     var bp = !!(term.modes && term.modes.bracketedPasteMode);
     var alt = false;
+    var mouseTrackingMode = getMouseTrackingMode();
     try { alt = term.buffer && term.buffer.active && term.buffer.active.type === 'alternate'; } catch (e) {}
-    if (bp !== lastEmittedModes.bracketedPasteMode || alt !== lastEmittedModes.altScreen) {
-      lastEmittedModes = { bracketedPasteMode: bp, altScreen: alt };
-      notify({ type: 'modes', bracketedPasteMode: bp, altScreen: alt });
+    if (
+      bp !== lastEmittedModes.bracketedPasteMode ||
+      alt !== lastEmittedModes.altScreen ||
+      mouseTrackingMode !== lastEmittedModes.mouseTrackingMode ||
+      sgrMouseMode !== lastEmittedModes.sgrMouseMode ||
+      sgrMousePixelsMode !== lastEmittedModes.sgrMousePixelsMode
+    ) {
+      lastEmittedModes = {
+        bracketedPasteMode: bp,
+        altScreen: alt,
+        mouseTrackingMode: mouseTrackingMode,
+        sgrMouseMode: sgrMouseMode,
+        sgrMousePixelsMode: sgrMousePixelsMode
+      };
+      notify({
+        type: 'modes',
+        bracketedPasteMode: bp,
+        altScreen: alt,
+        mouseTrackingMode: mouseTrackingMode,
+        sgrMouseMode: sgrMouseMode,
+        sgrMousePixelsMode: sgrMousePixelsMode
+      });
     }
   }
-  var lastEmittedModes = { bracketedPasteMode: false, altScreen: false };
+  var lastEmittedModes = {
+    bracketedPasteMode: false,
+    altScreen: false,
+    mouseTrackingMode: 'none',
+    sgrMouseMode: false,
+    sgrMousePixelsMode: false
+  };
 
   function emitKeyboardAvoidanceMetrics() {
     if (!term) return;
@@ -770,6 +880,147 @@ const XTERM_HTML = `<!DOCTYPE html>
     if (viewportRow > term.rows - 1) viewportRow = term.rows - 1;
     var viewportY = term.buffer.active.viewportY;
     return { col: col, row: viewportRow + viewportY };
+  }
+
+  function viewportToMouseReportCell(clientX, clientY) {
+    if (!term) return null;
+    var cellW = getCellWidth();
+    var cellH = getCellHeight();
+    if (cellW <= 0 || cellH <= 0) return null;
+    if (typeof clientX !== 'number') clientX = window.innerWidth / 2;
+    if (typeof clientY !== 'number') clientY = window.innerHeight / 2;
+    var total = getTotalScale();
+    if (total <= 0) total = 1;
+    var sx = (clientX - panX) / total;
+    var sy = (clientY - panY) / total;
+    var maxX = Math.max(0, term.cols * cellW - 1);
+    var maxY = Math.max(0, term.rows * cellH - 1);
+    if (sx < 0) sx = 0;
+    if (sx > maxX) sx = maxX;
+    if (sy < 0) sy = 0;
+    if (sy > maxY) sy = maxY;
+    var col = Math.floor(sx / cellW);
+    var row = Math.floor(sy / cellH);
+    if (col < 0) col = 0;
+    if (col > term.cols - 1) col = term.cols - 1;
+    if (row < 0) row = 0;
+    if (row > term.rows - 1) row = term.rows - 1;
+    return { col: col, row: row, x: Math.floor(sx), y: Math.floor(sy) };
+  }
+
+  function isAlternateBufferActive() {
+    try {
+      return !!(term && term.buffer && term.buffer.active && term.buffer.active.type === 'alternate');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getMouseTrackingMode() {
+    try {
+      if (term && term.modes && typeof term.modes.mouseTrackingMode === 'string') {
+        var mode = term.modes.mouseTrackingMode;
+        if (mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any') return mode;
+        return 'none';
+      }
+    } catch (e) {}
+    if (
+      trackedMouseTrackingMode === 'x10' ||
+      trackedMouseTrackingMode === 'vt200' ||
+      trackedMouseTrackingMode === 'drag' ||
+      trackedMouseTrackingMode === 'any'
+    ) {
+      return trackedMouseTrackingMode;
+    }
+    return 'none';
+  }
+
+  function repeatSequence(sequence, count) {
+    var out = '';
+    for (var i = 0; i < count; i++) out += sequence;
+    return out;
+  }
+
+  function buildArrowScrollSequence(lines) {
+    var prefix = '[';
+    try {
+      if (term && term.modes && term.modes.applicationCursorKeysMode) prefix = 'O';
+    } catch (e) {}
+    return ESC + prefix + (lines < 0 ? 'A' : 'B');
+  }
+
+  function buildMouseWheelSequence(lines, clientX, clientY) {
+    var cell = viewportToMouseReportCell(clientX, clientY);
+    if (!cell) return '';
+    var eventCode = lines < 0 ? 64 : 65;
+    if (sgrMousePixelsMode) {
+      return ESC + '[<' + eventCode + ';' + cell.x + ';' + cell.y + 'M';
+    }
+    if (sgrMouseMode) {
+      // Why: xterm increments zero-based mouse cells before encoding reports.
+      return ESC + '[<' + eventCode + ';' + (cell.col + 1) + ';' + (cell.row + 1) + 'M';
+    }
+    // Why: xterm increments zero-based mouse cells before encoding reports.
+    var button = eventCode + 32;
+    var col = cell.col + 1 + 32;
+    var row = cell.row + 1 + 32;
+    // Why: non-SGR mouse bytes above ASCII are not preserved reliably through
+    // the mobile JSON/RPC string path. Fall back to keys for wide terminals.
+    if (button > 126 || col > 126 || row > 126) return '';
+    return ESC + '[M' + String.fromCharCode(button) + String.fromCharCode(col) + String.fromCharCode(row);
+  }
+
+  function isWheelMouseTrackingMode(mode) {
+    return mode !== 'none' && mode !== 'x10';
+  }
+
+  function buildMouseWheelScrollInput(lines, clientX, clientY) {
+    var count = Math.min(Math.abs(lines), 32);
+    if (count === 0) return '';
+    var sequence = buildMouseWheelSequence(lines, clientX, clientY);
+    if (!sequence) return '';
+    return repeatSequence(sequence, count);
+  }
+
+  function buildTuiScrollInput(lines, clientX, clientY) {
+    var count = Math.min(Math.abs(lines), 32);
+    if (count === 0) return '';
+    var mouseTrackingMode = getMouseTrackingMode();
+    var sequence = '';
+    if (isWheelMouseTrackingMode(mouseTrackingMode)) {
+      sequence = buildMouseWheelSequence(lines, clientX, clientY);
+    }
+    if (!sequence) sequence = buildArrowScrollSequence(lines);
+    return repeatSequence(sequence, count);
+  }
+
+  function routeScrollLines(lines, clientX, clientY) {
+    if (!term || lines === 0) return;
+    var mouseTrackingMode = getMouseTrackingMode();
+    var alternateBufferActive = isAlternateBufferActive();
+    if (isWheelMouseTrackingMode(mouseTrackingMode)) {
+      // Why: xterm sends wheel events to mouse-aware TUIs before considering
+      // scrollback, even if the app stays on the normal buffer.
+      var mouseInput = buildMouseWheelScrollInput(lines, clientX, clientY);
+      if (mouseInput) {
+        notify({ type: 'terminal-input', bytes: mouseInput });
+        return;
+      }
+      // Why: default mouse encoding can be unrepresentable in our ASCII-safe
+      // RPC path on wide terminals. Send bounded arrows instead of local
+      // scrollback/no-op while a mouse-aware app owns scroll gestures.
+      var fallbackInput = buildTuiScrollInput(lines, clientX, clientY);
+      if (fallbackInput) notify({ type: 'terminal-input', bytes: fallbackInput });
+      return;
+    }
+    if (alternateBufferActive) {
+      // Why: alternate-screen TUIs own their scroll state and xterm has no
+      // scrollback there, so mobile scroll gestures must become terminal input.
+      var input = buildTuiScrollInput(lines, clientX, clientY);
+      if (input) notify({ type: 'terminal-input', bytes: input });
+      return;
+    }
+    term.scrollLines(lines);
   }
 
   function cellToViewportPx(col, absRow) {
@@ -1217,7 +1468,7 @@ const XTERM_HTML = `<!DOCTYPE html>
         var lines = Math.trunc(ts.accumDelta / effectiveCellH);
         if (lines !== 0) {
           ts.accumDelta -= lines * effectiveCellH;
-          term.scrollLines(lines);
+          routeScrollLines(lines, x, y);
         }
       }
       ts.lastX = x;
@@ -1257,7 +1508,7 @@ const XTERM_HTML = `<!DOCTYPE html>
         var lines = Math.trunc(ts.accumDelta / effectiveCellH);
         if (lines !== 0) {
           ts.accumDelta -= lines * effectiveCellH;
-          term.scrollLines(lines);
+          routeScrollLines(lines, ts.lastX, ts.lastY);
         }
         ts.momentumId = requestAnimationFrame(momentumStep);
       }
@@ -1310,7 +1561,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onSelectionEvicted,
     onModesChanged,
     onKeyboardAvoidanceMetrics,
-    onHaptic
+    onHaptic,
+    onTerminalInput
   },
   ref
 ) {
@@ -1395,10 +1647,23 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       } else if (msg.type === 'selection-evicted') {
         onSelectionEvicted?.()
       } else if (msg.type === 'modes') {
+        const mouseTrackingMode =
+          msg.mouseTrackingMode === 'x10' ||
+          msg.mouseTrackingMode === 'vt200' ||
+          msg.mouseTrackingMode === 'drag' ||
+          msg.mouseTrackingMode === 'any'
+            ? msg.mouseTrackingMode
+            : 'none'
         onModesChanged?.({
           bracketedPasteMode: !!msg.bracketedPasteMode,
-          altScreen: !!msg.altScreen
+          altScreen: !!msg.altScreen,
+          mouseTrackingMode,
+          sgrMouseMode: !!msg.sgrMouseMode,
+          sgrMousePixelsMode: !!msg.sgrMousePixelsMode
         })
+      } else if (msg.type === 'terminal-input') {
+        const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
+        if (bytes.length > 0) onTerminalInput?.(bytes)
       } else if (msg.type === 'keyboard-avoidance-metrics') {
         const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
         const rows = typeof msg.rows === 'number' ? msg.rows : 0
@@ -1430,7 +1695,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onSelectionEvicted,
       onModesChanged,
       onKeyboardAvoidanceMetrics,
-      onHaptic
+      onHaptic,
+      onTerminalInput
     ]
   )
 
