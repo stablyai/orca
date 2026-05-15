@@ -6,6 +6,7 @@ import { previewGhosttyImport } from '../ghostty/index'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
+import type { AgentAwakeService } from '../agent-awake-service'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -21,7 +22,10 @@ const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTitlebarAppName'
 ]
 
-export function registerSettingsHandlers(store: Store): void {
+export function registerSettingsHandlers(
+  store: Store,
+  agentAwakeService?: AgentAwakeService
+): void {
   ipcMain.handle('settings:get', () => {
     return store.getSettings()
   })
@@ -36,6 +40,9 @@ export function registerSettingsHandlers(store: Store): void {
     // no-op flip would inflate the experimental-feature-adoption signal.
     const before = store.getSettings()
     const result = store.updateSettings(args)
+    if ('keepComputerAwakeWhileAgentsRun' in args) {
+      agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
+    }
     if (APPEARANCE_MENU_KEYS.some((key) => key in args)) {
       rebuildAppMenu()
     }

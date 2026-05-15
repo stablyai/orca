@@ -162,6 +162,7 @@ function TabBarInner({
     void window.api.pwsh.isAvailable().then(setPwshAvailable)
   }, [])
   const resolvedGroupId = groupId ?? worktreeId
+
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
     [worktreeId, gitStatusByWorktree]
@@ -224,6 +225,7 @@ function TabBarInner({
           unifiedTabId: browserTab.tabId ?? browserTab.id,
           data: browserTab
         })
+        continue
       }
     }
     return items

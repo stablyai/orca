@@ -1,5 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { GlobalSettings } from '../../../../shared/types'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
 
 type CacheEntry<T> = { data: T | null; fetchedAt: number }
@@ -17,6 +19,16 @@ function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
   return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL_MS
 }
 
+export function getHostedReviewCacheKey(
+  repoPath: string,
+  branch: string,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): string {
+  const target = getActiveRuntimeTarget(settings)
+  const scope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+  return `${scope}::${repoPath}::${branch}`
+}
+
 export type HostedReviewSlice = {
   hostedReviewCache: Record<string, CacheEntry<HostedReviewInfo>>
   fetchHostedReviewForBranch: (
@@ -26,6 +38,7 @@ export type HostedReviewSlice = {
       linkedGitHubPR?: number | null
       linkedGitLabMR?: number | null
       linkedBitbucketPR?: number | null
+      linkedGiteaPR?: number | null
     }
   ) => Promise<HostedReviewInfo | null>
 }
@@ -41,13 +54,16 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     branch,
     options
   ): Promise<HostedReviewInfo | null> => {
-    const cacheKey = `${repoPath}::${branch}`
+    const settings = get().settings
+    const target = getActiveRuntimeTarget(settings)
+    const cacheKey = getHostedReviewCacheKey(repoPath, branch, settings)
     const cached = get().hostedReviewCache[cacheKey]
     const linkedRefetch =
       cached?.data === null &&
       ((options?.linkedGitHubPR ?? null) !== null ||
         (options?.linkedGitLabMR ?? null) !== null ||
-        (options?.linkedBitbucketPR ?? null) !== null)
+        (options?.linkedBitbucketPR ?? null) !== null ||
+        (options?.linkedGiteaPR ?? null) !== null)
     if (!options?.force && !linkedRefetch && isFresh(cached)) {
       return cached.data
     }
@@ -62,13 +78,26 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
     const request = (async () => {
       try {
-        const review = await window.api.hostedReview.forBranch({
-          repoPath,
+        const args = {
           branch,
           linkedGitHubPR: options?.linkedGitHubPR ?? null,
           linkedGitLabMR: options?.linkedGitLabMR ?? null,
-          linkedBitbucketPR: options?.linkedBitbucketPR ?? null
-        })
+          linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
+          linkedGiteaPR: options?.linkedGiteaPR ?? null
+        }
+        const review =
+          target.kind === 'environment'
+            ? await callRuntimeRpc<HostedReviewInfo | null>(
+                target,
+                'hostedReview.forBranch',
+                { repo: repoPath, ...args },
+                // Why: remote dev boxes can be slower at `git`/`gh` lookups
+                // than local desktop repos, especially on Windows filesystem
+                // paths. The main-process queue caps concurrency, so a longer
+                // timeout no longer risks a background socket stampede.
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.hostedReview.forBranch({ repoPath, ...args })
         if (requestGenerations.get(cacheKey) === generation) {
           set((state) => ({
             hostedReviewCache: {

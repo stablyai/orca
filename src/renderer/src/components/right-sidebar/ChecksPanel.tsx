@@ -17,6 +17,7 @@ import {
 } from './checks-panel-content'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 export default function ChecksPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
@@ -377,11 +378,20 @@ export default function ChecksPanel(): React.JSX.Element {
     }
     setTitleSaving(true)
     try {
-      const ok = await window.api.gh.updatePRTitle({
-        repoPath: repo.path,
-        prNumber: pr.number,
-        title: titleDraft.trim()
-      })
+      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+      const ok =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<boolean>(
+              target,
+              'github.updatePRTitle',
+              { repo: repo.id, prNumber: pr.number, title: titleDraft.trim() },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.updatePRTitle({
+              repoPath: repo.path,
+              prNumber: pr.number,
+              title: titleDraft.trim()
+            })
       if (ok) {
         // Re-fetch PR to get updated title
         await fetchPRForBranch(repo.path, branch, { force: true, linkedPRNumber: linkedPR })

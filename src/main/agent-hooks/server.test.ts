@@ -59,6 +59,151 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
+  it('allows multiple status-change subscribers to observe the same update', () => {
+    const server = new AgentHookServer()
+    const first = vi.fn()
+    const second = vi.fn()
+    server.subscribeStatusChanges(first)
+    server.subscribeStatusChanges(second)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(first).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        receivedAt: expect.any(Number),
+        observedInCurrentRuntime: true
+      })
+    ])
+    expect(second).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        receivedAt: expect.any(Number),
+        observedInCurrentRuntime: true
+      })
+    ])
+  })
+
+  it('keeps status-change subscribers when renderer fanout listener is cleared', () => {
+    const server = new AgentHookServer()
+    const statusChangeListener = vi.fn()
+    const rendererListener = vi.fn()
+    server.subscribeStatusChanges(statusChangeListener)
+    server.setListener(rendererListener)
+    server.setListener(null)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(statusChangeListener).toHaveBeenCalledTimes(1)
+    expect(rendererListener).not.toHaveBeenCalled()
+  })
+
+  it('unsubscribes status-change listeners without removing the remaining listeners', () => {
+    const server = new AgentHookServer()
+    const removed = vi.fn()
+    const remaining = vi.fn()
+    const unsubscribe = server.subscribeStatusChanges(removed)
+    server.subscribeStatusChanges(remaining)
+
+    unsubscribe()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(removed).not.toHaveBeenCalled()
+    expect(remaining).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        observedInCurrentRuntime: true
+      })
+    ])
+  })
+
+  it('notifies status-change subscribers when a working status is dropped or cleared', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.subscribeStatusChanges(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.dropStatusEntry(PANE)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.clearPaneState(PANE)
+
+    expect(listener).toHaveBeenNthCalledWith(2, [])
+    expect(listener).toHaveBeenNthCalledWith(4, [])
+  })
+
+  it('hydrates cached statuses as not observed in the current runtime', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
+    const firstServer = new AgentHookServer()
+    const secondServer = new AgentHookServer()
+    try {
+      await firstServer.start({ env: 'production', userDataPath: dir })
+      firstServer.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      firstServer.flushStatusPersistSync()
+      firstServer.stop()
+
+      await secondServer.start({ env: 'production', userDataPath: dir })
+
+      expect(secondServer.getStatusChangeSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          observedInCurrentRuntime: false
+        })
+      ])
+    } finally {
+      firstServer.stop()
+      secondServer.stop()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('replays the latest retained pane status when a listener attaches after windowless events', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

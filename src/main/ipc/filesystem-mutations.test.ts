@@ -2,16 +2,16 @@ import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
-const { handleMock, lstatMock, mkdirMock, renameMock, writeFileMock, realpathMock } = vi.hoisted(
-  () => ({
+const { handleMock, copyFileMock, lstatMock, mkdirMock, renameMock, writeFileMock, realpathMock } =
+  vi.hoisted(() => ({
     handleMock: vi.fn(),
+    copyFileMock: vi.fn(),
     lstatMock: vi.fn(),
     mkdirMock: vi.fn(),
     renameMock: vi.fn(),
     writeFileMock: vi.fn(),
     realpathMock: vi.fn()
-  })
-)
+  }))
 
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock }
@@ -23,11 +23,15 @@ vi.mock('fs/promises', () => ({
   rename: renameMock,
   writeFile: writeFileMock,
   realpath: realpathMock,
-  copyFile: vi.fn(),
+  copyFile: copyFileMock,
   readdir: vi.fn()
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
+import {
+  registerSshFilesystemProvider,
+  unregisterSshFilesystemProvider
+} from '../providers/ssh-filesystem-dispatch'
 
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
@@ -58,6 +62,7 @@ describe('registerFilesystemMutationHandlers', () => {
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
+    copyFileMock.mockReset()
     lstatMock.mockReset()
     mkdirMock.mockReset()
     renameMock.mockReset()
@@ -74,6 +79,7 @@ describe('registerFilesystemMutationHandlers', () => {
     mkdirMock.mockResolvedValue(undefined)
     writeFileMock.mockResolvedValue(undefined)
     renameMock.mockResolvedValue(undefined)
+    copyFileMock.mockResolvedValue(undefined)
 
     registerFilesystemMutationHandlers(store as never)
   })
@@ -208,6 +214,36 @@ describe('registerFilesystemMutationHandlers', () => {
     await handlers.get('fs:rename')!(null, { oldPath, newPath })
 
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
+  })
+
+  // ── fs:copy ────────────────────────────────────────────────────
+
+  it('copies a file without overwriting an existing destination', async () => {
+    const sourcePath = path.resolve('/workspace/repo/source.ts')
+    const destinationPath = path.resolve('/workspace/repo/source copy.ts')
+
+    await handlers.get('fs:copy')!(null, { sourcePath, destinationPath })
+
+    expect(mkdirMock).toHaveBeenCalledWith(path.resolve('/workspace/repo'), { recursive: true })
+    expect(copyFileMock).toHaveBeenCalledWith(sourcePath, destinationPath, expect.any(Number))
+  })
+
+  it('routes copy through the SSH filesystem provider when a connection is present', async () => {
+    const copy = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { copy } as never)
+
+    try {
+      await handlers.get('fs:copy')!(null, {
+        sourcePath: '/home/me/repo/source.ts',
+        destinationPath: '/home/me/repo/source copy.ts',
+        connectionId: 'ssh-1'
+      })
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(copy).toHaveBeenCalledWith('/home/me/repo/source.ts', '/home/me/repo/source copy.ts')
+    expect(copyFileMock).not.toHaveBeenCalled()
   })
 
   // ── Edge cases ─────────────────────────────────────────────────

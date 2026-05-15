@@ -5,8 +5,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { basename, joinPath } from '@/lib/path'
-import { normalizeAbsolutePath } from '@/components/right-sidebar/file-explorer-paths'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
@@ -15,6 +15,7 @@ import { hasRecentSelfWrite } from '@/components/editor/editor-self-write-regist
 import type { FsChangedPayload } from '../../../shared/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
+import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
@@ -25,7 +26,7 @@ import type { OpenFile } from '@/store/slices/editor'
 // and black out the window (issue #826). Coalescing per (worktreeId + path)
 // on a short debounce collapses that burst into one reload notification.
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
-const pendingExternalReloadTimers = new Map<string, number>()
+const pendingExternalReloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 function warnExternalWatchFailure(target: WatchedTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
@@ -44,9 +45,9 @@ function scheduleDebouncedExternalReload(notification: {
   const key = `${notification.worktreeId}::${notification.relativePath}`
   const existing = pendingExternalReloadTimers.get(key)
   if (existing !== undefined) {
-    window.clearTimeout(existing)
+    globalThis.clearTimeout(existing)
   }
-  const handle = window.setTimeout(() => {
+  const handle = globalThis.setTimeout(() => {
     pendingExternalReloadTimers.delete(key)
     notifyEditorExternalFileChange(notification)
   }, EXTERNAL_RELOAD_DEBOUNCE_MS)
@@ -57,6 +58,7 @@ type WatchedTarget = {
   worktreeId: string
   worktreePath: string
   connectionId: string | undefined
+  runtimeEnvironmentId: string | undefined
 }
 
 type ExternalWatchNotification = {
@@ -69,7 +71,7 @@ export function getWatchedTargetKey(target: WatchedTarget): string {
   // Why: SSH worktrees can exist in the store before their remote filesystem
   // provider is ready. Include connectionId so a local/unknown placeholder
   // watch is replaced by the real SSH watch when the repo metadata hydrates.
-  return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}`
+  return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}`
 }
 
 // Why: macOS atomic writes (Claude Code Edit, vim :w, VSCode save) deliver a
@@ -106,6 +108,7 @@ export function useEditorExternalWatch(): void {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const runtimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
 
   // Why: unify the target computation and the dependency key into one memo so
   // there's a single source of truth. The derived string key drives the
@@ -134,17 +137,20 @@ export function useEditorExternalWatch(): void {
       const target = {
         worktreeId: id,
         worktreePath: wt.path,
-        connectionId: repo?.connectionId ?? undefined
+        connectionId: repo?.connectionId ?? undefined,
+        runtimeEnvironmentId: runtimeEnvironmentId?.trim() || undefined
       }
       nextTargets.push(target)
       parts.push(getWatchedTargetKey(target))
     }
     return { targets: nextTargets, targetsKey: parts.join('|') }
-  }, [openFiles, worktreesByRepo, repos, activeWorktreeId])
+  }, [openFiles, worktreesByRepo, repos, activeWorktreeId, runtimeEnvironmentId])
 
   const targetsRef = useRef<WatchedTarget[]>([])
   const latestTargetsRef = useRef<WatchedTarget[]>(targets)
   latestTargetsRef.current = targets
+  const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
+  const fsChangedHandlerRef = useRef<((payload: FsChangedPayload) => void) | null>(null)
 
   // Why: diff previous vs next targets so unchanged worktrees keep their
   // existing subscription. Tearing down every subscription on each targetsKey
@@ -159,12 +165,55 @@ export function useEditorExternalWatch(): void {
     const added = nextTargets.filter((t) => !prevKeys.has(getWatchedTargetKey(t)))
 
     for (const target of removed) {
-      void window.api.fs.unwatchWorktree({
-        worktreePath: target.worktreePath,
-        connectionId: target.connectionId
-      })
+      const key = getWatchedTargetKey(target)
+      const remoteUnsubscribe = remoteWatchUnsubsRef.current.get(key)
+      if (remoteUnsubscribe) {
+        remoteUnsubscribe()
+        remoteWatchUnsubsRef.current.delete(key)
+      } else {
+        void window.api.fs.unwatchWorktree({
+          worktreePath: target.worktreePath,
+          connectionId: target.connectionId
+        })
+      }
     }
     for (const target of added) {
+      if (target.runtimeEnvironmentId) {
+        const key = getWatchedTargetKey(target)
+        let cancelled = false
+        const pendingUnsubscribe = (): void => {
+          cancelled = true
+        }
+        remoteWatchUnsubsRef.current.set(key, pendingUnsubscribe)
+        void subscribeRuntimeFileChanges(
+          {
+            settings: { activeRuntimeEnvironmentId: target.runtimeEnvironmentId },
+            worktreeId: target.worktreeId,
+            worktreePath: target.worktreePath,
+            connectionId: target.connectionId
+          },
+          (payload) => fsChangedHandlerRef.current?.(payload),
+          (err) => warnExternalWatchFailure(target, err)
+        )
+          .then((unsubscribe) => {
+            if (cancelled) {
+              unsubscribe()
+              return
+            }
+            if (remoteWatchUnsubsRef.current.get(key) === pendingUnsubscribe) {
+              remoteWatchUnsubsRef.current.set(key, unsubscribe)
+            } else {
+              unsubscribe()
+            }
+          })
+          .catch((err) => {
+            if (remoteWatchUnsubsRef.current.get(key) === pendingUnsubscribe) {
+              remoteWatchUnsubsRef.current.delete(key)
+            }
+            warnExternalWatchFailure(target, err)
+          })
+        continue
+      }
       void window.api.fs
         .watchWorktree({
           worktreePath: target.worktreePath,
@@ -188,25 +237,37 @@ export function useEditorExternalWatch(): void {
   // single always-mounted effect avoids re-subscribing on every targetsKey
   // change (which would otherwise miss events fired during re-subscription).
   useEffect(() => {
+    const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const { handleFsChanged, dispose } = createExternalWatchEventHandler((worktreePath) =>
       targetsRef.current.find(
-        (t) => normalizeAbsolutePath(t.worktreePath) === normalizeAbsolutePath(worktreePath)
+        (t) =>
+          normalizeRuntimePathForComparison(t.worktreePath) ===
+          normalizeRuntimePathForComparison(worktreePath)
       )
     )
     const unsubscribe = window.api.fs.onFsChanged(handleFsChanged)
+    fsChangedHandlerRef.current = handleFsChanged
 
     return () => {
       unsubscribe()
       dispose()
+      fsChangedHandlerRef.current = null
       // Why: final unmount must tear down every outstanding subscription.
       // The differential watch effect above intentionally never unwatches on
       // cleanup, so this is the only place that clears them.
       for (const target of targetsRef.current) {
-        void window.api.fs.unwatchWorktree({
-          worktreePath: target.worktreePath,
-          connectionId: target.connectionId
-        })
+        const key = getWatchedTargetKey(target)
+        const remoteUnsubscribe = remoteWatchUnsubs.get(key)
+        if (remoteUnsubscribe) {
+          remoteUnsubscribe()
+        } else {
+          void window.api.fs.unwatchWorktree({
+            worktreePath: target.worktreePath,
+            connectionId: target.connectionId
+          })
+        }
       }
+      remoteWatchUnsubs.clear()
       targetsRef.current = []
       // Why: deliberately do NOT clear pendingExternalReloadTimers here.
       // The map is module-scoped, so in React StrictMode (dev) the first
@@ -253,7 +314,7 @@ export function createExternalWatchEventHandler(
         continue
       }
       if (evt.kind === 'create' || evt.kind === 'update') {
-        createOrUpdatePaths.add(normalizeAbsolutePath(evt.absolutePath))
+        createOrUpdatePaths.add(normalizeRuntimePathForComparison(evt.absolutePath))
       }
     }
     for (const createdPath of createOrUpdatePaths) {
@@ -346,7 +407,7 @@ export function createExternalWatchEventHandler(
           file.worktreeId === target.worktreeId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           file.externalMutation &&
-          createOrUpdatePaths.has(normalizeAbsolutePath(file.filePath))
+          createOrUpdatePaths.has(normalizeRuntimePathForComparison(file.filePath))
         ) {
           state.setExternalMutation(file.id, null)
         }
@@ -384,7 +445,7 @@ export function createExternalWatchEventHandler(
 
       const relativePath = getExternalFileChangeRelativePath(
         target.worktreePath,
-        normalizeAbsolutePath(evt.absolutePath),
+        evt.absolutePath,
         evt.isDirectory
       )
       if (relativePath) {
@@ -481,7 +542,7 @@ function buildDeletePathByFileId(
   const deletePaths = new Set<string>()
   for (const evt of payload.events) {
     if (evt.kind === 'delete') {
-      deletePaths.add(normalizeAbsolutePath(evt.absolutePath))
+      deletePaths.add(normalizeRuntimePathForComparison(evt.absolutePath))
     }
   }
   const result = new Map<string, string>()
@@ -493,7 +554,7 @@ function buildDeletePathByFileId(
     if (!deletedIdSet.has(file.id) || file.worktreeId !== worktreeId) {
       continue
     }
-    const normalized = normalizeAbsolutePath(file.filePath)
+    const normalized = normalizeRuntimePathForComparison(file.filePath)
     if (deletePaths.has(normalized)) {
       result.set(file.id, normalized)
     }
@@ -509,7 +570,7 @@ function collectDeletedOpenEditorIds(
   const deletePaths = new Set<string>()
   for (const evt of payload.events) {
     if (evt.kind === 'delete') {
-      deletePaths.add(normalizeAbsolutePath(evt.absolutePath))
+      deletePaths.add(normalizeRuntimePathForComparison(evt.absolutePath))
     }
   }
   if (deletePaths.size === 0) {
@@ -523,7 +584,7 @@ function collectDeletedOpenEditorIds(
     ) {
       continue
     }
-    if (deletePaths.has(normalizeAbsolutePath(file.filePath))) {
+    if (deletePaths.has(normalizeRuntimePathForComparison(file.filePath))) {
       result.push(file.id)
     }
   }
@@ -564,7 +625,7 @@ function hasRenameCorrelatedCreate(
     if (!deletedIdSet.has(file.id)) {
       continue
     }
-    deletedBasenames.add(basename(normalizeAbsolutePath(file.filePath)))
+    deletedBasenames.add(basename(file.filePath))
   }
   if (deletedBasenames.size === 0) {
     return false
@@ -573,7 +634,7 @@ function hasRenameCorrelatedCreate(
     if (evt.kind !== 'create' || evt.isDirectory === true) {
       continue
     }
-    if (deletedBasenames.has(basename(normalizeAbsolutePath(evt.absolutePath)))) {
+    if (deletedBasenames.has(basename(evt.absolutePath))) {
       return true
     }
   }

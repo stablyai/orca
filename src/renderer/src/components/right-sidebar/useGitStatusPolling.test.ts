@@ -48,7 +48,9 @@ async function usePollingOnce(status: GitStatusResult): Promise<PollState> {
   })
 
   vi.doMock('@/store', () => ({
-    useAppStore: (selector: (s: PollState) => unknown) => selector(state)
+    useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
+      getState: () => ({ settings: null })
+    })
   }))
 
   vi.doMock('@/store/selectors', () => ({
@@ -78,7 +80,9 @@ async function usePollingOnce(status: GitStatusResult): Promise<PollState> {
 
   const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
   GitStatusPollingHarness({ runPolling })
-  await Promise.resolve()
+  await vi.waitFor(() => {
+    expect(state.setGitStatus).toHaveBeenCalled()
+  })
 
   return state
 }

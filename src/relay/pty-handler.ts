@@ -444,6 +444,11 @@ export class PtyHandler {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
           still.pty.kill('SIGKILL')
+          // Why: emit pty.exit BEFORE disposeManagedPty sets disposed=true.
+          // The natural onExit short-circuits on `managed.disposed`, so
+          // without this notify the renderer never learns the pane is dead
+          // when the SIGKILL fallback fires for a SIGTERM-ignoring child.
+          this.dispatcher.notify('pty.exit', { id, code: -1 })
           // Why: if SIGKILL's onExit never fires (kernel edge case,
           // uninterruptible sleep, child wedged on a bad NFS mount), the
           // fd and map entry would leak forever. Dispose synchronously so

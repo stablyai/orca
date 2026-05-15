@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { getConnectionId } from '@/lib/connection-context'
+import { searchRuntimeFiles } from '@/runtime/runtime-file-client'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
@@ -173,20 +174,27 @@ export default function Search(): React.JSX.Element {
         try {
           const state = useAppStore.getState()
           const connectionId = getConnectionId(activeWorktreeId!) ?? undefined
-          const results = await window.api.fs.search({
-            query: query.trim(),
-            rootPath: worktreePath,
-            connectionId,
-            caseSensitive:
-              state.fileSearchStateByWorktree[activeWorktreeId!]?.caseSensitive ?? false,
-            wholeWord: state.fileSearchStateByWorktree[activeWorktreeId!]?.wholeWord ?? false,
-            useRegex: state.fileSearchStateByWorktree[activeWorktreeId!]?.useRegex ?? false,
-            includePattern:
-              state.fileSearchStateByWorktree[activeWorktreeId!]?.includePattern || undefined,
-            excludePattern:
-              state.fileSearchStateByWorktree[activeWorktreeId!]?.excludePattern || undefined,
-            maxResults: SEARCH_MAX_RESULTS
-          })
+          const results = await searchRuntimeFiles(
+            {
+              settings: state.settings,
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId
+            },
+            {
+              query: query.trim(),
+              rootPath: worktreePath,
+              caseSensitive:
+                state.fileSearchStateByWorktree[activeWorktreeId!]?.caseSensitive ?? false,
+              wholeWord: state.fileSearchStateByWorktree[activeWorktreeId!]?.wholeWord ?? false,
+              useRegex: state.fileSearchStateByWorktree[activeWorktreeId!]?.useRegex ?? false,
+              includePattern:
+                state.fileSearchStateByWorktree[activeWorktreeId!]?.includePattern || undefined,
+              excludePattern:
+                state.fileSearchStateByWorktree[activeWorktreeId!]?.excludePattern || undefined,
+              maxResults: SEARCH_MAX_RESULTS
+            }
+          )
           if (latestSearchIdRef.current === searchId) {
             updateActiveSearchState({ results })
           }

@@ -8,6 +8,12 @@ export type VisibleTabRef = {
   tabId?: string
 }
 
+export type ActiveTabNavOrderIds = {
+  terminalIds?: string[]
+  editorIds?: string[]
+  browserIds?: string[]
+}
+
 /**
  * Compute the visible tab-strip order for a single group.
  *
@@ -109,11 +115,14 @@ export function getActiveTabNavOrder(
     | 'openFiles'
     | 'browserTabsByWorktree'
   >,
-  worktreeId: string
+  worktreeId: string,
+  ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
-  const terminalIds = (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
-  const editorIds = state.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
-  const browserIds = (state.browserTabsByWorktree[worktreeId] ?? []).map((t) => t.id)
+  const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
+  const editorIds =
+    ids.editorIds ?? state.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
+  const browserIds =
+    ids.browserIds ?? (state.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
 
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId

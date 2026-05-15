@@ -1,6 +1,15 @@
+/* eslint-disable max-lines -- Why: repo metadata hooks share TTL caches and
+Linear/GitHub cache invalidation entrypoints used by the issue dialog. */
 import { useEffect, useRef, useState } from 'react'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  linearTeamLabels,
+  linearTeamMembers,
+  linearTeamStates
+} from '@/runtime/runtime-linear-client'
 import type {
   GitHubAssignableUser,
+  GlobalSettings,
   LinearWorkflowState,
   LinearLabel,
   LinearMember
@@ -23,7 +32,11 @@ type MetadataState<T> = {
 const ghLabelStore = createMetadataRequestStore<string[]>()
 const ghAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
-export function useRepoLabels(repoPath: string | null): MetadataState<string[]> {
+export function useRepoLabels(
+  repoPath: string | null,
+  repoId?: string | null,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
     data: [],
     loading: false,
@@ -32,29 +45,41 @@ export function useRepoLabels(repoPath: string | null): MetadataState<string[]> 
   const activeKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!repoPath) {
+    const target = getActiveRuntimeTarget(settings)
+    if (!repoPath && !(target.kind === 'environment' && repoId)) {
       return
     }
+    const cacheKey =
+      target.kind === 'environment' ? `runtime:${target.environmentId}:${repoId}` : (repoPath ?? '')
 
-    const cached = getFreshMetadata(ghLabelStore, repoPath)
+    const cached = getFreshMetadata(ghLabelStore, cacheKey)
     if (cached) {
-      if (activeKeyRef.current !== repoPath) {
+      if (activeKeyRef.current !== cacheKey) {
         setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = repoPath
+        activeKeyRef.current = cacheKey
       }
       return
     }
 
-    activeKeyRef.current = repoPath
-    const requestKey = repoPath
+    activeKeyRef.current = cacheKey
+    const requestKey = cacheKey
     setState((s) => ({
       ...s,
       data: s.data.length ? ([] as typeof s.data) : s.data,
       loading: true,
       error: null
     }))
-    loadMetadata(ghLabelStore, repoPath, () =>
-      window.api.gh.listLabels({ repoPath }).then((labels) => labels as string[])
+    loadMetadata(ghLabelStore, cacheKey, () =>
+      target.kind === 'environment'
+        ? callRuntimeRpc<string[]>(
+            target,
+            'github.listLabels',
+            { repo: repoId ?? '' },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh
+            .listLabels({ repoPath: repoPath ?? '' })
+            .then((labels) => labels as string[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -73,12 +98,16 @@ export function useRepoLabels(repoPath: string | null): MetadataState<string[]> 
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [repoPath])
+  }, [repoId, repoPath, settings])
 
   return state
 }
 
-export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubAssignableUser[]> {
+export function useRepoAssignees(
+  repoPath: string | null,
+  repoId?: string | null,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): MetadataState<GitHubAssignableUser[]> {
   const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
     loading: false,
@@ -87,31 +116,41 @@ export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubA
   const activeKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!repoPath) {
+    const target = getActiveRuntimeTarget(settings)
+    if (!repoPath && !(target.kind === 'environment' && repoId)) {
       return
     }
+    const cacheKey =
+      target.kind === 'environment' ? `runtime:${target.environmentId}:${repoId}` : (repoPath ?? '')
 
-    const cached = getFreshMetadata(ghAssigneeStore, repoPath)
+    const cached = getFreshMetadata(ghAssigneeStore, cacheKey)
     if (cached) {
-      if (activeKeyRef.current !== repoPath) {
+      if (activeKeyRef.current !== cacheKey) {
         setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = repoPath
+        activeKeyRef.current = cacheKey
       }
       return
     }
 
-    activeKeyRef.current = repoPath
-    const requestKey = repoPath
+    activeKeyRef.current = cacheKey
+    const requestKey = cacheKey
     setState((s) => ({
       ...s,
       data: s.data.length ? ([] as typeof s.data) : s.data,
       loading: true,
       error: null
     }))
-    loadMetadata(ghAssigneeStore, repoPath, () =>
-      window.api.gh
-        .listAssignableUsers({ repoPath })
-        .then((users) => users as GitHubAssignableUser[])
+    loadMetadata(ghAssigneeStore, cacheKey, () =>
+      target.kind === 'environment'
+        ? callRuntimeRpc<GitHubAssignableUser[]>(
+            target,
+            'github.listAssignableUsers',
+            { repo: repoId ?? '' },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh
+            .listAssignableUsers({ repoPath: repoPath ?? '' })
+            .then((users) => users as GitHubAssignableUser[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -130,7 +169,7 @@ export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubA
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [repoPath])
+  }, [repoId, repoPath, settings])
 
   return state
 }
@@ -140,6 +179,14 @@ export function useRepoAssignees(repoPath: string | null): MetadataState<GitHubA
 const linearStateStore = createMetadataRequestStore<LinearWorkflowState[]>()
 const linearLabelStore = createMetadataRequestStore<LinearLabel[]>()
 const linearMemberStore = createMetadataRequestStore<LinearMember[]>()
+
+function linearMetadataCacheKey(
+  teamId: string,
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+): string {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment' ? `runtime:${target.environmentId}:${teamId}` : teamId
+}
 
 export function clearLinearMetadataCache(): void {
   clearMetadataRequestStore(linearStateStore)
@@ -152,7 +199,10 @@ export function clearGitHubMetadataCache(): void {
   clearMetadataRequestStore(ghAssigneeStore)
 }
 
-export function useTeamStates(teamId: string | null): MetadataState<LinearWorkflowState[]> {
+export function useTeamStates(
+  teamId: string | null,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): MetadataState<LinearWorkflowState[]> {
   const [state, setState] = useState<MetadataState<LinearWorkflowState[]>>({
     data: [],
     loading: false,
@@ -165,25 +215,26 @@ export function useTeamStates(teamId: string | null): MetadataState<LinearWorkfl
       return
     }
 
-    const cached = getFreshMetadata(linearStateStore, teamId)
+    const cacheKey = linearMetadataCacheKey(teamId, settings)
+    const cached = getFreshMetadata(linearStateStore, cacheKey)
     if (cached) {
-      if (activeKeyRef.current !== teamId) {
+      if (activeKeyRef.current !== cacheKey) {
         setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = teamId
+        activeKeyRef.current = cacheKey
       }
       return
     }
 
-    activeKeyRef.current = teamId
-    const requestKey = teamId
+    activeKeyRef.current = cacheKey
+    const requestKey = cacheKey
     setState((s) => ({
       ...s,
       data: s.data.length ? ([] as typeof s.data) : s.data,
       loading: true,
       error: null
     }))
-    loadMetadata(linearStateStore, teamId, () =>
-      window.api.linear.teamStates({ teamId }).then((states) => states as LinearWorkflowState[])
+    loadMetadata(linearStateStore, cacheKey, () =>
+      linearTeamStates(settings, teamId).then((states) => states as LinearWorkflowState[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -202,12 +253,15 @@ export function useTeamStates(teamId: string | null): MetadataState<LinearWorkfl
           error: err instanceof Error ? err.message : 'Failed to load states'
         }))
       })
-  }, [teamId])
+  }, [settings, teamId])
 
   return state
 }
 
-export function useTeamLabels(teamId: string | null): MetadataState<LinearLabel[]> {
+export function useTeamLabels(
+  teamId: string | null,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): MetadataState<LinearLabel[]> {
   const [state, setState] = useState<MetadataState<LinearLabel[]>>({
     data: [],
     loading: false,
@@ -220,25 +274,26 @@ export function useTeamLabels(teamId: string | null): MetadataState<LinearLabel[
       return
     }
 
-    const cached = getFreshMetadata(linearLabelStore, teamId)
+    const cacheKey = linearMetadataCacheKey(teamId, settings)
+    const cached = getFreshMetadata(linearLabelStore, cacheKey)
     if (cached) {
-      if (activeKeyRef.current !== teamId) {
+      if (activeKeyRef.current !== cacheKey) {
         setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = teamId
+        activeKeyRef.current = cacheKey
       }
       return
     }
 
-    activeKeyRef.current = teamId
-    const requestKey = teamId
+    activeKeyRef.current = cacheKey
+    const requestKey = cacheKey
     setState((s) => ({
       ...s,
       data: s.data.length ? ([] as typeof s.data) : s.data,
       loading: true,
       error: null
     }))
-    loadMetadata(linearLabelStore, teamId, () =>
-      window.api.linear.teamLabels({ teamId }).then((labels) => labels as LinearLabel[])
+    loadMetadata(linearLabelStore, cacheKey, () =>
+      linearTeamLabels(settings, teamId).then((labels) => labels as LinearLabel[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -257,12 +312,15 @@ export function useTeamLabels(teamId: string | null): MetadataState<LinearLabel[
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [teamId])
+  }, [settings, teamId])
 
   return state
 }
 
-export function useTeamMembers(teamId: string | null): MetadataState<LinearMember[]> {
+export function useTeamMembers(
+  teamId: string | null,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): MetadataState<LinearMember[]> {
   const [state, setState] = useState<MetadataState<LinearMember[]>>({
     data: [],
     loading: false,
@@ -275,25 +333,26 @@ export function useTeamMembers(teamId: string | null): MetadataState<LinearMembe
       return
     }
 
-    const cached = getFreshMetadata(linearMemberStore, teamId)
+    const cacheKey = linearMetadataCacheKey(teamId, settings)
+    const cached = getFreshMetadata(linearMemberStore, cacheKey)
     if (cached) {
-      if (activeKeyRef.current !== teamId) {
+      if (activeKeyRef.current !== cacheKey) {
         setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = teamId
+        activeKeyRef.current = cacheKey
       }
       return
     }
 
-    activeKeyRef.current = teamId
-    const requestKey = teamId
+    activeKeyRef.current = cacheKey
+    const requestKey = cacheKey
     setState((s) => ({
       ...s,
       data: s.data.length ? ([] as typeof s.data) : s.data,
       loading: true,
       error: null
     }))
-    loadMetadata(linearMemberStore, teamId, () =>
-      window.api.linear.teamMembers({ teamId }).then((members) => members as LinearMember[])
+    loadMetadata(linearMemberStore, cacheKey, () =>
+      linearTeamMembers(settings, teamId).then((members) => members as LinearMember[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -312,7 +371,7 @@ export function useTeamMembers(teamId: string | null): MetadataState<LinearMembe
           error: err instanceof Error ? err.message : 'Failed to load members'
         }))
       })
-  }, [teamId])
+  }, [settings, teamId])
 
   return state
 }

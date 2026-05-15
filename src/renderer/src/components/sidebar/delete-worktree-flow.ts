@@ -6,6 +6,7 @@ import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import type { Worktree } from '../../../../shared/types'
 
 type WorktreeBatchDeleteOptions = {
+  forceConfirm?: boolean
   onDeleted?: (worktreeIds: string[]) => void
 }
 
@@ -19,6 +20,21 @@ function viewWorktreeDiff(worktreeId: string): void {
   const state = useAppStore.getState()
   state.setRightSidebarTab('source-control')
   state.setRightSidebarOpen(true)
+}
+
+export async function runWorktreeDeletesSequentially(
+  targets: readonly Pick<Worktree, 'id' | 'displayName'>[]
+): Promise<string[]> {
+  const deletedIds: string[] = []
+  for (const target of targets) {
+    // Why: git worktree removals for one repo contend on git lock files.
+    // Running the user-selected batch sequentially avoids partial lock races.
+    const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName)
+    if (deleted) {
+      deletedIds.push(target.id)
+    }
+  }
+  return deletedIds
 }
 
 /**
@@ -158,12 +174,14 @@ export function runWorktreeBatchDelete(
     state.clearWorktreeDeleteState(target.id)
   }
 
-  const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
+  // Why: bulk cleanup can destroy many directories at once, so batch deletes
+  // and Space-triggered deletes must keep an explicit confirmation step.
+  const skipConfirm =
+    !options.forceConfirm &&
+    targets.length === 1 &&
+    (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm) {
-    void Promise.all(
-      targets.map((target) => runWorktreeDeleteWithToast(target.id, target.displayName))
-    ).then((results) => {
-      const deletedIds = targets.filter((_, index) => results[index]).map((target) => target.id)
+    void runWorktreeDeletesSequentially(targets).then((deletedIds) => {
       if (deletedIds.length > 0) {
         options.onDeleted?.(deletedIds)
       }
@@ -174,6 +192,7 @@ export function runWorktreeBatchDelete(
   if (targets.length === 1) {
     state.openModal('delete-worktree', {
       worktreeId: targets[0].id,
+      ...(options.forceConfirm ? { allowSkipConfirm: false } : {}),
       ...(options.onDeleted ? { onDeleted: options.onDeleted } : {})
     })
     return true
@@ -181,6 +200,7 @@ export function runWorktreeBatchDelete(
 
   state.openModal('delete-worktree', {
     worktreeIds: targets.map((target) => target.id),
+    allowSkipConfirm: false,
     ...(options.onDeleted ? { onDeleted: options.onDeleted } : {})
   })
   return true

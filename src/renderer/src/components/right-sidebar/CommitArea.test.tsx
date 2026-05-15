@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: these CommitArea regression tests share
+   element-tree helpers that keep the assertions independent from a DOM test
+   harness; splitting the remaining cases would mostly duplicate setup. */
 import { describe, expect, it, vi } from 'vitest'
 import { Check, RefreshCw } from 'lucide-react'
 import { CommitArea } from './SourceControl'
@@ -123,11 +126,19 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
     isCommitting: inputs.isCommitting,
+    aiEnabled: false,
+    aiAgentConfigured: false,
+    isGenerating: false,
+    generateError: null as string | null,
+    stagedCount: inputs.stagedCount,
+    hasUnresolvedConflicts: inputs.hasUnresolvedConflicts,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
     inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,
     primaryAction: resolvePrimaryAction(inputs),
     dropdownItems: resolveDropdownItems(inputs),
     onCommitMessageChange: vi.fn(),
+    onGenerate: vi.fn(),
+    onCancelGenerate: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }

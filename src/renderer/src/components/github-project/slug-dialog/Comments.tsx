@@ -3,7 +3,18 @@ import { Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useAppStore } from '@/store'
 import type { PRComment } from '../../../../../shared/types'
+import type {
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult
+} from '../../../../../shared/github-project-types'
+
+function getRuntimeTarget() {
+  const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+  return target.kind === 'environment' ? target : null
+}
 
 export function CommentsList({
   owner,
@@ -28,11 +39,20 @@ export function CommentsList({
             repo={repo}
             comment={c}
             onDelete={async () => {
-              const res = await window.api.gh.deleteIssueCommentBySlug({
+              const target = getRuntimeTarget()
+              const args = {
                 owner,
                 repo,
                 commentId: c.id
-              })
+              }
+              const res = target
+                ? await callRuntimeRpc<GitHubProjectMutationResult>(
+                    target,
+                    'github.project.deleteIssueCommentBySlug',
+                    args,
+                    { timeoutMs: 30_000 }
+                  )
+                : await window.api.gh.deleteIssueCommentBySlug(args)
               if (!res.ok) {
                 toast.error(res.error.message)
                 return
@@ -40,12 +60,21 @@ export function CommentsList({
               onChange(comments.filter((x) => x.id !== c.id))
             }}
             onEdit={async (next) => {
-              const res = await window.api.gh.updateIssueCommentBySlug({
+              const target = getRuntimeTarget()
+              const args = {
                 owner,
                 repo,
                 commentId: c.id,
                 body: next
-              })
+              }
+              const res = target
+                ? await callRuntimeRpc<GitHubProjectMutationResult>(
+                    target,
+                    'github.project.updateIssueCommentBySlug',
+                    args,
+                    { timeoutMs: 30_000 }
+                  )
+                : await window.api.gh.updateIssueCommentBySlug(args)
               if (!res.ok) {
                 toast.error(res.error.message)
                 return
@@ -154,7 +183,16 @@ export function NewCommentForm({
             }
             setSubmitting(true)
             try {
-              const res = await window.api.gh.addIssueCommentBySlug({ owner, repo, number, body })
+              const target = getRuntimeTarget()
+              const args = { owner, repo, number, body }
+              const res = target
+                ? await callRuntimeRpc<GitHubProjectCommentMutationResult>(
+                    target,
+                    'github.project.addIssueCommentBySlug',
+                    args,
+                    { timeoutMs: 30_000 }
+                  )
+                : await window.api.gh.addIssueCommentBySlug(args)
               if (!res.ok) {
                 toast.error(res.error.message)
                 return

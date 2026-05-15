@@ -14,7 +14,7 @@ export type CommandSpec = {
   notes?: string[]
 }
 
-export const GLOBAL_FLAGS = ['help', 'json']
+export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const commandPath: string[] = []
@@ -62,7 +62,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   if (['open', 'status'].includes(commandPath[0])) {
     return false
   }
-  if (['repo', 'worktree', 'terminal', 'computer'].includes(commandPath[0])) {
+  if (['repo', 'worktree', 'terminal', 'computer', 'note'].includes(commandPath[0])) {
     return false
   }
   return ![
@@ -92,7 +92,8 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'dialog',
         'storage',
         'orchestration',
-        'computer'
+        'computer',
+        'environment'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&

@@ -1,4 +1,5 @@
-import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/types'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
+import type { GitStatusResult, GitUpstreamStatus, GlobalSettings } from '../../../../shared/types'
 
 export type GitStatusRefreshDeps = {
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
@@ -15,17 +16,21 @@ export type GitStatusRefreshDeps = {
 }
 
 export async function refreshGitStatusForWorktree({
+  settings,
   worktreeId,
   worktreePath,
   connectionId,
   deps
 }: {
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
   deps: GitStatusRefreshDeps
 }): Promise<void> {
-  const status = (await window.api.git.status({
+  const status = (await getRuntimeGitStatus({
+    settings,
+    worktreeId,
     worktreePath,
     connectionId
   })) as GitStatusResult

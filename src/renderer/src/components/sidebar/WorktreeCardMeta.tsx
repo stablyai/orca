@@ -109,6 +109,9 @@ function getProviderName(review: HostedReviewInfo): string {
   if (review.provider === 'bitbucket') {
     return 'Bitbucket'
   }
+  if (review.provider === 'gitea') {
+    return 'Gitea'
+  }
   return 'GitHub'
 }
 

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  Cable,
   FlaskConical,
   GitBranch,
   Globe,
@@ -42,6 +43,8 @@ import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
+import { CommitMessageAiPane } from './CommitMessageAiPane'
+import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
 import { VOICE_PANE_SEARCH_ENTRIES } from './voice-pane-search'
@@ -59,11 +62,17 @@ import {
 } from './DeveloperPermissionsPane'
 import { ComputerUsePane, COMPUTER_USE_PANE_SEARCH_ENTRIES } from './ComputerUsePane'
 import { MobileSettingsPane, MOBILE_SETTINGS_PANE_SEARCH_ENTRIES } from './MobileSettingsPane'
+import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
+import {
+  RUNTIME_ENVIRONMENTS_SEARCH_ENTRY,
+  WEB_RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
+} from './runtime-environments-search'
 import { PrivacyPane } from './PrivacyPane'
 import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 
 type SettingsNavTarget =
   | 'general'
@@ -84,6 +93,7 @@ type SettingsNavTarget =
   | 'experimental'
   | 'agents'
   | 'orchestration'
+  | 'servers'
   | 'mobile'
   | 'repo'
 
@@ -170,9 +180,17 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
+function isWebClientLocation(): boolean {
+  return (
+    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
+    window.location.pathname.endsWith('/web-index.html')
+  )
+}
+
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
@@ -189,6 +207,8 @@ function Settings(): React.JSX.Element {
   const systemPrefersDark = useSystemPrefersDark()
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
+  const isWebClient = isWebClientLocation()
+  const showDesktopOnlySettings = !isWebClient
   const showComputerUsePreviewTooltip = !isMac
   const computerUsePlatform = computerUsePlatformLabel({ isWindows, isMac })
   // Why: the Terminal settings section shares one search index with the
@@ -355,7 +375,7 @@ function Settings(): React.JSX.Element {
             return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
           }
           try {
-            const result = await window.api.hooks.check({ repoId: repo.id })
+            const result = await checkRuntimeHooks(settings, repo.id)
             return [repo.id, result] as const
           } catch {
             return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
@@ -382,13 +402,16 @@ function Settings(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [repos])
+  }, [repos, settings])
 
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
     applyDocumentTheme(theme)
   }, [])
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
+  const runtimeEnvironmentsSearchEntry = isWebClient
+    ? WEB_RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
+    : RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
 
   const navSections = useMemo<SettingsNavSection[]>(
     () => [
@@ -416,9 +439,12 @@ function Settings(): React.JSX.Element {
       {
         id: 'git',
         title: 'Git',
-        description: 'Branch naming and local ref behavior.',
+        description: 'Branch naming, local ref behavior, and AI commit messages.',
         icon: GitBranch,
-        searchEntries: GIT_PANE_SEARCH_ENTRIES
+        // Why: the AI commit messages pane is rendered inside the Git section,
+        // so its search entries belong to Git too — that way a query like
+        // "claude" or "thinking" still surfaces the section.
+        searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES]
       },
       {
         id: 'appearance',
@@ -434,20 +460,24 @@ function Settings(): React.JSX.Element {
         icon: SquareTerminal,
         searchEntries: terminalPaneSearchEntries
       },
-      {
-        id: 'browser',
-        title: 'Browser',
-        description: 'Home page, link routing, and session cookies.',
-        icon: Globe,
-        searchEntries: BROWSER_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'notifications',
-        title: 'Notifications',
-        description: 'Native desktop notifications for agent and terminal events.',
-        icon: Bell,
-        searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
-      },
+      ...(showDesktopOnlySettings
+        ? [
+            {
+              id: 'browser' as const,
+              title: 'Browser',
+              description: 'Home page, link routing, and session cookies.',
+              icon: Globe,
+              searchEntries: BROWSER_PANE_SEARCH_ENTRIES
+            },
+            {
+              id: 'notifications' as const,
+              title: 'Notifications',
+              description: 'Native desktop notifications for agent and terminal events.',
+              icon: Bell,
+              searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
+            }
+          ]
+        : []),
       {
         id: 'orchestration',
         title: 'Orchestration',
@@ -456,30 +486,44 @@ function Settings(): React.JSX.Element {
         searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES
       },
       {
-        id: 'mobile',
-        title: 'Mobile',
-        description: 'Control terminals and agents from your phone.',
-        icon: Smartphone,
-        searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
+        id: 'servers',
+        title: 'Servers',
+        description: isWebClient
+          ? 'Connect this browser to a saved Orca server.'
+          : 'Run this client locally or through a remote Orca server.',
+        icon: Server,
+        searchEntries: [runtimeEnvironmentsSearchEntry],
         badge: 'Beta'
       },
-      {
-        id: 'computer-use',
-        title: 'Computer Use',
-        description: 'Enable agents to control any app on your computer.',
-        icon: MousePointerClick,
-        searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
-        badge: 'Beta'
-      },
-      {
-        id: 'voice',
-        title: 'Voice',
-        description: 'Local speech-to-text dictation with on-device models.',
-        icon: Mic,
-        searchEntries: VOICE_PANE_SEARCH_ENTRIES,
-        badge: 'Beta'
-      },
-      ...(isMac
+      ...(showDesktopOnlySettings
+        ? [
+            {
+              id: 'mobile' as const,
+              title: 'Mobile',
+              description: 'Control terminals and agents from your phone.',
+              icon: Smartphone,
+              searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
+              badge: 'Beta'
+            },
+            {
+              id: 'computer-use' as const,
+              title: 'Computer Use',
+              description: 'Enable agents to control any app on your computer.',
+              icon: MousePointerClick,
+              searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+              badge: 'Beta'
+            },
+            {
+              id: 'voice' as const,
+              title: 'Voice',
+              description: 'Local speech-to-text dictation with on-device models.',
+              icon: Mic,
+              searchEntries: VOICE_PANE_SEARCH_ENTRIES,
+              badge: 'Beta'
+            }
+          ]
+        : []),
+      ...(showDesktopOnlySettings && isMac
         ? [
             {
               id: 'developer-permissions' as const,
@@ -518,13 +562,17 @@ function Settings(): React.JSX.Element {
         icon: BarChart3,
         searchEntries: STATS_PANE_SEARCH_ENTRIES
       },
-      {
-        id: 'ssh',
-        title: 'SSH',
-        description: 'Remote SSH connections.',
-        icon: Server,
-        searchEntries: SSH_PANE_SEARCH_ENTRIES
-      },
+      ...(showDesktopOnlySettings
+        ? [
+            {
+              id: 'ssh' as const,
+              title: 'SSH',
+              description: 'Remote SSH connections.',
+              icon: Cable,
+              searchEntries: SSH_PANE_SEARCH_ENTRIES
+            }
+          ]
+        : []),
       {
         id: 'experimental',
         title: 'Experimental',
@@ -540,7 +588,14 @@ function Settings(): React.JSX.Element {
         searchEntries: getRepositoryPaneSearchEntries(repo)
       }))
     ],
-    [isMac, repos, terminalPaneSearchEntries]
+    [
+      isMac,
+      isWebClient,
+      repos,
+      runtimeEnvironmentsSearchEntry,
+      showDesktopOnlySettings,
+      terminalPaneSearchEntries
+    ]
   )
 
   const visibleNavSections = useMemo(
@@ -743,14 +798,18 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="git"
                   title="Git"
-                  description="Branch naming and local ref behavior."
-                  searchEntries={GIT_PANE_SEARCH_ENTRIES}
+                  description="Branch naming, local ref behavior, and AI commit messages."
+                  searchEntries={[
+                    ...GIT_PANE_SEARCH_ENTRIES,
+                    ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
+                  ]}
                 >
                   <GitPane
                     settings={settings}
                     updateSettings={updateSettings}
                     displayedGitUsername={displayedGitUsername}
                   />
+                  <CommitMessageAiPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection
@@ -799,23 +858,27 @@ function Settings(): React.JSX.Element {
                   />
                 </SettingsSection>
 
-                <SettingsSection
-                  id="browser"
-                  title="Browser"
-                  description="Home page, link routing, and session cookies."
-                  searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
-                >
-                  <BrowserPane settings={settings} updateSettings={updateSettings} />
-                </SettingsSection>
+                {showDesktopOnlySettings ? (
+                  <>
+                    <SettingsSection
+                      id="browser"
+                      title="Browser"
+                      description="Home page, link routing, and session cookies."
+                      searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
+                    >
+                      <BrowserPane settings={settings} updateSettings={updateSettings} />
+                    </SettingsSection>
 
-                <SettingsSection
-                  id="notifications"
-                  title="Notifications"
-                  description="Native desktop notifications for agent activity and terminal events."
-                  searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
-                >
-                  <NotificationsPane settings={settings} updateSettings={updateSettings} />
-                </SettingsSection>
+                    <SettingsSection
+                      id="notifications"
+                      title="Notifications"
+                      description="Native desktop notifications for agent activity and terminal events."
+                      searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
+                    >
+                      <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                    </SettingsSection>
+                  </>
+                ) : null}
 
                 <SettingsSection
                   id="orchestration"
@@ -827,59 +890,82 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
-                  id="mobile"
-                  title="Mobile"
+                  id="servers"
+                  title="Servers"
                   badge="Beta"
-                  description="Control terminals and agents from your phone."
-                  searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
-                >
-                  <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="computer-use"
-                  title="Computer Use"
-                  badge="Beta"
-                  badgeAccessory={
-                    showComputerUsePreviewTooltip ? (
-                      <TooltipProvider delayDuration={250}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="text-muted-foreground transition-colors hover:text-foreground"
-                              aria-label={`${computerUsePlatform} Computer Use preview details`}
-                            >
-                              <Info className="size-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                            <span>
-                              {computerUsePlatform} Computer Use is an early preview. Some apps and
-                              desktop environments may behave inconsistently.
-                            </span>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : null
+                  description={
+                    isWebClient
+                      ? 'Connect this browser to a saved Orca server.'
+                      : 'Run this desktop client locally or through a remote Orca server.'
                   }
-                  description="Enable agents to control any app on your computer."
-                  searchEntries={COMPUTER_USE_PANE_SEARCH_ENTRIES}
+                  searchEntries={[runtimeEnvironmentsSearchEntry]}
                 >
-                  <ComputerUsePane />
+                  <RuntimeEnvironmentsPane
+                    settings={settings}
+                    switchRuntimeEnvironment={switchRuntimeEnvironment}
+                    canGeneratePairingUrl={!isWebClient}
+                    allowLocalRuntime={!isWebClient}
+                  />
                 </SettingsSection>
 
-                <SettingsSection
-                  id="voice"
-                  title="Voice"
-                  badge="Beta"
-                  description="Local speech-to-text dictation with on-device models."
-                  searchEntries={VOICE_PANE_SEARCH_ENTRIES}
-                >
-                  <VoicePane settings={settings} updateSettings={updateSettings} />
-                </SettingsSection>
+                {showDesktopOnlySettings ? (
+                  <>
+                    <SettingsSection
+                      id="mobile"
+                      title="Mobile"
+                      badge="Beta"
+                      description="Control terminals and agents from your phone."
+                      searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
+                    >
+                      <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
+                    </SettingsSection>
 
-                {isMac ? (
+                    <SettingsSection
+                      id="computer-use"
+                      title="Computer Use"
+                      badge="Beta"
+                      badgeAccessory={
+                        showComputerUsePreviewTooltip ? (
+                          <TooltipProvider delayDuration={250}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground transition-colors hover:text-foreground"
+                                  aria-label={`${computerUsePlatform} Computer Use preview details`}
+                                >
+                                  <Info className="size-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                                <span>
+                                  {computerUsePlatform} Computer Use is an early preview. Some apps
+                                  and desktop environments may behave inconsistently.
+                                </span>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : null
+                      }
+                      description="Enable agents to control any app on your computer."
+                      searchEntries={COMPUTER_USE_PANE_SEARCH_ENTRIES}
+                    >
+                      <ComputerUsePane />
+                    </SettingsSection>
+
+                    <SettingsSection
+                      id="voice"
+                      title="Voice"
+                      badge="Beta"
+                      description="Local speech-to-text dictation with on-device models."
+                      searchEntries={VOICE_PANE_SEARCH_ENTRIES}
+                    >
+                      <VoicePane settings={settings} updateSettings={updateSettings} />
+                    </SettingsSection>
+                  </>
+                ) : null}
+
+                {showDesktopOnlySettings && isMac ? (
                   <SettingsSection
                     id="developer-permissions"
                     title="Permissions"
@@ -917,14 +1003,16 @@ function Settings(): React.JSX.Element {
                   <StatsPane />
                 </SettingsSection>
 
-                <SettingsSection
-                  id="ssh"
-                  title="SSH"
-                  description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
-                  searchEntries={SSH_PANE_SEARCH_ENTRIES}
-                >
-                  <SshPane />
-                </SettingsSection>
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="ssh"
+                    title="SSH"
+                    description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
+                    searchEntries={SSH_PANE_SEARCH_ENTRIES}
+                  >
+                    <SshPane />
+                  </SettingsSection>
+                ) : null}
 
                 <SettingsSection
                   id="experimental"

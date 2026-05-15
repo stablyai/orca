@@ -9,6 +9,8 @@ import {
   Plus,
   RefreshCw,
   Settings2,
+  Sparkles,
+  Square,
   Undo2,
   FileEdit,
   FileMinus,
@@ -30,6 +32,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -92,6 +95,16 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
+import {
+  bulkStageRuntimeGitPaths,
+  bulkUnstageRuntimeGitPaths,
+  commitRuntimeGit,
+  discardRuntimeGitPath,
+  getRuntimeGitBranchCompare,
+  stageRuntimeGitPath,
+  unstageRuntimeGitPath
+} from '@/runtime/runtime-git-client'
+import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
 import type {
   DiffComment,
@@ -233,6 +246,7 @@ function SourceControlInner(): React.JSX.Element {
   const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
+  const settings = useAppStore((s) => s.settings)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
@@ -326,6 +340,16 @@ function SourceControlInner(): React.JSX.Element {
     {}
   )
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  // Why: parallel state to commit. Same per-worktree shape so navigating between
+  // worktrees mid-generation never silently cancels the in-flight request.
+  const generateInFlightRef = useRef<Record<string, boolean>>({})
+  const [generateInFlightByWorktree, setGenerateInFlightByWorktree] = useState<
+    Record<string, boolean>
+  >({})
+  const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
+  const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
+  const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
@@ -366,6 +390,7 @@ function SourceControlInner(): React.JSX.Element {
     }
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     await refreshGitStatusForWorktree({
+      settings: useAppStore.getState().settings,
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId,
@@ -407,8 +432,7 @@ function SourceControlInner(): React.JSX.Element {
     setDefaultBaseRef(null)
 
     let stale = false
-    void window.api.repos
-      .getBaseRefDefault({ repoId: activeRepo.id })
+    void getRuntimeRepoBaseRefDefault(useAppStore.getState().settings, activeRepo.id)
       .then((result) => {
         if (!stale) {
           // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
@@ -436,7 +460,8 @@ function SourceControlInner(): React.JSX.Element {
   const hasUncommittedEntries = entries.length > 0
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
-  const hostedReviewCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
+  const hostedReviewCacheKey =
+    activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
     ? (hostedReviewCache[hostedReviewCacheKey]?.data ?? null)
     : null
@@ -559,10 +584,17 @@ function SourceControlInner(): React.JSX.Element {
     setCommitDrafts((prev) => pruneRecord(prev))
     setCommitErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
+    setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
+    setGenerateErrors((prev) => pruneRecord(prev))
     // Refs don't need setState — mutate in place to drop stale keys.
     for (const key of Object.keys(commitInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
         delete commitInFlightRef.current[key]
+      }
+    }
+    for (const key of Object.keys(generateInFlightRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete generateInFlightRef.current[key]
       }
     }
   }, [worktreeMap])
@@ -612,11 +644,15 @@ function SourceControlInner(): React.JSX.Element {
     setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
     setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
     try {
-      const commitResult = await window.api.git.commit({
-        worktreePath,
-        message,
-        connectionId
-      })
+      const commitResult = await commitRuntimeGit(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        message
+      )
       if (!commitResult.success) {
         setCommitErrors((prev) => ({
           ...prev,
@@ -685,6 +721,92 @@ function SourceControlInner(): React.JSX.Element {
     unresolvedConflicts.length,
     worktreePath
   ])
+
+  const handleGenerate = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+    if (generateInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    if (!commitMessageAi?.enabled || !commitMessageAi.agentId) {
+      return
+    }
+
+    if (commitMessageAi.agentId === 'custom') {
+      const command = commitMessageAi.customAgentCommand?.trim() ?? ''
+      if (!command) {
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]:
+            'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
+        }))
+        return
+      }
+    }
+
+    generateInFlightRef.current[activeWorktreeId] = true
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+    try {
+      const result = (await window.api.git.generateCommitMessage({
+        worktreePath,
+        connectionId
+      })) as
+        | { success: true; message: string; agentLabel?: string }
+        | { success: false; error: string; canceled?: boolean }
+
+      if (!result.success) {
+        // Why: cancellation is a deliberate user action, not a failure to
+        // surface. Clear any prior error and stay quiet.
+        if (result.canceled) {
+          setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+          return
+        }
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: result.error
+        }))
+        return
+      }
+
+      // Why: race protection — the user may have started typing into the
+      // textarea while the agent was running. In that case we silently drop
+      // the generated message rather than overwrite their in-progress edits.
+      setCommitDrafts((prev) => {
+        const current = prev[activeWorktreeId]
+        if (current && current.length > 0) {
+          return prev
+        }
+        return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
+      })
+      setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+    } catch (error) {
+      setGenerateErrors((prev) => ({
+        ...prev,
+        [activeWorktreeId]:
+          error instanceof Error ? error.message : 'Failed to generate commit message'
+      }))
+    } finally {
+      setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      generateInFlightRef.current[activeWorktreeId] = false
+    }
+  }, [activeWorktreeId, commitMessageAi, worktreePath])
+
+  const handleCancelGenerate = useCallback((): void => {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+    if (!generateInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    // Why: fire-and-forget — the in-flight generateCommitMessage promise
+    // resolves with `{canceled: true}` once the kill propagates, which is
+    // where the spinner is cleared. Awaiting here would just delay UI feedback.
+    void window.api.git.cancelGenerateCommitMessage({ worktreePath, connectionId })
+  }, [activeWorktreeId, worktreePath])
 
   // Why: a single dispatcher for every remote-only action the split button or
   // chevron dropdown can trigger. Keeps the error-swallow pattern in one
@@ -948,7 +1070,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths, connectionId })
+      await bulkStageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        bulkStagePaths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -969,7 +1099,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths, connectionId })
+      await bulkUnstageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        bulkUnstagePaths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -999,7 +1137,15 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(true)
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await window.api.git.bulkStage({ worktreePath, filePaths: paths, connectionId })
+        await bulkStageRuntimeGitPaths(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          paths
+        )
         await refreshActiveGitStatusAfterMutation()
         clearSelection()
       } finally {
@@ -1034,7 +1180,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkStage({ worktreePath, filePaths, connectionId })
+      await bulkStageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        filePaths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -1086,7 +1240,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+      await bulkUnstageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        paths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -1132,11 +1294,15 @@ function SourceControlInner(): React.JSX.Element {
 
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      const result = await window.api.git.branchCompare({
-        worktreePath,
-        baseRef: effectiveBaseRef,
-        connectionId
-      })
+      const result = await getRuntimeGitBranchCompare(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        effectiveBaseRef
+      )
       setGitBranchCompareResult(activeWorktreeId, requestKey, result)
     } catch (error) {
       setGitBranchCompareResult(activeWorktreeId, requestKey, {
@@ -1314,7 +1480,15 @@ function SourceControlInner(): React.JSX.Element {
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await window.api.git.stage({ worktreePath, filePath, connectionId })
+        await stageRuntimeGitPath(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePath
+        )
         await refreshActiveGitStatusAfterMutation()
       } catch {
         // git operation failed silently
@@ -1330,7 +1504,15 @@ function SourceControlInner(): React.JSX.Element {
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await window.api.git.unstage({ worktreePath, filePath, connectionId })
+        await unstageRuntimeGitPath(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePath
+        )
         await refreshActiveGitStatusAfterMutation()
       } catch {
         // git operation failed silently
@@ -1357,7 +1539,15 @@ function SourceControlInner(): React.JSX.Element {
         relativePath: filePath
       })
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.discard({ worktreePath, filePath, connectionId })
+      await discardRuntimeGitPath(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        filePath
+      )
       notifyEditorExternalFileChange({
         worktreeId: activeWorktreeId,
         worktreePath,
@@ -1438,7 +1628,15 @@ function SourceControlInner(): React.JSX.Element {
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
           bulkUnstage: (filePaths) =>
-            window.api.git.bulkUnstage({ worktreePath, filePaths, connectionId }),
+            bulkUnstageRuntimeGitPaths(
+              {
+                settings: useAppStore.getState().settings,
+                worktreeId: activeWorktreeId,
+                worktreePath,
+                connectionId
+              },
+              filePaths
+            ),
           discardMany,
           discardOne: discardSingle,
           onError: (error) => {
@@ -1780,6 +1978,20 @@ function SourceControlInner(): React.JSX.Element {
               commitMessage={commitMessage}
               commitError={commitError}
               isCommitting={isCommitting}
+              aiEnabled={commitMessageAi?.enabled === true}
+              aiAgentConfigured={
+                commitMessageAi?.enabled === true &&
+                commitMessageAi.agentId !== null &&
+                // Why: 'custom' is configured only once the user types a command.
+                // Without this guard, Generate would spawn an empty command and
+                // fail with a confusing error.
+                (commitMessageAi.agentId !== 'custom' ||
+                  (commitMessageAi.customAgentCommand ?? '').trim().length > 0)
+              }
+              isGenerating={isGenerating}
+              generateError={generateError}
+              stagedCount={grouped.staged.length}
+              hasUnresolvedConflicts={unresolvedConflicts.length > 0}
               isRemoteOperationActive={isRemoteOperationActive}
               inFlightRemoteOpKind={inFlightRemoteOpKind}
               primaryAction={primaryAction}
@@ -1792,6 +2004,10 @@ function SourceControlInner(): React.JSX.Element {
                   writeCommitDraftForWorktree(prev, activeWorktreeId, value)
                 )
               }}
+              onGenerate={() => {
+                void handleGenerate()
+              }}
+              onCancelGenerate={handleCancelGenerate}
               onPrimaryAction={handlePrimaryClick}
               onDropdownAction={handleActionInvoke}
             />
@@ -2091,11 +2307,19 @@ type CommitAreaProps = {
   commitMessage: string
   commitError: string | null
   isCommitting: boolean
+  aiEnabled: boolean
+  aiAgentConfigured: boolean
+  isGenerating: boolean
+  generateError: string | null
+  stagedCount: number
+  hasUnresolvedConflicts: boolean
   isRemoteOperationActive: boolean
   inFlightRemoteOpKind: RemoteOpKind | null
   primaryAction: PrimaryAction
   dropdownItems: DropdownEntry[]
   onCommitMessageChange: (message: string) => void
+  onGenerate: () => void
+  onCancelGenerate: () => void
   onPrimaryAction: () => void
   onDropdownAction: (kind: DropdownActionKind) => void
 }
@@ -2104,11 +2328,19 @@ export function CommitArea({
   commitMessage,
   commitError,
   isCommitting,
+  aiEnabled,
+  aiAgentConfigured,
+  isGenerating,
+  generateError,
+  stagedCount,
+  hasUnresolvedConflicts,
   isRemoteOperationActive,
   inFlightRemoteOpKind,
   primaryAction,
   dropdownItems,
   onCommitMessageChange,
+  onGenerate,
+  onCancelGenerate,
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
@@ -2146,23 +2378,90 @@ export function CommitArea({
   // title attribute carry the meaning for assistive tech.
   const PrimaryIcon = PRIMARY_ICONS[primaryAction.kind]
 
+  const hasMessage = commitMessage.trim().length > 0
+
+  // Why: only render the Generate button when the user has opted into the
+  // feature. Mounting a perma-disabled button would leak space and add noise
+  // for users who never plan to use AI commit messages.
+  const showGenerate = aiEnabled
+  let generateDisabledReason: string | undefined
+  if (isGenerating) {
+    generateDisabledReason = 'Generating commit message…'
+  } else if (isCommitting) {
+    generateDisabledReason = 'Commit in progress…'
+  } else if (!aiAgentConfigured) {
+    generateDisabledReason = 'Pick an agent in Settings → AI Commit Messages.'
+  } else if (stagedCount === 0) {
+    generateDisabledReason = 'Stage at least one file to generate a message.'
+  } else if (hasMessage) {
+    generateDisabledReason = 'Clear the message to regenerate.'
+  }
+  const isGenerateDisabled =
+    !aiAgentConfigured ||
+    isGenerating ||
+    isCommitting ||
+    stagedCount === 0 ||
+    hasMessage ||
+    hasUnresolvedConflicts
+
   return (
     <div className="px-3 pb-2">
-      <textarea
-        rows={rows}
-        value={commitMessage}
-        onChange={(e) => onCommitMessageChange(e.target.value)}
-        placeholder="Message"
-        aria-label="Commit message"
-        aria-describedby={commitError ? 'commit-area-error' : undefined}
-        className="mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-      />
+      <div className="relative">
+        <textarea
+          rows={rows}
+          value={commitMessage}
+          onChange={(e) => onCommitMessageChange(e.target.value)}
+          placeholder="Message"
+          aria-label="Commit message"
+          aria-describedby={
+            commitError
+              ? 'commit-area-error'
+              : generateError
+                ? 'commit-area-generate-error'
+                : undefined
+          }
+          // Why: reserve right padding so typed text does not slide under the
+          // absolute-positioned Generate icon in the top-right corner.
+          className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
+            showGenerate ? 'pr-7' : ''
+          }`}
+        />
+        {showGenerate &&
+          (isGenerating ? (
+            // Why: while generating the icon doubles as the cancel affordance.
+            // Default state shows the spinning RefreshCw; on hover/focus we
+            // swap to a Square ("stop") with a destructive tint so the user
+            // sees that clicking will abort the run. Group/group-hover toggles
+            // keep this stateless on the React side.
+            <button
+              type="button"
+              onClick={() => onCancelGenerate()}
+              title="Stop generating"
+              aria-label="Stop generating commit message"
+              className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
+            >
+              <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
+              <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={isGenerateDisabled}
+              onClick={() => onGenerate()}
+              title={generateDisabledReason ?? 'Generate commit message with AI'}
+              aria-label="Generate commit message with AI"
+              className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+            >
+              <Sparkles className="size-3.5" />
+            </button>
+          ))}
+      </div>
       {/* Why: primary + chevron sit together as a visual split button so the
           edit → commit → push loop stays in a single vertical band. The
           chevron exposes the full action surface (fetch, pull, sync,
           publish, compound commits) without forcing morphing labels to
           carry every possible intent. */}
-      <div className="flex items-stretch">
+      <div className="mt-1 flex items-stretch">
         {/* Why: match the "Squash and merge" button in PRActions
             (size="xs", px-3 text-[11px]) so the sidebar has a consistent
             action-button shape across Source Control and Checks. The primary
@@ -2243,6 +2542,16 @@ export function CommitArea({
           className="mt-1 text-[11px] text-destructive"
         >
           {commitError}
+        </p>
+      )}
+      {generateError && (
+        <p
+          id="commit-area-generate-error"
+          role="alert"
+          aria-live="polite"
+          className="mt-1 text-[11px] text-destructive"
+        >
+          {generateError}
         </p>
       )}
     </div>

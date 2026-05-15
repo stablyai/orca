@@ -728,6 +728,41 @@
   overflow: hidden;
 }
 
+/* Why: the workspace board is offset to the sidebar edge. The generic left
+   sheet translates by its full width, which makes an offset board fly in from
+   far offscreen; this reveals it from the sidebar boundary instead. */
+.workspace-kanban-sheet-content[data-state='open'] {
+  animation-name: workspace-kanban-sheet-in;
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-kanban-sheet-content[data-state='closed'] {
+  animation-name: workspace-kanban-sheet-out;
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+@keyframes workspace-kanban-sheet-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes workspace-kanban-sheet-out {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+
+  to {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
 .sidebar-header {
   padding: 12px 16px 8px;
   font-size: 11px;

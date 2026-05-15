@@ -14,6 +14,7 @@ import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolveTerminalDropTargetShell } from './terminal-drop-handler'
 import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
 import {
   applyExpandedLayoutTo,
@@ -42,6 +43,12 @@ import {
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  getRemoteRuntimePtyEnvironmentId,
+  getRemoteRuntimeTerminalHandle
+} from '@/runtime/runtime-terminal-stream'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -452,10 +459,10 @@ export default function TerminalPane({
         executeClosePane(paneId)
         return
       }
-      void window.api.pty
-        .hasChildProcesses(ptyId)
-        .then((hasChildren) => {
-          if (hasChildren) {
+      const settings = useAppStore.getState().settings
+      void inspectRuntimeTerminalProcess(settings, ptyId)
+        .then((process) => {
+          if (process.hasChildProcesses) {
             setCloseConfirmPaneId(paneId)
           } else {
             executeClosePane(paneId)
@@ -1081,20 +1088,21 @@ export default function TerminalPane({
           if (!transport) {
             return
           }
-          // Why: the explorer passes the worktree-absolute path via a DOM
-          // MIME, so for SSH worktrees this is a remote POSIX path destined
-          // for the remote shell. Quote for the target shell (remote = posix)
-          // rather than the client OS; otherwise a Windows client dropping
-          // onto an SSH-Linux worktree would emit Windows-style quoting.
-          // Why: `typeof === 'string'` (not `!== null`) so an unhydrated
-          // store (`undefined`) is treated as local and falls through to
-          // client-OS quoting, rather than being misclassified as remote.
-          const isRemote = typeof getConnectionId(worktreeId) === 'string'
-          const targetShell: 'posix' | 'windows' = isRemote
-            ? 'posix'
-            : isWindowsUserAgent()
-              ? 'windows'
-              : 'posix'
+          const state = useAppStore.getState()
+          const worktreePath =
+            Object.values(state.worktreesByRepo ?? {})
+              .flat()
+              .find((worktree) => worktree.id === worktreeId)?.path ??
+            cwd ??
+            filePath
+          const targetShell = resolveTerminalDropTargetShell({
+            activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId,
+            worktreePath,
+            // Why: internal Explorer drags paste a worktree-absolute path
+            // directly into the target shell. Runtime drops use the runtime
+            // worktree's path shape; legacy SSH drops remain POSIX.
+            connectionId: getConnectionId(worktreeId)
+          })
           transport.sendInput(shellEscapePath(filePath, targetShell))
           // Move focus to the terminal so the user can keep typing where the
           // dropped path just landed. Without this, focus stays on the file
@@ -1256,7 +1264,21 @@ export default function TerminalPane({
                   // active-mobile-subscriber path and the held-no-subscriber
                   // path (docs/mobile-fit-hold.md), so the banner unmounts
                   // and the PTY returns to desktop dims in either case.
-                  void window.api.runtime.restoreTerminalFit(ptyId)
+                  const remoteHandle = getRemoteRuntimeTerminalHandle(ptyId)
+                  const environmentId =
+                    getRemoteRuntimePtyEnvironmentId(ptyId) ??
+                    settingsRef.current?.activeRuntimeEnvironmentId ??
+                    null
+                  if (remoteHandle && environmentId) {
+                    void callRuntimeRpc(
+                      { kind: 'environment', environmentId },
+                      'terminal.restoreFit',
+                      { terminal: remoteHandle },
+                      { timeoutMs: 15_000 }
+                    ).catch(() => {})
+                  } else {
+                    void window.api.runtime.restoreTerminalFit(ptyId).catch(() => {})
+                  }
                 }
               }}
             >

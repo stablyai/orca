@@ -23,7 +23,8 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null
+      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+      linkedGiteaPR: args.linkedGiteaPR ?? null
     })
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({

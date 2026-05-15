@@ -62,6 +62,7 @@ function createPane(): ManagedPaneInternal {
     compositionHandler: null,
     debugLabel: null,
     pendingSplitScrollState: {
+      bufferType: 'normal',
       wasAtBottom: true,
       firstVisibleLineContent: '',
       viewportY: 0,

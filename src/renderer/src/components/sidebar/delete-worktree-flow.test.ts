@@ -73,7 +73,8 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.clearWorktreeDeleteState).toHaveBeenCalledWith('wt-2')
     expect(mocks.state.clearWorktreeDeleteState).not.toHaveBeenCalledWith('main')
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
-      worktreeIds: ['wt-1', 'wt-2']
+      worktreeIds: ['wt-1', 'wt-2'],
+      allowSkipConfirm: false
     })
   })
 
@@ -86,7 +87,7 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
   })
 
-  it('runs every eligible delete immediately when confirmation is skipped', async () => {
+  it('keeps batch deletes behind confirmation when confirmation is skipped', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([
       { id: 'wt-1', displayName: 'one' },
@@ -97,11 +98,42 @@ describe('runWorktreeBatchDelete', () => {
     const started = runWorktreeBatchDelete(['wt-1', 'wt-2'], { onDeleted })
 
     expect(started).toBe(true)
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
+      worktreeIds: ['wt-1', 'wt-2'],
+      allowSkipConfirm: false,
+      onDeleted
+    })
+  })
+
+  it('runs a single eligible delete immediately when confirmation is skipped', async () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+    const onDeleted = vi.fn()
+
+    const started = runWorktreeBatchDelete(['wt-1'], { onDeleted })
+
+    expect(started).toBe(true)
     expect(mocks.state.openModal).not.toHaveBeenCalled()
     expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false)
-    expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-2', false)
     await vi.waitFor(() => {
-      expect(onDeleted).toHaveBeenCalledWith(['wt-1', 'wt-2'])
+      expect(onDeleted).toHaveBeenCalledWith(['wt-1'])
+    })
+  })
+
+  it('can force confirmation for a single eligible delete', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+    const onDeleted = vi.fn()
+
+    const started = runWorktreeBatchDelete(['wt-1'], { forceConfirm: true, onDeleted })
+
+    expect(started).toBe(true)
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
+      worktreeId: 'wt-1',
+      allowSkipConfirm: false,
+      onDeleted
     })
   })
 

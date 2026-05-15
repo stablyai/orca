@@ -1,6 +1,20 @@
+/* eslint-disable max-lines -- Why: slash commands and doc-link command helpers share trigger-range contracts used by the editor keyboard path. */
 import React from 'react'
 import type { Editor } from '@tiptap/react'
-import { Heading1, Heading2, Heading3, ImageIcon, List, ListOrdered, Quote } from 'lucide-react'
+import { TextSelection } from '@tiptap/pm/state'
+import type {} from '@tiptap/extension-mathematics'
+import {
+  Heading1,
+  Heading2,
+  Heading3,
+  ImageIcon,
+  List,
+  ListOrdered,
+  Quote,
+  Sigma,
+  Table2,
+  Workflow
+} from 'lucide-react'
 import type { MarkdownDocument } from '../../../../shared/types'
 import { stripMarkdownExtension } from './markdown-doc-links'
 
@@ -41,14 +55,70 @@ export type SlashCommandId =
   | 'code-block'
   | 'divider'
   | 'image'
+  | 'table'
+  | 'mermaid'
+  | 'inline-math'
+  | 'math-block'
+  | 'emoji'
+
+export type SlashCommandIcon =
+  | { kind: 'component'; component: React.ComponentType<{ className?: string }> }
+  | { kind: 'text'; value: string }
+
+export type SlashCommandGroup = 'Headings' | 'Basic blocks' | 'Advanced' | 'Media' | 'Others'
 
 export type SlashCommand = {
   id: SlashCommandId
   label: string
   aliases: string[]
-  icon: React.ComponentType<{ className?: string }>
+  icon: SlashCommandIcon
+  group: SlashCommandGroup
   description: string
   run: (editor: Editor) => void
+}
+
+function icon(component: React.ComponentType<{ className?: string }>): SlashCommandIcon {
+  return { kind: 'component', component }
+}
+
+function textIcon(value: string): SlashCommandIcon {
+  return { kind: 'text', value }
+}
+
+function insertTextWithSelection(
+  editor: Editor,
+  text: string,
+  selectionStartOffset?: number,
+  selectionEndOffset = selectionStartOffset
+): void {
+  editor.commands.command(({ state, dispatch }) => {
+    const from = state.selection.from
+    const tr = state.tr.insertText(text, from, state.selection.to)
+
+    if (selectionStartOffset !== undefined) {
+      const selectionFrom = from + selectionStartOffset
+      const selectionTo = from + (selectionEndOffset ?? selectionStartOffset)
+      tr.setSelection(TextSelection.create(tr.doc, selectionFrom, selectionTo))
+    }
+
+    dispatch?.(tr.scrollIntoView())
+    return true
+  })
+}
+
+function insertCodeBlock(editor: Editor, language: string, text: string): void {
+  editor.commands.command(({ state, dispatch }) => {
+    const codeBlockType = state.schema.nodes.codeBlock
+    if (!codeBlockType) {
+      return false
+    }
+    const node = codeBlockType.create({ language }, text ? state.schema.text(text) : undefined)
+    const tr = state.tr.replaceSelectionWith(node).scrollIntoView()
+    const cursor = tr.selection.from + 1
+    tr.setSelection(TextSelection.create(tr.doc, cursor, cursor))
+    dispatch?.(tr)
+    return true
+  })
 }
 
 /**
@@ -60,7 +130,8 @@ export function runSlashCommand(
   editor: Editor,
   slashMenu: { from: number; to: number },
   command: SlashCommand,
-  onImageCommand?: () => void
+  onImageCommand?: () => void,
+  onEmojiCommand?: () => void
 ): void {
   editor.chain().focus().deleteRange({ from: slashMenu.from, to: slashMenu.to }).run()
   // Why: image insertion cannot rely on window.prompt() in Electron, so this
@@ -69,25 +140,20 @@ export function runSlashCommand(
     onImageCommand()
     return
   }
+  if (command.id === 'emoji' && onEmojiCommand) {
+    onEmojiCommand()
+    return
+  }
   command.run(editor)
 }
 
 export const slashCommands: SlashCommand[] = [
   {
-    id: 'text',
-    label: 'Text',
-    aliases: ['paragraph', 'plain'],
-    icon: List,
-    description: 'Start a normal paragraph.',
-    run: (editor) => {
-      editor.chain().focus().setParagraph().run()
-    }
-  },
-  {
     id: 'heading-1',
     label: 'Heading 1',
     aliases: ['h1', 'title'],
-    icon: Heading1,
+    icon: icon(Heading1),
+    group: 'Headings',
     description: 'Large section heading.',
     run: (editor) => {
       // Use setHeading (not toggleHeading) so the slash command is idempotent —
@@ -99,7 +165,8 @@ export const slashCommands: SlashCommand[] = [
     id: 'heading-2',
     label: 'Heading 2',
     aliases: ['h2'],
-    icon: Heading2,
+    icon: icon(Heading2),
+    group: 'Headings',
     description: 'Medium section heading.',
     run: (editor) => {
       // Use setHeading (not toggleHeading) so the slash command is idempotent —
@@ -111,7 +178,8 @@ export const slashCommands: SlashCommand[] = [
     id: 'heading-3',
     label: 'Heading 3',
     aliases: ['h3'],
-    icon: Heading3,
+    icon: icon(Heading3),
+    group: 'Headings',
     description: 'Small section heading.',
     run: (editor) => {
       // Use setHeading (not toggleHeading) so the slash command is idempotent —
@@ -120,50 +188,66 @@ export const slashCommands: SlashCommand[] = [
     }
   },
   {
-    id: 'task-list',
-    label: 'To-do List',
-    aliases: ['todo', 'task', 'checkbox'],
-    icon: List,
-    description: 'Create a checklist.',
-    run: (editor) => {
-      editor.chain().focus().toggleTaskList().run()
-    }
-  },
-  {
-    id: 'bullet-list',
-    label: 'Bullet List',
-    aliases: ['bullet', 'ul', 'list'],
-    icon: List,
-    description: 'Create an unordered list.',
-    run: (editor) => {
-      editor.chain().focus().toggleBulletList().run()
-    }
-  },
-  {
-    id: 'ordered-list',
-    label: 'Numbered List',
-    aliases: ['ordered', 'ol', 'numbered'],
-    icon: ListOrdered,
-    description: 'Create an ordered list.',
-    run: (editor) => {
-      editor.chain().focus().toggleOrderedList().run()
-    }
-  },
-  {
     id: 'blockquote',
     label: 'Quote',
     aliases: ['quote', 'blockquote'],
-    icon: Quote,
+    icon: icon(Quote),
+    group: 'Basic blocks',
     description: 'Insert a blockquote.',
     run: (editor) => {
       editor.chain().focus().toggleBlockquote().run()
     }
   },
   {
+    id: 'ordered-list',
+    label: 'Numbered List',
+    aliases: ['ordered', 'ol', 'numbered'],
+    icon: icon(ListOrdered),
+    group: 'Basic blocks',
+    description: 'Create an ordered list.',
+    run: (editor) => {
+      editor.chain().focus().toggleOrderedList().run()
+    }
+  },
+  {
+    id: 'bullet-list',
+    label: 'Bullet List',
+    aliases: ['bullet', 'ul', 'list'],
+    icon: icon(List),
+    group: 'Basic blocks',
+    description: 'Create an unordered list.',
+    run: (editor) => {
+      editor.chain().focus().toggleBulletList().run()
+    }
+  },
+  {
+    id: 'task-list',
+    label: 'Check List',
+    aliases: ['todo', 'task', 'checkbox'],
+    icon: icon(List),
+    group: 'Basic blocks',
+    description: 'Create a checklist.',
+    run: (editor) => {
+      editor.chain().focus().toggleTaskList().run()
+    }
+  },
+  {
+    id: 'text',
+    label: 'Paragraph',
+    aliases: ['paragraph', 'plain'],
+    icon: icon(List),
+    group: 'Basic blocks',
+    description: 'Start a normal paragraph.',
+    run: (editor) => {
+      editor.chain().focus().setParagraph().run()
+    }
+  },
+  {
     id: 'code-block',
     label: 'Code Block',
     aliases: ['code', 'snippet'],
-    icon: List,
+    icon: icon(List),
+    group: 'Basic blocks',
     description: 'Insert a fenced code block.',
     run: (editor) => {
       editor.chain().focus().toggleCodeBlock().run()
@@ -173,22 +257,79 @@ export const slashCommands: SlashCommand[] = [
     id: 'divider',
     label: 'Divider',
     aliases: ['divider', 'rule', 'hr'],
-    icon: List,
+    icon: icon(List),
+    group: 'Basic blocks',
     description: 'Insert a horizontal rule.',
     run: (editor) => {
       editor.chain().focus().setHorizontalRule().run()
     }
   },
   {
+    id: 'table',
+    label: 'Table',
+    aliases: ['grid', 'columns', 'rows'],
+    icon: icon(Table2),
+    group: 'Advanced',
+    description: 'Insert a 3x3 markdown table.',
+    run: (editor) => {
+      editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+    }
+  },
+  {
+    id: 'mermaid',
+    label: 'Mermaid Diagram',
+    aliases: ['diagram', 'flowchart', 'chart', 'graph'],
+    icon: icon(Workflow),
+    group: 'Advanced',
+    description: 'Insert a Mermaid fenced block.',
+    run: (editor) => {
+      insertCodeBlock(editor, 'mermaid', 'graph TD\n  A[Start] --> B[End]')
+    }
+  },
+  {
+    id: 'inline-math',
+    label: 'Inline Math',
+    aliases: ['math', 'latex', 'equation', 'formula'],
+    icon: icon(Sigma),
+    group: 'Advanced',
+    description: 'Insert inline LaTeX math.',
+    run: (editor) => {
+      editor.commands.insertInlineMath({ latex: 'x' })
+    }
+  },
+  {
+    id: 'math-block',
+    label: 'Math Block',
+    aliases: ['display math', 'latex block', 'equation block'],
+    icon: icon(Sigma),
+    group: 'Advanced',
+    description: 'Insert display LaTeX math.',
+    run: (editor) => {
+      editor.commands.insertBlockMath({ latex: 'x' })
+    }
+  },
+  {
     id: 'image',
     label: 'Image',
     aliases: ['image', 'img'],
-    icon: ImageIcon,
+    icon: icon(ImageIcon),
+    group: 'Media',
     description: 'Insert an image from your computer.',
     // Why: window.prompt() is not supported in Electron's renderer process,
     // so image URL input is handled by an inline input bar in RichMarkdownEditor.
     run: (editor) => {
       editor.chain().focus().run()
+    }
+  },
+  {
+    id: 'emoji',
+    label: 'Emoji',
+    aliases: ['smile', 'reaction', 'icon'],
+    icon: textIcon('🙂'),
+    group: 'Others',
+    description: 'Insert a plain Unicode emoji.',
+    run: (editor) => {
+      insertTextWithSelection(editor, '🙂')
     }
   }
 ]

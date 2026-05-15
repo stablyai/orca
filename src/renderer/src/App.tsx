@@ -368,6 +368,10 @@ function App(): React.JSX.Element {
     let reconnectStarted = false
     void (async () => {
       try {
+        // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
+        // Load settings first so a persisted remote runtime does not boot against
+        // the local filesystem and then hydrate stale local workspace state.
+        await actions.fetchSettings()
         await actions.fetchRepos()
         await actions.fetchAllWorktrees()
         const persistedUI = await window.api.ui.get()
@@ -377,10 +381,6 @@ function App(): React.JSX.Element {
           hydratePersistedUI: actions.hydratePersistedUI
         })
         const session = await window.api.session.get()
-        // Why: settings must be loaded before hydrateWorkspaceSession so that
-        // hydration has access to user preferences. Without this, settings
-        // would still be null at hydration time.
-        await actions.fetchSettings()
         if (!cancelled) {
           actions.hydrateWorkspaceSession(session)
           actions.hydrateTabsSession(session)
@@ -617,11 +617,10 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      // Why: skip the key build entirely when no input field has changed by
-      // reference. Mirrors every field used by getRuntimeMobileSessionSyncKey
-      // so this gate covers every "could the key have changed?" case.
-      // — if any field's reference is unchanged, neither the projection
-      // serialized from it nor the reference-compared map can have changed.
+      // Why: skip the key build entirely when every input field is unchanged
+      // by reference. Mirrors every field used by
+      // getRuntimeMobileSessionSyncKey so this gate covers every "could the
+      // key have changed?" case.
       if (
         state.tabsByWorktree === previousState.tabsByWorktree &&
         state.groupsByWorktree === previousState.groupsByWorktree &&
@@ -638,7 +637,7 @@ function App(): React.JSX.Element {
       ) {
         return
       }
-      const nextKey = getRuntimeMobileSessionSyncKey(state)
+      const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
       if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
         return
       }

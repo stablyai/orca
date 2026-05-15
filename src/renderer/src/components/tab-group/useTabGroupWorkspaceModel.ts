@@ -439,7 +439,8 @@ export function useTabGroupWorkspaceModel({
       closeToRight,
       createSplitGroup,
       newBrowserTab: () => {
-        const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+        const state = useAppStore.getState()
+        const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
         createBrowserTab(worktreeId, defaultUrl, {
           title: 'New Browser Tab',
           focusAddressBar: true
@@ -468,7 +469,13 @@ export function useTabGroupWorkspaceModel({
         }
         try {
           const connectionId = getConnectionId(worktreeId) ?? undefined
-          const fileInfo = await createUntitledMarkdownFile(path, worktreeId, connectionId)
+          const settings = useAppStore.getState().settings
+          const fileInfo = await createUntitledMarkdownFile(
+            path,
+            worktreeId,
+            connectionId,
+            settings
+          )
           openFile(fileInfo, { preview: false, targetGroupId: groupId })
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))

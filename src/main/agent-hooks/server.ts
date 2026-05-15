@@ -36,6 +36,7 @@ import {
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   type AgentStatusIpcPayload,
+  type AgentStatusState,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
 
@@ -53,6 +54,14 @@ type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
 }
+
+export type AgentHookStatusChangeEntry = {
+  state: AgentStatusState
+  receivedAt: number
+  observedInCurrentRuntime: boolean
+}
+
+type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 
 // Why: name of the on-disk cache that survives Orca restart. Lives next to
 // the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
@@ -199,6 +208,7 @@ export class AgentHookServer {
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
+  private statusChangeListeners = new Set<StatusChangeListener>()
   // Why: directory that holds the on-disk endpoint file. Set via start()'s
   // `userDataPath` option so the class has no direct Electron dependency
   // (keeps it mockable in the vitest node environment).
@@ -209,6 +219,9 @@ export class AgentHookServer {
   // by paneKey). Held on the instance instead of as module-level Maps so
   // tests can spin up multiple servers without state cross-contamination.
   private state: HookListenerState = createHookListenerState()
+  // Why: hydrated last-status rows are useful UI continuity, but they are not
+  // evidence of live agent work in this main-process runtime.
+  private runtimeObservedStatusPaneKeys = new Set<string>()
   // Why: full path to the on-disk last-status cache. Set in start() from
   // userDataPath. Null when the server runs without a userDataPath (e.g.
   // tests that skip the userDataPath option) — in that case, persistence is
@@ -243,6 +256,13 @@ export class AgentHookServer {
     }
   }
 
+  subscribeStatusChanges(listener: StatusChangeListener): () => void {
+    this.statusChangeListeners.add(listener)
+    return () => {
+      this.statusChangeListeners.delete(listener)
+    }
+  }
+
   /** Snapshot of the current cached statuses, in the IPC-shaped form the
    *  renderer consumes. Used by the `agentStatus:getSnapshot` IPC after
    *  workspace tabs have hydrated, so the dashboard catches up on any
@@ -251,6 +271,31 @@ export class AgentHookServer {
     return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
       toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
     )
+  }
+
+  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
+    return Array.from(this.state.lastStatusByPaneKey.entries(), ([paneKey, entry]) => {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      return {
+        state: enriched.payload.state,
+        receivedAt: enriched.receivedAt,
+        observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+      }
+    })
+  }
+
+  private notifyStatusChangeListeners(): void {
+    if (this.statusChangeListeners.size === 0) {
+      return
+    }
+    const snapshot = this.getStatusChangeSnapshot()
+    for (const listener of this.statusChangeListeners) {
+      try {
+        listener(snapshot)
+      } catch (err) {
+        console.error('[agent-hooks] status-change listener threw', err)
+      }
+    }
   }
 
   private attachStatusTiming(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
@@ -354,8 +399,10 @@ export class AgentHookServer {
       payload: normalizedPayload
     }
     const enriched = this.attachStatusTiming(event)
+    this.runtimeObservedStatusPaneKeys.add(paneKey)
     this.state.lastStatusByPaneKey.set(paneKey, enriched)
     this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
     this.onAgentStatus?.(enriched)
   }
 
@@ -416,8 +463,10 @@ export class AgentHookServer {
         const normalized = normalizeHookPayload(this.state, source, body, this.env)
         if (normalized) {
           const enriched = this.attachStatusTiming(normalized)
+          this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
           this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
           this.scheduleStatusPersist()
+          this.notifyStatusChangeListeners()
           this.onAgentStatus?.(enriched)
         }
 
@@ -477,7 +526,9 @@ export class AgentHookServer {
     this.endpointFileWritten = false
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
+    this.runtimeObservedStatusPaneKeys.clear()
     clearAllListenerCaches(this.state)
+    this.notifyStatusChangeListeners()
   }
 
   /** Why: invoked from the renderer-driven agentStatus:drop IPC when a user
@@ -492,7 +543,9 @@ export class AgentHookServer {
       return
     }
     this.state.lastStatusByPaneKey.delete(paneKey)
+    this.runtimeObservedStatusPaneKeys.delete(paneKey)
     this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
   }
 
   clearPaneState(paneKey: string): void {
@@ -503,7 +556,9 @@ export class AgentHookServer {
     const hadStatus = this.state.lastStatusByPaneKey.has(paneKey)
     clearPaneCacheState(this.state, paneKey)
     if (hadStatus) {
+      this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
     }
   }
 

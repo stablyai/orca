@@ -173,8 +173,14 @@ export default function OnboardingFlow({
               cloneUrl={flow.cloneUrl}
               onCloneUrlChange={flow.setCloneUrl}
               onOpenFolder={() => void flow.openFolder()}
+              onOpenServerFolder={(kind) => void flow.openFolder(kind)}
               onClone={() => void flow.clone()}
+              serverPath={flow.serverPath}
+              onServerPathChange={flow.setServerPath}
+              cloneDestination={flow.cloneDestination}
+              onCloneDestinationChange={flow.setCloneDestination}
               workspaceDir={flow.settings?.workspaceDir ?? ''}
+              runtimeActive={Boolean(flow.settings?.activeRuntimeEnvironmentId?.trim())}
               busyLabel={flow.busyLabel}
               error={flow.error}
             />

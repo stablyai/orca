@@ -5,6 +5,7 @@ import { basename, dirname, joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from '@/components/right-sidebar/fileExplorerUndoRedo'
+import { renameRuntimePath } from '@/runtime/runtime-file-client'
 
 /**
  * Electron's ipcRenderer.invoke wraps errors as:
@@ -124,20 +125,26 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
       file.filePath.startsWith(`${oldPath}\\`)
   )
   await Promise.all(filesToQuiesce.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
+  const fileContext = {
+    settings: state.settings,
+    worktreeId,
+    worktreePath,
+    connectionId
+  }
 
   try {
-    await window.api.fs.rename({ oldPath, newPath, connectionId })
+    await renameRuntimePath(fileContext, oldPath, newPath)
     remapOpenTabsForRenamedPath(oldPath, newPath, worktreePath)
     commitFileExplorerOp({
       undo: async () => {
-        await window.api.fs.rename({ oldPath: newPath, newPath: oldPath, connectionId })
+        await renameRuntimePath(fileContext, newPath, oldPath)
         if (refreshDir) {
           await refreshDir(parentDir)
         }
         remapOpenTabsForRenamedPath(newPath, oldPath, worktreePath)
       },
       redo: async () => {
-        await window.api.fs.rename({ oldPath, newPath, connectionId })
+        await renameRuntimePath(fileContext, oldPath, newPath)
         if (refreshDir) {
           await refreshDir(parentDir)
         }

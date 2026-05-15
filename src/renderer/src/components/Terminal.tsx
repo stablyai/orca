@@ -60,6 +60,7 @@ import {
   useActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
+import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -213,7 +214,9 @@ function Terminal(): React.JSX.Element | null {
           if (connectionId !== null) {
             return []
           }
-          return worktreeTabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+          return worktreeTabs
+            .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+            .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
         }
       )
       if (localPtyIds.length > 0) {
@@ -638,10 +641,12 @@ function Terminal(): React.JSX.Element | null {
       // the ambient/default group and open the file in the wrong pane.
       const targetGroupId = useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId]
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const settings = useAppStore.getState().settings
       const fileInfo = await createUntitledMarkdownFile(
         worktree.path,
         activeWorktreeId,
-        connectionId
+        connectionId,
+        settings
       )
       openFile(fileInfo, { preview: false, targetGroupId })
     } catch (err) {

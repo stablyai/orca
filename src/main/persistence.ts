@@ -57,6 +57,12 @@ import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
+import {
+  DEFAULT_WORKSPACE_STATUS_ID,
+  clampWorkspaceBoardOpacity,
+  normalizeWorkspaceBoardCompact,
+  normalizeWorkspaceStatuses
+} from '../shared/workspace-statuses'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -130,6 +136,16 @@ const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
 
 function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
+}
+
+function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
+  if (groupBy === 'none' || groupBy === 'repo' || groupBy === 'pr-status') {
+    return groupBy
+  }
+  if (groupBy === 'workspace-status') {
+    return 'none'
+  }
+  return getDefaultUIState().groupBy
 }
 
 function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' {
@@ -1195,7 +1211,11 @@ export class Store {
     return {
       ...getDefaultUIState(),
       ...this.state.ui,
-      sortBy: normalizeSortBy(this.state.ui?.sortBy)
+      groupBy: normalizeGroupBy(this.state.ui?.groupBy),
+      sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
+      workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact)
     }
   }
 
@@ -1203,9 +1223,21 @@ export class Store {
     this.state.ui = {
       ...this.state.ui,
       ...updates,
+      groupBy: updates.groupBy
+        ? normalizeGroupBy(updates.groupBy)
+        : normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
-        : normalizeSortBy(this.state.ui?.sortBy)
+        : normalizeSortBy(this.state.ui?.sortBy),
+      workspaceStatuses: normalizeWorkspaceStatuses(
+        updates.workspaceStatuses ?? this.state.ui?.workspaceStatuses
+      ),
+      workspaceBoardOpacity: clampWorkspaceBoardOpacity(
+        updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
+      ),
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(
+        updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+      )
     }
     this.scheduleSave()
   }
@@ -1706,6 +1738,7 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     isUnread: false,
     isPinned: false,
     sortOrder: Date.now(),
-    lastActivityAt: 0
+    lastActivityAt: 0,
+    workspaceStatus: DEFAULT_WORKSPACE_STATUS_ID
   }
 }

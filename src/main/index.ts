@@ -3,8 +3,11 @@
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
 import { grantDirAcl } from './win32-utils'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
+import * as QRCode from 'qrcode'
 import devIcon from '../../resources/icon-dev.png?asset'
 import { Store, initDataPath } from './persistence'
 import { StatsCollector, initStatsPath } from './stats/collector'
@@ -51,12 +54,18 @@ import { codexHookService } from './codex/hook-service'
 import { geminiHookService } from './gemini/hook-service'
 import { cursorHookService } from './cursor/hook-service'
 import { droidHookService } from './droid/hook-service'
-import { getPtyIdForPaneKey, registerPaneKeyTeardownListener, getLocalPtyProvider } from './ipc/pty'
+import {
+  getPtyIdForPaneKey,
+  registerPaneKeyTeardownListener,
+  getLocalPtyProvider,
+  registerHeadlessPtyRuntime
+} from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 import { AutomationService } from './automations/service'
+import { AgentAwakeService } from './agent-awake-service'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -75,10 +84,13 @@ let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let starNag: StarNagService | null = null
+let agentAwakeService: AgentAwakeService | null = null
+let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let disposeFeatureWallFirstAgentTour: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
+const isServeMode = process.argv.includes('--serve')
 
 installUncaughtPipeErrorGuard()
 // Why: propagate the Orca app version into `process.env` so PTY-env
@@ -141,7 +153,8 @@ function focusExistingWindow(): void {
 // agent work, so that routing ambiguity is acceptable. Packaged Orca keeps
 // the lock to protect against the corruption documented in PR #1326 /
 // issue #1312.
-const hasSingleInstanceLock = is.dev ? true : acquireSingleInstanceLock(app, focusExistingWindow)
+const hasSingleInstanceLock =
+  is.dev && !isServeMode ? true : acquireSingleInstanceLock(app, focusExistingWindow)
 if (!hasSingleInstanceLock) {
   if (is.dev) {
     // Why: packaged runs have no attached console, but dev runs do. Emit a
@@ -160,8 +173,12 @@ if (!hasSingleInstanceLock) {
 // below happen — those handlers only fire after whenReady, which app.quit()
 // prevents from ever dispatching.
 if (hasSingleInstanceLock) {
-  installDevParentDisconnectQuit(is.dev)
-  installDevParentWatchdog(is.dev)
+  // Why: dev parent shutdown coupling is only for electron-vite desktop runs.
+  // `orca serve` may be launched through a CLI shim or background shell whose
+  // parent lifetime is not the intended server lifetime.
+  const shouldCoupleToDevParent = is.dev && !isServeMode
+  installDevParentDisconnectQuit(shouldCoupleToDevParent)
+  installDevParentWatchdog(shouldCoupleToDevParent)
   // Why: must run after configureDevUserDataPath (which redirects userData to
   // orca-dev in dev mode) but before app.setName('Orca') inside whenReady
   // (which would change the resolved path on case-sensitive filesystems).
@@ -257,7 +274,15 @@ function openMainWindow(): BrowserWindow {
     claudeAccounts,
     rateLimits,
     window.webContents.id,
-    automations
+    automations,
+    {
+      prepareForCodexLaunch: () =>
+        store!.getSettings().activeCodexManagedAccountId
+          ? codexRuntimeHome!.prepareForCodexLaunch()
+          : null,
+      prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+    },
+    agentAwakeService ?? undefined
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -265,7 +290,10 @@ function openMainWindow(): BrowserWindow {
     window,
     store,
     runtime,
-    () => codexRuntimeHome!.prepareForCodexLaunch(),
+    () =>
+      store!.getSettings().activeCodexManagedAccountId
+        ? codexRuntimeHome!.prepareForCodexLaunch()
+        : null,
     () => claudeRuntimeAuth!.prepareForClaudeLaunch()
   )
   rateLimits.attach(window)
@@ -392,6 +420,117 @@ const syntheticTitleSpinnerByPaneKey = new Map<
   { timer: ReturnType<typeof setInterval>; frame: number; profile: SyntheticTitleProfile }
 >()
 
+type ServeOptions = {
+  json: boolean
+  wsPort?: number
+  pairingAddress: string | null
+  noPairing: boolean
+  mobilePairing: boolean
+}
+
+function getServeOptions(argv = process.argv): ServeOptions {
+  const valueAfter = (flag: string): string | null => {
+    const index = argv.indexOf(flag)
+    if (index === -1) {
+      return null
+    }
+    const value = argv[index + 1]
+    return value && !value.startsWith('--') ? value : null
+  }
+  const rawPort = valueAfter('--serve-port')
+  let wsPort: number | undefined
+  if (rawPort) {
+    const parsedPort = Number(rawPort)
+    if (!Number.isInteger(parsedPort) || parsedPort < 0 || parsedPort > 65535) {
+      throw new Error(`Invalid --serve-port value: ${rawPort}`)
+    }
+    wsPort = parsedPort
+  }
+  return {
+    json: argv.includes('--serve-json'),
+    ...(wsPort !== undefined ? { wsPort } : {}),
+    pairingAddress: valueAfter('--serve-pairing-address'),
+    noPairing: argv.includes('--serve-no-pairing'),
+    mobilePairing: argv.includes('--serve-mobile-pairing')
+  }
+}
+
+function getBundledWebClientRoot(): string | undefined {
+  const root = join(app.getAppPath(), 'out', 'web')
+  return existsSync(join(root, 'web-index.html')) ? root : undefined
+}
+
+async function renderTerminalPairingQr(pairingUrl: string): Promise<string | null> {
+  try {
+    return await QRCode.toString(pairingUrl, { type: 'terminal', small: true })
+  } catch {
+    try {
+      return await QRCode.toString(pairingUrl, { type: 'utf8' })
+    } catch {
+      return null
+    }
+  }
+}
+
+async function printServeReady(options: ServeOptions): Promise<void> {
+  if (!runtime || !runtimeRpc) {
+    throw new Error('Runtime server must be initialized before printing serve readiness')
+  }
+  const endpoint = runtimeRpc.getWebSocketEndpoint()
+  const pairing = options.noPairing
+    ? ({ available: false } as const)
+    : runtimeRpc.createPairingOffer({
+        address: options.pairingAddress,
+        name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
+        scope: options.mobilePairing ? 'mobile' : 'runtime'
+      })
+  const pairingQr =
+    pairing.available && options.mobilePairing
+      ? await renderTerminalPairingQr(pairing.pairingUrl)
+      : null
+  if (options.json) {
+    console.log(
+      JSON.stringify({
+        type: 'orca_server_ready',
+        runtimeId: runtime.getRuntimeId(),
+        endpoint,
+        pairing: pairing.available
+          ? {
+              url: pairing.pairingUrl,
+              endpoint: pairing.endpoint,
+              deviceId: pairing.deviceId,
+              webClientUrl: pairing.webClientUrl,
+              scope: options.mobilePairing ? 'mobile' : 'runtime',
+              qr: pairingQr
+            }
+          : null
+      })
+    )
+    return
+  }
+  console.log(`Orca server ready: ${endpoint ?? 'websocket unavailable'}`)
+  if (pairing.available) {
+    if (pairing.webClientUrl) {
+      console.log(`Web client URL: ${pairing.webClientUrl}`)
+    }
+    if (options.mobilePairing && pairingQr) {
+      console.log(`Mobile pairing QR:\n${pairingQr}`)
+    }
+    console.log(`Pairing URL: ${pairing.pairingUrl}`)
+  }
+}
+
+function installServeSignalHandlers(): void {
+  const quit = (): void => {
+    // Why: foreground `orca serve` is controlled by the parent CLI/terminal,
+    // so POSIX termination signals should follow Electron's normal quit path
+    // and flush runtime metadata, daemon checkpoints, and telemetry.
+    app.quit()
+  }
+  process.once('SIGINT', quit)
+  process.once('SIGTERM', quit)
+}
+
 // Why: on PTY teardown the paneKey→ptyId mapping is dropped, so the spinner
 // interval would keep firing but sendSyntheticTitle would no-op forever.
 // Stop the interval explicitly so the process doesn't carry a timer per dead
@@ -483,6 +622,15 @@ app.whenReady().then(async () => {
   }
 
   store = new Store()
+  agentAwakeService = new AgentAwakeService()
+  agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
+  // Why: disk-hydrated status rows are UI continuity only. The service starts
+  // from an empty snapshot; only hook events observed in this runtime can keep
+  // the local computer awake.
+  agentAwakeService.setStatuses([])
+  unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
+    agentAwakeService?.setStatuses(statuses)
+  })
   // Why: telemetry must initialize before any IPC handler / renderer can
   // call `track()`. The client is a no-op in dev/contributor builds
   // (`IS_OFFICIAL_BUILD === false`) and a no-op while `TELEMETRY_ENABLED`
@@ -622,38 +770,71 @@ app.whenReady().then(async () => {
   // ws://127.0.0.1:6769 is stable; a second dev instance still falls back via
   // ws-transport's EADDRINUSE handler.
   const devWsPort = is.dev && !isE2E ? 6769 : undefined
+  let serveOptions: ServeOptions | null = null
+  try {
+    serveOptions = isServeMode ? getServeOptions() : null
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    app.exit(1)
+    return
+  }
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: app.getPath('userData'),
     enableWebSocket: true,
     ...(isE2E ? { wsPort: 0 } : {}),
-    ...(devWsPort !== undefined ? { wsPort: devWsPort } : {})
+    ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
+    ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {}),
+    webClientRoot: getBundledWebClientRoot()
   })
   registerMobileHandlers(runtimeRpc)
 
-  await startFirstWindowStartupServices({
-    // Why: the persistent-terminal daemon is always started. If it fails, the
-    // LocalPtyProvider remains as the implicit fallback — terminals work, just
-    // without cross-restart persistence.
-    startDaemonPtyProvider: () => initDaemonPtyProvider(),
-    // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
-    // so the hook server must start before restored terminals can mount.
-    startAgentHookServer: () =>
-      agentHookServer.start({
-        env: app.isPackaged ? 'production' : 'development',
-        // Why: hooks source this endpoint file at invocation time, so old PTY
-        // env still reaches the current Orca process after an app restart.
-        userDataPath: app.getPath('userData')
-      }),
-    onDaemonError: (error) => {
-      console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
-    },
-    onAgentHookServerError: (error) => {
-      // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
-      // enrichment only. Orca must still boot if the loopback receiver fails.
-      console.error('[agent-hooks] Failed to start local hook server:', error)
-    }
-  })
+  if (!isServeMode) {
+    await startFirstWindowStartupServices({
+      // Why: the persistent-terminal daemon is desktop-only. Headless
+      // `orca serve` registers its PTY runtime below and must not spawn the
+      // desktop daemon or hook loopback listener.
+      startDaemonPtyProvider: () => initDaemonPtyProvider(),
+      // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
+      // so the hook server must start before restored terminals can mount.
+      startAgentHookServer: () =>
+        agentHookServer.start({
+          env: app.isPackaged ? 'production' : 'development',
+          // Why: hooks source this endpoint file at invocation time, so old PTY
+          // env still reaches the current Orca process after an app restart.
+          userDataPath: app.getPath('userData')
+        }),
+      onDaemonError: (error) => {
+        console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
+      },
+      onAgentHookServerError: (error) => {
+        // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
+        // enrichment only. Orca must still boot if the loopback receiver fails.
+        console.error('[agent-hooks] Failed to start local hook server:', error)
+      }
+    })
+  }
+
+  if (serveOptions) {
+    registerHeadlessPtyRuntime(
+      runtime,
+      () => codexRuntimeHome!.prepareForCodexLaunch(),
+      () => store!.getSettings(),
+      () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+      store
+    )
+    // Why: headless servers have no renderer graph publisher. Publish an
+    // explicit empty graph so status clients see a ready server while
+    // renderer-only operations still fail at their own window boundary.
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtimeRpc.start().catch((error) => {
+      console.error('[runtime] Failed to start headless RPC transport:', error)
+      throw error
+    })
+    installServeSignalHandlers()
+    await printServeReady(serveOptions)
+    return
+  }
 
   // Why: once the hook server is ready (or has already failed open), window
   // creation and runtime RPC startup are independent.
@@ -692,6 +873,10 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  unsubscribeAgentAwakeStatusChanges?.()
+  unsubscribeAgentAwakeStatusChanges = null
+  agentAwakeService?.dispose()
+  agentAwakeService = null
   disposeFeatureWallFirstAgentTour?.()
   disposeFeatureWallFirstAgentTour = null
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to

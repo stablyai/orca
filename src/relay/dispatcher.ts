@@ -13,6 +13,7 @@ import {
 
 export type RequestContext = {
   isStale: () => boolean
+  signal?: AbortSignal
 }
 
 export type MethodHandler = (
@@ -27,6 +28,7 @@ export class RelayDispatcher {
   private write: (data: Buffer) => void
   private requestHandlers = new Map<string, MethodHandler>()
   private notificationHandlers = new Map<string, NotificationHandler>()
+  private requestAbortControllers = new Map<number, AbortController>()
   private nextOutgoingSeq = 1
   private highestReceivedSeq = 0
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
@@ -54,6 +56,7 @@ export class RelayDispatcher {
   // up — causing the client's unacked-timeout checker to accumulate stale
   // timestamps that could eventually fire a false connection-dead signal.
   setWrite(write: (data: Buffer) => void): void {
+    this.abortActiveRequests()
     this.write = write
     this.nextOutgoingSeq = 1
     this.highestReceivedSeq = 0
@@ -65,6 +68,7 @@ export class RelayDispatcher {
   // disconnects even if no replacement has connected yet. Otherwise a late
   // pty.spawn/fs.watch completion can create remote state nobody can own.
   invalidateClient(): void {
+    this.abortActiveRequests()
     this.generation++
   }
 
@@ -74,6 +78,13 @@ export class RelayDispatcher {
 
   onNotification(method: string, handler: NotificationHandler): void {
     this.notificationHandlers.set(method, handler)
+  }
+
+  private abortActiveRequests(): void {
+    for (const controller of this.requestAbortControllers.values()) {
+      controller.abort()
+    }
+    this.requestAbortControllers.clear()
   }
 
   feed(data: Buffer): void {
@@ -157,26 +168,37 @@ export class RelayDispatcher {
     // space. Sending it would misroute — the new client may have issued
     // its own request with the same JSON-RPC id.
     const gen = this.generation
+    const abortController = new AbortController()
+    this.requestAbortControllers.set(req.id, abortController)
     const context: RequestContext = {
-      isStale: () => this.generation !== gen
+      isStale: () => this.generation !== gen || abortController.signal.aborted,
+      signal: abortController.signal
     }
     try {
       const result = await handler(req.params ?? {}, context)
-      if (this.generation !== gen) {
+      if (this.generation !== gen || abortController.signal.aborted) {
         return
       }
       this.sendResponse(req.id, result)
     } catch (err) {
-      if (this.generation !== gen) {
+      if (this.generation !== gen || abortController.signal.aborted) {
         return
       }
       const message = err instanceof Error ? err.message : String(err)
       const code = (err as { code?: number }).code ?? -32000
       this.sendResponse(req.id, undefined, { code, message })
+    } finally {
+      this.requestAbortControllers.delete(req.id)
     }
   }
 
   private handleNotification(notif: JsonRpcNotification): void {
+    if (notif.method === 'rpc.cancel') {
+      const id = Number((notif.params ?? {}).id)
+      const controller = this.requestAbortControllers.get(id)
+      controller?.abort()
+      return
+    }
     const handler = this.notificationHandlers.get(notif.method)
     if (handler) {
       handler(notif.params ?? {})

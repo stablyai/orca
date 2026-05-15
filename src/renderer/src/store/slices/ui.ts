@@ -12,6 +12,7 @@ import type {
   TaskViewPresetId,
   TuiAgent,
   UpdateStatus,
+  WorkspaceStatusDefinition,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
@@ -20,6 +21,12 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
+import {
+  clampWorkspaceBoardOpacity,
+  cloneDefaultWorkspaceStatuses,
+  normalizeWorkspaceBoardCompact,
+  normalizeWorkspaceStatuses
+} from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
@@ -259,6 +266,7 @@ export type UISlice = {
       | 'accounts'
       | 'voice'
       | 'experimental'
+      | 'servers'
       | 'mobile'
       | 'ssh'
     repoId: string | null
@@ -307,6 +315,12 @@ export type UISlice = {
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
   toggleWorktreeCardProperty: (prop: WorktreeCardProperty) => void
+  workspaceStatuses: WorkspaceStatusDefinition[]
+  setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  workspaceBoardOpacity: number
+  setWorkspaceBoardOpacity: (opacity: number) => void
+  workspaceBoardCompact: boolean
+  setWorkspaceBoardCompact: (compact: boolean) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
@@ -675,6 +689,27 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { worktreeCardProperties: updated }
     }),
 
+  workspaceStatuses: cloneDefaultWorkspaceStatuses(),
+  setWorkspaceStatuses: (statuses) => {
+    const normalized = normalizeWorkspaceStatuses(statuses)
+    window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
+    set({ workspaceStatuses: normalized })
+  },
+
+  workspaceBoardOpacity: 1,
+  setWorkspaceBoardOpacity: (opacity) => {
+    const clamped = clampWorkspaceBoardOpacity(opacity)
+    window.api.ui.set({ workspaceBoardOpacity: clamped }).catch(console.error)
+    set({ workspaceBoardOpacity: clamped })
+  },
+
+  workspaceBoardCompact: false,
+  setWorkspaceBoardCompact: (compact) => {
+    const normalized = normalizeWorkspaceBoardCompact(compact)
+    window.api.ui.set({ workspaceBoardCompact: normalized }).catch(console.error)
+    set({ workspaceBoardCompact: normalized })
+  },
+
   statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
   toggleStatusBarItem: (item) =>
     set((s) => {
@@ -814,6 +849,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+        workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
+        workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
+        workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
         statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time

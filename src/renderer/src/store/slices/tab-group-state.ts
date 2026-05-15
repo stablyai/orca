@@ -1,4 +1,5 @@
 import type { Tab, TabContentType, TabGroup, WorkspaceSessionState } from '../../../../shared/types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -69,7 +70,7 @@ export function ensureGroup(
   if (existing) {
     return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
   }
-  const groupId = globalThis.crypto.randomUUID()
+  const groupId = createBrowserUuid()
   const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
   return {
     group,
