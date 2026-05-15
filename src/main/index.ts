@@ -700,7 +700,7 @@ app.whenReady().then(async () => {
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider()
   })
-  automations = new AutomationService(store)
+  automations = new AutomationService(store, { claudeUsage, codexUsage })
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   disposeFeatureWallFirstAgentTour = registerFeatureWallFirstAgentTour({
     stats,

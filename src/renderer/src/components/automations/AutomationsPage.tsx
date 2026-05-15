@@ -37,6 +37,11 @@ import type {
 import type { Worktree } from '../../../../shared/types'
 import { buildAutomationRrule, parseAutomationRrule } from '../../../../shared/automation-schedules'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  formatAutomationCost,
+  formatAutomationTokens,
+  summarizeAutomationRunUsage
+} from './automation-usage-model'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationEditorDialog, type AutomationDraft } from './AutomationEditorDialog'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
@@ -739,6 +744,17 @@ export default function AutomationsPage(): React.JSX.Element {
                 automation.workspaceMode === 'new_per_run'
                   ? 'New workspace each run'
                   : (automationWorktree?.displayName ?? 'Missing workspace')
+              const usageSummary = summarizeAutomationRunUsage(
+                runs.filter((run) => run.automationId === automation.id)
+              )
+              const usageText =
+                usageSummary.knownRuns > 0
+                  ? `${formatAutomationCost(
+                      usageSummary.estimatedCostUsd
+                    )} est. · ${formatAutomationTokens(usageSummary.totalTokens)} tokens`
+                  : usageSummary.unavailableRuns > 0
+                    ? 'Usage unavailable'
+                    : 'No run usage yet'
               return (
                 <ContextMenu key={automation.id}>
                   <ContextMenuTrigger asChild>
@@ -774,6 +790,7 @@ export default function AutomationsPage(): React.JSX.Element {
                             )}`
                           : 'Paused'}
                       </span>
+                      <span className="text-xs text-muted-foreground">{usageText}</span>
                     </button>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-48">
