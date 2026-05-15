@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
-  Moon,
   RefreshCcw,
   Search,
   Trash2,
@@ -27,7 +26,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { runSleepWorktrees } from '@/components/sidebar/sleep-worktree-flow'
 import {
   canSelectWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
@@ -409,55 +407,57 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 Checking old workspaces
               </div>
             ) : (
-              <div className="bg-muted/25 px-5 py-2.5">
-                <div className="text-xs leading-5 text-muted-foreground">
-                  {oldCandidateCount > 0 ? (
-                    <>
-                      <span className="font-medium text-foreground">{oldCandidateCount}</span> old
-                      workspace{oldCandidateCount === 1 ? '' : 's'} found.
-                    </>
-                  ) : (
-                    'No old workspaces found.'
-                  )}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
+                <div className="min-w-0">
+                  {oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
+                    <div className="text-sm font-medium text-foreground">
+                      {selectedCount} selected
+                    </div>
+                  ) : null}
+                  <div className="text-xs leading-5 text-muted-foreground">
+                    {oldCandidateCount > 0 ? (
+                      <>
+                        <span className="font-medium text-foreground">{oldCandidateCount}</span> old
+                        workspace{oldCandidateCount === 1 ? '' : 's'} found.
+                      </>
+                    ) : (
+                      'No old workspaces found.'
+                    )}
+                  </div>
                 </div>
                 {oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
-                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0 text-xs leading-8 text-muted-foreground">
-                      <span className="font-medium text-foreground">{selectedCount}</span> selected
-                    </div>
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      {hiddenByKeepCount > 0 ? (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => setShowKept((value) => !value)}
-                        >
-                          {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
-                        </Button>
-                      ) : null}
-                      {readyCount > 0 && selectedCount < readyCount ? (
-                        <Button variant="ghost" size="xs" onClick={selectReady}>
-                          Select all removable
-                        </Button>
-                      ) : null}
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    {hiddenByKeepCount > 0 ? (
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={keepSelected}
-                        disabled={selectedCount === 0}
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setShowKept((value) => !value)}
                       >
-                        Hide selected
+                        {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setConfirming(true)}
-                        disabled={selectedCount === 0}
-                      >
-                        <Trash2 className="size-3.5" />
-                        Remove selected
+                    ) : null}
+                    {readyCount > 0 && selectedCount < readyCount ? (
+                      <Button variant="ghost" size="xs" onClick={selectReady}>
+                        Select all removable
                       </Button>
-                    </div>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={keepSelected}
+                      disabled={selectedCount === 0}
+                    >
+                      Hide selected
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setConfirming(true)}
+                      disabled={selectedCount === 0}
+                    >
+                      <Trash2 className="size-3.5" />
+                      Remove selected
+                    </Button>
                   </div>
                 ) : null}
               </div>
@@ -475,7 +475,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             ) : null}
 
             <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-3 px-5 pb-5 pt-2">
+              <div className="space-y-3 px-5 pb-5 pt-3">
                 {initialLoading ? <SkeletonRows /> : null}
                 {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
                   <EmptyState title="No old workspaces to clean up." />
@@ -502,7 +502,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   }
                   onView={closeAndView}
                   onKeep={(candidate) => void dismissCandidates([candidate])}
-                  onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
                   onRemove={(candidate) => {
                     setSelectedIds(new Set([candidate.worktreeId]))
                     setConfirming(true)
@@ -520,7 +519,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   }
                   onView={closeAndView}
                   onKeep={(candidate) => void dismissCandidates([candidate])}
-                  onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
                   onRemove={(candidate) => {
                     setSelectedIds(new Set([candidate.worktreeId]))
                     setConfirming(true)
@@ -538,7 +536,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   }
                   onView={closeAndView}
                   onKeep={(candidate) => void dismissCandidates([candidate])}
-                  onSleep={(candidate) => void sleepAndRefresh(candidate.worktreeId, refresh)}
                   onRemove={(candidate) => {
                     setSelectedIds(new Set([candidate.worktreeId]))
                     setConfirming(true)
@@ -589,7 +586,6 @@ function CandidateGroup({
   onToggleSelected,
   onView,
   onKeep,
-  onSleep,
   onRemove
 }: {
   tier: WorkspaceCleanupTier
@@ -601,7 +597,6 @@ function CandidateGroup({
   onToggleSelected: (worktreeId: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
   onKeep: (candidate: WorkspaceCleanupCandidate) => void
-  onSleep: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
 }): React.JSX.Element | null {
   if (rows.length === 0) {
@@ -632,7 +627,6 @@ function CandidateGroup({
               onToggleSelected={onToggleSelected}
               onView={onView}
               onKeep={onKeep}
-              onSleep={onSleep}
               onRemove={onRemove}
             />
           ))}
@@ -650,7 +644,6 @@ function CandidateRow({
   onToggleSelected,
   onView,
   onKeep,
-  onSleep,
   onRemove
 }: {
   candidate: WorkspaceCleanupCandidate
@@ -660,16 +653,12 @@ function CandidateRow({
   onToggleSelected: (worktreeId: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
   onKeep: (candidate: WorkspaceCleanupCandidate) => void
-  onSleep: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
 }): React.JSX.Element {
   const selectable = canSelectWorkspaceCleanupCandidate(candidate)
-  const hasLiveSurfaces =
-    candidate.localContext.terminalTabCount > 0 || candidate.localContext.browserTabCount > 0
   const blockers = candidate.blockers.map((blocker) => BLOCKER_LABELS[blocker])
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
-  const shouldShowSleep = candidate.tier !== 'ready' && hasLiveSurfaces
 
   return (
     <div
@@ -679,21 +668,20 @@ function CandidateRow({
       )}
     >
       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 md:grid-cols-[auto_minmax(0,1fr)_auto]">
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={selected}
-          aria-label={`Select ${candidate.displayName}`}
-          disabled={!selectable}
-          onClick={() => onToggleSelected(candidate.worktreeId)}
-          className={cn(
-            'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary',
-            selectable && 'hover:bg-accent',
-            !selectable && 'opacity-40'
-          )}
-        >
-          {selected ? <Check className="size-3" strokeWidth={3} /> : null}
-        </button>
+        {selectable ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            aria-label={`Select ${candidate.displayName}`}
+            onClick={() => onToggleSelected(candidate.worktreeId)}
+            className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent"
+          >
+            {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+          </button>
+        ) : (
+          <div className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        )}
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
@@ -746,24 +734,19 @@ function CandidateRow({
             <Search className="size-3.5" />
             View
           </Button>
-          {shouldShowSleep ? (
-            <Button variant="ghost" size="xs" onClick={() => onSleep(candidate)}>
-              <Moon className="size-3.5" />
-              Sleep
-            </Button>
-          ) : null}
           <Button variant="ghost" size="xs" onClick={() => onKeep(candidate)}>
             Hide
           </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="text-destructive hover:text-destructive"
-            disabled={!selectable}
-            onClick={() => onRemove(candidate)}
-          >
-            Remove
-          </Button>
+          {selectable ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-destructive hover:text-destructive"
+              onClick={() => onRemove(candidate)}
+            >
+              Remove
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -906,9 +889,4 @@ function toggleSetMember(current: Set<string>, value: string): Set<string> {
     next.add(value)
   }
   return next
-}
-
-async function sleepAndRefresh(worktreeId: string, refresh: () => void): Promise<void> {
-  await runSleepWorktrees([worktreeId])
-  refresh()
 }
