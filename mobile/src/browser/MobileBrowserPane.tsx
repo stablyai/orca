@@ -143,6 +143,24 @@ export function MobileBrowserPane({
   const pinchRef = useRef<PinchGesture | null>(null)
   const panRef = useRef<PanGesture | null>(null)
   const scrollingRef = useRef(false)
+  const lastZoomResetUrlRef = useRef(tab.url || 'about:blank')
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
+
+  const resetZoomState = useCallback(() => {
+    clearLongPressTimer()
+    pinchRef.current = null
+    panRef.current = null
+    scrollingRef.current = false
+    startPointRef.current = null
+    zoomRef.current = DEFAULT_ZOOM
+    setZoom(DEFAULT_ZOOM)
+  }, [clearLongPressTimer])
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -176,9 +194,9 @@ export function MobileBrowserPane({
   }, [zoom])
 
   useEffect(() => {
-    zoomRef.current = DEFAULT_ZOOM
-    setZoom(DEFAULT_ZOOM)
-  }, [rotated, tab.browserPageId])
+    lastZoomResetUrlRef.current = tab.url || 'about:blank'
+    resetZoomState()
+  }, [resetZoomState, rotated, tab.browserPageId, tab.url])
 
   const pageParams = useCallback(() => {
     if (!tab.browserPageId) {
@@ -265,6 +283,10 @@ export function MobileBrowserPane({
           setBusy(false)
           if (typeof event.tab?.url === 'string') {
             setAddressValue(event.tab.url)
+            if (event.tab.url !== lastZoomResetUrlRef.current) {
+              lastZoomResetUrlRef.current = event.tab.url
+              resetZoomState()
+            }
           }
         } else if (event.type === 'end') {
           clearStartupTimer()
@@ -296,6 +318,7 @@ export function MobileBrowserPane({
     appActive,
     applyFrame,
     client,
+    resetZoomState,
     screencastSupported,
     streamViewport,
     tab.browserPageId,
@@ -354,8 +377,10 @@ export function MobileBrowserPane({
     )) as { url?: string } | null
     if (typeof result?.url === 'string') {
       setAddressValue(result.url)
+      lastZoomResetUrlRef.current = result.url
+      resetZoomState()
     }
-  }, [addressValue, sendBrowserRequest])
+  }, [addressValue, resetZoomState, sendBrowserRequest])
 
   const sendPointerClick = useCallback(
     async (point: BrowserPoint, button: 'left' | 'right') => {
@@ -434,13 +459,6 @@ export function MobileBrowserPane({
     },
     [client, pageParams]
   )
-
-  const clearLongPressTimer = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
-    }
-  }, [])
 
   useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
 
