@@ -14,7 +14,7 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw, RotateCw } from 'lucide-react-native'
+import { ArrowUp, RotateCw } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import type {
@@ -208,8 +208,6 @@ export function MobileBrowserPane({
         page: tab.browserPageId,
         format: BROWSER_FRAME_FORMAT,
         quality: BROWSER_FRAME_QUALITY,
-        viewportWidth: streamViewport.width,
-        viewportHeight: streamViewport.height,
         maxWidth: streamViewport.width,
         maxHeight: streamViewport.height,
         everyNthFrame: 1
@@ -544,27 +542,6 @@ export function MobileBrowserPane({
   return (
     <View style={styles.root}>
       <View style={styles.toolbar}>
-        <IconButton
-          disabled={controlsDisabled || !tab.canGoBack}
-          label="Back"
-          onPress={() => void sendBrowserRequest('browser.back', {}, { showBusy: true })}
-        >
-          <ChevronLeft size={17} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
-        </IconButton>
-        <IconButton
-          disabled={controlsDisabled || !tab.canGoForward}
-          label="Forward"
-          onPress={() => void sendBrowserRequest('browser.forward', {}, { showBusy: true })}
-        >
-          <ChevronRight size={17} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
-        </IconButton>
-        <IconButton
-          disabled={controlsDisabled}
-          label="Reload"
-          onPress={() => void sendBrowserRequest('browser.reload', {}, { showBusy: true })}
-        >
-          <RefreshCw size={16} color={buttonColor(!controlsDisabled)} />
-        </IconButton>
         <TextInput
           style={styles.addressInput}
           value={addressValue}

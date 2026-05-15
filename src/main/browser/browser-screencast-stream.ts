@@ -92,10 +92,20 @@ export async function startBrowserScreencast(
 
   let closed = false
   let seq = 0
+  let deviceMetricsOverridden = false
   let resolveDone!: () => void
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve
   })
+
+  const clearDeviceMetricsOverride = async (): Promise<void> => {
+    if (webContents.isDestroyed() || !dbg.isAttached()) {
+      deviceMetricsOverridden = false
+      return
+    }
+    await sendDebuggerCommand(dbg, 'Emulation.clearDeviceMetricsOverride')
+    deviceMetricsOverridden = false
+  }
 
   const finish = (): void => {
     if (closed) {
@@ -193,6 +203,12 @@ export async function startBrowserScreencast(
         deviceScaleFactor: 1,
         mobile: false
       })
+      deviceMetricsOverridden = true
+    } else {
+      // Why: older mobile streams briefly set page metrics from phone geometry.
+      // Clear any stale override before a size-neutral stream starts so the host
+      // browser does not stay stuck in a phone-width layout.
+      await clearDeviceMetricsOverride().catch(() => {})
     }
     await sendDebuggerCommand(dbg, 'Page.startScreencast', {
       format: options.format,
@@ -203,6 +219,9 @@ export async function startBrowserScreencast(
     })
     void emitInitialFrameIfNeeded()
   } catch (error) {
+    if (deviceMetricsOverridden) {
+      await clearDeviceMetricsOverride().catch(() => {})
+    }
     finish()
     throw new BrowserError(
       'browser_error',
@@ -216,9 +235,12 @@ export async function startBrowserScreencast(
         return
       }
       try {
-        void sendDebuggerCommand(dbg, 'Page.stopScreencast')
-          .catch(() => {})
-          .finally(finish)
+        void (async () => {
+          await sendDebuggerCommand(dbg, 'Page.stopScreencast').catch(() => {})
+          if (deviceMetricsOverridden) {
+            await clearDeviceMetricsOverride().catch(() => {})
+          }
+        })().finally(finish)
       } catch {
         finish()
       }

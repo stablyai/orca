@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   ArrowUp,
   ChevronLeft,
+  ChevronRight,
   Eraser,
   Folder,
   File,
@@ -2359,6 +2360,33 @@ export default function SessionScreen() {
     }
   }
 
+  async function handleBrowserNavigationCommand(
+    tab: Extract<MobileSessionTab, { type: 'browser' }>,
+    method: 'browser.back' | 'browser.forward' | 'browser.reload'
+  ) {
+    if (!client || !tab.browserPageId) {
+      showToast('Browser page is not available yet.', 1500)
+      return
+    }
+    try {
+      const response = await client.sendRequest(
+        method,
+        {
+          worktree: `id:${worktreeId}`,
+          page: tab.browserPageId
+        },
+        { timeoutMs: 15_000 }
+      )
+      if (!response.ok) {
+        throw new Error((response as RpcFailure).error.message)
+      }
+      setTimeout(() => void fetchSessionTabs(), 250)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Browser command failed'
+      showToast(message, 1600)
+    }
+  }
+
   async function handleRenameTerminal(value: string) {
     if (!client || !renameTarget) return
     const target = renameTarget
@@ -3089,6 +3117,47 @@ export default function SessionScreen() {
         visible={browserActionTarget != null}
         title={browserActionTarget?.title || 'Browser'}
         actions={[
+          ...(browserActionTarget?.canGoBack
+            ? [
+                {
+                  label: 'Back',
+                  icon: ChevronLeft,
+                  onPress: () => {
+                    const target = browserActionTarget
+                    setBrowserActionTarget(null)
+                    if (target) {
+                      void handleBrowserNavigationCommand(target, 'browser.back')
+                    }
+                  }
+                }
+              ]
+            : []),
+          ...(browserActionTarget?.canGoForward
+            ? [
+                {
+                  label: 'Forward',
+                  icon: ChevronRight,
+                  onPress: () => {
+                    const target = browserActionTarget
+                    setBrowserActionTarget(null)
+                    if (target) {
+                      void handleBrowserNavigationCommand(target, 'browser.forward')
+                    }
+                  }
+                }
+              ]
+            : []),
+          {
+            label: 'Reload',
+            icon: RefreshCw,
+            onPress: () => {
+              const target = browserActionTarget
+              setBrowserActionTarget(null)
+              if (target) {
+                void handleBrowserNavigationCommand(target, 'browser.reload')
+              }
+            }
+          },
           {
             label: 'Close',
             destructive: true,
