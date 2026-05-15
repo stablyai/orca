@@ -221,7 +221,9 @@ describe('mergeWorktree', () => {
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
-      lastActivityAt: 1000
+      lastActivityAt: 1000,
+      workspaceStatus: 'in-review',
+      diffComments: []
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
@@ -243,7 +245,9 @@ describe('mergeWorktree', () => {
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
-      lastActivityAt: 1000
+      lastActivityAt: 1000,
+      workspaceStatus: 'in-review',
+      diffComments: []
     })
   })
 
@@ -258,6 +262,7 @@ describe('mergeWorktree', () => {
     expect(result.isPinned).toBe(false)
     expect(result.sortOrder).toBe(0)
     expect(result.lastActivityAt).toBe(0)
+    expect(result.workspaceStatus).toBe('in-progress')
   })
 
   it('strips refs/heads/ prefix from branch for display name', () => {
