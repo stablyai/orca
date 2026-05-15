@@ -737,6 +737,29 @@ function mergeMigrationUnsupportedPtyEntries(
   return [...byPtyId.values()]
 }
 
+function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter((entry): entry is MigrationUnsupportedPtyEntry => {
+    if (!entry || typeof entry !== 'object') {
+      return false
+    }
+    const candidate = entry as Partial<MigrationUnsupportedPtyEntry>
+    return (
+      typeof candidate.ptyId === 'string' &&
+      candidate.ptyId.length > 0 &&
+      (candidate.worktreeId === undefined || typeof candidate.worktreeId === 'string') &&
+      (candidate.tabId === undefined || typeof candidate.tabId === 'string') &&
+      (candidate.leafId === undefined || isTerminalLeafId(candidate.leafId)) &&
+      (candidate.paneKey === undefined || typeof candidate.paneKey === 'string') &&
+      candidate.reason === 'legacy-numeric-pane-key' &&
+      (candidate.source === 'local' || candidate.source === 'ssh') &&
+      Number.isFinite(candidate.updatedAt)
+    )
+  })
+}
+
 function migrationUnsupportedEntriesEqual(
   left: MigrationUnsupportedPtyEntry[],
   right: MigrationUnsupportedPtyEntry[]
@@ -1068,6 +1091,9 @@ export class Store {
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
+            parsed.migrationUnsupportedPtyEntries
+          ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
           automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
           onboarding: (() => {

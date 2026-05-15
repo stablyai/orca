@@ -154,8 +154,8 @@ export type TerminalSlice = {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
       activate?: boolean
-      /** Pre-allocated tab id (e.g. minted by main for CLI-spawned terminals
-       *  whose PTY env already carries `paneKey=`${tabId}:1``). Falls back to
+      /** Pre-allocated tab id (e.g. minted by main for CLI/runtime-spawned
+       *  terminals whose PTY env already carries a pane key). Falls back to
        *  minting a fresh id when omitted or when the supplied id collides
        *  with an existing tab anywhere in the store (tabIds form the global
        *  paneKey namespace, so collisions are checked across all worktrees). */
@@ -367,7 +367,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // boundary at useIpcEvents.ts spreads `id` whenever `tabId !== undefined`,
       // so a stray `''` or whitespace-only value from a future producer would
       // otherwise be persisted as a real tab id and break paneKey routing
-      // (`${tabId}:1` would shape as `:1` or `<spaces>:1`).
+      // (`${tabId}:${leafId}` would inherit the bad tab segment).
       const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
       const hintedId = trimmedHint.length > 0 ? trimmedHint : undefined
       const idCollides =

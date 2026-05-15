@@ -37,6 +37,7 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { track } from '@/lib/telemetry'
 import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
+import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -278,7 +279,7 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onCreateTerminal(
-        ({ requestId, worktreeId, command, title, ptyId, activate, tabId }) => {
+        ({ requestId, worktreeId, command, title, ptyId, activate, tabId, leafId }) => {
           try {
             if (isRuntimeEnvironmentActive()) {
               if (requestId) {
@@ -310,17 +311,15 @@ export function useIpcEvents(): void {
                   initialPtyId: ptyId,
                   activate: shouldActivate,
                   // Why: tabId hint comes from CLI-spawned PTYs whose env
-                  // already has paneKey=`${tabId}:1` baked in. Adopting the
-                  // tab under the same id keeps hook-event attribution working;
-                  // see docs/cli-terminal-hook-pane-key.md.
+                  // already has the pane key baked in. Adopting the tab under
+                  // the same id keeps hook-event attribution working.
                   ...(tabId !== undefined ? { id: tabId } : {})
                 }))
               : store.createTab(worktreeId)
             // Why: when an existing tab already owns this ptyId, we reuse it instead of
-            // minting a new one — but the PTY env already carries `paneKey=`${tabId}:1``
-            // from main. If the existing tab id doesn't match the hint, hook attribution
-            // will degrade for that PTY's lifetime. Warn so this is visible during
-            // development; in production this surfaces via `agent_hook_unattributed`.
+            // minting a new one — but the PTY env already carries a paneKey from main.
+            // If the existing tab id doesn't match the hint, hook attribution degrades
+            // for that PTY's lifetime. Warn so this is visible during development.
             if (tabId !== undefined && tab.id !== tabId) {
               console.warn(
                 `[onCreateTerminal] tabId hint ${tabId} ignored for ptyId ${ptyId}; existing tab ${tab.id} adopted instead (hook attribution will degrade for this terminal)`
@@ -333,6 +332,12 @@ export function useIpcEvents(): void {
             }
             if (title) {
               store.setTabCustomTitle(tab.id, title)
+            }
+            if (leafId && ptyId) {
+              // Why: CLI/runtime-spawned PTYs emit hook events before a hidden
+              // tab mounts TerminalPane, so the adopted UUID leaf must exist
+              // in layout state for paneKey validation to accept them.
+              store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
             }
             if (command) {
               store.queueTabStartupCommand(tab.id, { command })

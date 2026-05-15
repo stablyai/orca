@@ -13,10 +13,23 @@ const mockCreateTab = vi.fn()
 const mockSetTabCustomTitle = vi.fn()
 const mockUpdateTabPtyId = vi.fn()
 const mockCloseTab = vi.fn()
+const mockSetTabLayout = vi.fn()
 const mockRegisterEagerPtyBuffer = vi.fn()
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+function expectStablePaneSpawn(): string {
+  const spawnArgs = mockSpawn.mock.calls[0]?.[0]
+  const paneKey = spawnArgs?.env?.ORCA_PANE_KEY
+  const leafId = spawnArgs?.leafId
+  expect(typeof paneKey).toBe('string')
+  expect(typeof leafId).toBe('string')
+  expect(leafId).toMatch(UUID_RE)
+  expect(paneKey).toBe(`tab-1:${leafId}`)
+  return paneKey
+}
 
 const state = {
   settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
@@ -28,6 +41,7 @@ const state = {
   setTabCustomTitle: mockSetTabCustomTitle,
   updateTabPtyId: mockUpdateTabPtyId,
   closeTab: mockCloseTab,
+  setTabLayout: mockSetTabLayout,
   clearTabPtyId: vi.fn(),
   setAgentStatus: vi.fn()
 }
@@ -108,15 +122,24 @@ describe('launchAgentBackgroundSession', () => {
       expect.objectContaining({
         cwd: '/repo/worktree',
         command: "claude 'run the automation'",
-        env: {
-          ORCA_PANE_KEY: 'tab-1:1',
+        env: expect.objectContaining({
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1'
-        },
+        }),
         connectionId: null,
         worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
+        tabId: 'tab-1'
+      })
+    )
+    const paneKey = expectStablePaneSpawn()
+    const leafId = paneKey.slice('tab-1:'.length)
+    expect(mockSetTabLayout).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        root: { type: 'leaf', leafId },
+        activeLeafId: leafId,
+        ptyIdsByLeafId: { [leafId]: 'pty-1' },
+        titlesByLeafId: { [leafId]: 'Nightly audit' }
       })
     )
     expect(mockSetTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Nightly audit')
@@ -141,8 +164,9 @@ describe('launchAgentBackgroundSession', () => {
     const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
     dataSidecar('\x1b]9999;{"state":"done","prompt":"ok","agentType":"codex"}\x07')
 
+    const paneKey = expectStablePaneSpawn()
     expect(state.setAgentStatus).toHaveBeenCalledWith(
-      'tab-1:1',
+      paneKey,
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' }),
       undefined
     )
@@ -219,6 +243,18 @@ describe('launchAgentBackgroundSession', () => {
     })
 
     expect(mockSpawn).not.toHaveBeenCalled()
+    const params = mockRuntimeEnvironmentCall.mock.calls[0]?.[0]?.params
+    const paneKey = params?.env?.ORCA_PANE_KEY
+    const leafId = typeof paneKey === 'string' ? paneKey.slice('tab-1:'.length) : ''
+    expect(leafId).toMatch(UUID_RE)
+    expect(mockSetTabLayout).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        root: { type: 'leaf', leafId },
+        activeLeafId: leafId,
+        ptyIdsByLeafId: { [leafId]: 'remote:env-1@@terminal-1' }
+      })
+    )
     expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.create',
@@ -226,10 +262,12 @@ describe('launchAgentBackgroundSession', () => {
         worktree: 'wt-1',
         command: "claude 'run the automation'",
         env: expect.objectContaining({
-          ORCA_PANE_KEY: 'tab-1:1',
+          ORCA_PANE_KEY: `tab-1:${leafId}`,
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1'
         }),
+        tabId: 'tab-1',
+        leafId,
         focus: false
       }),
       timeoutMs: 15_000

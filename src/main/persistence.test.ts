@@ -202,6 +202,24 @@ describe('Store', () => {
     expect(repos[0].gitUsername).toBe('testuser')
   })
 
+  it('drops malformed migration-unsupported PTY entries on load', async () => {
+    const repo = makeRepo()
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [repo],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      migrationUnsupportedPtyEntries: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getRepos()).toHaveLength(1)
+  })
+
   it('can clear an automation back to the project default branch', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ worktreeBaseRef: 'origin/main' }))

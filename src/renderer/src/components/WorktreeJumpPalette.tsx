@@ -212,6 +212,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // tab.ptyId is a wake-hint sessionId, not a liveness signal) and the jump
   // palette dot would lie green even though the sidebar dot is correctly grey.
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
@@ -294,7 +295,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             agentStatusByPaneKey,
             runtimePaneTitlesByTabId,
             ptyIdsByTabId,
-            migrationUnsupportedByPtyId
+            migrationUnsupportedByPtyId,
+            terminalLayoutsByTabId
           )
         : switchableWorktreesForRows,
     [
@@ -306,7 +308,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       agentStatusByPaneKey,
       runtimePaneTitlesByTabId,
       ptyIdsByTabId,
-      migrationUnsupportedByPtyId
+      migrationUnsupportedByPtyId,
+      terminalLayoutsByTabId
     ]
   )
 
@@ -324,7 +327,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       agentStatusByPaneKey,
       runtimePaneTitlesByTabId,
       ptyIdsByTabId,
-      migrationUnsupportedByPtyId
+      migrationUnsupportedByPtyId,
+      terminalLayoutsByTabId
     )
   }, [
     allWorktrees,
@@ -333,7 +337,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
-    migrationUnsupportedByPtyId
+    migrationUnsupportedByPtyId,
+    terminalLayoutsByTabId
   ])
 
   // Why: browser rows need worktree lookups for repo badge colors, and browser

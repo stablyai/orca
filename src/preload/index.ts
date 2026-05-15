@@ -2056,6 +2056,7 @@ const api = {
           ptyId?: string
           activate?: boolean
           tabId?: string
+          leafId?: string
         }
       ) => callback(data)
       ipcRenderer.on('ui:createTerminal', listener)
