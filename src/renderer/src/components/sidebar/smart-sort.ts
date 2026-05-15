@@ -1,4 +1,4 @@
-import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
+import type { Worktree, Repo, TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
 import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry
@@ -125,7 +125,8 @@ export function sortWorktreesSmart(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   ptyIdsByTabId: Record<string, string[]>,
-  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 ): Worktree[] {
   // Why: `tabHasLivePty` (over `ptyIdsByTabId`) is the source of truth for
   // liveness — slept terminals retain `tab.ptyId` as a wake hint, so reading
@@ -150,7 +151,8 @@ export function sortWorktreesSmart(
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
     now,
-    migrationUnsupportedByPtyId
+    migrationUnsupportedByPtyId,
+    terminalLayoutsByTabId
   )
 
   return [...worktrees].sort(buildWorktreeComparator('smart', repoMap, now, attentionByWorktree))

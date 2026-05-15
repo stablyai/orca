@@ -863,7 +863,8 @@ const WorktreeList = React.memo(function WorktreeList() {
             state.runtimePaneTitlesByTabId,
             state.ptyIdsByTabId,
             now,
-            state.migrationUnsupportedByPtyId
+            state.migrationUnsupportedByPtyId,
+            state.terminalLayoutsByTabId
           )
         : new Map<string, WorktreeAttention>()
     lastAttentionByWorktreeRef.current = sortBy === 'smart' ? attentionByWorktree : null

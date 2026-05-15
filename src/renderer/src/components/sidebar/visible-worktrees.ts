@@ -192,7 +192,8 @@ export function getVisibleWorktreeIds(): string[] {
       state.agentStatusByPaneKey,
       state.runtimePaneTitlesByTabId,
       state.ptyIdsByTabId,
-      state.migrationUnsupportedByPtyId
+      state.migrationUnsupportedByPtyId,
+      state.terminalLayoutsByTabId
     ).map((w) => w.id)
   } else {
     // Why empty map: non-smart branches don't read attentionByWorktree, but
