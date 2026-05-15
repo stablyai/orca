@@ -1228,7 +1228,8 @@ export default function TerminalPane({
               // Why: same restore intent has two transports. Remote-runtime PTYs
               // must call the environment RPC; local PTYs use the Electron IPC
               // handler. Both resolve active-mobile and held-no-subscriber states.
-              const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
+              const transport = paneTransportsRef.current.get(pane.id)
+              const id = transport?.getPtyId()
               if (!id) {
                 return
               }

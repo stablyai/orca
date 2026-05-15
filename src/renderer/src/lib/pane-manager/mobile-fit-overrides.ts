@@ -115,9 +115,36 @@ export function unbindPane(paneId: number, tabId?: string): void {
 export function hydrateOverrides(
   overrides: { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
 ): void {
+  const previous = new Map(overridesByPtyId)
   overridesByPtyId.clear()
   for (const o of overrides) {
     overridesByPtyId.set(o.ptyId, { mode: o.mode, cols: o.cols, rows: o.rows })
+  }
+
+  // Why: hydration can complete after terminal panes mount during reload. Notify
+  // readers so held phone-fit overlays appear even without a fresh IPC event.
+  for (const [ptyId, override] of overridesByPtyId) {
+    const prior = previous.get(ptyId) ?? null
+    notifyChange({
+      ptyId,
+      mode: 'mobile-fit',
+      cols: override.cols,
+      rows: override.rows,
+      priorCols: prior?.cols ?? null,
+      priorRows: prior?.rows ?? null
+    })
+    previous.delete(ptyId)
+  }
+
+  for (const [ptyId, prior] of previous) {
+    notifyChange({
+      ptyId,
+      mode: 'desktop-fit',
+      cols: 0,
+      rows: 0,
+      priorCols: prior.cols,
+      priorRows: prior.rows
+    })
   }
 }
 

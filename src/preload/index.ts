@@ -33,7 +33,11 @@ import type {
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+import type {
+  RuntimeStatus,
+  RuntimeSyncWindowGraph,
+  RuntimeTerminalDriverState
+} from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type {
@@ -2353,6 +2357,12 @@ const api = {
     getTerminalFitOverrides: (): Promise<
       { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
+    getTerminalDrivers: (): Promise<
+      {
+        ptyId: string
+        driver: RuntimeTerminalDriverState
+      }[]
+    > => ipcRenderer.invoke('runtime:getTerminalDrivers'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
       ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
     onTerminalFitOverrideChanged: (
@@ -2371,16 +2381,13 @@ const api = {
       return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
     },
     onTerminalDriverChanged: (
-      callback: (event: {
-        ptyId: string
-        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
-      }) => void
+      callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
         data: {
           ptyId: string
-          driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
+          driver: RuntimeTerminalDriverState
         }
       ) => callback(data)
       ipcRenderer.on('runtime:terminalDriverChanged', listener)

@@ -72,6 +72,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
+  RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult
 } from '../../shared/runtime-types'
@@ -498,10 +499,7 @@ export type MobileNotificationEvent = {
 //   - `mobile{clientId}`: a mobile client is the active driver; desktop
 //      input/resize are dropped server-side and the lock banner is mounted.
 //      `clientId` is the most recent mobile actor for this PTY.
-export type DriverState =
-  | { kind: 'idle' }
-  | { kind: 'desktop' }
-  | { kind: 'mobile'; clientId: string }
+export type DriverState = RuntimeTerminalDriverState
 
 // Why: per-PTY layout target — what the PTY *should* be at right now.
 // `desktop` ⇒ runs at the desktop renderer's pane geometry; mobile passive
@@ -2151,6 +2149,10 @@ export class OrcaRuntimeService {
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
     }
     return result
+  }
+
+  getAllTerminalDrivers(): Map<string, DriverState> {
+    return new Map(this.currentDriver)
   }
 
   onClientDisconnected(clientId: string): void {

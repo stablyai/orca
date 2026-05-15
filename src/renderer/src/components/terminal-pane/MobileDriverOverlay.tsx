@@ -1,11 +1,12 @@
-import { useEffect, useState, type CSSProperties, type ReactElement } from 'react'
+import { useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
 
 type Props = {
   driver: DriverState
   hasFitOverride: boolean
-  onAction: () => void
+  onAction: () => void | Promise<void>
   /** Identifier class on the rendered root, used by e2e selectors. */
   rootClassName?: string
 }
@@ -24,6 +25,15 @@ export function MobileDriverOverlay({
   const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
 
   const [collapsed, setCollapsed] = useState(false)
+  const [actionPending, setActionPending] = useState(false)
+  const mountedRef = useRef(true)
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false
+    },
+    []
+  )
 
   // Re-expand on driver flip so a new mobile actor is loud, not silent.
   useEffect(() => {
@@ -37,6 +47,20 @@ export function MobileDriverOverlay({
     return null
   }
 
+  const handleAction = async (): Promise<void> => {
+    if (actionPending) {
+      return
+    }
+    setActionPending(true)
+    try {
+      await onAction()
+    } finally {
+      if (mountedRef.current) {
+        setActionPending(false)
+      }
+    }
+  }
+
   if (isHeldAtPhoneFit) {
     return (
       <LoudOverlay
@@ -44,7 +68,8 @@ export function MobileDriverOverlay({
         title="This terminal is sized for your mobile app"
         body="The session is still being held at the dimensions your phone last reported. Restore to use it on your desktop."
         actionLabel="Restore desktop size"
-        onAction={onAction}
+        actionPending={actionPending}
+        onAction={handleAction}
         tone="held"
         rootClassName={rootClassName}
       />
@@ -54,7 +79,8 @@ export function MobileDriverOverlay({
   if (collapsed) {
     return (
       <LockChip
-        onAction={onAction}
+        actionPending={actionPending}
+        onAction={handleAction}
         onExpand={() => setCollapsed(false)}
         rootClassName={rootClassName}
       />
@@ -67,7 +93,8 @@ export function MobileDriverOverlay({
       title="Your keyboard is paused"
       body="Output below is being typed from your phone. Take back to resume typing on the desktop, or collapse to keep watching."
       actionLabel="Take back"
-      onAction={onAction}
+      actionPending={actionPending}
+      onAction={handleAction}
       onCollapse={() => setCollapsed(true)}
       tone="driving"
       rootClassName={rootClassName}
@@ -80,7 +107,8 @@ type LoudOverlayProps = {
   title: string
   body: string
   actionLabel: string
-  onAction: () => void
+  actionPending: boolean
+  onAction: () => void | Promise<void>
   onCollapse?: () => void
   tone: 'driving' | 'held'
   rootClassName?: string
@@ -91,40 +119,56 @@ function LoudOverlay({
   title,
   body,
   actionLabel,
+  actionPending,
   onAction,
   onCollapse,
   tone,
   rootClassName
 }: LoudOverlayProps): ReactElement {
-  const eyebrowStyle: CSSProperties = {
-    ...EYEBROW_BASE_STYLE,
-    color: tone === 'driving' ? 'var(--color-primary)' : 'var(--color-destructive)'
-  }
+  const titleId = useId()
+  const bodyId = useId()
   return (
     <div
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="mobile-driver-overlay-title"
-      style={OVERLAY_STYLE}
-      className={rootClassName}
+      role="dialog"
+      aria-live="assertive"
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      className={cn(
+        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm',
+        rootClassName
+      )}
     >
-      <div className="shadow-2xl" style={CARD_STYLE}>
-        <div style={eyebrowStyle}>
+      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
+        <div
+          className={cn(
+            'flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em]',
+            tone === 'driving' ? 'text-foreground' : 'text-muted-foreground'
+          )}
+        >
           <span aria-hidden="true">●</span>
           <span>{eyebrow}</span>
         </div>
-        <div id="mobile-driver-overlay-title" style={TITLE_STYLE}>
+        <div id={titleId} className="text-base font-semibold leading-tight">
           {title}
         </div>
-        <div style={BODY_STYLE}>{body}</div>
-        <div style={BUTTON_ROW_STYLE}>
+        <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
+          {body}
+        </div>
+        <div className="mt-1 flex justify-end gap-2">
           {onCollapse && (
             <Button type="button" variant="outline" size="sm" onClick={onCollapse}>
               Collapse
             </Button>
           )}
-          {/* autoFocus required by role="alertdialog" so screen-reader + keyboard users land on the action. */}
-          <Button type="button" variant="default" size="sm" onClick={onAction} autoFocus>
+          {/* autoFocus lands keyboard users on the recovery action when the pane-local lock appears. */}
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={onAction}
+            disabled={actionPending}
+            autoFocus
+          >
             {actionLabel}
           </Button>
         </div>
@@ -134,104 +178,33 @@ function LoudOverlay({
 }
 
 type ChipProps = {
-  onAction: () => void
+  actionPending: boolean
+  onAction: () => void | Promise<void>
   onExpand: () => void
   rootClassName?: string
 }
 
-function LockChip({ onAction, onExpand, rootClassName }: ChipProps): ReactElement {
+function LockChip({ actionPending, onAction, onExpand, rootClassName }: ChipProps): ReactElement {
   return (
-    <div className={`shadow-lg ${rootClassName ?? ''}`.trim()} style={CHIP_WRAP_STYLE}>
-      <span aria-hidden="true" style={CHIP_DOT_STYLE} />
+    <div
+      className={cn(
+        'absolute right-2 top-2 z-50 flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium text-card-foreground shadow-xs',
+        rootClassName
+      )}
+    >
+      <span aria-hidden="true" className="size-2 rounded-full bg-foreground" />
       <Button
         type="button"
         variant="ghost"
         size="xs"
         className="px-1 font-medium"
         onClick={onExpand}
-        title="Show details"
       >
         Mobile driving
       </Button>
-      <Button type="button" variant="default" size="xs" onClick={onAction}>
+      <Button type="button" variant="default" size="xs" onClick={onAction} disabled={actionPending}>
         Take back
       </Button>
     </div>
   )
-}
-
-// Hoisted: stable across renders, no per-instance variation.
-const OVERLAY_STYLE: CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  zIndex: 10,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '24px',
-  background: 'rgba(8, 10, 14, 0.72)',
-  backdropFilter: 'blur(2px)',
-  WebkitBackdropFilter: 'blur(2px)'
-}
-
-const CARD_STYLE: CSSProperties = {
-  maxWidth: '480px',
-  width: '100%',
-  background: 'var(--color-card)',
-  color: 'var(--color-card-foreground)',
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-lg)',
-  padding: '24px 24px 20px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px'
-}
-
-const EYEBROW_BASE_STYLE: CSSProperties = {
-  fontSize: '11px',
-  fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px'
-}
-
-const TITLE_STYLE: CSSProperties = { fontSize: '17px', fontWeight: 600, lineHeight: 1.25 }
-
-const BODY_STYLE: CSSProperties = {
-  fontSize: '13px',
-  lineHeight: 1.45,
-  color: 'var(--color-muted-foreground)'
-}
-
-const BUTTON_ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  gap: '8px',
-  marginTop: '4px',
-  justifyContent: 'flex-end'
-}
-
-const CHIP_WRAP_STYLE: CSSProperties = {
-  position: 'absolute',
-  top: '8px',
-  right: '8px',
-  zIndex: 10,
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  padding: '4px 8px 4px 10px',
-  background: 'var(--color-card)',
-  color: 'var(--color-card-foreground)',
-  border: '1px solid var(--color-border)',
-  borderRadius: '999px',
-  fontSize: '12px',
-  fontWeight: 500
-}
-
-const CHIP_DOT_STYLE: CSSProperties = {
-  width: '8px',
-  height: '8px',
-  borderRadius: '50%',
-  background: 'var(--color-primary)'
 }
