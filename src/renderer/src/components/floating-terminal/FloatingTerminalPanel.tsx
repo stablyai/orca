@@ -1,10 +1,8 @@
 /* eslint-disable max-lines -- Why: the floating surface owns both terminal chrome and local notes tabs until the shared floating shell is extracted. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Minimize2, Minus } from 'lucide-react'
 import TabBar from '@/components/tab-bar/TabBar'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -23,6 +21,7 @@ import type { TerminalTab } from '../../../../shared/types'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 import ProjectNotesTabContent from '@/components/notes/ProjectNotesTabContent'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
+import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
   clampFloatingTerminalBounds,
@@ -361,7 +360,7 @@ export function FloatingTerminalPanel({
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div
-          className="flex h-9 shrink-0 items-center border-b border-border bg-[var(--bg-titlebar,var(--card))]"
+          className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
           onPointerDown={handleDragStart}
           onPointerMove={handleDragMove}
           onPointerUp={handleDragEnd}
@@ -401,47 +400,11 @@ export function FloatingTerminalPanel({
               tabBarOrder={tabBarOrder}
             />
           </div>
-          <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={
-                    maximized ? 'Restore floating terminal' : 'Maximize floating terminal'
-                  }
-                  aria-pressed={maximized}
-                  onClick={toggleMaximized}
-                >
-                  {maximized ? (
-                    <Minimize2 className="size-3.5" />
-                  ) : (
-                    <Maximize2 className="size-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {maximized ? 'Restore' : 'Maximize'}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Minimize floating terminal"
-                  onClick={() => onOpenChange(false)}
-                >
-                  <Minus className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                Minimize
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <FloatingTerminalWindowControls
+            maximized={maximized}
+            onToggleMaximized={toggleMaximized}
+            onMinimize={() => onOpenChange(false)}
+          />
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
