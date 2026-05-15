@@ -83,9 +83,8 @@ function formatScanNoticeMessage(errors: { repoId: string; message: string }[]):
   if (errors.length === 0) {
     return null
   }
-  return errors.length === 1
-    ? 'Some workspaces could not be checked. Refresh to try again.'
-    : `${errors.length} repositories could not be checked. Refresh to try again.`
+  const projectLabel = errors.length === 1 ? 'project' : 'projects'
+  return `Could not check ${errors.length} ${projectLabel}. This list may be incomplete. Refresh to try again.`
 }
 
 function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate): boolean {
@@ -422,6 +421,9 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 {initialLoading ? <SkeletonRows /> : null}
                 {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
                   <EmptyState title="No old workspaces to clean up." />
+                ) : null}
+                {!loading && scan && candidates.length === 0 && scanNoticeMessage ? (
+                  <EmptyState title="No old workspaces found in checked projects." />
                 ) : null}
                 {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
                   <EmptyState
