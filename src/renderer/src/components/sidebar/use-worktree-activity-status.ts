@@ -19,14 +19,15 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const ptyIdsForWorktree = useAppStore(
     useShallow((s) => selectLivePtyIdsForWorktree(s, worktreeId))
   )
-  const { hasPermission, hasLiveDone, hasRetainedDone } = useAppStore(
+  const { hasPermission, hasLiveWorking, hasLiveDone, hasRetainedDone } = useAppStore(
     useShallow((s) => {
       // Touch the epoch so this selector re-runs when a fresh hook entry
       // crosses the stale boundary.
       void s.agentStatusEpoch
       const wtTabs = s.tabsByWorktree[worktreeId] ?? EMPTY_TABS
       let perm = false
-      let live = false
+      let working = false
+      let done = false
       if (wtTabs.length > 0) {
         const tabIds = new Set(wtTabs.map((tab) => tab.id))
         const now = Date.now()
@@ -44,8 +45,10 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
           }
           if (entry.state === 'blocked' || entry.state === 'waiting') {
             perm = true
+          } else if (entry.state === 'working') {
+            working = true
           } else if (entry.state === 'done') {
-            live = true
+            done = true
           }
         }
       }
@@ -57,13 +60,18 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
           break
         }
       }
-      return { hasPermission: perm, hasLiveDone: live, hasRetainedDone: retained }
+      return {
+        hasPermission: perm,
+        hasLiveWorking: working,
+        hasLiveDone: done,
+        hasRetainedDone: retained
+      }
     })
   )
 
   // Why: compact and detailed cards need the same status-dot semantics:
   // runtime liveness gates title-derived states, then explicit agent rows can
-  // promote permission/done so the dot matches visible agent state.
+  // promote working/permission/done so the dot matches visible agent state.
   return useMemo(
     () =>
       resolveWorktreeStatus({
@@ -72,6 +80,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         ptyIdsByTabId: ptyIdsForWorktree,
         runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
         hasPermission,
+        hasLiveWorking,
         hasLiveDone,
         hasRetainedDone
       }),
@@ -81,6 +90,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       ptyIdsForWorktree,
       runtimePaneTitlesForWorktree,
       hasPermission,
+      hasLiveWorking,
       hasLiveDone,
       hasRetainedDone
     ]
