@@ -43,3 +43,25 @@ export function parsePaneKey(
   }
   return { tabId, leafId, stablePaneId: leafId }
 }
+
+export function parseLegacyNumericPaneKey(
+  paneKey: unknown
+): { tabId: string; numericPaneId: string; paneKey: string } | null {
+  if (typeof paneKey !== 'string' || paneKey.length > 256) {
+    return null
+  }
+  const trimmed = paneKey.trim()
+  const delimiter = trimmed.indexOf(':')
+  if (
+    delimiter <= 0 ||
+    delimiter !== trimmed.lastIndexOf(':') ||
+    delimiter === trimmed.length - 1
+  ) {
+    return null
+  }
+  const numericPaneId = trimmed.slice(delimiter + 1)
+  if (!/^\d+$/.test(numericPaneId)) {
+    return null
+  }
+  return { tabId: trimmed.slice(0, delimiter), numericPaneId, paneKey: trimmed }
+}

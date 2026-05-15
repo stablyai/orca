@@ -39,7 +39,7 @@ import {
   type AgentStatusState,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 
 export type { AgentHookSource }
 
@@ -215,6 +215,7 @@ export class AgentHookServer {
   // Why: hydrated last-status rows are useful UI continuity, but they are not
   // evidence of live agent work in this main-process runtime.
   private runtimeObservedStatusPaneKeys = new Set<string>()
+  private legacyPaneKeyAliases = new Map<string, string>()
   // Why: full path to the on-disk last-status cache. Set in start() from
   // userDataPath. Null when the server runs without a userDataPath (e.g.
   // tests that skip the userDataPath option) — in that case, persistence is
@@ -305,6 +306,35 @@ export class AgentHookServer {
     }
   }
 
+  registerPaneKeyAlias(legacyPaneKey: string, stablePaneKey: string): void {
+    const legacy = parseLegacyNumericPaneKey(legacyPaneKey)
+    const stable = parsePaneKey(stablePaneKey)
+    if (!legacy || !stable || legacy.tabId !== stable.tabId) {
+      return
+    }
+    this.legacyPaneKeyAliases.set(legacy.paneKey, stablePaneKey)
+  }
+
+  private resolvePaneKeyAlias(paneKey: string): string {
+    return this.legacyPaneKeyAliases.get(paneKey) ?? paneKey
+  }
+
+  private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
+    if (typeof body !== 'object' || body === null) {
+      return body
+    }
+    const record = body as Record<string, unknown>
+    const rawPaneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
+    const stablePaneKey = this.legacyPaneKeyAliases.get(rawPaneKey)
+    if (!stablePaneKey) {
+      return body
+    }
+    // Why: pre-migration live shells keep posting their immutable numeric
+    // ORCA_PANE_KEY. The reattach path proves the UUID leaf once, then this
+    // bridge lets hook caches and renderer state use only the stable key.
+    return { ...record, paneKey: stablePaneKey }
+  }
+
   /** Ingest a payload that arrived over the relay JSON-RPC channel rather
    *  than the local HTTP server. `connectionId` is the SshChannelMultiplexer
    *  identity Orca holds (the wire envelope carries connectionId: null and
@@ -341,7 +371,7 @@ export class AgentHookServer {
     // Why: match the listener's HTTP path — `normalizeHookPayload` trims and
     // length-caps paneKey before caching, so the cache key here must follow
     // the same rule or remote-vs-local events for the same pane would diverge.
-    const paneKey = envelope.paneKey.trim()
+    const paneKey = this.resolvePaneKeyAlias(envelope.paneKey.trim())
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
@@ -460,7 +490,12 @@ export class AgentHookServer {
         }
 
         trackEmptyPaneKeyHook(body)
-        const normalized = normalizeHookPayload(this.state, source, body, this.env)
+        const normalized = normalizeHookPayload(
+          this.state,
+          source,
+          this.normalizeHookBodyPaneKeyAlias(body),
+          this.env
+        )
         if (normalized) {
           const enriched = this.attachStatusTiming(normalized)
           this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
@@ -527,6 +562,7 @@ export class AgentHookServer {
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
+    this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
   }
@@ -539,24 +575,32 @@ export class AgentHookServer {
    *  lands. clearPaneState (which wipes all three caches) is the right shape
    *  only for PTY-teardown. */
   dropStatusEntry(paneKey: string): void {
-    if (!this.state.lastStatusByPaneKey.has(paneKey)) {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    if (!this.state.lastStatusByPaneKey.has(resolvedPaneKey)) {
       return
     }
-    this.state.lastStatusByPaneKey.delete(paneKey)
-    this.runtimeObservedStatusPaneKeys.delete(paneKey)
+    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
   }
 
   clearPaneState(paneKey: string): void {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
     // Why: only schedule a write when we actually evicted a status entry —
     // dropping prompt/tool caches for a pane that never produced a hook
     // event does not change the on-disk file, and skipping the write avoids
     // re-stat'ing on every dead-pane teardown.
-    const hadStatus = this.state.lastStatusByPaneKey.has(paneKey)
-    clearPaneCacheState(this.state, paneKey)
+    const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
+    clearPaneCacheState(this.state, resolvedPaneKey)
+    for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {
+      if (stablePaneKey === resolvedPaneKey) {
+        this.legacyPaneKeyAliases.delete(legacyPaneKey)
+        clearPaneCacheState(this.state, legacyPaneKey)
+      }
+    }
     if (hadStatus) {
-      this.runtimeObservedStatusPaneKeys.delete(paneKey)
+      this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
@@ -655,9 +699,14 @@ export class AgentHookServer {
     // tick.
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, rawEntry] of Object.entries(entries)) {
-      const entry = sanitizeHydratedEntry(paneKey, rawEntry)
+      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      const rawResolvedEntry =
+        resolvedPaneKey === paneKey || typeof rawEntry !== 'object' || rawEntry === null
+          ? rawEntry
+          : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
+      const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
-        this.state.lastStatusByPaneKey.set(paneKey, entry)
+        this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
         hydrated += 1
       } else {
         dropped += 1

@@ -62,6 +62,7 @@ import {
   setMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
 } from './agent-hooks/migration-unsupported-pty-state'
+import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
@@ -420,12 +421,11 @@ function collectMigrationUnsupportedPtyEntries(args: {
   leafIdByInputLeafId: Map<string, string>
   sourceForPtyId: (ptyId: string) => 'local' | 'ssh'
 }): MigrationUnsupportedPtyEntry[] {
-  const entries: MigrationUnsupportedPtyEntry[] = []
   const worktreeId = findWorktreeIdForTab(args.session, args.tabId)
   const tab = worktreeId
     ? args.session.tabsByWorktree?.[worktreeId]?.find((entry) => entry.id === args.tabId)
     : undefined
-  const pushEntry = (ptyId: string, leafId: string): void => {
+  const registerLegacyAlias = (inputLeafId: string, leafId: string): void => {
     if (!isTerminalLeafId(leafId)) {
       return
     }
@@ -435,41 +435,46 @@ function collectMigrationUnsupportedPtyEntries(args: {
     } catch {
       return
     }
-    entries.push({
-      ptyId,
-      ...(worktreeId ? { worktreeId } : {}),
-      tabId: args.tabId,
-      leafId,
-      paneKey,
-      reason: 'legacy-numeric-pane-key',
-      source: args.sourceForPtyId(ptyId),
-      updatedAt: Date.now()
-    })
+    const numeric = /^(?:pane:)?(\d+)$/.exec(inputLeafId)?.[1]
+    if (!numeric) {
+      return
+    }
+    // Why: persisted PaneManager ids are 1-based. A zero-based alias in split
+    // layouts would make tab:1 ambiguous and can route the first pane to the second.
+    agentHookServer.registerPaneKeyAlias(`${args.tabId}:${numeric}`, paneKey)
   }
-  for (const [inputLeafId, ptyId] of Object.entries(args.inputLayout.ptyIdsByLeafId ?? {})) {
+  let registeredAlias = false
+  const inputLeafIds = new Set([
+    ...collectLayoutLeafIdsInOrder(args.inputLayout.root),
+    ...Object.keys(args.inputLayout.ptyIdsByLeafId ?? {})
+  ])
+  for (const inputLeafId of inputLeafIds) {
     if (isTerminalLeafId(inputLeafId)) {
       continue
     }
     const leafId = args.leafIdByInputLeafId.get(inputLeafId)
     if (leafId) {
-      pushEntry(ptyId, leafId)
+      registerLegacyAlias(inputLeafId, leafId)
+      registeredAlias = true
     }
   }
   if (
-    entries.length === 0 &&
+    !registeredAlias &&
     tab?.ptyId &&
     Object.keys(args.inputLayout.ptyIdsByLeafId ?? {}).length === 0
   ) {
     const fallbackLeafId =
       args.normalizedLayout.activeLeafId ?? firstLayoutLeafId(args.normalizedLayout.root)
-    if (fallbackLeafId) {
-      // Why: older single-pane sessions can reattach from tab.ptyId only, with
-      // no leaf binding to migrate. Their live shell env can still hold the
-      // legacy pane key, so surface the restart-required row for that PTY.
-      pushEntry(tab.ptyId, fallbackLeafId)
+    if (fallbackLeafId && isTerminalLeafId(fallbackLeafId)) {
+      const paneKey = makePaneKey(args.tabId, fallbackLeafId)
+      agentHookServer.registerPaneKeyAlias(`${args.tabId}:0`, paneKey)
+      agentHookServer.registerPaneKeyAlias(`${args.tabId}:1`, paneKey)
     }
   }
-  return entries
+  // Why: legacy numeric pane keys are now bridged by aliases instead of
+  // persisted as restart-required rows. Existing saved rows are pruned during
+  // normalizePersistedPaneIdentityState.
+  return []
 }
 
 function normalizeTerminalLayoutSnapshotForPersistence(
@@ -697,10 +702,7 @@ function normalizePersistedPaneIdentityState(state: PersistedState): {
     normalizedSession.leafIdByInputLeafIdByTabId,
     normalizedSession.leafIdByPtyIdByTabId
   )
-  const mergedMigrationUnsupportedEntries = mergeMigrationUnsupportedPtyEntries([
-    ...(state.migrationUnsupportedPtyEntries ?? []),
-    ...normalizedSession.migrationUnsupportedEntries
-  ])
+  const mergedMigrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
   const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
     state.migrationUnsupportedPtyEntries ?? [],
     mergedMigrationUnsupportedEntries
@@ -722,19 +724,6 @@ function normalizePersistedPaneIdentityState(state: PersistedState): {
     changed: true,
     migrationUnsupportedEntries: mergedMigrationUnsupportedEntries
   }
-}
-
-function mergeMigrationUnsupportedPtyEntries(
-  entries: MigrationUnsupportedPtyEntry[]
-): MigrationUnsupportedPtyEntry[] {
-  const byPtyId = new Map<string, MigrationUnsupportedPtyEntry>()
-  for (const entry of entries) {
-    const existing = byPtyId.get(entry.ptyId)
-    if (!existing || existing.updatedAt <= entry.updatedAt) {
-      byPtyId.set(entry.ptyId, entry)
-    }
-  }
-  return [...byPtyId.values()]
 }
 
 function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {

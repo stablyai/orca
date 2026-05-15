@@ -21,6 +21,7 @@ const {
   openCodeClearPtyMock,
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
+  registerPaneKeyAliasMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
@@ -50,6 +51,7 @@ const {
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
   clearAgentHookPaneStateMock: vi.fn(),
+  registerPaneKeyAliasMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
   piClearPtyMock: vi.fn(),
   trackMock: vi.fn(),
@@ -101,7 +103,8 @@ vi.mock('../opencode/hook-service', () => ({
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
     buildPtyEnv: buildAgentHookEnvMock,
-    clearPaneState: clearAgentHookPaneStateMock
+    clearPaneState: clearAgentHookPaneStateMock,
+    registerPaneKeyAlias: registerPaneKeyAliasMock
   }
 }))
 
@@ -206,6 +209,7 @@ describe('registerPtyHandlers', () => {
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
+    registerPaneKeyAliasMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()
@@ -2326,9 +2330,10 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('registers only validated stable pane keys in the local PTY memory registry', async () => {
+  it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {
     registerPtyHandlers(mainWindow as never)
     const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
     await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
@@ -2340,22 +2345,13 @@ describe('registerPtyHandlers', () => {
 
     expect(registerPtyMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        paneKey: null
+        paneKey: stablePaneKey
       })
     )
-    expect(setMigrationUnsupportedPtyMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ptyId: expect.any(String),
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId,
-        paneKey: makePaneKey('tab-1', leafId),
-        reason: 'legacy-numeric-pane-key',
-        source: 'local'
-      })
-    )
+    expect(registerPaneKeyAliasMock).toHaveBeenCalledWith('tab-1:0', stablePaneKey)
+    expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
+    expect(setMigrationUnsupportedPtyMock).not.toHaveBeenCalled()
 
-    const stablePaneKey = makePaneKey('tab-1', leafId)
     await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,

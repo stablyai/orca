@@ -290,6 +290,50 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('maps registered legacy numeric HTTP pane keys to stable pane keys', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      server.registerPaneKeyAlias('tab-1:0', PANE)
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody(
+            {
+              hook_event_name: 'UserPromptSubmit',
+              prompt: 'legacy pane'
+            },
+            { paneKey: 'tab-1:0' }
+          )
+        )
+      })
+      expect(response.status).toBe(204)
+
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'legacy pane',
+            agentType: 'claude'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
   it('tracks hook posts with an empty paneKey before dropping them', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -2127,6 +2171,48 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('hydrates registered legacy numeric pane keys as stable pane status entries', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab-1:0': {
+            paneKey: 'tab-1:0',
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: null,
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'working', prompt: 'legacy cached', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    server.registerPaneKeyAlias('tab-1:0', PANE)
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          state: 'working',
+          prompt: 'legacy cached',
+          agentType: 'claude'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('drops a hydrate entry whose tabId disagrees with the paneKey prefix', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     writeFileSync(
@@ -2316,6 +2402,40 @@ describe('AgentHookServer ingestRemote', () => {
     )
     expect(listener).not.toHaveBeenCalled()
     expect(server.getStatusSnapshot()).toEqual([])
+  })
+
+  it('maps registered legacy numeric relay pane keys to stable pane keys', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.registerPaneKeyAlias('tab-1:0', PANE)
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: 'tab-1:0', tabId: 'tab-1', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: 'conn-1',
+        payload
+      })
+    )
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        state: 'working',
+        prompt: 'p'
+      })
+    ])
   })
 
   it('drops remote relay envelopes whose tabId disagrees with the paneKey tab', () => {

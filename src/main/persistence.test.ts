@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync, existsSync
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Repo, TerminalTab, WorkspaceSessionState } from '../shared/types'
-import { isTerminalLeafId } from '../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 
 // Shared mutable state so the electron mock can reference a per-test directory
@@ -1222,6 +1222,311 @@ describe('Store', () => {
     expect(isTerminalLeafId(leafId)).toBe(true)
     expect(layout.ptyIdsByLeafId).toEqual({ [leafId]: 'remote-pty' })
     expect(store.getSshRemotePtyLeases('ssh-1')[0].leafId).toBe(leafId)
+  })
+
+  it('hydrates legacy numeric agent status cache through the pane identity migration', async () => {
+    const agentHooksDir = join(testState.dir, 'agent-hooks')
+    mkdirSync(agentHooksDir, { recursive: true })
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'local-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: 'pane:1' },
+            activeLeafId: 'pane:1',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { 'pane:1': 'local-pty' }
+          }
+        }
+      }
+    })
+    writeFileSync(
+      join(agentHooksDir, 'last-status.json'),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab1:1': {
+            paneKey: 'tab1:1',
+            tabId: 'tab1',
+            worktreeId: 'wt1',
+            connectionId: null,
+            receivedAt: Date.now(),
+            stateStartedAt: Date.now() - 1000,
+            payload: { state: 'working', prompt: 'legacy numeric prompt', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf-8'
+    )
+
+    const store = await createStore()
+    const { agentHookServer } = await import('./agent-hooks/server')
+    await agentHookServer.start({ env: 'production', userDataPath: testState.dir })
+    try {
+      const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+      const leafId = layout.root?.type === 'leaf' ? layout.root.leafId : null
+      if (leafId === null) {
+        throw new Error('Expected remapped leaf id')
+      }
+      const stablePaneKey = makePaneKey('tab1', leafId)
+      expect(agentHookServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: stablePaneKey,
+          tabId: 'tab1',
+          worktreeId: 'wt1',
+          state: 'working',
+          prompt: 'legacy numeric prompt',
+          agentType: 'claude'
+        })
+      ])
+    } finally {
+      agentHookServer.stop()
+    }
+  })
+
+  it('hydrates split-pane legacy numeric agent status rows onto the matching remapped leaves', async () => {
+    const agentHooksDir = join(testState.dir, 'agent-hooks')
+    mkdirSync(agentHooksDir, { recursive: true })
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'local-pty-1'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: 'pane:1' },
+              second: { type: 'leaf', leafId: 'pane:2' },
+              sizes: [50, 50]
+            },
+            activeLeafId: 'pane:1',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { 'pane:1': 'local-pty-1', 'pane:2': 'local-pty-2' }
+          }
+        }
+      }
+    })
+    const now = Date.now()
+    writeFileSync(
+      join(agentHooksDir, 'last-status.json'),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab1:1': {
+            paneKey: 'tab1:1',
+            tabId: 'tab1',
+            worktreeId: 'wt1',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 2000,
+            payload: { state: 'working', prompt: 'left legacy prompt', agentType: 'claude' }
+          },
+          'tab1:2': {
+            paneKey: 'tab1:2',
+            tabId: 'tab1',
+            worktreeId: 'wt1',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 1000,
+            payload: { state: 'blocked', prompt: 'right legacy prompt', agentType: 'codex' }
+          }
+        }
+      }),
+      'utf-8'
+    )
+
+    const store = await createStore()
+    const { agentHookServer } = await import('./agent-hooks/server')
+    await agentHookServer.start({ env: 'production', userDataPath: testState.dir })
+    try {
+      const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+      const firstLeafId =
+        layout.root?.type === 'split' && layout.root.first.type === 'leaf'
+          ? layout.root.first.leafId
+          : null
+      const secondLeafId =
+        layout.root?.type === 'split' && layout.root.second.type === 'leaf'
+          ? layout.root.second.leafId
+          : null
+      if (firstLeafId === null || secondLeafId === null) {
+        throw new Error('Expected remapped split leaves')
+      }
+      const byPaneKey = new Map(
+        agentHookServer.getStatusSnapshot().map((entry) => [entry.paneKey, entry])
+      )
+
+      expect(byPaneKey.get(makePaneKey('tab1', firstLeafId))).toEqual(
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'left legacy prompt',
+          agentType: 'claude'
+        })
+      )
+      expect(byPaneKey.get(makePaneKey('tab1', secondLeafId))).toEqual(
+        expect.objectContaining({
+          state: 'blocked',
+          prompt: 'right legacy prompt',
+          agentType: 'codex'
+        })
+      )
+    } finally {
+      agentHookServer.stop()
+    }
+  })
+
+  it('hydrates split-pane legacy status rows even when PTY leaf bindings are absent', async () => {
+    const agentHooksDir = join(testState.dir, 'agent-hooks')
+    mkdirSync(agentHooksDir, { recursive: true })
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'local-pty-1'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: 'pane:1' },
+              second: { type: 'leaf', leafId: 'pane:2' },
+              sizes: [50, 50]
+            },
+            activeLeafId: 'pane:2',
+            expandedLeafId: null
+          }
+        }
+      }
+    })
+    const now = Date.now()
+    writeFileSync(
+      join(agentHooksDir, 'last-status.json'),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab1:1': {
+            paneKey: 'tab1:1',
+            tabId: 'tab1',
+            worktreeId: 'wt1',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 2000,
+            payload: { state: 'working', prompt: 'left no binding', agentType: 'claude' }
+          },
+          'tab1:2': {
+            paneKey: 'tab1:2',
+            tabId: 'tab1',
+            worktreeId: 'wt1',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 1000,
+            payload: { state: 'blocked', prompt: 'right no binding', agentType: 'codex' }
+          }
+        }
+      }),
+      'utf-8'
+    )
+
+    const store = await createStore()
+    const { agentHookServer } = await import('./agent-hooks/server')
+    await agentHookServer.start({ env: 'production', userDataPath: testState.dir })
+    try {
+      const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+      const firstLeafId =
+        layout.root?.type === 'split' && layout.root.first.type === 'leaf'
+          ? layout.root.first.leafId
+          : null
+      const secondLeafId =
+        layout.root?.type === 'split' && layout.root.second.type === 'leaf'
+          ? layout.root.second.leafId
+          : null
+      if (firstLeafId === null || secondLeafId === null) {
+        throw new Error('Expected remapped split leaves')
+      }
+      const byPaneKey = new Map(
+        agentHookServer.getStatusSnapshot().map((entry) => [entry.paneKey, entry])
+      )
+
+      expect(byPaneKey.get(makePaneKey('tab1', firstLeafId))).toEqual(
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'left no binding',
+          agentType: 'claude'
+        })
+      )
+      expect(byPaneKey.get(makePaneKey('tab1', secondLeafId))).toEqual(
+        expect.objectContaining({
+          state: 'blocked',
+          prompt: 'right no binding',
+          agentType: 'codex'
+        })
+      )
+    } finally {
+      agentHookServer.stop()
+    }
   })
 
   it('remaps legacy SSH lease leaf ids by PTY when the layout is already normalized', async () => {
