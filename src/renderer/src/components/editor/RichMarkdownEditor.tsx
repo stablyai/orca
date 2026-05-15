@@ -45,6 +45,8 @@ import type {
   RichMarkdownContextMenuCommand,
   RichMarkdownContextMenuCommandPayload
 } from '../../../../shared/rich-markdown-context-menu'
+import { buildMarkdownTableOfContents, type MarkdownTocItem } from './markdown-table-of-contents'
+import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -57,6 +59,8 @@ type RichMarkdownEditorProps = {
   onSave: (content: string) => void
   onOpenDocLink?: (target: string) => void
   markdownDocuments?: MarkdownDocument[]
+  showTableOfContents?: boolean
+  onCloseTableOfContents?: () => void
   // Why: front-matter is stripped from the rich editor's content but we still
   // want it visible to the user. It renders between the toolbar and the editor
   // surface so the formatting toolbar stays at the top of the pane.
@@ -154,6 +158,10 @@ function isRichMarkdownContextCommandTarget(
   )
 }
 
+function flattenMarkdownTocItems(items: MarkdownTocItem[]): MarkdownTocItem[] {
+  return items.flatMap((item) => [item, ...flattenMarkdownTocItems(item.children)])
+}
+
 export default function RichMarkdownEditor({
   fileId,
   content,
@@ -165,6 +173,8 @@ export default function RichMarkdownEditor({
   onSave,
   onOpenDocLink,
   markdownDocuments,
+  showTableOfContents = false,
+  onCloseTableOfContents,
   headerSlot
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -215,6 +225,11 @@ export default function RichMarkdownEditor({
   const [isEditingLink, setIsEditingLink] = useState(false)
   const isEditingLinkRef = useRef(false)
   const typedEmptyOrderedListMarkerRef = useRef(false)
+  const tableOfContentsItems = useMemo(() => buildMarkdownTableOfContents(content), [content])
+  const flatTableOfContentsItems = useMemo(
+    () => flattenMarkdownTocItems(tableOfContentsItems),
+    [tableOfContentsItems]
+  )
 
   // Why: assigning callback refs during render keeps them current before any
   // ProseMirror handler reads them, avoiding the one-render stale window that
@@ -566,6 +581,25 @@ export default function RichMarkdownEditor({
     openSearchRef.current = openSearch
   }, [openSearch])
 
+  const navigateToTableOfContentsItem = useCallback(
+    (id: string): void => {
+      const target = flatTableOfContentsItems.find((item) => item.id === id)
+      const container = scrollContainerRef.current
+      if (!target || !container) {
+        return
+      }
+      const sameTitleIndex = flatTableOfContentsItems
+        .filter((item) => item.title === target.title)
+        .findIndex((item) => item.id === target.id)
+      const matchingHeadings = Array.from(
+        container.querySelectorAll<HTMLElement>('h1, h2, h3')
+      ).filter((candidate) => candidate.textContent?.trim() === target.title)
+      const heading = matchingHeadings.at(Math.max(0, sameTitleIndex))
+      heading?.scrollIntoView({ block: 'center' })
+    },
+    [flatTableOfContentsItems]
+  )
+
   const filteredSlashCommands = useMemo(() => {
     const query = slashMenu?.query.trim().toLowerCase() ?? ''
     if (!query) {
@@ -712,75 +746,84 @@ export default function RichMarkdownEditor({
   }, [content, editor, fileId])
 
   return (
-    <div
-      ref={rootRef}
-      className="rich-markdown-editor-shell"
-      style={{ '--editor-font-zoom-level': editorFontZoomLevel } as React.CSSProperties}
-    >
-      <RichMarkdownToolbar
-        editor={editor}
-        onToggleLink={toggleLinkFromToolbar}
-        onImagePick={handleLocalImagePick}
-      />
-      {headerSlot}
-      {/* Why: wrap scroll area + search bar in a relative container so the
-          search bar overlays the content (Monaco-style) instead of occupying
-          layout space and shifting the document down when opened. */}
-      <div className="relative min-h-0 flex-1">
-        <div
-          ref={scrollContainerRef}
-          className="h-full overflow-auto scrollbar-editor"
-          onMouseDown={(event) => {
-            if (!shouldFocusEmptyEditorFromSurfaceClick(event, editorRef.current)) {
-              return
-            }
-            // Why: native contenteditable only places the caret on actual line
-            // boxes; an empty note should still focus when the user clicks any
-            // blank part of the document surface.
-            event.preventDefault()
-            editorRef.current?.commands.focus('start')
-          }}
-        >
-          <EditorContent editor={editor} />
-        </div>
-        <RichMarkdownSearchBar
-          activeMatchIndex={activeMatchIndex}
-          isOpen={isSearchOpen}
-          matchCount={matchCount}
-          onClose={closeSearch}
-          onMoveToMatch={moveToMatch}
-          onQueryChange={setSearchQuery}
-          query={searchQuery}
-          searchInputRef={searchInputRef}
-        />
-      </div>
-      {linkBubble ? (
-        <RichMarkdownLinkBubble
-          linkBubble={linkBubble}
-          isEditing={isEditingLink}
-          onSave={handleLinkSave}
-          onRemove={handleLinkRemove}
-          onEditStart={() => setIsEditingLink(true)}
-          onEditCancel={handleLinkEditCancel}
-          onOpen={handleLinkOpen}
-        />
-      ) : null}
-      {slashMenu && filteredSlashCommands.length > 0 ? (
-        <RichMarkdownSlashMenu
+    <div className="rich-markdown-editor-layout">
+      <div
+        ref={rootRef}
+        className="rich-markdown-editor-shell"
+        style={{ '--editor-font-zoom-level': editorFontZoomLevel } as React.CSSProperties}
+      >
+        <RichMarkdownToolbar
           editor={editor}
-          slashMenu={slashMenu}
-          filteredCommands={filteredSlashCommands}
-          selectedIndex={selectedCommandIndex}
+          onToggleLink={toggleLinkFromToolbar}
           onImagePick={handleLocalImagePick}
         />
-      ) : null}
-      {docLinkMenu ? (
-        <RichMarkdownDocLinkMenu
-          editor={editor}
-          menu={docLinkMenu}
-          rows={docLinkRows}
-          totalMatches={docLinkTotalMatches}
-          selectedIndex={selectedDocLinkIndex}
+        {headerSlot}
+        {/* Why: wrap scroll area + search bar in a relative container so the
+          search bar overlays the content (Monaco-style) instead of occupying
+          layout space and shifting the document down when opened. */}
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={scrollContainerRef}
+            className="h-full overflow-auto scrollbar-editor"
+            onMouseDown={(event) => {
+              if (!shouldFocusEmptyEditorFromSurfaceClick(event, editorRef.current)) {
+                return
+              }
+              // Why: native contenteditable only places the caret on actual line
+              // boxes; an empty note should still focus when the user clicks any
+              // blank part of the document surface.
+              event.preventDefault()
+              editorRef.current?.commands.focus('start')
+            }}
+          >
+            <EditorContent editor={editor} />
+          </div>
+          <RichMarkdownSearchBar
+            activeMatchIndex={activeMatchIndex}
+            isOpen={isSearchOpen}
+            matchCount={matchCount}
+            onClose={closeSearch}
+            onMoveToMatch={moveToMatch}
+            onQueryChange={setSearchQuery}
+            query={searchQuery}
+            searchInputRef={searchInputRef}
+          />
+        </div>
+        {linkBubble ? (
+          <RichMarkdownLinkBubble
+            linkBubble={linkBubble}
+            isEditing={isEditingLink}
+            onSave={handleLinkSave}
+            onRemove={handleLinkRemove}
+            onEditStart={() => setIsEditingLink(true)}
+            onEditCancel={handleLinkEditCancel}
+            onOpen={handleLinkOpen}
+          />
+        ) : null}
+        {slashMenu && filteredSlashCommands.length > 0 ? (
+          <RichMarkdownSlashMenu
+            editor={editor}
+            slashMenu={slashMenu}
+            filteredCommands={filteredSlashCommands}
+            selectedIndex={selectedCommandIndex}
+            onImagePick={handleLocalImagePick}
+          />
+        ) : null}
+        {docLinkMenu ? (
+          <RichMarkdownDocLinkMenu
+            editor={editor}
+            menu={docLinkMenu}
+            rows={docLinkRows}
+            totalMatches={docLinkTotalMatches}
+            selectedIndex={selectedDocLinkIndex}
+          />
+        ) : null}
+      </div>
+      {showTableOfContents ? (
+        <MarkdownTableOfContentsPanel
+          items={tableOfContentsItems}
+          onClose={onCloseTableOfContents ?? (() => {})}
+          onNavigate={navigateToTableOfContentsItem}
         />
       ) : null}
     </div>

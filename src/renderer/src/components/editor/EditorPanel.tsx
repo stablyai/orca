@@ -5,7 +5,16 @@ across multiple components. Autosave now lives in a smaller headless controller
 so hidden editor UI no longer participates in shutdown. */
 import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import * as monaco from 'monaco-editor'
-import { Columns2, Copy, Eye, ExternalLink, FileText, MoreHorizontal, Rows2 } from 'lucide-react'
+import {
+  Columns2,
+  Copy,
+  Eye,
+  ExternalLink,
+  FileText,
+  ListTree,
+  MoreHorizontal,
+  Rows2
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getConnectionId } from '@/lib/connection-context'
@@ -211,6 +220,7 @@ function EditorPanelInner({
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
+  const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [renameDialogFileId, setRenameDialogFileId] = useState<string | null>(null)
   const renameDialogFile = renameDialogFileId
     ? openFiles.find((f) => f.id === renameDialogFileId)
@@ -1129,6 +1139,9 @@ function EditorPanelInner({
     : hasViewModeToggle
       ? mdViewMode
       : 'edit'
+  const isMarkdownTableOfContentsDisabled = hasViewModeToggle && mdViewMode === 'source'
+  const canShowMarkdownTableOfContents =
+    isMarkdown && (hasViewModeToggle || activeFile.mode === 'markdown-preview')
   const canShowMarkdownPreview = canOpenMarkdownPreview({
     language: resolvedLanguage,
     mode: activeFile.mode,
@@ -1312,6 +1325,33 @@ function EditorPanelInner({
               }
             />
           )}
+          {canShowMarkdownTableOfContents && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={`p-1 rounded hover:bg-accent hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground ${
+                      showMarkdownTableOfContents && !isMarkdownTableOfContentsDisabled
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground'
+                    }`}
+                    onClick={() => setShowMarkdownTableOfContents((shown) => !shown)}
+                    disabled={isMarkdownTableOfContentsDisabled}
+                    aria-label="Table of Contents"
+                    aria-pressed={showMarkdownTableOfContents}
+                  >
+                    <ListTree size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  {isMarkdownTableOfContentsDisabled
+                    ? 'Table of Contents is available in rich or preview mode'
+                    : 'Table of Contents'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {hasViewModeToggle && isMarkdown && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1366,6 +1406,8 @@ function EditorPanelInner({
           handleDirtyStateHint={handleDirtyStateHint}
           handleSave={handleSave}
           reloadFileContent={reloadFileContent}
+          showMarkdownTableOfContents={showMarkdownTableOfContents}
+          onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
         />
       </Suspense>
       <UntitledFileRenameDialog

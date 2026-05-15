@@ -5,8 +5,20 @@
   display: flex;
   min-height: 0;
   height: 100%;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
   background: var(--editor-surface);
+}
+
+.rich-markdown-editor-layout {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  min-width: 0;
+  background: var(--editor-surface);
+  container-type: inline-size;
 }
 
 .rich-markdown-editor-toolbar {

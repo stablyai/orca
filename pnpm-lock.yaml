@@ -136,6 +136,9 @@ importers:
       electron-updater:
         specifier: ^6.8.3
         version: 6.8.3
+      entities:
+        specifier: ^6.0.1
+        version: 6.0.1
       github-slugger:
         specifier: ^2.0.0
         version: 2.0.0
@@ -154,6 +157,9 @@ importers:
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.5)
+      mdast-util-to-string:
+        specifier: ^4.0.0
+        version: 4.0.0
       mermaid:
         specifier: ^11.15.0
         version: 11.15.0
@@ -205,6 +211,9 @@ importers:
       remark-math:
         specifier: ^6.0.0
         version: 6.0.0
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
       shadcn:
         specifier: ^4.7.0
         version: 4.7.0(@types/node@25.6.0)(typescript@5.9.3)
@@ -229,6 +238,9 @@ importers:
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       ws:
         specifier: ^8.20.0
         version: 8.20.0
