@@ -2,10 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
-import {
-  getRuntimeFileReadScope,
-  readRuntimeFileContent
-} from '@/runtime/runtime-file-client'
+import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
   getRuntimeGitBranchDiff,
@@ -18,8 +15,8 @@ import {
   useEditorPanelExternalContentEvents,
   usePruneClosedEditorContent
 } from './useEditorPanelExternalContentEvents'
+import { useEditorPanelFileLoadRetry } from './useEditorPanelFileLoadRetry'
 
-const FILE_LOAD_RETRY_DELAYS_MS = [250, 1000, 2500]
 const inFlightFileReads = new Map<string, Promise<FileContent>>()
 const inFlightDiffReads = new Map<string, Promise<DiffContent>>()
 
@@ -38,16 +35,6 @@ type UseEditorPanelContentStateResult = {
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
   reloadFileContent: (file: OpenFile) => void
-}
-
-function shouldRetryFileLoadError(message: string): boolean {
-  const lower = message.toLowerCase()
-  return (
-    !lower.includes('access denied') &&
-    !lower.includes('enoent') &&
-    !lower.includes('no such file') &&
-    !lower.includes('file too large')
-  )
 }
 
 function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
@@ -259,44 +246,14 @@ export function useEditorPanelContentState({
     }
   }, [activeFile?.id, isChangesMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeFileLoadRetryId = activeFile?.id ?? null
-  const activeFileLoadError = activeFileLoadRetryId
-    ? fileContents[activeFileLoadRetryId]?.loadError
-    : undefined
-  useEffect(() => {
-    if (
-      !activeFileLoadRetryId ||
-      !activeFileLoadError ||
-      !shouldRetryFileLoadError(activeFileLoadError)
-    ) {
-      return
-    }
-    const retryCount = fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] ?? 0
-    if (retryCount >= FILE_LOAD_RETRY_DELAYS_MS.length) {
-      return
-    }
-    const delayMs = FILE_LOAD_RETRY_DELAYS_MS[retryCount] ?? FILE_LOAD_RETRY_DELAYS_MS[0]
-    fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] = retryCount + 1
-    const timeoutId = window.setTimeout(() => {
-      const currentFile = openFilesRef.current.find((file) => file.id === activeFileLoadRetryId)
-      if (
-        !currentFile ||
-        (currentFile.mode !== 'edit' && currentFile.mode !== 'markdown-preview')
-      ) {
-        return
-      }
-      setFileContents((prev) => {
-        if (prev[currentFile.id]?.loadError !== activeFileLoadError) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[currentFile.id]
-        return next
-      })
-      void loadFileContent(currentFile.filePath, currentFile.id, currentFile.worktreeId)
-    }, delayMs)
-    return () => window.clearTimeout(timeoutId)
-  }, [activeFileLoadRetryId, activeFileLoadError, loadFileContent])
+  useEditorPanelFileLoadRetry({
+    activeFile,
+    fileContents,
+    fileLoadRetryAttemptsRef,
+    loadFileContent,
+    openFilesRef,
+    setFileContents
+  })
 
   const changesStatusEntries = activeFile?.worktreeId
     ? gitStatusByWorktree[activeFile.worktreeId]
