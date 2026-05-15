@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import { buildWorktreeAgentRows } from './useWorktreeAgentRows'
+import {
+  buildWorktreeAgentRows,
+  selectMigrationUnsupportedEntriesForWorktree
+} from './useWorktreeAgentRows'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
@@ -106,5 +110,36 @@ describe('buildWorktreeAgentRows', () => {
     const done = rows.find((r) => r.paneKey === PANE_KEY_2)
     expect(working?.state).toBe('idle')
     expect(done?.state).toBe('done')
+  })
+})
+
+describe('selectMigrationUnsupportedEntriesForWorktree', () => {
+  it('returns raw migration records so shallow selectors can cache snapshots', () => {
+    const unsupported: MigrationUnsupportedPtyEntry = {
+      ptyId: 'pty-1',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: '44444444-4444-4444-8444-444444444444',
+      paneKey: makePaneKey('tab-1', '44444444-4444-4444-8444-444444444444'),
+      reason: 'legacy-numeric-pane-key',
+      source: 'local',
+      updatedAt: 1000
+    }
+    const state = {
+      tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: { 'pty-1': unsupported },
+      retainedAgentsByPaneKey: {}
+    }
+
+    const first = selectMigrationUnsupportedEntriesForWorktree(state, 'wt-1')
+    const second = selectMigrationUnsupportedEntriesForWorktree(state, 'wt-1')
+
+    // Why: the Electron black-screen regression came from creating converted
+    // AgentStatusEntry objects inside the Zustand selector. Returning store
+    // records preserves element identity for useShallow.
+    expect(first).toEqual([unsupported])
+    expect(second).toEqual([unsupported])
+    expect(first[0]).toBe(second[0])
   })
 })

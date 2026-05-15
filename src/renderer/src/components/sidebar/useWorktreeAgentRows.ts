@@ -4,10 +4,12 @@ import { useAppStore } from '@/store'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
@@ -18,7 +20,75 @@ import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsuppor
 // unnecessary re-renders — defeating the purpose of the narrow selector.
 const EMPTY_TABS: TerminalTab[] = []
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
+const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
+
+type WorktreeAgentRowsState = Pick<
+  AppState,
+  | 'agentStatusByPaneKey'
+  | 'migrationUnsupportedByPtyId'
+  | 'retainedAgentsByPaneKey'
+  | 'tabsByWorktree'
+>
+
+export function selectLiveAgentStatusEntriesForWorktree(
+  state: WorktreeAgentRowsState,
+  worktreeId: string
+): AgentStatusEntry[] {
+  const wtTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
+  if (wtTabs.length === 0) {
+    return EMPTY_LIVE_ENTRIES
+  }
+  const tabIds = new Set(wtTabs.map((t) => t.id))
+  const out: AgentStatusEntry[] = []
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    const parsed = parsePaneKey(paneKey)
+    if (!parsed) {
+      continue
+    }
+    if (!tabIds.has(parsed.tabId)) {
+      continue
+    }
+    out.push(entry)
+  }
+  return out.length > 0 ? out : EMPTY_LIVE_ENTRIES
+}
+
+export function selectMigrationUnsupportedEntriesForWorktree(
+  state: WorktreeAgentRowsState,
+  worktreeId: string
+): MigrationUnsupportedPtyEntry[] {
+  const wtTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
+  if (wtTabs.length === 0) {
+    return EMPTY_MIGRATION_UNSUPPORTED_ENTRIES
+  }
+  const tabIds = new Set(wtTabs.map((t) => t.id))
+  const out: MigrationUnsupportedPtyEntry[] = []
+  for (const unsupported of Object.values(state.migrationUnsupportedByPtyId)) {
+    if (!unsupported.paneKey) {
+      continue
+    }
+    const parsed = parsePaneKey(unsupported.paneKey)
+    if (!parsed || !tabIds.has(parsed.tabId)) {
+      continue
+    }
+    out.push(unsupported)
+  }
+  return out.length > 0 ? out : EMPTY_MIGRATION_UNSUPPORTED_ENTRIES
+}
+
+export function selectRetainedAgentEntriesForWorktree(
+  state: WorktreeAgentRowsState,
+  worktreeId: string
+): RetainedAgentEntry[] {
+  const out: RetainedAgentEntry[] = []
+  for (const ra of Object.values(state.retainedAgentsByPaneKey)) {
+    if (ra.worktreeId === worktreeId) {
+      out.push(ra)
+    }
+  }
+  return out.length > 0 ? out : EMPTY_RETAINED
+}
 
 export function buildWorktreeAgentRows(args: {
   tabs: TerminalTab[]
@@ -97,48 +167,17 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
   // every on-screen card re-render on any agent-status update anywhere —
   // O(worktrees²) render amplification. Pre-filtering here means the card
   // only re-renders when something relevant to THIS worktree changes.
-  const entries = useAppStore(
-    useShallow((s) => {
-      const wtTabs = s.tabsByWorktree[worktreeId] ?? EMPTY_TABS
-      if (wtTabs.length === 0) {
-        return EMPTY_LIVE_ENTRIES
-      }
-      const tabIds = new Set(wtTabs.map((t) => t.id))
-      const out: AgentStatusEntry[] = []
-      for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-        const parsed = parsePaneKey(paneKey)
-        if (!parsed) {
-          continue
-        }
-        if (!tabIds.has(parsed.tabId)) {
-          continue
-        }
-        out.push(entry)
-      }
-      for (const unsupported of Object.values(s.migrationUnsupportedByPtyId ?? {})) {
-        const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-        if (!entry) {
-          continue
-        }
-        const parsed = parsePaneKey(entry.paneKey)
-        if (!parsed || !tabIds.has(parsed.tabId)) {
-          continue
-        }
-        out.push(entry)
-      }
-      return out.length > 0 ? out : EMPTY_LIVE_ENTRIES
-    })
+  const liveEntries = useAppStore(
+    useShallow((s) => selectLiveAgentStatusEntriesForWorktree(s, worktreeId))
+  )
+  // Why: keep the store selector limited to stable raw records. Converting
+  // migration entries creates fresh objects with Date.now(), which breaks
+  // useSyncExternalStore's cached-snapshot contract and can blank Electron.
+  const migrationUnsupported = useAppStore(
+    useShallow((s) => selectMigrationUnsupportedEntriesForWorktree(s, worktreeId))
   )
   const retained = useAppStore(
-    useShallow((s) => {
-      const out: RetainedAgentEntry[] = []
-      for (const ra of Object.values(s.retainedAgentsByPaneKey)) {
-        if (ra.worktreeId === worktreeId) {
-          out.push(ra)
-        }
-      }
-      return out.length > 0 ? out : EMPTY_RETAINED
-    })
+    useShallow((s) => selectRetainedAgentEntriesForWorktree(s, worktreeId))
   )
   // Why: agentStatusEpoch is included in the dependency array (but not in the
   // computation itself) so the memo recomputes when freshness boundaries
@@ -150,12 +189,23 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
     // Why: Date.now() is read inside the memo (not as a dep) so stale-decay
     // recalculates whenever agentStatusEpoch ticks — same pattern as
     // useDashboardData.
+    const now = Date.now()
+    const entries =
+      migrationUnsupported.length > 0
+        ? [
+            ...liveEntries,
+            ...migrationUnsupported.flatMap((unsupported) => {
+              const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+              return entry ? [entry] : []
+            })
+          ]
+        : liveEntries
     return buildWorktreeAgentRows({
       tabs: tabs ?? [],
       entries,
       retained,
-      now: Date.now()
+      now
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, entries, retained, agentStatusEpoch])
+  }, [tabs, liveEntries, migrationUnsupported, retained, agentStatusEpoch])
 }
