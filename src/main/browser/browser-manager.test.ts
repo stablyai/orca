@@ -1108,6 +1108,75 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:hardReloadBrowserPage')
   })
 
+  it('forwards browser guest Ctrl+Tab keydown and Ctrl release', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 407,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const beforeInputHandler = guestOnMock.mock.calls
+      .filter(([event]) => event === 'before-input-event')
+      .at(-1)?.[1] as
+      | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
+      | undefined
+
+    const keyDownPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: keyDownPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'Tab',
+        key: 'Tab',
+        meta: false,
+        control: true,
+        alt: false,
+        shift: false
+      }
+    )
+    const keyUpPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: keyUpPreventDefault },
+      {
+        type: 'keyUp',
+        code: 'ControlRight',
+        key: 'Control',
+        meta: false,
+        control: false,
+        alt: false,
+        shift: false
+      }
+    )
+
+    expect(keyDownPreventDefault).toHaveBeenCalledTimes(1)
+    expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')
+  })
+
   it('cleans up prior guest listeners before re-registering the same tab', () => {
     const guest = {
       id: 808,

@@ -32,6 +32,14 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
+function isCtrlTabSwitchKey(input: Electron.Input): boolean {
+  return input.code === 'Tab' && input.control && !input.meta && !input.alt
+}
+
+function isControlKeyRelease(input: Electron.Input): boolean {
+  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
+}
+
 // Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
 // center of the CSS-centered content sits at ~18 CSS px from the top.
 // At zoom factor z that becomes 18·z window px.  Traffic lights are
@@ -468,6 +476,7 @@ export function createMainWindow(
     }
   })
 
+  let ctrlTabSwitching = false
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
       event.preventDefault()
@@ -476,6 +485,25 @@ export function createMainWindow(
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
+      return
+    }
+
+    if (isCtrlTabSwitchKey(input)) {
+      // Why: Ctrl+Tab is a held-key interaction. Route both press and release
+      // through IPC so renderer keyup suppression from preventDefault cannot
+      // leave the switcher overlay stranded.
+      event.preventDefault()
+      if (input.type === 'keyDown') {
+        ctrlTabSwitching = true
+        mainWindow.webContents.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+      }
+      return
+    }
+
+    if (ctrlTabSwitching && isControlKeyRelease(input)) {
+      event.preventDefault()
+      ctrlTabSwitching = false
+      mainWindow.webContents.send('ui:ctrlTabKeyUp')
       return
     }
 

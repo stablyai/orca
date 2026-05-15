@@ -22,6 +22,14 @@ function isTerminalTabSwitchChord(input: Electron.Input): boolean {
   )
 }
 
+function isCtrlTabSwitchKey(input: Electron.Input): boolean {
+  return input.code === 'Tab' && input.control && !input.meta && !input.alt
+}
+
+function isControlKeyRelease(input: Electron.Input): boolean {
+  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
+}
+
 export function setupGuestContextMenu(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -221,7 +229,26 @@ export function setupGuestShortcutForwarding(args: {
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
 }): () => void {
   const { browserTabId, guest, resolveRenderer, shouldForwardDictationShortcut } = args
+  let ctrlTabSwitching = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
+    if (isCtrlTabSwitchKey(input)) {
+      event.preventDefault()
+      if (input.type === 'keyDown') {
+        ctrlTabSwitching = true
+        const renderer = resolveRenderer(browserTabId)
+        renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+      }
+      return
+    }
+
+    if (ctrlTabSwitching && isControlKeyRelease(input)) {
+      event.preventDefault()
+      ctrlTabSwitching = false
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyUp')
+      return
+    }
+
     if (input.type !== 'keyDown') {
       return
     }

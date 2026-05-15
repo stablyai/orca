@@ -695,6 +695,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchTerminalTab: () => noopUnsubscribe,
+    onCtrlTabKeyDown: () => noopUnsubscribe,
+    onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
     onExportPdfRequested: () => noopUnsubscribe,
