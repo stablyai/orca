@@ -81,6 +81,8 @@ type ZoomState = {
   offsetY: number
 }
 
+type FrameLayer = 0 | 1
+
 type PinchGesture = {
   distance: number
   scale: number
@@ -131,6 +133,7 @@ export function MobileBrowserPane({
   const [error, setError] = useState<string | null>(null)
   const [rotated, setRotated] = useState(false)
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM)
+  const [visibleFrameLayer, setVisibleFrameLayer] = useState<FrameLayer>(0)
   const [layout, setLayout] = useState<ViewportLayout | null>(null)
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   const streamGenerationRef = useRef(0)
@@ -138,7 +141,9 @@ export function MobileBrowserPane({
   const frameMetadataRef = useRef<BrowserScreencastFrameMetadata | null>(null)
   const frameUriRef = useRef<string | null>(null)
   const frameMountedRef = useRef(false)
-  const browserImageRef = useRef<Image | null>(null)
+  const browserImageRefs = useRef<[Image | null, Image | null]>([null, null])
+  const pendingFrameLayerRef = useRef<FrameLayer | null>(null)
+  const visibleFrameLayerRef = useRef<FrameLayer>(0)
   const readyRef = useRef(false)
   const busyRef = useRef(false)
   const lastAppliedFrameAtRef = useRef(0)
@@ -222,11 +227,18 @@ export function MobileBrowserPane({
       setFrameMetadata(frame.metadata)
     }
     const nextFrameUri = createBrowserFrameDataUri(frame)
-    frameUriRef.current = nextFrameUri
-    updateBrowserImageSource(browserImageRef.current, nextFrameUri)
     if (!frameMountedRef.current) {
+      frameUriRef.current = nextFrameUri
       frameMountedRef.current = true
       setFrameUri(nextFrameUri)
+      updateBrowserImageSource(browserImageRefs.current[0], nextFrameUri)
+    } else if (pendingFrameLayerRef.current === null) {
+      // Why: decode the next frame offscreen and keep the previous layer visible
+      // until onLoad; replacing the visible Image directly flashes black.
+      const nextLayer: FrameLayer = visibleFrameLayerRef.current === 0 ? 1 : 0
+      frameUriRef.current = nextFrameUri
+      pendingFrameLayerRef.current = nextLayer
+      updateBrowserImageSource(browserImageRefs.current[nextLayer], nextFrameUri)
     }
     if (busyRef.current) {
       busyRef.current = false
@@ -250,7 +262,10 @@ export function MobileBrowserPane({
     const generation = streamGenerationRef.current
     frameUriRef.current = null
     frameMountedRef.current = false
+    pendingFrameLayerRef.current = null
+    visibleFrameLayerRef.current = 0
     setFrameUri(null)
+    setVisibleFrameLayer(0)
     setFrameMetadata(null)
     frameMetadataRef.current = null
     lastAppliedFrameAtRef.current = 0
@@ -753,16 +768,75 @@ export function MobileBrowserPane({
     [sendBrowserRequest]
   )
 
-  const setBrowserImageRef = useCallback((image: Image | null) => {
-    browserImageRef.current = image
+  const setBrowserImageRef = useCallback((layer: FrameLayer, image: Image | null) => {
+    browserImageRefs.current[layer] = image
     const currentFrameUri = frameUriRef.current
     if (image && currentFrameUri) {
       updateBrowserImageSource(image, currentFrameUri)
     }
   }, [])
+  const setBrowserImageLayer0Ref = useCallback(
+    (image: Image | null) => setBrowserImageRef(0, image),
+    [setBrowserImageRef]
+  )
+  const setBrowserImageLayer1Ref = useCallback(
+    (image: Image | null) => setBrowserImageRef(1, image),
+    [setBrowserImageRef]
+  )
+
+  const handleBrowserImageLoad = useCallback((layer: FrameLayer) => {
+    if (pendingFrameLayerRef.current !== layer) {
+      return
+    }
+    pendingFrameLayerRef.current = null
+    visibleFrameLayerRef.current = layer
+    setVisibleFrameLayer(layer)
+  }, [])
+  const handleBrowserImageLayer0Load = useCallback(
+    () => handleBrowserImageLoad(0),
+    [handleBrowserImageLoad]
+  )
+  const handleBrowserImageLayer1Load = useCallback(
+    () => handleBrowserImageLoad(1),
+    [handleBrowserImageLoad]
+  )
+  const handleBrowserImageError = useCallback((layer: FrameLayer) => {
+    if (pendingFrameLayerRef.current === layer) {
+      pendingFrameLayerRef.current = null
+    }
+  }, [])
+  const handleBrowserImageLayer0Error = useCallback(
+    () => handleBrowserImageError(0),
+    [handleBrowserImageError]
+  )
+  const handleBrowserImageLayer1Error = useCallback(
+    () => handleBrowserImageError(1),
+    [handleBrowserImageError]
+  )
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
   const initialFrameSource = useMemo(() => (frameUri ? { uri: frameUri } : null), [frameUri])
+  const frameLayerStyle = useCallback(
+    (layer: FrameLayer) => [
+      styles.browserImageLayer,
+      visibleFrameLayer !== layer && styles.browserImageLayerHidden
+    ],
+    [visibleFrameLayer]
+  )
+  const frameLayerRef = useCallback(
+    (layer: FrameLayer) => (layer === 0 ? setBrowserImageLayer0Ref : setBrowserImageLayer1Ref),
+    [setBrowserImageLayer0Ref, setBrowserImageLayer1Ref]
+  )
+  const frameLayerLoadHandler = useCallback(
+    (layer: FrameLayer) =>
+      layer === 0 ? handleBrowserImageLayer0Load : handleBrowserImageLayer1Load,
+    [handleBrowserImageLayer0Load, handleBrowserImageLayer1Load]
+  )
+  const frameLayerErrorHandler = useCallback(
+    (layer: FrameLayer) =>
+      layer === 0 ? handleBrowserImageLayer0Error : handleBrowserImageLayer1Error,
+    [handleBrowserImageLayer0Error, handleBrowserImageLayer1Error]
+  )
 
   return (
     <View style={styles.root}>
@@ -833,40 +907,52 @@ export function MobileBrowserPane({
                     }
                   ]}
                 >
-                  <Image
-                    ref={setBrowserImageRef}
-                    source={initialFrameSource}
-                    resizeMode="stretch"
-                    fadeDuration={0}
-                    style={
-                      frameGeometry.rotated
-                        ? [
-                            styles.browserImage,
-                            {
-                              width: frameGeometry.renderedHeight,
-                              height: frameGeometry.renderedWidth,
-                              transform: [{ rotate: '90deg' }]
-                            }
-                          ]
-                        : [
-                            styles.browserImage,
-                            {
-                              width: frameGeometry.renderedWidth,
-                              height: frameGeometry.renderedHeight
-                            }
-                          ]
-                    }
-                  />
+                  {([0, 1] as const).map((layer) => (
+                    <View key={layer} pointerEvents="none" style={frameLayerStyle(layer)}>
+                      <Image
+                        ref={frameLayerRef(layer)}
+                        source={initialFrameSource}
+                        resizeMode="stretch"
+                        fadeDuration={0}
+                        onLoad={frameLayerLoadHandler(layer)}
+                        onError={frameLayerErrorHandler(layer)}
+                        style={
+                          frameGeometry.rotated
+                            ? [
+                                styles.browserImage,
+                                {
+                                  width: frameGeometry.renderedHeight,
+                                  height: frameGeometry.renderedWidth,
+                                  transform: [{ rotate: '90deg' }]
+                                }
+                              ]
+                            : [
+                                styles.browserImage,
+                                {
+                                  width: frameGeometry.renderedWidth,
+                                  height: frameGeometry.renderedHeight
+                                }
+                              ]
+                        }
+                      />
+                    </View>
+                  ))}
                 </View>
               </View>
             ) : (
-              <Image
-                ref={setBrowserImageRef}
-                source={initialFrameSource}
-                resizeMode="contain"
-                fadeDuration={0}
-                style={styles.browserImageFill}
-              />
+              ([0, 1] as const).map((layer) => (
+                <View key={layer} pointerEvents="none" style={frameLayerStyle(layer)}>
+                  <Image
+                    ref={frameLayerRef(layer)}
+                    source={initialFrameSource}
+                    resizeMode="contain"
+                    fadeDuration={0}
+                    onLoad={frameLayerLoadHandler(layer)}
+                    onError={frameLayerErrorHandler(layer)}
+                    style={styles.browserImageFill}
+                  />
+                </View>
+              ))
             )}
           </View>
         ) : null}
@@ -1280,6 +1366,14 @@ const styles = StyleSheet.create({
   browserImageFill: {
     width: '100%',
     height: '100%'
+  },
+  browserImageLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  browserImageLayerHidden: {
+    opacity: 0
   },
   browserZoomOffset: {
     alignItems: 'center',

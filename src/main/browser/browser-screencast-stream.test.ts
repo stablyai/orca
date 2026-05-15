@@ -28,6 +28,34 @@ function createMockWebContents() {
   }
 }
 
+function jpegWithSize(width: number, height: number): Buffer {
+  return Buffer.from([
+    0xff,
+    0xd8,
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    (height >> 8) & 0xff,
+    height & 0xff,
+    (width >> 8) & 0xff,
+    width & 0xff,
+    0x03,
+    0x01,
+    0x11,
+    0x00,
+    0x02,
+    0x11,
+    0x00,
+    0x03,
+    0x11,
+    0x00,
+    0xff,
+    0xd9
+  ])
+}
+
 describe('startBrowserScreencast', () => {
   it('emits an initial captured frame before CDP produces screencast events', async () => {
     const webContents = createMockWebContents()
@@ -60,6 +88,34 @@ describe('startBrowserScreencast', () => {
       quality: 70,
       captureBeyondViewport: false
     })
+
+    session.stop()
+    await session.done
+  })
+
+  it('adds image dimensions to fallback capture frames', async () => {
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Page.captureScreenshot') {
+        return { data: jpegWithSize(1200, 800).toString('base64') }
+      }
+      return {}
+    })
+    const onFrame = vi.fn()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
+    expect(frame?.metadata).toMatchObject({ deviceWidth: 1200, deviceHeight: 800 })
 
     session.stop()
     await session.done

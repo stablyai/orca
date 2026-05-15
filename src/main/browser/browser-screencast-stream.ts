@@ -8,6 +8,7 @@ import {
 } from '../../shared/browser-screencast-protocol'
 import { BrowserError } from './cdp-bridge'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
+import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 
 const DEBUGGER_COMMAND_TIMEOUT_MS = 8_000
 
@@ -24,10 +25,7 @@ export type BrowserScreencastOptions = {
   onError?: (message: string) => void
 }
 
-export type BrowserScreencastSession = {
-  stop: () => void
-  done: Promise<void>
-}
+export type BrowserScreencastSession = { stop: () => void; done: Promise<void> }
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
@@ -184,14 +182,20 @@ export async function startBrowserScreencast(
       if (!data) {
         return
       }
+      const image = new Uint8Array(Buffer.from(data, 'base64'))
+      const imageSize = readBrowserScreencastImageSize(image, options.format)
       lastFrameSentAt = Date.now()
       options.onFrame(
         encodeBrowserScreencastFrame({
           opcode: BrowserScreencastOpcode.Frame,
           seq: seq++,
           format: options.format,
-          metadata: {},
-          image: new Uint8Array(Buffer.from(data, 'base64'))
+          // Why: static pages may only produce this fallback capture. Without
+          // dimensions, mobile clients stretch it to the phone aspect ratio.
+          metadata: imageSize
+            ? { deviceWidth: imageSize.width, deviceHeight: imageSize.height }
+            : {},
+          image
         })
       )
     } catch {
