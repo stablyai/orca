@@ -92,7 +92,7 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 1
   }
-  return Math.min(1, Math.max(0.65, Math.round(value * 100) / 100))
+  return Math.min(1, Math.max(0.2, Math.round(value * 100) / 100))
 }
 
 export function isWorkspaceStatusId(

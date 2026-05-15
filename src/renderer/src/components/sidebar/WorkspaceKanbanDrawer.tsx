@@ -222,7 +222,7 @@ export default function WorkspaceKanbanDrawer({
       <SheetContent
         side="left"
         showCloseButton={false}
-        className="bg-sidebar p-0 sm:max-w-none"
+        className="workspace-kanban-sheet-content bg-sidebar p-0 sm:max-w-none"
         overlayStyle={{ top: 36, left: drawerLeft }}
         style={
           {

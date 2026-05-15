@@ -47,7 +47,7 @@ export default function WorkspaceKanbanSettingsMenu({
           </div>
           <input
             type="range"
-            min={65}
+            min={20}
             max={100}
             value={opacityPercent}
             onChange={onOpacityChange}
